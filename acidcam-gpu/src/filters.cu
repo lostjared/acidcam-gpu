@@ -110,6 +110,19 @@ namespace ac_gpu {
                 break;
         }
     }
+
+    __global__ void squareBlockResizeVerticalKernel(unsigned char* currentFrame, unsigned char** allFrames, int numFrames, int width, int height, size_t step, int square_size, int collection_index) {
+        int x = blockIdx.x * blockDim.x + threadIdx.x;
+        int y = blockIdx.y * blockDim.y + threadIdx.y;
+        if (x >= width || y >= height) return;
+        int idx = y * step + x * 4;
+        unsigned char* historyFrame = allFrames[collection_index];
+        currentFrame[idx]     = (unsigned char)((currentFrame[idx]     * 0.5f) + (historyFrame[idx]     * 0.5f));
+        currentFrame[idx + 1] = (unsigned char)((currentFrame[idx + 1] * 0.5f) + (historyFrame[idx + 1] * 0.5f));
+        currentFrame[idx + 2] = (unsigned char)((currentFrame[idx + 2] * 0.5f) + (historyFrame[idx + 2] * 0.5f));
+        currentFrame[idx + 3] = 255;
+    }
+
 } 
 
 extern "C" void launch_median_blur(unsigned char* data, int width, int height, size_t step) {
@@ -126,9 +139,17 @@ extern "C" void launch_filter(int index, unsigned char* data, int width, int hei
     cudaDeviceSynchronize(); 
 }
 
-extern "C" void launch_median_blend(unsigned char* currentFrame, unsigned char** devicePtrArray, int numFrames, int width, int height, size_t step, bool isNegative) {
+extern "C" void launch_median_blend(unsigned char* currentFrame, unsigned char** devicePtrArray, int numFrames, int width, int height, size_t step, int div_value) {
     dim3 blockSize(16, 16);
     dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
-    ac_gpu::medianBlendKernel<<<gridSize, blockSize>>>(currentFrame, devicePtrArray, numFrames, width, height, step, isNegative);
+    ac_gpu::medianBlendKernel<<<gridSize, blockSize>>>(currentFrame, devicePtrArray, numFrames, width, height, step, (div_value != 0));
+    cudaDeviceSynchronize();
+}
+
+
+extern "C" void launch_square_block_resize_vertical(unsigned char* currentFrame, unsigned char** devicePtrArray, int numFrames, int width, int height, size_t step, int square_size, int collection_index) {
+    dim3 blockSize(16, 16);
+    dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
+    ac_gpu::squareBlockResizeVerticalKernel<<<gridSize, blockSize>>>(currentFrame, devicePtrArray, numFrames, width, height, step, square_size, collection_index);
     cudaDeviceSynchronize();
 }
