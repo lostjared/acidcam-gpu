@@ -109,15 +109,51 @@ namespace ac_gpu {
         }
     }
 
-    __global__ void squareBlockResizeVerticalKernel(unsigned char* currentFrame, unsigned char** allFrames, int numFrames, int width, int height, size_t step, int square_size, int collection_index) {
+    __global__ void squareBlockResizeVerticalKernel(unsigned char* currentFrame, unsigned char** allFrames, int numFrames, int width, int height, size_t step, int square_size, int start_index, int start_dir) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
         if (x >= width || y >= height) return;
+        
+        // Calculate which row of blocks this pixel belongs to (z in original algorithm)
+        int block_row = y / square_size;
+        
+        // Compute the frame index for this block row using triangle wave pattern
+        // The index bounces between 0 and numFrames-1 as we go down the rows
+        int period = 2 * (numFrames - 1);
+        if (period <= 0) period = 1;
+        
+        // Calculate starting position in the triangle wave
+        int start_pos;
+        if (start_dir == 1) {
+            start_pos = start_index;
+        } else {
+            start_pos = (2 * (numFrames - 1)) - start_index;
+        }
+        
+        // Advance by block_row steps
+        int pos = (start_pos + block_row) % period;
+        
+        // Convert position to index (triangle wave: goes up then down)
+        int frame_index;
+        if (pos < numFrames) {
+            frame_index = pos;
+        } else {
+            frame_index = period - pos;
+        }
+        
+        // Clamp frame_index to valid range
+        if (frame_index < 0) frame_index = 0;
+        if (frame_index >= numFrames) frame_index = numFrames - 1;
+        
         int idx = y * step + x * 4;
-        unsigned char* historyFrame = allFrames[collection_index];
-        currentFrame[idx]     = (unsigned char)((currentFrame[idx]     * 0.5f) + (historyFrame[idx]     * 0.5f));
-        currentFrame[idx + 1] = (unsigned char)((currentFrame[idx + 1] * 0.5f) + (historyFrame[idx + 1] * 0.5f));
-        currentFrame[idx + 2] = (unsigned char)((currentFrame[idx + 2] * 0.5f) + (historyFrame[idx + 2] * 0.5f));
+        
+        // Get the history frame for this block row
+        unsigned char* historyFrame = allFrames[frame_index];
+        
+        // Blend current pixel with history frame pixel (50/50 blend)
+        currentFrame[idx]     = (unsigned char)((0.5f * currentFrame[idx])     + (0.5f * historyFrame[idx]));
+        currentFrame[idx + 1] = (unsigned char)((0.5f * currentFrame[idx + 1]) + (0.5f * historyFrame[idx + 1]));
+        currentFrame[idx + 2] = (unsigned char)((0.5f * currentFrame[idx + 2]) + (0.5f * historyFrame[idx + 2]));
         currentFrame[idx + 3] = 255;
     }
 
@@ -145,9 +181,9 @@ extern "C" void launch_median_blend(unsigned char* currentFrame, unsigned char**
 }
 
 
-extern "C" void launch_square_block_resize_vertical(unsigned char* currentFrame, unsigned char** devicePtrArray, int numFrames, int width, int height, size_t step, int square_size, int collection_index) {
+extern "C" void launch_square_block_resize_vertical(unsigned char* currentFrame, unsigned char** devicePtrArray, int numFrames, int width, int height, size_t step, int square_size, int start_index, int start_dir) {
     dim3 blockSize(16, 16);
     dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
-    ac_gpu::squareBlockResizeVerticalKernel<<<gridSize, blockSize>>>(currentFrame, devicePtrArray, numFrames, width, height, step, square_size, collection_index);
+    ac_gpu::squareBlockResizeVerticalKernel<<<gridSize, blockSize>>>(currentFrame, devicePtrArray, numFrames, width, height, step, square_size, start_index, start_dir);
     cudaDeviceSynchronize();
 }

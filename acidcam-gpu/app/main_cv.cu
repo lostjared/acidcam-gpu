@@ -95,13 +95,6 @@ int main(int argc, char** argv) {
                 cudaMallocPitch(&d_workingBuffer, &workingPitch, buffer.w * 4, buffer.h);
             }
             cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), buffer.arraySize * sizeof(unsigned char*), cudaMemcpyHostToDevice);
-            launch_square_block_resize_vertical(buffer.deviceFrames[buffer.arraySize - 1], 
-                                                d_ptrList, 
-                                                buffer.arraySize, 
-                                                buffer.w, buffer.h, 
-                                                buffer.framePitch, 
-                                                square_size, 
-                                                collection_index);
 
             if(index_dir == 1) {
                 collection_index++;
@@ -144,8 +137,7 @@ int main(int argc, char** argv) {
             }
             cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), 
             buffer.arraySize * sizeof(unsigned char*), 
-            cudaMemcpyHostToDevice);
-            
+            cudaMemcpyHostToDevice);            
             switch(current_filter) {
                 case 0:
                     launch_filter(0, d_workingBuffer, buffer.w, buffer.h, workingPitch, alpha, false);
@@ -159,15 +151,10 @@ int main(int argc, char** argv) {
                     launch_median_blend(d_workingBuffer, d_ptrList, buffer.arraySize, buffer.w, buffer.h, workingPitch, 0);
                     break;
                 case 3:
-                    launch_square_block_resize_vertical(d_workingBuffer, d_ptrList, buffer.arraySize, buffer.w, buffer.h, workingPitch, square_size, collection_index);
+                    launch_square_block_resize_vertical(d_workingBuffer, d_ptrList, buffer.arraySize, buffer.w, buffer.h, workingPitch, square_size, collection_index, index_dir);
                     break;
             }
-            
-            cudaMemcpy2D(rgba_out.data, rgba_out.step[0], 
-             d_workingBuffer, workingPitch, 
-             width * 4, height, 
-             cudaMemcpyDeviceToHost);
-
+            cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost);
             cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
             cv::imshow("filter", frame);
 
