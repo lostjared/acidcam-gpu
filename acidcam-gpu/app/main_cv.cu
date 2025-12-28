@@ -157,20 +157,19 @@ int main(int argc, char** argv) {
             cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost);
             cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
             cv::imshow("filter", frame);
-
             int key = cv::waitKey(1);
             if (key == 27) break; 
             else if (key == 's' || key == 'S') { 
                 cv::imwrite("capture_" + std::to_string(screenshot_count++) + ".png", frame);
                 std::cout << "Saved screenshot." << std::endl;
             } 
-            else if (key == 82 || key == 0 || key == 65362) { // Up arrow
+            else if (key == 82 || key == 0 || key == 65362) { 
                 if (current_filter < max_filter) {
                     current_filter++;
                     std::cout << "Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
                 }
             }
-            else if (key == 84 || key == 1 || key == 65364) { // Down arrow
+            else if (key == 84 || key == 1 || key == 65364) { 
                 if (current_filter > 0) {
                     current_filter--;
                     std::cout << "Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
