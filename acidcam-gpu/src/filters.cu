@@ -64,8 +64,6 @@ namespace ac_gpu {
         int sumB = 0; 
         int sumG = 0; 
         int sumR = 0; 
-        
-        
         for (int j = 0; j < numFrames; ++j) {
             unsigned char* framePtr = allFrames[j];
             sumB += framePtr[idx];     

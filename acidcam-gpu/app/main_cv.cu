@@ -1,23 +1,44 @@
-#include <opencv2/opencv.hpp>
-#include <iostream>
-#include <chrono>
-#include <thread>
-#include <cuda_runtime.h>
-#include <ac-gpu/ac-gpu.hpp>
-#include <cstdlib>
-#include <ctime>
+#include<opencv2/opencv.hpp>
+#include<iostream>
+#include<chrono>
+#include<thread>
+#include<cuda_runtime.h>
+#include<ac-gpu/ac-gpu.hpp>
+#include<cstdlib>
+#include<ctime>
+#include<regex>
+#include<string>
+
+bool isNumeric(const std::string &text) {
+    std::regex re("^-?\\d+(\\.\\d+)?$");
+    return std::regex_match(text, re);
+}
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <video_path>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " camera_index start_filter" << std::endl;
         return -1;
     }
-
-    int camera_index = std::stoi(argv[1]);
-    int filter_index = std::stoi(argv[2]);
-
+    bool camera_mode = false;
+    int camera_index = 0;
+    int filter_index = 0;
+    if(isNumeric(argv[1])) {
+        camera_mode = true;
+        camera_index = std::stoi(argv[1]);
+    }
+    if(!isNumeric(argv[2])) {
+        std::cerr << "Error invalid filter_index\n";
+        return -1;
+    } else {
+        filter_index = std::stoi(argv[2]);
+    }
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
-    cv::VideoCapture cap(camera_index, cv::CAP_V4L2);
+    cv::VideoCapture cap;
+    if(camera_mode == true) {
+        cap.open(camera_index, cv::CAP_V4L2);
+    } else {
+        cap.open(argv[1]);
+    }
     if (!cap.isOpened()) return -1;
     cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
@@ -30,7 +51,7 @@ int main(int argc, char** argv) {
     std::cout << "Video resolution: " << width << "x" << height << " @ " << fps << " fps" << std::endl;
     auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
     int current_filter = filter_index;
-    const int max_filter = 3;  // 0: SelfAlphaBlend, 1: MedianBlur, 2: MedianBlend, 3: SquareBlockResize
+    const int max_filter = 3;  
     const char* filter_names[] = {"SelfAlphaBlend", "MedianBlur", "MedianBlend", "SquareBlockResize"};
     std::cout << "Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
     int screenshot_count = 1;
