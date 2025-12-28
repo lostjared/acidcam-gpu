@@ -110,9 +110,7 @@ namespace ac_gpu {
                 break;
         }
     }
-} // namespace ac_gpu
-
-// --- Launchers ---
+} 
 
 extern "C" void launch_median_blur(unsigned char* data, int width, int height, size_t step) {
     dim3 blockSize(16, 16);

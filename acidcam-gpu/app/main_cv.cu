@@ -14,21 +14,16 @@ int main(int argc, char** argv) {
     }
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
     bool isNegative = false; 
-
     cv::VideoCapture cap(argv[1]);
     if (!cap.isOpened()) return -1;
-
     double fps = cap.get(cv::CAP_PROP_FPS);
     if (fps <= 0) fps = 30.0;
     int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
     int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
     auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
-
     int current_filter = 0;
     int max_filter = 1;
     int screenshot_count = 1;
-
-
     {
         cv::Mat frame;
         cv::namedWindow("filter", cv::WINDOW_NORMAL);
@@ -40,11 +35,9 @@ int main(int argc, char** argv) {
         unsigned char* d_workingBuffer = nullptr;
         size_t workingPitch = 0;
         cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height);
-        
         float alpha = 1.0f;
         while (true) {
             auto start_time = std::chrono::steady_clock::now();
-        
             static bool dir = true;
             if(dir == true) {
                 alpha += 0.1f;
@@ -62,21 +55,16 @@ int main(int argc, char** argv) {
     
             if (!cap.read(frame)) break; 
             buffer.update(frame);
-            
-            // Reallocate working buffer if size changed
             if (workingPitch != buffer.framePitch) {
                 if (d_workingBuffer) cudaFree(d_workingBuffer);
                 cudaMallocPitch(&d_workingBuffer, &workingPitch, buffer.w * 4, buffer.h);
             }
             
-            // Copy newest frame to working buffer for processing
             cudaMemcpy2D(d_workingBuffer, workingPitch,
                          buffer.deviceFrames[buffer.arraySize - 1], buffer.framePitch,
                          buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice);
             
-            // Apply median blur random number of times (3-9) like CPU version
-            // Blur the WORKING buffer, not the collection buffer
-            int r = 3 + std::rand() % 7;
+            int r = 3;
             for (int i = 0; i < r; ++i) {
                 launch_median_blur(d_workingBuffer, 
                        buffer.w, buffer.h, workingPitch);
@@ -86,7 +74,6 @@ int main(int argc, char** argv) {
             buffer.arraySize * sizeof(unsigned char*), 
             cudaMemcpyHostToDevice);
 
-            // Blend writes to working buffer, collection stays clean
             launch_median_blend(d_workingBuffer, 
                     d_ptrList, 
                     buffer.arraySize, 
@@ -94,7 +81,6 @@ int main(int argc, char** argv) {
                     workingPitch, 
                     isNegative);
             
-            // Copy result from working buffer to output
             cudaMemcpy2D(rgba_out.data, rgba_out.step[0], 
              d_workingBuffer, workingPitch, 
              width * 4, height, 
