@@ -1,2 +1,2 @@
 # acidcam-gpu
-Acid Cam fil;ters running under CUDA
+Acid Cam filters running under CUDA
