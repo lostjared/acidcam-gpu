@@ -99,10 +99,10 @@ namespace ac_gpu {
 }
 
 extern "C" {
-    void launch_filter(int index, unsigned char* data, int width, int height, size_t step, float alpha, bool isNegative);
-    void launch_median_blur(unsigned char* data, int width, int height, size_t step);
-    void launch_median_blend(unsigned char* currentFrame, unsigned char** devicePtrArray, int numFrames, int width, int height, size_t step, int div_value);
-    void launch_square_block_resize_vertical(unsigned char* currentFrame, unsigned char** allFrames, int numFrames, int width, int height, size_t step, int square_size, int start_index, int start_dir);
+    void launch_filter(int filterIndex, unsigned char* data, unsigned char** allFrames,
+                       int numFrames, int width, int height, size_t step,
+                       float alpha, bool isNegative, int square_size,
+                       int start_index, int start_dir);
 }
 
 #endif

@@ -4,26 +4,42 @@
 
 namespace ac_gpu {
 
-    Filters filters[] = { {0, "SelfAlphaBlend"} };
+    Filters filters[] = { 
+        {0, "SelfAlphaBlend"}, 
+        {1, "MedianBlur"}, 
+        {2, "MedianBlend"}, 
+        {3, "SquareBlockResize"} 
+    };
 
-    __device__ void applySelfAlphaBlend(int x, int y, unsigned char* data, int width, int height, size_t step, float alpha, bool isNegative) {
-        if (x < width && y < height) {
-            int idx = y * step + x * 4; 
-            unsigned char b = data[idx];
-            unsigned char g = data[idx + 1];
-            unsigned char r = data[idx + 2];
-            
-            data[idx]     = (unsigned char)(b + (b * alpha)); 
-            data[idx + 1] = (unsigned char)(g + (g * alpha)); 
-            data[idx + 2] = (unsigned char)(r + (r * alpha)); 
-            
-            if (isNegative) {
-                data[idx]     = 255 - data[idx];
-                data[idx + 1] = 255 - data[idx + 1];
-                data[idx + 2] = 255 - data[idx + 2];
-            }
-            data[idx + 3] = 255;
+    struct FilterParams {
+        float alpha;
+        bool isNegative;
+        int numFrames;
+        int square_size;
+        int start_index;
+        int start_dir;
+    };
+
+    __device__ void setAlpha(unsigned char* data, int idx, bool isNegative) {
+        if (isNegative) {
+            data[idx]     = 255 - data[idx];
+            data[idx + 1] = 255 - data[idx + 1];
+            data[idx + 2] = 255 - data[idx + 2];
         }
+        data[idx + 3] = 255;
+    }
+
+    __device__ void processSelfAlphaBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char b = data[idx];
+        unsigned char g = data[idx + 1];
+        unsigned char r = data[idx + 2];
+        
+        data[idx]     = (unsigned char)(b + (b * params.alpha));
+        data[idx + 1] = (unsigned char)(g + (g * params.alpha));
+        data[idx + 2] = (unsigned char)(r + (r * params.alpha));
+        
+        setAlpha(data, idx, params.isNegative);
     }
 
     __device__ void sort_window_25(unsigned char* window) {
@@ -38,12 +54,10 @@ namespace ac_gpu {
         }
     }
 
-    __global__ void medianBlur5x5Kernel(unsigned char* data, int width, int height, size_t step) {
-        int x = blockIdx.x * blockDim.x + threadIdx.x;
-        int y = blockIdx.y * blockDim.y + threadIdx.y;
+    __device__ void processMedianBlur(int x, int y, unsigned char* data, int width, int height, size_t step) {
         if (x < 2 || x >= width - 2 || y < 2 || y >= height - 2) return;
-
-        for (int c = 0; c < 3; ++c) { 
+        
+        for (int c = 0; c < 3; ++c) {
             unsigned char window[25];
             int count = 0;
             for (int dy = -2; dy <= 2; dy++) {
@@ -52,138 +66,96 @@ namespace ac_gpu {
                 }
             }
             sort_window_25(window);
-            data[y * step + x * 4 + c] = window[12]; 
+            data[y * step + x * 4 + c] = window[12];
         }
     }
 
-    __global__ void medianBlendKernel(unsigned char* currentFrame, unsigned char** allFrames, int numFrames, int width, int height, size_t step, bool isNegative) {
-        int x = blockIdx.x * blockDim.x + threadIdx.x;
-        int y = blockIdx.y * blockDim.y + threadIdx.y;
-        if (x >= width || y >= height) return;
+    __device__ void processMedianBlend(int x, int y, unsigned char* currentFrame, unsigned char** allFrames,
+                                        size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
-        int sumB = 0; 
-        int sumG = 0; 
-        int sumR = 0; 
-        for (int j = 0; j < numFrames; ++j) {
+        int sumB = 0, sumG = 0, sumR = 0;
+        
+        for (int j = 0; j < params.numFrames; ++j) {
             unsigned char* framePtr = allFrames[j];
-            sumB += framePtr[idx];     
-            sumG += framePtr[idx + 1]; 
-            sumR += framePtr[idx + 2]; 
+            sumB += framePtr[idx];
+            sumG += framePtr[idx + 1];
+            sumR += framePtr[idx + 2];
         }
         
-        int valB = 1 + sumB;
-        int valG = 1 + sumG;
-        int valR = 1 + sumR;
+        unsigned char newB = currentFrame[idx]     ^ (unsigned char)(1 + sumB);
+        unsigned char newG = currentFrame[idx + 1] ^ (unsigned char)(1 + sumG);
+        unsigned char newR = currentFrame[idx + 2] ^ (unsigned char)(1 + sumR);
         
-        unsigned char newB = currentFrame[idx]     ^ (unsigned char)valB;
-        unsigned char newG = currentFrame[idx + 1] ^ (unsigned char)valG;
-        unsigned char newR = currentFrame[idx + 2] ^ (unsigned char)valR;
+        currentFrame[idx]     = newG;
+        currentFrame[idx + 1] = newR;
+        currentFrame[idx + 2] = newB;
         
-        currentFrame[idx]     = newG; 
-        currentFrame[idx + 1] = newR; 
-        currentFrame[idx + 2] = newB; 
-        
-        
-        if (isNegative) {
-            currentFrame[idx]     = 255 - currentFrame[idx];
-            currentFrame[idx + 1] = 255 - currentFrame[idx + 1];
-            currentFrame[idx + 2] = 255 - currentFrame[idx + 2];
-        }
-        
-        
-        currentFrame[idx + 3] = 255; 
+        setAlpha(currentFrame, idx, params.isNegative);
     }
 
-    __global__ void filterKernel(int filterIndex, unsigned char* data, int width, int height, size_t step, float alpha, bool isNegative) {
-        int x = blockIdx.x * blockDim.x + threadIdx.x;
-        int y = blockIdx.y * blockDim.y + threadIdx.y;
-        
-        if (x >= width || y >= height) return;
-        
-        switch(filterIndex) {
-            case 0:
-                applySelfAlphaBlend(x, y, data, width, height, step, alpha, isNegative);
-                break;
-            default:
-                break;
-        }
-    }
-
-    __global__ void squareBlockResizeVerticalKernel(unsigned char* currentFrame, unsigned char** allFrames, int numFrames, int width, int height, size_t step, int square_size, int start_index, int start_dir) {
-        int x = blockIdx.x * blockDim.x + threadIdx.x;
-        int y = blockIdx.y * blockDim.y + threadIdx.y;
-        if (x >= width || y >= height) return;
-        
-        // Calculate which row of blocks this pixel belongs to (z in original algorithm)
-        int block_row = y / square_size;
-        
-        // Compute the frame index for this block row using triangle wave pattern
-        // The index bounces between 0 and numFrames-1 as we go down the rows
-        int period = 2 * (numFrames - 1);
+    __device__ void processSquareBlockResize(int x, int y, unsigned char* currentFrame, unsigned char** allFrames,
+                                              size_t step, const FilterParams& params) {
+        int block_row = y / params.square_size;
+        int period = 2 * (params.numFrames - 1);
         if (period <= 0) period = 1;
         
-        // Calculate starting position in the triangle wave
-        int start_pos;
-        if (start_dir == 1) {
-            start_pos = start_index;
-        } else {
-            start_pos = (2 * (numFrames - 1)) - start_index;
-        }
-        
-        // Advance by block_row steps
+        int start_pos = (params.start_dir == 1) ? params.start_index : (2 * (params.numFrames - 1)) - params.start_index;
         int pos = (start_pos + block_row) % period;
+        int frame_index = (pos < params.numFrames) ? pos : period - pos;
         
-        // Convert position to index (triangle wave: goes up then down)
-        int frame_index;
-        if (pos < numFrames) {
-            frame_index = pos;
-        } else {
-            frame_index = period - pos;
-        }
-        
-        // Clamp frame_index to valid range
         if (frame_index < 0) frame_index = 0;
-        if (frame_index >= numFrames) frame_index = numFrames - 1;
+        if (frame_index >= params.numFrames) frame_index = params.numFrames - 1;
         
         int idx = y * step + x * 4;
-        
-        // Get the history frame for this block row
         unsigned char* historyFrame = allFrames[frame_index];
         
-        // Blend current pixel with history frame pixel (50/50 blend)
-        currentFrame[idx]     = (unsigned char)((0.5f * currentFrame[idx])     + (0.5f * historyFrame[idx]));
-        currentFrame[idx + 1] = (unsigned char)((0.5f * currentFrame[idx + 1]) + (0.5f * historyFrame[idx + 1]));
-        currentFrame[idx + 2] = (unsigned char)((0.5f * currentFrame[idx + 2]) + (0.5f * historyFrame[idx + 2]));
+        currentFrame[idx]     = (unsigned char)(0.5f * currentFrame[idx]     + 0.5f * historyFrame[idx]);
+        currentFrame[idx + 1] = (unsigned char)(0.5f * currentFrame[idx + 1] + 0.5f * historyFrame[idx + 1]);
+        currentFrame[idx + 2] = (unsigned char)(0.5f * currentFrame[idx + 2] + 0.5f * historyFrame[idx + 2]);
         currentFrame[idx + 3] = 255;
     }
 
-} 
 
-extern "C" void launch_median_blur(unsigned char* data, int width, int height, size_t step) {
-    dim3 blockSize(16, 16);
-    dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
-    ac_gpu::medianBlur5x5Kernel<<<gridSize, blockSize>>>(data, width, height, step);
-    cudaDeviceSynchronize();
+    __global__ void unifiedFilterKernel(int filterIndex, unsigned char* data, unsigned char** allFrames,
+                                         int width, int height, size_t step, FilterParams params) {
+        int x = blockIdx.x * blockDim.x + threadIdx.x;
+        int y = blockIdx.y * blockDim.y + threadIdx.y;
+        
+        if (x >= width || y >= height) return;
+        
+        switch (filterIndex) {
+            case 0:
+                processSelfAlphaBlend(x, y, data, step, params);
+                break;
+            case 1:
+                processMedianBlur(x, y, data, width, height, step);
+                break;
+            case 2:
+                processMedianBlend(x, y, data, allFrames, step, params);
+                break;
+            case 3:
+                processSquareBlockResize(x, y, data, allFrames, step, params);
+                break;
+        }
+    }
+
 }
 
-extern "C" void launch_filter(int index, unsigned char* data, int width, int height, size_t step, float alpha, bool isNegative) {
+extern "C" void launch_filter(int filterIndex, unsigned char* data, unsigned char** allFrames,
+                               int numFrames, int width, int height, size_t step,
+                               float alpha, bool isNegative, int square_size,
+                               int start_index, int start_dir) {
     dim3 blockSize(16, 16);
     dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
-    ac_gpu::filterKernel<<<gridSize, blockSize>>>(index, data, width, height, step, alpha, isNegative);        
-    cudaDeviceSynchronize(); 
-}
-
-extern "C" void launch_median_blend(unsigned char* currentFrame, unsigned char** devicePtrArray, int numFrames, int width, int height, size_t step, int div_value) {
-    dim3 blockSize(16, 16);
-    dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
-    ac_gpu::medianBlendKernel<<<gridSize, blockSize>>>(currentFrame, devicePtrArray, numFrames, width, height, step, (div_value != 0));
-    cudaDeviceSynchronize();
-}
-
-
-extern "C" void launch_square_block_resize_vertical(unsigned char* currentFrame, unsigned char** devicePtrArray, int numFrames, int width, int height, size_t step, int square_size, int start_index, int start_dir) {
-    dim3 blockSize(16, 16);
-    dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
-    ac_gpu::squareBlockResizeVerticalKernel<<<gridSize, blockSize>>>(currentFrame, devicePtrArray, numFrames, width, height, step, square_size, start_index, start_dir);
+    
+    ac_gpu::FilterParams params;
+    params.alpha = alpha;
+    params.isNegative = isNegative;
+    params.numFrames = numFrames;
+    params.square_size = square_size;
+    params.start_index = start_index;
+    params.start_dir = start_dir;
+    
+    ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(filterIndex, data, allFrames, width, height, step, params);
     cudaDeviceSynchronize();
 }

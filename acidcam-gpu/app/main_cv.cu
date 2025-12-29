@@ -87,7 +87,6 @@ int main(int argc, char** argv) {
                     dir = true;
                 }
             }
-    
             if (!cap.read(frame)) break; 
             buffer.update(frame);
             if (workingPitch != buffer.framePitch) {
@@ -95,7 +94,6 @@ int main(int argc, char** argv) {
                 cudaMallocPitch(&d_workingBuffer, &workingPitch, buffer.w * 4, buffer.h);
             }
             cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), buffer.arraySize * sizeof(unsigned char*), cudaMemcpyHostToDevice);
-
             if(index_dir == 1) {
                 collection_index++;
                 if(collection_index >= (buffer.arraySize - 1)) {
@@ -109,8 +107,6 @@ int main(int argc, char** argv) {
                     index_dir = 1;
                 }
             }
-
-
             if(square_dir == 1) {
                 square_size += 2;
                 if(square_size >= 64) {
@@ -124,36 +120,18 @@ int main(int argc, char** argv) {
                     square_dir = 1;
                 }
             }
-
             cudaMemcpy2D(d_workingBuffer, workingPitch,
                          buffer.deviceFrames[buffer.arraySize - 1], buffer.framePitch,
                          buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice);
-            if(current_filter == 2) {            
-                int r = 3;
-                for (int i = 0; i < r; ++i) {
-                    launch_median_blur(d_workingBuffer, 
-                        buffer.w, buffer.h, workingPitch);
-                }
-            }
             cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), 
-            buffer.arraySize * sizeof(unsigned char*), 
-            cudaMemcpyHostToDevice);            
-            switch(current_filter) {
-                case 0:
-                    launch_filter(0, d_workingBuffer, buffer.w, buffer.h, workingPitch, alpha, false);
-                    break;
-                case 1:
-                    for (int i = 0; i < 3; ++i) {
-                        launch_median_blur(d_workingBuffer, buffer.w, buffer.h, workingPitch);
-                    }
-                    break;
-                case 2:
-                    launch_median_blend(d_workingBuffer, d_ptrList, buffer.arraySize, buffer.w, buffer.h, workingPitch, 0);
-                    break;
-                case 3:
-                    launch_square_block_resize_vertical(d_workingBuffer, d_ptrList, buffer.arraySize, buffer.w, buffer.h, workingPitch, square_size, collection_index, index_dir);
-                    break;
-            }
+                       buffer.arraySize * sizeof(unsigned char*), 
+                       cudaMemcpyHostToDevice);
+            
+
+            launch_filter(current_filter, d_workingBuffer, d_ptrList,
+                          buffer.arraySize, buffer.w, buffer.h, workingPitch,
+                          alpha, false, square_size, collection_index, index_dir);
+            
             cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost);
             cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
             cv::imshow("filter", frame);
