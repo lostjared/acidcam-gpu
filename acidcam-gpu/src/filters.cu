@@ -3,7 +3,7 @@
 #include <string>
 
 namespace ac_gpu {
-
+    
     Filters filters[] = { 
         {0, "SelfAlphaBlend"}, 
         {1, "MedianBlur"}, 

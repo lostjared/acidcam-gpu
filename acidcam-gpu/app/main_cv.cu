@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
     std::cout << "Video resolution: " << width << "x" << height << " @ " << fps << " fps" << std::endl;
     auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
     int current_filter = filter_index;
-    const int max_filter = 3;  
+    const int max_filter = 4;  
     const char* filter_names[] = {"SelfAlphaBlend", "MedianBlur", "MedianBlend", "MedianBlurBLend", "SquareBlockResize"};
     std::cout << "Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
     int screenshot_count = 1;
