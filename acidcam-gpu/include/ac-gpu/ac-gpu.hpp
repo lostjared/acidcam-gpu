@@ -13,8 +13,7 @@ namespace ac_gpu {
         int index;
         std::string name;
     };
-
-    inline static const char *filter_names[] = {"SelfAlphaBlend", "MedianBlend", "MedianBlurBLend", "SquareBlockResize"};
+    
 
     class DynamicFrameBuffer {
     public:
@@ -101,7 +100,7 @@ namespace ac_gpu {
 }
 
 extern "C" {
-    void launch_filter(ac_gpu::Filter *filter, size_t count, int filterIndex, unsigned char* data, unsigned char** allFrames,
+    void launch_filter(ac_gpu::Filter *filter, size_t count, unsigned char* data, unsigned char** allFrames,
                        int numFrames, int width, int height, size_t step,
                        float alpha, bool isNegative, int square_size,
                        int start_index, int start_dir);

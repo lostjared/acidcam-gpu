@@ -253,7 +253,7 @@ int main(int argc, char** argv) {
                        buffer.arraySize * sizeof(unsigned char*), 
                        cudaMemcpyHostToDevice));
 
-            launch_filter(&vlist[0], vlist.size(), current_filter, d_workingBuffer, d_ptrList,
+            launch_filter(&vlist[0], vlist.size(), d_workingBuffer, d_ptrList,
                           buffer.arraySize, buffer.w, buffer.h, workingPitch,
                           alpha, false, square_size, collection_index, index_dir);
             
@@ -263,7 +263,14 @@ int main(int argc, char** argv) {
             int key = cv::waitKey(1);
             if (key == 27) break; 
             else if (key == 's' || key == 'S') { 
-                std::string out = "capture_" + std::to_string(screenshot_count++) + ".png";
+                auto now = std::chrono::system_clock::now();
+                std::time_t t = std::chrono::system_clock::to_time_t(now);
+                std::tm tm = *std::localtime(&t);
+                char timebuf[32];
+                std::strftime(timebuf, sizeof(timebuf), "%Y%m%d_%H%M%S", &tm);
+                std::string out = "acidcam_gpu-" + std::string(timebuf) + "_" +
+                                  std::to_string(width) + "x" + std::to_string(height) +
+                                  "_" + std::to_string(screenshot_count++) + ".png";
                 cv::imwrite(out, frame);
                 std::cout << "ac: Saved screenshot: " << out << std::endl;
             } 

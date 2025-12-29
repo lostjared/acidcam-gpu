@@ -119,7 +119,7 @@ namespace ac_gpu {
     }
 
 
-    __global__ void unifiedFilterKernel(Filter *filters, size_t count, int filterIndex, unsigned char* data, unsigned char** allFrames,
+    __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames,
                                          int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -145,7 +145,7 @@ namespace ac_gpu {
     }
 }
 
-extern "C" void launch_filter(ac_gpu::Filter *f, size_t c, int filterIndex, unsigned char* data, unsigned char** allFrames,
+extern "C" void launch_filter(ac_gpu::Filter *f, size_t c, unsigned char* data, unsigned char** allFrames,
                                int numFrames, int width, int height, size_t step,
                                float alpha, bool isNegative, int square_size,
                                int start_index, int start_dir) {
@@ -158,7 +158,7 @@ extern "C" void launch_filter(ac_gpu::Filter *f, size_t c, int filterIndex, unsi
     params.square_size = square_size;
     params.start_index = start_index;
     params.start_dir = start_dir;
-    ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(f, c, filterIndex, data, allFrames, width, height, step, params);
+    ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(f, c, data, allFrames, width, height, step, params);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
