@@ -8,6 +8,7 @@
 #include<ctime>
 #include<regex>
 #include<string>
+#include<vector>
 
 #define CHECK_CUDA(call) \
     do { \
@@ -39,15 +40,46 @@ int main(int argc, char** argv) {
         camera_mode = true;
         camera_index = std::stoi(argv[1]);
     }
-    if(!isNumeric(argv[2])) {
-        std::cerr << "ac: Error invalid filter_index\n";
-        return -1;
+    const char* filter_names[] = {"SelfAlphaBlend", "MedianBlend", "MedianBlurBLend", "SquareBlockResize"};
+    std::vector<ac_gpu::Filter> vlist;
+
+    std::string list = argv[2];
+    if (list.find(',') != std::string::npos) {
+        size_t start = 0;
+        while (1) {
+            size_t pos = list.find(',', start);
+            std::string tok = (pos == std::string::npos) ? list.substr(start) : list.substr(start, pos - start);
+            if (tok.empty()) {
+                if (pos == std::string::npos) break;
+                start = pos + 1;
+                continue;
+            }
+            if (!isNumeric(tok)) {
+                std::cerr << "ac: Error invalid filter_index\n";
+                return -1;
+            }
+            int idx = std::stoi(tok);
+            if (idx > max_filter || idx < 0) {
+                std::cerr << "ac: Filter out of range..\n";
+                return -3;
+            }
+            vlist.emplace_back(ac_gpu::Filter{idx, filter_names[idx]});
+            if (pos == std::string::npos) break;
+            start = pos + 1;
+        }
+        if (!vlist.empty()) filter_index = (int)vlist[0].index;
     } else {
-        filter_index = std::stoi(argv[2]);
-    }
-    if(filter_index > max_filter || filter_index < 0) {
-        std::cerr << "ac: Filter out of range..\n";
-        return -3;
+        if (!isNumeric(list)) {
+            std::cerr << "ac: Error invalid filter_index\n";
+            return -1;
+        }
+        int idx = std::stoi(list);
+        if (idx > max_filter || idx < 0) {
+            std::cerr << "ac: Filter out of range..\n";
+            return -3;
+        }
+        filter_index = idx;
+        vlist.emplace_back(ac_gpu::Filter{filter_index, filter_names[filter_index]});
     }
     if(!isNumeric(argv[3])) {
         std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
@@ -59,7 +91,7 @@ int main(int argc, char** argv) {
             return -2;  
         }
     }
-
+    
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
     cv::VideoCapture cap;
     if(camera_mode == true) {
@@ -79,8 +111,6 @@ int main(int argc, char** argv) {
     std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << fps << " fps" << std::endl;
     auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
     int current_filter = filter_index;
-
-    const char* filter_names[] = {"SelfAlphaBlend", "MedianBlend", "MedianBlurBLend", "SquareBlockResize"};
     std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
     int screenshot_count = 1;
     int square_size = 4;
@@ -129,7 +159,7 @@ int main(int argc, char** argv) {
                 width = buffer.w;
                 height = buffer.h;
                 CHECK_CUDA(cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height));
-                rgba_out = cv::Mat(height, width, CV_8UC4);  // Resize output buffer too
+                rgba_out = cv::Mat(height, width, CV_8UC4);  
             }
             
             if(index_dir == 1) {
@@ -166,7 +196,7 @@ int main(int argc, char** argv) {
                        buffer.arraySize * sizeof(unsigned char*), 
                        cudaMemcpyHostToDevice));
 
-            launch_filter(current_filter, d_workingBuffer, d_ptrList,
+            launch_filter(&vlist[0], vlist.size(), current_filter, d_workingBuffer, d_ptrList,
                           buffer.arraySize, buffer.w, buffer.h, workingPitch,
                           alpha, false, square_size, collection_index, index_dir);
             
@@ -183,12 +213,18 @@ int main(int argc, char** argv) {
             else if (key == 82 || key == 0 || key == 65362) { 
                 if (current_filter < max_filter) {
                     current_filter++;
+                    vlist.clear();
+                    ac_gpu::Filter f {current_filter, filter_names[current_filter]};
+                    vlist.push_back(f);
                     std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
                 }
             }
             else if (key == 84 || key == 1 || key == 65364) { 
                 if (current_filter > 0) {
                     current_filter--;
+                    vlist.clear();
+                    ac_gpu::Filter f {current_filter, filter_names[current_filter]};
+                    vlist.push_back(f);
                     std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
                 }
             }

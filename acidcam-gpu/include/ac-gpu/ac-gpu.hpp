@@ -9,8 +9,8 @@
 
 namespace ac_gpu {
 
-    struct Filters {
-        size_t index;
+    struct Filter {
+        int index;
         std::string name;
     };
 
@@ -95,11 +95,11 @@ namespace ac_gpu {
         }
     };
 
-    extern Filters filters[];
+    extern Filter filters[];
 }
 
 extern "C" {
-    void launch_filter(int filterIndex, unsigned char* data, unsigned char** allFrames,
+    void launch_filter(ac_gpu::Filter *filter, size_t count, int filterIndex, unsigned char* data, unsigned char** allFrames,
                        int numFrames, int width, int height, size_t step,
                        float alpha, bool isNegative, int square_size,
                        int start_index, int start_dir);
