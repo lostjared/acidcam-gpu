@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         cv::Mat frame;
         cv::namedWindow("filter", cv::WINDOW_NORMAL);
         cv::resizeWindow("filter", 1920, 1080);
-        ac_gpu::DynamicFrameBuffer buffer(8); 
+        ac_gpu::DynamicFrameBuffer buffer(10); 
         unsigned char** d_ptrList; 
         cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*));
         cv::Mat rgba_out(height, width, CV_8UC4);
