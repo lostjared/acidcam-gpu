@@ -101,8 +101,11 @@ int main(int argc, char** argv) {
                 }
             }
             if (!cap.read(frame)) break; 
-            if(filter_index == 2)
-                cv::medianBlur(frame, frame, 3);
+            if(current_filter == 2 || current_filter == 3) {
+                int r = 3 + rand() % 7;  
+                for(int i = 0; i < r; ++i)
+                    cv::medianBlur(frame, frame, 3);
+            }
 
             buffer.update(frame);
             if (workingPitch != buffer.framePitch) {
