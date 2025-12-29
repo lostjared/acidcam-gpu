@@ -14,6 +14,8 @@ namespace ac_gpu {
         std::string name;
     };
 
+    inline static const char *filter_names[] = {"SelfAlphaBlend", "MedianBlend", "MedianBlurBLend", "SquareBlockResize"};
+
     class DynamicFrameBuffer {
     public:
         int arraySize;

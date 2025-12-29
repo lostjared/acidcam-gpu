@@ -29,20 +29,16 @@ bool isNumeric(const std::string &text) {
 }
 
 int main(int argc, char** argv) {
-
     Argz<std::string> argz(argc, argv);
-
     bool camera_mode = false;
     int camera_index = 0;
     int filter_index = 0;
     int dynamic_buffer = 10;
     const int max_filter = 3;
-
     std::string inputArg;
     std::string filtersArg;
     std::string bufferArg;
     std::string cameraArg;
-
     argz.addOptionSingleValue('i', "input file (short)");
     argz.addOptionDoubleValue(255, "input", "Input video file");
     argz.addOptionSingleValue('c', "camera index (short)");
