@@ -169,7 +169,6 @@ int main(int argc, char** argv) {
     std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << fps << " fps" << std::endl;
     auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
     int current_filter = filter_index;
-    std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
     int screenshot_count = 1;
     int square_size = 4;
     int square_dir = 1;
@@ -178,7 +177,7 @@ int main(int argc, char** argv) {
     {
         cv::Mat frame;
         cv::namedWindow("filter", cv::WINDOW_NORMAL);
-        cv::resizeWindow("filter", 1920, 1080);
+        cv::resizeWindow("filter", width, height);
         ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer); 
         unsigned char** d_ptrList; 
         CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
