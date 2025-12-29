@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(acidcam-gpu LANGUAGES CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(OpenCV REQUIRED)
