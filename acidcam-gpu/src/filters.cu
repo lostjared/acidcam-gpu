@@ -6,10 +6,9 @@ namespace ac_gpu {
     
     Filters filters[] = { 
         {0, "SelfAlphaBlend"}, 
-        {1, "MedianBlur"}, 
-        {2, "MedianBlend"}, 
-        {3, "MedianBlurBlend"},
-        {4, "SquareBlockResize"} 
+        {1, "MedianBlend"}, 
+        {2, "MedianBlurBlend"},
+        {3, "SquareBlockResize"} 
     };
 
     struct FilterParams {
@@ -128,18 +127,13 @@ namespace ac_gpu {
             case 0:
                 processSelfAlphaBlend(x, y, data, step, params);
                 break;
-            case 1:
-                processMedianBlur(x, y, data, width, height, step);
+            case 1: 
+                processMedianBlend(x, y, data, allFrames, step, params);
                 break;
-            case 2: {
-                    processMedianBlend(x, y, data, allFrames, step, params);
-            }
+            case 2: 
+                processMedianBlend(x, y, data, allFrames, step, params);
                 break;
-            case 3: {
-                    processMedianBlend(x, y, data, allFrames, step, params);
-            }
-                break;
-            case 4:
+            case 3:
                 processSquareBlockResize(x, y, data, allFrames, step, params);
                 break;
         }
