@@ -16,7 +16,7 @@ bool isNumeric(const std::string &text) {
 
 int main(int argc, char** argv) {
     if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " camera_index start_filter" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " camera_index start_filter dynmic_buffer_size" << std::endl;
         return -1;
     }
     bool camera_mode = false;
