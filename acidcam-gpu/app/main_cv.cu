@@ -48,7 +48,6 @@ int main(int argc, char** argv) {
     argz.addOptionSingleValue('b', "buffer size (short)");
     argz.addOptionDoubleValue(257, "buffer", "Dynamic buffer size (4-32)");
     argz.addOptionSingle('h', "help");
-
     try {
         Argument<std::string> a;
         std::vector<std::string> positional;
@@ -129,6 +128,7 @@ int main(int argc, char** argv) {
         if (!isNumeric(list)) {
             std::cerr << "ac: Error invalid filter_index\n";
             return -1;
+    
         }
         int idx = std::stoi(list);
         if (idx > max_filter || idx < 0) {
@@ -149,159 +149,163 @@ int main(int argc, char** argv) {
         std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
         return -2;  
     }
-    
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
     cv::VideoCapture cap;
-    if(camera_mode == true) {
-        cap.open(camera_index, cv::CAP_V4L2);
-    } else {
-        cap.open(inputArg.empty() ? argv[1] : inputArg);
-    }
-    if (!cap.isOpened()) return -1;
-    cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
-    cap.set(cv::CAP_PROP_FPS, 60);
-    double fps = cap.get(cv::CAP_PROP_FPS);
-    if (fps <= 0) fps = 30.0;
-    int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
-    int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
-    std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << fps << " fps" << std::endl;
-    auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
-    int current_filter = filter_index;
-    int screenshot_count = 1;
-    int square_size = 4;
-    int square_dir = 1;
-    int collection_index = 0;
-    int index_dir = 1;
-    {
-        cv::Mat frame;
-        cv::namedWindow("filter", cv::WINDOW_NORMAL);
-        cv::resizeWindow("filter", width, height);
-        ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer); 
-        unsigned char** d_ptrList; 
-        CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
-        cv::Mat rgba_out(height, width, CV_8UC4);
-        unsigned char* d_workingBuffer = nullptr;
-        size_t workingPitch = 0;
-        CHECK_CUDA(cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height));
-        float alpha = 1.0f;
-        while (1) {
-            auto start_time = std::chrono::steady_clock::now();
-            static bool dir = true;
-            if(dir == true) {
-                alpha += 0.1f;
-                if(alpha >= 6.0f) {
-                    alpha = 6.0f;
-                    dir = false;
-                }
-            } else {
-                alpha -= 0.1f;
-                if(alpha <= 1.0f) {
-                    alpha = 1.0f;
-                    dir = true;
-                }
-            }
-            if (!cap.read(frame)) break; 
-            if(current_filter == 2 || current_filter == 3) {
-                int r = 3 + rand() % 7;  
-                for(int i = 0; i < r; ++i)
-                    cv::medianBlur(frame, frame, 3);
-            }
-
-            buffer.update(frame);
-            
-            if (workingPitch != buffer.framePitch || width != buffer.w || height != buffer.h) {
-                if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
-                width = buffer.w;
-                height = buffer.h;
-                CHECK_CUDA(cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height));
-                rgba_out = cv::Mat(height, width, CV_8UC4);  
-            }
-            
-            if(index_dir == 1) {
-                collection_index++;
-                if(collection_index >= (buffer.arraySize - 1)) {
-                    collection_index = buffer.arraySize - 1;
-                    index_dir = 0;
-                }
-            } else {
-                collection_index--;
-                if(collection_index <= 0) {
-                    collection_index = 0;
-                    index_dir = 1;
-                }
-            }
-            if(square_dir == 1) {
-                square_size += 2;
-                if(square_size >= 64) {
-                    square_size = 64;
-                    square_dir = 0;
-                }
-            } else {
-                square_size -= 2;
-                if(square_size <= 2) {
-                    square_size = 2;
-                    square_dir = 1;
-                }
-            }
-            CHECK_CUDA(cudaMemcpy2D(d_workingBuffer, workingPitch,
-                         buffer.deviceFrames[buffer.arraySize - 1], buffer.framePitch,
-                         buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice));
-            
-            CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), 
-                       buffer.arraySize * sizeof(unsigned char*), 
-                       cudaMemcpyHostToDevice));
-
-            launch_filter(&vlist[0], vlist.size(), d_workingBuffer, d_ptrList,
-                          buffer.arraySize, buffer.w, buffer.h, workingPitch,
-                          alpha, false, square_size, collection_index, index_dir);
-            
-            CHECK_CUDA(cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost));
-            cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
-            cv::imshow("filter", frame);
-            int key = cv::waitKey(1);
-            if (key == 27) break; 
-            else if (key == 's' || key == 'S') { 
-                auto now = std::chrono::system_clock::now();
-                std::time_t t = std::chrono::system_clock::to_time_t(now);
-                std::tm tm = *std::localtime(&t);
-                char timebuf[32];
-                std::strftime(timebuf, sizeof(timebuf), "%Y%m%d_%H%M%S", &tm);
-                std::string out = "acidcam_gpu-" + std::string(timebuf) + "_" +
-                                  std::to_string(width) + "x" + std::to_string(height) +
-                                  "_" + std::to_string(screenshot_count++) + ".png";
-                cv::imwrite(out, frame);
-                std::cout << "ac: Saved screenshot: " << out << std::endl;
-            } 
-            else if (key == 82 || key == 0 || key == 65362) { 
-                if (current_filter < max_filter) {
-                    current_filter++;
-                    vlist.clear();
-                    ac_gpu::Filter f {current_filter, filter_names[current_filter]};
-                    vlist.push_back(f);
-                    std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
-                }
-            }
-            else if (key == 84 || key == 1 || key == 65364) { 
-                if (current_filter > 0) {
-                    current_filter--;
-                    vlist.clear();
-                    ac_gpu::Filter f {current_filter, filter_names[current_filter]};
-                    vlist.push_back(f);
-                    std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
-                }
-            }
-
-            auto end_time = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-            if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
+    try {
+        if(camera_mode == true) {
+            cap.open(camera_index, cv::CAP_V4L2);
+        } else {
+            cap.open(inputArg.empty() ? argv[1] : inputArg);
         }
+        if (!cap.isOpened()) return -1;
+        cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+        cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
+        cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
+        cap.set(cv::CAP_PROP_FPS, 60);
+        double fps = cap.get(cv::CAP_PROP_FPS);
+        if (fps <= 0) fps = 30.0;
+        int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
+        int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+        std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << fps << " fps" << std::endl;
+        auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
+        int current_filter = filter_index;
+        int screenshot_count = 1;
+        int square_size = 4;
+        int square_dir = 1;
+        int collection_index = 0;
+        int index_dir = 1;
+        {
+            cv::Mat frame;
+            cv::namedWindow("filter", cv::WINDOW_NORMAL);
+            cv::resizeWindow("filter", width, height);
+            ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer); 
+            unsigned char** d_ptrList; 
+            CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
+            cv::Mat rgba_out(height, width, CV_8UC4);
+            unsigned char* d_workingBuffer = nullptr;
+            size_t workingPitch = 0;
+            CHECK_CUDA(cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height));
+            float alpha = 1.0f;
+            while (1) {
+                auto start_time = std::chrono::steady_clock::now();
+                static bool dir = true;
+                if(dir == true) {
+                    alpha += 0.1f;
+                    if(alpha >= 6.0f) {
+                        alpha = 6.0f;
+                        dir = false;
+                    }
+                } else {
+                    alpha -= 0.1f;
+                    if(alpha <= 1.0f) {
+                        alpha = 1.0f;
+                        dir = true;
+                    }
+                }
+                if (!cap.read(frame)) break; 
+                if(current_filter == 2 || current_filter == 3) {
+                    int r = 3 + rand() % 7;  
+                    for(int i = 0; i < r; ++i)
+                        cv::medianBlur(frame, frame, 3);
+                }
 
-        CHECK_CUDA(cudaFree(d_ptrList));
-        if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
+                buffer.update(frame);
+                
+                if (workingPitch != buffer.framePitch || width != buffer.w || height != buffer.h) {
+                    if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
+                    width = buffer.w;
+                    height = buffer.h;
+                    CHECK_CUDA(cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height));
+                    rgba_out = cv::Mat(height, width, CV_8UC4);  
+                }
+                
+                if(index_dir == 1) {
+                    collection_index++;
+                    if(collection_index >= (buffer.arraySize - 1)) {
+                        collection_index = buffer.arraySize - 1;
+                        index_dir = 0;
+                    }
+                } else {
+                    collection_index--;
+                    if(collection_index <= 0) {
+                        collection_index = 0;
+                        index_dir = 1;
+                    }
+                }
+                if(square_dir == 1) {
+                    square_size += 2;
+                    if(square_size >= 64) {
+                        square_size = 64;
+                        square_dir = 0;
+                    }
+                } else {
+                    square_size -= 2;
+                    if(square_size <= 2) {
+                        square_size = 2;
+                        square_dir = 1;
+                    }
+                }
+                CHECK_CUDA(cudaMemcpy2D(d_workingBuffer, workingPitch,
+                            buffer.deviceFrames[buffer.arraySize - 1], buffer.framePitch,
+                            buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice));
+                
+                CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), 
+                        buffer.arraySize * sizeof(unsigned char*), 
+                        cudaMemcpyHostToDevice));
+
+                launch_filter(&vlist[0], vlist.size(), d_workingBuffer, d_ptrList,
+                            buffer.arraySize, buffer.w, buffer.h, workingPitch,
+                            alpha, false, square_size, collection_index, index_dir);
+                
+                CHECK_CUDA(cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost));
+                cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
+                cv::imshow("filter", frame);
+                int key = cv::waitKey(1);
+                if (key == 27) break; 
+                else if (key == 's' || key == 'S') { 
+                    auto now = std::chrono::system_clock::now();
+                    std::time_t t = std::chrono::system_clock::to_time_t(now);
+                    std::tm tm = *std::localtime(&t);
+                    char timebuf[32];
+                    std::strftime(timebuf, sizeof(timebuf), "%Y%m%d_%H%M%S", &tm);
+                    std::string out = "acidcam_gpu-" + std::string(timebuf) + "_" +
+                                    std::to_string(width) + "x" + std::to_string(height) +
+                                    "_" + std::to_string(screenshot_count++) + ".png";
+                    cv::imwrite(out, frame);
+                    std::cout << "ac: Saved screenshot: " << out << std::endl;
+                } 
+                else if (key == 82 || key == 0 || key == 65362) { 
+                    if (current_filter < max_filter) {
+                        current_filter++;
+                        vlist.clear();
+                        ac_gpu::Filter f {current_filter, filter_names[current_filter]};
+                        vlist.push_back(f);
+                        std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
+                    }
+                }
+                else if (key == 84 || key == 1 || key == 65364) { 
+                    if (current_filter > 0) {
+                        current_filter--;
+                        vlist.clear();
+                        ac_gpu::Filter f {current_filter, filter_names[current_filter]};
+                        vlist.push_back(f);
+                        std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
+                    }
+                }
+                auto end_time = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+                if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
+            }
+            CHECK_CUDA(cudaFree(d_ptrList));
+            if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
+        } 
+    }
+    catch(ac_gpu::ACException &e) {
+        std::cerr << e.why() << std::endl;
     } 
-
+    catch(std::exception &e) {
+        std::cerr << e.what() << std::endl;
+    }
     cap.release(); 
     return 0;
 }

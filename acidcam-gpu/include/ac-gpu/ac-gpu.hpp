@@ -13,8 +13,15 @@ namespace ac_gpu {
         int index;
         std::string name;
     };
-    
 
+    class ACException {
+    public:
+        ACException(const std::string &text) : txt{text} {}
+        std::string why() const { return txt; }
+    private:
+        std::string txt;
+    };
+    
     class DynamicFrameBuffer {
     public:
         int arraySize;
