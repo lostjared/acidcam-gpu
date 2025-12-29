@@ -136,9 +136,6 @@ namespace ac_gpu {
             }
                 break;
             case 3: {
-                    processMedianBlur(x, y, data, width, height, step);
-                    processMedianBlur(x, y, data, width, height, step);
-                    processMedianBlur(x, y, data, width, height, step);
                     processMedianBlend(x, y, data, allFrames, step, params);
             }
                 break;

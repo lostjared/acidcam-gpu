@@ -15,13 +15,15 @@ bool isNumeric(const std::string &text) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
+    if (argc != 4) {
         std::cerr << "Usage: " << argv[0] << " camera_index start_filter" << std::endl;
         return -1;
     }
     bool camera_mode = false;
     int camera_index = 0;
     int filter_index = 0;
+    int dynamic_buffer = 10;
+
     if(isNumeric(argv[1])) {
         camera_mode = true;
         camera_index = std::stoi(argv[1]);
@@ -32,6 +34,17 @@ int main(int argc, char** argv) {
     } else {
         filter_index = std::stoi(argv[2]);
     }
+
+    if(!isNumeric(argv[3])) {
+        std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
+        return -2;
+    } else {
+        dynamic_buffer = std::stoi(argv[3]);
+        if(dynamic_buffer < 4 || dynamic_buffer > 32) {
+            std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
+        }
+    }
+
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
     cv::VideoCapture cap;
     if(camera_mode == true) {
@@ -63,7 +76,7 @@ int main(int argc, char** argv) {
         cv::Mat frame;
         cv::namedWindow("filter", cv::WINDOW_NORMAL);
         cv::resizeWindow("filter", 1920, 1080);
-        ac_gpu::DynamicFrameBuffer buffer(10); 
+        ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer); 
         unsigned char** d_ptrList; 
         cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*));
         cv::Mat rgba_out(height, width, CV_8UC4);
@@ -88,6 +101,9 @@ int main(int argc, char** argv) {
                 }
             }
             if (!cap.read(frame)) break; 
+            if(filter_index == 2)
+                cv::medianBlur(frame, frame, 3);
+
             buffer.update(frame);
             if (workingPitch != buffer.framePitch) {
                 if (d_workingBuffer) cudaFree(d_workingBuffer);
