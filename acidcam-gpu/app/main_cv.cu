@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
         size_t workingPitch = 0;
         cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height);
         float alpha = 1.0f;
-        while (true) {
+        while (1) {
             auto start_time = std::chrono::steady_clock::now();
             static bool dir = true;
             if(dir == true) {
