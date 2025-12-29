@@ -4,11 +4,14 @@
 #include<thread>
 #include<cuda_runtime.h>
 #include<ac-gpu/ac-gpu.hpp>
+#include<ac-gpu/argz.hpp>
 #include<cstdlib>
 #include<ctime>
 #include<regex>
 #include<string>
 #include<vector>
+
+static const char* filter_names[] = {"SelfAlphaBlend", "MedianBlend", "MedianBlurBLend", "SquareBlockResize"};
 
 #define CHECK_CUDA(call) \
     do { \
@@ -26,24 +29,82 @@ bool isNumeric(const std::string &text) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        std::cerr << "ac: Usage: " << argv[0] << " camera_index start_filter dynmic_buffer_size" << std::endl;
-        return -1;
-    }
+
+    Argz<std::string> argz(argc, argv);
+
     bool camera_mode = false;
     int camera_index = 0;
     int filter_index = 0;
     int dynamic_buffer = 10;
-    const int max_filter = 3;  
+    const int max_filter = 3;
 
-    if(isNumeric(argv[1])) {
-        camera_mode = true;
-        camera_index = std::stoi(argv[1]);
+    std::string inputArg;
+    std::string filtersArg;
+    std::string bufferArg;
+    std::string cameraArg;
+
+    argz.addOptionSingleValue('i', "input file (short)");
+    argz.addOptionDoubleValue(255, "input", "Input video file");
+    argz.addOptionSingleValue('c', "camera index (short)");
+    argz.addOptionDoubleValue(258, "camera", "Camera index (prefer this over --input)");
+    argz.addOptionSingleValue('f', "filters list (short)");
+    argz.addOptionDoubleValue(256, "filters", "Comma-separated filter indices (e.g. 0,1,2)");
+    argz.addOptionSingleValue('b', "buffer size (short)");
+    argz.addOptionDoubleValue(257, "buffer", "Dynamic buffer size (4-32)");
+    argz.addOptionSingle('h', "help");
+
+    try {
+        Argument<std::string> a;
+        std::vector<std::string> positional;
+        int code = 0;
+        while ((code = argz.proc(a)) != -1) {
+            switch (code) {
+                case 'h':
+                    argz.help(std::cout);
+                    return 0;
+                case 'i':
+                case 255:
+                    inputArg = a.arg_value;
+                    break;
+                case 'c':
+                case 258:
+                    cameraArg = a.arg_value;
+                    break;
+                case 'f':
+                case 256:
+                    filtersArg = a.arg_value;
+                    break;
+                case 'b':
+                case 257:
+                    bufferArg = a.arg_value;
+                    break;
+            }
+        }
+    } catch (ArgException<std::string> &e) {
+        std::cerr << "ac: Argument error: " << e.text() << std::endl;
+        return -1;
     }
-    const char* filter_names[] = {"SelfAlphaBlend", "MedianBlend", "MedianBlurBLend", "SquareBlockResize"};
+
+    if (filtersArg.empty() || bufferArg.empty() || (inputArg.empty() && cameraArg.empty())) {
+        std::cerr << "ac: Usage: --input <file> or --camera <index> --filters <list> --buffer <size>\n";
+        return -1;
+    }
+
+    if (!cameraArg.empty()) {
+        if (!isNumeric(cameraArg)) {
+            std::cerr << "ac: camera index must be numeric\n";
+            return -1;
+        }
+        camera_mode = true;
+        camera_index = std::stoi(cameraArg);
+    } else if (!inputArg.empty() && isNumeric(inputArg)) {
+        camera_mode = true;
+        camera_index = std::stoi(inputArg);
+    }
+
     std::vector<ac_gpu::Filter> vlist;
 
-    std::string list = argv[2];
+    std::string list = filtersArg.empty() ? argv[2] : filtersArg;
     if (list.find(',') != std::string::npos) {
         size_t start = 0;
         while (1) {
@@ -81,15 +142,16 @@ int main(int argc, char** argv) {
         filter_index = idx;
         vlist.emplace_back(ac_gpu::Filter{filter_index, filter_names[filter_index]});
     }
-    if(!isNumeric(argv[3])) {
-        std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
-        return -2;
-    } else {
-        dynamic_buffer = std::stoi(argv[3]);
-        if(dynamic_buffer < 4 || dynamic_buffer > 32) {
+    if(!bufferArg.empty()) {
+        if(!isNumeric(bufferArg)) {
             std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
-            return -2;  
+            return -2;
         }
+        dynamic_buffer = std::stoi(bufferArg);
+    }
+    if(dynamic_buffer < 4 || dynamic_buffer > 32) {
+        std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
+        return -2;  
     }
     
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
@@ -97,7 +159,7 @@ int main(int argc, char** argv) {
     if(camera_mode == true) {
         cap.open(camera_index, cv::CAP_V4L2);
     } else {
-        cap.open(argv[1]);
+        cap.open(inputArg.empty() ? argv[1] : inputArg);
     }
     if (!cap.isOpened()) return -1;
     cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
