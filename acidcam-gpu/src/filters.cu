@@ -77,6 +77,7 @@ namespace ac_gpu {
         
         for (int j = 0; j < params.numFrames; ++j) {
             unsigned char* framePtr = allFrames[j];
+            if (framePtr == nullptr) continue; 
             sumB += framePtr[idx];
             sumG += framePtr[idx + 1];
             sumR += framePtr[idx + 2];
@@ -108,6 +109,8 @@ namespace ac_gpu {
         
         int idx = y * step + x * 4;
         unsigned char* historyFrame = allFrames[frame_index];
+        
+        if (historyFrame == nullptr) return;
         
         currentFrame[idx]     = (unsigned char)(0.5f * currentFrame[idx]     + 0.5f * historyFrame[idx]);
         currentFrame[idx + 1] = (unsigned char)(0.5f * currentFrame[idx + 1] + 0.5f * historyFrame[idx + 1]);
@@ -157,5 +160,10 @@ extern "C" void launch_filter(int filterIndex, unsigned char* data, unsigned cha
     params.start_dir = start_dir;
     
     ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(filterIndex, data, allFrames, width, height, step, params);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
+    }
+    
     cudaDeviceSynchronize();
 }
