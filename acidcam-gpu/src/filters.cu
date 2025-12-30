@@ -59,16 +59,15 @@ namespace ac_gpu {
             }
         }
     }
-
     __device__ void processSelfScaleRefined(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;    
         unsigned char b = data[idx];
         unsigned char g = data[idx + 1];
         unsigned char r = data[idx + 2];
         float alpha = params.alpha;
-        data[idx]     = static_cast<unsigned char>((0.25f * (b * alpha)) + (0.75f * b));
-        data[idx + 1] = static_cast<unsigned char>((0.25f * (g * alpha)) + (0.75f * g));
-        data[idx + 2] = static_cast<unsigned char>((0.25f * (r * alpha)) + (0.75f * r));
+        data[idx]     = (unsigned char)fminf(255.0f, b * alpha);
+        data[idx + 1] = (unsigned char)fminf(255.0f, g * alpha);
+        data[idx + 2] = (unsigned char)fminf(255.0f, r * alpha);
         setAlpha(data, idx, params.isNegative);
     }
 
@@ -136,17 +135,12 @@ namespace ac_gpu {
         currentFrame[idx + 3] = 255;
     }
 
-    // new
-
     __device__ bool colorBounds(unsigned char r1, unsigned char g1, unsigned char b1, 
                                 unsigned char r2, unsigned char g2, unsigned char b2, 
                                 int ir, int ig, int ib) {
         return (abs(r1 - r2) < ir && abs(g1 - g2) < ig && abs(b1 - b2) < ib);
     }
 
-    // --- PORTED FILTERS ---
-
-    // StrangeGlitch (Works for 16, 32, 64 based on params.numFrames)
     __device__ void processStrangeGlitch(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         unsigned char b = data[idx];
@@ -155,14 +149,17 @@ namespace ac_gpu {
 
         for (int q = 0; q < params.numFrames; ++q) {
             unsigned char* otherFrame = allFrames[q];
+            if (otherFrame == nullptr) continue;
+
             unsigned char ob = otherFrame[idx];
             unsigned char og = otherFrame[idx + 1];
             unsigned char or_ = otherFrame[idx + 2];
 
-            if (colorBounds(r, g, b, or_, og, ob, 30, 30, 30)) {
+            if (!colorBounds(r, g, b, or_, og, ob, 30, 30, 30)) {
                 data[idx]     = ob;
                 data[idx + 1] = og;
                 data[idx + 2] = or_;
+                break; 
             }
         }
     }
@@ -219,18 +216,18 @@ namespace ac_gpu {
             data[idx + (2 - j)] = (unsigned char)val;
         }
     }
-
     __device__ void processSquareShrink(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
         int offZ = params.start_index; 
         int offI = params.start_index;
-
         if (y >= offZ && y < (height - offZ) && x >= offI && x < (width - offI)) {
             int idx = y * step + x * 4;
-            unsigned char* reimage = allFrames[params.numFrames - 1]; 
+            unsigned char* reimage = allFrames[0]; 
             
-            data[idx]     = (unsigned char)((data[idx] * 0.5f) + (reimage[idx] * 0.5f));
-            data[idx + 1] = (unsigned char)((data[idx+1] * 0.5f) + (reimage[idx+1] * 0.5f));
-            data[idx + 2] = (unsigned char)((data[idx+2] * 0.5f) + (reimage[idx+2] * 0.5f));
+            if (reimage != nullptr) {
+                data[idx]     = (unsigned char)((data[idx] * 0.5f) + (reimage[idx] * 0.5f));
+                data[idx + 1] = (unsigned char)((data[idx+1] * 0.5f) + (reimage[idx+1] * 0.5f));
+                data[idx + 2] = (unsigned char)((data[idx+2] * 0.5f) + (reimage[idx+2] * 0.5f));
+            }
         }
     }
 
@@ -304,5 +301,5 @@ extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* d
     }
 
     cudaDeviceSynchronize();
-        cudaFree(f_device);
+    cudaFree(f_device);
 }

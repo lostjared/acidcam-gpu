@@ -53,10 +53,10 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
     
     if (gState.alpha_dir == 1) {
         gState.alpha += 0.01f;
-        if (gState.alpha >= 1.0f) gState.alpha_dir = 0;
+        if (gState.alpha >= 3.0f) gState.alpha_dir = 0;
     } else {
         gState.alpha -= 0.01f;
-        if (gState.alpha <= 0.1f) gState.alpha_dir = 1;
+        if (gState.alpha <= 1.0f) gState.alpha_dir = 1;
     }
 
     if (gState.square_dir == 1) {
@@ -66,9 +66,6 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
         gState.square_offset -= gState.square_speed;
         if (gState.square_offset <= 1) gState.square_dir = 1;
     }
-
-    
-    //buffer.update(frame); 
 
     
     CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), 
