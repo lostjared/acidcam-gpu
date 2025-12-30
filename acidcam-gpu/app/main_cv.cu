@@ -119,7 +119,6 @@ cv::Size extractResolution(const std::string &text) {
     }
     std::string left = text.substr(0, pos);
     std::string right = text.substr(pos+1);
-    std::cout << "resolution: " << left << ":" << right << "\n";
     return cv::Size(std::stoi(left), std::stoi(right));
 }
 
@@ -141,6 +140,7 @@ int main(int argc, char** argv) {
     std::string cameraArg;
     std::string output_filename;
     std::string output_crf= "23";
+    double output_fps = 60.0;
 
     argz.addOptionSingleValue('i', "input file (short)")
     .addOptionDoubleValue(255, "input", "Input video file")
@@ -155,6 +155,7 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(289, "camera-res", "Camera resolution")
     .addOptionDoubleValue(290, "output", "output filename")
     .addOptionDoubleValue(291, "crf", "output compresion")
+    .addOptionDoubleValue(292, "fps", "frames per second")
     .addOptionSingle('h', "help");
     try {
         Argument<std::string> a;
@@ -185,7 +186,7 @@ int main(int argc, char** argv) {
                 case 260:
                     vres = extractResolution(a.arg_value);
                     break;
-                case  259:
+                case 289:
                     cres = extractResolution(a.arg_value);
                     break;
                 case 290:
@@ -193,6 +194,9 @@ int main(int argc, char** argv) {
                     break;
                 case 291:
                     output_crf = a.arg_value;
+                    break;
+                case 292:
+                    output_fps = std::stod(a.arg_value);
                     break;
             }
         }
@@ -276,7 +280,7 @@ int main(int argc, char** argv) {
     int frameCount = 0;
     double currentFPS = 0.0;
     auto lastFPSUpdate = std::chrono::steady_clock::now();
-    double fps = 30;
+    double fps = 30.0;
     try {
         if(camera_mode == true) {
             cap.open(camera_index, cv::CAP_V4L2);
@@ -284,34 +288,30 @@ int main(int argc, char** argv) {
             cap.open(inputArg.empty() ? argv[1] : inputArg);
         }
         if (!cap.isOpened()) return -1;
+    
         cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+        int fourcc = (int)cap.get(cv::CAP_PROP_FOURCC);
+        if (fourcc != cv::VideoWriter::fourcc('M', 'J', 'P', 'G')) {
+            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y', 'Y', 'U', 'V'));
+            std::cout << "ac: Using YYUV codec (YUYV not available)" << std::endl;
+       } else {
+            std::cout << "ac: Using MJPG codec" << std::endl;
+        }
         cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
         cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
-        cap.set(cv::CAP_PROP_FPS, 60);
+        cap.set(cv::CAP_PROP_FPS, output_fps);
         fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
+        double reported_fps = fps;
         int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
         int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
-        if (width % 2 != 0) {
-            width--;
-            cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
-        }
-        if (height % 2 != 0) {
-            height--;
-            cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
-        }
-
         ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer);
         CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
         cv::Mat rgba_out(height, width, CV_8UC4);
-        std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << fps << " fps" << std::endl;
+        std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << reported_fps << " fps (reported by camera)" << std::endl;
         auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
         int current_filter = filter_index;
         int screenshot_count = 1;
-        //int square_size = 4;
-        //int square_dir = 1;
-        //int collection_index = 0;
-        //int index_dir = 1;
         cv::Mat frame;
         cv::namedWindow("filter", cv::WINDOW_NORMAL);
         cv::resizeWindow("filter", vres.width, vres.height);
@@ -366,7 +366,7 @@ int main(int argc, char** argv) {
             auto elapsedx = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFPSUpdate);
 
             if (elapsedx.count() >= 1000) {
-                currentFPS = frameCount / (elapsedx.count() / 1000.0);
+                currentFPS = (frameCount * 1000.0) / elapsedx.count();
                 frameCount = 0;
                 lastFPSUpdate = currentTime;
             }
