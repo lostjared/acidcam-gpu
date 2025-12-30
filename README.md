@@ -11,8 +11,6 @@ The original project brought a massive library of "glitch" filters to digital ar
 
 **acidcam-gpu** solves this by:
 * **Parallelizing the Chaos:** Using custom CUDA kernels to process millions of pixels simultaneously.
-* **Real-Time Feedback:** Optimized for low-latency live performances and VJ sets.
-* **Fractal Integration:** Native support for real-time 3D fractal generation and psychedelic distortion.
 
 ## 🛠 Tech Stack
 * **Language:** C++20
