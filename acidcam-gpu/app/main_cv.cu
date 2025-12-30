@@ -30,7 +30,9 @@ struct AnimationState {
     int alpha_dir = 1;
     int square_offset = 0;
     int square_dir = 1;
+    int square_dir_size = 1;
     int square_speed = 2;
+    int square_size = 0;
 } gState;
 
 
@@ -51,14 +53,36 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
         if (gState.alpha <= 1.0f) gState.alpha_dir = 1;
     }
 
-    if (gState.square_dir == 1) {
-        gState.square_offset += gState.square_speed;
-        if (gState.square_offset > (frame.rows / 2) - 1) gState.square_dir = 0;
+    static int current_frame_index = 0;
+    static int index_dir = 1;
+
+    if(index_dir == 1) {
+        current_frame_index++;
+        if(current_frame_index >= (buffer.arraySize - 1)) {
+            current_frame_index = buffer.arraySize - 1;
+            index_dir = 0;
+        }
     } else {
-        gState.square_offset -= gState.square_speed;
-        if (gState.square_offset <= 1) gState.square_dir = 1;
+        current_frame_index--;
+        if(current_frame_index <= 0) {
+            current_frame_index = 0;
+            index_dir = 1;
+        }
     }
 
+    if(gState.square_dir_size == 1) {
+        gState.square_size += 2;
+         if(gState.square_size >= 64) {
+               gState.square_size = 64;
+                gState.square_dir_size = 0;
+        }
+    } else {
+        gState.square_size -= 2;
+        if(gState.square_size <= 2) {
+            gState.square_size = 2;
+            gState.square_dir_size = 1;
+        }
+    }
     
     CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), 
                           buffer.arraySize * sizeof(unsigned char*), 
@@ -79,9 +103,9 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
         workingPitch, 
         gState.alpha, 
         false, 
-        gState.square_offset, 
-        gState.square_offset, 
-        gState.square_dir,
+        gState.square_size,
+        current_frame_index, 
+        index_dir,
         d_list_ptr, 
         changed     
     );
