@@ -7,9 +7,20 @@
 #include <vector>
 #include <string>
 
+
+#define CHECK_CUDA(call) \
+    do { \
+        cudaError_t err = call; \
+        if (err != cudaSuccess) { \
+            std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ << " - " \
+                      << cudaGetErrorString(err) << std::endl; \
+            exit(EXIT_FAILURE); \
+        } \
+    } while(0)
+
 namespace ac_gpu {
 
-    inline const int AC_FILTER_MAX = 10;
+    inline const int AC_FILTER_MAX = 11;
 
     struct Filter {
         int index;
@@ -109,10 +120,11 @@ namespace ac_gpu {
 }
 
 extern "C" {
-    void launch_filter(ac_gpu::Filter *filter, size_t count, unsigned char* data, unsigned char** allFrames,
-                       int numFrames, int width, int height, size_t step,
-                       float alpha, bool isNegative, int square_size,
-                       int start_index, int start_dir);
+    void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* data, unsigned char** allFrames,
+                            int numFrames, int width, int height, size_t step,
+                            float alpha, bool isNegative, int square_size,
+                            int start_index, int start_dir, 
+                            ac_gpu::Filter** d_list_ptr, bool& changed);
 }
 
 #endif

@@ -14,7 +14,8 @@ namespace ac_gpu {
         {6, "MatrixOutline"},
         {7, "AuraTrails"},
         {8, "MirrorReverseColor"},
-        {9, "ImageSquareShrink"}
+        {9, "ImageSquareShrink"},
+        {10,"MotionGhostTrails"}
     };
 
     struct FilterParams {
@@ -231,6 +232,31 @@ namespace ac_gpu {
         }
     }
 
+    __device__ void processMotionGhost(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        
+        unsigned char b = data[idx];
+        unsigned char g = data[idx + 1];
+        unsigned char r = data[idx + 2];
+
+        unsigned char* ghostFrame = allFrames[0];
+        
+        if (ghostFrame != nullptr) {
+            unsigned char gb = ghostFrame[idx];
+            unsigned char gg = ghostFrame[idx + 1];
+            unsigned char gr = ghostFrame[idx + 2];
+
+            float a = params.alpha;
+            float inv_a = 1.0f - a;
+
+            data[idx]     = (unsigned char)fminf(255.0f, (b * inv_a) + (gb * a));
+            data[idx + 1] = (unsigned char)fminf(255.0f, (g * inv_a) + (gg * a));
+            data[idx + 2] = (unsigned char)fminf(255.0f, (r * inv_a) + (gr * a));
+        }
+        
+        setAlpha(data, idx, params.isNegative);
+    }
+
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames,
                                          int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -260,7 +286,7 @@ namespace ac_gpu {
                     case 7: processAuraTrails(x, y, data, allFrames, step, params); break;
                     case 8: processMirrorReverse(x, y, data, width, height, step); break;
                     case 9: processSquareShrink(x, y, data, allFrames, width, height, step, params); break;
-
+                    case 10: processMotionGhost(x, y, data, allFrames, step, params); break;
                 }
         }
 
@@ -273,14 +299,21 @@ namespace ac_gpu {
     }
 }
 
+
 extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* data, unsigned char** allFrames,
                             int numFrames, int width, int height, size_t step,
                             float alpha, bool isNegative, int square_size,
-                            int start_index, int start_dir) {
+                            int start_index, int start_dir, 
+                            ac_gpu::Filter** d_list_ptr, bool& changed) {
 
-    ac_gpu::Filter* f_device;
-    cudaMalloc(&f_device, sizeof(ac_gpu::Filter) * c);
-    cudaMemcpy(f_device, f_host, sizeof(ac_gpu::Filter) * c, cudaMemcpyHostToDevice);
+    if (changed || *d_list_ptr == nullptr) {
+        if (*d_list_ptr != nullptr) {
+            cudaFree(*d_list_ptr);
+        }
+        CHECK_CUDA(cudaMalloc(d_list_ptr, sizeof(ac_gpu::Filter) * c));
+        CHECK_CUDA(cudaMemcpy(*d_list_ptr, f_host, sizeof(ac_gpu::Filter) * c, cudaMemcpyHostToDevice));
+        changed = false; 
+    }
 
     dim3 blockSize(16, 16);
     dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
@@ -293,13 +326,8 @@ extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* d
     params.start_index = start_index;
     params.start_dir = start_dir;
 
-    ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(f_device, c, data, allFrames, width, height, step, params);
-
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
-    }
-
+    ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(*d_list_ptr, c, data, allFrames, width, height, step, params);
+    
     cudaDeviceSynchronize();
-    cudaFree(f_device);
 }
+

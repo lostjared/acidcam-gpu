@@ -21,7 +21,8 @@ static const char* filter_names[] = {
     "MatrixOutline",
     "AuraTrails",
     "MirrorReverseColor",
-    "ImageSquareShrink"
+    "ImageSquareShrink",
+    "MotionGhostTrails"
 };
 
 struct AnimationState {
@@ -32,15 +33,6 @@ struct AnimationState {
     int square_speed = 2;
 } gState;
 
-#define CHECK_CUDA(call) \
-    do { \
-        cudaError_t err = call; \
-        if (err != cudaSuccess) { \
-            std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ << " - " \
-                      << cudaGetErrorString(err) << std::endl; \
-            exit(EXIT_FAILURE); \
-        } \
-    } while(0)
 
 bool isNumeric(const std::string &text) {
     std::regex re("^-?\\d+(\\.\\d+)?$");
@@ -49,7 +41,7 @@ bool isNumeric(const std::string &text) {
 
 void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer, 
                     unsigned char* d_workingBuffer, unsigned char** d_ptrList,
-                    size_t workingPitch, ac_gpu::Filter* activeFilters, size_t filterCount) {
+                    size_t workingPitch, ac_gpu::Filter* activeFilters, size_t filterCount, ac_gpu::Filter** d_list_ptr, bool& changed) {
     
     if (gState.alpha_dir == 1) {
         gState.alpha += 0.01f;
@@ -76,7 +68,6 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
     CHECK_CUDA(cudaMemcpy2D(d_workingBuffer, workingPitch,
                             buffer.deviceFrames[buffer.arraySize - 1], buffer.framePitch,
                             buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice));
-
     launch_filter(
         activeFilters, 
         filterCount, 
@@ -90,7 +81,9 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
         false, 
         gState.square_offset, 
         gState.square_offset, 
-        gState.square_dir
+        gState.square_dir,
+        d_list_ptr, 
+        changed     
     );
 }
 
@@ -103,6 +96,9 @@ int main(int argc, char** argv) {
     unsigned char* d_workingBuffer = nullptr;
     size_t workingPitch = 0;
     unsigned char** d_ptrList = nullptr;
+    ac_gpu::Filter* d_filterList = nullptr;
+    //size_t d_filterListSize = 0;
+    bool filtersChanged = true; 
     std::string inputArg;
     std::string filtersArg;
     std::string bufferArg;
@@ -276,7 +272,9 @@ int main(int argc, char** argv) {
                 d_ptrList, 
                 workingPitch, 
                 &vlist[0], 
-                vlist.size()
+                vlist.size(),
+                &d_filterList,
+                filtersChanged
             );
                         
             CHECK_CUDA(cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost));
@@ -303,6 +301,7 @@ int main(int argc, char** argv) {
                     vlist.clear();
                     ac_gpu::Filter f {current_filter, filter_names[current_filter]};
                     vlist.push_back(f);
+                    filtersChanged = true;
                     std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
                 }
             }
@@ -312,6 +311,7 @@ int main(int argc, char** argv) {
                     vlist.clear();
                     ac_gpu::Filter f {current_filter, filter_names[current_filter]};
                     vlist.push_back(f);
+                    filtersChanged = true;
                     std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
                 }
             }
@@ -319,6 +319,9 @@ int main(int argc, char** argv) {
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
             if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
         } 
+        if (d_filterList) {
+           cudaFree(d_filterList);
+        }
         CHECK_CUDA(cudaFree(d_ptrList));
         if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
     }
