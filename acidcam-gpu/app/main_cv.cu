@@ -276,6 +276,7 @@ int main(int argc, char** argv) {
     int frameCount = 0;
     double currentFPS = 0.0;
     auto lastFPSUpdate = std::chrono::steady_clock::now();
+    double fps = 30;
     try {
         if(camera_mode == true) {
             cap.open(camera_index, cv::CAP_V4L2);
@@ -287,10 +288,19 @@ int main(int argc, char** argv) {
         cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
         cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
         cap.set(cv::CAP_PROP_FPS, 60);
-        double fps = cap.get(cv::CAP_PROP_FPS);
+        fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
         int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
         int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+        if (width % 2 != 0) {
+            width--;
+            cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
+        }
+        if (height % 2 != 0) {
+            height--;
+            cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
+        }
+
         ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer);
         CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
         cv::Mat rgba_out(height, width, CV_8UC4);
@@ -347,7 +357,7 @@ int main(int argc, char** argv) {
             CHECK_CUDA(cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost));
 
             if(!output_filename.empty())
-                writer.write(rgba_out.ptr());
+                writer.write_ts(rgba_out.ptr());
             
             cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
 
@@ -363,7 +373,9 @@ int main(int argc, char** argv) {
 
             std::string status = "Acid Cam GPU - Filter: " + std::string(filter_names[current_filter]) + 
                      " | Alpha: " + std::to_string(gState.alpha).substr(0, 4) +
-                     " | FPS: " + std::to_string((int)currentFPS);
+                     " | FPS: " + std::to_string((int)currentFPS) + " Duration: ";
+                    double duration_sec = cap.get(cv::CAP_PROP_POS_MSEC) / 1000.0;
+                    status += std::to_string(duration_sec).substr(0, 6) + "s";
 
             cv::putText(frame, status, cv::Point(21, 51), 
                         cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
@@ -426,7 +438,8 @@ int main(int argc, char** argv) {
     }
     if(!output_filename.empty()) {
         writer.close();
-        std::cout << "ac: Wrote: " << output_filename << std::endl;
+        double f_time = static_cast<double>(writer.get_frame_count()) / fps;
+        std::cout << "ac: Wrote: " << output_filename <<  " (" << writer.get_frame_count() << ") frames, duration: " << f_time << std::endl;
     }
     cap.release(); 
     

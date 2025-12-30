@@ -577,15 +577,12 @@ void Writer::write_ts(void* rgba_buffer) {
         return;
     }
 
+    // Zero-copy: pass input buffer directly to sws_scale
     const int src_stride = width * 4;
-    uint8_t* src = static_cast<uint8_t*>(rgba_buffer);
-    for (int y = 0; y < height; ++y) {
-        memcpy(frameRGBA->data[0] + y * frameRGBA->linesize[0], 
-               src + y * src_stride, 
-               src_stride);
-    }
+    uint8_t* src_data[1] = { static_cast<uint8_t*>(rgba_buffer) };
+    int src_linesize[1] = { src_stride };
     
-    sws_scale(sws_ctx, frameRGBA->data, frameRGBA->linesize, 0, height, frameYUV->data, frameYUV->linesize);
+    sws_scale(sws_ctx, src_data, src_linesize, 0, height, frameYUV->data, frameYUV->linesize);
     
     frameYUV->pts = frame_count;
     
