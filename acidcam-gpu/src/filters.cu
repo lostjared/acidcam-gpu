@@ -14,7 +14,9 @@ namespace ac_gpu {
         {6, "MatrixOutline"},
         {7, "AuraTrails"},
         {8, "MirrorReverseColor"},
+        {9, "ImageSquareShrink"}
     };
+
     struct FilterParams {
         float alpha;
         bool isNegative;
@@ -165,10 +167,9 @@ namespace ac_gpu {
         }
     }
 
-    // CollectionMatrixOutline
+    
     __device__ void processMatrixOutline(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
-        // Assuming frame at index 4 is the comparison frame as per your CPU code
         unsigned char* compareFrame = allFrames[4]; 
         
         unsigned char b = data[idx];
@@ -179,21 +180,15 @@ namespace ac_gpu {
         unsigned char cg = compareFrame[idx + 1];
         unsigned char cr = compareFrame[idx + 2];
 
-        // intensity usually comes from getPixelCollection() in your code
         int intensity = 30; 
 
         if (colorBounds(r, g, b, cr, cg, cb, intensity, intensity, intensity)) {
             data[idx] = 0; data[idx+1] = 0; data[idx+2] = 0;
         } 
-        // Note: The 'else' part in your CPU code uses copy1 (MedianBlend).
-        // On GPU, you'd apply MedianBlend as a separate pass or use a temp buffer.
     }
 
-    // MatrixCollectionAuraTrails
     __device__ void processAuraTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
-        
-        // Your CPU code averages frames 1, 4, and 7
         int indices[] = {1, 4, 7};
         float sumB = data[idx], sumG = data[idx+1], sumR = data[idx+2];
 
@@ -209,7 +204,6 @@ namespace ac_gpu {
         data[idx + 2] = (unsigned char)sumR;
     }
 
-    // Mirror_ReverseColor
     __device__ void processMirrorReverse(int x, int y, unsigned char* data, int width, int height, size_t step) {
         int idx = y * step + x * 4;
         int pos_x = (width - x - 1);
@@ -222,20 +216,16 @@ namespace ac_gpu {
         for(int j = 0; j < 3; ++j) {
             float val = (data[idx+j] * 0.25f) + (data[idx0+j] * 0.25f) + 
                         (data[idx1+j] * 0.25f) + (data[idx2+j] * 0.25f);
-            // Reverse color logic: pixel[3-j-1]
             data[idx + (2 - j)] = (unsigned char)val;
         }
     }
 
-    // ImageSquareShrink
     __device__ void processSquareShrink(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
-        // params.start_index and params.start_dir used for frame_offset_z/i
         int offZ = params.start_index; 
         int offI = params.start_index;
 
         if (y >= offZ && y < (height - offZ) && x >= offI && x < (width - offI)) {
             int idx = y * step + x * 4;
-            // Assuming blend image is the last frame in the collection
             unsigned char* reimage = allFrames[params.numFrames - 1]; 
             
             data[idx]     = (unsigned char)((data[idx] * 0.5f) + (reimage[idx] * 0.5f));
@@ -243,10 +233,6 @@ namespace ac_gpu {
             data[idx + 2] = (unsigned char)((data[idx+2] * 0.5f) + (reimage[idx+2] * 0.5f));
         }
     }
-
-
-    // 
-
 
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames,
                                          int width, int height, size_t step, FilterParams params) {
@@ -290,12 +276,18 @@ namespace ac_gpu {
     }
 }
 
-extern "C" void launch_filter(ac_gpu::Filter *f, size_t c, unsigned char* data, unsigned char** allFrames,
-                               int numFrames, int width, int height, size_t step,
-                               float alpha, bool isNegative, int square_size,
-                               int start_index, int start_dir) {
+extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* data, unsigned char** allFrames,
+                            int numFrames, int width, int height, size_t step,
+                            float alpha, bool isNegative, int square_size,
+                            int start_index, int start_dir) {
+
+    ac_gpu::Filter* f_device;
+    cudaMalloc(&f_device, sizeof(ac_gpu::Filter) * c);
+    cudaMemcpy(f_device, f_host, sizeof(ac_gpu::Filter) * c, cudaMemcpyHostToDevice);
+
     dim3 blockSize(16, 16);
     dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
+
     ac_gpu::FilterParams params;
     params.alpha = alpha;
     params.isNegative = isNegative;
@@ -303,14 +295,14 @@ extern "C" void launch_filter(ac_gpu::Filter *f, size_t c, unsigned char* data, 
     params.square_size = square_size;
     params.start_index = start_index;
     params.start_dir = start_dir;
-    ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(f, c, data, allFrames, width, height, step, params);
+
+    ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(f_device, c, data, allFrames, width, height, step, params);
+
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
     }
-    
+
     cudaDeviceSynchronize();
+        cudaFree(f_device);
 }
-
-
-//f ilter 30
