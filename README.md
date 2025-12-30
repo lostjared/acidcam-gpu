@@ -30,7 +30,7 @@ This project is developed and tested on **Bazzite Linux** using **Arch Linux** c
 ### Prerequisites
 * **NVIDIA GPU:** RTX 20-series or newer.
 * **Drivers:** NVIDIA Proprietary Drivers (v535+).
-* **Environment:** Arch Linux (with `cuda`, `glfw`, and `cmake` installed via `pacman`).
+* **Environment:** Arch Linux (with `cuda`, `opencv`, and `cmake` installed via `pacman`).
 
 ### Build Instructions
 ```bash
