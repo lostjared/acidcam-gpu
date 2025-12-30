@@ -15,7 +15,7 @@ The original project brought a massive library of "glitch" filters to digital ar
 ## 🛠 Tech Stack
 * **Language:** C++20
 * **Parallel Computing:** NVIDIA CUDA (Optimized for **RTX 2070**)
-* **Graphics API:** OpenGL / GLFW (Hardware-accelerated rendering)
+* **Graphics API:** OpenGL / SDL (Hardware-accelerated rendering)
 * **Format Support:** Native **MX2 MXMOD** 3D model parsing for real-time geometry glitching.
 
 ## ⚡ Why NVIDIA & CUDA?
