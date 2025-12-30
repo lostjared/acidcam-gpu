@@ -215,6 +215,9 @@ int main(int argc, char** argv) {
     }
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
     cv::VideoCapture cap;
+    int frameCount = 0;
+    double currentFPS = 0.0;
+    auto lastFPSUpdate = std::chrono::steady_clock::now();
     try {
         if(camera_mode == true) {
             cap.open(camera_index, cv::CAP_V4L2);
@@ -279,6 +282,27 @@ int main(int argc, char** argv) {
                         
             CHECK_CUDA(cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost));
             cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
+
+            frameCount++;
+            auto currentTime = std::chrono::steady_clock::now();
+            auto elapsedx = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFPSUpdate);
+
+            if (elapsedx.count() >= 1000) {
+                currentFPS = frameCount / (elapsedx.count() / 1000.0);
+                frameCount = 0;
+                lastFPSUpdate = currentTime;
+            }
+
+            std::string status = "Acid Cam GPU - Filter: " + std::string(filter_names[current_filter]) + 
+                     " | Alpha: " + std::to_string(gState.alpha).substr(0, 4) +
+                     " | FPS: " + std::to_string((int)currentFPS);
+
+            cv::putText(frame, status, cv::Point(21, 51), 
+                        cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
+
+            cv::putText(frame, status, cv::Point(20, 50), 
+                        cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+
             cv::imshow("filter", frame);
             int key = cv::waitKey(1);
             if (key == 27) break; 
