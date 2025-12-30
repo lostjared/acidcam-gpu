@@ -47,4 +47,4 @@ mkdir build && cd build
 cmake ..
 make -j$(nproc)
 
-![Project Demo](https://github.com/lostjared/acidcam-gpu/raw/main/output.gif)
+![Project Demo](https://github.com/lostjared/acidcam-gpu/blob/main/output.gif)
