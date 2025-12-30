@@ -577,9 +577,17 @@ void Writer::write_ts(void* rgba_buffer) {
         return;
     }
 
-    memcpy(frameRGBA->data[0], rgba_buffer, width * height * 4);
+    const int src_stride = width * 4;
+    uint8_t* src = static_cast<uint8_t*>(rgba_buffer);
+    for (int y = 0; y < height; ++y) {
+        memcpy(frameRGBA->data[0] + y * frameRGBA->linesize[0], 
+               src + y * src_stride, 
+               src_stride);
+    }
+    
     sws_scale(sws_ctx, frameRGBA->data, frameRGBA->linesize, 0, height, frameYUV->data, frameYUV->linesize);
-    frameYUV->pts = av_rescale_q(frame_count, AVRational{1, fps_num / fps_den}, codec_ctx->time_base);
+    
+    frameYUV->pts = frame_count;
     
     int ret = avcodec_send_frame(codec_ctx, frameYUV);
     if (ret < 0) {
