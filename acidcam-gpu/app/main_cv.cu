@@ -11,7 +11,7 @@
 #include<string>
 #include<vector>
 
-static const char* filter_names[] = {"SelfAlphaBlend", "MedianBlend", "MedianBlurBLend", "SquareBlockResize"};
+static const char* filter_names[] = {"SelfAlphaBlend", "MedianBlend", "MedianBlurBLend", "SquareBlockResize", "SelfAlphaScaleRefined"};
 
 #define CHECK_CUDA(call) \
     do { \
@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
     int camera_index = 0;
     int filter_index = 0;
     int dynamic_buffer = 10;
-    const int max_filter = 3;
+    const int max_filter = ac_gpu::AC_FILTER_MAX;
     std::string inputArg;
     std::string filtersArg;
     std::string bufferArg;

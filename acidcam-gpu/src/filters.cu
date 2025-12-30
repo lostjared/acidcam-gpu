@@ -8,7 +8,8 @@ namespace ac_gpu {
         {0, "SelfAlphaBlend"}, 
         {1, "MedianBlend"}, 
         {2, "MedianBlurBlend"},
-        {3, "SquareBlockResize"} 
+        {3, "SquareBlockResize"},
+        {4, "SelfAlphaScaleRefined"}
     };
 
     struct FilterParams {
@@ -52,6 +53,18 @@ namespace ac_gpu {
                 }
             }
         }
+    }
+
+    __device__ void processSelfScaleRefined(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;    
+        unsigned char b = data[idx];
+        unsigned char g = data[idx + 1];
+        unsigned char r = data[idx + 2];
+        float alpha = params.alpha;
+        data[idx]     = static_cast<unsigned char>((0.25f * (b * alpha)) + (0.75f * b));
+        data[idx + 1] = static_cast<unsigned char>((0.25f * (g * alpha)) + (0.75f * g));
+        data[idx + 2] = static_cast<unsigned char>((0.25f * (r * alpha)) + (0.75f * r));
+        setAlpha(data, idx, params.isNegative);
     }
 
     __device__ void processMedianBlur(int x, int y, unsigned char* data, int width, int height, size_t step) {
@@ -139,6 +152,9 @@ namespace ac_gpu {
                         break;
                     case 3:
                         processSquareBlockResize(x, y, data, allFrames, step, params);
+                        break;
+                    case 4: 
+                        processSelfScaleRefined(x, y, data, step, params);
                         break;
                 }
         }
