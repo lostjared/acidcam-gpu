@@ -25,7 +25,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 
 ## Project Goals:
 * **Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
-* **Visual User Interace** Simple to use User interface
+* **Visual User Interface** Simple to use User interface
 * **Command line tool** Command line tool
 
 ## 📦 Installation & Environment
