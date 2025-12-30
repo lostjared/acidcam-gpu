@@ -141,6 +141,7 @@ int main(int argc, char** argv) {
     std::string output_filename;
     std::string output_crf= "23";
     double output_fps = 60.0;
+    int tick_count = 1;
 
     argz.addOptionSingleValue('i', "input file (short)")
     .addOptionDoubleValue(255, "input", "Input video file")
@@ -154,6 +155,7 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(260, "resolution", "Window resolution")
     .addOptionDoubleValue(289, "camera-res", "Camera resolution")
     .addOptionDoubleValue(290, "output", "output filename")
+    .addOptionDoubleValue(293, "speed", "recording speed higher value to capture more frames")
     .addOptionDoubleValue(291, "crf", "output compresion")
     .addOptionDoubleValue(292, "fps", "frames per second")
     .addOptionSingle('h', "help");
@@ -197,6 +199,9 @@ int main(int argc, char** argv) {
                     break;
                 case 292:
                     output_fps = std::stod(a.arg_value);
+                    break;
+                case 293:
+                    tick_count = std::stoi(a.arg_value);
                     break;
             }
         }
@@ -301,6 +306,7 @@ int main(int argc, char** argv) {
         cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
         cap.set(cv::CAP_PROP_FPS, output_fps);
         fps = cap.get(cv::CAP_PROP_FPS);
+        //cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
         if (fps <= 0) fps = 30.0;
         double reported_fps = fps;
         int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
@@ -327,13 +333,7 @@ int main(int argc, char** argv) {
             if (!cap.read(frame)) break; 
 
             buffer.update(frame);
-            
-            if(current_filter == 2 || current_filter == 3) {
-                int r = 3 + rand() % 7;  
-                for(int i = 0; i < r; ++i)
-                    cv::medianBlur(frame, frame, 3);
-            }
-
+    
             if (workingPitch != buffer.framePitch || width != buffer.w || height != buffer.h) {
                 if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
                 width = buffer.w;
@@ -353,14 +353,12 @@ int main(int argc, char** argv) {
                 &d_filterList,
                 filtersChanged
             );
-                        
+    
             CHECK_CUDA(cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost));
-
             if(!output_filename.empty())
                 writer.write_ts(rgba_out.ptr());
             
-            cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
-
+            cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGRA);
             frameCount++;
             auto currentTime = std::chrono::steady_clock::now();
             auto elapsedx = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFPSUpdate);
@@ -370,21 +368,22 @@ int main(int argc, char** argv) {
                 frameCount = 0;
                 lastFPSUpdate = currentTime;
             }
-
-            std::string status = "Acid Cam GPU - Filter: " + std::string(filter_names[current_filter]) + 
-                     " | Alpha: " + std::to_string(gState.alpha).substr(0, 4) +
-                     " | FPS: " + std::to_string((int)currentFPS) + " Duration: ";
-                    double duration_sec = cap.get(cv::CAP_PROP_POS_MSEC) / 1000.0;
-                    status += std::to_string(duration_sec).substr(0, 6) + "s";
-
-            cv::putText(frame, status, cv::Point(21, 51), 
-                        cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
-
-            cv::putText(frame, status, cv::Point(20, 50), 
-                        cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
-
-
-            cv::imshow("filter", frame);
+            static int delay = tick_count;
+            static int tick = 0;
+            if(!output_filename.empty()) {
+                delay = tick_count;
+            }
+            if(tick_count == 1) {
+                std::string status = "Acid Cam GPU - FPS: " + std::to_string((int)currentFPS);
+                cv::putText(frame, status, cv::Point(21, 51), 
+                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+                cv::imshow("filter", frame);
+            } else if(!output_filename.empty() && (++tick%delay) == 0) {
+                std::string status = "Acid Cam GPU - FPS: " + std::to_string((int)currentFPS);
+                cv::putText(frame, status, cv::Point(21, 51), 
+                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+                cv::imshow("filter", frame);
+            }
             int key = cv::waitKey(1);
             if (key == 27) break; 
 
@@ -420,9 +419,11 @@ int main(int argc, char** argv) {
                     std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
                 }
             }
-            auto end_time = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-            if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
+            if(camera_mode == false) {
+                auto end_time = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+                if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
+            }
         } 
         if (d_filterList) {
            cudaFree(d_filterList);
