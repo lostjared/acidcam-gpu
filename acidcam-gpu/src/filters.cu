@@ -9,9 +9,12 @@ namespace ac_gpu {
         {1, "MedianBlend"}, 
         {2, "MedianBlurBlend"},
         {3, "SquareBlockResize"},
-        {4, "SelfAlphaScaleRefined"}
+        {4, "SelfAlphaScaleRefined"},
+        {5, "StrangeGlitch"},
+        {6, "MatrixOutline"},
+        {7, "AuraTrails"},
+        {8, "MirrorReverseColor"},
     };
-
     struct FilterParams {
         float alpha;
         bool isNegative;
@@ -131,6 +134,119 @@ namespace ac_gpu {
         currentFrame[idx + 3] = 255;
     }
 
+    // new
+
+    __device__ bool colorBounds(unsigned char r1, unsigned char g1, unsigned char b1, 
+                                unsigned char r2, unsigned char g2, unsigned char b2, 
+                                int ir, int ig, int ib) {
+        return (abs(r1 - r2) < ir && abs(g1 - g2) < ig && abs(b1 - b2) < ib);
+    }
+
+    // --- PORTED FILTERS ---
+
+    // StrangeGlitch (Works for 16, 32, 64 based on params.numFrames)
+    __device__ void processStrangeGlitch(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char b = data[idx];
+        unsigned char g = data[idx + 1];
+        unsigned char r = data[idx + 2];
+
+        for (int q = 0; q < params.numFrames; ++q) {
+            unsigned char* otherFrame = allFrames[q];
+            unsigned char ob = otherFrame[idx];
+            unsigned char og = otherFrame[idx + 1];
+            unsigned char or_ = otherFrame[idx + 2];
+
+            if (colorBounds(r, g, b, or_, og, ob, 30, 30, 30)) {
+                data[idx]     = ob;
+                data[idx + 1] = og;
+                data[idx + 2] = or_;
+            }
+        }
+    }
+
+    // CollectionMatrixOutline
+    __device__ void processMatrixOutline(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        // Assuming frame at index 4 is the comparison frame as per your CPU code
+        unsigned char* compareFrame = allFrames[4]; 
+        
+        unsigned char b = data[idx];
+        unsigned char g = data[idx + 1];
+        unsigned char r = data[idx + 2];
+        
+        unsigned char cb = compareFrame[idx];
+        unsigned char cg = compareFrame[idx + 1];
+        unsigned char cr = compareFrame[idx + 2];
+
+        // intensity usually comes from getPixelCollection() in your code
+        int intensity = 30; 
+
+        if (colorBounds(r, g, b, cr, cg, cb, intensity, intensity, intensity)) {
+            data[idx] = 0; data[idx+1] = 0; data[idx+2] = 0;
+        } 
+        // Note: The 'else' part in your CPU code uses copy1 (MedianBlend).
+        // On GPU, you'd apply MedianBlend as a separate pass or use a temp buffer.
+    }
+
+    // MatrixCollectionAuraTrails
+    __device__ void processAuraTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        
+        // Your CPU code averages frames 1, 4, and 7
+        int indices[] = {1, 4, 7};
+        float sumB = data[idx], sumG = data[idx+1], sumR = data[idx+2];
+
+        for(int i = 0; i < 3; ++i) {
+            unsigned char* f = allFrames[indices[i]];
+            sumB = (sumB * 0.5f) + (f[idx] * 0.5f);
+            sumG = (sumG * 0.5f) + (f[idx+1] * 0.5f);
+            sumR = (sumR * 0.5f) + (f[idx+2] * 0.5f);
+        }
+
+        data[idx]     = (unsigned char)sumB;
+        data[idx + 1] = (unsigned char)sumG;
+        data[idx + 2] = (unsigned char)sumR;
+    }
+
+    // Mirror_ReverseColor
+    __device__ void processMirrorReverse(int x, int y, unsigned char* data, int width, int height, size_t step) {
+        int idx = y * step + x * 4;
+        int pos_x = (width - x - 1);
+        int pos_y = (height - y - 1);
+
+        int idx0 = pos_y * step + x * 4;     // pixels[0]
+        int idx1 = pos_y * step + pos_x * 4; // pixels[1]
+        int idx2 = y * step + pos_x * 4;     // pixels[2]
+
+        for(int j = 0; j < 3; ++j) {
+            float val = (data[idx+j] * 0.25f) + (data[idx0+j] * 0.25f) + 
+                        (data[idx1+j] * 0.25f) + (data[idx2+j] * 0.25f);
+            // Reverse color logic: pixel[3-j-1]
+            data[idx + (2 - j)] = (unsigned char)val;
+        }
+    }
+
+    // ImageSquareShrink
+    __device__ void processSquareShrink(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        // params.start_index and params.start_dir used for frame_offset_z/i
+        int offZ = params.start_index; 
+        int offI = params.start_index;
+
+        if (y >= offZ && y < (height - offZ) && x >= offI && x < (width - offI)) {
+            int idx = y * step + x * 4;
+            // Assuming blend image is the last frame in the collection
+            unsigned char* reimage = allFrames[params.numFrames - 1]; 
+            
+            data[idx]     = (unsigned char)((data[idx] * 0.5f) + (reimage[idx] * 0.5f));
+            data[idx + 1] = (unsigned char)((data[idx+1] * 0.5f) + (reimage[idx+1] * 0.5f));
+            data[idx + 2] = (unsigned char)((data[idx+2] * 0.5f) + (reimage[idx+2] * 0.5f));
+        }
+    }
+
+
+    // 
+
 
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames,
                                          int width, int height, size_t step, FilterParams params) {
@@ -156,7 +272,20 @@ namespace ac_gpu {
                     case 4: 
                         processSelfScaleRefined(x, y, data, step, params);
                         break;
+                    case 5: processStrangeGlitch(x, y, data, allFrames, step, params); break;
+                    case 6: processMatrixOutline(x, y, data, allFrames, step, params); break;
+                    case 7: processAuraTrails(x, y, data, allFrames, step, params); break;
+                    case 8: processMirrorReverse(x, y, data, width, height, step); break;
+                    case 9: processSquareShrink(x, y, data, allFrames, width, height, step, params); break;
+
                 }
+        }
+
+        if (params.isNegative) {
+            int idx = y * step + x * 4;
+            data[idx]   = 255 - data[idx];
+            data[idx+1] = 255 - data[idx+1];
+            data[idx+2] = 255 - data[idx+2];
         }
     }
 }
@@ -182,3 +311,6 @@ extern "C" void launch_filter(ac_gpu::Filter *f, size_t c, unsigned char* data, 
     
     cudaDeviceSynchronize();
 }
+
+
+//f ilter 30
