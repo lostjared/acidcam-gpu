@@ -121,21 +121,22 @@ int main(int argc, char** argv) {
     size_t workingPitch = 0;
     unsigned char** d_ptrList = nullptr;
     ac_gpu::Filter* d_filterList = nullptr;
+    cv::Size size;
     //size_t d_filterListSize = 0;
     bool filtersChanged = true; 
     std::string inputArg;
     std::string filtersArg;
     std::string bufferArg;
     std::string cameraArg;
-    argz.addOptionSingleValue('i', "input file (short)");
-    argz.addOptionDoubleValue(255, "input", "Input video file");
-    argz.addOptionSingleValue('c', "camera index (short)");
-    argz.addOptionDoubleValue(258, "camera", "Camera index (prefer this over --input)");
-    argz.addOptionSingleValue('f', "filters list (short)");
-    argz.addOptionDoubleValue(256, "filters", "Comma-separated filter indices (e.g. 0,1,2)");
-    argz.addOptionSingleValue('b', "buffer size (short)");
-    argz.addOptionDoubleValue(257, "buffer", "Dynamic buffer size (4-32)");
-    argz.addOptionSingle('h', "help");
+    argz.addOptionSingleValue('i', "input file (short)")
+    .addOptionDoubleValue(255, "input", "Input video file")
+    .addOptionSingleValue('c', "camera index (short)")
+    .addOptionDoubleValue(258, "camera", "Camera index (prefer this over --input)")
+    .addOptionSingleValue('f', "filters list (short)")
+    .addOptionDoubleValue(256, "filters", "Comma-separated filter indices (e.g. 0,1,2)")
+    .addOptionSingleValue('b', "buffer size (short)")
+    .addOptionDoubleValue(257, "buffer", "Dynamic buffer size (4-32)")
+    .addOptionSingle('h', "help");
     try {
         Argument<std::string> a;
         std::vector<std::string> positional;
