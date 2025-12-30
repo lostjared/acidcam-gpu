@@ -35,7 +35,7 @@ This project is developed and tested on **Bazzite Linux** using **Arch Linux** c
 ### Build Instructions
 ```bash
 # Clone the repository
-git clone [https://github.com/your-username/acidcam-gpu.git](https://github.com/your-username/acidcam-gpu.git)
+git clone https://github.com/lostjared/acidcam-gpu.git
 cd acidcam-gpu
 
 # Build the project
