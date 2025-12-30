@@ -10,6 +10,7 @@
 #include<regex>
 #include<string>
 #include<vector>
+#include<mxwrite.hpp>
 
 static const char* filter_names[] = {
     "SelfAlphaBlend", 
@@ -111,6 +112,17 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
     );
 }
 
+cv::Size extractResolution(const std::string &text) {
+    auto pos = text.find("x");
+    if(pos == std::string::npos || text.empty()) {
+        throw ac_gpu::ACException("Error could not extract string or variable size");
+    }
+    std::string left = text.substr(0, pos);
+    std::string right = text.substr(pos+1);
+    std::cout << "resolution: " << left << ":" << right << "\n";
+    return cv::Size(std::stoi(left), std::stoi(right));
+}
+
 int main(int argc, char** argv) {
     Argz<std::string> argz(argc, argv);
     bool camera_mode = false;
@@ -121,13 +133,15 @@ int main(int argc, char** argv) {
     size_t workingPitch = 0;
     unsigned char** d_ptrList = nullptr;
     ac_gpu::Filter* d_filterList = nullptr;
-    cv::Size size;
-    //size_t d_filterListSize = 0;
+    cv::Size vres(1920, 1080), cres (1920, 1080);
     bool filtersChanged = true; 
     std::string inputArg;
     std::string filtersArg;
     std::string bufferArg;
     std::string cameraArg;
+    std::string output_filename;
+    std::string output_crf= "23";
+
     argz.addOptionSingleValue('i', "input file (short)")
     .addOptionDoubleValue(255, "input", "Input video file")
     .addOptionSingleValue('c', "camera index (short)")
@@ -136,6 +150,11 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(256, "filters", "Comma-separated filter indices (e.g. 0,1,2)")
     .addOptionSingleValue('b', "buffer size (short)")
     .addOptionDoubleValue(257, "buffer", "Dynamic buffer size (4-32)")
+    .addOptionSingleValue('r', "Window resolution")
+    .addOptionDoubleValue(260, "resolution", "Window resolution")
+    .addOptionDoubleValue(289, "camera-res", "Camera resolution")
+    .addOptionDoubleValue(290, "output", "output filename")
+    .addOptionDoubleValue(291, "crf", "output compresion")
     .addOptionSingle('h', "help");
     try {
         Argument<std::string> a;
@@ -161,6 +180,19 @@ int main(int argc, char** argv) {
                 case 'b':
                 case 257:
                     bufferArg = a.arg_value;
+                    break;
+                case 'r':
+                case 260:
+                    vres = extractResolution(a.arg_value);
+                    break;
+                case  259:
+                    cres = extractResolution(a.arg_value);
+                    break;
+                case 290:
+                    output_filename = a.arg_value;
+                    break;
+                case 291:
+                    output_crf = a.arg_value;
                     break;
             }
         }
@@ -240,6 +272,7 @@ int main(int argc, char** argv) {
     }
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
     cv::VideoCapture cap;
+    Writer writer;
     int frameCount = 0;
     double currentFPS = 0.0;
     auto lastFPSUpdate = std::chrono::steady_clock::now();
@@ -251,8 +284,8 @@ int main(int argc, char** argv) {
         }
         if (!cap.isOpened()) return -1;
         cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-        cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
-        cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
+        cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
+        cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
         cap.set(cv::CAP_PROP_FPS, 60);
         double fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
@@ -271,8 +304,14 @@ int main(int argc, char** argv) {
         //int index_dir = 1;
         cv::Mat frame;
         cv::namedWindow("filter", cv::WINDOW_NORMAL);
-        cv::resizeWindow("filter", width, height);
+        cv::resizeWindow("filter", vres.width, vres.height);
         CHECK_CUDA(cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height));
+        if(!output_filename.empty()) {
+            if(!writer.open_ts(output_filename, width, height, fps, output_crf.c_str())) {
+                throw ac_gpu::ACException("ac: Could not open filename: "+output_filename);
+            }
+        }
+
         while (1) {
             auto start_time = std::chrono::steady_clock::now();
             if (!cap.read(frame)) break; 
@@ -306,6 +345,10 @@ int main(int argc, char** argv) {
             );
                         
             CHECK_CUDA(cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost));
+
+            if(!output_filename.empty())
+                writer.write(rgba_out.ptr());
+            
             cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGR);
 
             frameCount++;
@@ -327,6 +370,7 @@ int main(int argc, char** argv) {
 
             cv::putText(frame, status, cv::Point(20, 50), 
                         cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+
 
             cv::imshow("filter", frame);
             int key = cv::waitKey(1);
@@ -380,6 +424,11 @@ int main(int argc, char** argv) {
     catch(std::exception &e) {
         std::cerr << e.what() << std::endl;
     }
+    if(!output_filename.empty()) {
+        writer.close();
+        std::cout << "ac: Wrote: " << output_filename << std::endl;
+    }
     cap.release(); 
+    
     return 0;
 }
