@@ -368,17 +368,9 @@ int main(int argc, char** argv) {
                 frameCount = 0;
                 lastFPSUpdate = currentTime;
             }
-            static int delay = tick_count;
             static int tick = 0;
-            if(!output_filename.empty()) {
-                delay = tick_count;
-            }
-            if(tick_count == 1) {
-                std::string status = "Acid Cam GPU - FPS: " + std::to_string((int)currentFPS);
-                cv::putText(frame, status, cv::Point(21, 51), 
-                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
-                cv::imshow("filter", frame);
-            } else if(!output_filename.empty() && (++tick%delay) == 0) {
+            bool should_draw = (tick_count == 1) || (++tick % tick_count == 0);
+            if(should_draw) {
                 std::string status = "Acid Cam GPU - FPS: " + std::to_string((int)currentFPS);
                 cv::putText(frame, status, cv::Point(21, 51), 
                 cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
@@ -386,7 +378,6 @@ int main(int argc, char** argv) {
             }
             int key = cv::waitKey(1);
             if (key == 27) break; 
-
             else if (key == 's' || key == 'S') { 
                 auto now = std::chrono::system_clock::now();
                 std::time_t t = std::chrono::system_clock::to_time_t(now);

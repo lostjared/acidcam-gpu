@@ -21,12 +21,20 @@ message(STATUS "FFMPEG INCLUDE DIRS: ${FFMPEG_INCLUDE_DIRS}")
 message(STATUS "MXWrite: ${MXWrite_LIBRARIES}")
 
 
+
 add_library(acidcam-gpu SHARED
     src/filters.cu
 )
 
 set_target_properties(acidcam-gpu PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
+)
+
+target_compile_options(acidcam-gpu PRIVATE 
+    -O3               
+    -march=native     
+    -ffast-math       
+    -fomit-frame-pointer
 )
 
 target_include_directories(acidcam-gpu
@@ -50,6 +58,13 @@ add_executable(acidcam
     app/main_cv.cu
 )
 
+target_compile_options(acidcam PRIVATE 
+    -O3               
+    -march=native     
+    -ffast-math       
+    -fomit-frame-pointer
+)
+
 set_target_properties(acidcam PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
@@ -65,3 +80,4 @@ target_link_libraries(acidcam
     acidcam-gpu
     ${OpenCV_LIBS}
 )
+
