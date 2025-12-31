@@ -117,6 +117,18 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
 
 
 int main(int argc, char** argv) {
+    int device_count = 0;
+    cudaError_t error = cudaGetDeviceCount(&device_count);
+    std::cout << "Acid Cam GPU Demo" << std::endl;
+    if (error != cudaSuccess || device_count == 0) {
+        std::cerr << "OpenCV Cuda Support not found." << std::endl;
+        std::cerr << "Reason: " << cudaGetErrorString(error) << std::endl;
+        std::cerr << "Check: Are NVIDIA drivers installed? Is the GPU seated?" << std::endl;
+        return -1; 
+    } else {
+        std::cout << "🚀 GPU Acceleration Active: " << device_count << " device(s) found." << std::endl;
+        cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
+    }
     Argz<std::string> argz(argc, argv);
     bool camera_mode = false;
     int camera_index = 0, filter_index = 0, dynamic_buffer = 10;
@@ -128,7 +140,6 @@ int main(int argc, char** argv) {
     std::string output_crf= "23";
     double output_fps = 60.0;
     int tick_count = 1;
-
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
     .addOptionSingleValue('f', "filters").addOptionDoubleValue(256, "filters", "Filter IDs")
@@ -140,7 +151,6 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(291, "crf", "CRF")
     .addOptionDoubleValue(292, "fps", "FPS")
     .addOptionSingle('h', "help");
-
     try {
         Argument<std::string> a;
         int code = 0;
@@ -179,7 +189,6 @@ int main(int argc, char** argv) {
     }
 
     dynamic_buffer = std::stoi(bufferArg);
-    cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
 
     cv::VideoCapture cap;
     Writer writer;
