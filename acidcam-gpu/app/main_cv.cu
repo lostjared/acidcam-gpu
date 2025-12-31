@@ -146,6 +146,7 @@ int main(int argc, char** argv) {
     double output_fps = 60.0;
     int tick_count = 1;
     size_t time_over = 0;
+    bool show_hud = true;
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
     .addOptionSingleValue('f', "filters").addOptionDoubleValue(256, "filters", "Filter IDs")
@@ -157,6 +158,7 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(291, "crf", "CRF")
     .addOptionDoubleValue(292, "fps", "FPS")
     .addOptionDoubleValue(294, "time", "How many seconds to record")
+    .addOptionDouble(300, "hide", "hide HUD")
     .addOptionSingle('h', "help");
     try {
         Argument<std::string> a;
@@ -175,6 +177,7 @@ int main(int argc, char** argv) {
                 case 292: output_fps = std::stod(a.arg_value); break;
                 case 293: tick_count = std::stoi(a.arg_value); break;
                 case 294: time_over = std::stoi(a.arg_value); break;
+                case 300: show_hud = false; break;
             }
         }
     }  
@@ -290,10 +293,12 @@ int main(int argc, char** argv) {
             int mins = (elapsed_ms / 60000);
             int secs = (elapsed_ms % 60000) / 1000;
               
-            if ((tick_count == 1) || (++tick % tick_count == 0)) {        
-                std::string text = std::format("Acid Cam GPU - Time: {:02}:{:02} | FPS: {}", mins, secs, (int)currentFPS);
-                cv::putText(frame, text, cv::Point(20, 50), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
-                cv::putText(frame, device_text, cv::Point(20, 80), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(55,255,255), 2);
+            if ((tick_count == 1) || (++tick % tick_count == 0)) {      
+                if(show_hud) {  
+                    std::string text = std::format("Acid Cam GPU - Time: {:02}:{:02} | FPS: {}", mins, secs, (int)currentFPS);
+                    cv::putText(frame, text, cv::Point(20, 50), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+                    cv::putText(frame, device_text, cv::Point(20, 80), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(55,255,255), 2);
+                }
                 cv::imshow("filter",frame);
             }
             int key = cv::waitKey(1);
