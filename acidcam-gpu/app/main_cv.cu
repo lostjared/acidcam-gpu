@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
     std::string output_crf= "23";
     double output_fps = 60.0;
     int tick_count = 1;
-
+    std::string tally;
     argz.addOptionSingleValue('i', "input file (short)")
     .addOptionDoubleValue(255, "input", "Input video file")
     .addOptionSingleValue('c', "camera index (short)")
@@ -401,6 +401,8 @@ int main(int argc, char** argv) {
                     filtersChanged = true;
                     std::cout << "ac: Current filter: " << ac_gpu::filters[current_filter].name << " (" << current_filter << ")" << std::endl;
                 }
+            } else if(key == 't') {
+                tally += std::to_string(current_filter) + ", ";
             }
             if(camera_mode == false) {
                 auto end_time = std::chrono::steady_clock::now();
@@ -413,6 +415,10 @@ int main(int argc, char** argv) {
         }
         CHECK_CUDA(cudaFree(d_ptrList));
         if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
+
+        if(!tally.empty()) {
+            std::cout << "Total tally..: " << tally << "\n";
+        }
     }
     catch(ac_gpu::ACException &e) {
         std::cerr << e.why() << std::endl;
