@@ -169,7 +169,12 @@ int main(int argc, char** argv) {
                 case 293: tick_count = std::stoi(a.arg_value); break;
             }
         }
-    } catch (...) { return -1; }
+    }  
+    catch(ArgException<std::string> &e) {
+        std::cerr << e.text() << "\n";
+        return -1;
+    }
+    
     if (!cameraArg.empty()) { camera_mode = true; camera_index = std::stoi(cameraArg); }
     std::vector<ac_gpu::Filter> vlist;
     std::string list = filtersArg;
@@ -211,6 +216,8 @@ int main(int argc, char** argv) {
         int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
         int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
         
+        std::cout << "ac: Resolution: " << width << "x" << height << " @ " << fps << std::endl;
+
         ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer);
         CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
 
