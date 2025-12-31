@@ -151,6 +151,9 @@ int main(int argc, char** argv) {
     size_t time_over = 0;
     bool show_hud = true;
     bool repeat = false;
+    size_t start_pos = 0;
+    size_t jump_pos = 0;
+
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
     .addOptionSingleValue('f', "filters").addOptionDoubleValue(256, "filters", "Filter IDs")
@@ -164,6 +167,8 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(294, "time", "How many seconds to record")
     .addOptionDoubleValue(301, "device", "Select Cuda Device")
     .addOptionDouble(304, "repeat", "repeat video")
+    .addOptionDoubleValue(305, "skip", "Skip to frame in video")
+    .addOptionDoubleValue(306, "jump", "Jump to second in video")
     .addOptionDouble(302, "list", "List all devices")
     .addOptionDouble(300, "hide", "hide HUD")
     .addOptionSingle('h', "help");
@@ -192,12 +197,19 @@ int main(int argc, char** argv) {
                         std::cout << "ac: Device number must be an integer." << std::endl;
                     }
                 break;
-            case 302:
+                case 302:
                     exit(EXIT_SUCCESS);
                     break;
                 case 304:
                     repeat = true;
                     break;
+                case 305:
+                    start_pos = std::stoi(a.arg_value);
+                break;
+                case 306:
+                    jump_pos = std::stoi(a.arg_value);
+                break;
+
             }
         }
     }  
@@ -243,8 +255,12 @@ int main(int argc, char** argv) {
             cap.open(cameraINdex);
 #endif
         }
-        else 
+        else {
             cap.open(inputArg);
+            if(cap.isOpened()) {
+                cap.set(cv::CAP_PROP_POS_FRAMES, start_pos);
+            }
+        }
         if (!cap.isOpened()) return -1;
         if(camera_mode == true) {
             cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
@@ -253,6 +269,10 @@ int main(int argc, char** argv) {
         }
         double fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
+
+        if(jump_pos != 0) {
+            cap.set(cv::CAP_PROP_POS_FRAMES, static_cast<double>((jump_pos * fps)));
+        }
 
         int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
         int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
