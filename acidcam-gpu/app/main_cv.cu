@@ -12,20 +12,6 @@
 #include<vector>
 #include<mxwrite.hpp>
 
-static const char* filter_names[] = {
-    "SelfAlphaBlend", 
-    "MedianBlend", 
-    "MedianBlurBlend", 
-    "SquareBlockResize", 
-    "SelfAlphaScaleRefined",
-    "StrangeGlitch",
-    "MatrixOutline",
-    "AuraTrails",
-    "MirrorReverseColor",
-    "ImageSquareShrink",
-    "MotionGhostTrails"
-};
-
 struct AnimationState {
     float alpha = 1.0f;
     int alpha_dir = 1;
@@ -249,7 +235,7 @@ int main(int argc, char** argv) {
                 std::cerr << "ac: Filter out of range..\n";
                 return -3;
             }
-            vlist.emplace_back(ac_gpu::Filter{idx, filter_names[idx]});
+            vlist.emplace_back(ac_gpu::Filter{idx, ac_gpu::filters[idx].name});
             if (pos == std::string::npos) break;
             start = pos + 1;
         }
@@ -266,7 +252,7 @@ int main(int argc, char** argv) {
             return -3;
         }
         filter_index = idx;
-        vlist.emplace_back(ac_gpu::Filter{filter_index, filter_names[filter_index]});
+        vlist.emplace_back(ac_gpu::Filter{filter_index,  ac_gpu::filters[filter_index].name});
     }
     if(!bufferArg.empty()) {
         if(!isNumeric(bufferArg)) {
@@ -394,20 +380,20 @@ int main(int argc, char** argv) {
                 if (current_filter < ac_gpu::AC_FILTER_MAX - 1) {
                     current_filter++;
                     vlist.clear();
-                    ac_gpu::Filter f {current_filter, filter_names[current_filter]};
+                    ac_gpu::Filter f {current_filter,  ac_gpu::filters[current_filter].name};
                     vlist.push_back(f);
                     filtersChanged = true;
-                    std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
+                    std::cout << "ac: Current filter: " << ac_gpu::filters[current_filter].name << " (" << current_filter << ")" << std::endl;
                 }
             }
             else if (key == 84 || key == 1 || key == 65364) { 
                 if (current_filter > 0) {
                     current_filter--;
                     vlist.clear();
-                    ac_gpu::Filter f {current_filter, filter_names[current_filter]};
+                    ac_gpu::Filter f {current_filter, ac_gpu::filters[current_filter].name};
                     vlist.push_back(f);
                     filtersChanged = true;
-                    std::cout << "ac: Current filter: " << filter_names[current_filter] << " (" << current_filter << ")" << std::endl;
+                    std::cout << "ac: Current filter: " << ac_gpu::filters[current_filter].name << " (" << current_filter << ")" << std::endl;
                 }
             }
             if(camera_mode == false) {

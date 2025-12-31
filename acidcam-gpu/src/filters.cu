@@ -7,7 +7,7 @@ namespace ac_gpu {
     Filter filters[] = { 
         {0, "SelfAlphaBlend"}, 
         {1, "MedianBlend"}, 
-        {2, "MedianBlurBlend"},
+        {2, "MedianBlend"},
         {3, "SquareBlockResize"},
         {4, "SelfAlphaScaleRefined"},
         {5, "StrangeGlitch"},
@@ -281,12 +281,18 @@ namespace ac_gpu {
                     case 4: 
                         processSelfScaleRefined(x, y, data, step, params);
                         break;
-                    case 5: processStrangeGlitch(x, y, data, allFrames, step, params); break;
-                    case 6: processMatrixOutline(x, y, data, allFrames, step, params); break;
-                    case 7: processAuraTrails(x, y, data, allFrames, step, params); break;
-                    case 8: processMirrorReverse(x, y, data, width, height, step); break;
-                    case 9: processSquareShrink(x, y, data, allFrames, width, height, step, params); break;
-                    case 10: processMotionGhost(x, y, data, allFrames, step, params); break;
+                    case 5: processStrangeGlitch(x, y, data, allFrames, step, params); 
+                        break;
+                    case 6: processMatrixOutline(x, y, data, allFrames, step, params); 
+                        break;
+                    case 7: processAuraTrails(x, y, data, allFrames, step, params); 
+                        break;
+                    case 8: processMirrorReverse(x, y, data, width, height, step); 
+                        break;
+                    case 9: processSquareShrink(x, y, data, allFrames, width, height, step, params); 
+                        break;
+                    case 10: processMotionGhost(x, y, data, allFrames, step, params); 
+                        break;
                 }
         }
 
