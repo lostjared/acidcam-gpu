@@ -145,6 +145,7 @@ int main(int argc, char** argv) {
     std::string output_crf= "23";
     double output_fps = 60.0;
     int tick_count = 1;
+    size_t time_over = 0;
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
     .addOptionSingleValue('f', "filters").addOptionDoubleValue(256, "filters", "Filter IDs")
@@ -155,6 +156,7 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(293, "speed", "Tick speed")
     .addOptionDoubleValue(291, "crf", "CRF")
     .addOptionDoubleValue(292, "fps", "FPS")
+    .addOptionDoubleValue(294, "time", "How many seconds to record")
     .addOptionSingle('h', "help");
     try {
         Argument<std::string> a;
@@ -172,6 +174,7 @@ int main(int argc, char** argv) {
                 case 291: output_crf = a.arg_value; break;
                 case 292: output_fps = std::stod(a.arg_value); break;
                 case 293: tick_count = std::stoi(a.arg_value); break;
+                case 294: time_over = std::stoi(a.arg_value); break;
             }
         }
     }  
@@ -282,11 +285,12 @@ int main(int argc, char** argv) {
            
             frameCount++;
             static int tick = 0;
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - app_start_time).count();
+            int mins = (elapsed_ms / 60000);
+            int secs = (elapsed_ms % 60000) / 1000;
+              
             if ((tick_count == 1) || (++tick % tick_count == 0)) {        
-                auto now = std::chrono::steady_clock::now();
-                auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - app_start_time).count();
-                int mins = (elapsed_ms / 60000);
-                int secs = (elapsed_ms % 60000) / 1000;
                 std::string text = std::format("Acid Cam GPU - Time: {:02}:{:02} | FPS: {}", mins, secs, (int)currentFPS);
                 cv::putText(frame, text, cv::Point(20, 50), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
                 cv::putText(frame, device_text, cv::Point(20, 80), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(55,255,255), 2);
@@ -326,6 +330,17 @@ int main(int argc, char** argv) {
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
                 if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
             } 
+
+            if(output_filename.empty() && time_over != 0 && secs >= time_over) {
+                std::cout << "ac: Time duration reached. Exiting..." << std::endl;
+                break;
+            } if (time_over != 0 && !output_filename.empty() && writer.is_open()) {
+                auto time_elapsed = static_cast<double>(writer.get_frame_count()) / fps;
+                if (time_elapsed >= time_over) {
+                    std::cout << "ac: Time duration reached exiting..." << std::endl;
+                    break;
+                }
+            }
         } 
 
         if (d_filterList)
