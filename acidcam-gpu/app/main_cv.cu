@@ -1,4 +1,6 @@
 #include<opencv2/opencv.hpp>
+#include<opencv2/core/cuda.hpp>
+#include<opencv2/cudaimgproc.hpp>
 #include<iostream>
 #include<chrono>
 #include<thread>
@@ -11,6 +13,7 @@
 #include<string>
 #include<vector>
 #include<mxwrite.hpp>
+
 
 struct AnimationState {
     float alpha = 1.0f;
@@ -28,9 +31,22 @@ bool isNumeric(const std::string &text) {
     return std::regex_match(text, re);
 }
 
+cv::Size extractResolution(const std::string &text) {
+    auto pos = text.find("x");
+    if(pos == std::string::npos || text.empty()) {
+        throw ac_gpu::ACException("Error could not extract string or variable size");
+    }
+    std::string left = text.substr(0, pos);
+    std::string right = text.substr(pos+1);
+    return cv::Size(std::stoi(left), std::stoi(right));
+}
+
+
 void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer, 
-                    unsigned char* d_workingBuffer, unsigned char** d_ptrList,
-                    size_t workingPitch, ac_gpu::Filter* activeFilters, size_t filterCount, ac_gpu::Filter** d_list_ptr, bool& changed) {
+                    cv::cuda::GpuMat& gpuWorkingBuffer, unsigned char** d_ptrList,
+                    ac_gpu::Filter* activeFilters, size_t filterCount, 
+                    ac_gpu::Filter** d_list_ptr, bool& changed) {
+    
     
     if (gState.alpha_dir == 1) {
         gState.alpha += 0.01f;
@@ -42,7 +58,6 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
 
     static int current_frame_index = 0;
     static int index_dir = 1;
-
     if(index_dir == 1) {
         current_frame_index++;
         if(current_frame_index >= (buffer.arraySize - 1)) {
@@ -71,23 +86,25 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
         }
     }
     
+    
     CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), 
                           buffer.arraySize * sizeof(unsigned char*), 
                           cudaMemcpyHostToDevice));
 
     
-    CHECK_CUDA(cudaMemcpy2D(d_workingBuffer, workingPitch,
+    CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.ptr<unsigned char>(), gpuWorkingBuffer.step,
                             buffer.deviceFrames[buffer.arraySize - 1], buffer.framePitch,
                             buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice));
+    
     launch_filter(
         activeFilters, 
         filterCount, 
-        d_workingBuffer, 
+        gpuWorkingBuffer.ptr<unsigned char>(), 
         d_ptrList, 
         buffer.arraySize, 
-        buffer.w, 
-        buffer.h, 
-        workingPitch, 
+        gpuWorkingBuffer.cols, 
+        gpuWorkingBuffer.rows, 
+        gpuWorkingBuffer.step, 
         gState.alpha, 
         false, 
         gState.square_size,
@@ -98,340 +115,193 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
     );
 }
 
-cv::Size extractResolution(const std::string &text) {
-    auto pos = text.find("x");
-    if(pos == std::string::npos || text.empty()) {
-        throw ac_gpu::ACException("Error could not extract string or variable size");
-    }
-    std::string left = text.substr(0, pos);
-    std::string right = text.substr(pos+1);
-    return cv::Size(std::stoi(left), std::stoi(right));
-}
 
 int main(int argc, char** argv) {
     Argz<std::string> argz(argc, argv);
     bool camera_mode = false;
-    int camera_index = 0;
-    int filter_index = 0;
-    int dynamic_buffer = 10;
-    unsigned char* d_workingBuffer = nullptr;
-    size_t workingPitch = 0;
+    int camera_index = 0, filter_index = 0, dynamic_buffer = 10;
     unsigned char** d_ptrList = nullptr;
     ac_gpu::Filter* d_filterList = nullptr;
     cv::Size vres(1920, 1080), cres (1920, 1080);
     bool filtersChanged = true; 
-    std::string inputArg;
-    std::string filtersArg;
-    std::string bufferArg;
-    std::string cameraArg;
-    std::string output_filename;
+    std::string inputArg, filtersArg, bufferArg, cameraArg, output_filename, tally;
     std::string output_crf= "23";
     double output_fps = 60.0;
     int tick_count = 1;
-    std::string tally;
-    argz.addOptionSingleValue('i', "input file (short)")
-    .addOptionDoubleValue(255, "input", "Input video file")
-    .addOptionSingleValue('c', "camera index (short)")
-    .addOptionDoubleValue(258, "camera", "Camera index (prefer this over --input)")
-    .addOptionSingleValue('f', "filters list (short)")
-    .addOptionDoubleValue(256, "filters", "Comma-separated filter indices (e.g. 0,1,2)")
-    .addOptionSingleValue('b', "buffer size (short)")
-    .addOptionDoubleValue(257, "buffer", "Dynamic buffer size (4-32)")
-    .addOptionSingleValue('r', "Window resolution")
-    .addOptionDoubleValue(260, "resolution", "Window resolution")
-    .addOptionDoubleValue(289, "camera-res", "Camera resolution")
-    .addOptionDoubleValue(290, "output", "output filename")
-    .addOptionDoubleValue(293, "speed", "recording speed higher value to capture more frames")
-    .addOptionDoubleValue(291, "crf", "output compresion")
-    .addOptionDoubleValue(292, "fps", "frames per second")
+
+    argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
+    .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
+    .addOptionSingleValue('f', "filters").addOptionDoubleValue(256, "filters", "Filter IDs")
+    .addOptionSingleValue('b', "buffer").addOptionDoubleValue(257, "buffer", "Buffer 4-32")
+    .addOptionSingleValue('r', "resolution").addOptionDoubleValue(260, "resolution", "Window size")
+    .addOptionDoubleValue(289, "camera-res", "Camera size")
+    .addOptionDoubleValue(290, "output", "Filename")
+    .addOptionDoubleValue(293, "speed", "Tick speed")
+    .addOptionDoubleValue(291, "crf", "CRF")
+    .addOptionDoubleValue(292, "fps", "FPS")
     .addOptionSingle('h', "help");
+
     try {
         Argument<std::string> a;
-        std::vector<std::string> positional;
         int code = 0;
         while ((code = argz.proc(a)) != -1) {
             switch (code) {
-                case 'h':
-                    argz.help(std::cout);
-                    return 0;
-                case 'i':
-                case 255:
-                    inputArg = a.arg_value;
-                    break;
-                case 'c':
-                case 258:
-                    cameraArg = a.arg_value;
-                    break;
-                case 'f':
-                case 256:
-                    filtersArg = a.arg_value;
-                    break;
-                case 'b':
-                case 257:
-                    bufferArg = a.arg_value;
-                    break;
-                case 'r':
-                case 260:
-                    vres = extractResolution(a.arg_value);
-                    break;
-                case 289:
-                    cres = extractResolution(a.arg_value);
-                    break;
-                case 290:
-                    output_filename = a.arg_value;
-                    break;
-                case 291:
-                    output_crf = a.arg_value;
-                    break;
-                case 292:
-                    output_fps = std::stod(a.arg_value);
-                    break;
-                case 293:
-                    tick_count = std::stoi(a.arg_value);
-                    break;
+                case 'h': argz.help(std::cout); return 0;
+                case 'i': case 255: inputArg = a.arg_value; break;
+                case 'c': case 258: cameraArg = a.arg_value; break;
+                case 'f': case 256: filtersArg = a.arg_value; break;
+                case 'b': case 257: bufferArg = a.arg_value; break;
+                case 'r': case 260: vres = extractResolution(a.arg_value); break;
+                case 289: cres = extractResolution(a.arg_value); break;
+                case 290: output_filename = a.arg_value; break;
+                case 291: output_crf = a.arg_value; break;
+                case 292: output_fps = std::stod(a.arg_value); break;
+                case 293: tick_count = std::stoi(a.arg_value); break;
             }
         }
-    } catch (ArgException<std::string> &e) {
-        std::cerr << "ac: Argument error: " << e.text() << std::endl;
-        return -1;
-    }
-
-    if (filtersArg.empty() || bufferArg.empty() || (inputArg.empty() && cameraArg.empty())) {
-        std::cerr << "ac: Usage: --input <file> or --camera <index> --filters <list> --buffer <size>\n";
-        return -1;
-    }
-
-    if (!cameraArg.empty()) {
-        if (!isNumeric(cameraArg)) {
-            std::cerr << "ac: camera index must be numeric\n";
-            return -1;
-        }
-        camera_mode = true;
-        camera_index = std::stoi(cameraArg);
-    } else if (!inputArg.empty() && isNumeric(inputArg)) {
-        camera_mode = true;
-        camera_index = std::stoi(inputArg);
-    }
-
+    } catch (...) { return -1; }
+    if (!cameraArg.empty()) { camera_mode = true; camera_index = std::stoi(cameraArg); }
     std::vector<ac_gpu::Filter> vlist;
-
-    std::string list = filtersArg.empty() ? argv[2] : filtersArg;
+    std::string list = filtersArg;
     if (list.find(',') != std::string::npos) {
         size_t start = 0;
         while (1) {
             size_t pos = list.find(',', start);
             std::string tok = (pos == std::string::npos) ? list.substr(start) : list.substr(start, pos - start);
-            if (tok.empty()) {
-                if (pos == std::string::npos) break;
-                start = pos + 1;
-                continue;
-            }
-            if (!isNumeric(tok)) {
-                std::cerr << "ac: Error invalid filter_index\n";
-                return -1;
-            }
-            int idx = std::stoi(tok);
-            if (idx > ac_gpu::AC_FILTER_MAX || idx < 0) {
-                std::cerr << "ac: Filter out of range..\n";
-                return -3;
-            }
-            vlist.emplace_back(ac_gpu::Filter{idx, ac_gpu::filters[idx].name});
+            if (!tok.empty()) vlist.emplace_back(ac_gpu::Filter{std::stoi(tok), ac_gpu::filters[std::stoi(tok)].name});
             if (pos == std::string::npos) break;
             start = pos + 1;
         }
-        if (!vlist.empty()) filter_index = (int)vlist[0].index;
+        filter_index = vlist[0].index;
     } else {
-        if (!isNumeric(list)) {
-            std::cerr << "ac: Error invalid filter_index\n";
-            return -1;
-    
-        }
-        int idx = std::stoi(list);
-        if (idx > ac_gpu::AC_FILTER_MAX-1 || idx < 0) {
-            std::cerr << "ac: Filter out of range..\n";
-            return -3;
-        }
-        filter_index = idx;
-        vlist.emplace_back(ac_gpu::Filter{filter_index,  ac_gpu::filters[filter_index].name});
+        filter_index = std::stoi(list);
+        vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
     }
-    if(!bufferArg.empty()) {
-        if(!isNumeric(bufferArg)) {
-            std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
-            return -2;
-        }
-        dynamic_buffer = std::stoi(bufferArg);
-    }
-    if(dynamic_buffer < 4 || dynamic_buffer > 32) {
-        std::cerr << "ac: Requires value between 4-32 for sizes of dynamic array buffer.\n";
-        return -2;  
-    }
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+    dynamic_buffer = std::stoi(bufferArg);
+    cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
+
     cv::VideoCapture cap;
     Writer writer;
-    int frameCount = 0;
+    int frameCount = 0, screenshot_count = 1;
     double currentFPS = 0.0;
     auto lastFPSUpdate = std::chrono::steady_clock::now();
-    double fps = 30.0;
+
     try {
-        if(camera_mode == true) {
-            cap.open(camera_index, cv::CAP_V4L2);
-        } else {
-            cap.open(inputArg.empty() ? argv[1] : inputArg);
-        }
+        if(camera_mode) cap.open(camera_index, cv::CAP_V4L2);
+        else cap.open(inputArg);
         if (!cap.isOpened()) return -1;
-    
         if(camera_mode == true) {
-            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-            int fourcc = (int)cap.get(cv::CAP_PROP_FOURCC);
-            if (fourcc != cv::VideoWriter::fourcc('M', 'J', 'P', 'G')) {
-                cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y', 'Y', 'U', 'V'));
-                std::cout << "ac: Attempting YYUV codec (YUYV not available)" << std::endl;
-           } else {
-                std::cout << "ac: Using MJPG codec" << std::endl;
-            }
             cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
             cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
             cap.set(cv::CAP_PROP_FPS, output_fps);
         }
-        //cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
-        fps = cap.get(cv::CAP_PROP_FPS);
+        double fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
-        double reported_fps = fps;
+
         int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
         int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+        
         ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer);
         CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
-        cv::Mat rgba_out(height, width, CV_8UC4);
-        std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << reported_fps << " fps ";
-        if(camera_mode == true) {
-            std::cout << " (reported by camera)";
-        }    
-        std::cout << std::endl;
-        auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
-        int current_filter = filter_index;
-        int screenshot_count = 1;
-        cv::Mat frame;
+
+        cv::cuda::GpuMat gpuWorkingBuffer(height, width, CV_8UC4);
+        cv::cuda::GpuMat gpuDisplayBuffer(height, width, CV_8UC4);
+        cv::Mat frame, rgba_out(height, width, CV_8UC4);
         cv::namedWindow("filter", cv::WINDOW_NORMAL);
         cv::resizeWindow("filter", vres.width, vres.height);
-        CHECK_CUDA(cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height));
-        if(!output_filename.empty()) {
-            if(!writer.open_ts(output_filename, width, height, fps, output_crf.c_str())) {
-                throw ac_gpu::ACException("ac: Could not open filename: "+output_filename);
-            }
-        }
+        cv::moveWindow("filter", 0, 0);
 
-        while (1) {
+        if(!output_filename.empty()) 
+            writer.open_ts(output_filename, width, height, fps, output_crf.c_str());
+
+        auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
+
+        while (true) {
             auto start_time = std::chrono::steady_clock::now();
             if (!cap.read(frame)) break; 
 
             buffer.update(frame);
-    
-            if (workingPitch != buffer.framePitch || width != buffer.w || height != buffer.h) {
-                if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
-                width = buffer.w;
-                height = buffer.h;
-                CHECK_CUDA(cudaMallocPitch(&d_workingBuffer, &workingPitch, width * 4, height));
-                rgba_out = cv::Mat(height, width, CV_8UC4);  
+
+            if (width != buffer.w || height != buffer.h) {
+                width = buffer.w; height = buffer.h;
+                gpuWorkingBuffer.create(height, width, CV_8UC4);
+                gpuDisplayBuffer.create(height, width, CV_8UC4);
+                rgba_out = cv::Mat(height, width, CV_8UC4);
             }
             
-            updateAndDraw(  
-                frame, 
-                buffer, 
-                d_workingBuffer, 
-                d_ptrList, 
-                workingPitch, 
-                &vlist[0], 
-                vlist.size(),
-                &d_filterList,
-                filtersChanged
-            );
-    
-            CHECK_CUDA(cudaMemcpy2D(rgba_out.data, rgba_out.step[0], d_workingBuffer, workingPitch, width * 4, height, cudaMemcpyDeviceToHost));
-            if(!output_filename.empty())
+            updateAndDraw(frame, buffer, gpuWorkingBuffer, d_ptrList, &vlist[0], vlist.size(), &d_filterList, filtersChanged);
+
+            cv::cuda::cvtColor(gpuWorkingBuffer, gpuDisplayBuffer, cv::COLOR_RGBA2BGRA);
+            gpuDisplayBuffer.download(frame);
+
+            if(!output_filename.empty()) {
+                gpuWorkingBuffer.download(rgba_out);
                 writer.write_ts(rgba_out.ptr());
-            
-            cv::cvtColor(rgba_out, frame, cv::COLOR_RGBA2BGRA);
-            frameCount++;
+            }
+
             auto currentTime = std::chrono::steady_clock::now();
             auto elapsedx = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFPSUpdate);
-
             if (elapsedx.count() >= 1000) {
                 currentFPS = (frameCount * 1000.0) / elapsedx.count();
                 frameCount = 0;
                 lastFPSUpdate = currentTime;
             }
+            frameCount++;
+
             static int tick = 0;
-            bool should_draw = (tick_count == 1) || (++tick % tick_count == 0);
-            if(should_draw) {
-                std::string status = "FPS: " + std::to_string(static_cast<int>(currentFPS));
-                cv::putText(frame, status, cv::Point(21, 51), 
-                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+            if ((tick_count == 1) || (++tick % tick_count == 0)) {
+                cv::putText(frame, "FPS: " + std::to_string((int)currentFPS), cv::Point(20, 50), 
+                            cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
                 cv::imshow("filter", frame);
             }
+
             int key = cv::waitKey(1);
             if (key == 27) break; 
-            else if (key == 's' || key == 'S') { 
-                auto now = std::chrono::system_clock::now();
-                std::time_t t = std::chrono::system_clock::to_time_t(now);
-                std::tm tm = *std::localtime(&t);
-                char timebuf[32];
-                std::strftime(timebuf, sizeof(timebuf), "%Y%m%d_%H%M%S", &tm);
-                std::string out = "acidcam_gpu-" + std::string(timebuf) + "_" +
-                                std::to_string(width) + "x" + std::to_string(height) +
-                                "_" + std::to_string(screenshot_count++) + ".png";
+            else if (key == 's' || key == 'S') {
+                std::string out = "acidcam-gpu_" + std::to_string(screenshot_count++) + ".png";
                 cv::imwrite(out, frame);
-                std::cout << "ac: Saved screenshot: " << out << std::endl;
-            } 
-            else if (key == 82 || key == 0 || key == 65362) { 
-                if (current_filter < ac_gpu::AC_FILTER_MAX - 1) {
-                    current_filter++;
+                std::cout << "Saved: " << out << std::endl;
+            }
+            else if (key == 't') {
+                tally += std::to_string(filter_index) + ", ";
+            }
+            else if (key == 82 || key == 65362) { 
+                if (filter_index < ac_gpu::AC_FILTER_MAX - 1) {
+                    filter_index++;
                     vlist.clear();
-                    ac_gpu::Filter f {current_filter,  ac_gpu::filters[current_filter].name};
-                    vlist.push_back(f);
+                    vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
                     filtersChanged = true;
-                    std::cout << "ac: Current filter: " << ac_gpu::filters[current_filter].name << " (" << current_filter << ")" << std::endl;
+                    std::cout << "Filter: " << ac_gpu::filters[filter_index].name << std::endl;
                 }
             }
-            else if (key == 84 || key == 1 || key == 65364) { 
-                if (current_filter > 0) {
-                    current_filter--;
+            else if (key == 84 || key == 65364) { 
+                if (filter_index > 0) {
+                    filter_index--;
                     vlist.clear();
-                    ac_gpu::Filter f {current_filter, ac_gpu::filters[current_filter].name};
-                    vlist.push_back(f);
+                    vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
                     filtersChanged = true;
-                    std::cout << "ac: Current filter: " << ac_gpu::filters[current_filter].name << " (" << current_filter << ")" << std::endl;
+                    std::cout << "Filter: " << ac_gpu::filters[filter_index].name << std::endl;
                 }
-            } else if(key == 't') {
-                tally += std::to_string(current_filter) + ", ";
             }
-            if(camera_mode == false) {
+
+            if(!camera_mode) {
                 auto end_time = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
                 if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
             }
         } 
-        if (d_filterList) {
-           cudaFree(d_filterList);
-        }
-        CHECK_CUDA(cudaFree(d_ptrList));
-        if (d_workingBuffer) CHECK_CUDA(cudaFree(d_workingBuffer));
 
-        if(!tally.empty()) {
-            std::cout << "Total tally..: " << tally << "\n";
-        }
+        if (d_filterList)
+            CHECK_CUDA(cudaFree(d_filterList));
+        CHECK_CUDA(cudaFree(d_ptrList));
+        if(!tally.empty()) 
+            std::cout << "Total tally: " << tally << "\n";
     }
-    catch(ac_gpu::ACException &e) {
-        std::cerr << e.why() << std::endl;
-    } 
-    catch(std::exception &e) {
-        std::cerr << e.what() << std::endl;
+    catch(std::exception &e) { 
+        std::cerr << e.what() << std::endl; 
     }
-    if(!output_filename.empty()) {
-        writer.close();
-        double f_time = static_cast<double>(writer.get_frame_count()) / fps;
-        std::cout << "ac: Wrote: " << output_filename <<  " (" << writer.get_frame_count() << ") frames, duration: " << f_time << std::endl;
-    }
+    if(!output_filename.empty()) writer.close();
     cap.release(); 
-    
     return 0;
 }
