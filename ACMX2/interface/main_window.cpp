@@ -169,6 +169,13 @@ void MainWindow::initControls() {
         shader_path = path;
         loadShaders(path);
     }
+    QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
+                    "* { color: red; font-weight: bold; } "
+                    "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
+                    "QPushButton:hover { background-color: red; color: black; }";
+
+    setStyleSheet(style);
+    
 }
 
 void MainWindow::newList() {

@@ -39,7 +39,12 @@ void LibraryWindow::init() {
     setLayout(layout);
     setWindowTitle("Shader Library Folder Selector");
     resize(400, 200);
-    setStyleSheet("QDialog { background-color: rgb(0,0,0);} * { color: red; }");
+    QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
+                    "* { color: red; font-weight: bold; } "
+                    "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
+                    "QPushButton:hover { background-color: red; color: black; }";
+
+    setStyleSheet(style);
 }
 
 void LibraryWindow::onBrowseButtonClicked() {

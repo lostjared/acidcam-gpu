@@ -31,7 +31,13 @@ void ShaderDialog::init() {
     setLayout(layout);
     setWindowTitle("Create New Shader");
     resize(400, 150);
-    setStyleSheet("QDialog { background-color: rgb(0,0,0);} * { color: red; }");
+    QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
+                    "* { color: red; font-weight: bold; } "
+                    "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
+                    "QPushButton:hover { background-color: red; color: black; }";
+
+    setStyleSheet(style);
+    
 }
 
 void ShaderDialog::onOkButtonClicked() {

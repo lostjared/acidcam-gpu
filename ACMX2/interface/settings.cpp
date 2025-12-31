@@ -33,7 +33,13 @@ void SettingsWindow::init() {
     for (int i = 0; i <= 9; ++i) {
         cameraIndexComboBox->addItem(QString::number(i));
     }
-    setStyleSheet("QDialog { background-color: rgb(0,0,0);} * { color: red; }");
+    QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
+                    "* { color: red; font-weight: bold; } "
+                    "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
+                    "QPushButton:hover { background-color: red; color: black; }";
+
+    setStyleSheet(style);
+    
     QLabel *cameraResolutionLabel = new QLabel("Select Camera Resolution:", this);
     cameraResolutionComboBox = new QComboBox(this);
     QStringList cameraResolutions;
