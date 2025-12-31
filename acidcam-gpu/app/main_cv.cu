@@ -13,7 +13,7 @@
 #include<string>
 #include<vector>
 #include<mxwrite.hpp>
-
+#include<format>
 
 struct AnimationState {
     float alpha = 1.0f;
@@ -129,6 +129,11 @@ int main(int argc, char** argv) {
         std::cout << "🚀 GPU Acceleration Active: " << device_count << " device(s) found." << std::endl;
         cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
     }
+    auto cuda_device = cv::cuda::getDevice();
+    cv::cuda::DeviceInfo device(cuda_device);
+    std::ostringstream stream;
+    stream << device.name() << " Total Memory: "<< device.totalMemory();
+    std::string device_text = stream.str();
     Argz<std::string> argz(argc, argv);
     bool camera_mode = false;
     int camera_index = 0, filter_index = 0, dynamic_buffer = 10;
@@ -192,9 +197,7 @@ int main(int argc, char** argv) {
         filter_index = std::stoi(list);
         vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
     }
-
     dynamic_buffer = std::stoi(bufferArg);
-
     cv::VideoCapture cap;
     Writer writer;
     int frameCount = 0, screenshot_count = 1;
@@ -244,6 +247,7 @@ int main(int argc, char** argv) {
             writer.open_ts(output_filename, width, height, fps, output_crf.c_str());
 
         auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
+        auto app_start_time = std::chrono::steady_clock::now();
 
         while (1) {
             auto start_time = std::chrono::steady_clock::now();
@@ -275,15 +279,19 @@ int main(int argc, char** argv) {
                 frameCount = 0;
                 lastFPSUpdate = currentTime;
             }
+           
             frameCount++;
-
             static int tick = 0;
-            if ((tick_count == 1) || (++tick % tick_count == 0)) {
-                cv::putText(frame, "FPS: " + std::to_string((int)currentFPS), cv::Point(20, 50), 
-                            cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
-                cv::imshow("filter", frame);
+            if ((tick_count == 1) || (++tick % tick_count == 0)) {        
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - app_start_time).count();
+                int mins = (elapsed_ms / 60000);
+                int secs = (elapsed_ms % 60000) / 1000;
+                std::string text = std::format("Acid Cam GPU - Time: {:02}:{:02} | FPS: {}", mins, secs, (int)currentFPS);
+                cv::putText(frame, text, cv::Point(20, 50), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+                cv::putText(frame, device_text, cv::Point(20, 80), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(55,255,255), 2);
+                cv::imshow("filter",frame);
             }
-
             int key = cv::waitKey(1);
             if (key == 27) break; 
             else if (key == 's' || key == 'S') {
