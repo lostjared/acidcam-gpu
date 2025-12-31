@@ -45,7 +45,19 @@ namespace ac_gpu {
         { 37, "DetectEdges" },
         { 38, "SobelNorm" },
         { 39, "SobelThreshold" },
-        { 40, "LineInLineOut" }
+        { 40, "LineInLineOut" },
+        { 40, "LineInLineOut" },
+        { 41, "LineInLineOut4_Increase" },
+        { 42, "LineInLineOut_ReverseIncrease" },
+        { 43, "LineInLineOut_InvertedY" },
+        { 44, "LineInLineOut_ReverseInvertedY" },
+        { 45, "LineInLineOut_Vertical" },
+        { 46, "LineInLineOut_VerticalIncrease" },
+        { 47, "LineInLineOut_IncreaseImage" },
+        { 48, "SquareByRow" },
+        { 49, "SquareByRowRev" },
+        { 50, "SquareByRow2" },
+        { 51, "DivideByValue" }
     };
 
     struct FilterParams {
@@ -337,6 +349,137 @@ namespace ac_gpu {
         data[idx + 2] = v;
     }
 
+    __device__ int get_osc_offset(int frame_count, int max_val) {
+        if (max_val == 0) return 0;
+        int cycle = frame_count % (2 * max_val);
+        return (cycle < max_val) ? cycle : (2 * max_val - cycle);
+    }
+
+    __device__ void processLineInLineOut4_Increase(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = get_osc_offset(params.frame_count, 250); 
+        //int src_x = (x + offset) % width;
+        
+        unsigned char* hist = allFrames[params.frame_count % params.numFrames];
+        if (hist) {
+            int h_idx = y * step + x * 4; 
+            //unsigned char* src_pixel_ptr = &data[y * step + src_x * 4];
+            for(int j=0; j<3; ++j) {
+                data[idx + j] = (unsigned char)((0.5f * data[idx+j]) + (0.5f * hist[h_idx+j]));
+            }
+        }
+    }
+
+    __device__ void processLineInLineOut_ReverseIncrease(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = get_osc_offset(params.frame_count, 250);
+        int src_x = (x + offset) % width;
+        int tpos = width - src_x - 1;
+        
+        if (tpos >= 0 && tpos < width) {
+            unsigned char* hist = allFrames[params.frame_count % params.numFrames];
+            if (hist) {
+                for(int j=0; j<3; ++j) {
+                    data[idx+j] = (unsigned char)((0.5f * data[idx+j]) + (0.5f * hist[idx+j]));
+                }
+            }
+        }
+    }
+
+    __device__ void processLineInLineOut_InvertedY(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = get_osc_offset(params.frame_count, 400);
+        int zpos = height - y - 1; 
+        
+        if(zpos >= 0 && zpos < height) {
+            unsigned char* hist = allFrames[params.frame_count % params.numFrames];
+            if(hist) {
+                 for(int j=0; j<3; ++j) {
+                    data[idx+j] = (unsigned char)((0.5f * data[idx+j]) + (0.5f * hist[idx+j]));
+                 }
+            }
+        }
+    }
+
+    __device__ void processLineInLineOut_Vertical(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = get_osc_offset(params.frame_count, 100);
+        int src_y = (y + offset) % height;
+        
+        unsigned char* hist = allFrames[params.frame_count % params.numFrames];
+        if(hist) {
+            int src_idx = src_y * step + x * 4;
+            for(int j=0; j<3; ++j) {
+                data[src_idx+j] = (unsigned char)((0.5f * data[src_idx+j]) + (0.5f * hist[idx+j]));
+            }
+        }
+    }
+
+    __device__ void processLineInLineOut_IncreaseImage(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* reimage = allFrames[0]; 
+        unsigned char* hist = allFrames[params.frame_count % params.numFrames];
+        if(reimage && hist) {
+            for(int j=0; j<3; ++j) {
+                float val = (0.3f * data[idx+j]) + (0.3f * hist[idx+j]) + (0.3f * reimage[idx+j]);
+                data[idx+j] = (unsigned char)fminf(255.0f, val);
+            }
+        }
+    }
+    __device__ void processSquareByRow(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params, bool reverse, bool strobe) {
+        int SIZE_VALUE = 96;
+        int idx = y * step + x * 4;
+        int block_x = x / SIZE_VALUE;
+        int block_y = y / SIZE_VALUE;
+        float r_val = gpu_rand(block_x, block_y + params.frame_count, params.seed); 
+        int index = (int)(r_val * 64.0f) % params.numFrames;
+        
+        unsigned char* hist = allFrames[index];
+        if(hist) {
+            int target_x = x;
+            if(reverse) {
+                if ((block_y % 2) != 0) {
+                    target_x = width - x - 1;
+                }
+            }
+            
+            if (target_x >= 0 && target_x < width) {
+                int h_idx = y * step + target_x * 4;
+                if(strobe) {
+                    for(int j=0; j<3; ++j) {
+                        data[idx+j] = (unsigned char)((0.5f * data[idx+j]) + (0.5f * hist[h_idx+j]));
+                    }
+                } else {
+                    data[idx] = hist[h_idx];
+                    data[idx+1] = hist[h_idx+1];
+                    data[idx+2] = hist[h_idx+2];
+                }
+            }
+        }
+    }
+
+    __device__ void processDivideByValue(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned int total[3] = {0, 0, 0};
+        int count = (params.numFrames > 8) ? 8 : params.numFrames;
+        
+        if(count == 0) return;
+
+        for(int j = 0; j < count; ++j) {
+            unsigned char* f = allFrames[j];
+            if(f) {
+                total[0] += f[idx];
+                total[1] += f[idx+1];
+                total[2] += f[idx+2];
+            }
+        }
+        
+        for(int j=0; j<3; ++j) {
+            unsigned char avg = (unsigned char)(total[j] / 5);
+            data[idx+j] = data[idx+j] ^ avg;
+        }
+    }
+
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -506,6 +649,38 @@ namespace ac_gpu {
                         }
                     }
                 } break;
+                case 41: processLineInLineOut4_Increase(x, y, data, allFrames, width, height, step, params); break;
+                case 42: processLineInLineOut_ReverseIncrease(x, y, data, allFrames, width, height, step, params); break;
+                case 43: processLineInLineOut_InvertedY(x, y, data, allFrames, width, height, step, params); break;
+                case 44: { 
+                    int idx = y * step + x * 4;
+                    int offset = get_osc_offset(params.frame_count, 400);
+                    int zpos = height - y - 1; 
+                    int rpos = width - x - 1;
+                    unsigned char* hist = allFrames[params.frame_count % params.numFrames];
+                    if(hist && zpos >= 0 && rpos >= 0) {
+                        for(int j=0; j<3; ++j) 
+                            data[idx+j] = (unsigned char)((0.5f * data[idx+j]) + (0.5f * hist[zpos * step + rpos * 4 + j]));
+                    }
+                } break;
+                case 45: processLineInLineOut_Vertical(x, y, data, allFrames, width, height, step, params); break;
+                case 46: {
+                    int idx = y * step + x * 4;
+                    int offset = get_osc_offset(params.frame_count, 400);
+                    int src_y = (y + offset) % height;
+                    unsigned char* hist = allFrames[params.frame_count % params.numFrames];
+                    if(hist) {
+                        int src_idx = src_y * step + x * 4;
+                        for(int j=0; j<3; ++j) 
+                            data[src_idx+j] = (unsigned char)((0.5f * data[src_idx+j]) + (0.5f * hist[idx+j]));
+                    }
+                } break;
+
+                case 47: processLineInLineOut_IncreaseImage(x, y, data, allFrames, width, height, step, params); break; 
+                case 48: processSquareByRow(x, y, data, allFrames, width, height, step, params, false, false); break;
+                case 49: processSquareByRow(x, y, data, allFrames, width, height, step, params, true, false); break; // Rev
+                case 50: processSquareByRow(x, y, data, allFrames, width, height, step, params, false, true); break; // SquareByRow2 (Blend)
+                case 51: processDivideByValue(x, y, data, allFrames, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);

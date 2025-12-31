@@ -150,6 +150,7 @@ int main(int argc, char** argv) {
     int tick_count = 1;
     size_t time_over = 0;
     bool show_hud = true;
+    bool repeat = false;
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
     .addOptionSingleValue('f', "filters").addOptionDoubleValue(256, "filters", "Filter IDs")
@@ -162,6 +163,7 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(292, "fps", "FPS")
     .addOptionDoubleValue(294, "time", "How many seconds to record")
     .addOptionDoubleValue(301, "device", "Select Cuda Device")
+    .addOptionDouble(304, "repeat", "repeat video")
     .addOptionDouble(302, "list", "List all devices")
     .addOptionDouble(300, "hide", "hide HUD")
     .addOptionSingle('h', "help");
@@ -192,6 +194,9 @@ int main(int argc, char** argv) {
                 break;
             case 302:
                     exit(EXIT_SUCCESS);
+                    break;
+                case 304:
+                    repeat = true;
                     break;
             }
         }
@@ -272,7 +277,13 @@ int main(int argc, char** argv) {
 
         while (1) {
             auto start_time = std::chrono::steady_clock::now();
-            if (!cap.read(frame)) break; 
+            if (!cap.read(frame)) {
+                if(repeat)  {
+                    cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                    continue;
+                } 
+                break; 
+            }
 
             buffer.update(frame);
 
