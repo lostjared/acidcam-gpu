@@ -280,17 +280,19 @@ int main(int argc, char** argv) {
         }
         if (!cap.isOpened()) return -1;
     
-        cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-        int fourcc = (int)cap.get(cv::CAP_PROP_FOURCC);
-        if (fourcc != cv::VideoWriter::fourcc('M', 'J', 'P', 'G')) {
-            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y', 'Y', 'U', 'V'));
-            std::cout << "ac: Using YYUV codec (YUYV not available)" << std::endl;
-       } else {
-            std::cout << "ac: Using MJPG codec" << std::endl;
+        if(camera_mode == true) {
+            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+            int fourcc = (int)cap.get(cv::CAP_PROP_FOURCC);
+            if (fourcc != cv::VideoWriter::fourcc('M', 'J', 'P', 'G')) {
+                cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y', 'Y', 'U', 'V'));
+                std::cout << "ac: Attempting YYUV codec (YUYV not available)" << std::endl;
+           } else {
+                std::cout << "ac: Using MJPG codec" << std::endl;
+            }
+            cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
+            cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
+            cap.set(cv::CAP_PROP_FPS, output_fps);
         }
-        cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
-        cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
-        cap.set(cv::CAP_PROP_FPS, output_fps);
         //cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
         fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
@@ -300,7 +302,11 @@ int main(int argc, char** argv) {
         ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer);
         CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
         cv::Mat rgba_out(height, width, CV_8UC4);
-        std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << reported_fps << " fps (reported by camera)" << std::endl;
+        std::cout << "ac: Video resolution: " << width << "x" << height << " @ " << reported_fps << " fps ";
+        if(camera_mode == true) {
+            std::cout << " (reported by camera)";
+        }    
+        std::cout << std::endl;
         auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
         int current_filter = filter_index;
         int screenshot_count = 1;
