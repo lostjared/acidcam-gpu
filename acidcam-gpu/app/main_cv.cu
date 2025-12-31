@@ -217,7 +217,7 @@ int main(int argc, char** argv) {
 
         auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
 
-        while (true) {
+        while (1) {
             auto start_time = std::chrono::steady_clock::now();
             if (!cap.read(frame)) break; 
 
