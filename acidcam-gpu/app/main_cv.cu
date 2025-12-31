@@ -305,8 +305,8 @@ int main(int argc, char** argv) {
         cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
         cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
         cap.set(cv::CAP_PROP_FPS, output_fps);
-        fps = cap.get(cv::CAP_PROP_FPS);
         //cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+        fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
         double reported_fps = fps;
         int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
@@ -371,7 +371,7 @@ int main(int argc, char** argv) {
             static int tick = 0;
             bool should_draw = (tick_count == 1) || (++tick % tick_count == 0);
             if(should_draw) {
-                std::string status = "Acid Cam GPU - FPS: " + std::to_string((int)currentFPS);
+                std::string status = "FPS: " + std::to_string(static_cast<int>(currentFPS));
                 cv::putText(frame, status, cv::Point(21, 51), 
                 cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
                 cv::imshow("filter", frame);
