@@ -202,8 +202,20 @@ int main(int argc, char** argv) {
     auto lastFPSUpdate = std::chrono::steady_clock::now();
 
     try {
-        if(camera_mode) cap.open(camera_index, cv::CAP_V4L2);
-        else cap.open(inputArg);
+        if(camera_mode) {
+#ifdef __linux__
+            cap.open(camera_index, cv::CAP_V4L2);
+            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
+            cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
+            cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
+            cap.set(cv::CAP_PROP_FPS, output_fps);
+            cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 1); 
+#else
+            cap.open(cameraINdex);
+#endif
+        }
+        else 
+            cap.open(inputArg);
         if (!cap.isOpened()) return -1;
         if(camera_mode == true) {
             cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
