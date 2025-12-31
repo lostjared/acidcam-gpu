@@ -115,20 +115,23 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
     );
 }
 
-
-int main(int argc, char** argv) {
+void checkDevices() {
     int device_count = 0;
     cudaError_t error = cudaGetDeviceCount(&device_count);
-    std::cout << "Acid Cam GPU Demo" << std::endl;
     if (error != cudaSuccess || device_count == 0) {
         std::cerr << "OpenCV Cuda Support not found." << std::endl;
         std::cerr << "Reason: " << cudaGetErrorString(error) << std::endl;
         std::cerr << "Check: Are NVIDIA drivers installed? Is the GPU seated?" << std::endl;
-        return -1; 
+        exit(EXIT_FAILURE);
     } else {
         std::cout << "🚀 GPU Acceleration Active: " << device_count << " device(s) found." << std::endl;
         cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
     }
+}
+
+int main(int argc, char** argv) {
+    std::cout << "Acid Cam GPU Demo" << std::endl;
+    checkDevices();
     auto cuda_device = cv::cuda::getDevice();
     cv::cuda::DeviceInfo device(cuda_device);
     std::ostringstream stream;
@@ -158,6 +161,8 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(291, "crf", "CRF")
     .addOptionDoubleValue(292, "fps", "FPS")
     .addOptionDoubleValue(294, "time", "How many seconds to record")
+    .addOptionDoubleValue(301, "device", "Select Cuda Device")
+    .addOptionDouble(302, "list", "List all devices")
     .addOptionDouble(300, "hide", "hide HUD")
     .addOptionSingle('h', "help");
     try {
@@ -178,6 +183,16 @@ int main(int argc, char** argv) {
                 case 293: tick_count = std::stoi(a.arg_value); break;
                 case 294: time_over = std::stoi(a.arg_value); break;
                 case 300: show_hud = false; break;
+                case 301:
+                    if(isNumeric(a.arg_value)) {
+                        cv::cuda::setDevice(std::stoi(a.arg_value));
+                    } else {
+                        std::cout << "ac: Device number must be an integer." << std::endl;
+                    }
+                break;
+            case 302:
+                    exit(EXIT_SUCCESS);
+                    break;
             }
         }
     }  
