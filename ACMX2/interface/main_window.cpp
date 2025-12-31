@@ -14,6 +14,11 @@
 #include<QProcess>
 #include<QTextStream>
 
+#ifdef __linux__
+#include<unistd.h>
+#include<sys/types.h>
+#endif
+
 void MainWindow::initControls() {
     process = new QProcess(this);
     connect(process, &QProcess::readyReadStandardOutput, this, [=]() {
@@ -604,6 +609,18 @@ void MainWindow::cameraSettings() {
 }
 
 void MainWindow::runSelected() {
+
+#ifdef __linux__
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    QString uid = QString::number(getuid()); 
+    env.insert("XDG_RUNTIME_DIR", "/run/user/" + uid);
+    env.insert("PULSE_SERVER", "unix:/run/user/" + uid + "/pulse/native");
+    env.insert("CUDA_VISIBLE_DEVICES", "0"); 
+    env.insert("vblank_mode", "0"); 
+    process->setProcessEnvironment(env);
+
+#endif
+
    if(shader_path.length()==0) {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
@@ -697,6 +714,17 @@ void MainWindow::runSelected() {
 }
 
 void MainWindow::runAll() {
+
+#ifdef __linux__
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    QString uid = QString::number(getuid()); 
+    env.insert("XDG_RUNTIME_DIR", "/run/user/" + uid);
+    env.insert("PULSE_SERVER", "unix:/run/user/" + uid + "/pulse/native");
+    env.insert("CUDA_VISIBLE_DEVICES", "0"); 
+    env.insert("vblank_mode", "0"); 
+    process->setProcessEnvironment(env);
+#endif
+
     if(shader_path.length()==0) {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
