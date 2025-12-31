@@ -281,7 +281,7 @@ int main(int argc, char** argv) {
                     vlist.clear();
                     vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
                     filtersChanged = true;
-                    std::cout << "Filter: " << ac_gpu::filters[filter_index].name << std::endl;
+                    std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
                 }
             }
             else if (key == 84 || key == 65364) { 
@@ -290,22 +290,27 @@ int main(int argc, char** argv) {
                     vlist.clear();
                     vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
                     filtersChanged = true;
-                    std::cout << "Filter: " << ac_gpu::filters[filter_index].name << std::endl;
+                    std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
                 }
             }
 
-            if(!camera_mode) {
+            if(!camera_mode && tick == 1) {
                 auto end_time = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
                 if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
-            }
+            } 
         } 
 
         if (d_filterList)
             CHECK_CUDA(cudaFree(d_filterList));
+     
         CHECK_CUDA(cudaFree(d_ptrList));
+      
         if(!tally.empty()) 
             std::cout << "Total tally: " << tally << "\n";
+
+        if(!output_filename.empty())
+            std::cout << "Wrote: " << output_filename << " " << writer.get_frame_count() << " frames " << static_cast<double>(writer.get_frame_count())/fps << " seconds" << std::endl;
     }
     catch(std::exception &e) { 
         std::cerr << e.what() << std::endl; 
