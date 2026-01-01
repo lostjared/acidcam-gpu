@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
     int camera_index = 0, filter_index = 0, dynamic_buffer = 10;
     unsigned char** d_ptrList = nullptr;
     ac_gpu::Filter* d_filterList = nullptr;
-    cv::Size vres(1920, 1080), cres (1920, 1080);
+    cv::Size vres(0,0), cres (1920, 1080);
     bool filtersChanged = true; 
     std::string inputArg, filtersArg, bufferArg, cameraArg, output_filename, tally;
     std::string output_crf= "23";
@@ -209,7 +209,6 @@ int main(int argc, char** argv) {
                 case 306:
                     jump_pos = std::stoi(a.arg_value);
                 break;
-
             }
         }
     }  
@@ -260,6 +259,7 @@ int main(int argc, char** argv) {
             if(cap.isOpened()) {
                 cap.set(cv::CAP_PROP_POS_FRAMES, start_pos);
             }
+            std::cout << "ac: Opened: "<<  inputArg << std::endl;
         }
         if (!cap.isOpened()) return -1;
         if(camera_mode == true) {
@@ -269,32 +269,30 @@ int main(int argc, char** argv) {
         }
         double fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
-
         if(jump_pos != 0) {
             cap.set(cv::CAP_PROP_POS_FRAMES, static_cast<double>((jump_pos * fps)));
         }
-
         int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
         int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
-        
-        std::cout << "ac: Resolution: " << width << "x" << height << " @ " << fps << std::endl;
-
+        std::cout << "ac: Resolution: " << width << "x" << height << " @ " << fps << " fps " << std::endl;
         ac_gpu::DynamicFrameBuffer buffer(dynamic_buffer);
         CHECK_CUDA(cudaMalloc(&d_ptrList, buffer.arraySize * sizeof(unsigned char*)));
-
         cv::cuda::GpuMat gpuWorkingBuffer(height, width, CV_8UC4);
         cv::cuda::GpuMat gpuDisplayBuffer(height, width, CV_8UC4);
         cv::Mat frame, rgba_out(height, width, CV_8UC4);
         cv::namedWindow("filter", cv::WINDOW_NORMAL);
-        cv::resizeWindow("filter", vres.width, vres.height);
+        if(vres.width != 0 && vres.height != 0)
+            cv::resizeWindow("filter", vres.width, vres.height);
+        else
+            cv::resizeWindow("filter", width, height);
+
         cv::moveWindow("filter", 0, 0);
-
-        if(!output_filename.empty()) 
+        if(!output_filename.empty()) {
             writer.open_ts(output_filename, width, height, fps, output_crf.c_str());
-
+            std::cout << "ac: Opened: " << output_filename << " for writing " << width << "x" << height << " @ " << fps << " fps CRF: " << output_crf << std::endl;
+        }
         auto frame_duration = std::chrono::milliseconds((int)(1000.0 / fps));
         auto app_start_time = std::chrono::steady_clock::now();
-
         while (1) {
             auto start_time = std::chrono::steady_clock::now();
             if (!cap.read(frame)) {
@@ -304,26 +302,20 @@ int main(int argc, char** argv) {
                 } 
                 break; 
             }
-
             buffer.update(frame);
-
             if (width != buffer.w || height != buffer.h) {
                 width = buffer.w; height = buffer.h;
                 gpuWorkingBuffer.create(height, width, CV_8UC4);
                 gpuDisplayBuffer.create(height, width, CV_8UC4);
                 rgba_out = cv::Mat(height, width, CV_8UC4);
             }
-            
             updateAndDraw(frame, buffer, gpuWorkingBuffer, d_ptrList, &vlist[0], vlist.size(), &d_filterList, filtersChanged);
-
             cv::cuda::cvtColor(gpuWorkingBuffer, gpuDisplayBuffer, cv::COLOR_RGBA2BGRA);
             gpuDisplayBuffer.download(frame);
-
             if(!output_filename.empty()) {
                 gpuWorkingBuffer.download(rgba_out);
                 writer.write_ts(rgba_out.ptr());
             }
-
             auto currentTime = std::chrono::steady_clock::now();
             auto elapsedx = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFPSUpdate);
             if (elapsedx.count() >= 1000) {
@@ -331,14 +323,12 @@ int main(int argc, char** argv) {
                 frameCount = 0;
                 lastFPSUpdate = currentTime;
             }
-           
             frameCount++;
             static int tick = 0;
             auto now = std::chrono::steady_clock::now();
             auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - app_start_time).count();
             int mins = (elapsed_ms / 60000);
-            int secs = (elapsed_ms % 60000) / 1000;
-              
+            int secs = (elapsed_ms % 60000) / 1000; 
             if ((tick_count == 1) || (++tick % tick_count == 0)) {      
                 if(show_hud) {  
                     std::string text = std::format("Acid Cam GPU - Time: {:02}:{:02} | FPS: {}", mins, secs, (int)currentFPS);
@@ -375,13 +365,11 @@ int main(int argc, char** argv) {
                     std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
                 }
             }
-
             if(!camera_mode && tick == 1) {
                 auto end_time = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
                 if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
             } 
-
             if(output_filename.empty() && time_over != 0 && secs >= time_over) {
                 std::cout << "ac: Time duration reached. Exiting..." << std::endl;
                 break;
@@ -393,10 +381,9 @@ int main(int argc, char** argv) {
                 }
             }
         } 
-
         if (d_filterList)
             CHECK_CUDA(cudaFree(d_filterList));
-     
+
         CHECK_CUDA(cudaFree(d_ptrList));
       
         if(!tally.empty()) 
