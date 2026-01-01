@@ -187,8 +187,28 @@ int main(int argc, char** argv) {
                 case 290: output_filename = a.arg_value; break;
                 case 291: output_crf = a.arg_value; break;
                 case 292: output_fps = std::stod(a.arg_value); break;
-                case 293: tick_count = std::stoi(a.arg_value); break;
-                case 294: time_over = std::stoi(a.arg_value); break;
+                case 293:
+                    if(!isNumeric(a.arg_value)) {
+                        std::cerr << "ac: Error speed must be a numeric value.\n";
+                        exit(EXIT_FAILURE);
+                    }
+                    tick_count = std::stoi(a.arg_value); 
+                    if(tick_count <= 0) {
+                        std::cout << "ac: Error speed must be greater than zero\n";
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case 294: 
+                    if(!isNumeric(a.arg_value)) {
+                        std::cerr << "ac: Time must be a numeric value.\n";
+                        exit(EXIT_FAILURE);
+                    }
+                    time_over = std::stoi(a.arg_value); 
+                    if(time_over <= 0) {
+                        std::cerr << "ac: Time must be greater than zero\n";
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
                 case 300: show_hud = false; break;
                 case 301:
                     if(isNumeric(a.arg_value)) {
@@ -340,7 +360,12 @@ int main(int argc, char** argv) {
             int key = cv::waitKey(1);
             if (key == 27) break; 
             else if (key == 's' || key == 'S') {
-                std::string out = "acidcam-gpu_" + std::to_string(screenshot_count++) + ".png";
+                auto t = std::time(nullptr);
+                auto tm = *std::localtime(&t);
+                std::ostringstream oss;
+                oss << "acidcam-gpu_" << width << "x" << height << " - " << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".png";
+                std::string outstr = oss.str();
+                std::string out = "acidcam-gpu_" + oss.str() + "-" + std::to_string(screenshot_count++) + ".png";
                 cv::imwrite(out, frame);
                 std::cout << "Saved: " << out << std::endl;
             }
@@ -364,21 +389,23 @@ int main(int argc, char** argv) {
                     filtersChanged = true;
                     std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
                 }
-            }
-            if(!camera_mode && tick == 1) {
-                auto end_time = std::chrono::steady_clock::now();
-                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-                if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
             } 
             if(output_filename.empty() && time_over != 0 && secs >= time_over) {
                 std::cout << "ac: Time duration reached. Exiting..." << std::endl;
                 break;
-            } if (time_over != 0 && !output_filename.empty() && writer.is_open()) {
+            } 
+            if (time_over != 0 && !output_filename.empty() && writer.is_open()) {
                 auto time_elapsed = static_cast<double>(writer.get_frame_count()) / fps;
                 if (time_elapsed >= time_over) {
                     std::cout << "ac: Time duration reached exiting..." << std::endl;
                     break;
                 }
+            }
+
+            if(camera_mode ==false && tick_count == 1) {
+                auto end_time = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+                if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
             }
         } 
         if (d_filterList)
