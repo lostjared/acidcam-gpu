@@ -42,10 +42,10 @@ namespace ac_gpu {
         { 36, "XorSumStrobe" },
         { 37, "DetectEdges" },
         { 38, "SobelNorm" },
-        { 39, "SobelThreshold" },
-        { 40, "LineInLineOut" },
-        { 41, "LineInLineOut4_Increase" },
-        { 42, "LineInLineOut_ReverseIncrease" },
+        { 39, "LineInLineOut" },
+        { 40, "LineInLineOut4_Increase" },
+        { 41, "LineInLineOut_ReverseIncrease" },
+        { 42, "LineInLineOut_ReverseIncrease2" },
         { 43, "LineInLineOut_InvertedY" },
         { 44, "LineInLineOut_ReverseInvertedY" },
         { 45, "LineInLineOut_Vertical" },
@@ -731,16 +731,14 @@ namespace ac_gpu {
         { 725, "GrainStorm" },
         { 726, "GravityPull" },
         { 727, "GridWarp" },
-        { 728, "HaloRing" },
-        { 729, "HarshLight" },
-        { 730, "HazeLayer" },
-        { 731, "HeatRipple" },
-        { 732, "HexagonBlur" },
-        { 733, "HighContrast" },
-        { 734, "HologramScan" },
-        { 735, "HorizonBend" },
-        { 736, "HotSpot" },
-        { 737, "HueWobble" }
+        { 728, "HazeLayer" },
+        { 729, "HeatRipple" },
+        { 730, "HexagonBlur" },
+        { 731, "HighContrast" },
+        { 732, "HologramScan" },
+        { 733, "HorizonBend" },
+        { 734, "HotSpot" },
+        { 735, "HueWobble" }
     };
     struct FilterParams {
         float alpha;
@@ -8106,22 +8104,6 @@ namespace ac_gpu {
         int src_idx = src_y * step + src_x * 4;
         for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
     }
-    __device__ void processHaloRing(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        float cx = width / 2.0f, cy = height / 2.0f;
-        float dist = sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy));
-        float ring_dist = 100.0f + 50.0f * sinf(params.frame_count * 0.03f);
-        float halo = expf(-fabsf(dist - ring_dist) / 20.0f);
-        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * (1.0f + halo * 0.5f));
-    }
-    __device__ void processHarshLight(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        float harsh = 1.3f + 0.3f * sinf(params.frame_count * 0.08f);
-        for (int j = 0; j < 3; ++j) {
-            float val = (data[idx + j] - 128) * harsh + 128;
-            data[idx + j] = (unsigned char)fminf(255.0f, fmaxf(0.0f, val));
-        }
-    }
     __device__ void processHazeLayer(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float haze = 0.3f + 0.2f * sinf(params.frame_count * 0.03f);
@@ -9072,16 +9054,14 @@ namespace ac_gpu {
                 case 725: processGrainStorm(x, y, data, step, params); break;
                 case 726: processGravityPull(x, y, data, width, height, step, params); break;
                 case 727: processGridWarp(x, y, data, width, height, step, params); break;
-                case 728: processHaloRing(x, y, data, width, height, step, params); break;
-                case 729: processHarshLight(x, y, data, step, params); break;
-                case 730: processHazeLayer(x, y, data, height, step, params); break;
-                case 731: processHeatRipple(x, y, data, width, height, step, params); break;
-                case 732: processHexagonBlur(x, y, data, width, height, step, params); break;
-                case 733: processHighContrast(x, y, data, step, params); break;
-                case 734: processHologramScan(x, y, data, height, step, params); break;
-                case 735: processHorizonBend(x, y, data, width, height, step, params); break;
-                case 736: processHotSpot(x, y, data, width, height, step, params); break;
-                case 737: processHueWobble(x, y, data, step, params); break;
+                case 728: processHazeLayer(x, y, data, height, step, params); break;
+                case 729: processHeatRipple(x, y, data, width, height, step, params); break;
+                case 730: processHexagonBlur(x, y, data, width, height, step, params); break;
+                case 731: processHighContrast(x, y, data, step, params); break;
+                case 732: processHologramScan(x, y, data, height, step, params); break;
+                case 733: processHorizonBend(x, y, data, width, height, step, params); break;
+                case 734: processHotSpot(x, y, data, width, height, step, params); break;
+                case 735: processHueWobble(x, y, data, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);
