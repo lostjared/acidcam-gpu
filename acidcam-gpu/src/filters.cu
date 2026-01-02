@@ -208,7 +208,87 @@ namespace ac_gpu {
         { 202, "SineWaveDistort" },
         { 203, "CosineWaveDistort" },
         { 204, "SinCosBlend" },
-        { 205, "PixelReverseXor" }
+        { 205, "PixelReverseXor" },
+        { 206, "LinesAcrossX" },
+        { 207, "XorLineX" },
+        { 208, "AlphaComponentIncrease" },
+        { 209, "ExpandContract" },
+        { 210, "LongLines" },
+        { 211, "TearRight" },
+        { 212, "TearDown" },
+        { 213, "DistortionByRow" },
+        { 214, "DistortionByCol" },
+        { 215, "AlternateAlpha" },
+        { 216, "DiagSquareRGB" },
+        { 217, "ShiftPixelsRGB" },
+        { 218, "ColorWaveTrailsRGB" },
+        { 219, "ProperTrails" },
+        { 220, "XorLag" },
+        { 221, "PixelateBlend" },
+        { 222, "DiagPixel" },
+        { 223, "DiagPixelY" },
+        { 224, "ExpandLeftRight" },
+        { 225, "DiagSquare" },
+        { 226, "HorizontalColorOffset" },
+        { 227, "PrevFrameNotEqual" },
+        { 228, "BlackLines" },
+        { 229, "DizzyMode" },
+        { 230, "GhostShift" },
+        { 231, "RGBSplitFilter" },
+        { 232, "PixelateRect" },
+        { 233, "CollectionXor4" },
+        { 234, "RectangleSpin" },
+        { 235, "RectanglePlotXY" },
+        { 236, "ShiftLinesDown" },
+        { 237, "PictureStretch" },
+        { 238, "PictureStretchPieces" },
+        { 239, "VisualSnow" },
+        { 240, "VisualSnowX2" },
+        { 241, "LineGlitch" },
+        { 242, "SlitReverse64" },
+        { 243, "SlitReverse64_Increase" },
+        { 244, "SlitStretch" },
+        { 245, "LineLeftRight" },
+        { 246, "LineLeftRightResize" },
+        { 247, "RGBLineTrails" },
+        { 248, "RGBCollectionBlend" },
+        { 249, "RGBCollectionIncrease" },
+        { 250, "RGBLongTrails" },
+        { 251, "FadeRGB_Speed" },
+        { 252, "RGBStrobeTrails" },
+        { 253, "BoxGlitch" },
+        { 254, "VerticalPictureDistort" },
+        { 255, "ShortTrail" },
+        { 256, "DiagInward" },
+        { 257, "DiagSquareInward" },
+        { 258, "DiagSquareInwardResize" },
+        { 259, "PictureShiftDownRight" },
+        { 260, "FlipPictureShift" },
+        { 261, "RGBWideTrails" },
+        { 262, "LineInLineOut_Increase" },
+        { 263, "LineInLineOut2_Increase" },
+        { 264, "LineInLineOut3_Increase" },
+        { 265, "SquareByRow2Plus" },
+        { 266, "FrameSep" },
+        { 267, "FrameSep2" },
+        { 268, "FrameStopStart" },
+        { 269, "OutOfOrder" },
+        { 270, "TrackingDown" },
+        { 271, "TrackingDownBlend" },
+        { 272, "TrackingRev" },
+        { 273, "TrackingMirror" },
+        { 274, "BlockPixels" },
+        { 275, "FrameChop" },
+        { 276, "YLineDown" },
+        { 277, "YLineDownBlend" },
+        { 278, "SquareDiff1" },
+        { 279, "LineAcrossX" },
+        { 280, "ColorGlitch" },
+        { 281, "PixelShiftUp" },
+        { 282, "PixelShiftDown" },
+        { 283, "PixelShiftLeft" },
+        { 284, "PixelShiftRight" },
+        { 285, "PixelShiftDiagonal" }
     };
     struct FilterParams {
         float alpha;
@@ -2273,6 +2353,898 @@ namespace ac_gpu {
             data[idx + j] ^= data[ridx + j];
         }
     }
+    __device__ void processLinesAcrossX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (x > 0) {
+            int prev_idx = y * step + (x - 1) * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] ^= data[prev_idx + j];
+            }
+        }
+    }
+    __device__ void processXorLineX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int avg = (params.sumR + params.sumG + params.sumB) / 3;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)((0.5f * (data[idx + j] ^ avg)) + (0.5f * data[idx + j]));
+        }
+    }
+    __device__ void processAlphaComponentIncrease(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int channel = params.frame_count % 3;
+        float alpha = 0.1f + 0.9f * fabsf(sinf(params.frame_count * 0.01f));
+        data[idx + channel] ^= (unsigned char)(alpha * data[idx + channel]);
+    }
+    __device__ void processExpandContract(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int nw = width + (int)(sinf(params.frame_count * 0.02f) * width);
+        if (nw < width) nw = width;
+        int src_x = (x * nw) / width;
+        if (src_x >= 0 && src_x < width) {
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    __device__ void processLongLines(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, 0, params.seed);
+        if (r < 0.007f) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = 0;
+            }
+        }
+    }
+    __device__ void processTearRight(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int max_off = 50 + (params.frame_count % 350);
+        float r = gpu_rand(y, params.seed, params.frame_count);
+        int offset = 25 + (int)(r * max_off);
+        int total_size = width + offset;
+        int src_x = (x * total_size) / width;
+        if (src_x >= width) src_x = width - 1;
+        if (src_x < 0) src_x = 0;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void processTearDown(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int max_off = 50 + (params.frame_count % 350);
+        float r = gpu_rand(x, params.seed, params.frame_count);
+        int offset = 25 + (int)(r * max_off);
+        int total_size = height + offset;
+        int src_y = (y * total_size) / height;
+        if (src_y >= height) src_y = height - 1;
+        if (src_y < 0) src_y = 0;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void processDistortionByRow(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int nw = height / 16 + (y % (height - height / 16));
+        int src_y = (y * nw) / height;
+        if (src_y >= height) src_y = height - 1;
+        if (src_y < 0) src_y = 0;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void processDistortionByCol(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int nh = width / 16 + (x % (width - width / 16));
+        int src_x = (x * nh) / width;
+        if (src_x >= width) src_x = width - 1;
+        if (src_x < 0) src_x = 0;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void processAlternateAlpha(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int rgb = params.frame_count % 3;
+        float alpha = 0.1f + 0.4f * fabsf(sinf(params.frame_count * 0.01f));
+        data[idx + rgb] = (unsigned char)((data[idx + rgb] * 0.5f) * alpha);
+    }
+    __device__ void processDiagSquareRGB(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int rgb = params.frame_count % 3;
+        int sq_x = x / 32;
+        int sq_y = y / 32;
+        int offset = (sq_x + sq_y) % params.numFrames;
+        unsigned char* hist = allFrames[offset];
+        if (hist) {
+            data[idx + rgb] = hist[idx + rgb];
+        }
+    }
+    __device__ void processShiftPixelsRGB(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int rgb = params.frame_count % 3;
+        int offset = 1 + (params.frame_count % (width / 16));
+        int src_x = (x + offset) % width;
+        int src_idx = y * step + src_x * 4;
+        data[idx + rgb] += data[src_idx + rgb];
+    }
+    __device__ void processColorWaveTrailsRGB(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int rgb = params.frame_count % 3;
+        int fi = y % params.numFrames;
+        unsigned char* hist = allFrames[fi];
+        if (hist) {
+            data[idx + rgb] = (unsigned char)((0.3f * data[idx + rgb]) + (0.7f * hist[idx + rgb]));
+        }
+    }
+    __device__ void processProperTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* hist = allFrames[params.numFrames > 7 ? 7 : params.numFrames - 1];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((0.5f * data[idx + j]) + (0.5f * hist[idx + j]));
+            }
+        }
+    }
+    __device__ void processXorLag(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int fi = params.numFrames > 31 ? 31 : params.numFrames - 1;
+        unsigned char* hist = allFrames[fi];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] ^= hist[idx + j];
+            }
+        }
+    }
+    __device__ void processPixelateBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int wait = 1 + ((x + y + params.seed) % 50);
+        int fi = ((x * params.sh + y) / wait) % params.numFrames;
+        unsigned char* hist = allFrames[fi];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((0.5f * data[idx + j]) + (0.5f * hist[idx + j]));
+            }
+        }
+    }
+    __device__ void processDiagPixel(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int off = y % params.numFrames;
+        unsigned char* hist = allFrames[off];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((0.5f * data[idx + j]) + (0.5f * hist[idx + j]));
+            }
+        }
+    }
+    __device__ void processDiagPixelY(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int off = (x + y) % params.numFrames;
+        unsigned char* hist = allFrames[off];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = hist[idx + j];
+            }
+        }
+    }
+    __device__ void processExpandLeftRight(int x, int y, unsigned char* data, unsigned char** allFrames, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int off = (params.frame_count + y) % width;
+        int fi = y % params.numFrames;
+        unsigned char* hist = allFrames[fi];
+        if (hist) {
+            int src_x = (x + off) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((0.5f * data[idx + j]) + (0.5f * hist[src_idx + j]));
+            }
+        }
+    }
+    __device__ void processDiagSquare(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int sq_x = x / 32;
+        int sq_y = y / 32;
+        int offset = (sq_x + sq_y) % params.numFrames;
+        unsigned char* hist = allFrames[offset];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = hist[idx + j];
+            }
+        }
+    }
+    __device__ void processHorizontalColorOffset(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int coffset = (y / 50) % 3;
+        float color = 0.3f + 0.7f * fabsf(sinf((x + params.frame_count) * 0.01f));
+        data[idx + coffset] = (unsigned char)(data[idx + coffset] * color);
+    }
+    __device__ void processPrevFrameNotEqual(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            int threshold = 25;
+            for (int j = 0; j < 3; ++j) {
+                if (data[idx + j] >= prev[idx + j] && data[idx + j] <= prev[idx + j] + threshold) {
+                    data[idx + j] = prev[idx + j];
+                }
+            }
+        }
+    }
+    __device__ void processBlackLines(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int depth = params.seed % 50;
+        bool on = ((y / 50) % 2) == 0;
+        if (on && x < depth) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = 0;
+            }
+        } else if (on && x + depth < width) {
+            int src_idx = y * step + (x + depth) * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((0.5f * data[idx + j]) + (0.5f * data[src_idx + j]));
+            }
+        }
+    }
+    __device__ void processDizzyMode(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((0.5f * data[idx + j]) + (0.5f * prev[idx + j]));
+            }
+        }
+    }
+    __device__ void processGhostShift(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        for (int i = 0; i < params.numFrames && i < 8; ++i) {
+            unsigned char* hist = allFrames[i];
+            if (hist) {
+                for (int j = 0; j < 3; ++j) {
+                    data[idx + j] = (unsigned char)((0.6f * data[idx + j]) + (0.4f * hist[idx + j]));
+                }
+            }
+        }
+    }
+    __device__ void processRGBSplitFilter(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int f0 = params.numFrames > 15 ? 15 : params.numFrames - 1;
+        int f1 = params.numFrames > 7 ? 7 : params.numFrames / 2;
+        int f2 = 0;
+        unsigned char* rgb0 = allFrames[f0];
+        unsigned char* rgb1 = allFrames[f1];
+        unsigned char* rgb2 = allFrames[f2];
+        if (rgb0) data[idx] = rgb0[idx];
+        if (rgb1) data[idx + 1] = rgb1[idx + 1];
+        if (rgb2) data[idx + 2] = rgb2[idx + 2];
+    }
+    __device__ void processPixelateRect(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        if (r < 0.1f) {
+            int fi = (int)(r * params.numFrames * 10) % params.numFrames;
+            unsigned char* hist = allFrames[fi];
+            if (hist) {
+                for (int j = 0; j < 3; ++j) {
+                    data[idx + j] = hist[idx + j];
+                }
+            }
+        }
+    }
+    __device__ void processCollectionXor4(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float alpha = 0.1f + 0.9f * fabsf(sinf(params.frame_count * 0.01f));
+        int colors[3] = {0, 0, 0};
+        int count = params.numFrames < 4 ? params.numFrames : 4;
+        for (int q = 0; q < count; ++q) {
+            unsigned char* hist = allFrames[q];
+            if (hist) {
+                for (int j = 0; j < 3; ++j) {
+                    colors[j] += hist[idx + j];
+                }
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            int avg_color = colors[j] / count;
+            int pix_val = data[idx + j] ^ avg_color;
+            data[idx + j] = (unsigned char)((1.0f - alpha) * data[idx + j] + alpha * pix_val);
+        }
+    }
+    __device__ void processRectangleSpin(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        if (r < 0.05f) {
+            int src_y = (int)(r * height * 20) % height;
+            int src_idx = src_y * step + x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    __device__ void processRectanglePlotXY(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        if (r < 0.1f) {
+            int src_x = (int)(r * width * 10) % width;
+            int src_y = (int)(r * height * 10) % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] ^= data[src_idx + j];
+            }
+        }
+    }
+    // Filter 236: ShiftLinesDown
+    __device__ void processShiftLinesDown(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shiftAmount = (params.frame_count / 4) % height;
+        int src_y = (y + shiftAmount) % height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 237: PictureStretch
+    __device__ void processPictureStretch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float stretch = 1.0f + 0.5f * sinf(params.frame_count * 0.02f);
+        int src_x = (int)(x / stretch) % width;
+        if (src_x < 0) src_x += width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 238: PictureStretchPieces
+    __device__ void processPictureStretchPieces(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int piece = y / 32;
+        float stretch = 1.0f + 0.3f * sinf((params.frame_count + piece * 10) * 0.03f);
+        int src_x = (int)(x / stretch) % width;
+        if (src_x < 0) src_x += width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 239: VisualSnow
+    __device__ void processVisualSnow(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        if (r < 0.1f) {
+            unsigned char snow = (unsigned char)(r * 255 * 10);
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.7f * data[idx + j] + 0.3f * snow);
+            }
+        }
+    }
+    // Filter 240: VisualSnowX2
+    __device__ void processVisualSnowX2(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        if (r < 0.2f) {
+            unsigned char snow = (unsigned char)(r * 255 * 5);
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * snow);
+            }
+        }
+    }
+    // Filter 241: LineGlitch
+    __device__ void processLineGlitch(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x / 32, y, params.seed);
+        if (r < 0.15f) {
+            int offset = (int)(r * 100) % 50;
+            int src_x = (x + offset) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    // Filter 242: SlitReverse64
+    __device__ void processSlitReverse64(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int slit = y / 64;
+        if (slit % 2 == 0) {
+            int src_x = width - 1 - x;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+            }
+        }
+    }
+    // Filter 243: SlitReverse64_Increase
+    __device__ void processSlitReverse64_Increase(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int slitSize = 32 + (params.frame_count % 64);
+        int slit = y / slitSize;
+        if (slit % 2 == 0) {
+            int src_x = width - 1 - x;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+            }
+        }
+    }
+    // Filter 244: SlitStretch
+    __device__ void processSlitStretch(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int slit = y / 32;
+        float stretch = 1.0f + 0.5f * (slit % 4) * 0.25f;
+        int src_x = (int)(x * stretch) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 245: LineLeftRight
+    __device__ void processLineLeftRight(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int dir = (y / 16) % 2;
+        int offset = params.frame_count % width;
+        int src_x = dir == 0 ? (x + offset) % width : (x - offset + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 246: LineLeftRightResize
+    __device__ void processLineLeftRightResize(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int lineSize = 8 + (params.frame_count / 8) % 32;
+        int dir = (y / lineSize) % 2;
+        int offset = params.frame_count % width;
+        int src_x = dir == 0 ? (x + offset) % width : (x - offset + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 247: RGBLineTrails
+    __device__ void processRGBLineTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int channel = y % 3;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            data[idx + channel] = (unsigned char)(0.6f * data[idx + channel] + 0.4f * prev[idx + channel]);
+        }
+    }
+    // Filter 248: RGBCollectionBlend
+    __device__ void processRGBCollectionBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            int fi = j % params.numFrames;
+            unsigned char* hist = allFrames[fi];
+            if (hist) {
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * hist[idx + j]);
+            }
+        }
+    }
+    // Filter 249: RGBCollectionIncrease
+    __device__ void processRGBCollectionIncrease(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float alpha = 0.1f + 0.9f * fabsf(sinf(params.frame_count * 0.02f));
+        for (int j = 0; j < 3; ++j) {
+            int fi = (j + params.frame_count) % params.numFrames;
+            unsigned char* hist = allFrames[fi];
+            if (hist) {
+                data[idx + j] = (unsigned char)((1.0f - alpha) * data[idx + j] + alpha * hist[idx + j]);
+            }
+        }
+    }
+    // Filter 250: RGBLongTrails
+    __device__ void processRGBLongTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            int fi = (j * 5) % params.numFrames;
+            unsigned char* hist = allFrames[fi];
+            if (hist) {
+                data[idx + j] = (unsigned char)(0.3f * data[idx + j] + 0.7f * hist[idx + j]);
+            }
+        }
+    }
+    // Filter 251: FadeRGB_Speed
+    __device__ void processFadeRGB_Speed(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float speedR = fabsf(sinf(params.frame_count * 0.05f));
+        float speedG = fabsf(sinf(params.frame_count * 0.07f));
+        float speedB = fabsf(sinf(params.frame_count * 0.09f));
+        data[idx] = (unsigned char)(data[idx] * speedB);
+        data[idx + 1] = (unsigned char)(data[idx + 1] * speedG);
+        data[idx + 2] = (unsigned char)(data[idx + 2] * speedR);
+    }
+    // Filter 252: RGBStrobeTrails
+    __device__ void processRGBStrobeTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int strobe = params.frame_count % 3;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            data[idx + strobe] = (unsigned char)(0.5f * data[idx + strobe] + 0.5f * prev[idx + strobe]);
+        }
+    }
+    // Filter 253: BoxGlitch
+    __device__ void processBoxGlitch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x / 64, y / 64, params.seed);
+        if (r < 0.1f) {
+            int offset_x = (int)(r * 100) % 32;
+            int offset_y = (int)(r * 50) % 16;
+            int src_x = (x + offset_x) % width;
+            int src_y = (y + offset_y) % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    // Filter 254: VerticalPictureDistort
+    __device__ void processVerticalPictureDistort(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float distort = sinf(x * 0.05f + params.frame_count * 0.02f) * 10;
+        int src_y = ((int)(y + distort) % height + height) % height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 255: ShortTrail
+    __device__ void processShortTrail(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.8f * data[idx + j] + 0.2f * prev[idx + j]);
+            }
+        }
+    }
+    // Filter 256: DiagInward
+    __device__ void processDiagInward(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        int dx = x - cx;
+        int dy = y - cy;
+        float dist = sqrtf((float)(dx * dx + dy * dy));
+        float factor = 0.5f + 0.5f * sinf(dist * 0.05f - params.frame_count * 0.05f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 257: DiagSquareInward
+    __device__ void processDiagSquareInward(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int sq = params.square_size > 0 ? params.square_size : 32;
+        int sx = (x / sq) * sq + sq / 2;
+        int sy = (y / sq) * sq + sq / 2;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dist = sqrtf((float)((sx - cx) * (sx - cx) + (sy - cy) * (sy - cy)));
+        float factor = 0.5f + 0.5f * sinf(dist * 0.02f - params.frame_count * 0.03f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 258: DiagSquareInwardResize
+    __device__ void processDiagSquareInwardResize(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int sq = 16 + (params.frame_count / 4) % 48;
+        int sx = (x / sq) * sq + sq / 2;
+        int sy = (y / sq) * sq + sq / 2;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dist = sqrtf((float)((sx - cx) * (sx - cx) + (sy - cy) * (sy - cy)));
+        float factor = 0.5f + 0.5f * sinf(dist * 0.02f - params.frame_count * 0.03f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 259: PictureShiftDownRight
+    __device__ void processPictureShiftDownRight(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = params.int_param1 % 100;
+        int src_x = (x - offset + width) % width;
+        int src_y = (y - offset + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 260: FlipPictureShift
+    __device__ void processFlipPictureShift(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int flip = (params.frame_count / 30) % 4;
+        int src_x = x, src_y = y;
+        if (flip == 1) { src_x = width - 1 - x; }
+        else if (flip == 2) { src_y = height - 1 - y; }
+        else if (flip == 3) { src_x = width - 1 - x; src_y = height - 1 - y; }
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 261: RGBWideTrails
+    __device__ void processRGBWideTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            int fi = (j * 8) % params.numFrames;
+            unsigned char* hist = allFrames[fi];
+            if (hist) {
+                data[idx + j] = (unsigned char)(0.4f * data[idx + j] + 0.6f * hist[idx + j]);
+            }
+        }
+    }
+    // Filter 262: LineInLineOut_Increase
+    __device__ void processLineInLineOut_Increase(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int lineSize = 4 + (params.frame_count / 4) % 32;
+        int segment = x / lineSize;
+        float factor = (segment % 2 == 0) ? 1.0f + params.alpha * 0.5f : 1.0f - params.alpha * 0.3f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
+        }
+    }
+    // Filter 263: LineInLineOut2_Increase
+    __device__ void processLineInLineOut2_Increase(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int lineSize = 4 + (params.frame_count / 4) % 32;
+        int segment = y / lineSize;
+        float factor = (segment % 2 == 0) ? 1.0f + params.alpha * 0.5f : 1.0f - params.alpha * 0.3f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
+        }
+    }
+    // Filter 264: LineInLineOut3_Increase
+    __device__ void processLineInLineOut3_Increase(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int lineSize = 8 + (params.frame_count / 8) % 24;
+        int segX = x / lineSize;
+        int segY = y / lineSize;
+        float factor = ((segX + segY) % 2 == 0) ? 1.2f : 0.8f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
+        }
+    }
+    // Filter 265: SquareByRow2Plus
+    __device__ void processSquareByRow2Plus(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int sq = params.square_size > 0 ? params.square_size : 16;
+        int row = y / sq;
+        int offset = (row * 5) % width;
+        int src_x = (x + offset) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 266: FrameSep
+    __device__ void processFrameSep(int x, int y, unsigned char* data, unsigned char** allFrames, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int half = width / 2;
+        int fi = (x < half) ? 0 : (params.numFrames > 1 ? 1 : 0);
+        unsigned char* hist = allFrames[fi];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = hist[idx + j];
+            }
+        }
+    }
+    // Filter 267: FrameSep2
+    __device__ void processFrameSep2(int x, int y, unsigned char* data, unsigned char** allFrames, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int half = height / 2;
+        int fi = (y < half) ? 0 : (params.numFrames > 1 ? 1 : 0);
+        unsigned char* hist = allFrames[fi];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = hist[idx + j];
+            }
+        }
+    }
+    // Filter 268: FrameStopStart
+    __device__ void processFrameStopStart(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cycle = (params.frame_count / 30) % 2;
+        if (cycle == 0) {
+            unsigned char* hist = allFrames[0];
+            if (hist) {
+                for (int j = 0; j < 3; ++j) {
+                    data[idx + j] = hist[idx + j];
+                }
+            }
+        }
+    }
+    // Filter 269: OutOfOrder
+    __device__ void processOutOfOrder(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int fi = (x ^ y ^ params.seed) % params.numFrames;
+        unsigned char* hist = allFrames[fi];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * hist[idx + j]);
+            }
+        }
+    }
+    // Filter 270: TrackingDown
+    __device__ void processTrackingDown(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int track = (params.frame_count * 2) % height;
+        if (y == track) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = 255;
+            }
+        }
+    }
+    // Filter 271: TrackingDownBlend
+    __device__ void processTrackingDownBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int track = (params.frame_count * 2) % height;
+        if (abs(y - track) < 5) {
+            unsigned char* prev = allFrames[0];
+            if (prev) {
+                for (int j = 0; j < 3; ++j) {
+                    data[idx + j] = (unsigned char)(0.3f * data[idx + j] + 0.7f * prev[idx + j]);
+                }
+            }
+        }
+    }
+    // Filter 272: TrackingRev
+    __device__ void processTrackingRev(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int track = height - 1 - ((params.frame_count * 2) % height);
+        if (y == track) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = 255 - data[idx + j];
+            }
+        }
+    }
+    // Filter 273: TrackingMirror
+    __device__ void processTrackingMirror(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int track = (params.frame_count * 2) % height;
+        if (abs(y - track) < 10) {
+            int src_x = width - 1 - x;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    // Filter 274: BlockPixels
+    __device__ void processBlockPixels(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int bx = x / 8;
+        int by = y / 8;
+        float r = gpu_rand(bx, by, params.seed);
+        if (r < 0.3f) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * (0.5f + r));
+            }
+        }
+    }
+    // Filter 275: FrameChop
+    __device__ void processFrameChop(int x, int y, unsigned char* data, unsigned char** allFrames, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int chop = width / 4;
+        int section = x / chop;
+        int fi = section % params.numFrames;
+        unsigned char* hist = allFrames[fi];
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = hist[idx + j];
+            }
+        }
+    }
+    // Filter 276: YLineDown
+    __device__ void processYLineDown(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int linePos = (params.frame_count + x) % height;
+        if (y == linePos) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = 255;
+            }
+        }
+    }
+    // Filter 277: YLineDownBlend
+    __device__ void processYLineDownBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int linePos = (params.frame_count + x) % height;
+        if (abs(y - linePos) < 3) {
+            unsigned char* prev = allFrames[0];
+            if (prev) {
+                for (int j = 0; j < 3; ++j) {
+                    data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * prev[idx + j]);
+                }
+            }
+        }
+    }
+    // Filter 278: SquareDiff1
+    __device__ void processSquareDiff1(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int sq = 16;
+        int sx = (x / sq) * sq;
+        int sy = (y / sq) * sq;
+        int src_idx = sy * step + sx * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                int diff = abs(data[idx + j] - prev[src_idx + j]);
+                data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] + diff * 0.5f);
+            }
+        }
+    }
+    // Filter 279: LineAcrossX
+    __device__ void processLineAcrossXNew(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int lineX = (params.frame_count * 3) % width;
+        if (abs(x - lineX) < 2) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = 255 - data[idx + j];
+            }
+        }
+    }
+    // Filter 280: ColorGlitch
+    __device__ void processColorGlitch(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        if (r < 0.05f) {
+            int channel = (int)(r * 60) % 3;
+            data[idx + channel] = 255 - data[idx + channel];
+        }
+    }
+    // Filter 281: PixelShiftUp
+    __device__ void processPixelShiftUp(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = params.int_param1 % height;
+        int src_y = (y + offset) % height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 282: PixelShiftDown
+    __device__ void processPixelShiftDown(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = params.int_param1 % height;
+        int src_y = (y - offset + height) % height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 283: PixelShiftLeft
+    __device__ void processPixelShiftLeft(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = params.int_param2 % width;
+        int src_x = (x + offset) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 284: PixelShiftRight
+    __device__ void processPixelShiftRight(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = params.int_param2 % width;
+        int src_x = (x - offset + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 285: PixelShiftDiagonal
+    __device__ void processPixelShiftDiagonal(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset_x = params.int_param2 % width;
+        int offset_y = params.int_param1 % height;
+        int src_x = (x + offset_x) % width;
+        int src_y = (y + offset_y) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -2626,6 +3598,86 @@ namespace ac_gpu {
                 case 203: processCosineWaveDistort(x, y, data, height, step, params); break;
                 case 204: processSinCosBlend(x, y, data, step, params); break;
                 case 205: processPixelReverseXor(x, y, data, width, height, step, params); break;
+                case 206: processLinesAcrossX(x, y, data, width, step, params); break;
+                case 207: processXorLineX(x, y, data, step, params); break;
+                case 208: processAlphaComponentIncrease(x, y, data, step, params); break;
+                case 209: processExpandContract(x, y, data, width, step, params); break;
+                case 210: processLongLines(x, y, data, step, params); break;
+                case 211: processTearRight(x, y, data, width, step, params); break;
+                case 212: processTearDown(x, y, data, height, step, params); break;
+                case 213: processDistortionByRow(x, y, data, height, step, params); break;
+                case 214: processDistortionByCol(x, y, data, width, step, params); break;
+                case 215: processAlternateAlpha(x, y, data, step, params); break;
+                case 216: processDiagSquareRGB(x, y, data, allFrames, step, params); break;
+                case 217: processShiftPixelsRGB(x, y, data, width, step, params); break;
+                case 218: processColorWaveTrailsRGB(x, y, data, allFrames, step, params); break;
+                case 219: processProperTrails(x, y, data, allFrames, step, params); break;
+                case 220: processXorLag(x, y, data, allFrames, step, params); break;
+                case 221: processPixelateBlend(x, y, data, allFrames, step, params); break;
+                case 222: processDiagPixel(x, y, data, allFrames, step, params); break;
+                case 223: processDiagPixelY(x, y, data, allFrames, step, params); break;
+                case 224: processExpandLeftRight(x, y, data, allFrames, width, step, params); break;
+                case 225: processDiagSquare(x, y, data, allFrames, step, params); break;
+                case 226: processHorizontalColorOffset(x, y, data, width, step, params); break;
+                case 227: processPrevFrameNotEqual(x, y, data, allFrames, step, params); break;
+                case 228: processBlackLines(x, y, data, width, step, params); break;
+                case 229: processDizzyMode(x, y, data, allFrames, step, params); break;
+                case 230: processGhostShift(x, y, data, allFrames, step, params); break;
+                case 231: processRGBSplitFilter(x, y, data, allFrames, step, params); break;
+                case 232: processPixelateRect(x, y, data, allFrames, step, params); break;
+                case 233: processCollectionXor4(x, y, data, allFrames, step, params); break;
+                case 234: processRectangleSpin(x, y, data, width, height, step, params); break;
+                case 235: processRectanglePlotXY(x, y, data, width, height, step, params); break;
+                case 236: processShiftLinesDown(x, y, data, width, height, step, params); break;
+                case 237: processPictureStretch(x, y, data, width, height, step, params); break;
+                case 238: processPictureStretchPieces(x, y, data, width, height, step, params); break;
+                case 239: processVisualSnow(x, y, data, step, params); break;
+                case 240: processVisualSnowX2(x, y, data, step, params); break;
+                case 241: processLineGlitch(x, y, data, width, step, params); break;
+                case 242: processSlitReverse64(x, y, data, width, step, params); break;
+                case 243: processSlitReverse64_Increase(x, y, data, width, step, params); break;
+                case 244: processSlitStretch(x, y, data, width, step, params); break;
+                case 245: processLineLeftRight(x, y, data, width, step, params); break;
+                case 246: processLineLeftRightResize(x, y, data, width, step, params); break;
+                case 247: processRGBLineTrails(x, y, data, allFrames, step, params); break;
+                case 248: processRGBCollectionBlend(x, y, data, allFrames, step, params); break;
+                case 249: processRGBCollectionIncrease(x, y, data, allFrames, step, params); break;
+                case 250: processRGBLongTrails(x, y, data, allFrames, step, params); break;
+                case 251: processFadeRGB_Speed(x, y, data, step, params); break;
+                case 252: processRGBStrobeTrails(x, y, data, allFrames, step, params); break;
+                case 253: processBoxGlitch(x, y, data, width, height, step, params); break;
+                case 254: processVerticalPictureDistort(x, y, data, height, step, params); break;
+                case 255: processShortTrail(x, y, data, allFrames, step, params); break;
+                case 256: processDiagInward(x, y, data, width, height, step, params); break;
+                case 257: processDiagSquareInward(x, y, data, width, height, step, params); break;
+                case 258: processDiagSquareInwardResize(x, y, data, width, height, step, params); break;
+                case 259: processPictureShiftDownRight(x, y, data, width, height, step, params); break;
+                case 260: processFlipPictureShift(x, y, data, width, height, step, params); break;
+                case 261: processRGBWideTrails(x, y, data, allFrames, step, params); break;
+                case 262: processLineInLineOut_Increase(x, y, data, width, step, params); break;
+                case 263: processLineInLineOut2_Increase(x, y, data, height, step, params); break;
+                case 264: processLineInLineOut3_Increase(x, y, data, width, height, step, params); break;
+                case 265: processSquareByRow2Plus(x, y, data, width, step, params); break;
+                case 266: processFrameSep(x, y, data, allFrames, width, step, params); break;
+                case 267: processFrameSep2(x, y, data, allFrames, height, step, params); break;
+                case 268: processFrameStopStart(x, y, data, allFrames, step, params); break;
+                case 269: processOutOfOrder(x, y, data, allFrames, step, params); break;
+                case 270: processTrackingDown(x, y, data, height, step, params); break;
+                case 271: processTrackingDownBlend(x, y, data, allFrames, height, step, params); break;
+                case 272: processTrackingRev(x, y, data, height, step, params); break;
+                case 273: processTrackingMirror(x, y, data, width, height, step, params); break;
+                case 274: processBlockPixels(x, y, data, step, params); break;
+                case 275: processFrameChop(x, y, data, allFrames, width, step, params); break;
+                case 276: processYLineDown(x, y, data, height, step, params); break;
+                case 277: processYLineDownBlend(x, y, data, allFrames, height, step, params); break;
+                case 278: processSquareDiff1(x, y, data, allFrames, step, params); break;
+                case 279: processLineAcrossXNew(x, y, data, width, step, params); break;
+                case 280: processColorGlitch(x, y, data, step, params); break;
+                case 281: processPixelShiftUp(x, y, data, height, step, params); break;
+                case 282: processPixelShiftDown(x, y, data, height, step, params); break;
+                case 283: processPixelShiftLeft(x, y, data, width, step, params); break;
+                case 284: processPixelShiftRight(x, y, data, width, step, params); break;
+                case 285: processPixelShiftDiagonal(x, y, data, width, height, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);
