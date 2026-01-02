@@ -29,7 +29,10 @@
 #include<string_view>
 #include <deque>
 #include <opencv2/opencv.hpp>
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaimgproc.hpp>
 #include <model.hpp>
+#include <ac-gpu/ac-gpu.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 void transfer_audio(std::string_view, std::string_view);
@@ -539,6 +542,10 @@ struct MXArguments {
     unsigned int audio_channels = 2;
     float audio_sensitivty = 0.25f;
 #endif
+    // acidcam-gpu filter settings
+    bool gpu_filter_enabled = false;
+    std::vector<int> gpu_filter_indices;
+    int gpu_frame_buffer_size = 8;
 };
 
 struct FrameData {
@@ -594,12 +601,53 @@ public:
         library.is3D(args.is3d);
         is3d_enabled = args.is3d;
         m_file = args.model_file;
+
+        // Setup acidcam-gpu filters
+        gpu_filter_enabled = args.gpu_filter_enabled;
+        if(gpu_filter_enabled && !args.gpu_filter_indices.empty()) {
+            for(int idx : args.gpu_filter_indices) {
+                if(idx >= 0 && idx < ac_gpu::AC_FILTER_MAX) {
+                    gpu_filters.push_back({idx, ac_gpu::filters[idx].name});
+                    mx::system_out << "acmx2: GPU filter added: " << ac_gpu::filters[idx].name << " (index " << idx << ")\n";
+                }
+            }
+            gpu_current_filter_index = args.gpu_filter_indices[0];  // Set initial filter index
+            gpu_frame_buffer = std::make_unique<ac_gpu::DynamicFrameBuffer>(args.gpu_frame_buffer_size);
+            CHECK_CUDA(cudaMalloc(&d_ptrList, args.gpu_frame_buffer_size * sizeof(unsigned char*)));
+            mx::system_out << "acmx2: GPU filtering enabled with " << gpu_filters.size() << " filter(s)\n";
+        }
     }
 
     bool is3d_enabled = false;
 
     
+    bool gpu_filter_enabled = false;
+    std::vector<ac_gpu::Filter> gpu_filters;
+    int gpu_current_filter_index = 0;
+    std::unique_ptr<ac_gpu::DynamicFrameBuffer> gpu_frame_buffer;
+    cv::cuda::GpuMat gpuWorkingBuffer;
+    cv::Mat gpuFilteredFrame;  // CPU buffer for GPU filter output (RGBA)
+    unsigned char** d_ptrList = nullptr;
+    ac_gpu::Filter* d_filterList = nullptr;
+    bool gpu_filtersChanged = true;
+    float gpu_alpha = 1.0f;
+    int gpu_alpha_dir = 1;
+    int gpu_square_size = 8;
+    int gpu_frame_index = 0;
+    int gpu_frame_dir = 1;
+
+    
     ~ACView() override {
+        if(d_ptrList) {
+            cudaFree(d_ptrList);
+            d_ptrList = nullptr;
+        }
+        if(d_filterList) {
+            cudaFree(d_filterList);
+            d_filterList = nullptr;
+        }
+        gpu_frame_buffer.reset();
+
 #ifdef AUDIO_ENABLED
         if(audio_is_enabled) {
             close_audio();
@@ -962,8 +1010,79 @@ public:
             library.useProgram();
         }
         if(!isFrozen && !newFrame.empty()) {
-            glActiveTexture(GL_TEXTURE0);
-            updateTexture(camera_texture, newFrame);
+            // Apply acidcam-gpu filter if enabled
+            if(gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
+                // Update the frame buffer with current frame (handles BGR->RGBA conversion internally)
+                gpu_frame_buffer->update(newFrame);
+                
+                // Allocate GPU working buffer if needed
+                if(gpuWorkingBuffer.empty() || gpuWorkingBuffer.cols != newFrame.cols || gpuWorkingBuffer.rows != newFrame.rows) {
+                    gpuWorkingBuffer.create(newFrame.rows, newFrame.cols, CV_8UC4);
+                }
+                
+                // Update animation parameters
+                if(gpu_alpha_dir == 1) {
+                    gpu_alpha += 0.01f;
+                    if(gpu_alpha >= 3.0f) gpu_alpha_dir = 0;
+                } else {
+                    gpu_alpha -= 0.01f;
+                    if(gpu_alpha <= 1.0f) gpu_alpha_dir = 1;
+                }
+                
+                // Update frame index for temporal effects
+                if(gpu_frame_dir == 1) {
+                    gpu_frame_index++;
+                    if(gpu_frame_index >= gpu_frame_buffer->arraySize - 1) {
+                        gpu_frame_index = gpu_frame_buffer->arraySize - 1;
+                        gpu_frame_dir = 0;
+                    }
+                } else {
+                    gpu_frame_index--;
+                    if(gpu_frame_index <= 0) {
+                        gpu_frame_index = 0;
+                        gpu_frame_dir = 1;
+                    }
+                }
+                
+                
+                CHECK_CUDA(cudaMemcpy(d_ptrList, gpu_frame_buffer->deviceFrames.data(),
+                                      gpu_frame_buffer->arraySize * sizeof(unsigned char*),
+                                      cudaMemcpyHostToDevice));
+                
+                
+                CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.ptr<unsigned char>(), gpuWorkingBuffer.step,
+                                        gpu_frame_buffer->deviceFrames[gpu_frame_buffer->arraySize - 1],
+                                        gpu_frame_buffer->framePitch,
+                                        gpu_frame_buffer->w * 4, gpu_frame_buffer->h,
+                                        cudaMemcpyDeviceToDevice));
+                
+                launch_filter(
+                    gpu_filters.data(),
+                    gpu_filters.size(),
+                    gpuWorkingBuffer.ptr<unsigned char>(),
+                    d_ptrList,
+                    gpu_frame_buffer->arraySize,
+                    gpuWorkingBuffer.cols,
+                    gpuWorkingBuffer.rows,
+                    gpuWorkingBuffer.step,
+                    gpu_alpha,
+                    false,  // isNegative
+                    gpu_square_size,
+                    gpu_frame_index,
+                    gpu_frame_dir,
+                    &d_filterList,
+                    gpu_filtersChanged
+                );
+                
+                // Download RGBA directly - no conversion needed
+                gpuWorkingBuffer.download(gpuFilteredFrame);
+                
+                glActiveTexture(GL_TEXTURE0);
+                updateTextureRGBA(camera_texture, gpuFilteredFrame);
+            } else {
+                glActiveTexture(GL_TEXTURE0);
+                updateTexture(camera_texture, newFrame);
+            }
             if(texture_cache && library.isCache() && (!filename.empty() || !graphic.empty())) { 
                 static int counter = 0;
                 if(++counter > cache_delay) {
@@ -1301,6 +1420,28 @@ public:
                             sprite.setShader(library.shader());
                         
                         break;
+                    case SDLK_LEFT:
+                        if(gpu_filter_enabled && !gpu_filters.empty()) {
+                            gpu_current_filter_index--;
+                            if(gpu_current_filter_index < 0)
+                                gpu_current_filter_index = ac_gpu::AC_FILTER_MAX - 1;
+                            gpu_filters[0] = {gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name};
+                            gpu_filtersChanged = true;
+                            mx::system_out << "acmx2: GPU Filter: " << ac_gpu::filters[gpu_current_filter_index].name << " [" << gpu_current_filter_index << "]\n";
+                            fflush(stdout);
+                        }
+                        break;
+                    case SDLK_RIGHT:
+                        if(gpu_filter_enabled && !gpu_filters.empty()) {
+                            gpu_current_filter_index++;
+                            if(gpu_current_filter_index >= ac_gpu::AC_FILTER_MAX)
+                                gpu_current_filter_index = 0;
+                            gpu_filters[0] = {gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name};
+                            gpu_filtersChanged = true;
+                            mx::system_out << "acmx2: GPU Filter: " << ac_gpu::filters[gpu_current_filter_index].name << " [" << gpu_current_filter_index << "]\n";
+                            fflush(stdout);
+                        }
+                        break;
                     case SDLK_SPACE:
                         library.toggleBypass();
                         break;
@@ -1530,6 +1671,18 @@ private:
                         GL_RGBA,
                         GL_UNSIGNED_BYTE,
                         temp.ptr());
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    
+    void updateTextureRGBA(GLuint texture, cv::Mat &frame) {
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexSubImage2D(GL_TEXTURE_2D, 
+                        0, 0, 0,
+                        frame.cols, frame.rows,
+                        GL_RGBA,
+                        GL_UNSIGNED_BYTE,
+                        frame.ptr());
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
@@ -1782,6 +1935,9 @@ int main(int argc, char **argv) {
           .addOptionDouble(259, "enable-3d", "Enable 3D cube")
           .addOptionDoubleValue(260, "model", "Model file")
           .addOptionDouble(261, "help", "print help info")
+          .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
+          .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
+          .addOptionDouble(402, "list-filters", "List available GPU filters")
 #ifdef AUDIO_ENABLED
           .addOptionSingle('w', "Enable Audio Reactivity")
           .addOptionDouble('W', "enable-audio", "enabled audio reacitivty")
@@ -1920,6 +2076,40 @@ int main(int argc, char **argv) {
                     break;
                 case 260:
                     args.model_file = arg.arg_value;
+                    break;
+                case 400: {
+                    // Parse comma-separated GPU filter indices
+                    args.gpu_filter_enabled = true;
+                    std::string list = arg.arg_value;
+                    size_t start = 0;
+                    while(true) {
+                        size_t pos = list.find(',', start);
+                        std::string tok = (pos == std::string::npos) ? list.substr(start) : list.substr(start, pos - start);
+                        if(!tok.empty()) {
+                            int idx = std::stoi(tok);
+                            if(idx >= 0 && idx < ac_gpu::AC_FILTER_MAX) {
+                                args.gpu_filter_indices.push_back(idx);
+                            } else {
+                                mx::system_err << "acmx2: Invalid GPU filter index: " << idx << " (max: " << ac_gpu::AC_FILTER_MAX - 1 << ")\n";
+                            }
+                        }
+                        if(pos == std::string::npos) break;
+                        start = pos + 1;
+                    }
+                }
+                    break;
+                case 401:
+                    args.gpu_frame_buffer_size = std::stoi(arg.arg_value);
+                    if(args.gpu_frame_buffer_size < 4) args.gpu_frame_buffer_size = 4;
+                    if(args.gpu_frame_buffer_size > 32) args.gpu_frame_buffer_size = 32;
+                    mx::system_out << "acmx2: GPU frame buffer size: " << args.gpu_frame_buffer_size << "\n";
+                    break;
+                case 402:
+                    mx::system_out << "Available GPU Filters (" << ac_gpu::AC_FILTER_MAX << " total):\n";
+                    for(int i = 0; i < ac_gpu::AC_FILTER_MAX; ++i) {
+                        mx::system_out << "  " << i << ": " << ac_gpu::filters[i].name << "\n";
+                    }
+                    exit(EXIT_SUCCESS);
                     break;
 #ifdef AUDIO_ENABLED
                 case 'W':

@@ -11,6 +11,7 @@ find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(MXWrite REQUIRED)
 find_package(SDL2_mixer REQUIRED)
+find_package(CUDAToolkit REQUIRED)
 find_package(acidcam-gpu REQUIRED CONFIG)
 
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
@@ -83,6 +84,10 @@ target_include_directories(acmx2 PRIVATE
     ${CMAKE_INSTALL_PREFIX}/include
     ${CMAKE_PREFIX_PATH}/include
     ${MXWrite_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
+    /usr/local/include
+    /usr/local/include/opencv4
+    /opt/cuda/include
 )
 
 target_link_libraries(acmx2 PRIVATE 
@@ -93,6 +98,7 @@ target_link_libraries(acmx2 PRIVATE
     ${AUDIO_LIBS}
     MXWrite::mxwrite
     acidcam-gpu::acidcam-gpu
+    CUDA::cudart
 )
 
 install(TARGETS acmx2 DESTINATION bin)
