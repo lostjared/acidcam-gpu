@@ -288,7 +288,82 @@ namespace ac_gpu {
         { 282, "PixelShiftDown" },
         { 283, "PixelShiftLeft" },
         { 284, "PixelShiftRight" },
-        { 285, "PixelShiftDiagonal" }
+        { 285, "PixelShiftDiagonal" },
+        { 286, "WaveBlend" },
+        { 287, "WaveBlendX2" },
+        { 288, "SineWaveBlend" },
+        { 289, "CosineWaveBlend" },
+        { 290, "SpiralWave" },
+        { 291, "RadialBlur" },
+        { 292, "ZoomBlur" },
+        { 293, "RotateBlend" },
+        { 294, "MirrorWave" },
+        { 295, "MirrorWaveX" },
+        { 296, "MirrorWaveY" },
+        { 297, "PixelDrift" },
+        { 298, "PixelDriftX" },
+        { 299, "PixelDriftY" },
+        { 300, "ColorPulse" },
+        { 301, "ColorPulseRGB" },
+        { 302, "ColorPulseXor" },
+        { 303, "GlitchBlock" },
+        { 304, "GlitchBlockXor" },
+        { 305, "GlitchLine" },
+        { 306, "GlitchLineX" },
+        { 307, "NoiseBlend" },
+        { 308, "NoiseBlendX2" },
+        { 309, "NoiseXor" },
+        { 310, "ChannelShift" },
+        { 311, "ChannelShiftX" },
+        { 312, "ChannelRotate" },
+        { 313, "DiagonalStretch" },
+        { 314, "DiagonalStretchX" },
+        { 315, "DiagonalMirror" },
+        { 316, "SquareWave" },
+        { 317, "SquareWaveX" },
+        { 318, "SquareWaveBlend" },
+        { 319, "TriangleWave" },
+        { 320, "TriangleWaveBlend" },
+        { 321, "SawtoothWave" },
+        { 322, "SawtoothWaveBlend" },
+        { 323, "PulseWave" },
+        { 324, "PulseWaveBlend" },
+        { 325, "StepWave" },
+        { 326, "StepWaveBlend" },
+        { 327, "RippleEffect" },
+        { 328, "RippleEffectX2" },
+        { 329, "ShockWave" },
+        { 330, "ShockWaveBlend" },
+        { 331, "TwistEffect" },
+        { 332, "TwistEffectBlend" },
+        { 333, "FishEye" },
+        { 334, "FishEyeBlend" },
+        { 335, "Kaleidoscope" },
+        { 336, "KaleidoscopeBlend" },
+        { 337, "TunnelEffect" },
+        { 338, "TunnelEffectBlend" },
+        { 339, "VortexEffect" },
+        { 340, "VortexEffectBlend" },
+        { 341, "PixelSort" },
+        { 342, "PixelSortX" },
+        { 343, "ColorDrift" },
+        { 344, "ColorDriftX" },
+        { 345, "RGBShift" },
+        { 346, "RGBShiftX" },
+        { 347, "ChromaticAberration" },
+        { 348, "ChromaticAberrationX" },
+        { 349, "Posterize" },
+        { 350, "PosterizeBlend" },
+        { 351, "Solarize" },
+        { 352, "SolarizeBlend" },
+        { 353, "GammaBright" },
+        { 354, "GammaDark" },
+        { 355, "ContrastBoost" },
+        { 356, "ContrastReduce" },
+        { 357, "EdgeGlow" },
+        { 358, "EdgeGlowBlend" },
+        { 359, "FrameBlendMulti" },
+        { 360, "FrameBlendMultiX" }
     };
     struct FilterParams {
         float alpha;
@@ -3245,6 +3320,988 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
+    // Filter 286: WaveBlend
+    __device__ void processWaveBlend(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float wave = sinf((x + params.frame_count) * 0.05f) * 20.0f;
+        int src_x = ((int)(x + wave) % width + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 287: WaveBlendX2
+    __device__ void processWaveBlendX2(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float waveX = sinf((x + params.frame_count) * 0.05f) * 20.0f;
+        float waveY = cosf((y + params.frame_count) * 0.05f) * 20.0f;
+        int src_x = ((int)(x + waveX) % width + width) % width;
+        int src_y = ((int)(y + waveY) % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 288: SineWaveBlend
+    __device__ void processSineWaveBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float factor = 0.5f + 0.5f * sinf((x + y + params.frame_count) * 0.03f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 289: CosineWaveBlend
+    __device__ void processCosineWaveBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float factor = 0.5f + 0.5f * cosf((x - y + params.frame_count) * 0.03f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 290: SpiralWave
+    __device__ void processSpiralWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float angle = atan2f(dy, dx) + params.frame_count * 0.02f;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float factor = 0.5f + 0.5f * sinf(angle * 3.0f + dist * 0.05f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 291: RadialBlur
+    __device__ void processRadialBlur(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float blur = fminf(dist * 0.01f, 0.5f);
+        int src_x = (int)(cx + dx * (1.0f - blur));
+        int src_y = (int)(cy + dy * (1.0f - blur));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 292: ZoomBlur
+    __device__ void processZoomBlur(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float zoom = 1.0f + 0.1f * sinf(params.frame_count * 0.05f);
+        int src_x = (int)(cx + (x - cx) / zoom);
+        int src_y = (int)(cy + (y - cy) / zoom);
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 293: RotateBlend
+    __device__ void processRotateBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float angle = params.frame_count * 0.01f;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        int src_x = (int)(cx + dx * cosf(angle) - dy * sinf(angle));
+        int src_y = (int)(cy + dx * sinf(angle) + dy * cosf(angle));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 294: MirrorWave
+    __device__ void processMirrorWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float wave = sinf((y + params.frame_count) * 0.1f) * 30.0f;
+        int src_x = (int)(width - 1 - x + wave);
+        src_x = (src_x % width + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 295: MirrorWaveX
+    __device__ void processMirrorWaveX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float wave = sinf((x + params.frame_count) * 0.08f) * 20.0f;
+        int src_x = (int)(width - 1 - x + wave);
+        src_x = (src_x % width + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * data[src_idx + j]);
+        }
+    }
+    // Filter 296: MirrorWaveY
+    __device__ void processMirrorWaveY(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float wave = sinf((y + params.frame_count) * 0.08f) * 20.0f;
+        int src_y = (int)(height - 1 - y + wave);
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * data[src_idx + j]);
+        }
+    }
+    // Filter 297: PixelDrift
+    __device__ void processPixelDrift(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float drift_x = sinf(y * 0.02f + params.frame_count * 0.03f) * 10.0f;
+        float drift_y = cosf(x * 0.02f + params.frame_count * 0.03f) * 10.0f;
+        int src_x = ((int)(x + drift_x) % width + width) % width;
+        int src_y = ((int)(y + drift_y) % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.5f * data[src_idx + j] + 0.5f * prev[idx + j]);
+            }
+        }
+    }
+    // Filter 298: PixelDriftX
+    __device__ void processPixelDriftX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float drift = sinf(y * 0.03f + params.frame_count * 0.05f) * 15.0f;
+        int src_x = ((int)(x + drift) % width + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 299: PixelDriftY
+    __device__ void processPixelDriftY(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float drift = cosf(x * 0.03f + params.frame_count * 0.05f) * 15.0f;
+        int src_y = ((int)(y + drift) % height + height) % height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 300: ColorPulse
+    __device__ void processColorPulse(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float pulse = 0.5f + 0.5f * sinf(params.frame_count * 0.1f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * pulse);
+        }
+    }
+    // Filter 301: ColorPulseRGB
+    __device__ void processColorPulseRGB(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float pulseR = 0.5f + 0.5f * sinf(params.frame_count * 0.08f);
+        float pulseG = 0.5f + 0.5f * sinf(params.frame_count * 0.1f);
+        float pulseB = 0.5f + 0.5f * sinf(params.frame_count * 0.12f);
+        data[idx] = (unsigned char)(data[idx] * pulseB);
+        data[idx + 1] = (unsigned char)(data[idx + 1] * pulseG);
+        data[idx + 2] = (unsigned char)(data[idx + 2] * pulseR);
+    }
+    // Filter 302: ColorPulseXor
+    __device__ void processColorPulseXor(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int pulse = (int)(128 * sinf(params.frame_count * 0.05f));
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] ^= (unsigned char)abs(pulse);
+        }
+    }
+    // Filter 303: GlitchBlock
+    __device__ void processGlitchBlock(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int bx = x / 32;
+        int by = y / 32;
+        float r = gpu_rand(bx, by, params.seed);
+        if (r < 0.15f) {
+            int offset = (int)(r * 200) - 100;
+            int src_x = (x + offset) % width;
+            if (src_x < 0) src_x += width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    // Filter 304: GlitchBlockXor
+    __device__ void processGlitchBlockXor(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int bx = x / 32;
+        int by = y / 32;
+        float r = gpu_rand(bx, by, params.seed);
+        if (r < 0.2f) {
+            unsigned char xv = (unsigned char)(r * 255);
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] ^= xv;
+            }
+        }
+    }
+    // Filter 305: GlitchLine
+    __device__ void processGlitchLine(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(0, y, params.seed);
+        if (r < 0.1f) {
+            int offset = (int)(r * 100) % 50;
+            int src_x = (x + offset) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    // Filter 306: GlitchLineX
+    __device__ void processGlitchLineX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, 0, params.seed);
+        if (r < 0.1f) {
+            int offset = (int)(r * 100) % 50;
+            int src_y = (y + offset) % height;
+            int src_idx = src_y * step + x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    // Filter 307: NoiseBlend
+    __device__ void processNoiseBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        unsigned char noise = (unsigned char)(r * 255);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.8f * data[idx + j] + 0.2f * noise);
+        }
+    }
+    // Filter 308: NoiseBlendX2
+    __device__ void processNoiseBlendX2(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        unsigned char noise = (unsigned char)(r * 255);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * noise);
+        }
+    }
+    // Filter 309: NoiseXor
+    __device__ void processNoiseXor(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed);
+        if (r < 0.3f) {
+            unsigned char noise = (unsigned char)(r * 255 * 3.33f);
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] ^= noise;
+            }
+        }
+    }
+    // Filter 310: ChannelShift
+    __device__ void processChannelShift(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = params.frame_count % 30;
+        int src_x_r = (x + shift) % width;
+        int src_x_b = (x - shift + width) % width;
+        unsigned char r_val = data[y * step + src_x_r * 4 + 2];
+        unsigned char b_val = data[y * step + src_x_b * 4];
+        data[idx + 2] = r_val;
+        data[idx] = b_val;
+    }
+    // Filter 311: ChannelShiftX
+    __device__ void processChannelShiftX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = params.frame_count % 20;
+        int src_y_r = (y + shift) % height;
+        int src_y_b = (y - shift + height) % height;
+        unsigned char r_val = data[src_y_r * step + x * 4 + 2];
+        unsigned char b_val = data[src_y_b * step + x * 4];
+        data[idx + 2] = r_val;
+        data[idx] = b_val;
+    }
+    // Filter 312: ChannelRotate
+    __device__ void processChannelRotate(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int rot = params.frame_count % 3;
+        unsigned char b = data[idx];
+        unsigned char g = data[idx + 1];
+        unsigned char r = data[idx + 2];
+        if (rot == 0) { data[idx] = r; data[idx + 1] = b; data[idx + 2] = g; }
+        else if (rot == 1) { data[idx] = g; data[idx + 1] = r; data[idx + 2] = b; }
+    }
+    // Filter 313: DiagonalStretch
+    __device__ void processDiagonalStretch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float stretch = 1.0f + 0.3f * sinf(params.frame_count * 0.03f);
+        int diag = x + y;
+        int src_x = (int)(x + (diag % 50) * (stretch - 1.0f)) % width;
+        if (src_x < 0) src_x += width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 314: DiagonalStretchX
+    __device__ void processDiagonalStretchX(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float stretch = 1.0f + 0.3f * cosf(params.frame_count * 0.03f);
+        int diag = x - y;
+        int src_y = (int)(y + (abs(diag) % 50) * (stretch - 1.0f)) % height;
+        if (src_y < 0) src_y += height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 315: DiagonalMirror
+    __device__ void processDiagonalMirror(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (x + y < (width + height) / 2) {
+            int src_x = y % width;
+            int src_y = x % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+            }
+        }
+    }
+    // Filter 316: SquareWave
+    __device__ void processSquareWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 32;
+        int phase = (x + params.frame_count) / period;
+        float factor = (phase % 2 == 0) ? 1.2f : 0.8f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
+        }
+    }
+    // Filter 317: SquareWaveX
+    __device__ void processSquareWaveX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 32;
+        int phase = (y + params.frame_count) / period;
+        float factor = (phase % 2 == 0) ? 1.2f : 0.8f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
+        }
+    }
+    // Filter 318: SquareWaveBlend
+    __device__ void processSquareWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 48;
+        int phase = (x + y + params.frame_count) / period;
+        unsigned char* src = (phase % 2 == 0) ? allFrames[0] : NULL;
+        if (src) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * src[idx + j]);
+            }
+        }
+    }
+    // Filter 319: TriangleWave
+    __device__ void processTriangleWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 64;
+        int pos = (x + params.frame_count) % period;
+        float factor = (pos < period / 2) ? (float)pos / (period / 2) : 2.0f - (float)pos / (period / 2);
+        factor = 0.5f + 0.5f * factor;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 320: TriangleWaveBlend
+    __device__ void processTriangleWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 64;
+        int pos = (y + params.frame_count) % period;
+        float alpha = (pos < period / 2) ? (float)pos / (period / 2) : 2.0f - (float)pos / (period / 2);
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * (1.0f - alpha) + prev[idx + j] * alpha);
+            }
+        }
+    }
+    // Filter 321: SawtoothWave
+    __device__ void processSawtoothWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 64;
+        int pos = (x + params.frame_count) % period;
+        float factor = 0.5f + 0.5f * ((float)pos / period);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 322: SawtoothWaveBlend
+    __device__ void processSawtoothWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 64;
+        int pos = (y + params.frame_count) % period;
+        float alpha = (float)pos / period;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * (1.0f - alpha) + prev[idx + j] * alpha);
+            }
+        }
+    }
+    // Filter 323: PulseWave
+    __device__ void processPulseWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 48;
+        int pos = (x + y + params.frame_count) % period;
+        float factor = (pos < period / 4) ? 1.3f : 0.9f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
+        }
+    }
+    // Filter 324: PulseWaveBlend
+    __device__ void processPulseWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int period = 48;
+        int pos = (x + y + params.frame_count) % period;
+        float blend = (pos < period / 4) ? 0.8f : 0.3f;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * blend + prev[idx + j] * (1.0f - blend));
+            }
+        }
+    }
+    // Filter 325: StepWave
+    __device__ void processStepWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int steps = 4;
+        int period = 64;
+        int pos = (x + params.frame_count) % period;
+        int stepVal = (pos * steps) / period;
+        float factor = 0.5f + 0.5f * ((float)stepVal / steps);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    // Filter 326: StepWaveBlend
+    __device__ void processStepWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int steps = 4;
+        int period = 64;
+        int pos = (y + params.frame_count) % period;
+        int stepVal = (pos * steps) / period;
+        float blend = (float)stepVal / steps;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * (1.0f - blend) + prev[idx + j] * blend);
+            }
+        }
+    }
+    // Filter 327: RippleEffect
+    __device__ void processRippleEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float ripple = sinf(dist * 0.1f - params.frame_count * 0.1f) * 10.0f;
+        int src_x = (int)(x + ripple * dx / (dist + 1.0f));
+        int src_y = (int)(y + ripple * dy / (dist + 1.0f));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 328: RippleEffectX2
+    __device__ void processRippleEffectX2(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float ripple = sinf(dist * 0.15f - params.frame_count * 0.15f) * 15.0f;
+        int src_x = (int)(x + ripple * dx / (dist + 1.0f));
+        int src_y = (int)(y + ripple * dy / (dist + 1.0f));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 329: ShockWave
+    __device__ void processShockWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float wave_pos = (params.frame_count * 3) % (int)(sqrtf((float)(width * width + height * height)));
+        float wave_width = 30.0f;
+        if (fabsf(dist - wave_pos) < wave_width) {
+            float offset = sinf((dist - wave_pos) * 0.2f) * 10.0f;
+            int src_x = (int)(x + offset * dx / (dist + 1.0f));
+            int src_y = (int)(y + offset * dy / (dist + 1.0f));
+            src_x = (src_x % width + width) % width;
+            src_y = (src_y % height + height) % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    // Filter 330: ShockWaveBlend
+    __device__ void processShockWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float wave_pos = (params.frame_count * 3) % (int)(sqrtf((float)(width * width + height * height)));
+        float wave_width = 40.0f;
+        unsigned char* prev = allFrames[0];
+        if (fabsf(dist - wave_pos) < wave_width && prev) {
+            float blend = 1.0f - fabsf(dist - wave_pos) / wave_width;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * (1.0f - blend) + prev[idx + j] * blend);
+            }
+        }
+    }
+    // Filter 331: TwistEffect
+    __device__ void processTwistEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float max_dist = sqrtf((float)(cx * cx + cy * cy));
+        float twist = (1.0f - dist / max_dist) * sinf(params.frame_count * 0.02f) * 1.5f;
+        float angle = atan2f(dy, dx) + twist;
+        int src_x = (int)(cx + dist * cosf(angle));
+        int src_y = (int)(cy + dist * sinf(angle));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 332: TwistEffectBlend
+    __device__ void processTwistEffectBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float max_dist = sqrtf((float)(cx * cx + cy * cy));
+        float twist = (1.0f - dist / max_dist) * sinf(params.frame_count * 0.03f) * 2.0f;
+        float angle = atan2f(dy, dx) + twist;
+        int src_x = (int)(cx + dist * cosf(angle));
+        int src_y = (int)(cy + dist * sinf(angle));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 333: FishEye
+    __device__ void processFishEye(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx) / cx;
+        float dy = (float)(y - cy) / cy;
+        float dist = sqrtf(dx * dx + dy * dy);
+        if (dist < 1.0f) {
+            float factor = powf(dist, 1.5f) / dist;
+            int src_x = (int)(cx + dx * factor * cx);
+            int src_y = (int)(cy + dy * factor * cy);
+            src_x = (src_x % width + width) % width;
+            src_y = (src_y % height + height) % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    // Filter 334: FishEyeBlend
+    __device__ void processFishEyeBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx) / cx;
+        float dy = (float)(y - cy) / cy;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float strength = 0.5f + 0.5f * sinf(params.frame_count * 0.05f);
+        if (dist < 1.0f) {
+            float factor = powf(dist, 1.0f + strength) / dist;
+            int src_x = (int)(cx + dx * factor * cx);
+            int src_y = (int)(cy + dy * factor * cy);
+            src_x = (src_x % width + width) % width;
+            src_y = (src_y % height + height) % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+            }
+        }
+    }
+    // Filter 335: Kaleidoscope
+    __device__ void processKaleidoscope(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float angle = atan2f(dy, dx);
+        float dist = sqrtf(dx * dx + dy * dy);
+        int segments = 6;
+        float segment_angle = (2.0f * 3.14159265f) / segments;
+        float new_angle = fmodf(fabsf(angle), segment_angle);
+        if ((int)(angle / segment_angle) % 2 == 1) new_angle = segment_angle - new_angle;
+        new_angle += params.frame_count * 0.01f;
+        int src_x = (int)(cx + dist * cosf(new_angle));
+        int src_y = (int)(cy + dist * sinf(new_angle));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 336: KaleidoscopeBlend
+    __device__ void processKaleidoscopeBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float angle = atan2f(dy, dx);
+        float dist = sqrtf(dx * dx + dy * dy);
+        int segments = 8;
+        float segment_angle = (2.0f * 3.14159265f) / segments;
+        float new_angle = fmodf(fabsf(angle), segment_angle);
+        if ((int)(angle / segment_angle) % 2 == 1) new_angle = segment_angle - new_angle;
+        new_angle += params.frame_count * 0.02f;
+        int src_x = (int)(cx + dist * cosf(new_angle));
+        int src_y = (int)(cy + dist * sinf(new_angle));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 337: TunnelEffect
+    __device__ void processTunnelEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float angle = atan2f(dy, dx);
+        float dist = sqrtf(dx * dx + dy * dy) + 1.0f;
+        float tunnel_x = angle / 3.14159265f * width;
+        float tunnel_y = 100.0f / dist * height + params.frame_count * 2.0f;
+        int src_x = ((int)tunnel_x % width + width) % width;
+        int src_y = ((int)tunnel_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 338: TunnelEffectBlend
+    __device__ void processTunnelEffectBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float angle = atan2f(dy, dx);
+        float dist = sqrtf(dx * dx + dy * dy) + 1.0f;
+        float tunnel_x = angle / 3.14159265f * width;
+        float tunnel_y = 100.0f / dist * height + params.frame_count * 2.0f;
+        int src_x = ((int)tunnel_x % width + width) % width;
+        int src_y = ((int)tunnel_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * data[src_idx + j]);
+        }
+    }
+    // Filter 339: VortexEffect
+    __device__ void processVortexEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float angle = atan2f(dy, dx) + dist * 0.01f * sinf(params.frame_count * 0.03f);
+        int src_x = (int)(cx + dist * cosf(angle));
+        int src_y = (int)(cy + dist * sinf(angle));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[src_idx + j];
+        }
+    }
+    // Filter 340: VortexEffectBlend
+    __device__ void processVortexEffectBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        float dx = (float)(x - cx);
+        float dy = (float)(y - cy);
+        float dist = sqrtf(dx * dx + dy * dy);
+        float angle = atan2f(dy, dx) + dist * 0.015f * sinf(params.frame_count * 0.04f);
+        int src_x = (int)(cx + dist * cosf(angle));
+        int src_y = (int)(cy + dist * sinf(angle));
+        src_x = (src_x % width + width) % width;
+        src_y = (src_y % height + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+        }
+    }
+    // Filter 341: PixelSort
+    __device__ void processPixelSort(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        int threshold = 100 + (params.frame_count % 100);
+        if (brightness > threshold) {
+            int offset = (brightness - threshold) / 10;
+            int src_x = (x + offset) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((data[idx + j] + data[src_idx + j]) / 2);
+            }
+        }
+    }
+    // Filter 342: PixelSortX
+    __device__ void processPixelSortX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        int threshold = 100 + (params.frame_count % 100);
+        if (brightness > threshold) {
+            int offset = (brightness - threshold) / 10;
+            int src_y = (y + offset) % height;
+            int src_idx = src_y * step + x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((data[idx + j] + data[src_idx + j]) / 2);
+            }
+        }
+    }
+    // Filter 343: ColorDrift
+    __device__ void processColorDrift(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float drift = sinf(params.frame_count * 0.02f);
+        int shift = (int)(drift * 50);
+        data[idx] = (unsigned char)((data[idx] + shift + 256) % 256);
+        data[idx + 1] = (unsigned char)((data[idx + 1] - shift + 256) % 256);
+        data[idx + 2] = (unsigned char)((data[idx + 2] + shift / 2 + 256) % 256);
+    }
+    // Filter 344: ColorDriftX
+    __device__ void processColorDriftX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float drift = cosf(params.frame_count * 0.025f);
+        int shift = (int)(drift * 40);
+        data[idx] = (unsigned char)((data[idx] - shift + 256) % 256);
+        data[idx + 1] = (unsigned char)((data[idx + 1] + shift + 256) % 256);
+        data[idx + 2] = (unsigned char)((data[idx + 2] - shift / 2 + 256) % 256);
+    }
+    // Filter 345: RGBShift
+    __device__ void processRGBShift(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = 3 + (params.frame_count % 10);
+        int r_x = (x + shift) % width;
+        int b_x = (x - shift + width) % width;
+        unsigned char r = data[y * step + r_x * 4 + 2];
+        unsigned char b = data[y * step + b_x * 4];
+        data[idx + 2] = r;
+        data[idx] = b;
+    }
+    // Filter 346: RGBShiftX
+    __device__ void processRGBShiftX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = 3 + (params.frame_count % 10);
+        int r_y = (y + shift) % height;
+        int b_y = (y - shift + height) % height;
+        unsigned char r = data[r_y * step + x * 4 + 2];
+        unsigned char b = data[b_y * step + x * 4];
+        data[idx + 2] = r;
+        data[idx] = b;
+    }
+    // Filter 347: ChromaticAberration
+    __device__ void processChromaticAberration(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = 5;
+        int r_x = (x + shift) % width;
+        int g_x = x;
+        int b_x = (x - shift + width) % width;
+        data[idx + 2] = data[y * step + r_x * 4 + 2];
+        data[idx + 1] = data[y * step + g_x * 4 + 1];
+        data[idx] = data[y * step + b_x * 4];
+    }
+    // Filter 348: ChromaticAberrationX
+    __device__ void processChromaticAberrationX(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = 5;
+        int r_x = (x + shift) % width;
+        int r_y = (y + shift) % height;
+        int b_x = (x - shift + width) % width;
+        int b_y = (y - shift + height) % height;
+        data[idx + 2] = data[r_y * step + r_x * 4 + 2];
+        data[idx] = data[b_y * step + b_x * 4];
+    }
+    // Filter 349: Posterize
+    __device__ void processPosterize(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int levels = 4;
+        float factor = 255.0f / levels;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(roundf(data[idx + j] / factor) * factor);
+        }
+    }
+    // Filter 350: PosterizeBlend
+    __device__ void processPosterizeBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int levels = 4 + (params.frame_count % 4);
+        float factor = 255.0f / levels;
+        for (int j = 0; j < 3; ++j) {
+            unsigned char poster = (unsigned char)(roundf(data[idx + j] / factor) * factor);
+            data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * poster);
+        }
+    }
+    // Filter 351: Solarize
+    __device__ void processSolarize(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int threshold = 128;
+        for (int j = 0; j < 3; ++j) {
+            if (data[idx + j] > threshold) {
+                data[idx + j] = 255 - data[idx + j];
+            }
+        }
+    }
+    // Filter 352: SolarizeBlend
+    __device__ void processSolarizeBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int threshold = 100 + (params.frame_count % 100);
+        for (int j = 0; j < 3; ++j) {
+            unsigned char solar = (data[idx + j] > threshold) ? (255 - data[idx + j]) : data[idx + j];
+            data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * solar);
+        }
+    }
+    // Filter 353: GammaBright
+    __device__ void processGammaBright(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float gamma = 0.7f;
+        for (int j = 0; j < 3; ++j) {
+            float normalized = data[idx + j] / 255.0f;
+            data[idx + j] = (unsigned char)(powf(normalized, gamma) * 255.0f);
+        }
+    }
+    // Filter 354: GammaDark
+    __device__ void processGammaDark(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float gamma = 1.5f;
+        for (int j = 0; j < 3; ++j) {
+            float normalized = data[idx + j] / 255.0f;
+            data[idx + j] = (unsigned char)(powf(normalized, gamma) * 255.0f);
+        }
+    }
+    // Filter 355: ContrastBoost
+    __device__ void processContrastBoost(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float contrast = 1.5f;
+        for (int j = 0; j < 3; ++j) {
+            float val = (data[idx + j] - 128) * contrast + 128;
+            data[idx + j] = (unsigned char)fminf(255.0f, fmaxf(0.0f, val));
+        }
+    }
+    // Filter 356: ContrastReduce
+    __device__ void processContrastReduce(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float contrast = 0.6f;
+        for (int j = 0; j < 3; ++j) {
+            float val = (data[idx + j] - 128) * contrast + 128;
+            data[idx + j] = (unsigned char)fminf(255.0f, fmaxf(0.0f, val));
+        }
+    }
+    // Filter 357: EdgeGlow
+    __device__ void processEdgeGlow(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+            int sum = 0;
+            for (int j = 0; j < 3; ++j) {
+                int gx = data[(y - 1) * step + (x + 1) * 4 + j] - data[(y - 1) * step + (x - 1) * 4 + j]
+                       + 2 * data[y * step + (x + 1) * 4 + j] - 2 * data[y * step + (x - 1) * 4 + j]
+                       + data[(y + 1) * step + (x + 1) * 4 + j] - data[(y + 1) * step + (x - 1) * 4 + j];
+                sum += abs(gx);
+            }
+            int edge = sum / 3;
+            float glow = 0.5f + 0.5f * sinf(params.frame_count * 0.1f);
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] + edge * glow * 0.3f);
+            }
+        }
+    }
+    // Filter 358: EdgeGlowBlend
+    __device__ void processEdgeGlowBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (x > 0 && x < width - 1 && y > 0 && y < height - 1 && prev) {
+            int sum = 0;
+            for (int j = 0; j < 3; ++j) {
+                int gx = data[(y - 1) * step + (x + 1) * 4 + j] - data[(y - 1) * step + (x - 1) * 4 + j]
+                       + 2 * data[y * step + (x + 1) * 4 + j] - 2 * data[y * step + (x - 1) * 4 + j]
+                       + data[(y + 1) * step + (x + 1) * 4 + j] - data[(y + 1) * step + (x - 1) * 4 + j];
+                sum += abs(gx);
+            }
+            int edge = sum / 3;
+            float blend = fminf(1.0f, edge / 100.0f);
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * (1.0f - blend) + prev[idx + j] * blend);
+            }
+        }
+    }
+    // Filter 359: FrameBlendMulti
+    __device__ void processFrameBlendMulti(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int count = min(params.numFrames, 4);
+        for (int j = 0; j < 3; ++j) {
+            int sum = data[idx + j];
+            for (int f = 0; f < count; ++f) {
+                if (allFrames[f]) sum += allFrames[f][idx + j];
+            }
+            data[idx + j] = (unsigned char)(sum / (count + 1));
+        }
+    }
+    // Filter 360: FrameBlendMultiX
+    __device__ void processFrameBlendMultiX(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int count = min(params.numFrames, 8);
+        float weights[9] = {1.0f, 0.9f, 0.8f, 0.7f, 0.6f, 0.5f, 0.4f, 0.3f, 0.2f};
+        float total_weight = weights[0];
+        for (int j = 0; j < 3; ++j) {
+            float sum = data[idx + j] * weights[0];
+            for (int f = 0; f < count; ++f) {
+                if (allFrames[f]) {
+                    sum += allFrames[f][idx + j] * weights[f + 1];
+                    if (j == 0) total_weight += weights[f + 1];
+                }
+            }
+            data[idx + j] = (unsigned char)(sum / total_weight);
+        }
+    }
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -3678,6 +4735,81 @@ namespace ac_gpu {
                 case 283: processPixelShiftLeft(x, y, data, width, step, params); break;
                 case 284: processPixelShiftRight(x, y, data, width, step, params); break;
                 case 285: processPixelShiftDiagonal(x, y, data, width, height, step, params); break;
+                case 286: processWaveBlend(x, y, data, width, step, params); break;
+                case 287: processWaveBlendX2(x, y, data, width, height, step, params); break;
+                case 288: processSineWaveBlend(x, y, data, step, params); break;
+                case 289: processCosineWaveBlend(x, y, data, step, params); break;
+                case 290: processSpiralWave(x, y, data, width, height, step, params); break;
+                case 291: processRadialBlur(x, y, data, width, height, step, params); break;
+                case 292: processZoomBlur(x, y, data, width, height, step, params); break;
+                case 293: processRotateBlend(x, y, data, width, height, step, params); break;
+                case 294: processMirrorWave(x, y, data, width, height, step, params); break;
+                case 295: processMirrorWaveX(x, y, data, width, step, params); break;
+                case 296: processMirrorWaveY(x, y, data, height, step, params); break;
+                case 297: processPixelDrift(x, y, data, allFrames, width, height, step, params); break;
+                case 298: processPixelDriftX(x, y, data, width, step, params); break;
+                case 299: processPixelDriftY(x, y, data, height, step, params); break;
+                case 300: processColorPulse(x, y, data, step, params); break;
+                case 301: processColorPulseRGB(x, y, data, step, params); break;
+                case 302: processColorPulseXor(x, y, data, step, params); break;
+                case 303: processGlitchBlock(x, y, data, width, height, step, params); break;
+                case 304: processGlitchBlockXor(x, y, data, step, params); break;
+                case 305: processGlitchLine(x, y, data, width, step, params); break;
+                case 306: processGlitchLineX(x, y, data, height, step, params); break;
+                case 307: processNoiseBlend(x, y, data, step, params); break;
+                case 308: processNoiseBlendX2(x, y, data, step, params); break;
+                case 309: processNoiseXor(x, y, data, step, params); break;
+                case 310: processChannelShift(x, y, data, width, step, params); break;
+                case 311: processChannelShiftX(x, y, data, height, step, params); break;
+                case 312: processChannelRotate(x, y, data, step, params); break;
+                case 313: processDiagonalStretch(x, y, data, width, height, step, params); break;
+                case 314: processDiagonalStretchX(x, y, data, width, height, step, params); break;
+                case 315: processDiagonalMirror(x, y, data, width, height, step, params); break;
+                case 316: processSquareWave(x, y, data, step, params); break;
+                case 317: processSquareWaveX(x, y, data, step, params); break;
+                case 318: processSquareWaveBlend(x, y, data, allFrames, step, params); break;
+                case 319: processTriangleWave(x, y, data, step, params); break;
+                case 320: processTriangleWaveBlend(x, y, data, allFrames, step, params); break;
+                case 321: processSawtoothWave(x, y, data, step, params); break;
+                case 322: processSawtoothWaveBlend(x, y, data, allFrames, step, params); break;
+                case 323: processPulseWave(x, y, data, step, params); break;
+                case 324: processPulseWaveBlend(x, y, data, allFrames, step, params); break;
+                case 325: processStepWave(x, y, data, step, params); break;
+                case 326: processStepWaveBlend(x, y, data, allFrames, step, params); break;
+                case 327: processRippleEffect(x, y, data, width, height, step, params); break;
+                case 328: processRippleEffectX2(x, y, data, width, height, step, params); break;
+                case 329: processShockWave(x, y, data, width, height, step, params); break;
+                case 330: processShockWaveBlend(x, y, data, allFrames, width, height, step, params); break;
+                case 331: processTwistEffect(x, y, data, width, height, step, params); break;
+                case 332: processTwistEffectBlend(x, y, data, width, height, step, params); break;
+                case 333: processFishEye(x, y, data, width, height, step, params); break;
+                case 334: processFishEyeBlend(x, y, data, width, height, step, params); break;
+                case 335: processKaleidoscope(x, y, data, width, height, step, params); break;
+                case 336: processKaleidoscopeBlend(x, y, data, width, height, step, params); break;
+                case 337: processTunnelEffect(x, y, data, width, height, step, params); break;
+                case 338: processTunnelEffectBlend(x, y, data, width, height, step, params); break;
+                case 339: processVortexEffect(x, y, data, width, height, step, params); break;
+                case 340: processVortexEffectBlend(x, y, data, width, height, step, params); break;
+                case 341: processPixelSort(x, y, data, width, step, params); break;
+                case 342: processPixelSortX(x, y, data, height, step, params); break;
+                case 343: processColorDrift(x, y, data, step, params); break;
+                case 344: processColorDriftX(x, y, data, step, params); break;
+                case 345: processRGBShift(x, y, data, width, step, params); break;
+                case 346: processRGBShiftX(x, y, data, height, step, params); break;
+                case 347: processChromaticAberration(x, y, data, width, step, params); break;
+                case 348: processChromaticAberrationX(x, y, data, width, height, step, params); break;
+                case 349: processPosterize(x, y, data, step, params); break;
+                case 350: processPosterizeBlend(x, y, data, step, params); break;
+                case 351: processSolarize(x, y, data, step, params); break;
+                case 352: processSolarizeBlend(x, y, data, step, params); break;
+                case 353: processGammaBright(x, y, data, step, params); break;
+                case 354: processGammaDark(x, y, data, step, params); break;
+                case 355: processContrastBoost(x, y, data, step, params); break;
+                case 356: processContrastReduce(x, y, data, step, params); break;
+                case 357: processEdgeGlow(x, y, data, width, height, step, params); break;
+                case 358: processEdgeGlowBlend(x, y, data, allFrames, width, height, step, params); break;
+                case 359: processFrameBlendMulti(x, y, data, allFrames, step, params); break;
+                case 360: processFrameBlendMultiX(x, y, data, allFrames, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);
