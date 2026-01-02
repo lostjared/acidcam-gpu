@@ -174,12 +174,19 @@ int main(int argc, char** argv) {
     .addOptionDouble(302, "list", "List all devices")
     .addOptionDouble(300, "hide", "hide HUD")
     .addOptionDouble(307, "exposure", "Disable Auto Exposurre")
+    .addOptionDouble(320, "list", "List all filters")
     .addOptionSingle('h', "help");
     try {
         Argument<std::string> a;
         int code = 0;
         while ((code = argz.proc(a)) != -1) {
             switch (code) {
+                case 320:
+                    for(size_t i = 0; i < ac_gpu::AC_FILTER_MAX; ++i) {
+                        std::cout << ac_gpu::filters[i].name << ": " << ac_gpu::filters[i].index << std::endl;
+                    }
+                    exit(EXIT_SUCCESS);
+                break;
                 case 'h': argz.help(std::cout); return 0;
                 case 'i': case 255: 
                 inputArg = a.arg_value;
