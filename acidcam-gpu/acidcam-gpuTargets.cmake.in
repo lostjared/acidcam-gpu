@@ -1,0 +1,13 @@
+if(NOT TARGET acidcam-gpu::acidcam-gpu)
+    add_library(acidcam-gpu::acidcam-gpu SHARED IMPORTED)
+    
+    set_target_properties(acidcam-gpu::acidcam-gpu PROPERTIES
+        IMPORTED_LOCATION "@PACKAGE_CMAKE_INSTALL_LIBDIR@/libacidcam-gpu.so"
+        INTERFACE_INCLUDE_DIRECTORIES "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/acidcam-gpu"
+        IMPORTED_NO_SONAME ON
+    )
+    
+    set_target_properties(acidcam-gpu::acidcam-gpu PROPERTIES
+        LINKER_LANGUAGE CXX
+    )
+endif()

@@ -1,8 +1,16 @@
 cmake_minimum_required(VERSION 3.18)
-project(acidcam-gpu LANGUAGES CXX CUDA)
+project(acidcam-gpu 
+    VERSION 1.0.0
+    DESCRIPTION "GPU-accelerated video filter library using CUDA"
+    LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# Set install directories for CMake package config
+set(CMAKE_INSTALL_INCLUDEDIR "include")
+set(CMAKE_INSTALL_LIBDIR "lib")
+set(CMAKE_INSTALL_BINDIR "bin")
 
 find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -81,3 +89,48 @@ target_link_libraries(acidcam
     ${OpenCV_LIBS}
 )
 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    DESTINATION include/acidcam-gpu
+    FILES_MATCHING PATTERN "*.hpp"
+)
+
+set_target_properties(acidcam-gpu acidcam PROPERTIES
+    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
+)
+
+install(TARGETS acidcam-gpu
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+)
+
+install(TARGETS acidcam
+    RUNTIME DESTINATION bin
+)
+
+# Install CMake configuration files
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/acidcam-gpuConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/acidcam-gpuConfig.cmake"
+    @ONLY
+)
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/acidcam-gpuConfigVersion.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/acidcam-gpuConfigVersion.cmake"
+    @ONLY
+)
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/acidcam-gpuTargets.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/acidcam-gpuTargets.cmake"
+    @ONLY
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/acidcam-gpuConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/acidcam-gpuConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/acidcam-gpuTargets.cmake"
+    DESTINATION lib/cmake/acidcam-gpu
+)

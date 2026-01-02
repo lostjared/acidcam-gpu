@@ -1,0 +1,45 @@
+# Example: Using acidcam-gpu in another project
+# 
+# To use this library in your CMake project, add the following to your CMakeLists.txt:
+#
+# 1. Find the package:
+#    find_package(acidcam-gpu REQUIRED)
+#
+# 2. Link against the library:
+#    target_link_libraries(your_target PRIVATE acidcam-gpu::acidcam-gpu)
+#
+# 3. Include the headers:
+#    target_include_directories(your_target PRIVATE ${acidcam-gpu_INCLUDE_DIRS})
+
+cmake_minimum_required(VERSION 3.18)
+project(acidcam-gpu-example LANGUAGES CXX CUDA)
+
+set(CMAKE_CXX_STANDARD 20)
+
+# Find the acidcam-gpu package
+# Make sure acidcam-gpu is installed first:
+#   cd /path/to/acidcam-gpu/build
+#   make install
+find_package(acidcam-gpu REQUIRED CONFIG)
+find_package(OpenCV REQUIRED)
+
+# Create an example executable
+add_executable(example-filter example-filter.cu)
+
+# Link against acidcam-gpu
+target_link_libraries(example-filter 
+    PRIVATE 
+    acidcam-gpu::acidcam-gpu
+    ${OpenCV_LIBS}
+)
+
+# Set CUDA language
+set_target_properties(example-filter PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+)
+
+# Optimization flags
+target_compile_options(example-filter PRIVATE 
+    -O3
+    -march=native
+)

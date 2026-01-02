@@ -1,0 +1,25 @@
+set(ACIDCAM_GPU_VERSION_MAJOR 1)
+set(ACIDCAM_GPU_VERSION_MINOR 0)
+set(ACIDCAM_GPU_VERSION_PATCH 0)
+set(ACIDCAM_GPU_VERSION ${ACIDCAM_GPU_VERSION_MAJOR}.${ACIDCAM_GPU_VERSION_MINOR}.${ACIDCAM_GPU_VERSION_PATCH})
+
+set_and_check(acidcam-gpu_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/acidcam-gpu")
+set_and_check(acidcam-gpu_LIB_DIR "@PACKAGE_CMAKE_INSTALL_LIBDIR@")
+
+if(NOT TARGET acidcam-gpu::acidcam-gpu)
+    add_library(acidcam-gpu::acidcam-gpu SHARED IMPORTED)
+    set_target_properties(acidcam-gpu::acidcam-gpu PROPERTIES
+        IMPORTED_LOCATION "@PACKAGE_CMAKE_INSTALL_LIBDIR@/libacidcam-gpu.so"
+        INTERFACE_INCLUDE_DIRECTORIES "${acidcam-gpu_INCLUDE_DIR}"
+    )
+    
+    # Link required libraries
+    set_property(TARGET acidcam-gpu::acidcam-gpu APPEND PROPERTY
+        INTERFACE_LINK_LIBRARIES
+        OpenCV::OpenCV
+        MXWrite::mxwrite
+        PkgConfig::FFMPEG
+    )
+endif()
+
+set(acidcam-gpu_FOUND TRUE)
