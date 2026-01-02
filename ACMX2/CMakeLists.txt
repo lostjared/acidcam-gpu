@@ -11,6 +11,7 @@ find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(MXWrite REQUIRED)
 find_package(SDL2_mixer REQUIRED)
+find_package(acidcam-gpu REQUIRED CONFIG)
 
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libavcodec
@@ -91,6 +92,7 @@ target_link_libraries(acmx2 PRIVATE
     ${OpenCV_LIBRARIES} 
     ${AUDIO_LIBS}
     MXWrite::mxwrite
+    acidcam-gpu::acidcam-gpu
 )
 
 install(TARGETS acmx2 DESTINATION bin)
