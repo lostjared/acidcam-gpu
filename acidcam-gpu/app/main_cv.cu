@@ -282,7 +282,6 @@ int main(int argc, char** argv) {
         vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
     }
     dynamic_buffer = std::stoi(bufferArg);
-
     if(dynamic_buffer < 2 || dynamic_buffer > 32) {
         std::cerr << "ac: Buffer must be valid from rang 3-32" << std::endl;
         exit(EXIT_FAILURE);
