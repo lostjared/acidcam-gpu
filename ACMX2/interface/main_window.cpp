@@ -74,6 +74,9 @@ void MainWindow::initControls() {
     audioSet = new QAction(tr("Audio Settings"), this);
     connect(audioSet,&QAction::triggered, this, &MainWindow::menuAudioSettings);
     cameraMenu->addAction(audioSet);
+    gpuFilterAction = new QAction(tr("GPU Filter Settings"), this);
+    connect(gpuFilterAction, &QAction::triggered, this, &MainWindow::menuGPUFilterSettings);
+    cameraMenu->addAction(gpuFilterAction);
     runMenu_select = new QAction(tr("Run Selected"), this);
     runMenu_select->setShortcut(QKeySequence("F5"));
     connect(runMenu_select, &QAction::triggered, this, &MainWindow::runSelected);
@@ -560,6 +563,20 @@ void MainWindow::menuAudioSettings() {
     }
 }
 
+void MainWindow::menuGPUFilterSettings() {
+    GPUFilterDialog gpuDialog(executable_path, this);
+    if(gpuDialog.exec() == QDialog::Accepted) {
+        gpu_filter_enabled = gpuDialog.isGPUFilterEnabled();
+        gpu_filter_indices = gpuDialog.getFilterArgument();
+        gpu_buffer_size = gpuDialog.getBufferSize();
+        if(gpu_filter_enabled) {
+            Log("GPU Filter Settings Saved: Filters=" + gpu_filter_indices + ", Buffer=" + QString::number(gpu_buffer_size));
+        } else {
+            Log("GPU Filtering Disabled");
+        }
+    }
+}
+
 void MainWindow::cameraSettings() {
     SettingsWindow settingsWindow(this);
     if(settingsWindow.exec() == QDialog::Accepted) {
@@ -702,6 +719,11 @@ void MainWindow::runSelected() {
         arguments << "--enable-3d";
         arguments << "--model" << model_file;
     }
+
+    if(gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
+        arguments << "--gpu-filter" << gpu_filter_indices;
+        arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
+    }
  
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
@@ -811,6 +833,12 @@ void MainWindow::runAll() {
         arguments << "--enable-3d";
         arguments << "--model" << model_file;
     }
+
+    if(gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
+        arguments << "--gpu-filter" << gpu_filter_indices;
+        arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
+    }
+
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if(!process->waitForStarted()) {

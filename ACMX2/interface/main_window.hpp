@@ -16,6 +16,7 @@
 #include"editor.hpp"
 #include"shader.hpp"
 #include"shaderlibrary.hpp"
+#include"gpufilter.hpp"
 
 class ReadOnlyStringListModel : public QStringListModel {
     Q_OBJECT
@@ -55,6 +56,7 @@ public slots:
     void menuShuffle();
     void menuSearch();
     void menuFindNext();
+    void menuGPUFilterSettings();
 protected:
     bool addShaderToList(const QString &shaderName);
 
@@ -114,6 +116,11 @@ private:
     int audio_input = -1;
     int audio_output = -1;
     QString model_file;
+    // GPU Filter settings
+    bool gpu_filter_enabled = false;
+    QString gpu_filter_indices;
+    int gpu_buffer_size = 8;
+    QAction *gpuFilterAction;
 };
 
 
