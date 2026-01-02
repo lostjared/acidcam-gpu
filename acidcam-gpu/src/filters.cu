@@ -644,24 +644,63 @@ namespace ac_gpu {
         { 638, "VerticalMelt" },
         { 639, "VHSTracking" },
         { 640, "VibrantPop" },
-        { 641, "VideoFeedback" },
-        { 642, "VignetteFlash" },
-        { 643, "VoronoiShatter" },
-        { 644, "WarpSpeed" },
-        { 645, "WaterColor" },
-        { 646, "WaveCollapse" },
-        { 647, "WebPattern" },
-        { 648, "WhirlpoolSpin" },
-        { 649, "WindBlast" },
-        { 650, "WireframePulse" },
-        { 651, "XRayFlash" },
-        { 652, "ZebraStripe" },
-        { 653, "ZenRipple" },
-        { 654, "ZigzagWave" },
-        { 655, "ZoomPulse" },
-        { 656, "ZoneTint" },
-        { 657, "AcidDrip" },
-        { 658, "AuroraWave" }
+        { 641, "VignetteFlash" },
+        { 642, "VoronoiShatter" },
+        { 643, "WarpSpeed" },
+        { 644, "WaterColor" },
+        { 645, "WaveCollapse" },
+        { 646, "WebPattern" },
+        { 647, "WhirlpoolSpin" },
+        { 648, "WindBlast" },
+        { 649, "WireframePulse" },
+        { 650, "XRayFlash" },
+        { 651, "ZebraStripe" },
+        { 652, "ZenRipple" },
+        { 653, "ZigzagWave" },
+        { 654, "ZoomPulse" },
+        { 655, "ZoneTint" },
+        { 656, "AcidDrip" },
+        { 657, "AuroraWave" },
+        { 658, "BandPass" },
+        { 659, "BilinearStretch" },
+        { 660, "BleedThrough" },
+        { 661, "BlockShatter" },
+        { 662, "BlurMask" },
+        { 663, "BokehBlur" },
+        { 664, "BounceWave" },
+        { 665, "BrokenGlass" },
+        { 666, "BubbleWarp" },
+        { 667, "CRTCurvature" },
+        { 668, "CascadeBlend" },
+        { 669, "CelShade" },
+        { 670, "ChainReaction" },
+        { 671, "ChannelDelay" },
+        { 672, "ChromaBleed" },
+        { 673, "CircuitTrace" },
+        { 674, "ClockWipe" },
+        { 675, "CloudShadow" },
+        { 676, "ColorBurn" },
+        { 677, "ColorHalves" },
+        { 678, "ComicDots" },
+        { 679, "ConcentricPulse" },
+        { 680, "CopperTone" },
+        { 681, "CornerStretch" },
+        { 682, "CosmicDust" },
+        { 683, "CrossBlur" },
+        { 684, "CrossProcess" },
+        { 685, "CrystalEdge" },
+        { 686, "CubeRotate" },
+        { 687, "CurtainReveal" },
+        { 688, "CyberPunk" },
+        { 689, "DataCorrupt" },
+        { 690, "DebrisField" },
+        { 691, "DeepFry" },
+        { 692, "DesyncRGB" },
+        { 693, "DiagonalWipe" },
+        { 694, "DigitalArtifact" },
+        { 695, "DimensionRift" },
+        { 696, "DotCrawl" },
+        { 697, "DualTone" }
     };
     struct FilterParams {
         float alpha;
@@ -6481,7 +6520,7 @@ namespace ac_gpu {
         }
     }
 
-    // ===== NEW FILTERS 579-618 =====
+    
     __device__ void processPlaidPattern(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int stripe_x = (x + params.frame_count) % 40;
@@ -6902,7 +6941,6 @@ namespace ac_gpu {
         for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
     }
 
-    // ===== NEW FILTERS 619-658 =====
     __device__ void processTangentWarp(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float nx = (x - width / 2.0f) / (width / 2.0f);
@@ -7131,17 +7169,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fmaxf(0.0f, fminf(255.0f, gray + diff * pop));
         }
     }
-    __device__ void processVideoFeedback(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        float scale = 0.98f + 0.01f * sinf(params.frame_count * 0.03f);
-        float cx = width / 2.0f, cy = height / 2.0f;
-        int src_x = (int)(cx + (x - cx) * scale) % width;
-        int src_y = (int)(cy + (y - cy) * scale) % height;
-        src_x = (src_x + width) % width;
-        src_y = (src_y + height) % height;
-        int src_idx = src_y * step + src_x * 4;
-        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)((data[idx + j] + data[src_idx + j]) / 2);
-    }
     __device__ void processVignetteFlash(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float cx = width / 2.0f, cy = height / 2.0f;
@@ -7317,6 +7344,446 @@ namespace ac_gpu {
             data[idx] = (unsigned char)fminf(255.0f, data[idx] + 50 * aurora);
             data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] + 100 * aurora);
             data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] + 30 * aurora);
+        }
+    }
+
+    // ===== NEW FILTERS 659-698 =====
+    __device__ void processBandPass(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int low = 60 + (params.frame_count % 60);
+        int high = 180 + (params.frame_count % 60);
+        for (int j = 0; j < 3; ++j) {
+            if (data[idx + j] < low) data[idx + j] = (unsigned char)(data[idx + j] * 0.5f);
+            else if (data[idx + j] > high) data[idx + j] = (unsigned char)(255 - (data[idx + j] - high));
+        }
+    }
+    __device__ void processBilinearStretch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float sx = 1.0f + 0.3f * sinf(params.frame_count * 0.05f);
+        float sy = 1.0f + 0.3f * cosf(params.frame_count * 0.05f);
+        int src_x = (int)(x / sx) % width;
+        int src_y = (int)(y / sy) % height;
+        src_x = (src_x + width) % width;
+        src_y = (src_y + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processBleedThrough(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int bleed = 3 + (params.frame_count % 5);
+        for (int j = 0; j < 3; ++j) {
+            int sum = data[idx + j];
+            for (int b = 1; b <= bleed; ++b) {
+                int bx = (x + b) % width;
+                sum += data[y * step + bx * 4 + j] / (b + 1);
+            }
+            data[idx + j] = (unsigned char)fminf(255.0f, (float)sum);
+        }
+    }
+    __device__ void processBlockShatter(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int bsize = 16 + (params.frame_count % 16);
+        int bx = x / bsize, by = y / bsize;
+        float r = gpu_rand(bx, by, params.seed + params.frame_count / 10);
+        if (r < 0.3f) {
+            int ox = (int)((r - 0.15f) * bsize);
+            int oy = (int)((r - 0.15f) * bsize);
+            int src_x = (x + ox + width) % width;
+            int src_y = (y + oy + height) % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void processBlurMask(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        int threshold = 128 + (int)(64.0f * sinf(params.frame_count * 0.05f));
+        if (gray > threshold && x > 1 && y > 1 && x < width - 2 && y < height - 2) {
+            for (int j = 0; j < 3; ++j) {
+                int sum = data[idx + j] * 4;
+                sum += data[(y - 1) * step + x * 4 + j];
+                sum += data[(y + 1) * step + x * 4 + j];
+                sum += data[y * step + (x - 1) * 4 + j];
+                sum += data[y * step + (x + 1) * 4 + j];
+                data[idx + j] = (unsigned char)(sum / 8);
+            }
+        }
+    }
+    __device__ void processBokehBlur(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dist = sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        float max_dist = sqrtf(cx * cx + cy * cy);
+        int blur_size = (int)(dist / max_dist * 5.0f * (1.0f + sinf(params.frame_count * 0.05f)));
+        if (blur_size > 0 && x > blur_size && y > blur_size && x < width - blur_size && y < height - blur_size) {
+            for (int j = 0; j < 3; ++j) {
+                int sum = 0, count = 0;
+                for (int dy = -blur_size; dy <= blur_size; dy += 2) {
+                    for (int dx = -blur_size; dx <= blur_size; dx += 2) {
+                        sum += data[(y + dy) * step + (x + dx) * 4 + j];
+                        count++;
+                    }
+                }
+                data[idx + j] = (unsigned char)(sum / count);
+            }
+        }
+    }
+    __device__ void processBounceWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float bounce = fabsf(sinf(x * 0.03f + params.frame_count * 0.1f)) * 15.0f;
+        int src_y = ((int)(y + bounce) + height) % height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processBrokenGlass(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shard_x = x / 25, shard_y = y / 25;
+        float r = gpu_rand(shard_x, shard_y, params.seed);
+        float angle = r * 6.28318f;
+        float offset = (r - 0.5f) * 10.0f * sinf(params.frame_count * 0.05f);
+        int src_x = (int)(x + offset * cosf(angle)) % width;
+        int src_y = (int)(y + offset * sinf(angle)) % height;
+        src_x = (src_x + width) % width;
+        src_y = (src_y + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processBubbleWarp(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dx = x - cx, dy = y - cy;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float bubble = sinf(dist * 0.05f - params.frame_count * 0.1f) * 10.0f;
+        float angle = atan2f(dy, dx);
+        int src_x = (int)(x + bubble * cosf(angle)) % width;
+        int src_y = (int)(y + bubble * sinf(angle)) % height;
+        src_x = (src_x + width) % width;
+        src_y = (src_y + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processCRTCurvature(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float nx = (x - width / 2.0f) / (width / 2.0f);
+        float ny = (y - height / 2.0f) / (height / 2.0f);
+        float curve = 0.1f * (1.0f + 0.5f * sinf(params.frame_count * 0.03f));
+        nx = nx * (1.0f + curve * ny * ny);
+        ny = ny * (1.0f + curve * nx * nx);
+        int src_x = (int)((nx + 1.0f) * width / 2.0f) % width;
+        int src_y = (int)((ny + 1.0f) * height / 2.0f) % height;
+        src_x = (src_x + width) % width;
+        src_y = (src_y + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processCascadeBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cascade = (y + params.frame_count) % 60;
+        float factor = (cascade < 30) ? cascade / 30.0f : (60 - cascade) / 30.0f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * (0.5f + factor * 0.5f));
+        }
+    }
+    __device__ void processCelShade(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int levels = 4 + (params.frame_count % 4);
+        int step_size = 256 / levels;
+        for (int j = 0; j < 3; ++j) {
+            int val = data[idx + j];
+            val = (val / step_size) * step_size + step_size / 2;
+            data[idx + j] = (unsigned char)fminf(255.0f, (float)val);
+        }
+    }
+    __device__ void processChainReaction(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int ring = params.frame_count % 100;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dist = sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        if (fabsf(dist - ring * 3) < 5.0f) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * 1.5f);
+        }
+    }
+    __device__ void processChannelDelay(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int r_delay = 5 + (params.frame_count % 10);
+        int b_delay = -(5 + (params.frame_count % 10));
+        data[idx + 2] = data[y * step + ((x + r_delay + width) % width) * 4 + 2];
+        data[idx] = data[y * step + ((x + b_delay + width) % width) * 4];
+    }
+    __device__ void processChromaBleed(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int bleed = 5 + (params.frame_count % 8);
+        int sum_r = 0, sum_g = 0, sum_b = 0;
+        for (int i = 0; i < bleed; ++i) {
+            int bx = (x + i) % width;
+            sum_r += data[y * step + bx * 4 + 2];
+            sum_g += data[y * step + bx * 4 + 1];
+            sum_b += data[y * step + bx * 4];
+        }
+        data[idx + 2] = (unsigned char)(sum_r / bleed);
+        data[idx + 1] = data[idx + 1];
+        data[idx] = (unsigned char)(sum_b / bleed);
+    }
+    __device__ void processCircuitTrace(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int grid = 12;
+        int gx = x % grid, gy = y % grid;
+        int node_x = x / grid, node_y = y / grid;
+        float r = gpu_rand(node_x, node_y, params.seed);
+        int trace = (r < 0.5f) ? (gx < 2) : (gy < 2);
+        if (trace) {
+            float pulse = 0.5f + 0.5f * sinf(params.frame_count * 0.1f + node_x + node_y);
+            data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] + 150 * pulse);
+        }
+    }
+    __device__ void processClockWipe(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float angle = atan2f(y - cy, x - cx) + 3.14159f;
+        float wipe_angle = fmodf(params.frame_count * 0.05f, 6.28318f);
+        if (angle < wipe_angle) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = 255 - data[idx + j];
+        }
+    }
+    __device__ void processCloudShadow(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cloud = sinf(x * 0.01f + params.frame_count * 0.02f) * cosf(y * 0.015f + params.frame_count * 0.015f);
+        float shadow = (cloud > 0.3f) ? 0.6f : 1.0f;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * shadow);
+    }
+    __device__ void processColorBurn(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float intensity = (data[idx] + data[idx + 1] + data[idx + 2]) / 765.0f;
+        float burn = intensity * intensity;
+        int channel = params.frame_count % 3;
+        data[idx + channel] = (unsigned char)(data[idx + channel] * burn + 255 * (1.0f - burn) * 0.3f);
+    }
+    __device__ void processColorHalves(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int split = width / 2 + (int)(50.0f * sinf(params.frame_count * 0.03f));
+        if (x < split) {
+            data[idx] = (unsigned char)(data[idx] * 0.5f);
+            data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] * 1.5f);
+        } else {
+            data[idx + 2] = (unsigned char)(data[idx + 2] * 0.5f);
+            data[idx] = (unsigned char)fminf(255.0f, data[idx] * 1.5f);
+        }
+    }
+    __device__ void processComicDots(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int dot_size = 6;
+        int cx = (x / dot_size) * dot_size + dot_size / 2;
+        int cy = (y / dot_size) * dot_size + dot_size / 2;
+        float dist = sqrtf((float)((x - cx) * (x - cx) + (y - cy) * (y - cy)));
+        int gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        float radius = (gray / 255.0f) * dot_size * 0.7f;
+        if (dist < radius) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = 0;
+        } else {
+            for (int j = 0; j < 3; ++j) data[idx + j] = 255;
+        }
+    }
+    __device__ void processConcentricPulse(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dist = sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        float pulse = sinf(dist * 0.05f - params.frame_count * 0.15f);
+        float factor = 0.7f + pulse * 0.3f;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * factor);
+    }
+    __device__ void processCopperTone(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int gray = (data[idx] * 30 + data[idx + 1] * 59 + data[idx + 2] * 11) / 100;
+        float pulse = 0.8f + 0.2f * sinf(params.frame_count * 0.05f);
+        data[idx] = (unsigned char)(gray * 0.4f * pulse);
+        data[idx + 1] = (unsigned char)(gray * 0.6f * pulse);
+        data[idx + 2] = (unsigned char)(gray * 0.9f * pulse);
+    }
+    __device__ void processCornerStretch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float nx = (float)x / width, ny = (float)y / height;
+        float stretch = 0.2f * sinf(params.frame_count * 0.05f);
+        float corner_dist = fminf(fminf(nx, 1.0f - nx), fminf(ny, 1.0f - ny));
+        float factor = 1.0f + stretch * (1.0f - corner_dist * 4.0f);
+        factor = fmaxf(0.5f, fminf(1.5f, factor));
+        int src_x = (int)(width / 2.0f + (x - width / 2.0f) * factor) % width;
+        int src_y = (int)(height / 2.0f + (y - height / 2.0f) * factor) % height;
+        src_x = (src_x + width) % width;
+        src_y = (src_y + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processCosmicDust(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed + params.frame_count / 3);
+        if (r < 0.01f) {
+            float bright = r * 100.0f;
+            data[idx] = (unsigned char)fminf(255.0f, data[idx] + 150 * bright);
+            data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] + 100 * bright);
+            data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] + 200 * bright);
+        }
+    }
+    __device__ void processCrossBlur(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int size = 3 + (params.frame_count % 5);
+        if (x > size && y > size && x < width - size && y < height - size) {
+            for (int j = 0; j < 3; ++j) {
+                int sum = data[idx + j];
+                for (int i = 1; i <= size; ++i) {
+                    sum += data[y * step + (x - i) * 4 + j];
+                    sum += data[y * step + (x + i) * 4 + j];
+                    sum += data[(y - i) * step + x * 4 + j];
+                    sum += data[(y + i) * step + x * 4 + j];
+                }
+                data[idx + j] = (unsigned char)(sum / (size * 4 + 1));
+            }
+        }
+    }
+    __device__ void processCrossProcess(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = data[idx + 2] / 255.0f;
+        float g = data[idx + 1] / 255.0f;
+        float b = data[idx] / 255.0f;
+        float pulse = 0.5f + 0.5f * sinf(params.frame_count * 0.05f);
+        r = powf(r, 0.8f + pulse * 0.2f);
+        g = powf(g, 1.0f);
+        b = powf(b, 1.2f - pulse * 0.2f);
+        data[idx + 2] = (unsigned char)(fminf(1.0f, r * 1.1f) * 255);
+        data[idx + 1] = (unsigned char)(g * 255);
+        data[idx] = (unsigned char)(fminf(1.0f, b * 0.9f) * 255);
+    }
+    __device__ void processCrystalEdge(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int facet_size = 20 + (params.frame_count % 20);
+        int fx = (x / facet_size) * facet_size;
+        int fy = (y / facet_size) * facet_size;
+        int edge_x = x - fx, edge_y = y - fy;
+        if (edge_x < 2 || edge_y < 2 || edge_x > facet_size - 3 || edge_y > facet_size - 3) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * 1.5f);
+        }
+    }
+    __device__ void processCubeRotate(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dx = x - cx, dy = y - cy;
+        float angle = params.frame_count * 0.02f;
+        float cos_a = cosf(angle), sin_a = sinf(angle);
+        int src_x = (int)(cx + dx * cos_a - dy * sin_a) % width;
+        int src_y = (int)(cy + dx * sin_a + dy * cos_a) % height;
+        src_x = (src_x + width) % width;
+        src_y = (src_y + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processCurtainReveal(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int curtain = (params.frame_count * 3) % width;
+        if (x < curtain) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = 255 - data[idx + j];
+        }
+    }
+    __device__ void processCyberPunk(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int scan = (y + params.frame_count * 2) % 4;
+        float cyan = (scan < 2) ? 1.3f : 0.9f;
+        float magenta = (scan >= 2) ? 1.3f : 0.9f;
+        data[idx] = (unsigned char)fminf(255.0f, data[idx] * cyan);
+        data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] * cyan);
+        data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] * magenta);
+    }
+    __device__ void processDataCorrupt(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x / 8, y / 4, params.seed + params.frame_count / 5);
+        if (r < 0.05f) {
+            int shift = (int)(r * 500) % 50 - 25;
+            int src_x = (x + shift + width) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void processDebrisField(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x / 10, y / 10, params.seed);
+        if (r < 0.15f) {
+            int ox = (int)((r - 0.075f) * 20 + params.frame_count * 0.5f) % 20 - 10;
+            int oy = (int)((r - 0.075f) * 20) % 20 - 10;
+            int src_x = (x + ox + width) % width;
+            int src_y = (y + oy + height) % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void processDeepFry(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float intensity = 1.5f + 0.5f * sinf(params.frame_count * 0.1f);
+        for (int j = 0; j < 3; ++j) {
+            float val = (data[idx + j] - 128) * intensity + 128;
+            val = fmaxf(0.0f, fminf(255.0f, val));
+            if (val > 200) val = 255;
+            else if (val < 55) val = 0;
+            data[idx + j] = (unsigned char)val;
+        }
+    }
+    __device__ void processDesyncRGB(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int r_off_x = (params.frame_count % 10) - 5;
+        int g_off_y = (params.frame_count % 8) - 4;
+        int b_off_x = -((params.frame_count % 10) - 5);
+        int r_x = (x + r_off_x + width) % width;
+        int g_y = (y + g_off_y + height) % height;
+        int b_x = (x + b_off_x + width) % width;
+        data[idx + 2] = data[y * step + r_x * 4 + 2];
+        data[idx + 1] = data[g_y * step + x * 4 + 1];
+        data[idx] = data[y * step + b_x * 4];
+    }
+    __device__ void processDiagonalWipe(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int diag = x + y;
+        int wipe = (params.frame_count * 5) % (width + height);
+        if (diag < wipe) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = 255 - data[idx + j];
+        }
+    }
+    __device__ void processDigitalArtifact(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int block = (x / 8) + (y / 8) * 100;
+        float r = gpu_rand(block, params.seed, params.frame_count / 10);
+        if (r < 0.02f) {
+            unsigned char artifact = (unsigned char)((int)(r * 12750) % 256);
+            for (int j = 0; j < 3; ++j) data[idx + j] = artifact;
+        }
+    }
+    __device__ void processDimensionRift(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dist = sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        float rift = sinf(dist * 0.03f - params.frame_count * 0.1f);
+        if (rift > 0.7f) {
+            int src_x = (width - 1 - x);
+            int src_y = (height - 1 - y);
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) data[idx + j] = (data[idx + j] + data[src_idx + j]) / 2;
+        }
+    }
+    __device__ void processDotCrawl(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int crawl = ((x + y + params.frame_count) % 4);
+        if (crawl == 0) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.8f);
+        }
+    }
+    __device__ void processDualTone(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        int phase = (params.frame_count / 30) % 3;
+        if (gray < 128) {
+            if (phase == 0) { data[idx] = gray; data[idx + 1] = 0; data[idx + 2] = gray; }
+            else if (phase == 1) { data[idx] = 0; data[idx + 1] = gray; data[idx + 2] = gray; }
+            else { data[idx] = gray; data[idx + 1] = gray; data[idx + 2] = 0; }
+        } else {
+            if (phase == 0) { data[idx] = 255 - gray; data[idx + 1] = 255; data[idx + 2] = 255 - gray; }
+            else if (phase == 1) { data[idx] = 255; data[idx + 1] = 255 - gray; data[idx + 2] = 255 - gray; }
+            else { data[idx] = 255 - gray; data[idx + 1] = 255 - gray; data[idx + 2] = 255; }
         }
     }
 
@@ -8108,24 +8575,63 @@ namespace ac_gpu {
                 case 638: processVerticalMelt(x, y, data, height, step, params); break;
                 case 639: processVHSTracking(x, y, data, width, step, params); break;
                 case 640: processVibrantPop(x, y, data, step, params); break;
-                case 641: processVideoFeedback(x, y, data, width, height, step, params); break;
-                case 642: processVignetteFlash(x, y, data, width, height, step, params); break;
-                case 643: processVoronoiShatter(x, y, data, width, height, step, params); break;
-                case 644: processWarpSpeed(x, y, data, width, height, step, params); break;
-                case 645: processWaterColor(x, y, data, width, height, step, params); break;
-                case 646: processWaveCollapse(x, y, data, width, height, step, params); break;
-                case 647: processWebPattern(x, y, data, width, height, step, params); break;
-                case 648: processWhirlpoolSpin(x, y, data, width, height, step, params); break;
-                case 649: processWindBlast(x, y, data, width, step, params); break;
-                case 650: processWireframePulse(x, y, data, step, params); break;
-                case 651: processXRayFlash(x, y, data, step, params); break;
-                case 652: processZebraStripe(x, y, data, step, params); break;
-                case 653: processZenRipple(x, y, data, width, height, step, params); break;
-                case 654: processZigzagWave(x, y, data, width, height, step, params); break;
-                case 655: processZoomPulse(x, y, data, width, height, step, params); break;
-                case 656: processZoneTint(x, y, data, width, height, step, params); break;
-                case 657: processAcidDrip(x, y, data, height, step, params); break;
-                case 658: processAuroraWave(x, y, data, height, step, params); break;
+                case 641: processVignetteFlash(x, y, data, width, height, step, params); break;
+                case 642: processVoronoiShatter(x, y, data, width, height, step, params); break;
+                case 643: processWarpSpeed(x, y, data, width, height, step, params); break;
+                case 644: processWaterColor(x, y, data, width, height, step, params); break;
+                case 645: processWaveCollapse(x, y, data, width, height, step, params); break;
+                case 646: processWebPattern(x, y, data, width, height, step, params); break;
+                case 647: processWhirlpoolSpin(x, y, data, width, height, step, params); break;
+                case 648: processWindBlast(x, y, data, width, step, params); break;
+                case 649: processWireframePulse(x, y, data, step, params); break;
+                case 650: processXRayFlash(x, y, data, step, params); break;
+                case 651: processZebraStripe(x, y, data, step, params); break;
+                case 652: processZenRipple(x, y, data, width, height, step, params); break;
+                case 653: processZigzagWave(x, y, data, width, height, step, params); break;
+                case 654: processZoomPulse(x, y, data, width, height, step, params); break;
+                case 655: processZoneTint(x, y, data, width, height, step, params); break;
+                case 656: processAcidDrip(x, y, data, height, step, params); break;
+                case 657: processAuroraWave(x, y, data, height, step, params); break;
+                case 658: processBandPass(x, y, data, step, params); break;
+                case 659: processBilinearStretch(x, y, data, width, height, step, params); break;
+                case 660: processBleedThrough(x, y, data, width, step, params); break;
+                case 661: processBlockShatter(x, y, data, width, height, step, params); break;
+                case 662: processBlurMask(x, y, data, width, height, step, params); break;
+                case 663: processBokehBlur(x, y, data, width, height, step, params); break;
+                case 664: processBounceWave(x, y, data, width, height, step, params); break;
+                case 665: processBrokenGlass(x, y, data, width, height, step, params); break;
+                case 666: processBubbleWarp(x, y, data, width, height, step, params); break;
+                case 667: processCRTCurvature(x, y, data, width, height, step, params); break;
+                case 668: processCascadeBlend(x, y, data, step, params); break;
+                case 669: processCelShade(x, y, data, step, params); break;
+                case 670: processChainReaction(x, y, data, width, height, step, params); break;
+                case 671: processChannelDelay(x, y, data, width, step, params); break;
+                case 672: processChromaBleed(x, y, data, width, step, params); break;
+                case 673: processCircuitTrace(x, y, data, step, params); break;
+                case 674: processClockWipe(x, y, data, width, height, step, params); break;
+                case 675: processCloudShadow(x, y, data, step, params); break;
+                case 676: processColorBurn(x, y, data, step, params); break;
+                case 677: processColorHalves(x, y, data, width, step, params); break;
+                case 678: processComicDots(x, y, data, step, params); break;
+                case 679: processConcentricPulse(x, y, data, width, height, step, params); break;
+                case 680: processCopperTone(x, y, data, step, params); break;
+                case 681: processCornerStretch(x, y, data, width, height, step, params); break;
+                case 682: processCosmicDust(x, y, data, step, params); break;
+                case 683: processCrossBlur(x, y, data, width, height, step, params); break;
+                case 684: processCrossProcess(x, y, data, step, params); break;
+                case 685: processCrystalEdge(x, y, data, width, height, step, params); break;
+                case 686: processCubeRotate(x, y, data, width, height, step, params); break;
+                case 687: processCurtainReveal(x, y, data, width, step, params); break;
+                case 688: processCyberPunk(x, y, data, step, params); break;
+                case 689: processDataCorrupt(x, y, data, width, step, params); break;
+                case 690: processDebrisField(x, y, data, width, height, step, params); break;
+                case 691: processDeepFry(x, y, data, step, params); break;
+                case 692: processDesyncRGB(x, y, data, width, height, step, params); break;
+                case 693: processDiagonalWipe(x, y, data, width, height, step, params); break;
+                case 694: processDigitalArtifact(x, y, data, step, params); break;
+                case 695: processDimensionRift(x, y, data, width, height, step, params); break;
+                case 696: processDotCrawl(x, y, data, step, params); break;
+                case 697: processDualTone(x, y, data, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);
