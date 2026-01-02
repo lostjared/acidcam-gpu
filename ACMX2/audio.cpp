@@ -7,23 +7,37 @@
 float gAmplitude = 0.0f;
 float amp_sense = 25.0f;
 unsigned int input_channels = 2;
+unsigned int output_channels = 2;
 bool output_buffer = false;
 
 int audioCallback(void* outputBuffer, void* inputBuffer, unsigned int nBufferFrames,
     double streamTime, RtAudioStreamStatus status, void* userData) {
-    if (status) {
-        std::cerr << "Stream underflow detected!" << std::endl;
-    }
     float* in = static_cast<float*>(inputBuffer);
     float* out = static_cast<float*>(outputBuffer);
     float sum = 0.0f;
 
-    for (unsigned int i = 0; i < nBufferFrames; ++i) { 
+    if (status || in == nullptr) {
+        if (out) std::fill_n(out, nBufferFrames * output_channels, 0.0f);
+        return 0;
+    }
+
+    for (unsigned int i = 0; i < nBufferFrames; ++i) {
         for (unsigned int ch = 0; ch < input_channels; ++ch) {
-            unsigned int index = i * input_channels + ch;
-            sum += std::abs(in[index]);
-            if(output_buffer == true)
-                out[index] = in[index]; 
+            unsigned int inIndex = i * input_channels + ch;
+            sum += std::abs(in[inIndex]);
+        }
+        for (unsigned int ch = 0; ch < output_channels; ++ch) {
+            unsigned int outIndex = i * output_channels + ch;
+            if (output_buffer && out) {
+                if (ch < input_channels) {
+                    unsigned int inIndex = i * input_channels + ch;
+                    out[outIndex] = in[inIndex];
+                } else {
+                    out[outIndex] = 0.0f;
+                }
+            } else if (out) {
+                out[outIndex] = 0.0f;
+            }
         }
     }
 
@@ -34,7 +48,7 @@ int audioCallback(void* outputBuffer, void* inputBuffer, unsigned int nBufferFra
 float get_amp() { return gAmplitude; }
 float get_sense() { return amp_sense; }
 
-RtAudio audio;
+RtAudio audio(RtAudio::LINUX_ALSA);
 
 void set_output(bool o) {
     output_buffer = o;
@@ -96,20 +110,26 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
         std::cout << "acmx2: Using default output device: " << outputDevice << "\n";
     }
 
-    if (inputDevice == 0) {
-        std::cout << "acmx2: No Input device found...\n";
+    
+    RtAudio::DeviceInfo inInfo = audio.getDeviceInfo(inputDevice);
+    RtAudio::DeviceInfo outInfo = audio.getDeviceInfo(outputDevice);
+    if (inInfo.inputChannels == 0) {
+        std::cout << "acmx2: Input device has no input channels...\n";
         return 1;
     }
-    else if (outputDevice == 0) {
-        std::cout << "acmx2: No Output device found...\n";
+    if (outInfo.outputChannels == 0) {
+        std::cout << "acmx2: Output device has no output channels...\n";
         return 1;
     }
-    else {
+
+    {
+        input_channels = std::min(channels, inInfo.inputChannels);
+        output_channels = std::min(2u, outInfo.outputChannels);
         inputParams.deviceId = inputDevice;
         inputParams.nChannels = input_channels;
         inputParams.firstChannel = 0;
         outputParams.deviceId = outputDevice;
-        outputParams.nChannels = 2;
+        outputParams.nChannels = output_channels;
         outputParams.firstChannel = 0;
 
         std::vector<unsigned int> sampleRates = audio.getDeviceInfo(inputDevice).sampleRates;
