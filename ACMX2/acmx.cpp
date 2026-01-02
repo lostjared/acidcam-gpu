@@ -602,7 +602,6 @@ public:
         is3d_enabled = args.is3d;
         m_file = args.model_file;
 
-        // Setup acidcam-gpu filters
         gpu_filter_enabled = args.gpu_filter_enabled;
         if(gpu_filter_enabled && !args.gpu_filter_indices.empty()) {
             for(int idx : args.gpu_filter_indices) {
@@ -611,7 +610,7 @@ public:
                     mx::system_out << "acmx2: GPU filter added: " << ac_gpu::filters[idx].name << " (index " << idx << ")\n";
                 }
             }
-            gpu_current_filter_index = args.gpu_filter_indices[0];  // Set initial filter index
+            gpu_current_filter_index = args.gpu_filter_indices[0];
             gpu_frame_buffer = std::make_unique<ac_gpu::DynamicFrameBuffer>(args.gpu_frame_buffer_size);
             CHECK_CUDA(cudaMalloc(&d_ptrList, args.gpu_frame_buffer_size * sizeof(unsigned char*)));
             mx::system_out << "acmx2: GPU filtering enabled with " << gpu_filters.size() << " filter(s)\n";
@@ -620,13 +619,12 @@ public:
 
     bool is3d_enabled = false;
 
-    
     bool gpu_filter_enabled = false;
     std::vector<ac_gpu::Filter> gpu_filters;
     int gpu_current_filter_index = 0;
     std::unique_ptr<ac_gpu::DynamicFrameBuffer> gpu_frame_buffer;
     cv::cuda::GpuMat gpuWorkingBuffer;
-    cv::Mat gpuFilteredFrame;  // CPU buffer for GPU filter output (RGBA)
+    cv::Mat gpuFilteredFrame;
     unsigned char** d_ptrList = nullptr;
     ac_gpu::Filter* d_filterList = nullptr;
     bool gpu_filtersChanged = true;
@@ -636,7 +634,6 @@ public:
     int gpu_frame_index = 0;
     int gpu_frame_dir = 1;
 
-    
     ~ACView() override {
         if(d_ptrList) {
             cudaFree(d_ptrList);
@@ -1010,17 +1007,13 @@ public:
             library.useProgram();
         }
         if(!isFrozen && !newFrame.empty()) {
-            // Apply acidcam-gpu filter if enabled
             if(gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
-                // Update the frame buffer with current frame (handles BGR->RGBA conversion internally)
                 gpu_frame_buffer->update(newFrame);
                 
-                // Allocate GPU working buffer if needed
                 if(gpuWorkingBuffer.empty() || gpuWorkingBuffer.cols != newFrame.cols || gpuWorkingBuffer.rows != newFrame.rows) {
                     gpuWorkingBuffer.create(newFrame.rows, newFrame.cols, CV_8UC4);
                 }
                 
-                // Update animation parameters
                 if(gpu_alpha_dir == 1) {
                     gpu_alpha += 0.01f;
                     if(gpu_alpha >= 3.0f) gpu_alpha_dir = 0;
@@ -1029,7 +1022,6 @@ public:
                     if(gpu_alpha <= 1.0f) gpu_alpha_dir = 1;
                 }
                 
-                // Update frame index for temporal effects
                 if(gpu_frame_dir == 1) {
                     gpu_frame_index++;
                     if(gpu_frame_index >= gpu_frame_buffer->arraySize - 1) {
@@ -1044,11 +1036,9 @@ public:
                     }
                 }
                 
-                
                 CHECK_CUDA(cudaMemcpy(d_ptrList, gpu_frame_buffer->deviceFrames.data(),
                                       gpu_frame_buffer->arraySize * sizeof(unsigned char*),
                                       cudaMemcpyHostToDevice));
-                
                 
                 CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.ptr<unsigned char>(), gpuWorkingBuffer.step,
                                         gpu_frame_buffer->deviceFrames[gpu_frame_buffer->arraySize - 1],
@@ -1066,15 +1056,15 @@ public:
                     gpuWorkingBuffer.rows,
                     gpuWorkingBuffer.step,
                     gpu_alpha,
-                    false,  // isNegative
+                    false,
                     gpu_square_size,
                     gpu_frame_index,
                     gpu_frame_dir,
                     &d_filterList,
                     gpu_filtersChanged
                 );
+                gpu_filtersChanged = false;
                 
-                // Download RGBA directly - no conversion needed
                 gpuWorkingBuffer.download(gpuFilteredFrame);
                 
                 glActiveTexture(GL_TEXTURE0);
