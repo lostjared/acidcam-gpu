@@ -501,7 +501,47 @@ namespace ac_gpu {
         { 495, "EchoShift" },
         { 496, "FractalNoise" },
         { 497, "GradientRotate" },
-        { 498, "HarmonicShift" }
+        { 498, "HarmonicShift" },
+        { 499, "AcidWarp" },
+        { 500, "BlendDiagonal" },
+        { 501, "ChromaFlash" },
+        { 502, "CircleWave" },
+        { 503, "ColorCrush" },
+        { 504, "CrosshatchBlend" },
+        { 505, "CyberGlitch" },
+        { 506, "DarkPulse" },
+        { 507, "DiamondPatternX" },
+        { 508, "DigitalRain" },
+        { 509, "DisplaceX" },
+        { 510, "DriftBlend" },
+        { 511, "EdgePulse" },
+        { 512, "FlameEffect" },
+        { 513, "FlickerShift" },
+        { 514, "GhostLayer" },
+        { 515, "GlitchBlockX" },
+        { 516, "GlowPulse" },
+        { 517, "GridDistort" },
+        { 518, "HexPattern" },
+        { 519, "HueRotate" },
+        { 520, "InterweaveX" },
+        { 521, "JitterBlend" },
+        { 522, "KaleidoScope4" },
+        { 523, "LaserScan" },
+        { 524, "LightLeak" },
+        { 525, "MeltDown" },
+        { 526, "MirrorDiag" },
+        { 527, "NeonGlow" },
+        { 528, "NoiseBlendX" },
+        { 529, "PixelDrift" },
+        { 530, "PlasmaWave" },
+        { 531, "PrismSplit" },
+        { 532, "PulseRadial" },
+        { 533, "RainbowStrobe" },
+        { 534, "RefractionX" },
+        { 535, "ScanlineX" },
+        { 536, "ShatterEffect" },
+        { 537, "StaticNoise" },
+        { 538, "TunnelVision" }
     };
     struct FilterParams {
         float alpha;
@@ -5650,6 +5690,315 @@ namespace ac_gpu {
         data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] * (1.0f + harmonic2 * 0.2f));
         data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] * (1.0f - harmonic * 0.1f));
     }
+    __device__ void processAcidWarp(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dx = x - cx, dy = y - cy;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float warp = sinf(dist * 0.03f - params.frame_count * 0.1f) * 10.0f;
+        int src_x = (int)(x + warp * dx / (dist + 1.0f)) % width;
+        int src_y = (int)(y + warp * dy / (dist + 1.0f)) % height;
+        if (src_x < 0) src_x += width; if (src_y < 0) src_y += height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processBlendDiagonal(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int diag = (x + y + params.frame_count) % 32;
+        float blend = (diag < 16) ? diag / 16.0f : (32 - diag) / 16.0f;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * (0.5f + 0.5f * blend));
+    }
+    __device__ void processChromaFlash(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int flash = (params.frame_count / 4) % 3;
+        data[idx + flash] = (unsigned char)fminf(255.0f, data[idx + flash] * 1.5f);
+    }
+    __device__ void processCircleWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dist = sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        float wave = sinf(dist * 0.1f - params.frame_count * 0.1f);
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * (0.6f + 0.4f * wave));
+    }
+    __device__ void processColorCrush(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int crush = 3 + (params.frame_count / 20) % 5;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)((data[idx + j] / crush) * crush);
+    }
+    __device__ void processCrosshatchBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int hatch = ((x + params.frame_count) % 8 < 2) || ((y + params.frame_count) % 8 < 2);
+        if (hatch) for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.6f);
+    }
+    __device__ void processCyberGlitch(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed + params.frame_count);
+        if (r < 0.02f) {
+            int offset = (int)(r * 500) - 250;
+            int src_x = (x + offset + width) % width;
+            for (int j = 0; j < 3; ++j) data[idx + j] = data[y * step + src_x * 4 + j];
+        }
+    }
+    __device__ void processDarkPulse(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float pulse = 0.5f + 0.3f * sinf(params.frame_count * 0.08f);
+        int avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        if (avg < 128) for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * pulse);
+    }
+    __device__ void processDiamondPatternX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int dx = abs((x + params.frame_count) % 32 - 16);
+        int dy = abs((y + params.frame_count) % 32 - 16);
+        float diamond = 1.0f - (dx + dy) / 32.0f;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * (0.5f + 0.5f * diamond));
+    }
+    __device__ void processDigitalRain(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int rain = (y + params.frame_count * 3) % height;
+        if (rain < 20) {
+            data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] * 1.5f);
+            data[idx] = (unsigned char)(data[idx] * 0.7f);
+            data[idx + 2] = (unsigned char)(data[idx + 2] * 0.7f);
+        }
+    }
+    __device__ void processDisplaceX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int disp = (int)(sinf(y * 0.05f + params.frame_count * 0.05f) * 8);
+        int src_x = (x + disp + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + data[src_idx + j] * 0.5f);
+    }
+    __device__ void processDriftBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            int drift = (params.frame_count / 2) % 10;
+            int src_x = (x + drift) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.6f + prev[src_idx + j] * 0.4f);
+        }
+    }
+    __device__ void processEdgePulse(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+            int edge = 0;
+            for (int j = 0; j < 3; ++j) edge += abs(data[y * step + (x+1) * 4 + j] - data[y * step + (x-1) * 4 + j]);
+            float pulse = 0.5f + 0.5f * sinf(params.frame_count * 0.1f);
+            if (edge > 50) for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * (1.0f + pulse * 0.5f));
+        }
+    }
+    __device__ void processFlameEffect(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float flame = sinf(x * 0.1f + params.frame_count * 0.15f) * 0.5f + 0.5f;
+        float yf = 1.0f - (float)y / height;
+        data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] * (1.0f + flame * yf * 0.5f));
+        data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] * (1.0f + flame * yf * 0.3f));
+        data[idx] = (unsigned char)(data[idx] * (1.0f - flame * yf * 0.2f));
+    }
+    __device__ void processFlickerShift(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int flicker = (params.frame_count + x + y) % 5;
+        if (flicker == 0) for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(255 - data[idx + j]);
+    }
+    __device__ void processGhostLayer(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        for (int i = 0; i < min(4, params.numFrames); ++i) {
+            unsigned char* frame = allFrames[i];
+            if (frame) {
+                float ghost = 0.15f / (i + 1.0f);
+                for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * (1.0f - ghost) + frame[idx + j] * ghost);
+            }
+        }
+    }
+    __device__ void processGlitchBlockX(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int bx = x / 16, by = y / 16;
+        float r = gpu_rand(bx, by, params.seed + params.frame_count / 5);
+        if (r < 0.1f) {
+            int offset = (int)(r * 160) - 80;
+            int src_x = (x + offset + width) % width;
+            for (int j = 0; j < 3; ++j) data[idx + j] = data[y * step + src_x * 4 + j];
+        }
+    }
+    __device__ void processGlowPulse(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        float pulse = 0.5f + 0.5f * sinf(params.frame_count * 0.07f);
+        if (avg > 150) for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * (1.0f + pulse * 0.3f));
+    }
+    __device__ void processGridDistort(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int gx = (x / 8) % 2, gy = (y / 8) % 2;
+        int offset = ((gx + gy) % 2) * ((params.frame_count % 10) - 5);
+        int src_x = (x + offset + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processHexPattern(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int hx = (x + (y / 2) * 3 + params.frame_count) % 12;
+        int hy = y % 6;
+        float hex = (hx < 6 && hy < 3) ? 1.0f : 0.7f;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * hex);
+    }
+    __device__ void processHueRotate(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float angle = (params.frame_count % 360) * 0.0174533f;
+        float cs = cosf(angle), sn = sinf(angle);
+        float r = data[idx + 2], g = data[idx + 1], b = data[idx];
+        data[idx + 2] = (unsigned char)fminf(255.0f, fmaxf(0.0f, r * (0.213f + cs * 0.787f - sn * 0.213f) + g * (0.715f - cs * 0.715f - sn * 0.715f) + b * (0.072f - cs * 0.072f + sn * 0.928f)));
+        data[idx + 1] = (unsigned char)fminf(255.0f, fmaxf(0.0f, r * (0.213f - cs * 0.213f + sn * 0.143f) + g * (0.715f + cs * 0.285f + sn * 0.140f) + b * (0.072f - cs * 0.072f - sn * 0.283f)));
+        data[idx] = (unsigned char)fminf(255.0f, fmaxf(0.0f, r * (0.213f - cs * 0.213f - sn * 0.787f) + g * (0.715f - cs * 0.715f + sn * 0.715f) + b * (0.072f + cs * 0.928f + sn * 0.072f)));
+    }
+    __device__ void processInterweaveX(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            int weave = (x + params.frame_count) % 4;
+            if (weave < 2) for (int j = 0; j < 3; ++j) data[idx + j] = prev[idx + j];
+        }
+    }
+    __device__ void processJitterBlend(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed + params.frame_count);
+        int jitter = (int)(r * 6) - 3;
+        int src_x = (x + jitter + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.7f + data[src_idx + j] * 0.3f);
+    }
+    __device__ void processKaleidoScope4(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int mx = (x < width / 2) ? x : width - 1 - x;
+        int my = (y < height / 2) ? y : height - 1 - y;
+        int src_idx = my * step + mx * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + data[src_idx + j] * 0.5f);
+    }
+    __device__ void processLaserScan(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int scan = (params.frame_count * 4) % height;
+        if (abs(y - scan) < 3) {
+            data[idx + 2] = 255; data[idx + 1] = (unsigned char)(data[idx + 1] * 0.5f); data[idx] = (unsigned char)(data[idx] * 0.5f);
+        }
+    }
+    __device__ void processLightLeak(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float lx = (float)x / width, ly = (float)y / height;
+        float leak = sinf(lx * 3.14159f + params.frame_count * 0.05f) * sinf(ly * 3.14159f);
+        leak = fmaxf(0.0f, leak);
+        data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] + leak * 80);
+        data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] + leak * 60);
+    }
+    __device__ void processMeltDown(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int melt = (int)(sinf(x * 0.1f + params.frame_count * 0.05f) * 5);
+        int src_y = min(max(y + melt, 0), height - 1);
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.4f + data[src_idx + j] * 0.6f);
+    }
+    __device__ void processMirrorDiag(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if ((x + y) % 2 == params.frame_count % 2) {
+            int mx = width - 1 - x, my = height - 1 - y;
+            mx = min(max(mx, 0), width - 1); my = min(max(my, 0), height - 1);
+            int src_idx = my * step + mx * 4;
+            for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + data[src_idx + j] * 0.5f);
+        }
+    }
+    __device__ void processNeonGlow(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+            int edge = 0;
+            for (int j = 0; j < 3; ++j) {
+                edge += abs(data[(y+1) * step + x * 4 + j] - data[(y-1) * step + x * 4 + j]);
+                edge += abs(data[y * step + (x+1) * 4 + j] - data[y * step + (x-1) * 4 + j]);
+            }
+            if (edge > 100) {
+                int ch = params.frame_count % 3;
+                data[idx + ch] = 255;
+            }
+        }
+    }
+    __device__ void processNoiseBlendX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float noise = gpu_rand(x, y, params.seed + params.frame_count) * 0.3f;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * (0.85f + noise));
+    }
+    __device__ void processPixelDrift(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int drift = ((x / 4 + params.frame_count) % 8) - 4;
+        int src_x = (x + drift + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processPlasmaWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float plasma = sinf(x * 0.03f + params.frame_count * 0.05f) + sinf(y * 0.03f + params.frame_count * 0.04f);
+        plasma = (plasma + 2.0f) / 4.0f;
+        data[idx] = (unsigned char)(data[idx] * (0.5f + plasma * 0.5f));
+        data[idx + 1] = (unsigned char)(data[idx + 1] * (1.0f - plasma * 0.3f));
+        data[idx + 2] = (unsigned char)(data[idx + 2] * (0.5f + (1.0f - plasma) * 0.5f));
+    }
+    __device__ void processPrismSplit(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = 2 + (params.frame_count % 4);
+        int rx = (x + offset) % width, bx = (x - offset + width) % width;
+        data[idx + 2] = data[y * step + rx * 4 + 2];
+        data[idx] = data[y * step + bx * 4];
+    }
+    __device__ void processPulseRadial(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dist = sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        float pulse = sinf(dist * 0.05f - params.frame_count * 0.1f);
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * (0.7f + 0.3f * pulse));
+    }
+    __device__ void processRainbowStrobe(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int phase = (params.frame_count / 3) % 6;
+        float boost = 1.3f;
+        if (phase == 0 || phase == 5) data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] * boost);
+        if (phase == 1 || phase == 2) data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] * boost);
+        if (phase == 3 || phase == 4) data[idx] = (unsigned char)fminf(255.0f, data[idx] * boost);
+    }
+    __device__ void processRefractionX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float refract = sinf((x + y) * 0.05f + params.frame_count * 0.03f) * 4.0f;
+        int src_x = ((int)(x + refract) % width + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.6f + data[src_idx + j] * 0.4f);
+    }
+    __device__ void processScanlineX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int scanline = (y + params.frame_count) % 4;
+        if (scanline == 0) for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.7f);
+    }
+    __device__ void processShatterEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int bx = x / 32, by = y / 32;
+        float r = gpu_rand(bx, by, params.seed);
+        int ox = (int)((r - 0.5f) * (params.frame_count % 20));
+        int oy = (int)((r - 0.5f) * (params.frame_count % 20));
+        int src_x = (x + ox + width) % width, src_y = (y + oy + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processStaticNoise(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed + params.frame_count);
+        if (r < 0.05f) {
+            unsigned char noise = (unsigned char)(r * 5000) % 256;
+            for (int j = 0; j < 3; ++j) data[idx + j] = noise;
+        }
+    }
+    __device__ void processTunnelVision(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dist = sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        float max_dist = sqrtf(cx * cx + cy * cy);
+        float vignette = 1.0f - (dist / max_dist) * 0.7f;
+        vignette = fmaxf(0.3f, vignette + 0.2f * sinf(params.frame_count * 0.05f));
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * vignette);
+    }
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -6296,6 +6645,46 @@ namespace ac_gpu {
                 case 496: processFractalNoise(x, y, data, step, params); break;
                 case 497: processGradientRotate(x, y, data, width, height, step, params); break;
                 case 498: processHarmonicShift(x, y, data, step, params); break;
+                case 499: processAcidWarp(x, y, data, width, height, step, params); break;
+                case 500: processBlendDiagonal(x, y, data, width, height, step, params); break;
+                case 501: processChromaFlash(x, y, data, step, params); break;
+                case 502: processCircleWave(x, y, data, width, height, step, params); break;
+                case 503: processColorCrush(x, y, data, step, params); break;
+                case 504: processCrosshatchBlend(x, y, data, step, params); break;
+                case 505: processCyberGlitch(x, y, data, width, step, params); break;
+                case 506: processDarkPulse(x, y, data, step, params); break;
+                case 507: processDiamondPatternX(x, y, data, step, params); break;
+                case 508: processDigitalRain(x, y, data, height, step, params); break;
+                case 509: processDisplaceX(x, y, data, width, step, params); break;
+                case 510: processDriftBlend(x, y, data, allFrames, width, step, params); break;
+                case 511: processEdgePulse(x, y, data, width, height, step, params); break;
+                case 512: processFlameEffect(x, y, data, height, step, params); break;
+                case 513: processFlickerShift(x, y, data, step, params); break;
+                case 514: processGhostLayer(x, y, data, allFrames, step, params); break;
+                case 515: processGlitchBlockX(x, y, data, width, height, step, params); break;
+                case 516: processGlowPulse(x, y, data, step, params); break;
+                case 517: processGridDistort(x, y, data, width, height, step, params); break;
+                case 518: processHexPattern(x, y, data, step, params); break;
+                case 519: processHueRotate(x, y, data, step, params); break;
+                case 520: processInterweaveX(x, y, data, allFrames, step, params); break;
+                case 521: processJitterBlend(x, y, data, width, step, params); break;
+                case 522: processKaleidoScope4(x, y, data, width, height, step, params); break;
+                case 523: processLaserScan(x, y, data, width, height, step, params); break;
+                case 524: processLightLeak(x, y, data, width, height, step, params); break;
+                case 525: processMeltDown(x, y, data, height, step, params); break;
+                case 526: processMirrorDiag(x, y, data, width, height, step, params); break;
+                case 527: processNeonGlow(x, y, data, width, height, step, params); break;
+                case 528: processNoiseBlendX(x, y, data, step, params); break;
+                case 529: processPixelDrift(x, y, data, width, step, params); break;
+                case 530: processPlasmaWave(x, y, data, step, params); break;
+                case 531: processPrismSplit(x, y, data, width, step, params); break;
+                case 532: processPulseRadial(x, y, data, width, height, step, params); break;
+                case 533: processRainbowStrobe(x, y, data, step, params); break;
+                case 534: processRefractionX(x, y, data, width, step, params); break;
+                case 535: processScanlineX(x, y, data, step, params); break;
+                case 536: processShatterEffect(x, y, data, width, height, step, params); break;
+                case 537: processStaticNoise(x, y, data, step, params); break;
+                case 538: processTunnelVision(x, y, data, width, height, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);
