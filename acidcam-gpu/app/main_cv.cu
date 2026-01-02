@@ -248,7 +248,23 @@ int main(int argc, char** argv) {
         return -1;
     }
     
-    if (!cameraArg.empty()) { camera_mode = true; camera_index = std::stoi(cameraArg); }
+    if (!cameraArg.empty()) { 
+        camera_mode = true; 
+        if(isNumeric(cameraArg))
+            camera_index = std::stoi(cameraArg); 
+        else {
+            std::cerr << "ac: Camera argumnet must be a valid integer." << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+    if(!isNumeric(filtersArg)) {
+        std::cerr << "ac: Error requires filters argument." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    if(!isNumeric(bufferArg)) {
+        std::cerr << "ac: Error requires integer buffer argument." << std::endl;
+        exit(EXIT_FAILURE);
+    }
     std::vector<ac_gpu::Filter> vlist;
     std::string list = filtersArg;
     if (list.find(',') != std::string::npos) {
@@ -266,6 +282,12 @@ int main(int argc, char** argv) {
         vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
     }
     dynamic_buffer = std::stoi(bufferArg);
+
+    if(dynamic_buffer < 2 || dynamic_buffer > 32) {
+        std::cerr << "ac: Buffer must be valid from rang 3-32" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
     cv::VideoCapture cap;
     Writer writer;
     int frameCount = 0, screenshot_count = 1;
