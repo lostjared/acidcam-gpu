@@ -9,12 +9,12 @@ namespace ac_gpu {
         { 1, "MedianBlend" },
         { 2, "MedianBlend" },
         { 3, "SquareBlockResize" },
-        { 4, "SelfAlphaScaleRefined" },
+        { 4, "SelfScaleRefined" },
         { 5, "StrangeGlitch" },
         { 6, "MatrixOutline" },
         { 7, "AuraTrails" },
         { 8, "MirrorReverseColor" },
-        { 9, "ImageSquareShrink" },
+        { 9, "SquareShrink" },
         { 10, "MotionGhostTrails" },
         { 11, "StretchColMatrix8" },
         { 12, "StretchColMatrix16" },
@@ -46,7 +46,6 @@ namespace ac_gpu {
         { 38, "SobelNorm" },
         { 39, "SobelThreshold" },
         { 40, "LineInLineOut" },
-        { 40, "LineInLineOut" },
         { 41, "LineInLineOut4_Increase" },
         { 42, "LineInLineOut_ReverseIncrease" },
         { 43, "LineInLineOut_InvertedY" },
@@ -57,7 +56,34 @@ namespace ac_gpu {
         { 48, "SquareByRow" },
         { 49, "SquareByRowRev" },
         { 50, "SquareByRow2" },
-        { 51, "DivideByValue" }
+        { 51, "DivideByValue" },
+        { 52, "ColorCollectionSubtleStrobe" },
+        { 53, "CollectionRandom" },
+        { 54, "CollectionAlphaXor" },
+        { 55, "ColorCollection64X" },
+        { 56, "ColorCollectionSwitch" },
+        { 57, "ColorCollectionRGB_Index" },
+        { 58, "ColorCollectionGhostTrails" },
+        { 59, "ColorCollectionScale" },
+        { 60, "ColorCollectionReverseStrobe" },
+        { 61, "ColorCollectionXorPixel" },
+        { 62, "BlendWithSource25" },
+        { 63, "BlendWithSource50" },
+        { 64, "BlendWithSource75" },
+        { 65, "BlendWithSource100" },
+        { 66, "ColorCollectionXorOffsetFlash" },
+        { 67, "ColorCollectionMatrixGhost" },
+        { 68, "MildStrobe" },
+        { 69, "ReduceBy50" },
+        { 70, "ColorPositionAverageXor" },
+        { 71, "ColorPositionXor" },
+        { 72, "GrayStrobe" },
+        { 73, "ColorStrobeXor" },
+        { 74, "ColorGhost" },
+        { 75, "BlurredOutXor" },
+        { 76, "DizzyFilter" },
+        { 77, "Buzzed" },
+        { 78, "BuzzedDark" }
     };
 
     struct FilterParams {
@@ -358,12 +384,10 @@ namespace ac_gpu {
     __device__ void processLineInLineOut4_Increase(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int offset = get_osc_offset(params.frame_count, 250); 
-        //int src_x = (x + offset) % width;
         
         unsigned char* hist = allFrames[params.frame_count % params.numFrames];
         if (hist) {
             int h_idx = y * step + x * 4; 
-            //unsigned char* src_pixel_ptr = &data[y * step + src_x * 4];
             for(int j=0; j<3; ++j) {
                 data[idx + j] = (unsigned char)((0.5f * data[idx+j]) + (0.5f * hist[h_idx+j]));
             }
@@ -477,6 +501,452 @@ namespace ac_gpu {
         for(int j=0; j<3; ++j) {
             unsigned char avg = (unsigned char)(total[j] / 5);
             data[idx+j] = data[idx+j] ^ avg;
+        }
+    }
+
+    
+    __device__ void processColorCollectionSubtleStrobe(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int idx1 = 1 % params.numFrames;
+        int idx2 = 3 % params.numFrames;
+        int idx3 = 6 % params.numFrames;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        if (f1 && f2 && f3) {
+            
+            data[idx] = f1[idx];       
+            data[idx + 1] = f2[idx + 1]; 
+            data[idx + 2] = f3[idx + 2]; 
+        }
+    }
+
+    
+    __device__ void processCollectionRandom(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int frameIdx = (params.seed + x + y) % (params.numFrames > 1 ? params.numFrames - 1 : 1);
+        unsigned char* f = allFrames[frameIdx];
+        if (f) {
+            data[idx] = f[idx];
+            data[idx + 1] = f[idx + 1];
+            data[idx + 2] = f[idx + 2];
+        }
+    }
+
+    
+    __device__ void processCollectionAlphaXor(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int idx1 = 1 % params.numFrames;
+        int idx2 = 3 % params.numFrames;
+        int idx3 = (params.numFrames - 1) % params.numFrames;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        if (f1 && f2 && f3) {
+            data[idx] = data[idx] ^ f1[idx];
+            data[idx + 1] = data[idx + 1] ^ f2[idx + 1];
+            data[idx + 2] = data[idx + 2] ^ f3[idx + 2];
+        }
+    }
+
+    
+    __device__ void processColorCollection64X(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int midIdx = params.numFrames / 2;
+        int animIdx = params.start_index % params.numFrames;
+        unsigned char* f1 = allFrames[1 % params.numFrames];
+        unsigned char* f2 = allFrames[midIdx];
+        unsigned char* f3 = allFrames[animIdx];
+        if (f1 && f2 && f3) {
+            data[idx] = f1[idx];
+            data[idx + 1] = f2[idx + 1];
+            data[idx + 2] = f3[idx + 2];
+        }
+    }
+
+   
+    __device__ void processColorCollectionSwitch(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int switchIdx = params.frame_count % 3;
+        int fidx1 = 1 % params.numFrames;
+        int fidx2 = params.numFrames / 2;
+        int fidx3 = (params.numFrames - 1);
+        unsigned char* frames[3];
+        frames[0] = allFrames[fidx1];
+        frames[1] = allFrames[fidx2];
+        frames[2] = allFrames[fidx3];
+        if (frames[0] && frames[1] && frames[2]) {
+            switch (switchIdx) {
+                case 0:
+                    data[idx] = frames[0][idx];
+                    data[idx + 1] = frames[1][idx + 1];
+                    data[idx + 2] = frames[2][idx + 2];
+                    break;
+                case 1:
+                    data[idx] = frames[2][idx];
+                    data[idx + 1] = frames[0][idx + 1];
+                    data[idx + 2] = frames[1][idx + 2];
+                    break;
+                case 2:
+                    data[idx] = frames[1][idx];
+                    data[idx + 1] = frames[2][idx + 1];
+                    data[idx + 2] = frames[0][idx + 2];
+                    break;
+            }
+        }
+    }
+
+    __device__ void processColorCollectionRGB_Index(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int channelIdx = params.frame_count % 3;
+        int frameIdx = (channelIdx + 1) % params.numFrames;
+        unsigned char* f = allFrames[frameIdx];
+        if (f) {
+            data[idx + channelIdx] = f[idx + channelIdx];
+        }
+    }
+
+    __device__ void processColorCollectionGhostTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int idx1 = 1 % params.numFrames;
+        int idx2 = (params.numFrames / 2) % params.numFrames;
+        int idx3 = (params.numFrames - 1) % params.numFrames;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        if (f1 && f2 && f3) {
+            for (int j = 0; j < 3; ++j) {
+                float val = (f1[idx + j] * 0.33f) + (f2[idx + j] * 0.33f) + (f3[idx + j] * 0.33f);
+                data[idx + j] = (unsigned char)fminf(255.0f, val);
+            }
+        }
+    }
+
+
+    __device__ void processColorCollectionScale(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int idx1 = 1 % params.numFrames;
+        int idx2 = (params.numFrames / 2) % params.numFrames;
+        int idx3 = (params.numFrames - 1) % params.numFrames;
+        int channelIdx = params.frame_count % 3;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        if (f1 && f2 && f3) {
+            data[idx] = f1[idx];
+            data[idx + 1] = f2[idx + 1];
+            data[idx + 2] = f3[idx + 2];
+            data[idx + channelIdx] = (unsigned char)fminf(255.0f, data[idx + channelIdx] * params.alpha);
+        }
+    }
+
+    __device__ void processColorCollectionReverseStrobe(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int idx1 = 1 % params.numFrames;
+        int idx2 = 4 % params.numFrames;
+        int idx3 = (params.numFrames - 1) % params.numFrames;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        bool reversed = (params.frame_count % 2) == 0;
+        if (f1 && f2 && f3) {
+            if (reversed) {
+                data[idx] = f3[idx];
+                data[idx + 1] = f2[idx + 1];
+                data[idx + 2] = f1[idx + 2];
+            } else {
+                data[idx] = f1[idx];
+                data[idx + 1] = f2[idx + 1];
+                data[idx + 2] = f3[idx + 2];
+            }
+        }
+    }
+
+    __device__ void processColorCollectionXorPixel(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int idx1 = 1 % params.numFrames;
+        int idx2 = 4 % params.numFrames;
+        int idx3 = (params.numFrames - 1) % params.numFrames;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        unsigned char* frames[3] = {f1, f2, f3};
+        bool reversed = (params.frame_count % 2) == 0;
+        if (f1 && f2 && f3) {
+            for (int j = 0; j < 3; ++j) {
+                unsigned char* f = reversed ? frames[2 - j] : frames[j];
+                unsigned char scaled_pix = (unsigned char)fminf(255.0f, data[idx + j] * params.alpha);
+                unsigned char scaled_val = (unsigned char)fminf(255.0f, f[idx + j] * params.alpha);
+                data[idx + j] = scaled_pix ^ scaled_val;
+            }
+        }
+    }
+
+    __device__ void processBlendWithSource25(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* orig = allFrames[0];
+        if (orig) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * 0.75f + orig[idx + j] * 0.25f);
+            }
+        }
+    }
+
+    __device__ void processBlendWithSource50(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* orig = allFrames[0];
+        if (orig) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + orig[idx + j] * 0.5f);
+            }
+        }
+    }
+
+    __device__ void processBlendWithSource75(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* orig = allFrames[0];
+        if (orig) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * 0.25f + orig[idx + j] * 0.75f);
+            }
+        }
+    }
+
+    __device__ void processBlendWithSource100(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* orig = allFrames[0];
+        if (orig) {
+            float a = fminf(1.0f, params.alpha);
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * (1.0f - a) + orig[idx + j] * a);
+            }
+        }
+    }
+
+    __device__ void processColorCollectionXorOffsetFlash(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offsetVal = (params.frame_count / 30) % 3;
+        int idx1 = 1 % params.numFrames;
+        int idx2 = (params.numFrames / 2) % params.numFrames;
+        int idx3 = (params.numFrames - 1) % params.numFrames;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        unsigned char* frames[3] = {f1, f2, f3};
+        if (f1 && f2 && f3) {
+            for (int j = 0; j < 3; ++j) {
+                if (offsetVal == j) {
+                    data[idx + j] = data[idx + j] ^ frames[j][idx + offsetVal];
+                } else {
+                    data[idx + j] = frames[j][idx + j];
+                }
+            }
+        }
+    }
+
+    __device__ void processColorCollectionMatrixGhost(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int idx1 = 0;
+        int idx2 = params.numFrames / 2;
+        int idx3 = params.numFrames - 1;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        if (f1 && f2 && f3) {
+            for (int j = 0; j < 3; ++j) {
+                float val = (f1[idx + j] * 0.33f) + (f2[idx + j] * 0.33f) + (f3[idx + j] * 0.33f);
+                data[idx + j] = (unsigned char)fminf(255.0f, val);
+            }
+        }
+    }
+
+    __device__ void processMildStrobe(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int modeIdx = params.frame_count % 3;
+        int fidx0 = 0;
+        int fidx1 = 3 % params.numFrames;
+        int fidx2 = 6 % params.numFrames;
+        unsigned char* f0 = allFrames[fidx0];
+        unsigned char* f1 = allFrames[fidx1];
+        unsigned char* f2 = allFrames[fidx2];
+        if (f0 && f1 && f2) {
+            int values[3];
+            switch (modeIdx) {
+                case 0: values[0] = 0; values[1] = 1; values[2] = 2; break;
+                case 1: values[0] = 1; values[1] = 2; values[2] = 0; break;
+                case 2: values[0] = 0; values[1] = 2; values[2] = 1; break;
+            }
+            unsigned char* frames[3] = {f0, f1, f2};
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = frames[j][idx + values[j]];
+            }
+        }
+    }
+
+    __device__ void processReduceBy50(int x, int y, unsigned char* data, size_t step) {
+        int idx = y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * 0.5f);
+        }
+    }
+
+    __device__ void processColorPositionAverageXor(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int values[3];
+        values[0] = (params.sumB) % 256;
+        values[1] = (params.sumG) % 256;
+        values[2] = (params.sumR) % 256;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = data[idx + j] ^ values[j];
+        }
+    }
+
+    __device__ void processColorPositionXor(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* hist = allFrames[(params.numFrames - 1) % params.numFrames];
+        int values[3];
+        values[0] = (params.sumB) % 256;
+        values[1] = (params.sumG) % 256;
+        values[2] = (params.sumR) % 256;
+        if (hist) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (data[idx + j] ^ hist[idx + j]) ^ values[j];
+            }
+        }
+    }
+
+    __device__ void processGrayStrobe(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if ((params.frame_count % 2) == 0) {
+            float gray = 0.299f * data[idx + 2] + 0.587f * data[idx + 1] + 0.114f * data[idx];
+            unsigned char g = (unsigned char)fminf(255.0f, gray);
+            data[idx] = g;
+            data[idx + 1] = g;
+            data[idx + 2] = g;
+        }
+    }
+
+    __device__ void processColorStrobeXor(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char randVal[3] = {
+            (unsigned char)(params.sumB % 256),
+            (unsigned char)(params.sumG % 256),
+            (unsigned char)(params.sumR % 256)
+        };
+        float sval[3] = {0, 0, 0};
+        int count = (params.numFrames > 8) ? 8 : params.numFrames;
+        for (int q = 0; q < count; ++q) {
+            unsigned char* f = allFrames[q];
+            if (f) {
+                for (int j = 0; j < 3; ++j) {
+                    sval[j] += f[idx + j];
+                }
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            int avg = (int)(sval[j] / count);
+            data[idx + j] = data[idx + j] ^ avg ^ randVal[j];
+        }
+    }
+
+    __device__ void processColorGhost(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int animIdx = params.start_index % params.numFrames;
+        int midIdx = params.numFrames / 2;
+        int endIdx = params.numFrames - 2;
+        if (endIdx < 0) endIdx = 0;
+        unsigned char* f1 = allFrames[animIdx];
+        unsigned char* f2 = allFrames[midIdx];
+        unsigned char* f3 = allFrames[endIdx];
+        if (f1 && f2 && f3) {
+            data[idx] = f1[idx];
+            data[idx + 1] = f2[idx + 1];
+            data[idx + 2] = f3[idx + 2];
+        }
+    }
+
+    __device__ void processBlurredOutXor(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int idx1 = 1 % params.numFrames;
+        int idx2 = params.numFrames / 2;
+        int idx3 = params.numFrames - 1;
+        unsigned char* f1 = allFrames[idx1];
+        unsigned char* f2 = allFrames[idx2];
+        unsigned char* f3 = allFrames[idx3];
+        if (f1 && f2 && f3) {
+            for (int j = 0; j < 3; ++j) {
+                unsigned char avg = (unsigned char)((f1[idx + j] + f2[idx + j] + f3[idx + j]) / 3);
+                data[idx + j] = data[idx + j] ^ avg;
+            }
+        }
+    }
+
+    __device__ void processBoxFilter(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        if (x <= 1 || x >= width - 2 || y <= 1 || y >= height - 2) return;
+        int idx = y * step + x * 4;
+        float sum[3] = {0, 0, 0};
+        int count = 0;
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+                int nidx = (y + dy) * step + (x + dx) * 4;
+                for (int j = 0; j < 3; ++j) {
+                    sum[j] += data[nidx + j];
+                }
+                count++;
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(sum[j] / count);
+        }
+    }
+
+    __device__ void processDizzyFilter(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* f1 = allFrames[1 % params.numFrames];
+        unsigned char* f2 = allFrames[params.numFrames / 2];
+        unsigned char* f3 = allFrames[params.numFrames - 1];
+        if (f1 && f2 && f3) {
+            for (int j = 0; j < 3; ++j) {
+                float val = (f1[idx + j] * 0.33f) + (f2[idx + j] * 0.33f) + (f3[idx + j] * 0.33f);
+                data[idx + j] = (unsigned char)val;
+            }
+        }
+    }
+
+    __device__ void processBuzzed(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int count = (params.numFrames > 8) ? 8 : params.numFrames;
+        float sep_value = 1.0f / count;
+        float value[3] = {0, 0, 0};
+        for (int q = 0; q < count; ++q) {
+            unsigned char* f = allFrames[q];
+            if (f) {
+                for (int j = 0; j < 3; ++j) {
+                    value[j] += f[idx + j] * sep_value;
+                }
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)value[j];
+        }
+    }
+
+    __device__ void processBuzzedDark(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int count = (params.numFrames > 16) ? 16 : params.numFrames;
+        float sep_value = 1.0f / (count > 1 ? count - 1 : 1);
+        float value[3] = {0, 0, 0};
+        for (int q = 0; q < count; ++q) {
+            unsigned char* f = allFrames[q];
+            if (f) {
+                for (int j = 0; j < 3; ++j) {
+                    value[j] += f[idx + j] * sep_value;
+                }
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            float v = value[j] * 0.7f; 
+            data[idx + j] = (unsigned char)fminf(255.0f, v);
         }
     }
 
@@ -681,6 +1151,34 @@ namespace ac_gpu {
                 case 49: processSquareByRow(x, y, data, allFrames, width, height, step, params, true, false); break; // Rev
                 case 50: processSquareByRow(x, y, data, allFrames, width, height, step, params, false, true); break; // SquareByRow2 (Blend)
                 case 51: processDivideByValue(x, y, data, allFrames, step, params); break;
+                // New filters (52-79)
+                case 52: processColorCollectionSubtleStrobe(x, y, data, allFrames, step, params); break;
+                case 53: processCollectionRandom(x, y, data, allFrames, step, params); break;
+                case 54: processCollectionAlphaXor(x, y, data, allFrames, step, params); break;
+                case 55: processColorCollection64X(x, y, data, allFrames, step, params); break;
+                case 56: processColorCollectionSwitch(x, y, data, allFrames, step, params); break;
+                case 57: processColorCollectionRGB_Index(x, y, data, allFrames, step, params); break;
+                case 58: processColorCollectionGhostTrails(x, y, data, allFrames, step, params); break;
+                case 59: processColorCollectionScale(x, y, data, allFrames, step, params); break;
+                case 60: processColorCollectionReverseStrobe(x, y, data, allFrames, step, params); break;
+                case 61: processColorCollectionXorPixel(x, y, data, allFrames, step, params); break;
+                case 62: processBlendWithSource25(x, y, data, allFrames, step, params); break;
+                case 63: processBlendWithSource50(x, y, data, allFrames, step, params); break;
+                case 64: processBlendWithSource75(x, y, data, allFrames, step, params); break;
+                case 65: processBlendWithSource100(x, y, data, allFrames, step, params); break;
+                case 66: processColorCollectionXorOffsetFlash(x, y, data, allFrames, step, params); break;
+                case 67: processColorCollectionMatrixGhost(x, y, data, allFrames, step, params); break;
+                case 68: processMildStrobe(x, y, data, allFrames, step, params); break;
+                case 69: processReduceBy50(x, y, data, step); break;
+                case 70: processColorPositionAverageXor(x, y, data, step, params); break;
+                case 71: processColorPositionXor(x, y, data, allFrames, step, params); break;
+                case 72: processGrayStrobe(x, y, data, step, params); break;
+                case 73: processColorStrobeXor(x, y, data, allFrames, step, params); break;
+                case 74: processColorGhost(x, y, data, allFrames, step, params); break;
+                case 75: processBlurredOutXor(x, y, data, allFrames, step, params); break;
+                case 76: processDizzyFilter(x, y, data, allFrames, step, params); break;
+                case 77: processBuzzed(x, y, data, allFrames, step, params); break;
+                case 78: processBuzzedDark(x, y, data, allFrames, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);

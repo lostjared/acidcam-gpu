@@ -20,7 +20,7 @@
 
 namespace ac_gpu {
 
-    inline const int AC_FILTER_MAX = 52;
+    inline const int AC_FILTER_MAX = 79;
     struct Filter {
         int index;
         std::string name;
