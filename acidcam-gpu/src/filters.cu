@@ -541,7 +541,47 @@ namespace ac_gpu {
         { 535, "ScanlineX" },
         { 536, "ShatterEffect" },
         { 537, "StaticNoise" },
-        { 538, "TunnelVision" }
+        { 538, "TunnelVision" },
+        { 539, "AberrationPulse" },
+        { 540, "AquaWave" },
+        { 541, "BinaryFlash" },
+        { 542, "BloomGlow" },
+        { 543, "CellularNoise" },
+        { 544, "ChromaShift2" },
+        { 545, "ColorBands" },
+        { 546, "ColorVortex" },
+        { 547, "CrystalMosaic" },
+        { 548, "CubicDistort" },
+        { 549, "DepthFade" },
+        { 550, "DiscoFlash" },
+        { 551, "DitherBlend" },
+        { 552, "DoubleVision" },
+        { 553, "DreamHaze" },
+        { 554, "ElectricStorm" },
+        { 555, "EmbossShift" },
+        { 556, "FiberOptic" },
+        { 557, "FilmGrain" },
+        { 558, "FireWorks" },
+        { 559, "FluidMotion" },
+        { 560, "FogRoll" },
+        { 561, "GlassRefract" },
+        { 562, "GlowTrails" },
+        { 563, "GridPulse" },
+        { 564, "HalftoneBlend" },
+        { 565, "HeatDistort" },
+        { 566, "HoloGlitch" },
+        { 567, "InfraredView" },
+        { 568, "LavaLamp" },
+        { 569, "LensFlare" },
+        { 570, "LightningBolt" },
+        { 571, "LiquidMetal" },
+        { 572, "MatrixCode" },
+        { 573, "MirrorKaleid" },
+        { 574, "NightVision" },
+        { 575, "OilSlick" },
+        { 576, "ParticleField" },
+        { 577, "PinwheelSpin" },
+        { 578, "PixelStorm" }
     };
     struct FilterParams {
         float alpha;
@@ -5999,6 +6039,369 @@ namespace ac_gpu {
         vignette = fmaxf(0.3f, vignette + 0.2f * sinf(params.frame_count * 0.05f));
         for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * vignette);
     }
+
+    // ===== NEW FILTERS 539-578 =====
+    __device__ void processAberrationPulse(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = (int)(5.0f * sinf(params.frame_count * 0.1f));
+        int rx = (x + offset + width) % width;
+        int bx = (x - offset + width) % width;
+        data[idx] = data[y * step + bx * 4];
+        data[idx + 2] = data[y * step + rx * 4 + 2];
+    }
+    __device__ void processAquaWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float wave = sinf(x * 0.05f + params.frame_count * 0.08f) * 10.0f;
+        int src_y = ((int)(y + wave) + height) % height;
+        int src_idx = src_y * step + x * 4;
+        data[idx] = (unsigned char)fminf(255.0f, data[src_idx] * 0.8f);
+        data[idx + 1] = (unsigned char)fminf(255.0f, data[src_idx + 1] * 1.2f);
+        data[idx + 2] = (unsigned char)fminf(255.0f, data[src_idx + 2] * 1.1f);
+    }
+    __device__ void processBinaryFlash(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        int threshold = 128 + (int)(64.0f * sinf(params.frame_count * 0.15f));
+        unsigned char val = (gray > threshold) ? 255 : 0;
+        for (int j = 0; j < 3; ++j) data[idx + j] = val;
+    }
+    __device__ void processBloomGlow(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float bloom = 1.0f + 0.3f * sinf(params.frame_count * 0.05f);
+        for (int j = 0; j < 3; ++j) {
+            float val = data[idx + j] * bloom;
+            if (data[idx + j] > 200) val += 30;
+            data[idx + j] = (unsigned char)fminf(255.0f, val);
+        }
+    }
+    __device__ void processCellularNoise(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = (x / 16) * 16 + 8, cy = (y / 16) * 16 + 8;
+        float dist = sqrtf((float)((x - cx) * (x - cx) + (y - cy) * (y - cy)));
+        float factor = fmaxf(0.5f, 1.0f - dist / 16.0f);
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * factor);
+    }
+    __device__ void processChromaShift2(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = 3 + (params.frame_count % 5);
+        int r_idx = y * step + ((x + shift) % width) * 4;
+        int b_idx = y * step + ((x - shift + width) % width) * 4;
+        data[idx + 2] = data[r_idx + 2];
+        data[idx] = data[b_idx];
+    }
+    __device__ void processColorBands(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int band = (y + params.frame_count) % 60;
+        if (band < 20) data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] * 1.5f);
+        else if (band < 40) data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] * 1.5f);
+        else data[idx] = (unsigned char)fminf(255.0f, data[idx] * 1.5f);
+    }
+    __device__ void processColorVortex(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dx = x - cx, dy = y - cy;
+        float angle = atan2f(dy, dx) + params.frame_count * 0.02f;
+        float dist = sqrtf(dx * dx + dy * dy);
+        int hue_shift = (int)(angle * 40.0f + dist * 0.1f) % 256;
+        data[idx] = (data[idx] + hue_shift) % 256;
+        data[idx + 1] = (data[idx + 1] + hue_shift / 2) % 256;
+    }
+    __device__ void processCrystalMosaic(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int size = 8 + (params.frame_count % 8);
+        int bx = (x / size) * size + size / 2;
+        int by = (y / size) * size + size / 2;
+        bx = bx < width ? bx : width - 1;
+        by = by < height ? by : height - 1;
+        int src_idx = by * step + bx * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processCubicDistort(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float nx = (x - width / 2.0f) / (width / 2.0f);
+        float ny = (y - height / 2.0f) / (height / 2.0f);
+        float distort = 0.1f * sinf(params.frame_count * 0.05f);
+        nx = nx + distort * nx * nx * nx;
+        ny = ny + distort * ny * ny * ny;
+        int src_x = (int)((nx + 1.0f) * width / 2.0f) % width;
+        int src_y = (int)((ny + 1.0f) * height / 2.0f) % height;
+        src_x = (src_x + width) % width;
+        src_y = (src_y + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processDepthFade(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float depth = (float)y / height;
+        depth = depth + 0.2f * sinf(params.frame_count * 0.03f);
+        depth = fmaxf(0.3f, fminf(1.0f, depth));
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * depth);
+    }
+    __device__ void processDiscoFlash(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int phase = params.frame_count % 12;
+        if (phase < 4) data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] + 100);
+        else if (phase < 8) data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] + 100);
+        else data[idx] = (unsigned char)fminf(255.0f, data[idx] + 100);
+    }
+    __device__ void processDitherBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int pattern = ((x + params.frame_count) % 2) ^ ((y + params.frame_count) % 2);
+        float factor = pattern ? 1.2f : 0.8f;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
+    }
+    __device__ void processDoubleVision(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = 10 + (int)(5.0f * sinf(params.frame_count * 0.1f));
+        int x2 = (x + offset) % width;
+        int idx2 = y * step + x2 * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)((data[idx + j] + data[idx2 + j]) / 2);
+    }
+    __device__ void processDreamHaze(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float haze = 0.7f + 0.3f * sinf(params.frame_count * 0.02f + x * 0.01f + y * 0.01f);
+        for (int j = 0; j < 3; ++j) {
+            float val = data[idx + j] * haze + 50 * (1.0f - haze);
+            data[idx + j] = (unsigned char)fminf(255.0f, val);
+        }
+    }
+    __device__ void processElectricStorm(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed + params.frame_count);
+        if (r < 0.02f) {
+            data[idx] = 200;
+            data[idx + 1] = 200;
+            data[idx + 2] = 255;
+        }
+    }
+    __device__ void processEmbossShift(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (x > 0 && y > 0 && x < width - 1 && y < height - 1) {
+            int shift = 1 + (params.frame_count % 3);
+            for (int j = 0; j < 3; ++j) {
+                int diff = data[idx + j] - data[(y - shift) * step + (x - shift) * 4 + j];
+                data[idx + j] = (unsigned char)(128 + diff);
+            }
+        }
+    }
+    __device__ void processFiberOptic(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float angle = atan2f(y - cy, x - cx);
+        int fiber = (int)((angle + 3.14159f) * 20) % 3;
+        data[idx + fiber] = (unsigned char)fminf(255.0f, data[idx + fiber] * 1.5f);
+    }
+    __device__ void processFilmGrain(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float grain = (gpu_rand(x, y, params.seed + params.frame_count) - 0.5f) * 30.0f;
+        for (int j = 0; j < 3; ++j) {
+            float val = data[idx + j] + grain;
+            data[idx + j] = (unsigned char)fmaxf(0.0f, fminf(255.0f, val));
+        }
+    }
+    __device__ void processFireWorks(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = (params.seed % (width / 2)) + width / 4;
+        int cy = (params.seed % (height / 2)) + height / 4;
+        float dist = sqrtf((float)((x - cx) * (x - cx) + (y - cy) * (y - cy)));
+        float ring = (float)(params.frame_count % 60);
+        if (fabsf(dist - ring) < 3.0f) {
+            data[idx + 2] = 255;
+            data[idx + 1] = (unsigned char)(200 - ring * 3);
+            data[idx] = 0;
+        }
+    }
+    __device__ void processFluidMotion(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float t = params.frame_count * 0.05f;
+        float dx = sinf(y * 0.02f + t) * 5.0f;
+        float dy = cosf(x * 0.02f + t) * 5.0f;
+        int src_x = ((int)(x + dx) + width) % width;
+        int src_y = ((int)(y + dy) + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processFogRoll(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float fog_line = height * (0.5f + 0.3f * sinf(params.frame_count * 0.02f));
+        float fog = 0.0f;
+        if (y > fog_line) fog = fminf(0.7f, (y - fog_line) / (height * 0.3f));
+        for (int j = 0; j < 3; ++j) {
+            float val = data[idx + j] * (1.0f - fog) + 200 * fog;
+            data[idx + j] = (unsigned char)val;
+        }
+    }
+    __device__ void processGlassRefract(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float refract = sinf(x * 0.1f + params.frame_count * 0.1f) * cosf(y * 0.1f) * 8.0f;
+        int src_x = ((int)(x + refract) + width) % width;
+        int src_y = ((int)(y + refract * 0.5f) + height) % height;
+        int src_idx = src_y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processGlowTrails(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float glow = 1.0f + 0.5f * sinf(params.frame_count * 0.1f + x * 0.02f);
+        for (int j = 0; j < 3; ++j) {
+            if (data[idx + j] > 150) {
+                data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * glow);
+            }
+        }
+    }
+    __device__ void processGridPulse(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int grid_x = x % 32, grid_y = y % 32;
+        float pulse = 0.5f + 0.5f * sinf(params.frame_count * 0.1f);
+        if (grid_x < 2 || grid_y < 2) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * pulse + 128 * (1.0f - pulse));
+        }
+    }
+    __device__ void processHalftoneBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        int dot_size = 4 + (params.frame_count % 4);
+        int cx = (x / dot_size) * dot_size + dot_size / 2;
+        int cy = (y / dot_size) * dot_size + dot_size / 2;
+        float dist = sqrtf((float)((x - cx) * (x - cx) + (y - cy) * (y - cy)));
+        float threshold = (gray / 255.0f) * dot_size;
+        unsigned char val = (dist < threshold) ? 255 : 0;
+        for (int j = 0; j < 3; ++j) data[idx + j] = (data[idx + j] + val) / 2;
+    }
+    __device__ void processHeatDistort(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float heat = sinf(y * 0.1f + params.frame_count * 0.2f) * (1.0f - (float)y / height) * 10.0f;
+        int src_x = ((int)(x + heat) + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processHoloGlitch(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int scanline = (y + params.frame_count * 2) % 100;
+        if (scanline < 5) {
+            data[idx] = (data[idx] + 50) % 256;
+            data[idx + 1] = (data[idx + 1] + 100) % 256;
+            data[idx + 2] = (data[idx + 2] + 150) % 256;
+        }
+    }
+    __device__ void processInfraredView(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int intensity = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        float pulse = 0.8f + 0.2f * sinf(params.frame_count * 0.05f);
+        if (intensity > 180) { data[idx] = 255; data[idx + 1] = 255; data[idx + 2] = 200; }
+        else if (intensity > 140) { data[idx] = 0; data[idx + 1] = (unsigned char)(255 * pulse); data[idx + 2] = 255; }
+        else if (intensity > 100) { data[idx] = 0; data[idx + 1] = 100; data[idx + 2] = (unsigned char)(200 * pulse); }
+        else { data[idx] = (unsigned char)(50 * pulse); data[idx + 1] = 0; data[idx + 2] = 100; }
+    }
+    __device__ void processLavaLamp(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float t = params.frame_count * 0.02f;
+        float blob1 = sinf(x * 0.02f + t) * cosf(y * 0.02f + t * 0.7f);
+        float blob2 = cosf(x * 0.03f - t * 0.5f) * sinf(y * 0.03f + t);
+        float blend = (blob1 + blob2 + 2.0f) / 4.0f;
+        data[idx + 2] = (unsigned char)(data[idx + 2] * blend + 200 * (1.0f - blend));
+        data[idx + 1] = (unsigned char)(data[idx + 1] * (1.0f - blend) + 100 * blend);
+    }
+    __device__ void processLensFlare(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int flare_x = width / 2 + (int)(100.0f * sinf(params.frame_count * 0.03f));
+        int flare_y = height / 3;
+        float dist = sqrtf((float)((x - flare_x) * (x - flare_x) + (y - flare_y) * (y - flare_y)));
+        if (dist < 50) {
+            float intensity = 1.0f - dist / 50.0f;
+            for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] + 200 * intensity);
+        }
+    }
+    __device__ void processLightningBolt(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (params.frame_count % 15 < 2) {
+            int bolt_x = width / 2 + (params.seed % 100) - 50;
+            bolt_x += (int)(gpu_rand(y, params.seed, params.frame_count) * 30 - 15);
+            if (abs(x - bolt_x) < 3) {
+                data[idx] = 200;
+                data[idx + 1] = 200;
+                data[idx + 2] = 255;
+            }
+        }
+    }
+    __device__ void processLiquidMetal(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        float shine = 0.5f + 0.5f * sinf(gray * 0.1f + params.frame_count * 0.1f);
+        unsigned char metal = (unsigned char)(gray * shine + 128 * (1.0f - shine));
+        data[idx] = metal;
+        data[idx + 1] = metal;
+        data[idx + 2] = (unsigned char)fminf(255.0f, metal * 1.1f);
+    }
+    __device__ void processMatrixCode(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int col = x / 8;
+        int drop = ((params.frame_count * 3 + col * 17) % (height + 50)) - 25;
+        if (y > drop && y < drop + 25) {
+            float intensity = 1.0f - (float)(y - drop) / 25.0f;
+            data[idx] = 0;
+            data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] + 200 * intensity);
+            data[idx + 2] = 0;
+        }
+    }
+    __device__ void processMirrorKaleid(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int mx = (x < width / 2) ? x : width - 1 - x;
+        int my = (y < height / 2) ? y : height - 1 - y;
+        mx = (mx + params.frame_count) % (width / 2);
+        int src_idx = my * step + mx * 4;
+        for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+    }
+    __device__ void processNightVision(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int gray = (data[idx] * 30 + data[idx + 1] * 59 + data[idx + 2] * 11) / 100;
+        float noise = (gpu_rand(x, y, params.seed + params.frame_count) - 0.5f) * 20.0f;
+        gray = (int)fmaxf(0.0f, fminf(255.0f, gray + noise));
+        data[idx] = 0;
+        data[idx + 1] = (unsigned char)(gray);
+        data[idx + 2] = 0;
+    }
+    __device__ void processOilSlick(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float phase = x * 0.05f + y * 0.03f + params.frame_count * 0.1f;
+        float r_shift = sinf(phase) * 50.0f;
+        float g_shift = sinf(phase + 2.094f) * 50.0f;
+        float b_shift = sinf(phase + 4.189f) * 50.0f;
+        data[idx] = (unsigned char)fmaxf(0.0f, fminf(255.0f, data[idx] + b_shift));
+        data[idx + 1] = (unsigned char)fmaxf(0.0f, fminf(255.0f, data[idx + 1] + g_shift));
+        data[idx + 2] = (unsigned char)fmaxf(0.0f, fminf(255.0f, data[idx + 2] + r_shift));
+    }
+    __device__ void processParticleField(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x / 4, y / 4, params.seed);
+        if (r < 0.1f) {
+            int py = (y + params.frame_count * 2) % 4;
+            if (py == 0) {
+                for (int j = 0; j < 3; ++j) data[idx + j] = 255;
+            }
+        }
+    }
+    __device__ void processPinwheelSpin(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float angle = atan2f(y - cy, x - cx) + params.frame_count * 0.05f;
+        int sector = (int)((angle + 3.14159f) / 0.785f) % 8;
+        if (sector % 2 == 0) {
+            for (int j = 0; j < 3; ++j) data[idx + j] = (unsigned char)(data[idx + j] * 0.6f);
+        }
+    }
+    __device__ void processPixelStorm(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x, y, params.seed + params.frame_count);
+        if (r < 0.03f) {
+            int ox = (int)((r * 1000) - 500) % 20;
+            int oy = (int)((r * 500) - 250) % 20;
+            int src_x = (x + ox + width) % width;
+            int src_y = (y + oy + height) % height;
+            int src_idx = src_y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) data[idx + j] = data[src_idx + j];
+        }
+    }
+
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -6685,6 +7088,46 @@ namespace ac_gpu {
                 case 536: processShatterEffect(x, y, data, width, height, step, params); break;
                 case 537: processStaticNoise(x, y, data, step, params); break;
                 case 538: processTunnelVision(x, y, data, width, height, step, params); break;
+                case 539: processAberrationPulse(x, y, data, width, step, params); break;
+                case 540: processAquaWave(x, y, data, width, height, step, params); break;
+                case 541: processBinaryFlash(x, y, data, step, params); break;
+                case 542: processBloomGlow(x, y, data, step, params); break;
+                case 543: processCellularNoise(x, y, data, step, params); break;
+                case 544: processChromaShift2(x, y, data, width, step, params); break;
+                case 545: processColorBands(x, y, data, step, params); break;
+                case 546: processColorVortex(x, y, data, width, height, step, params); break;
+                case 547: processCrystalMosaic(x, y, data, width, height, step, params); break;
+                case 548: processCubicDistort(x, y, data, width, height, step, params); break;
+                case 549: processDepthFade(x, y, data, height, step, params); break;
+                case 550: processDiscoFlash(x, y, data, step, params); break;
+                case 551: processDitherBlend(x, y, data, step, params); break;
+                case 552: processDoubleVision(x, y, data, width, step, params); break;
+                case 553: processDreamHaze(x, y, data, step, params); break;
+                case 554: processElectricStorm(x, y, data, step, params); break;
+                case 555: processEmbossShift(x, y, data, width, height, step, params); break;
+                case 556: processFiberOptic(x, y, data, width, height, step, params); break;
+                case 557: processFilmGrain(x, y, data, step, params); break;
+                case 558: processFireWorks(x, y, data, width, height, step, params); break;
+                case 559: processFluidMotion(x, y, data, width, height, step, params); break;
+                case 560: processFogRoll(x, y, data, height, step, params); break;
+                case 561: processGlassRefract(x, y, data, width, height, step, params); break;
+                case 562: processGlowTrails(x, y, data, step, params); break;
+                case 563: processGridPulse(x, y, data, step, params); break;
+                case 564: processHalftoneBlend(x, y, data, step, params); break;
+                case 565: processHeatDistort(x, y, data, width, height, step, params); break;
+                case 566: processHoloGlitch(x, y, data, step, params); break;
+                case 567: processInfraredView(x, y, data, step, params); break;
+                case 568: processLavaLamp(x, y, data, width, height, step, params); break;
+                case 569: processLensFlare(x, y, data, width, height, step, params); break;
+                case 570: processLightningBolt(x, y, data, width, height, step, params); break;
+                case 571: processLiquidMetal(x, y, data, step, params); break;
+                case 572: processMatrixCode(x, y, data, height, step, params); break;
+                case 573: processMirrorKaleid(x, y, data, width, height, step, params); break;
+                case 574: processNightVision(x, y, data, step, params); break;
+                case 575: processOilSlick(x, y, data, step, params); break;
+                case 576: processParticleField(x, y, data, step, params); break;
+                case 577: processPinwheelSpin(x, y, data, width, height, step, params); break;
+                case 578: processPixelStorm(x, y, data, width, height, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);
