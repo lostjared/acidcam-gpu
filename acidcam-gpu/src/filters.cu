@@ -406,41 +406,63 @@ namespace ac_gpu {
         { 400, "AlphaBlendDoubleX" },
         { 401, "AlphaStrobeBlendX" },
         { 402, "BitwiseAndBlend" },
-        { 403, "BitwiseOrBlend" },
-        { 404, "BitwiseXorAverage" },
-        { 405, "BitwiseXorBlendX" },
-        { 406, "BlackStrobe" },
-        { 407, "BlendAlphaXorX" },
-        { 408, "BlendCombinedValuesX" },
-        { 409, "BlendFor360" },
-        { 410, "BlendForward16" },
-        { 411, "BlendForward32" },
-        { 412, "BlendFromXtoY" },
-        { 413, "BlendIncreaseX" },
-        { 414, "BlendRedGreenBlue" },
-        { 415, "BlendWithColorX" },
-        { 416, "BlendAngle" },
-        { 417, "BlockScale" },
-        { 418, "BlockStrobe" },
-        { 419, "BlockXor" },
-        { 420, "BlockyTrails16" },
-        { 421, "BlockyTrails32" },
-        { 422, "BlurDistortionX" },
-        { 423, "BlurHighToLow" },
-        { 424, "BlurSimple" },
-        { 425, "CannyBlend" },
-        { 426, "CannyStrobe" },
-        { 427, "ColorDullBlur" },
-        { 428, "ColorFadeSlow" },
-        { 429, "ColorFibonacci" },
-        { 430, "ColorFreezeBlend" },
-        { 431, "ColorPulseIncrease" },
-        { 432, "ColorShadowBlend" },
-        { 433, "ColorXorScaleX" },
-        { 434, "CurtainEffect" },
-        { 435, "DarkColorFibonacci" },
-        { 436, "DarkColorsBlend" },
-        { 437, "EnergizeBlend" }
+        { 403, "BitwiseXorAverage" },
+        { 404, "BitwiseXorBlendX" },
+        { 405, "BlackStrobe" },
+        { 406, "BlendAlphaXorX" },
+        { 407, "BlendCombinedValuesX" },
+        { 408, "BlendFor360" },
+        { 409, "BlendForward16" },
+        { 410, "BlendForward32" },
+        { 411, "BlendFromXtoY" },
+        { 412, "BlendIncreaseX" },
+        { 413, "BlendRedGreenBlue" },
+        { 414, "BlendWithColorX" },
+        { 415, "BlendAngle" },
+        { 416, "BlockScale" },
+        { 417, "BlockStrobe" },
+        { 418, "BlockXor" },
+        { 419, "BlockyTrails16" },
+        { 420, "BlockyTrails32" },
+        { 421, "BlurDistortionX" },
+        { 422, "CannyStrobe" },
+        { 423, "ColorFadeSlow" },
+        { 424, "ColorFibonacci" },
+        { 425, "CurtainEffect" },
+        { 426, "DarkColorFibonacci" },
+        { 427, "DarkColorsBlend" },
+        { 428, "EnergizeBlend" },
+        { 429, "AverageLines" },
+        { 430, "AverageLinesBlendX" },
+        { 431, "BlendRowAlpha" },
+        { 432, "BlendInOut" },
+        { 433, "ColorFlashIncreaseX" },
+        { 434, "ColorIncreaseInOut" },
+        { 435, "ColorLinesX" },
+        { 436, "ColorMoveDownX" },
+        { 437, "ColorOrderSwapX" },
+        { 438, "ColorPulseAlphaX" },
+        { 439, "ColorRowShiftX" },
+        { 440, "ColorShiftXorX" },
+        { 441, "CopyXorAlphaX" },
+        { 442, "CycleShiftRGBX" },
+        { 443, "DarkNegateX" },
+        { 444, "DarkSelfAlphaX" },
+        { 445, "DiagonalGlitch" },
+        { 446, "DigitalHaze" },
+        { 447, "DoubleXorBlend" },
+        { 448, "EchoBlend" },
+        { 449, "ElectricEdge" },
+        { 450, "FlashColorStrobe" },
+        { 451, "FrameDiffXor" },
+        { 452, "GhostMirror" },
+        { 453, "GlitchSort" },
+        { 454, "HeatWave" },
+        { 455, "InterlaceBlend" },
+        { 456, "InvertStrobe" },
+        { 457, "KaleidoBlend" },
+        { 458, "LightStrobe" },
+        { 459, "LineGlitchX" }
     };
     struct FilterParams {
         float alpha;
@@ -4633,14 +4655,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + anded * 0.5f);
         }
     }
-    __device__ void processBitwiseOrBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        unsigned char mask = (unsigned char)(64 + 32 * sinf(params.frame_count * 0.04f));
-        for (int j = 0; j < 3; ++j) {
-            unsigned char ored = data[idx + j] | mask;
-            data[idx + j] = (unsigned char)(data[idx + j] * 0.6f + ored * 0.4f);
-        }
-    }
     __device__ void processBitwiseXorAverage(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         unsigned char avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
@@ -4809,52 +4823,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + data[src_idx + j] * 0.5f);
         }
     }
-    __device__ void processBlurHighToLow(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        float dist_y = (float)y / height;
-        int blur_radius = (int)(dist_y * 3.0f);
-        if (blur_radius > 0 && y > blur_radius && y < height - blur_radius) {
-            for (int j = 0; j < 3; ++j) {
-                int sum = 0;
-                for (int dy = -blur_radius; dy <= blur_radius; ++dy) {
-                    int src_idx = (y + dy) * step + x * 4;
-                    sum += data[src_idx + j];
-                }
-                data[idx + j] = (unsigned char)(sum / (2 * blur_radius + 1));
-            }
-        }
-    }
-    __device__ void processBlurSimple(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
-            for (int j = 0; j < 3; ++j) {
-                int sum = data[idx + j];
-                sum += data[(y-1) * step + x * 4 + j];
-                sum += data[(y+1) * step + x * 4 + j];
-                sum += data[y * step + (x-1) * 4 + j];
-                sum += data[y * step + (x+1) * 4 + j];
-                data[idx + j] = (unsigned char)(sum / 5);
-            }
-        }
-    }
-    __device__ void processCannyBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
-            int gx = 0, gy = 0;
-            for (int j = 0; j < 3; ++j) {
-                int val_left = data[y * step + (x-1) * 4 + j];
-                int val_right = data[y * step + (x+1) * 4 + j];
-                int val_up = data[(y-1) * step + x * 4 + j];
-                int val_down = data[(y+1) * step + x * 4 + j];
-                gx += abs(val_right - val_left);
-                gy += abs(val_down - val_up);
-            }
-            int edge = (gx + gy) / 6;
-            for (int j = 0; j < 3; ++j) {
-                data[idx + j] = (unsigned char)(data[idx + j] * 0.7f + edge * 0.3f);
-            }
-        }
-    }
     __device__ void processCannyStrobe(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int strobe = params.frame_count % 4;
@@ -4872,12 +4840,6 @@ namespace ac_gpu {
             data[idx] = data[idx + 1] = data[idx + 2] = (unsigned char)edge;
         }
     }
-    __device__ void processColorDullBlur(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        for (int j = 0; j < 3; ++j) {
-            data[idx + j] = (unsigned char)(data[idx + j] * 0.7f + 40);
-        }
-    }
     __device__ void processColorFadeSlow(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float fade = (params.frame_count % 512) / 512.0f;
@@ -4892,42 +4854,6 @@ namespace ac_gpu {
         float factor = 0.5f + 0.5f * (fib[fib_idx] / 21.0f);
         for (int j = 0; j < 3; ++j) {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
-        }
-    }
-    __device__ void processColorFreezeBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        unsigned char* frozen = allFrames[0];
-        if (frozen) {
-            int diff = abs(data[idx] - frozen[idx]) + abs(data[idx+1] - frozen[idx+1]) + abs(data[idx+2] - frozen[idx+2]);
-            if (diff < params.threshold * 3) {
-                for (int j = 0; j < 3; ++j) {
-                    data[idx + j] = frozen[idx + j];
-                }
-            }
-        }
-    }
-    __device__ void processColorPulseIncrease(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        float pulse = 0.8f + 0.4f * sinf(params.frame_count * 0.1f);
-        for (int j = 0; j < 3; ++j) {
-            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * pulse);
-        }
-    }
-    __device__ void processColorShadowBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        int avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        float shadow = (avg < 128) ? 0.6f : 1.0f;
-        for (int j = 0; j < 3; ++j) {
-            data[idx + j] = (unsigned char)(data[idx + j] * shadow);
-        }
-    }
-    __device__ void processColorXorScaleX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
-        int idx = y * step + x * 4;
-        float scale = 0.5f + 0.5f * cosf(params.frame_count * 0.04f);
-        unsigned char xor_val = (unsigned char)(params.frame_count % 256);
-        for (int j = 0; j < 3; ++j) {
-            unsigned char xored = data[idx + j] ^ xor_val;
-            data[idx + j] = (unsigned char)(data[idx + j] * scale + xored * (1.0f - scale));
         }
     }
     __device__ void processCurtainEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
@@ -4966,6 +4892,318 @@ namespace ac_gpu {
                 int diff = abs(data[idx + j] - prev[idx + j]);
                 int energized = data[idx + j] + diff;
                 data[idx + j] = (unsigned char)fminf(255.0f, (float)energized);
+            }
+        }
+    }
+    __device__ void processAverageLines(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int line_width = 8 + (params.frame_count % 16);
+        int block = x / line_width;
+        if (block % 2 == 0) {
+            int avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + avg * 0.5f);
+            }
+        }
+    }
+    __device__ void processAverageLinesBlendX(int x, int y, unsigned char* data, unsigned char** allFrames, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        int line_width = 16;
+        int block = x / line_width;
+        if (prev && block % 2 == 0) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)((data[idx + j] + prev[idx + j]) / 2);
+            }
+        }
+    }
+    __device__ void processBlendRowAlpha(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float row_alpha = (float)(y % 64) / 64.0f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * (0.6f + 0.4f * row_alpha));
+        }
+    }
+    __device__ void processBlendInOut(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        float cycle = 0.5f + 0.5f * sinf(params.frame_count * 0.03f);
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * cycle + prev[idx + j] * (1.0f - cycle));
+            }
+        }
+    }
+    __device__ void processColorFlashIncreaseX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int flash = params.frame_count % 30;
+        float inc = 1.0f + (flash < 10 ? flash * 0.05f : 0.0f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * inc);
+        }
+    }
+    __device__ void processColorIncreaseInOut(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float cycle = 0.5f + 0.5f * sinf(params.frame_count * 0.04f);
+        float inc = 0.8f + 0.4f * cycle;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * inc);
+        }
+    }
+    __device__ void processColorLinesX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int line = y % 8;
+        if (line < 4) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * 0.7f);
+            }
+        }
+    }
+    __device__ void processColorMoveDownX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int offset = params.frame_count % height;
+        int src_y = (y + offset) % height;
+        int src_idx = src_y * step + x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + data[src_idx + j] * 0.5f);
+        }
+    }
+    __device__ void processColorOrderSwapX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int mode = params.frame_count % 6;
+        unsigned char b = data[idx], g = data[idx + 1], r = data[idx + 2];
+        switch (mode) {
+            case 0: data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; break;
+            case 1: data[idx] = g; data[idx + 1] = b; data[idx + 2] = r; break;
+            case 2: data[idx] = b; data[idx + 1] = r; data[idx + 2] = g; break;
+            case 3: data[idx] = r; data[idx + 1] = b; data[idx + 2] = g; break;
+            case 4: data[idx] = g; data[idx + 1] = r; data[idx + 2] = b; break;
+            default: break;
+        }
+    }
+    __device__ void processColorPulseAlphaX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float pulse = 0.5f + 0.5f * sinf(params.frame_count * 0.08f);
+        float alpha = params.alpha * pulse;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * alpha + data[idx + j] * (1.0f - alpha) * 0.5f);
+        }
+    }
+    __device__ void processColorRowShiftX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = (y + params.frame_count) % 32;
+        int src_x = (x + shift) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + data[src_idx + j] * 0.5f);
+        }
+    }
+    __device__ void processColorShiftXorX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int shift = params.frame_count % 8;
+        for (int j = 0; j < 3; ++j) {
+            unsigned char shifted = (data[idx + j] << shift) | (data[idx + j] >> (8 - shift));
+            data[idx + j] ^= shifted;
+        }
+    }
+    __device__ void processCopyXorAlphaX(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                unsigned char xored = data[idx + j] ^ prev[idx + j];
+                data[idx + j] = (unsigned char)(xored * params.alpha + data[idx + j] * (1.0f - params.alpha));
+            }
+        }
+    }
+    __device__ void processCycleShiftRGBX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cycle = params.frame_count % 3;
+        unsigned char temp[3] = {data[idx], data[idx + 1], data[idx + 2]};
+        data[idx] = temp[(0 + cycle) % 3];
+        data[idx + 1] = temp[(1 + cycle) % 3];
+        data[idx + 2] = temp[(2 + cycle) % 3];
+    }
+    __device__ void processDarkNegateX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        if (avg < 100) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(255 - data[idx + j]);
+            }
+        }
+    }
+    __device__ void processDarkSelfAlphaX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        float alpha = (avg < 128) ? 0.5f : 1.0f;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * alpha);
+        }
+    }
+    __device__ void processDiagonalGlitch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int diag = (x + y + params.frame_count) % 64;
+        if (diag < 8) {
+            int shift = diag * 2;
+            int src_x = (x + shift) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    __device__ void processDigitalHaze(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float haze = 0.1f + 0.1f * sinf((x + y) * 0.02f + params.frame_count * 0.03f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * (1.0f - haze) + 200 * haze);
+        }
+    }
+    __device__ void processDoubleXorBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* p1 = allFrames[0];
+        unsigned char* p2 = (params.numFrames > 1) ? allFrames[1] : NULL;
+        if (p1 && p2) {
+            for (int j = 0; j < 3; ++j) {
+                unsigned char xor1 = data[idx + j] ^ p1[idx + j];
+                unsigned char xor2 = xor1 ^ p2[idx + j];
+                data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + xor2 * 0.5f);
+            }
+        }
+    }
+    __device__ void processEchoBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int numEcho = min(params.numFrames, 4);
+        for (int j = 0; j < 3; ++j) {
+            float sum = data[idx + j];
+            float weight = 1.0f;
+            for (int f = 0; f < numEcho; ++f) {
+                if (allFrames[f]) {
+                    weight *= 0.6f;
+                    sum += allFrames[f][idx + j] * weight;
+                }
+            }
+            data[idx + j] = (unsigned char)(sum / (1.0f + weight * numEcho * 0.3f));
+        }
+    }
+    __device__ void processElectricEdge(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+            int edge = 0;
+            for (int j = 0; j < 3; ++j) {
+                int dx = abs(data[y * step + (x+1) * 4 + j] - data[y * step + (x-1) * 4 + j]);
+                int dy = abs(data[(y+1) * step + x * 4 + j] - data[(y-1) * step + x * 4 + j]);
+                edge += dx + dy;
+            }
+            edge /= 6;
+            if (edge > 30) {
+                int pulse = (params.frame_count % 10 < 5) ? 255 : 180;
+                data[idx] = (unsigned char)fminf(255.0f, data[idx] * 0.3f + pulse * 0.7f);
+                data[idx + 1] = (unsigned char)(data[idx + 1] * 0.5f);
+                data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] * 0.3f + pulse * 0.7f);
+            }
+        }
+    }
+    __device__ void processFlashColorStrobe(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int strobe = params.frame_count % 15;
+        if (strobe < 3) {
+            int channel = strobe % 3;
+            data[idx + channel] = 255;
+        }
+    }
+    __device__ void processFrameDiffXor(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                int diff = abs(data[idx + j] - prev[idx + j]);
+                data[idx + j] ^= (unsigned char)diff;
+            }
+        }
+    }
+    __device__ void processGhostMirror(int x, int y, unsigned char* data, unsigned char** allFrames, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int mirror_x = width - x - 1;
+        int mirror_idx = y * step + mirror_x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + prev[mirror_idx + j] * 0.5f);
+            }
+        }
+    }
+    __device__ void processGlitchSort(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(x / 32, y / 32, params.seed);
+        if (r < 0.1f) {
+            int offset = (int)(r * 20) - 10;
+            int src_x = (x + offset + width) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
+            }
+        }
+    }
+    __device__ void processHeatWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float wave = sinf((y + params.frame_count * 2) * 0.05f) * 5.0f;
+        int src_x = ((int)(x + wave) % width + width) % width;
+        int src_idx = y * step + src_x * 4;
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * 0.3f + data[src_idx + j] * 0.7f);
+        }
+    }
+    __device__ void processInterlaceBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        unsigned char* prev = allFrames[0];
+        if (prev && y % 2 == 0) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + prev[idx + j] * 0.5f);
+            }
+        }
+    }
+    __device__ void processInvertStrobe(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int strobe = params.frame_count % 12;
+        if (strobe < 4) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)(255 - data[idx + j]);
+            }
+        }
+    }
+    __device__ void processKaleidoBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2;
+        int cy = height / 2;
+        int dx = x - cx;
+        int dy = y - cy;
+        float angle = atan2f((float)dy, (float)dx);
+        float sector = fmodf(angle + 3.14159f, 3.14159f / 3.0f);
+        float factor = 0.5f + 0.5f * cosf(sector * 6.0f + params.frame_count * 0.05f);
+        for (int j = 0; j < 3; ++j) {
+            data[idx + j] = (unsigned char)(data[idx + j] * factor);
+        }
+    }
+    __device__ void processLightStrobe(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        int strobe = params.frame_count % 8;
+        if (strobe < 2) {
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * 1.5f);
+            }
+        }
+    }
+    __device__ void processLineGlitchX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        float r = gpu_rand(0, y, params.seed + params.frame_count);
+        if (r < 0.05f) {
+            int shift = (int)(r * 100) - 50;
+            int src_x = (x + shift + width) % width;
+            int src_idx = y * step + src_x * 4;
+            for (int j = 0; j < 3; ++j) {
+                data[idx + j] = data[src_idx + j];
             }
         }
     }
@@ -5519,41 +5757,63 @@ namespace ac_gpu {
                 case 400: processAlphaBlendDoubleX(x, y, data, allFrames, step, params); break;
                 case 401: processAlphaStrobeBlendX(x, y, data, allFrames, step, params); break;
                 case 402: processBitwiseAndBlend(x, y, data, step, params); break;
-                case 403: processBitwiseOrBlend(x, y, data, step, params); break;
-                case 404: processBitwiseXorAverage(x, y, data, step, params); break;
-                case 405: processBitwiseXorBlendX(x, y, data, allFrames, step, params); break;
-                case 406: processBlackStrobe(x, y, data, step, params); break;
-                case 407: processBlendAlphaXorX(x, y, data, step, params); break;
-                case 408: processBlendCombinedValuesX(x, y, data, step, params); break;
-                case 409: processBlendFor360(x, y, data, width, height, step, params); break;
-                case 410: processBlendForward16(x, y, data, allFrames, step, params); break;
-                case 411: processBlendForward32(x, y, data, allFrames, step, params); break;
-                case 412: processBlendFromXtoY(x, y, data, step, params); break;
-                case 413: processBlendIncreaseX(x, y, data, step, params); break;
-                case 414: processBlendRedGreenBlue(x, y, data, step, params); break;
-                case 415: processBlendWithColorX(x, y, data, step, params); break;
-                case 416: processBlendAngle(x, y, data, width, height, step, params); break;
-                case 417: processBlockScale(x, y, data, width, height, step, params); break;
-                case 418: processBlockStrobe(x, y, data, width, height, step, params); break;
-                case 419: processBlockXor(x, y, data, width, height, step, params); break;
-                case 420: processBlockyTrails16(x, y, data, allFrames, width, height, step, params); break;
-                case 421: processBlockyTrails32(x, y, data, allFrames, width, height, step, params); break;
-                case 422: processBlurDistortionX(x, y, data, width, height, step, params); break;
-                case 423: processBlurHighToLow(x, y, data, width, height, step, params); break;
-                case 424: processBlurSimple(x, y, data, width, height, step, params); break;
-                case 425: processCannyBlend(x, y, data, width, height, step, params); break;
-                case 426: processCannyStrobe(x, y, data, width, height, step, params); break;
-                case 427: processColorDullBlur(x, y, data, step, params); break;
-                case 428: processColorFadeSlow(x, y, data, step, params); break;
-                case 429: processColorFibonacci(x, y, data, step, params); break;
-                case 430: processColorFreezeBlend(x, y, data, allFrames, step, params); break;
-                case 431: processColorPulseIncrease(x, y, data, step, params); break;
-                case 432: processColorShadowBlend(x, y, data, step, params); break;
-                case 433: processColorXorScaleX(x, y, data, step, params); break;
-                case 434: processCurtainEffect(x, y, data, width, height, step, params); break;
-                case 435: processDarkColorFibonacci(x, y, data, step, params); break;
-                case 436: processDarkColorsBlend(x, y, data, step, params); break;
-                case 437: processEnergizeBlend(x, y, data, allFrames, step, params); break;
+                case 403: processBitwiseXorAverage(x, y, data, step, params); break;
+                case 404: processBitwiseXorBlendX(x, y, data, allFrames, step, params); break;
+                case 405: processBlackStrobe(x, y, data, step, params); break;
+                case 406: processBlendAlphaXorX(x, y, data, step, params); break;
+                case 407: processBlendCombinedValuesX(x, y, data, step, params); break;
+                case 408: processBlendFor360(x, y, data, width, height, step, params); break;
+                case 409: processBlendForward16(x, y, data, allFrames, step, params); break;
+                case 410: processBlendForward32(x, y, data, allFrames, step, params); break;
+                case 411: processBlendFromXtoY(x, y, data, step, params); break;
+                case 412: processBlendIncreaseX(x, y, data, step, params); break;
+                case 413: processBlendRedGreenBlue(x, y, data, step, params); break;
+                case 414: processBlendWithColorX(x, y, data, step, params); break;
+                case 415: processBlendAngle(x, y, data, width, height, step, params); break;
+                case 416: processBlockScale(x, y, data, width, height, step, params); break;
+                case 417: processBlockStrobe(x, y, data, width, height, step, params); break;
+                case 418: processBlockXor(x, y, data, width, height, step, params); break;
+                case 419: processBlockyTrails16(x, y, data, allFrames, width, height, step, params); break;
+                case 420: processBlockyTrails32(x, y, data, allFrames, width, height, step, params); break;
+                case 421: processBlurDistortionX(x, y, data, width, height, step, params); break;
+                case 422: processCannyStrobe(x, y, data, width, height, step, params); break;
+                case 423: processColorFadeSlow(x, y, data, step, params); break;
+                case 424: processColorFibonacci(x, y, data, step, params); break;
+                case 425: processCurtainEffect(x, y, data, width, height, step, params); break;
+                case 426: processDarkColorFibonacci(x, y, data, step, params); break;
+                case 427: processDarkColorsBlend(x, y, data, step, params); break;
+                case 428: processEnergizeBlend(x, y, data, allFrames, step, params); break;
+                case 429: processAverageLines(x, y, data, width, step, params); break;
+                case 430: processAverageLinesBlendX(x, y, data, allFrames, width, step, params); break;
+                case 431: processBlendRowAlpha(x, y, data, height, step, params); break;
+                case 432: processBlendInOut(x, y, data, allFrames, step, params); break;
+                case 433: processColorFlashIncreaseX(x, y, data, step, params); break;
+                case 434: processColorIncreaseInOut(x, y, data, step, params); break;
+                case 435: processColorLinesX(x, y, data, step, params); break;
+                case 436: processColorMoveDownX(x, y, data, height, step, params); break;
+                case 437: processColorOrderSwapX(x, y, data, step, params); break;
+                case 438: processColorPulseAlphaX(x, y, data, step, params); break;
+                case 439: processColorRowShiftX(x, y, data, width, step, params); break;
+                case 440: processColorShiftXorX(x, y, data, step, params); break;
+                case 441: processCopyXorAlphaX(x, y, data, allFrames, step, params); break;
+                case 442: processCycleShiftRGBX(x, y, data, step, params); break;
+                case 443: processDarkNegateX(x, y, data, step, params); break;
+                case 444: processDarkSelfAlphaX(x, y, data, step, params); break;
+                case 445: processDiagonalGlitch(x, y, data, width, height, step, params); break;
+                case 446: processDigitalHaze(x, y, data, step, params); break;
+                case 447: processDoubleXorBlend(x, y, data, allFrames, step, params); break;
+                case 448: processEchoBlend(x, y, data, allFrames, step, params); break;
+                case 449: processElectricEdge(x, y, data, width, height, step, params); break;
+                case 450: processFlashColorStrobe(x, y, data, step, params); break;
+                case 451: processFrameDiffXor(x, y, data, allFrames, step, params); break;
+                case 452: processGhostMirror(x, y, data, allFrames, width, step, params); break;
+                case 453: processGlitchSort(x, y, data, width, step, params); break;
+                case 454: processHeatWave(x, y, data, width, height, step, params); break;
+                case 455: processInterlaceBlend(x, y, data, allFrames, step, params); break;
+                case 456: processInvertStrobe(x, y, data, step, params); break;
+                case 457: processKaleidoBlend(x, y, data, width, height, step, params); break;
+                case 458: processLightStrobe(x, y, data, step, params); break;
+                case 459: processLineGlitchX(x, y, data, width, step, params); break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);
