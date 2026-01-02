@@ -154,6 +154,7 @@ int main(int argc, char** argv) {
     bool repeat = false;
     size_t start_pos = 0;
     size_t jump_pos = 0;
+    bool expose = false;
 
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
@@ -172,6 +173,7 @@ int main(int argc, char** argv) {
     .addOptionDoubleValue(306, "jump", "Jump to second in video")
     .addOptionDouble(302, "list", "List all devices")
     .addOptionDouble(300, "hide", "hide HUD")
+    .addOptionDouble(307, "exposure", "Disable Auto Exposurre")
     .addOptionSingle('h', "help");
     try {
         Argument<std::string> a;
@@ -190,6 +192,7 @@ int main(int argc, char** argv) {
                     exit(EXIT_FAILURE);
                 }
                 break;
+                case 307: expose = true; break;
                 case 'c': case 258: cameraArg = a.arg_value; break;
                 case 'f': case 256: filtersArg = a.arg_value; break;
                 case 'b': case 257: bufferArg = a.arg_value; break;
@@ -257,7 +260,7 @@ int main(int argc, char** argv) {
             exit(EXIT_FAILURE);
         }
     }
-    if(!isNumeric(filtersArg)) {
+    if(filtersArg.empty()){
         std::cerr << "ac: Error requires filters argument." << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -301,7 +304,8 @@ int main(int argc, char** argv) {
             cap.set(cv::CAP_PROP_FRAME_WIDTH, cres.width);
             cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
             cap.set(cv::CAP_PROP_FPS, output_fps);
-            cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 1); 
+            if(expose) 
+                cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 1); 
 #else
             cap.open(cameraINdex);
 #endif
