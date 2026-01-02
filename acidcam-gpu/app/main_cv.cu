@@ -14,6 +14,7 @@
 #include<vector>
 #include<mxwrite.hpp>
 #include<format>
+#include<filesystem>
 
 struct AnimationState {
     float alpha = 1.0f;
@@ -178,7 +179,17 @@ int main(int argc, char** argv) {
         while ((code = argz.proc(a)) != -1) {
             switch (code) {
                 case 'h': argz.help(std::cout); return 0;
-                case 'i': case 255: inputArg = a.arg_value; break;
+                case 'i': case 255: 
+                inputArg = a.arg_value;
+                if(!std::filesystem::exists(inputArg)) {
+                    std::cerr << "ac: File: " << inputArg << " does not exist." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                if(std::filesystem::is_directory(inputArg)) {
+                    std::cerr << "ac: Argument passed is directory." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                break;
                 case 'c': case 258: cameraArg = a.arg_value; break;
                 case 'f': case 256: filtersArg = a.arg_value; break;
                 case 'b': case 257: bufferArg = a.arg_value; break;
