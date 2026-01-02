@@ -1,9 +1,12 @@
-@PACKAGE_INIT@
-
 # acidcam-gpu CMake configuration file
 # This file is used to find and use the acidcam-gpu library in other CMake projects
 
 include(CMakeFindDependencyMacro)
+
+# Get the installation prefix from this file's location
+# Path is: /usr/local/lib/cmake/acidcam-gpu/acidcam-gpuConfig.cmake
+# Go up 3 levels: cmake/acidcam-gpu -> cmake -> lib -> .
+get_filename_component(_ACIDCAM_GPU_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 
 # Find required dependencies
 find_dependency(OpenCV REQUIRED)
@@ -23,7 +26,4 @@ include("${CMAKE_CURRENT_LIST_DIR}/acidcam-gpuTargets.cmake")
 # Set variables for backward compatibility
 set(acidcam-gpu_FOUND TRUE)
 set(acidcam-gpu_LIBRARIES acidcam-gpu::acidcam-gpu)
-set(acidcam-gpu_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/acidcam-gpu")
-
-# Check that the required components are available
-check_required_components(acidcam-gpu)
+set(acidcam-gpu_INCLUDE_DIRS "${_ACIDCAM_GPU_PREFIX}/include/acidcam-gpu")

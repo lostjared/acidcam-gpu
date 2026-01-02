@@ -1,9 +1,14 @@
+# Get the installation prefix from this file's location
+# Path is: /usr/local/lib/cmake/acidcam-gpu/acidcam-gpuTargets.cmake
+# Go up 3 levels: cmake/acidcam-gpu -> cmake -> lib -> .
+get_filename_component(_ACIDCAM_GPU_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+
 if(NOT TARGET acidcam-gpu::acidcam-gpu)
     add_library(acidcam-gpu::acidcam-gpu SHARED IMPORTED)
     
     set_target_properties(acidcam-gpu::acidcam-gpu PROPERTIES
-        IMPORTED_LOCATION "@PACKAGE_CMAKE_INSTALL_LIBDIR@/libacidcam-gpu.so"
-        INTERFACE_INCLUDE_DIRECTORIES "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/acidcam-gpu"
+        IMPORTED_LOCATION "${_ACIDCAM_GPU_PREFIX}/lib/libacidcam-gpu.so"
+        INTERFACE_INCLUDE_DIRECTORIES "${_ACIDCAM_GPU_PREFIX}/include/acidcam-gpu"
         IMPORTED_NO_SONAME ON
     )
     
