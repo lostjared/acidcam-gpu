@@ -2750,7 +2750,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 236: ShiftLinesDown
     __device__ void processShiftLinesDown(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int shiftAmount = (params.frame_count / 4) % height;
@@ -2760,7 +2759,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 237: PictureStretch
     __device__ void processPictureStretch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float stretch = 1.0f + 0.5f * sinf(params.frame_count * 0.02f);
@@ -2771,7 +2769,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 238: PictureStretchPieces
     __device__ void processPictureStretchPieces(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int piece = y / 32;
@@ -2783,7 +2780,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 239: VisualSnow
     __device__ void processVisualSnow(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x, y, params.seed);
@@ -2794,7 +2790,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 240: VisualSnowX2
     __device__ void processVisualSnowX2(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x, y, params.seed);
@@ -2805,7 +2800,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 241: LineGlitch
     __device__ void processLineGlitch(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x / 32, y, params.seed);
@@ -2818,7 +2812,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 242: SlitReverse64
     __device__ void processSlitReverse64(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int slit = y / 64;
@@ -2830,7 +2823,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 243: SlitReverse64_Increase
     __device__ void processSlitReverse64_Increase(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int slitSize = 32 + (params.frame_count % 64);
@@ -2843,7 +2835,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 244: SlitStretch
     __device__ void processSlitStretch(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int slit = y / 32;
@@ -2854,7 +2845,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 245: LineLeftRight
     __device__ void processLineLeftRight(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int dir = (y / 16) % 2;
@@ -2865,7 +2855,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 246: LineLeftRightResize
     __device__ void processLineLeftRightResize(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int lineSize = 8 + (params.frame_count / 8) % 32;
@@ -2877,7 +2866,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 247: RGBLineTrails
     __device__ void processRGBLineTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int channel = y % 3;
@@ -2886,7 +2874,6 @@ namespace ac_gpu {
             data[idx + channel] = (unsigned char)(0.6f * data[idx + channel] + 0.4f * prev[idx + channel]);
         }
     }
-    // Filter 248: RGBCollectionBlend
     __device__ void processRGBCollectionBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         for (int j = 0; j < 3; ++j) {
@@ -2897,7 +2884,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 249: RGBCollectionIncrease
     __device__ void processRGBCollectionIncrease(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float alpha = 0.1f + 0.9f * fabsf(sinf(params.frame_count * 0.02f));
@@ -2909,7 +2895,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 250: RGBLongTrails
     __device__ void processRGBLongTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         for (int j = 0; j < 3; ++j) {
@@ -2920,7 +2905,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 251: FadeRGB_Speed
     __device__ void processFadeRGB_Speed(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float speedR = fabsf(sinf(params.frame_count * 0.05f));
@@ -2930,7 +2914,6 @@ namespace ac_gpu {
         data[idx + 1] = (unsigned char)(data[idx + 1] * speedG);
         data[idx + 2] = (unsigned char)(data[idx + 2] * speedR);
     }
-    // Filter 252: RGBStrobeTrails
     __device__ void processRGBStrobeTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int strobe = params.frame_count % 3;
@@ -2939,7 +2922,6 @@ namespace ac_gpu {
             data[idx + strobe] = (unsigned char)(0.5f * data[idx + strobe] + 0.5f * prev[idx + strobe]);
         }
     }
-    // Filter 253: BoxGlitch
     __device__ void processBoxGlitch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x / 64, y / 64, params.seed);
@@ -2954,7 +2936,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 254: VerticalPictureDistort
     __device__ void processVerticalPictureDistort(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float distort = sinf(x * 0.05f + params.frame_count * 0.02f) * 10;
@@ -2964,7 +2945,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 255: ShortTrail
     __device__ void processShortTrail(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         unsigned char* prev = allFrames[0];
@@ -2974,7 +2954,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 256: DiagInward
     __device__ void processDiagInward(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -2987,7 +2966,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 257: DiagSquareInward
     __device__ void processDiagSquareInward(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int sq = params.square_size > 0 ? params.square_size : 32;
@@ -3001,7 +2979,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 258: DiagSquareInwardResize
     __device__ void processDiagSquareInwardResize(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int sq = 16 + (params.frame_count / 4) % 48;
@@ -3015,7 +2992,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 259: PictureShiftDownRight
     __device__ void processPictureShiftDownRight(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int offset = params.int_param1 % 100;
@@ -3026,7 +3002,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 260: FlipPictureShift
     __device__ void processFlipPictureShift(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int flip = (params.frame_count / 30) % 4;
@@ -3039,7 +3014,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 261: RGBWideTrails
     __device__ void processRGBWideTrails(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         for (int j = 0; j < 3; ++j) {
@@ -3050,7 +3024,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 262: LineInLineOut_Increase
     __device__ void processLineInLineOut_Increase(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int lineSize = 4 + (params.frame_count / 4) % 32;
@@ -3060,7 +3033,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
         }
     }
-    // Filter 263: LineInLineOut2_Increase
     __device__ void processLineInLineOut2_Increase(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int lineSize = 4 + (params.frame_count / 4) % 32;
@@ -3070,7 +3042,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
         }
     }
-    // Filter 264: LineInLineOut3_Increase
     __device__ void processLineInLineOut3_Increase(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int lineSize = 8 + (params.frame_count / 8) % 24;
@@ -3081,7 +3052,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
         }
     }
-    // Filter 265: SquareByRow2Plus
     __device__ void processSquareByRow2Plus(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int sq = params.square_size > 0 ? params.square_size : 16;
@@ -3093,7 +3063,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 266: FrameSep
     __device__ void processFrameSep(int x, int y, unsigned char* data, unsigned char** allFrames, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int half = width / 2;
@@ -3105,7 +3074,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 267: FrameSep2
     __device__ void processFrameSep2(int x, int y, unsigned char* data, unsigned char** allFrames, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int half = height / 2;
@@ -3117,7 +3085,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 268: FrameStopStart
     __device__ void processFrameStopStart(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cycle = (params.frame_count / 30) % 2;
@@ -3130,7 +3097,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 269: OutOfOrder
     __device__ void processOutOfOrder(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int fi = (x ^ y ^ params.seed) % params.numFrames;
@@ -3141,7 +3107,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 270: TrackingDown
     __device__ void processTrackingDown(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int track = (params.frame_count * 2) % height;
@@ -3151,7 +3116,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 271: TrackingDownBlend
     __device__ void processTrackingDownBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int track = (params.frame_count * 2) % height;
@@ -3164,7 +3128,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 272: TrackingRev
     __device__ void processTrackingRev(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int track = height - 1 - ((params.frame_count * 2) % height);
@@ -3174,7 +3137,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 273: TrackingMirror
     __device__ void processTrackingMirror(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int track = (params.frame_count * 2) % height;
@@ -3186,7 +3148,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 274: BlockPixels
     __device__ void processBlockPixels(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int bx = x / 8;
@@ -3198,7 +3159,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 275: FrameChop
     __device__ void processFrameChop(int x, int y, unsigned char* data, unsigned char** allFrames, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int chop = width / 4;
@@ -3211,7 +3171,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 276: YLineDown
     __device__ void processYLineDown(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int linePos = (params.frame_count + x) % height;
@@ -3221,7 +3180,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 277: YLineDownBlend
     __device__ void processYLineDownBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int linePos = (params.frame_count + x) % height;
@@ -3234,7 +3192,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 278: SquareDiff1
     __device__ void processSquareDiff1(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int sq = 16;
@@ -3249,7 +3206,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 279: LineAcrossX
     __device__ void processLineAcrossXNew(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int lineX = (params.frame_count * 3) % width;
@@ -3259,7 +3215,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 280: ColorGlitch
     __device__ void processColorGlitch(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x, y, params.seed);
@@ -3268,7 +3223,6 @@ namespace ac_gpu {
             data[idx + channel] = 255 - data[idx + channel];
         }
     }
-    // Filter 281: PixelShiftUp
     __device__ void processPixelShiftUp(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int offset = params.int_param1 % height;
@@ -3278,7 +3232,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 282: PixelShiftDown
     __device__ void processPixelShiftDown(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int offset = params.int_param1 % height;
@@ -3288,7 +3241,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 283: PixelShiftLeft
     __device__ void processPixelShiftLeft(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int offset = params.int_param2 % width;
@@ -3298,7 +3250,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 284: PixelShiftRight
     __device__ void processPixelShiftRight(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int offset = params.int_param2 % width;
@@ -3308,7 +3259,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 285: PixelShiftDiagonal
     __device__ void processPixelShiftDiagonal(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int offset_x = params.int_param2 % width;
@@ -3320,7 +3270,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 286: WaveBlend
     __device__ void processWaveBlend(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float wave = sinf((x + params.frame_count) * 0.05f) * 20.0f;
@@ -3330,7 +3279,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 287: WaveBlendX2
     __device__ void processWaveBlendX2(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float waveX = sinf((x + params.frame_count) * 0.05f) * 20.0f;
@@ -3342,7 +3290,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 288: SineWaveBlend
     __device__ void processSineWaveBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float factor = 0.5f + 0.5f * sinf((x + y + params.frame_count) * 0.03f);
@@ -3350,7 +3297,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 289: CosineWaveBlend
     __device__ void processCosineWaveBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float factor = 0.5f + 0.5f * cosf((x - y + params.frame_count) * 0.03f);
@@ -3358,7 +3304,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 290: SpiralWave
     __device__ void processSpiralWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3372,7 +3317,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 291: RadialBlur
     __device__ void processRadialBlur(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3390,7 +3334,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 292: ZoomBlur
     __device__ void processZoomBlur(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3405,7 +3348,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 293: RotateBlend
     __device__ void processRotateBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3422,7 +3364,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 294: MirrorWave
     __device__ void processMirrorWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float wave = sinf((y + params.frame_count) * 0.1f) * 30.0f;
@@ -3433,7 +3374,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 295: MirrorWaveX
     __device__ void processMirrorWaveX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float wave = sinf((x + params.frame_count) * 0.08f) * 20.0f;
@@ -3444,7 +3384,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * data[src_idx + j]);
         }
     }
-    // Filter 296: MirrorWaveY
     __device__ void processMirrorWaveY(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float wave = sinf((y + params.frame_count) * 0.08f) * 20.0f;
@@ -3455,7 +3394,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * data[src_idx + j]);
         }
     }
-    // Filter 297: PixelDrift
     __device__ void processPixelDrift(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float drift_x = sinf(y * 0.02f + params.frame_count * 0.03f) * 10.0f;
@@ -3470,7 +3408,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 298: PixelDriftX
     __device__ void processPixelDriftX(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float drift = sinf(y * 0.03f + params.frame_count * 0.05f) * 15.0f;
@@ -3480,7 +3417,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 299: PixelDriftY
     __device__ void processPixelDriftY(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float drift = cosf(x * 0.03f + params.frame_count * 0.05f) * 15.0f;
@@ -3490,7 +3426,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 300: ColorPulse
     __device__ void processColorPulse(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float pulse = 0.5f + 0.5f * sinf(params.frame_count * 0.1f);
@@ -3498,7 +3433,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * pulse);
         }
     }
-    // Filter 301: ColorPulseRGB
     __device__ void processColorPulseRGB(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float pulseR = 0.5f + 0.5f * sinf(params.frame_count * 0.08f);
@@ -3508,7 +3442,6 @@ namespace ac_gpu {
         data[idx + 1] = (unsigned char)(data[idx + 1] * pulseG);
         data[idx + 2] = (unsigned char)(data[idx + 2] * pulseR);
     }
-    // Filter 302: ColorPulseXor
     __device__ void processColorPulseXor(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int pulse = (int)(128 * sinf(params.frame_count * 0.05f));
@@ -3516,7 +3449,6 @@ namespace ac_gpu {
             data[idx + j] ^= (unsigned char)abs(pulse);
         }
     }
-    // Filter 303: GlitchBlock
     __device__ void processGlitchBlock(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int bx = x / 32;
@@ -3532,7 +3464,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 304: GlitchBlockXor
     __device__ void processGlitchBlockXor(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int bx = x / 32;
@@ -3545,7 +3476,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 305: GlitchLine
     __device__ void processGlitchLine(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(0, y, params.seed);
@@ -3558,7 +3488,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 306: GlitchLineX
     __device__ void processGlitchLineX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x, 0, params.seed);
@@ -3571,7 +3500,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 307: NoiseBlend
     __device__ void processNoiseBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x, y, params.seed);
@@ -3580,7 +3508,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.8f * data[idx + j] + 0.2f * noise);
         }
     }
-    // Filter 308: NoiseBlendX2
     __device__ void processNoiseBlendX2(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x, y, params.seed);
@@ -3589,7 +3516,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * noise);
         }
     }
-    // Filter 309: NoiseXor
     __device__ void processNoiseXor(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float r = gpu_rand(x, y, params.seed);
@@ -3600,7 +3526,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 310: ChannelShift
     __device__ void processChannelShift(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int shift = params.frame_count % 30;
@@ -3611,7 +3536,6 @@ namespace ac_gpu {
         data[idx + 2] = r_val;
         data[idx] = b_val;
     }
-    // Filter 311: ChannelShiftX
     __device__ void processChannelShiftX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int shift = params.frame_count % 20;
@@ -3622,7 +3546,6 @@ namespace ac_gpu {
         data[idx + 2] = r_val;
         data[idx] = b_val;
     }
-    // Filter 312: ChannelRotate
     __device__ void processChannelRotate(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int rot = params.frame_count % 3;
@@ -3632,7 +3555,6 @@ namespace ac_gpu {
         if (rot == 0) { data[idx] = r; data[idx + 1] = b; data[idx + 2] = g; }
         else if (rot == 1) { data[idx] = g; data[idx + 1] = r; data[idx + 2] = b; }
     }
-    // Filter 313: DiagonalStretch
     __device__ void processDiagonalStretch(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float stretch = 1.0f + 0.3f * sinf(params.frame_count * 0.03f);
@@ -3644,7 +3566,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 314: DiagonalStretchX
     __device__ void processDiagonalStretchX(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float stretch = 1.0f + 0.3f * cosf(params.frame_count * 0.03f);
@@ -3656,7 +3577,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 315: DiagonalMirror
     __device__ void processDiagonalMirror(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         if (x + y < (width + height) / 2) {
@@ -3668,7 +3588,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 316: SquareWave
     __device__ void processSquareWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 32;
@@ -3678,7 +3597,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
         }
     }
-    // Filter 317: SquareWaveX
     __device__ void processSquareWaveX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 32;
@@ -3688,7 +3606,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
         }
     }
-    // Filter 318: SquareWaveBlend
     __device__ void processSquareWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 48;
@@ -3700,7 +3617,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 319: TriangleWave
     __device__ void processTriangleWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 64;
@@ -3711,7 +3627,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 320: TriangleWaveBlend
     __device__ void processTriangleWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 64;
@@ -3724,7 +3639,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 321: SawtoothWave
     __device__ void processSawtoothWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 64;
@@ -3734,7 +3648,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 322: SawtoothWaveBlend
     __device__ void processSawtoothWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 64;
@@ -3747,7 +3660,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 323: PulseWave
     __device__ void processPulseWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 48;
@@ -3757,7 +3669,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fminf(255.0f, data[idx + j] * factor);
         }
     }
-    // Filter 324: PulseWaveBlend
     __device__ void processPulseWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int period = 48;
@@ -3770,7 +3681,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 325: StepWave
     __device__ void processStepWave(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int steps = 4;
@@ -3782,7 +3692,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(data[idx + j] * factor);
         }
     }
-    // Filter 326: StepWaveBlend
     __device__ void processStepWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int steps = 4;
@@ -3797,7 +3706,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 327: RippleEffect
     __device__ void processRippleEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3815,7 +3723,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 328: RippleEffectX2
     __device__ void processRippleEffectX2(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3833,7 +3740,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 329: ShockWave
     __device__ void processShockWave(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3855,7 +3761,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 330: ShockWaveBlend
     __device__ void processShockWaveBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3873,7 +3778,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 331: TwistEffect
     __device__ void processTwistEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3893,7 +3797,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 332: TwistEffectBlend
     __device__ void processTwistEffectBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3913,7 +3816,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 333: FishEye
     __device__ void processFishEye(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3933,7 +3835,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 334: FishEyeBlend
     __device__ void processFishEyeBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3954,7 +3855,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 335: Kaleidoscope
     __device__ void processKaleidoscope(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -3977,7 +3877,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 336: KaleidoscopeBlend
     __device__ void processKaleidoscopeBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -4000,7 +3899,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 337: TunnelEffect
     __device__ void processTunnelEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -4018,7 +3916,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 338: TunnelEffectBlend
     __device__ void processTunnelEffectBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -4036,7 +3933,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * data[src_idx + j]);
         }
     }
-    // Filter 339: VortexEffect
     __device__ void processVortexEffect(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -4054,7 +3950,6 @@ namespace ac_gpu {
             data[idx + j] = data[src_idx + j];
         }
     }
-    // Filter 340: VortexEffectBlend
     __device__ void processVortexEffectBlend(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int cx = width / 2;
@@ -4072,7 +3967,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
         }
     }
-    // Filter 341: PixelSort
     __device__ void processPixelSort(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
@@ -4086,7 +3980,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 342: PixelSortX
     __device__ void processPixelSortX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
@@ -4100,7 +3993,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 343: ColorDrift
     __device__ void processColorDrift(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float drift = sinf(params.frame_count * 0.02f);
@@ -4109,7 +4001,6 @@ namespace ac_gpu {
         data[idx + 1] = (unsigned char)((data[idx + 1] - shift + 256) % 256);
         data[idx + 2] = (unsigned char)((data[idx + 2] + shift / 2 + 256) % 256);
     }
-    // Filter 344: ColorDriftX
     __device__ void processColorDriftX(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float drift = cosf(params.frame_count * 0.025f);
@@ -4118,7 +4009,6 @@ namespace ac_gpu {
         data[idx + 1] = (unsigned char)((data[idx + 1] + shift + 256) % 256);
         data[idx + 2] = (unsigned char)((data[idx + 2] - shift / 2 + 256) % 256);
     }
-    // Filter 345: RGBShift
     __device__ void processRGBShift(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int shift = 3 + (params.frame_count % 10);
@@ -4129,7 +4019,6 @@ namespace ac_gpu {
         data[idx + 2] = r;
         data[idx] = b;
     }
-    // Filter 346: RGBShiftX
     __device__ void processRGBShiftX(int x, int y, unsigned char* data, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int shift = 3 + (params.frame_count % 10);
@@ -4140,7 +4029,6 @@ namespace ac_gpu {
         data[idx + 2] = r;
         data[idx] = b;
     }
-    // Filter 347: ChromaticAberration
     __device__ void processChromaticAberration(int x, int y, unsigned char* data, int width, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int shift = 5;
@@ -4151,7 +4039,6 @@ namespace ac_gpu {
         data[idx + 1] = data[y * step + g_x * 4 + 1];
         data[idx] = data[y * step + b_x * 4];
     }
-    // Filter 348: ChromaticAberrationX
     __device__ void processChromaticAberrationX(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int shift = 5;
@@ -4162,7 +4049,6 @@ namespace ac_gpu {
         data[idx + 2] = data[r_y * step + r_x * 4 + 2];
         data[idx] = data[b_y * step + b_x * 4];
     }
-    // Filter 349: Posterize
     __device__ void processPosterize(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int levels = 4;
@@ -4171,7 +4057,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(roundf(data[idx + j] / factor) * factor);
         }
     }
-    // Filter 350: PosterizeBlend
     __device__ void processPosterizeBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int levels = 4 + (params.frame_count % 4);
@@ -4181,7 +4066,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * poster);
         }
     }
-    // Filter 351: Solarize
     __device__ void processSolarize(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int threshold = 128;
@@ -4191,7 +4075,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 352: SolarizeBlend
     __device__ void processSolarizeBlend(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int threshold = 100 + (params.frame_count % 100);
@@ -4200,7 +4083,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(0.6f * data[idx + j] + 0.4f * solar);
         }
     }
-    // Filter 353: GammaBright
     __device__ void processGammaBright(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float gamma = 0.7f;
@@ -4209,7 +4091,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(powf(normalized, gamma) * 255.0f);
         }
     }
-    // Filter 354: GammaDark
     __device__ void processGammaDark(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float gamma = 1.5f;
@@ -4218,7 +4099,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(powf(normalized, gamma) * 255.0f);
         }
     }
-    // Filter 355: ContrastBoost
     __device__ void processContrastBoost(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float contrast = 1.5f;
@@ -4227,7 +4107,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fminf(255.0f, fmaxf(0.0f, val));
         }
     }
-    // Filter 356: ContrastReduce
     __device__ void processContrastReduce(int x, int y, unsigned char* data, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         float contrast = 0.6f;
@@ -4236,7 +4115,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)fminf(255.0f, fmaxf(0.0f, val));
         }
     }
-    // Filter 357: EdgeGlow
     __device__ void processEdgeGlow(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
@@ -4254,7 +4132,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 358: EdgeGlowBlend
     __device__ void processEdgeGlowBlend(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         unsigned char* prev = allFrames[0];
@@ -4273,7 +4150,6 @@ namespace ac_gpu {
             }
         }
     }
-    // Filter 359: FrameBlendMulti
     __device__ void processFrameBlendMulti(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int count = min(params.numFrames, 4);
@@ -4285,7 +4161,6 @@ namespace ac_gpu {
             data[idx + j] = (unsigned char)(sum / (count + 1));
         }
     }
-    // Filter 360: FrameBlendMultiX
     __device__ void processFrameBlendMultiX(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
         int count = min(params.numFrames, 8);
