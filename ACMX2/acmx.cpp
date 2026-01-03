@@ -546,6 +546,7 @@ struct MXArguments {
     bool gpu_filter_enabled = false;
     std::vector<int> gpu_filter_indices;
     int gpu_frame_buffer_size = 8;
+    bool disable_counter = false;
 };
 
 struct FrameData {
@@ -615,6 +616,7 @@ public:
             CHECK_CUDA(cudaMalloc(&d_ptrList, args.gpu_frame_buffer_size * sizeof(unsigned char*)));
             mx::system_out << "acmx2: GPU filtering enabled with " << gpu_filters.size() << " filter(s)\n";
         }
+        counter_disabled = args.disable_counter;
     }
 
     bool is3d_enabled = false;
@@ -633,6 +635,13 @@ public:
     int gpu_square_size = 8;
     int gpu_frame_index = 0;
     int gpu_frame_dir = 1;
+
+    mx::Font overlayFont;
+    std::chrono::steady_clock::time_point sessionStartTime;
+    double displayFPS = 0.0;
+    int fpsFrameCount = 0;
+    std::chrono::steady_clock::time_point fpsLastTime;
+    bool counter_disabled = false;
 
     ~ACView() override {
         if(d_ptrList) {
@@ -734,6 +743,16 @@ public:
     
     virtual void load(gl::GLWindow *win) override {
         frame_counter = 0;
+        sessionStartTime = std::chrono::steady_clock::now();
+        fpsLastTime = sessionStartTime;
+        fpsFrameCount = 0;
+        displayFPS = 0.0;
+        
+        if(overlayFont.tryLoadFont(win->util.getFilePath("data/font.ttf"), 24)) {
+            win->text.init(win->w, win->h);
+            win->text.setColor({255, 255, 255, 255});
+        }
+        
         library.is3D(is3d_enabled);
         if(std::get<0>(flib) == 1)
             library.loadPrograms(win, std::get<1>(flib));
@@ -809,7 +828,7 @@ public:
 #ifdef _WIN32
             cap.open(camera_index, cv::CAP_DSHOW);
 #else
-            cap.open(camera_index);
+            cap.open(camera_index, cv::CAP_V4L2);
 #endif
             if(!cap.isOpened()) {
                 throw mx::Exception("Could not open camera index: " + std::to_string(camera_index));
@@ -1309,6 +1328,36 @@ public:
         fshader.setUniform("proj_matrix", glm::mat4(1.0f));
         sprite.setShader(&fshader);
         sprite.draw(fboTexture, 0, 0, win->w, win->h);
+
+        if(!counter_disabled && overlayFont.handle().has_value()) {
+            fpsFrameCount++;
+            auto currentTime = std::chrono::steady_clock::now();
+            auto fpsDelta = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - fpsLastTime).count();
+            if(fpsDelta >= 500) {
+                displayFPS = (fpsFrameCount * 1000.0) / fpsDelta;
+                fpsFrameCount = 0;
+                fpsLastTime = currentTime;
+            }
+            
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - sessionStartTime).count();
+            int hours = elapsed / 3600;
+            int minutes = (elapsed % 3600) / 60;
+            int seconds = elapsed % 60;
+            
+            std::ostringstream timerStr;
+            timerStr << std::setfill('0') << std::setw(2) << hours << ":"
+                     << std::setfill('0') << std::setw(2) << minutes << ":"
+                     << std::setfill('0') << std::setw(2) << seconds;
+            
+            std::ostringstream fpsStr;
+            fpsStr << std::fixed << std::setprecision(1) << displayFPS << " FPS";
+            
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            win->text.printText_Blended(overlayFont, 10, 10, timerStr.str());
+            win->text.printText_Blended(overlayFont, 10, 40, fpsStr.str());
+            glDisable(GL_BLEND);
+        }
 
         static auto lastUpdate = std::chrono::steady_clock::now();
         auto now = std::chrono::steady_clock::now();        
@@ -1928,6 +1977,7 @@ int main(int argc, char **argv) {
           .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
           .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
           .addOptionDouble(402, "list-filters", "List available GPU filters")
+          .addOptionDouble(403, "disable-counter", "Disable timer and FPS counter overlay")
 #ifdef AUDIO_ENABLED
           .addOptionSingle('w', "Enable Audio Reactivity")
           .addOptionDouble('W', "enable-audio", "enabled audio reacitivty")
@@ -2100,6 +2150,9 @@ int main(int argc, char **argv) {
                         mx::system_out << "  " << i << ": " << ac_gpu::filters[i].name << "\n";
                     }
                     exit(EXIT_SUCCESS);
+                    break;
+                case 403:
+                    args.disable_counter = true;
                     break;
 #ifdef AUDIO_ENABLED
                 case 'W':
