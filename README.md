@@ -71,6 +71,7 @@ cp -rf ../data/ .
 cd ../../
 echo "completed..."
 ```
+
 Early Example (as a GIF)
 
 ![Project Demo](https://github.com/lostjared/acidcam-gpu/blob/main/output.gif)
