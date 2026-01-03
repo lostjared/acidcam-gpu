@@ -240,4 +240,7 @@ sudo chown -R $USER:$USER ~/ACMX2
 
 This setup is designed to keep your development workflow fast and reproducible while maintaining full access to GPU acceleration, camera devices, and graphical output.
 
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/1c3fb4db-39c3-4684-9256-88aa71f58711" />
+
+
 
