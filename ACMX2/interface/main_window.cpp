@@ -649,8 +649,8 @@ void MainWindow::runSelected() {
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid()); 
-    env.insert("XDG_RUNTIME_DIR", "/run/user/" + uid);
-    env.insert("PULSE_SERVER", "unix:/run/user/" + uid + "/pulse/native");
+    //env.insert("XDG_RUNTIME_DIR", "/run/user/" + uid);
+    //env.insert("PULSE_SERVER", "unix:/run/user/" + uid + "/pulse/native");
     env.insert("CUDA_VISIBLE_DEVICES", "0"); 
     env.insert("vblank_mode", "0"); 
     process->setProcessEnvironment(env);
@@ -759,8 +759,8 @@ void MainWindow::runAll() {
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid()); 
-    env.insert("XDG_RUNTIME_DIR", "/run/user/" + uid);
-    env.insert("PULSE_SERVER", "unix:/run/user/" + uid + "/pulse/native");
+    //env.insert("XDG_RUNTIME_DIR", "/run/user/" + uid);
+    //env.insert("PULSE_SERVER", "unix:/run/user/" + uid + "/pulse/native");
     env.insert("CUDA_VISIBLE_DEVICES", "0"); 
     env.insert("vblank_mode", "0"); 
     process->setProcessEnvironment(env);
