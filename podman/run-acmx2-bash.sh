@@ -19,9 +19,5 @@ exec podman run --rm -it \
   -e QT_QPA_PLATFORM=xcb \
   -e XDG_RUNTIME_DIR=/tmp/xdg \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
-  "$IMAGE" bash -lc '
-    mkdir -p /tmp/xdg
-    chmod 700 /tmp/xdg
-    exec /opt/src/acidcam-gpu/ACMX2/interface/build/interface
-  '
+  "$IMAGE" bash 
 
