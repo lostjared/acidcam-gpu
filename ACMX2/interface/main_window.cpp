@@ -77,6 +77,12 @@ void MainWindow::initControls() {
     gpuFilterAction = new QAction(tr("GPU Filter Settings"), this);
     connect(gpuFilterAction, &QAction::triggered, this, &MainWindow::menuGPUFilterSettings);
     cameraMenu->addAction(gpuFilterAction);
+    cameraMenu->addSeparator();
+    styleSheetAction = new QAction(tr("Use Custom Style"), this);
+    styleSheetAction->setCheckable(true);
+    styleSheetAction->setChecked(true);
+    connect(styleSheetAction, &QAction::toggled, this, &MainWindow::applyCustomStyleSheet);
+    cameraMenu->addAction(styleSheetAction);
     runMenu_select = new QAction(tr("Run Selected"), this);
     runMenu_select->setShortcut(QKeySequence("F5"));
     connect(runMenu_select, &QAction::triggered, this, &MainWindow::runSelected);
@@ -173,17 +179,30 @@ void MainWindow::initControls() {
         executable_path = appSettings.value("exePath", "acmx2").toString();
 #endif
     prefix_path = appSettings.value("prefix_path", ".").toString();
+    bool useCustomStyle = appSettings.value("useCustomStyle", true).toBool();
+    styleSheetAction->setChecked(useCustomStyle);
     if(!path.isEmpty()) {
         shader_path = path;
         loadShaders(path);
     }
-    QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
+    customStyleSheet = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
                     "* { color: red; font-weight: bold; } "
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
 
-    setStyleSheet(style);
+    applyCustomStyleSheet(useCustomStyle);
     
+}
+
+void MainWindow::applyCustomStyleSheet(bool enable)
+{
+    QSettings appSettings("LostSideDead");
+    appSettings.setValue("useCustomStyle", enable);
+    if(enable) {
+        setStyleSheet(customStyleSheet);
+    } else {
+        setStyleSheet("");
+    }
 }
 
 void MainWindow::newList() {

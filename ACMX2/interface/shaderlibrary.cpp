@@ -3,6 +3,7 @@
 #include<QFile>
 #include<QDir>
 #include<QTextStream>
+#include<QSettings>
 
 LibraryWindow::LibraryWindow(QWidget *parent) : QDialog(parent) {
     init();
@@ -44,7 +45,10 @@ void LibraryWindow::init() {
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
 
-    setStyleSheet(style);
+    QSettings appSettings("LostSideDead");
+    if(appSettings.value("useCustomStyle", true).toBool()) {
+        setStyleSheet(style);
+    }
 }
 
 void LibraryWindow::onBrowseButtonClicked() {

@@ -121,6 +121,9 @@ private:
     QString gpu_filter_indices;
     int gpu_buffer_size = 8;
     QAction *gpuFilterAction;
+    QAction *styleSheetAction;
+    QString customStyleSheet;
+    void applyCustomStyleSheet(bool enable);
 };
 
 

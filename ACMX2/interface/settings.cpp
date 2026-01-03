@@ -1,5 +1,6 @@
 #include "settings.hpp"
 #include<QMessageBox>
+#include<QSettings>
 
 SettingsWindow::SettingsWindow(QWidget *parent)
     : QDialog(parent),
@@ -38,7 +39,10 @@ void SettingsWindow::init() {
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
 
-    setStyleSheet(style);
+    QSettings appSettings("LostSideDead");
+    if(appSettings.value("useCustomStyle", true).toBool()) {
+        setStyleSheet(style);
+    }
     
     QLabel *cameraResolutionLabel = new QLabel("Select Camera Resolution:", this);
     cameraResolutionComboBox = new QComboBox(this);
@@ -61,7 +65,7 @@ void SettingsWindow::init() {
                      << "2560x1600"
                      << "3840x2160";
     cameraResolutionComboBox->addItems(cameraResolutions);
-    cameraResolutionComboBox->setCurrentIndex(6);
+    cameraResolutionComboBox->setCurrentIndex(8);
 
     QLabel *cameraFPSLabel = new QLabel("Set FPS:", this);
     cameraFPSSpinBox = new QSpinBox(this);
@@ -104,7 +108,7 @@ void SettingsWindow::init() {
         "1920x1080", "1080x1920", "2560x1440", "1440x2560", "3840x2160", "2160x3840"
     };
     screenResolutionComboBox->addItems(screenResolutions);
-    screenResolutionComboBox->setCurrentIndex(0);
+    screenResolutionComboBox->setCurrentIndex(-1);
 
     textureCacheCheckBox = new QCheckBox("Enable Texture Cache", this);
     cacheDelaySpinBox = new QSpinBox(this);

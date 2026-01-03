@@ -1,4 +1,5 @@
 #include"shader.hpp"
+#include<QSettings>
 
 ShaderDialog::ShaderDialog(QWidget *parent) : QDialog(parent) {
     init();
@@ -36,7 +37,10 @@ void ShaderDialog::init() {
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
 
-    setStyleSheet(style);
+    QSettings appSettings("LostSideDead");
+    if(appSettings.value("useCustomStyle", true).toBool()) {
+        setStyleSheet(style);
+    }
     
 }
 

@@ -2,12 +2,15 @@
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QTextStream>
+#include <QCompleter>
+#include <QSettings>
+#include <algorithm>
 
 GPUFilterDialog::GPUFilterDialog(const QString &executablePath, QWidget *parent)
     : QDialog(parent), execPath(executablePath)
 {
     setWindowTitle("GPU Filter Settings");
-    setMinimumSize(500, 450);
+    setMinimumSize(500, 500);
     setupUI();
     loadFiltersFromExecutable();
 }
@@ -29,10 +32,29 @@ void GPUFilterDialog::setupUI()
     mainLayout->addWidget(bufferGroup);
     QGroupBox *filterGroup = new QGroupBox("Filter Selection", this);
     QVBoxLayout *filterMainLayout = new QVBoxLayout(filterGroup);
+    
+    QHBoxLayout *searchLayout = new QHBoxLayout();
+    QLabel *searchLabel = new QLabel("Search:", this);
+    searchLineEdit = new QLineEdit(this);
+    searchLineEdit->setPlaceholderText("Type to search filters...");
+    searchLineEdit->setClearButtonEnabled(true);
+    searchLayout->addWidget(searchLabel);
+    searchLayout->addWidget(searchLineEdit, 1);
+    filterMainLayout->addLayout(searchLayout);
+    
     QHBoxLayout *comboLayout = new QHBoxLayout();
     QLabel *availableLabel = new QLabel("Available Filters:", this);
     filterComboBox = new QComboBox(this);
     filterComboBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    filterComboBox->setMaxVisibleItems(20);
+    
+    filterModel = new QStandardItemModel(this);
+    proxyModel = new QSortFilterProxyModel(this);
+    proxyModel->setSourceModel(filterModel);
+    proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+    filterComboBox->setModel(proxyModel);
+    
     comboLayout->addWidget(availableLabel);
     comboLayout->addWidget(filterComboBox, 1);
     filterMainLayout->addLayout(comboLayout);
@@ -68,10 +90,12 @@ void GPUFilterDialog::setupUI()
     connect(clearButton, &QPushButton::clicked, this, &GPUFilterDialog::clearAll);
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+    connect(searchLineEdit, &QLineEdit::textChanged, this, &GPUFilterDialog::filterSearchChanged);
     connect(enableCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         filterComboBox->setEnabled(checked);
         selectedFiltersList->setEnabled(checked);
         bufferSizeSpinBox->setEnabled(checked);
+        searchLineEdit->setEnabled(checked);
         addButton->setEnabled(checked);
         removeButton->setEnabled(checked);
         upButton->setEnabled(checked);
@@ -83,24 +107,28 @@ void GPUFilterDialog::setupUI()
     filterComboBox->setEnabled(false);
     selectedFiltersList->setEnabled(false);
     bufferSizeSpinBox->setEnabled(false);
+    searchLineEdit->setEnabled(false);
     addButton->setEnabled(false);
     removeButton->setEnabled(false);
     upButton->setEnabled(false);
     downButton->setEnabled(false);
     clearButton->setEnabled(false);
     
-    // Style
     QString style = "QDialog { background-color: black; }"
                     "QGroupBox { color: red; border: 1px solid red; margin-top: 10px; padding-top: 10px; }"
                     "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
                     "QLabel { color: red; }"
                     "QCheckBox { color: red; }"
+                    "QLineEdit { background-color: #110000; color: red; border: 1px solid red; padding: 3px; }"
                     "QComboBox { background-color: #110000; color: red; border: 1px solid red; }"
                     "QSpinBox { background-color: #110000; color: red; border: 1px solid red; }"
                     "QListWidget { background-color: #110000; color: lime; border: 1px solid red; }"
                     "QPushButton { border: 1px solid red; background-color: #110000; color: red; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
-    setStyleSheet(style);
+    QSettings appSettings("LostSideDead");
+    if(appSettings.value("useCustomStyle", true).toBool()) {
+        setStyleSheet(style);
+    }
 }
 
 void GPUFilterDialog::loadFiltersFromExecutable()
@@ -122,24 +150,43 @@ void GPUFilterDialog::loadFiltersFromExecutable()
     
     filterNames.clear();
     filterNameToIndex.clear();
-    filterComboBox->clear();
+    filterModel->clear();
+    
+    QList<QPair<QString, int>> tempFilters;
     
     for (const QString &line : lines) {
         QRegularExpressionMatch match = re.match(line);
         if (match.hasMatch()) {
             int index = match.captured(1).toInt();
             QString name = match.captured(2).trimmed();
-            QString displayName = QString("%1: %2").arg(index).arg(name);
-            
-            filterNames.append(displayName);
-            filterNameToIndex[displayName] = index;
-            filterComboBox->addItem(displayName);
+            tempFilters.append(qMakePair(name, index));
         }
+    }
+    
+    std::sort(tempFilters.begin(), tempFilters.end(), 
+        [](const QPair<QString, int> &a, const QPair<QString, int> &b) {
+            return a.first.toLower() < b.first.toLower();
+        });
+    
+    for (const auto &filter : tempFilters) {
+        filterNames.append(filter.first);
+        filterNameToIndex[filter.first] = filter.second;
+        QStandardItem *item = new QStandardItem(filter.first);
+        item->setData(filter.second, Qt::UserRole);
+        filterModel->appendRow(item);
     }
     
     if (filterNames.isEmpty()) {
         QMessageBox::warning(this, "Warning", 
             "No GPU filters found. Make sure acmx2 is compiled with GPU filter support.");
+    }
+}
+
+void GPUFilterDialog::filterSearchChanged(const QString &text)
+{
+    proxyModel->setFilterFixedString(text);
+    if (proxyModel->rowCount() > 0) {
+        filterComboBox->setCurrentIndex(0);
     }
 }
 

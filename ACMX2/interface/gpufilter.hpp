@@ -13,6 +13,9 @@
 #include <QGroupBox>
 #include <QProcess>
 #include <QStringList>
+#include <QLineEdit>
+#include <QSortFilterProxyModel>
+#include <QStandardItemModel>
 
 class GPUFilterDialog : public QDialog {
     Q_OBJECT
@@ -30,6 +33,7 @@ public slots:
     void moveUp();
     void moveDown();
     void clearAll();
+    void filterSearchChanged(const QString &text);
 
 private:
     void loadFiltersFromExecutable();
@@ -38,6 +42,7 @@ private:
     QString execPath;
     QCheckBox *enableCheckBox;
     QComboBox *filterComboBox;
+    QLineEdit *searchLineEdit;
     QListWidget *selectedFiltersList;
     QSpinBox *bufferSizeSpinBox;
     QPushButton *addButton;
@@ -48,6 +53,8 @@ private:
     QPushButton *okButton;
     QPushButton *cancelButton;
     
+    QStandardItemModel *filterModel;
+    QSortFilterProxyModel *proxyModel;
   
     QMap<QString, int> filterNameToIndex;
     QStringList filterNames;
