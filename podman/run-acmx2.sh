@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-IMAGE="localhost/acmx2-cuda-opencv:latest"
+IMAGE="ghcr.io/lostjared/acmx2:latest"
 
 if command -v xhost >/dev/null 2>&1; then
   xhost +si:localuser:root >/dev/null 2>&1 || true
