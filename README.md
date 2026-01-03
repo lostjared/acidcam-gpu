@@ -76,6 +76,13 @@ Early Example (as a GIF)
 
 ![Project Demo](https://github.com/lostjared/acidcam-gpu/blob/main/output.gif)
 
+# Latest Shader Pack
+
+https://lostsidedead.biz/activity/shader.pack.2025.12.07.zip
+
+# Latest 3D Geometry 
+
+https://lostsidedead.biz/activity/models.2025.12.08.zip
 
 # ACMX2 Container Environment Documentation
 
