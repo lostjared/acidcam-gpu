@@ -6,6 +6,14 @@
 
 # In Early stages of Development
 
+⚠ NVIDIA CUDA License Notice
+
+This container includes NVIDIA CUDA libraries.
+Use of this container is subject to the NVIDIA Deep Learning Container License:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+By pulling or running the container, you agree to NVIDIA’s license terms.
+
 
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch  art. Part of the **ACMX2** and **libmx2** ecosystem, it offloads complex glitch filters to **NVIDIA GPUs**, enabling fluid, high-resolution visual transformations at 60+ FPS. Requires you have OpenCV 4 compiled with CUDA support.
 
