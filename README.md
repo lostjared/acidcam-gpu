@@ -53,3 +53,191 @@ make -j$(nproc)
 Early Example (as a GIF)
 
 ![Project Demo](https://github.com/lostjared/acidcam-gpu/blob/main/output.gif)
+
+
+# ACMX2 Container Environment Documentation
+
+This guide covers the setup and usage of the ACMX2 / Acidcam-GPU development environment on **Bazzite**. It details how to build the container, manage file paths, and ensure full hardware access (NVIDIA GPU, Webcam, and X11 Display).
+
+---
+
+## 1. Host System Setup
+
+Before launching the container, you must establish a specific folder structure on your Bazzite host. This ensures your code is persistent and files can be easily transferred.
+
+Open a terminal on your host and run:
+
+```bash
+# Create a folder for your source code (if not already present)
+mkdir -p ~/ACMX2
+
+# Create a "scratch pad" for transferring files (videos, models, loose shaders)
+mkdir -p ~/container_share
+```
+
+**Folder purposes:**
+
+- `~/ACMX2`  
+  Permanent C++ source code. Edit files here using host tools (VS Code, etc.).
+
+- `~/container_share`  
+  Shared volume. Files placed here are visible to both the host and the container.
+
+---
+
+## 2. Building the Image
+
+Navigate to the directory containing your `Containerfile` and build the image. We tag it as `dev` to match the launch script.
+
+```bash
+podman build -t localhost/acmx2-cuda-opencv:dev .
+```
+
+---
+
+## 3. The Launch Script (`run.sh`)
+
+Use this script to launch the container. It handles the complex flags required for GPU, Webcam, and X11/Wayland compatibility.
+
+Create a file named `run.sh` on your host:
+
+```bash
+#!/bin/bash
+
+# Authorize local X11 connections (required for GUI)
+xhost +local:
+
+# Run the container
+podman run --rm -it \
+  --security-opt=label=disable \
+  --group-add keep-groups \
+  --net=host \
+  \
+  # --- HARDWARE ACCESS ---
+  --device nvidia.com/gpu=all \
+  --device /dev/video0 \
+  \
+  # --- DISPLAY SETTINGS (X11/Wayland Bridge) ---
+  -e DISPLAY=$DISPLAY \
+  -e WAYLAND_DISPLAY=$WAYLAND_DISPLAY \
+  -e XDG_RUNTIME_DIR=/tmp/xdg \
+  -e QT_QPA_PLATFORM=xcb \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/xdg/$WAYLAND_DISPLAY \
+  \
+  # --- FILE MAPPINGS ---
+  -v $HOME/ACMX2:/opt/src/acidcam-gpu/ACMX2 \
+  -v $HOME/container_share:/root/share \
+  \
+  # --- STARTUP LOCATION ---
+  -w /opt/src/acidcam-gpu/ACMX2/interface/build \
+  \
+  localhost/acmx2-cuda-opencv:dev
+```
+
+Make it executable:
+
+```bash
+chmod +x run.sh
+```
+
+---
+
+## 4. Workflow & Usage
+
+### A. Development Loop
+
+Since your source code is mounted, you do not need to edit files inside the container.
+
+- **Edit**  
+  Modify `~/ACMX2/main.cpp` (or other files) on your host machine.
+
+- **Build**  
+  Inside the container terminal:
+  ```bash
+  make
+  ```
+
+- **Run**
+  ```bash
+  ./interface
+  ```
+
+### B. File Paths (Shaders & Models)
+
+The container uses different paths than your host. Ensure your C++ code looks in the correct locations.
+
+- **Source code & shaders**  
+  `/opt/src/acidcam-gpu/ACMX2`  
+  Example:
+  ```
+  /opt/src/acidcam-gpu/ACMX2/shaders/my_shader.glsl
+  ```
+
+- **External assets (models, videos)**  
+
+  1. Copy files to `~/container_share` on the host.
+  2. Access them in the container from:
+     ```
+     /root/share/test_video.mp4
+     ```
+
+### C. Saving Output
+
+- **Source code**  
+  Changes are saved automatically to `~/ACMX2` on the host.
+
+- **Binaries / render output**  
+  Copy output files to `/root/share` inside the container.  
+  They will appear in `~/container_share` on the host.
+
+---
+
+## 5. Troubleshooting
+
+### Camera errors
+**Error:**  
+```
+Could not open camera index: 0
+```
+
+**Fix:**  
+Check available devices:
+```bash
+ls /dev/video*
+```
+If your camera is `/dev/video2`, update the `--device` flag in `run.sh`.
+
+---
+
+### X11 display errors
+**Error:**  
+```
+qt.qpa.xcb: could not connect to display
+```
+
+**Fix:**  
+Ensure the following line exists in `run.sh`:
+```bash
+xhost +local:
+```
+Re-run `./run.sh` to refresh permissions.
+
+---
+
+### Permission denied on files
+
+Files created inside the container are owned by root.
+
+**Fix ownership on the host:**
+```bash
+sudo chown -R $USER:$USER ~/ACMX2
+```
+
+---
+
+## Notes
+
+This setup is designed to keep your development workflow fast and reproducible while maintaining full access to GPU acceleration, camera devices, and graphical output.
+
+
