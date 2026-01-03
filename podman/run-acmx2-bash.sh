@@ -1,4 +1,5 @@
 #!/bin/bash
+xhost +local:docker
 set -euo pipefail
 
 IMAGE="ghcr.io/lostjared/acmx2:latest"
