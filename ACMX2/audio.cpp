@@ -43,7 +43,7 @@ int audioCallback(void* outputBuffer, void* inputBuffer, unsigned int nBufferFra
 float get_amp() { return gAmplitude; }
 float get_sense() { return amp_sense; }
 
-RtAudio audio(RtAudio::LINUX_ALSA);
+RtAudio audio(RtAudio::LINUX_PULSE);
 
 void set_output(bool o) {
     output_buffer = o;
