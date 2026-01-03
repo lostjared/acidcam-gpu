@@ -18,7 +18,6 @@ if [ ! -f "$PULSE_COOKIE" ]; then
 fi
 
 exec podman run -it \
-  --name acmx2_dev_update \
   --security-opt=label=disable \
   --net=host \
   --cap-add=SYS_NICE \
