@@ -122,5 +122,5 @@ RUN mkdir -p files/shaders \
 && unzip models.zip
 
 WORKDIR /opt/src/acidcam-gpu/ACMX2/interface/build
-CMD ["/bin/bash"]
+CMD ["/opt/src/acidcam-gpu/ACMX2/interface/build/interface"]
 
