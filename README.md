@@ -107,31 +107,19 @@ Create a file named `run.sh` on your host:
 # Authorize local X11 connections (required for GUI)
 xhost +local:
 
-# Run the container
 podman run --rm -it \
   --security-opt=label=disable \
-  --group-add keep-groups \
-  --net=host \
-  \
-  # --- HARDWARE ACCESS ---
   --device nvidia.com/gpu=all \
   --device /dev/video0 \
-  \
-  # --- DISPLAY SETTINGS (X11/Wayland Bridge) ---
+  --net=host \
   -e DISPLAY=$DISPLAY \
   -e WAYLAND_DISPLAY=$WAYLAND_DISPLAY \
   -e XDG_RUNTIME_DIR=/tmp/xdg \
   -e QT_QPA_PLATFORM=xcb \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/xdg/$WAYLAND_DISPLAY \
-  \
-  # --- FILE MAPPINGS ---
-  -v $HOME/ACMX2:/opt/src/acidcam-gpu/ACMX2 \
-  -v $HOME/container_share:/root/share \
-  \
-  # --- STARTUP LOCATION ---
+  -v ~/ACMX2:/root/share \
   -w /opt/src/acidcam-gpu/ACMX2/interface/build \
-  \
   localhost/acmx2-cuda-opencv:dev
 ```
 
