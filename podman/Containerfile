@@ -108,6 +108,19 @@ RUN mkdir -p build \
  && make -j"$(nproc)" \
  && cp -rf ../data/ .
 
-WORKDIR /opt/src/ACMX2/interface/build
+WORKDIR /opt/src
+RUN apt-get update && apt-get install -y --no-install-recommends \
+curl unzip
+
+WORKDIR /opt/src
+RUN mkdir -p files/shaders \
+&& cd files/shaders \
+&& curl https://lostsidedead.biz/acmx2/shaders.zip -o shaders.zip  \
+&& unzip shaders.zip \
+&& cd  .. \ 
+&& curl https://lostsidedead.biz/acmx2/models.zip -o models.zip \
+&& unzip models.zip
+
+WORKDIR /opt/src/acidcam-gpu/ACMX2/interface/build
 CMD ["/bin/bash"]
 

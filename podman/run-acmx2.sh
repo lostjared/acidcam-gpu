@@ -1,4 +1,8 @@
 #!/bin/bash
+
+xhost +local:docker
+mkdir -p ~/ACMX2
+
 podman run --rm -it \
   --security-opt=label=disable \
   --device nvidia.com/gpu=all \
