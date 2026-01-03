@@ -1,0 +1,113 @@
+FROM nvidia/cuda:13.1.0-devel-ubuntu24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common ca-certificates \
+    && add-apt-repository universe \
+    && apt-get update
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git build-essential pkg-config cmake ninja-build \
+    libgl1-mesa-dev libglu1-mesa-dev mesa-utils \
+    libglm-dev \
+    libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+    libwayland-dev wayland-protocols \
+    libasound2-dev libpulse-dev \
+    ffmpeg \
+    libsdl2-dev libsdl2-ttf-dev libsdl2-mixer-dev libsdl2-image-dev \
+    qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools \
+    qmake6 \
+    qt6-multimedia-dev \
+    libjpeg-dev libpng-dev libtiff-dev \
+    libavcodec-dev libavformat-dev libswscale-dev libavutil-dev \
+    libtbb-dev libopenblas-dev liblapack-dev \
+    libgtk-3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- Build OpenCV with CUDA (and opencv_contrib) ----
+ARG OPENCV_VERSION=4.13.0
+WORKDIR /opt/src
+
+RUN git clone --depth=1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git \
+ && git clone --depth=1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git
+
+WORKDIR /opt/src/opencv
+RUN cmake -S . -B build -G Ninja \
+    -D CMAKE_BUILD_TYPE=Release \
+    -D CMAKE_INSTALL_PREFIX=/usr/local \
+    -D OPENCV_EXTRA_MODULES_PATH=/opt/src/opencv_contrib/modules \
+    -D BUILD_TESTS=OFF -D BUILD_PERF_TESTS=OFF -D BUILD_EXAMPLES=OFF \
+    -D BUILD_opencv_python3=OFF -D BUILD_opencv_java=OFF \
+    -D WITH_CUDA=ON \
+    -D WITH_CUDNN=OFF \
+    -D OPENCV_DNN_CUDA=OFF \
+    -D ENABLE_FAST_MATH=ON -D CUDA_FAST_MATH=ON \
+    -D WITH_CUBLAS=ON \
+    -D WITH_OPENGL=ON \
+    -D WITH_FFMPEG=ON \
+    -D WITH_GSTREAMER=OFF \
+    -D WITH_QT=OFF \
+    -D WITH_GTK=ON \
+    -D CUDA_ARCH_BIN="7.5" \
+ && cmake --build build -j"$(nproc)" \
+ && cmake --install build \
+ && ldconfig
+
+# ---- Build & install libmx2 ----
+WORKDIR /opt/src
+RUN git clone --depth=1 https://github.com/lostjared/libmx2.git
+WORKDIR /opt/src/libmx2/libmx
+RUN cmake -S . -B build \
+      -DEXAMPLES=OFF -DOPENGL=ON \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+    && cmake --build build -j"$(nproc)" \
+    && cmake --install build \
+    && ldconfig
+
+# ---- Build & install acidcam-gpu ----
+WORKDIR /opt/src
+RUN git clone --depth=1 https://github.com/lostjared/acidcam-gpu.git
+
+WORKDIR /opt/src/acidcam-gpu/MXWrite
+RUN cmake -S . -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+    && cmake --build build -j"$(nproc)" \
+    && cmake --install build \
+    && ldconfig
+
+WORKDIR /opt/src/acidcam-gpu/acidcam-gpu
+RUN cmake -S . -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+    && cmake --build build -j"$(nproc)" \
+    && cmake --install build \
+    && ldconfig
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+librtaudio-dev
+
+# ---- Build & install ACMX2 + Qt interface ----
+
+WORKDIR /opt/src/acidcam-gpu/ACMX2
+RUN cmake -S . -B build \
+      -DAUDIO=ON \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+    && cmake --build build -j"$(nproc)" \
+    && cmake --install build \
+    && ldconfig
+
+WORKDIR /opt/src/acidcam-gpu/ACMX2/interface
+RUN mkdir -p build \
+ && cd build \
+ && qmake6 .. \
+ && make -j"$(nproc)" \
+ && cp -rf ../data/ .
+
+WORKDIR /opt/src/ACMX2/interface/build
+CMD ["/bin/bash"]
+
