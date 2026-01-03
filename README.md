@@ -6,14 +6,92 @@
 
 # In Early stages of Development
 
-⚠ NVIDIA CUDA License Notice
+# ACMX2 – Linux (NVIDIA GPU Required)
+
+ACMX2 is distributed as a **Podman container** for Linux.
+This makes installation simple and avoids dependency issues, but it **requires an NVIDIA GPU**.
+
+---
+
+## System Requirements
+
+Before running ACMX2, your system must have:
+
+- Linux (x86_64)
+- NVIDIA GPU
+- NVIDIA proprietary drivers installed on the host
+- Podman
+- NVIDIA Container Toolkit (for Podman)
+- X11 or XWayland
+- Webcam device (`/dev/video0`) for camera input
+- Audio input device (microphone)
+
+> ⚠️ **Important**
+> This build uses NVIDIA CUDA.
+> It will **not run on AMD or Intel GPUs**.
+
+---
+
+## Step 1: Pull the ACMX2 Container Image
+
+```bash
+podman pull ghcr.io/lostjared/acmx2:latest
+```
+
+---
+
+## Step 2: Go to the Podman Script Directory
+
+```bash
+cd podman
+chmod +x run-acmx2.sh
+```
+
+---
+
+## Step 3: Run ACMX2
+
+```bash
+./run-acmx2.sh
+```
+
+The script:
+- Enables NVIDIA GPU acceleration
+- Passes through camera and audio devices
+- Opens the ACMX2 interface window on your desktop
+
+---
+
+## NVIDIA License Notice
 
 This container includes NVIDIA CUDA libraries.
-Use of this container is subject to the NVIDIA Deep Learning Container License:
+
+Use of the container is subject to the NVIDIA Deep Learning Container License:
 https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
 
-By pulling or running the container, you agree to NVIDIA’s license terms.
+By pulling or running this container, you agree to NVIDIA’s license terms.
 
+---
+
+## Troubleshooting
+
+### NVIDIA Driver Not Detected
+Verify:
+```bash
+nvidia-smi
+```
+
+---
+
+## Quick Start Summary
+
+```bash
+podman pull ghcr.io/lostjared/acmx2:latest
+cd podman
+./run-acmx2.sh
+```
+
+---
 
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch  art. Part of the **ACMX2** and **libmx2** ecosystem, it offloads complex glitch filters to **NVIDIA GPUs**, enabling fluid, high-resolution visual transformations at 60+ FPS. Requires you have OpenCV 4 compiled with CUDA support.
 
