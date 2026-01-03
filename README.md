@@ -90,7 +90,7 @@ mkdir -p ~/container_share
 Navigate to the directory containing your `Containerfile` and build the image. We tag it as `dev` to match the launch script.
 
 ```bash
-podman build -t localhost/acmx2-cuda-opencv:dev .
+podman build -t acmx2-cuda-opencv:dev -f Containerfile .
 ```
 
 ---
