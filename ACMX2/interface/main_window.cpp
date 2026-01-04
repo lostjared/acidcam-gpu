@@ -13,7 +13,7 @@
 #include <algorithm>
 #include<QProcess>
 #include<QTextStream>
-
+#include<filesystem>
 #ifdef __linux__
 #include<unistd.h>
 #include<sys/types.h>
@@ -649,12 +649,14 @@ void MainWindow::runSelected() {
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid()); 
-    //env.insert("XDG_RUNTIME_DIR", "/run/user/" + uid);
-    //env.insert("PULSE_SERVER", "unix:/run/user/" + uid + "/pulse/native");
+    QString user_run_path = "/run/user/" + uid;
+    if (std::filesystem::exists(user_run_path.toStdString())) {
+        env.insert("XDG_RUNTIME_DIR", user_run_path);
+        env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
+    } 
     env.insert("CUDA_VISIBLE_DEVICES", "0"); 
-    env.insert("vblank_mode", "0"); 
+    env.insert("vblank_mode", "0");
     process->setProcessEnvironment(env);
-
 #endif
 
    if(shader_path.length()==0) {
@@ -759,13 +761,15 @@ void MainWindow::runAll() {
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid()); 
-    //env.insert("XDG_RUNTIME_DIR", "/run/user/" + uid);
-    //env.insert("PULSE_SERVER", "unix:/run/user/" + uid + "/pulse/native");
+    QString user_run_path = "/run/user/" + uid;
+    if (std::filesystem::exists(user_run_path.toStdString())) {
+        env.insert("XDG_RUNTIME_DIR", user_run_path);
+        env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
+    } 
     env.insert("CUDA_VISIBLE_DEVICES", "0"); 
-    env.insert("vblank_mode", "0"); 
+    env.insert("vblank_mode", "0");
     process->setProcessEnvironment(env);
 #endif
-
     if(shader_path.length()==0) {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
