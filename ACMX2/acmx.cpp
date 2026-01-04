@@ -1824,7 +1824,7 @@ private:
                         });
                     }
 
-                    if (writer.is_open() && written_frame_counter == 0) {
+                    if (writer.is_open() && written_frame_counter <= 30 && filename.empty() && graphic.empty()) {
                         written_frame_counter++;
                         continue;
                     }
