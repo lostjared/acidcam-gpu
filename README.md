@@ -265,7 +265,7 @@ exec podman run -it \
 Make it executable:
 
 ```bash
-chmod +x run.sh
+chmod +x acmx2-run.sh
 ```
 
 ---
