@@ -108,7 +108,7 @@ void SettingsWindow::init() {
         "1920x1080", "1080x1920", "2560x1440", "1440x2560", "3840x2160", "2160x3840"
     };
     screenResolutionComboBox->addItems(screenResolutions);
-    screenResolutionComboBox->setCurrentIndex(-1);
+    screenResolutionComboBox->setCurrentIndex(0);
 
     textureCacheCheckBox = new QCheckBox("Enable Texture Cache", this);
     cacheDelaySpinBox = new QSpinBox(this);
