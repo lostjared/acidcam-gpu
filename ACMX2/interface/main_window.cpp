@@ -13,7 +13,6 @@
 #include <algorithm>
 #include<QProcess>
 #include<QTextStream>
-#include<filesystem>
 #ifdef __linux__
 #include<unistd.h>
 #include<sys/types.h>
@@ -650,7 +649,7 @@ void MainWindow::runSelected() {
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid()); 
     QString user_run_path = "/run/user/" + uid;
-    if (std::filesystem::exists(user_run_path.toStdString())) {
+    if (QDir(user_run_path).exists()) {
         env.insert("XDG_RUNTIME_DIR", user_run_path);
         env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
     } 
@@ -762,7 +761,7 @@ void MainWindow::runAll() {
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid()); 
     QString user_run_path = "/run/user/" + uid;
-    if (std::filesystem::exists(user_run_path.toStdString())) {
+    if (QDir(user_run_path).exists()) {
         env.insert("XDG_RUNTIME_DIR", user_run_path);
         env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
     } 
