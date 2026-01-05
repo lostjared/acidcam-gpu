@@ -1928,7 +1928,7 @@ const char *message = R"(
 template<typename T>
 void printAbout(Argz<T> &parser) { 
     mx::system_out << PROGRAM_NAME << ": " << VERSION_INFO << "\n";
-    mx::system_out << "(C) 2025 " << VERSION_AUTHOR << "\n";
+    mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
     mx::system_out << "Command Line Arguments:\n";
     parser.help(mx::system_out);
@@ -1999,7 +1999,7 @@ int main(int argc, char **argv) {
     }
 
     mx::system_out << PROGRAM_NAME << " " << VERSION_INFO << "\n";
-    mx::system_out << "(C) 2025 " << VERSION_AUTHOR << "\n";
+    mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
 
     Argument<std::string> arg;
