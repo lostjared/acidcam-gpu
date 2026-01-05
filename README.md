@@ -226,15 +226,19 @@ IMAGE="ghcr.io/lostjared/acmx2:latest"
 # 1. Get Host Audio Paths
 PULSE_SOCKET="/run/user/$(id -u)/pulse/native"
 PULSE_COOKIE="$HOME/.config/pulse/cookie"
+HOST_SHARE="$HOME/container_share"
 
 if command -v xhost >/dev/null 2>&1; then
   xhost +si:localuser:root >/dev/null 2>&1 || true
 fi
 
-# 2. Check if cookie exists (create dummy if missing to prevent mount error)
+# 2. Check if cookie exists
 if [ ! -f "$PULSE_COOKIE" ]; then
     echo "Warning: Pulse Cookie not found at $PULSE_COOKIE"
 fi
+
+# 3. Ensure the share directory exists on host
+mkdir -p "$HOST_SHARE"
 
 exec podman run -it \
   --security-opt=label=disable \
@@ -252,6 +256,7 @@ exec podman run -it \
   -v "$PULSE_SOCKET":/tmp/pulse-socket \
   -v "$PULSE_COOKIE":/tmp/pulse-cookie \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v "$HOST_SHARE":/root/share \
   "$IMAGE" bash -lc '
     mkdir -p /tmp/xdg
     chmod 700 /tmp/xdg
