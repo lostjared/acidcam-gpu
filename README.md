@@ -274,34 +274,13 @@ chmod +x acmx2-run.sh
 
 ## 4. Workflow & Usage
 
-### A. Development Loop
-
-Since your source code is mounted, you do not need to edit files inside the container.
-
-- **Edit**  
-  Modify `~/ACMX2/main.cpp` (or other files) on your host machine.
-
-- **Build**  
-  Inside the container terminal:
-  ```bash
-  make
-  ```
-
+### A. Program to Run
 - **Run**
   ```bash
   ./interface
   ```
 
 ### B. File Paths (Shaders & Models)
-
-The container uses different paths than your host. Ensure your C++ code looks in the correct locations.
-
-- **Source code & shaders**  
-  `/opt/src/acidcam-gpu/ACMX2`  
-  Example:
-  ```
-  /opt/src/acidcam-gpu/ACMX2/shaders/my_shader.glsl
-  ```
 
 - **External assets (models, videos)**  
 
