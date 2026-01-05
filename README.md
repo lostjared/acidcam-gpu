@@ -192,9 +192,6 @@ mkdir -p ~/container_share
 
 **Folder purposes:**
 
-- `~/ACMX2`  
-  Permanent C++ source code. Edit files here using host tools (VS Code, etc.).
-
 - `~/container_share`  
   Shared volume. Files placed here are visible to both the host and the container.
 
