@@ -183,8 +183,6 @@ Before launching the container, you must establish a specific folder structure o
 Open a terminal on your host and run:
 
 ```bash
-# Create a folder for your source code (if not already present)
-mkdir -p ~/ACMX2
 
 # Create a "scratch pad" for transferring files (videos, models, loose shaders)
 mkdir -p ~/container_share
@@ -292,9 +290,6 @@ chmod +x acmx2-run.sh
 
 ### C. Saving Output
 
-- **Source code**  
-  Changes are saved automatically to `~/ACMX2` on the host.
-
 - **Binaries / render output**  
   Copy output files to `/root/share` inside the container.  
   They will appear in `~/container_share` on the host.
@@ -329,7 +324,7 @@ Ensure the following line exists in `run.sh`:
 ```bash
 xhost +local:
 ```
-Re-run `./run.sh` to refresh permissions.
+Re-run `./run-acmx2.sh` to refresh permissions.
 
 ---
 
