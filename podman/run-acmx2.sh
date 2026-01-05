@@ -8,7 +8,7 @@ IMAGE="ghcr.io/lostjared/acmx2:latest"
 PULSE_SOCKET="/run/user/$(id -u)/pulse/native"
 PULSE_COOKIE="$HOME/.config/pulse/cookie"
 HOST_SHARE="$HOME/container_share"
-
+mkdir -p "$HOST_SHARE"
 if command -v xhost >/dev/null 2>&1; then
   xhost +si:localuser:root >/dev/null 2>&1 || true
 fi
