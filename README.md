@@ -210,11 +210,11 @@ podman build -t acmx2-cuda-opencv:dev -f Containerfile .
 
 ---
 
-## 3. The Launch Script (`run.sh`)
+## 3. The Launch Script (`acmx2-run.sh`)
 
 Use this script to launch the container. It handles the complex flags required for GPU, Webcam, and X11/Wayland compatibility.
 
-Create a file named `run.sh` on your host:
+Create a file named `acn20run.sh` on your host:
 
 ```bash
 #!/bin/bash
