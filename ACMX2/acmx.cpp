@@ -1907,6 +1907,8 @@ const char *message = R"(
 -[ Keyboard controls ]- {
     Up arrow - Previous shader
     Down arrow - Next shader
+    Left - Previous GPU filter (if enabled)
+    Right - Next PGU fitler (if enabled)
     Space -  Enable/Disable Processing
     L - Enable/Disable video freeze (Video/Image Modes)
     P - Enable/Disable pause video (Video/Image Modes)
@@ -1945,13 +1947,14 @@ void printAbout(Argz<T> &parser) {
     mx::system_out << PROGRAM_NAME << ": " << VERSION_INFO << "\n";
     mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
-    checkDevices();
     mx::system_out << "Command Line Arguments:\n";
     parser.help(mx::system_out);
     mx::system_out << message;
 }
 
 int main(int argc, char **argv) {
+    fflush(stdout);
+    checkDevices();
     fflush(stdout);
     Argz<std::string> parser(argc, argv);    
     parser.addOptionSingle('v', "Display help message")
