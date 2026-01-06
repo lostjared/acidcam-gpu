@@ -1925,11 +1925,27 @@ const char *message = R"(
 }
 )";
 
+
+void checkDevices() {
+    int device_count = 0;
+    cudaError_t error = cudaGetDeviceCount(&device_count);
+    if (error != cudaSuccess || device_count == 0) {
+        std::cerr << "OpenCV Cuda Support not found." << std::endl;
+        std::cerr << "Reason: " << cudaGetErrorString(error) << std::endl;
+        std::cerr << "Check: Are NVIDIA drivers installed? Is the GPU seated?" << std::endl;
+        exit(EXIT_FAILURE);
+    } else {
+        std::cout << "🚀 GPU Acceleration Active: " << device_count << " device(s) found." << std::endl;
+        cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
+    }
+}
+
 template<typename T>
 void printAbout(Argz<T> &parser) { 
     mx::system_out << PROGRAM_NAME << ": " << VERSION_INFO << "\n";
     mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
+    checkDevices();
     mx::system_out << "Command Line Arguments:\n";
     parser.help(mx::system_out);
     mx::system_out << message;
@@ -2001,6 +2017,7 @@ int main(int argc, char **argv) {
     mx::system_out << PROGRAM_NAME << " " << VERSION_INFO << "\n";
     mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
+    checkDevices();
 
     Argument<std::string> arg;
     MXArguments args;
