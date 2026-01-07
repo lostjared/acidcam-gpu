@@ -1,6 +1,8 @@
 #include "settings.hpp"
 #include<QMessageBox>
 #include<QSettings>
+#include<unistd.h>
+#include<fcntl.h>
 
 SettingsWindow::SettingsWindow(QWidget *parent)
     : QDialog(parent),
@@ -20,6 +22,21 @@ SettingsWindow::SettingsWindow(QWidget *parent)
     init();
 }
 
+void SettingsWindow::populateCameraDevices() {
+    for (int i = 0; i < 20; ++i) {
+        QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(i);
+        QFile file(sysfs_path);
+        if (file.exists()) {
+            QString cameraName = getCameraName(i);
+            cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
+        }
+    }
+    
+    if (cameraIndexComboBox->count() == 0) {
+        cameraIndexComboBox->addItem("No cameras found", -1);
+    }
+}
+
 void SettingsWindow::init() {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     cameraOptionRadioButton = new QRadioButton("Use Camera", this);
@@ -31,9 +48,7 @@ void SettingsWindow::init() {
     mainLayout->addWidget(graphicsFileOptionRadioButton);
     QLabel *cameraIndexLabel = new QLabel("Select Camera Index:", this);
     cameraIndexComboBox = new QComboBox(this);
-    for (int i = 0; i <= 9; ++i) {
-        cameraIndexComboBox->addItem(QString::number(i));
-    }
+    populateCameraDevices();
     QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
                     "* { color: red; font-weight: bold; } "
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
@@ -70,7 +85,7 @@ void SettingsWindow::init() {
     QLabel *cameraFPSLabel = new QLabel("Set FPS:", this);
     cameraFPSSpinBox = new QSpinBox(this);
     cameraFPSSpinBox->setRange(1, 120);
-    cameraFPSSpinBox->setValue(24);
+    cameraFPSSpinBox->setValue(30);
 
     
     QHBoxLayout *inputVideoFileLayout = new QHBoxLayout;
@@ -333,6 +348,19 @@ QString SettingsWindow::getModelFile() const {
     return modelFile;
 }
 
+QString SettingsWindow::getCameraName(int device_index) {
+    QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(device_index);
+    QFile file(sysfs_path);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QString name = QString::fromUtf8(file.readLine()).trimmed();
+        file.close();
+        if (!name.isEmpty()) {
+            return name;
+        }
+    }
+    return "Unknown Camera";
+}
+
 void SettingsWindow::acceptSettings() {
     useInputVideoFile = inputVideoOptionRadioButton->isChecked();
     useGraphicsFile = graphicsFileOptionRadioButton->isChecked();
@@ -352,7 +380,7 @@ void SettingsWindow::acceptSettings() {
         graphicsFile = graphicsFileLineEdit->text();
     } else {
         
-        selectedCameraIndex = cameraIndexComboBox->currentText().toInt();
+        selectedCameraIndex = cameraIndexComboBox->currentData().toInt();
         QStringList cameraResParts = cameraResolutionComboBox->currentText().split('x');
         if (cameraResParts.size() == 2) {
             selectedCameraResolution = QSize(cameraResParts[0].toInt(), cameraResParts[1].toInt());

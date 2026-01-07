@@ -34,7 +34,7 @@ public:
     bool isCopyAudioEnabled() const;
     bool is3dEnabled() const;
     QString getModelFile() const;
-
+    QString getCameraName(int device_index);   
 private slots:
     void acceptSettings();
     void rejectSettings();
@@ -45,6 +45,7 @@ private slots:
 
 private:
     void init();
+    void populateCameraDevices();
 
     QComboBox *cameraIndexComboBox;
     QComboBox *cameraResolutionComboBox;
