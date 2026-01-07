@@ -1,8 +1,10 @@
 #include "settings.hpp"
 #include<QMessageBox>
 #include<QSettings>
+#include<QSet>
 #include<unistd.h>
 #include<fcntl.h>
+
 
 SettingsWindow::SettingsWindow(QWidget *parent)
     : QDialog(parent),
@@ -23,12 +25,17 @@ SettingsWindow::SettingsWindow(QWidget *parent)
 }
 
 void SettingsWindow::populateCameraDevices() {
+    QSet<QString> addedCameras;
+    
     for (int i = 0; i < 20; ++i) {
         QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(i);
         QFile file(sysfs_path);
         if (file.exists()) {
             QString cameraName = getCameraName(i);
-            cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
+            if (!addedCameras.contains(cameraName)) {
+                cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
+                addedCameras.insert(cameraName);
+            }
         }
     }
     
@@ -160,7 +167,6 @@ void SettingsWindow::init() {
 
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheDelaySpinBox, &QSpinBox::setEnabled);
 
-    
     connect(cameraOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
         if (checked) {
             cameraIndexComboBox->setEnabled(true);
