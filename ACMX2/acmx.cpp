@@ -542,11 +542,11 @@ struct MXArguments {
     unsigned int audio_channels = 2;
     float audio_sensitivty = 0.25f;
 #endif
-    // acidcam-gpu filter settings
     bool gpu_filter_enabled = false;
     std::vector<int> gpu_filter_indices;
     int gpu_frame_buffer_size = 8;
     bool disable_counter = false;
+    int cuda_device = 0;
 };
 
 struct FrameData {
@@ -586,7 +586,8 @@ public:
           frame_cache{4},
           texture_cache{args.cache},
           cache_delay{args.cache_delay},
-          copy_audio{args.copy_audio} {
+          copy_audio{args.copy_audio},
+          gpu_cuda_device{args.cuda_device} {
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
@@ -742,6 +743,13 @@ public:
     std::string m_file;
     
     virtual void load(gl::GLWindow *win) override {
+        cudaError_t cuda_err = cudaSetDevice(gpu_cuda_device);
+        if(cuda_err != cudaSuccess) {
+            throw mx::Exception("Failed to set CUDA device " + std::to_string(gpu_cuda_device) + ": " + std::string(cudaGetErrorString(cuda_err)));
+        }
+        mx::system_out << "acmx2: Using CUDA device: " << gpu_cuda_device << "\n";
+        fflush(stdout);
+        
         frame_counter = 0;
         sessionStartTime = std::chrono::steady_clock::now();
         fpsLastTime = sessionStartTime;
@@ -1594,6 +1602,7 @@ private:
     bool oscillateScale = false;
     float cameraDistance = 0.0f;
     std::atomic<uint64_t> snapshotOffset{0};
+    int gpu_cuda_device = 0;
 private:
     std::atomic<uint64_t> frames_dropped{0};
     int win_w = 0;
@@ -1738,7 +1747,7 @@ private:
                     if(!cap.read(localFrame)) {
                         mx::system_err << "acmx2: camera read failed.\n";
                         captureRunning = false;
-                        running = false;  // Signal main loop to quit
+                        running = false;  
                         break;
                     }
                     if(localFrame.empty()) {
@@ -1928,7 +1937,7 @@ const char *message = R"(
 )";
 
 
-void checkDevices() {
+void checkDevices(bool list_only = false) {
     int device_count = 0;
     cudaError_t error = cudaGetDeviceCount(&device_count);
     if (error != cudaSuccess || device_count == 0) {
@@ -1938,7 +1947,14 @@ void checkDevices() {
         exit(EXIT_FAILURE);
     } else {
         std::cout << "🚀 GPU Acceleration Active: " << device_count << " device(s) found." << std::endl;
-        cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
+        if(list_only) {
+            for(int i = 0; i < device_count; ++i) {
+                cudaSetDevice(i);
+                cv::cuda::printShortCudaDeviceInfo(i);
+            }
+        } else {
+            cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
+        }
     }
 }
 
@@ -1953,8 +1969,6 @@ void printAbout(Argz<T> &parser) {
 }
 
 int main(int argc, char **argv) {
-    fflush(stdout);
-    checkDevices();
     fflush(stdout);
     Argz<std::string> parser(argc, argv);    
     parser.addOptionSingle('v', "Display help message")
@@ -1997,6 +2011,9 @@ int main(int argc, char **argv) {
           .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
           .addOptionDouble(402, "list-filters", "List available GPU filters")
           .addOptionDouble(403, "disable-counter", "Disable timer and FPS counter overlay")
+          .addOptionSingleValue('m', "CUDA device index")
+          .addOptionDoubleValue('M', "cuda-device", "CUDA device index")
+          .addOptionDouble(404, "list-cuda-devices", "List available CUDA devices")
 #ifdef AUDIO_ENABLED
           .addOptionSingle('w', "Enable Audio Reactivity")
           .addOptionDouble('W', "enable-audio", "enabled audio reacitivty")
@@ -2138,7 +2155,6 @@ int main(int argc, char **argv) {
                     args.model_file = arg.arg_value;
                     break;
                 case 400: {
-                    // Parse comma-separated GPU filter indices
                     args.gpu_filter_enabled = true;
                     std::string list = arg.arg_value;
                     size_t start = 0;
@@ -2173,6 +2189,14 @@ int main(int argc, char **argv) {
                     break;
                 case 403:
                     args.disable_counter = true;
+                    break;
+                case 'm':
+                case 'M':
+                    args.cuda_device = atoi(arg.arg_value.c_str());
+                    break;
+                case 404:
+                    checkDevices(true);
+                    exit(EXIT_SUCCESS);
                     break;
 #ifdef AUDIO_ENABLED
                 case 'W':
