@@ -1,6 +1,6 @@
 #ifndef __VERSION_INFO_H_
 #define __VERSION_INFO_H_
-#define VERSION_INFO "v2.0.0"
+#define VERSION_INFO "v2.0.1"
 #define VERSION_AUTHOR "LostSideDead"
 #define PROGRAM_NAME "ACMX2"
 #endif
