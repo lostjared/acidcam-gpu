@@ -15,6 +15,9 @@
 #include<mxwrite.hpp>
 #include<format>
 #include<filesystem>
+#include<fstream>
+#include<unistd.h>
+#include<fcntl.h>
 
 struct AnimationState {
     float alpha = 1.0f;
@@ -130,6 +133,65 @@ void checkDevices() {
     }
 }
 
+void listGraphicsCards() {
+    int device_count = 0;
+    cudaError_t error = cudaGetDeviceCount(&device_count);
+    if (error != cudaSuccess || device_count == 0) {
+        std::cerr << "No CUDA devices found." << std::endl;
+        return;
+    }
+    
+    std::cout << "Available Graphics Cards:" << std::endl;
+    for (int i = 0; i < device_count; ++i) {
+        cv::cuda::DeviceInfo device(i);
+        std::cout << "  [" << i << "] " << device.name() 
+                  << " - Total Memory: " << (device.totalMemory() / (1024*1024)) << " MB" << std::endl;
+    }
+}
+
+std::string getCameraName(int device_index) {
+    std::string sysfs_path = "/sys/class/video4linux/video" + std::to_string(device_index) + "/name";
+    std::ifstream file(sysfs_path);
+    if (file.is_open()) {
+        std::string name;
+        if (std::getline(file, name)) {
+            name.erase(name.find_last_not_of(" \n\r\t") + 1);
+            file.close();
+            return name;
+        }
+        file.close();
+    }
+    return "Unknown Camera";
+}
+
+void listCameras() {
+    std::cout << "Available Cameras:" << std::endl;
+    int camera_count = 0;
+    int stderr_backup = dup(STDERR_FILENO);
+    int devnull = open("/dev/null", O_WRONLY);
+    dup2(devnull, STDERR_FILENO);
+    close(devnull);
+    
+    for (int i = 0; i < 10; ++i) {
+        cv::VideoCapture cap(i);
+        if (cap.isOpened()) {
+            dup2(stderr_backup, STDERR_FILENO);
+            std::string camera_name = getCameraName(i);
+            std::cout << "  [" << i << "] " << camera_name << std::endl;
+            camera_count++;
+            cap.release();
+            devnull = open("/dev/null", O_WRONLY);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+    }   
+    dup2(stderr_backup, STDERR_FILENO);
+    close(stderr_backup);
+    if (camera_count == 0) {
+        std::cout << "  No cameras found." << std::endl;
+    }
+}
+
 int main(int argc, char** argv) {
     std::cout << "Acid Cam GPU Demo" << std::endl;
     checkDevices();
@@ -174,6 +236,7 @@ int main(int argc, char** argv) {
     .addOptionDouble(302, "list", "List all devices")
     .addOptionDouble(300, "hide", "hide HUD")
     .addOptionDouble(307, "exposure", "Disable Auto Exposurre")
+    .addOptionDouble(308, "list-devices", "List graphics cards and cameras")
     .addOptionDouble(320, "list", "List all filters")
     .addOptionSingle('h', "help");
     try {
@@ -200,6 +263,12 @@ int main(int argc, char** argv) {
                 }
                 break;
                 case 307: expose = true; break;
+                case 308:
+                    listGraphicsCards();
+                    std::cout << std::endl;
+                    listCameras();
+                    exit(EXIT_SUCCESS);
+                break;
                 case 'c': case 258: cameraArg = a.arg_value; break;
                 case 'f': case 256: filtersArg = a.arg_value; break;
                 case 'b': case 257: bufferArg = a.arg_value; break;
@@ -443,7 +512,7 @@ int main(int argc, char** argv) {
                     std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
                 }
             } 
-            if(output_filename.empty() && time_over != 0 && secs >= time_over) {
+            if(output_filename.empty() && time_over != 0 && (elapsed_ms / 1000) >= time_over) {
                 std::cout << "ac: Time duration reached. Exiting..." << std::endl;
                 break;
             } 
@@ -469,8 +538,12 @@ int main(int argc, char** argv) {
         if(!tally.empty()) 
             std::cout << "Total tally: " << tally << "\n";
 
-        if(!output_filename.empty())
-            std::cout << "Wrote: " << output_filename << " " << writer.get_frame_count() << " frames " << static_cast<double>(writer.get_frame_count())/fps << " seconds" << std::endl;
+        if(!output_filename.empty()) {
+            double total_secs = static_cast<double>(writer.get_frame_count()) / fps;
+            int final_mins = static_cast<int>(total_secs / 60);
+            int final_secs = static_cast<int>(total_secs) % 60;
+            std::cout << "Wrote: " << output_filename << " " << writer.get_frame_count() << " frames " << std::format("{:02}:{:02}", final_mins, final_secs) << std::endl;
+        }
     }
     catch(std::exception &e) { 
         std::cerr << e.what() << std::endl; 
