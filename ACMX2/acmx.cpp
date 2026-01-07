@@ -2037,7 +2037,6 @@ int main(int argc, char **argv) {
     mx::system_out << PROGRAM_NAME << " " << VERSION_INFO << "\n";
     mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
-    checkDevices();
 
     Argument<std::string> arg;
     MXArguments args;
@@ -2239,7 +2238,7 @@ int main(int argc, char **argv) {
         mx::system_err.flush();
         return EXIT_FAILURE;
     }    
-
+    checkDevices();
     if(args.path.empty()) {
         args.path = ".";
         mx::system_out << "acmx2: Path name not provided, using current path...\n";
