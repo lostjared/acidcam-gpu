@@ -392,6 +392,16 @@ int main(int argc, char** argv) {
             auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - app_start_time).count();
             int mins = (elapsed_ms / 60000);
             int secs = (elapsed_ms % 60000) / 1000; 
+
+            static uint64_t frame_counter = 0;
+            frame_counter++;
+
+            if(!output_filename.empty()) {
+                double time_elapsed = static_cast<double>(frame_counter) / fps;
+                mins = static_cast<int>(time_elapsed / 60);
+                secs = static_cast<int>(time_elapsed) % 60;
+            }
+           
             if ((tick_count == 1) || (++tick % tick_count == 0)) {      
                 if(show_hud) {  
                     std::string text = std::format("Acid Cam GPU - Time: {:02}:{:02} | FPS: {}", mins, secs, (int)currentFPS);
