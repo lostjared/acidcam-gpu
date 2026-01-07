@@ -1346,12 +1346,13 @@ public:
                 fpsFrameCount = 0;
                 fpsLastTime = currentTime;
             }
-            
-            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - sessionStartTime).count();
-            int hours = elapsed / 3600;
-            int minutes = (elapsed % 3600) / 60;
-            int seconds = elapsed % 60;
-            
+            static uint64_t frame_counter = 0;
+            ++frame_counter;
+            uint64_t seconds = 0, minutes = 0, hours = 0;
+            double time_elapsed = static_cast<double>(frame_counter) / fps;
+            hours = static_cast<int>((time_elapsed / 60) / 60);
+            minutes = static_cast<int>(time_elapsed / 60);
+            seconds = static_cast<int>(time_elapsed) % 60;
             std::ostringstream timerStr;
             timerStr << std::setfill('0') << std::setw(2) << hours << ":"
                      << std::setfill('0') << std::setw(2) << minutes << ":"
@@ -1867,8 +1868,17 @@ private:
         if(recording) {
             writer.close();
             int64_t final_frame_count = writer.get_frame_count();
-            double elapsedSeconds = writer.get_duration(); 
-            mx::system_out << "acmx2: " << " wrote " << elapsedSeconds << " seconds (" << final_frame_count << " frames) to file: " << ofilename << "\n";
+            double total_secs = static_cast<double>(final_frame_count) / fps;
+            uint64_t hours = 0, minutes = 0, seconds = 0;
+            hours = static_cast<uint64_t>(total_secs / 3600);
+            minutes = static_cast<uint64_t>(total_secs / 60) % 60;
+            seconds = static_cast<uint64_t>(total_secs) % 60;
+            std::ostringstream timerStr;
+            timerStr << std::setfill('0') << std::setw(2) << hours << ":"
+                     << std::setfill('0') << std::setw(2) << minutes << ":"
+                     << std::setfill('0') << std::setw(2) << seconds;
+            
+            mx::system_out << "acmx2: " << " wrote " << timerStr.str() << " (" << final_frame_count << " frames) to file: " << ofilename << "\n";
             if(!filename.empty() && repeat == false && copy_audio && finished) {
                 transfer_audio(filename, ofilename);
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
