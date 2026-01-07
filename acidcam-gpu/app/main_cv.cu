@@ -402,7 +402,7 @@ int main(int argc, char** argv) {
             }
             int key = cv::waitKey(1);
             if (key == 27) break; 
-            else if (key == 's' || key == 'S') {
+            else if (key == 'z'|| key == 'Z') {
                 auto t = std::time(nullptr);
                 auto tm = *std::localtime(&t);
                 std::ostringstream oss;
@@ -415,18 +415,18 @@ int main(int argc, char** argv) {
             else if (key == 't') {
                 tally += std::to_string(filter_index) + ", ";
             }
-            else if (key == 82 || key == 65362) { 
-                if (filter_index < ac_gpu::AC_FILTER_MAX - 1) {
-                    filter_index++;
+            else if (key == 'w' || key == 'W') { 
+                if (filter_index > 0) {
+                    filter_index--;
                     vlist.clear();
                     vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
                     filtersChanged = true;
                     std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
                 }
             }
-            else if (key == 84 || key == 65364) { 
-                if (filter_index > 0) {
-                    filter_index--;
+            else if (key == 's' || key == 'S') { 
+                if (filter_index < ac_gpu::AC_FILTER_MAX - 1) {
+                    filter_index++;
                     vlist.clear();
                     vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
                     filtersChanged = true;
