@@ -801,20 +801,39 @@ namespace ac_gpu {
         int sumB = 0;
         int sumG = 0;
         int sumR = 0;
+        int validFrames = 0;
         for (int j = 0; j < params.numFrames; ++j) {
             unsigned char* framePtr = allFrames[j];
             if (framePtr != nullptr) {
                 sumB += framePtr[idx];
                 sumG += framePtr[idx + 1];
                 sumR += framePtr[idx + 2];
+                validFrames++;
             }
         }
-        unsigned char newB = currentFrame[idx] ^ (unsigned char)(1 + sumB);
-        unsigned char newG = currentFrame[idx + 1] ^ (unsigned char)(1 + sumG);
-        unsigned char newR = currentFrame[idx + 2] ^ (unsigned char)(1 + sumR);
-        currentFrame[idx] = newG;
-        currentFrame[idx + 1] = newR;
-        currentFrame[idx + 2] = newB;
+        if (validFrames > 0) {
+            int avgB = sumB / validFrames;
+            int avgG = sumG / validFrames;
+            int avgR = sumR / validFrames;
+            unsigned char curB = currentFrame[idx];
+            unsigned char curG = currentFrame[idx + 1];
+            unsigned char curR = currentFrame[idx + 2];
+            unsigned char xorB = curB ^ (unsigned char)(1 + sumB);
+            unsigned char xorG = curG ^ (unsigned char)(1 + sumG);
+            unsigned char xorR = curR ^ (unsigned char)(1 + sumR);
+            unsigned char newB = (unsigned char)((xorB * 0.5f) + (avgB * 0.5f));
+            unsigned char newG = (unsigned char)((xorG * 0.5f) + (avgG * 0.5f));
+            unsigned char newR = (unsigned char)((xorR * 0.5f) + (avgR * 0.5f));
+            float boost = 1.8f;
+            int midpoint = 128;
+            newB = (unsigned char)fminf(255.0f, fmaxf(0.0f, midpoint + (newB - midpoint) * boost));
+            newG = (unsigned char)fminf(255.0f, fmaxf(0.0f, midpoint + (newG - midpoint) * boost));
+            newR = (unsigned char)fminf(255.0f, fmaxf(0.0f, midpoint + (newR - midpoint) * boost));
+            currentFrame[idx] = newR;
+            currentFrame[idx + 1] = newG;
+            currentFrame[idx + 2] = newB;
+        }
+        setAlpha(currentFrame, idx, params.isNegative);
     }
     __device__ void processSquareBlockResize(int x, int y, unsigned char* currentFrame, unsigned char** allFrames, size_t step, const FilterParams& params) {
         int block_row = y / params.square_size;
@@ -8178,6 +8197,33 @@ namespace ac_gpu {
         data[idx + ch] = (unsigned char)fminf(255.0f, fmaxf(0.0f, temp[ch] + shift));
         data[idx + (ch + 1) % 3] = (unsigned char)fminf(255.0f, fmaxf(0.0f, temp[(ch + 1) % 3] - shift / 2));
     }
+    __device__ void Blur(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+        int idx = y * step + x * 4;
+        if (x < 2 || y < 2) return;
+        unsigned char values[3][25];
+        int count = 0;
+        for (int dy = -2; dy <= 2; ++dy) {
+            for (int dx = -2; dx <= 2; ++dx) {
+                int nidx = (y + dy) * step + (x + dx) * 4;
+                for (int j = 0; j < 3; ++j) {
+                    values[j][count] = data[nidx + j];
+                }
+                count++;
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            for (int i = 0; i < count - 1; ++i) {
+                for (int k = 0; k < count - i - 1; ++k) {
+                    if (values[j][k] > values[j][k + 1]) {
+                        unsigned char tmp = values[j][k];
+                        values[j][k] = values[j][k + 1];
+                        values[j][k + 1] = tmp;
+                    }
+                }
+            }
+            data[idx + j] = values[j][count / 2];
+        }
+    }
 
     __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -8189,7 +8235,10 @@ namespace ac_gpu {
             int idx = y * step + x * 4;
             switch (filters[i].index) {
                 case 0: processSelfAlphaBlend(x, y, data, step, params); break;
-                case 1: case 2: processMedianBlend(x, y, data, allFrames, step, params); break;
+                case 1:
+                processMedianBlend(x, y, data, allFrames, step, params);
+                break;
+                case 2: processMedianBlend(x, y, data, allFrames, step, params); break;
                 case 3: processSquareBlockResize(x, y, data, allFrames, step, params); break;
                 case 4: processSelfScaleRefined(x, y, data, step, params); break;
                 case 5: processStrangeGlitch(x, y, data, allFrames, step, params); break;
