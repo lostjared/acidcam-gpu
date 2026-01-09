@@ -1834,7 +1834,11 @@ private:
                         });
                     }
 
-                    if (writer.is_open() && written_frame_counter <= 30 && filename.empty() && graphic.empty()) {
+                    // skip first frame
+                    if(writer.is_open() && !filename.empty() && written_frame_counter == 0) {
+                        written_frame_counter++;
+                        continue;
+                    } else if (writer.is_open() && written_frame_counter <= 30 && filename.empty() && graphic.empty()) {
                         written_frame_counter++;
                         continue;
                     }
