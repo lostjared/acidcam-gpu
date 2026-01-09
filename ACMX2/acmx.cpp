@@ -823,8 +823,8 @@ public:
             if(!ofilename.empty()) {
                 if(writer.open(ofilename, w, h, fps, crf.c_str())) {
                     mx::system_out << "acmx2: Opened: " << ofilename 
-                                   << " for writing at: " << crf 
-                                   << " CRF FPS: " << fps <<"\n";
+                                   << " for writing at: CRF: " << crf 
+                                   << " FPS: " << fps <<"\n";
 
                     fflush(stdout);
                     fflush(stderr);
@@ -875,8 +875,8 @@ public:
             if(!ofilename.empty()) {
                 if(writer.open_ts(ofilename, w, h, fps, crf.c_str())) {
                     mx::system_out << "acmx2: Opened: " << ofilename 
-                                   << " for writing at: " << crf 
-                                   << " CRF FPS: " << fps <<"\n";
+                                   << " for writing at: CRF: " << crf 
+                                   << " FPS: " << fps <<"\n";
                 } else {
                     throw mx::Exception("Could not open output video file: " +  ofilename);
                 }
@@ -919,7 +919,7 @@ public:
             if(!ofilename.empty()) {
                 if(writer.open(ofilename, w, h, fps, crf.c_str())) {
                     mx::system_out << "acmx2: Opened: " << ofilename 
-                                   << " for writing at: " << crf << " CRF\n";
+                                   << " for writing at: CRF: " << crf << "\n";
                     fflush(stdout);
                     fflush(stderr);
                 } else {
