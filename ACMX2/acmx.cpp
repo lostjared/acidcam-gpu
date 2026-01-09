@@ -756,40 +756,9 @@ public:
         fpsFrameCount = 0;
         displayFPS = 0.0;
         
-        if(overlayFont.tryLoadFont(win->util.getFilePath("data/font.ttf"), 24)) {
-            win->text.init(win->w, win->h);
-            win->text.setColor({255, 255, 255, 255});
-        }
+        overlayFont.tryLoadFont(win->util.getFilePath("data/font.ttf"), 24);
+
         
-        library.is3D(is3d_enabled);
-        if(std::get<0>(flib) == 1)
-            library.loadPrograms(win, std::get<1>(flib));
-        else
-            library.loadProgram(win, std::get<1>(flib));
-        library.setIndex(std::get<2>(flib));
-
-        std::string m_file_path;
-        if(std::filesystem::exists(m_file)) {
-            m_file_path = m_file;
-        } else {
-            m_file_path =  win->util.getFilePath("data/" + m_file);
-        }
-
-        if(is3d_enabled && !cube.openModel(m_file_path)) {
-            throw mx::Exception("Could not open model: cube.mxmod.z");
-        }
-        cube.setShaderProgram(library.shader(), "samp");
-        if(!fshader.loadProgram(win->util.getFilePath("data/vert.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
-            throw mx::Exception("Error loading shader");
-        }
-         if(!fshader3d.loadProgram(win->util.getFilePath("data/vertex.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
-            throw mx::Exception("Error loading shader");
-        }
-        GLenum error = glGetError();
-        if (error != GL_NO_ERROR) {
-            throw mx::Exception("OpenGL error occurred: GL Error: " + std::to_string(error));
-        }
-
         int w = 1280, h = 720;
         int frame_w = w, frame_h = h;
 
@@ -815,11 +784,16 @@ public:
             }
 
             win->setWindowSize(w, h);
-            win->w = w;
-            win->h = h;
-            
+            SDL_PumpEvents();
+            SDL_Delay(50);  
+            SDL_PumpEvents();            
+            SDL_GL_GetDrawableSize(win->getWindow(), &win->w, &win->h);
+            if(win->w != w || win->h != h) {
+                win->w = w;
+                win->h = h;
+            }
+            glViewport(0, 0, win->w, win->h);
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-
             if(!ofilename.empty()) {
                 if(writer.open(ofilename, w, h, fps, crf.c_str())) {
                     mx::system_out << "acmx2: Opened: " << ofilename 
@@ -867,8 +841,12 @@ public:
             }
 
             win->setWindowSize(w, h);
-            win->w = w;
-            win->h = h;
+            SDL_GL_GetDrawableSize(win->getWindow(), &win->w, &win->h);
+            if(win->w != w || win->h != h) {
+                win->w = w;
+                win->h = h;
+            }
+            glViewport(0, 0, w, h);
 
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
@@ -911,9 +889,12 @@ public:
             }
 
             win->setWindowSize(w, h);
-            win->w = w;
-            win->h = h;
-            
+            SDL_GL_GetDrawableSize(win->getWindow(), &win->w, &win->h);
+            if(win->w != w || win->h != h) {
+                win->w = w;
+                win->h = h;
+            }
+            glViewport(0, 0, w, h);
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
             if(!ofilename.empty()) {
@@ -930,6 +911,35 @@ public:
             throw mx::Exception("Requires input from a file, or camera.");
         }
 
+        library.is3D(is3d_enabled);
+        if(std::get<0>(flib) == 1)
+            library.loadPrograms(win, std::get<1>(flib));
+        else
+            library.loadProgram(win, std::get<1>(flib));
+        library.setIndex(std::get<2>(flib));
+
+        std::string m_file_path;
+        if(std::filesystem::exists(m_file)) {
+            m_file_path = m_file;
+        } else {
+            m_file_path =  win->util.getFilePath("data/" + m_file);
+        }
+
+        if(is3d_enabled && !cube.openModel(m_file_path)) {
+            throw mx::Exception("Could not open model: cube.mxmod.z");
+        }
+        cube.setShaderProgram(library.shader(), "samp");
+        if(!fshader.loadProgram(win->util.getFilePath("data/vert.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
+            throw mx::Exception("Error loading shader");
+        }
+         if(!fshader3d.loadProgram(win->util.getFilePath("data/vertex.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
+            throw mx::Exception("Error loading shader");
+        }
+        GLenum error = glGetError();
+        if (error != GL_NO_ERROR) {
+            throw mx::Exception("OpenGL error occurred: GL Error: " + std::to_string(error));
+        }
+
         library.useProgram();
         if(texture_cache) {
             cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
@@ -944,7 +954,7 @@ public:
         cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
         camera_texture = loadTexture(blankMat);
         sprite.setName("samp");
-        sprite.initWithTexture(library.shader(), camera_texture, 0, 0, blankMat.cols, blankMat.rows);
+        sprite.initWithTexture(library.shader(), camera_texture, 0, 0, win->w, win->h);
         setupCaptureFBO(win->w, win->h);
         glGenBuffers(2, pboIds);
         size_t pboSize = win->w * win->h * 4;
@@ -953,6 +963,11 @@ public:
             glBufferData(GL_PIXEL_PACK_BUFFER, pboSize, nullptr, GL_STREAM_READ);
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        if(overlayFont.handle().has_value()) {
+            win->text.init(win->w, win->h);
+            win->text.setColor({255, 255, 255, 255});
+        }
+        
         if(!graphic.empty())
             win->setWindowTitle("ACMX2 - Graphics Input");
         else if(filename.empty())
