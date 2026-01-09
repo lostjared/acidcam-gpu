@@ -649,6 +649,7 @@ void MainWindow::runSelected() {
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid()); 
     QString user_run_path = "/run/user/" + uid;
+    env.insert("SDL_VIDEODRIVER", "x11");
     if (QDir(user_run_path).exists()) {
         env.insert("XDG_RUNTIME_DIR", user_run_path);
         env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
@@ -761,6 +762,7 @@ void MainWindow::runAll() {
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid()); 
     QString user_run_path = "/run/user/" + uid;
+    env.insert("SDL_VIDEODRIVER", "x11");
     if (QDir(user_run_path).exists()) {
         env.insert("XDG_RUNTIME_DIR", user_run_path);
         env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
