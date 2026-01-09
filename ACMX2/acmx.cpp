@@ -1346,10 +1346,10 @@ public:
                 fpsFrameCount = 0;
                 fpsLastTime = currentTime;
             }
+
             std::string timerStr = getTimeString();            
             std::ostringstream fpsStr;
             fpsStr << std::fixed << std::setprecision(1) << displayFPS << " FPS";
-            
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             win->text.printText_Blended(overlayFont, 10, 10, timerStr);
@@ -1379,22 +1379,13 @@ public:
         } else if (cap.isOpened() && !filename.empty()) {
             frame_counter = static_cast<unsigned int>(cap.get(cv::CAP_PROP_POS_FRAMES));
             if (std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 3) {
-
-                double currentFrame = static_cast<double>(frame_counter);
-                double percentage   = 0.0;
-
                 if (totalFrames <= 0.0) {
                     totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
                 }
-                if (totalFrames > 0.0) {
-                    percentage = (currentFrame / totalFrames) * 100.0;
-                }
-
                 std::string timeStr = getTimeString();
                 int64_t displayFrames = getFrameCount();
-
                 std::ostringstream stream;
-                stream << "ACMX2 - " << static_cast<int>(percentage) << "% ["
+                stream << "ACMX2 - ["
                        << displayFrames << "/"
                        << static_cast<int>(totalFrames) << "] - "
                        << timeStr << " - Video Mode";
@@ -1441,6 +1432,12 @@ public:
         uint64_t seconds = static_cast<uint64_t>(timeSeconds) % 60;
         
         std::ostringstream timerStr;
+        if (!filename.empty() && totalFrames > 0.0) {
+            double currentFrame = static_cast<double>(frame_counter);
+            double percentage = (currentFrame / totalFrames) * 100.0;
+            timerStr << std::fixed << std::setprecision(1) << percentage << "% - ";
+        }
+        
         timerStr << std::setfill('0') << std::setw(2) << hours << ":"
                  << std::setfill('0') << std::setw(2) << minutes << ":"
                  << std::setfill('0') << std::setw(2) << seconds;
