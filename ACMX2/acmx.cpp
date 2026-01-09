@@ -1346,24 +1346,13 @@ public:
                 fpsFrameCount = 0;
                 fpsLastTime = currentTime;
             }
-            static uint64_t frame_counter = 0;
-            ++frame_counter;
-            uint64_t seconds = 0, minutes = 0, hours = 0;
-            double time_elapsed = static_cast<double>(frame_counter) / fps;
-            hours = static_cast<int>((time_elapsed / 60) / 60);
-            minutes = static_cast<int>(time_elapsed / 60);
-            seconds = static_cast<int>(time_elapsed) % 60;
-            std::ostringstream timerStr;
-            timerStr << std::setfill('0') << std::setw(2) << hours << ":"
-                     << std::setfill('0') << std::setw(2) << minutes << ":"
-                     << std::setfill('0') << std::setw(2) << seconds;
-            
+            std::string timerStr = getTimeString();            
             std::ostringstream fpsStr;
             fpsStr << std::fixed << std::setprecision(1) << displayFPS << " FPS";
             
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            win->text.printText_Blended(overlayFont, 10, 10, timerStr.str());
+            win->text.printText_Blended(overlayFont, 10, 10, timerStr);
             win->text.printText_Blended(overlayFont, 10, 40, fpsStr.str());
             glDisable(GL_BLEND);
         }
@@ -1372,21 +1361,19 @@ public:
         auto now = std::chrono::steady_clock::now();        
 
         if (!graphic.empty()) {
-            if (writer.is_open() &&
-                std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate).count() >= 250) {
-
-                double elapsedSeconds = writer.get_duration();
-                int64_t temp_frames   = writer.get_frame_count();
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate).count() >= 250) {
+                std::string timeStr = getTimeString();
+                int64_t currentFrames = getFrameCount();
 
                 std::ostringstream stream;
                 stream << "ACMX2 - Graphics Mode - "
-                       << std::fixed << std::setprecision(1)
-                       << elapsedSeconds << " seconds"
-                       << " [" << temp_frames << " frames]";
+                       << timeStr
+                       << " [" << currentFrames << " frames]";
+                if (writer.is_open()) {
+                    stream << " (Recording)";
+                }
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
-            } else if (!writer.is_open()) {
-                win->setWindowTitle("ACMX2 - Graphics Mode");
             }
 
         } else if (cap.isOpened() && !filename.empty()) {
@@ -1395,7 +1382,6 @@ public:
 
                 double currentFrame = static_cast<double>(frame_counter);
                 double percentage   = 0.0;
-                double seconds      = 0.0;
 
                 if (totalFrames <= 0.0) {
                     totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
@@ -1404,49 +1390,68 @@ public:
                     percentage = (currentFrame / totalFrames) * 100.0;
                 }
 
-                double displaySeconds = seconds;
-                int64_t displayFrames = static_cast<int64_t>(currentFrame);
-
-                if (writer.is_open()) {
-                    double recordedSeconds = writer.get_duration();
-                    int64_t recordedFrames = writer.get_frame_count();
-                    if (recordedSeconds > 0.0) {
-                        displaySeconds = recordedSeconds;
-                        displayFrames  = recordedFrames;
-                    } else if (fps > 0.0) {
-                        seconds = currentFrame / fps;
-                        displaySeconds = seconds;
-                    }
-                } else if (fps > 0.0) {
-                    seconds = currentFrame / fps;
-                    displaySeconds = seconds;
-                }
+                std::string timeStr = getTimeString();
+                int64_t displayFrames = getFrameCount();
 
                 std::ostringstream stream;
                 stream << "ACMX2 - " << static_cast<int>(percentage) << "% ["
-                       << static_cast<int>(displayFrames) << "/"
+                       << displayFrames << "/"
                        << static_cast<int>(totalFrames) << "] - "
-                       << static_cast<int>(displaySeconds) << " seconds - Video Mode";
+                       << timeStr << " - Video Mode";
+                if (writer.is_open()) {
+                    stream << " (Recording)";
+                }
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
             }
 
-        } else if (cap.isOpened() && filename.empty() && writer.is_open()) {
+        } else if (cap.isOpened() && filename.empty()) {
             if (std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 1) {
-
-                double elapsedSeconds = writer.get_duration();
-                int64_t temp_frames   = writer.get_frame_count();
+                std::string timeStr = getTimeString();
+                int64_t currentFrames = getFrameCount();
 
                 std::ostringstream stream;
                 stream << "ACMX2 - Capture Mode - "
-                       << std::fixed << std::setprecision(1)
-                       << elapsedSeconds << " seconds"
-                       << " [" << temp_frames << " frames]";
+                       << timeStr
+                       << " [" << currentFrames << " frames]";
+                if (writer.is_open()) {
+                    stream << " (Recording)";
+                }
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
             }
         }
         frame_counter++;
+    }
+
+    std::string getTimeString() {
+        int64_t frameCount = 0;
+        double timeSeconds = 0.0;
+        
+        if (writer.is_open()) {
+            frameCount = writer.get_frame_count();
+            timeSeconds = static_cast<double>(frameCount) / fps;
+        } else {
+            frameCount = static_cast<int64_t>(frame_counter);
+            timeSeconds = static_cast<double>(frameCount) / fps;
+        }
+        
+        uint64_t hours = static_cast<uint64_t>(timeSeconds / 3600);
+        uint64_t minutes = static_cast<uint64_t>(timeSeconds / 60) % 60;
+        uint64_t seconds = static_cast<uint64_t>(timeSeconds) % 60;
+        
+        std::ostringstream timerStr;
+        timerStr << std::setfill('0') << std::setw(2) << hours << ":"
+                 << std::setfill('0') << std::setw(2) << minutes << ":"
+                 << std::setfill('0') << std::setw(2) << seconds;
+        return timerStr.str();
+    }
+    
+    int64_t getFrameCount() {
+        if (writer.is_open()) {
+            return writer.get_frame_count();
+        }
+        return static_cast<int64_t>(frame_counter);
     }
 
     virtual void event(gl::GLWindow *win, SDL_Event &e) override {
