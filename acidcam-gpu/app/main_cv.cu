@@ -225,6 +225,7 @@ int main(int argc, char** argv) {
     size_t jump_pos = 0;
     bool expose = false;
     bool silent = false;
+    double fps = 0.0;
 
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
@@ -424,8 +425,7 @@ int main(int argc, char** argv) {
             cap.set(cv::CAP_PROP_FPS, output_fps);
         }
         unsigned long total_frames = cap.get(cv::CAP_PROP_FRAME_COUNT);
-
-        double fps = cap.get(cv::CAP_PROP_FPS);
+        fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
         if(jump_pos != 0) {
             cap.set(cv::CAP_PROP_POS_FRAMES, static_cast<double>((jump_pos * fps)));
@@ -572,13 +572,6 @@ int main(int argc, char** argv) {
        
         if(!tally.empty()) 
             std::cout << "Total tally: " << tally << "\n";
-
-        if(!output_filename.empty()) {
-            double total_secs = static_cast<double>(writer.get_frame_count()) / fps;
-            int final_mins = static_cast<int>(total_secs / 60);
-            int final_secs = static_cast<int>(total_secs) % 60;
-            std::cout << "Wrote: " << output_filename << " " << writer.get_frame_count() << " frames " << std::format("{:02}:{:02}", final_mins, final_secs) << std::endl;
-        }
     }
     catch (const Interrupt &)  {
         std::cout << "Interrupt called. Stopping..." << std::endl;
@@ -586,11 +579,17 @@ int main(int argc, char** argv) {
     catch(std::exception &e) { 
         std::cerr << e.what() << std::endl; 
     }
-     if (d_filterList)
+
+    if(!output_filename.empty()) {
+        double total_secs = static_cast<double>(writer.get_frame_count()) / fps;
+        int final_mins = static_cast<int>(total_secs / 60);
+        int final_secs = static_cast<int>(total_secs) % 60;
+        std::cout << "Wrote: " << output_filename << " " << writer.get_frame_count() << " frames " << std::format("{:02}:{:02}", final_mins, final_secs) << std::endl;
+    }
+
+    if (d_filterList)
             CHECK_CUDA(cudaFree(d_filterList));
-    CHECK_CUDA(cudaFree(d_ptrList));
-      
-        
+    CHECK_CUDA(cudaFree(d_ptrList));    
     if(!output_filename.empty()) writer.close();
     cap.release(); 
     return 0;
