@@ -469,7 +469,7 @@ int main(int argc, char** argv) {
                 double percentage = (static_cast<double>(frame_count) / total_frames) * 100.0;
                 static double old_count = percentage;
                 if(static_cast<int>(old_count) < static_cast<int>(percentage)) {
-                    std::cout << "acidcam-gpu writing [" << frame_count << "/" << total_frames << "] " << std::fixed << std::setprecision(1) << percentage << "%\n";
+                    std::cout << "acidcam-gpu writing [" << frame_count << "/" << total_frames << "] - " << std::fixed << std::setprecision(1) << percentage << "%\n";
                     old_count = percentage;
                 }
             }
