@@ -829,9 +829,9 @@ namespace ac_gpu {
             newB = (unsigned char)fminf(255.0f, fmaxf(0.0f, midpoint + (newB - midpoint) * boost));
             newG = (unsigned char)fminf(255.0f, fmaxf(0.0f, midpoint + (newG - midpoint) * boost));
             newR = (unsigned char)fminf(255.0f, fmaxf(0.0f, midpoint + (newR - midpoint) * boost));
-            currentFrame[idx] = newR;
+            currentFrame[idx] = newB;
             currentFrame[idx + 1] = newG;
-            currentFrame[idx + 2] = newB;
+            currentFrame[idx + 2] = newR;
         }
         setAlpha(currentFrame, idx, params.isNegative);
     }
@@ -8234,7 +8234,9 @@ namespace ac_gpu {
         for (int i = 0; i < count; ++i) {
             int idx = y * step + x * 4;
             switch (filters[i].index) {
-                case 0: processSelfAlphaBlend(x, y, data, step, params); break;
+                case 0: 
+                processSelfAlphaBlend(x, y, data, step, params); 
+                break;
                 case 1:
                 processMedianBlend(x, y, data, allFrames, step, params);
                 break;

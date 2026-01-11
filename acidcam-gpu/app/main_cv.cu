@@ -193,7 +193,7 @@ void listCameras() {
 }
 
 int main(int argc, char** argv) {
-    std::cout << "Acid Cam GPU Demo" << std::endl;
+    std::cout << "Acid Cam GPU cli" << std::endl;
     checkDevices();
     auto cuda_device = cv::cuda::getDevice();
     cv::cuda::DeviceInfo device(cuda_device);
@@ -217,6 +217,7 @@ int main(int argc, char** argv) {
     size_t start_pos = 0;
     size_t jump_pos = 0;
     bool expose = false;
+    bool silent = false;
 
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
@@ -238,7 +239,8 @@ int main(int argc, char** argv) {
     .addOptionDouble(307, "exposure", "Disable Auto Exposurre")
     .addOptionDouble(308, "list-devices", "List graphics cards and cameras")
     .addOptionDouble(320, "list", "List all filters")
-    .addOptionSingle('h', "help");
+    .addOptionSingle('h', "help")
+    .addOptionDouble(400, "silent", "Supress video shown, run in command line mode");
     try {
         Argument<std::string> a;
         int code = 0;
@@ -268,6 +270,9 @@ int main(int argc, char** argv) {
                     std::cout << std::endl;
                     listCameras();
                     exit(EXIT_SUCCESS);
+                break;
+                case 400:
+                    silent = true;
                 break;
                 case 'c': case 258: cameraArg = a.arg_value; break;
                 case 'f': case 256: filtersArg = a.arg_value; break;
@@ -372,6 +377,16 @@ int main(int argc, char** argv) {
     double currentFPS = 0.0;
     auto lastFPSUpdate = std::chrono::steady_clock::now();
 
+    if(camera_mode && silent == true) {
+        std::cerr << "ac: Error silent mode requires video input." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    if(silent == true && output_filename.empty()) {
+        std::cerr << "ac: Error silent mode requires video to output." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
     try {
         if(camera_mode) {
 #ifdef __linux__
@@ -399,6 +414,8 @@ int main(int argc, char** argv) {
             cap.set(cv::CAP_PROP_FRAME_HEIGHT, cres.height);
             cap.set(cv::CAP_PROP_FPS, output_fps);
         }
+        unsigned long total_frames = cap.get(cv::CAP_PROP_FRAME_COUNT);
+
         double fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 0) fps = 30.0;
         if(jump_pos != 0) {
@@ -412,13 +429,14 @@ int main(int argc, char** argv) {
         cv::cuda::GpuMat gpuWorkingBuffer(height, width, CV_8UC4);
         cv::cuda::GpuMat gpuDisplayBuffer(height, width, CV_8UC4);
         cv::Mat frame, rgba_out(height, width, CV_8UC4);
-        cv::namedWindow("filter", cv::WINDOW_NORMAL);
-        if(vres.width != 0 && vres.height != 0)
-            cv::resizeWindow("filter", vres.width, vres.height);
-        else
-            cv::resizeWindow("filter", width, height);
-
-        cv::moveWindow("filter", 0, 0);
+        if(silent == false) {
+            cv::namedWindow("filter", cv::WINDOW_NORMAL);
+            if(vres.width != 0 && vres.height != 0)
+                cv::resizeWindow("filter", vres.width, vres.height);
+            else
+                cv::resizeWindow("filter", width, height);
+            cv::moveWindow("filter", 0, 0);
+        }
         if(!output_filename.empty()) {
             writer.open_ts(output_filename, width, height, fps, output_crf.c_str());
             std::cout << "ac: Opened: " << output_filename << " for writing " << width << "x" << height << " @ " << fps << " fps CRF: " << output_crf << std::endl;
@@ -447,6 +465,13 @@ int main(int argc, char** argv) {
             if(!output_filename.empty()) {
                 gpuWorkingBuffer.download(rgba_out);
                 writer.write_ts(rgba_out.ptr());
+                unsigned long frame_count = writer.get_frame_count();
+                double percentage = (static_cast<double>(frame_count) / total_frames) * 100.0;
+                static double old_count = percentage;
+                if(static_cast<int>(old_count) < static_cast<int>(percentage)) {
+                    std::cout << "acidcam-gpu writing [" << frame_count << "/" << total_frames << "] " << std::fixed << std::setprecision(1) << percentage << "%\n";
+                    old_count = percentage;
+                }
             }
             auto currentTime = std::chrono::steady_clock::now();
             auto elapsedx = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFPSUpdate);
@@ -471,7 +496,7 @@ int main(int argc, char** argv) {
                 secs = static_cast<int>(time_elapsed) % 60;
             }
            
-            if ((tick_count == 1) || (++tick % tick_count == 0)) {      
+            if (silent == false && (tick_count == 1) || (++tick % tick_count == 0)) {      
                 if(show_hud) {  
                     std::string text = std::format("Acid Cam GPU - Time: {:02}:{:02} | FPS: {}", mins, secs, (int)currentFPS);
                     cv::putText(frame, text, cv::Point(20, 50), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
@@ -479,39 +504,42 @@ int main(int argc, char** argv) {
                 }
                 cv::imshow("filter",frame);
             }
-            int key = cv::waitKey(1);
-            if (key == 27) break; 
-            else if (key == 'z'|| key == 'Z') {
-                auto t = std::time(nullptr);
-                auto tm = *std::localtime(&t);
-                std::ostringstream oss;
-                oss << "acidcam-gpu_" << width << "x" << height << " - " << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".png";
-                std::string outstr = oss.str();
-                std::string out = "acidcam-gpu_" + oss.str() + "-" + std::to_string(screenshot_count++) + ".png";
-                cv::imwrite(out, frame);
-                std::cout << "Saved: " << out << std::endl;
-            }
-            else if (key == 't') {
-                tally += std::to_string(filter_index) + ", ";
-            }
-            else if (key == 'w' || key == 'W') { 
-                if (filter_index > 0) {
-                    filter_index--;
-                    vlist.clear();
-                    vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
-                    filtersChanged = true;
-                    std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
+
+            if(silent == false) {
+                int key = cv::waitKey(1);
+                if (key == 27) break; 
+                else if (key == 'z'|| key == 'Z') {
+                    auto t = std::time(nullptr);
+                    auto tm = *std::localtime(&t);
+                    std::ostringstream oss;
+                    oss << "acidcam-gpu_" << width << "x" << height << " - " << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".png";
+                    std::string outstr = oss.str();
+                    std::string out = "acidcam-gpu_" + oss.str() + "-" + std::to_string(screenshot_count++) + ".png";
+                    cv::imwrite(out, frame);
+                    std::cout << "Saved: " << out << std::endl;
                 }
-            }
-            else if (key == 's' || key == 'S') { 
-                if (filter_index < ac_gpu::AC_FILTER_MAX - 1) {
-                    filter_index++;
-                    vlist.clear();
-                    vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
-                    filtersChanged = true;
-                    std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
+                else if (key == 't') {
+                    tally += std::to_string(filter_index) + ", ";
                 }
-            } 
+                else if (key == 'w' || key == 'W') { 
+                    if (filter_index > 0) {
+                        filter_index--;
+                        vlist.clear();
+                        vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
+                        filtersChanged = true;
+                        std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
+                    }
+                }
+                else if (key == 's' || key == 'S') { 
+                    if (filter_index < ac_gpu::AC_FILTER_MAX - 1) {
+                        filter_index++;
+                        vlist.clear();
+                        vlist.emplace_back(ac_gpu::Filter{filter_index, ac_gpu::filters[filter_index].name});
+                        filtersChanged = true;
+                        std::cout << "Filter: " << ac_gpu::filters[filter_index].name << " (" << filter_index << ")" << std::endl;
+                    }
+                } 
+            }
             if(output_filename.empty() && time_over != 0 && (elapsed_ms / 1000) >= time_over) {
                 std::cout << "ac: Time duration reached. Exiting..." << std::endl;
                 break;
@@ -523,6 +551,8 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
+
+
 
             if(camera_mode ==false && tick_count == 1) {
                 auto end_time = std::chrono::steady_clock::now();
