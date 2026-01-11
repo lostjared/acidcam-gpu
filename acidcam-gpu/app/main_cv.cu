@@ -18,6 +18,7 @@
 #include<fstream>
 #include<unistd.h>
 #include<fcntl.h>
+#include<signal.h>
 
 struct AnimationState {
     float alpha = 1.0f;
@@ -190,6 +191,12 @@ void listCameras() {
     if (camera_count == 0) {
         std::cout << "  No cameras found." << std::endl;
     }
+}
+
+class Interrupt {};
+
+void signalHandler(int signum) {
+    throw Interrupt();
 }
 
 int main(int argc, char** argv) {
@@ -388,6 +395,8 @@ int main(int argc, char** argv) {
     }
 
     try {
+        if(silent == true)
+            signal(SIGINT, signalHandler);
         if(camera_mode) {
 #ifdef __linux__
             cap.open(camera_index, cv::CAP_V4L2);
@@ -468,7 +477,7 @@ int main(int argc, char** argv) {
                 unsigned long frame_count = writer.get_frame_count();
                 double percentage = (static_cast<double>(frame_count) / total_frames) * 100.0;
                 static double old_count = percentage;
-                if(static_cast<int>(old_count) < static_cast<int>(percentage)) {
+                if(silent == true && static_cast<int>(old_count) < static_cast<int>(percentage)) {
                     std::cout << "acidcam-gpu writing [" << frame_count << "/" << total_frames << "] - " << std::fixed << std::setprecision(1) << percentage << "%\n";
                     old_count = percentage;
                 }
@@ -560,11 +569,7 @@ int main(int argc, char** argv) {
                 if (elapsed < frame_duration) std::this_thread::sleep_for(frame_duration - elapsed);
             }
         } 
-        if (d_filterList)
-            CHECK_CUDA(cudaFree(d_filterList));
-
-        CHECK_CUDA(cudaFree(d_ptrList));
-      
+       
         if(!tally.empty()) 
             std::cout << "Total tally: " << tally << "\n";
 
@@ -575,9 +580,17 @@ int main(int argc, char** argv) {
             std::cout << "Wrote: " << output_filename << " " << writer.get_frame_count() << " frames " << std::format("{:02}:{:02}", final_mins, final_secs) << std::endl;
         }
     }
+    catch (const Interrupt &)  {
+        std::cout << "Interrupt called. Stopping..." << std::endl;
+    }
     catch(std::exception &e) { 
         std::cerr << e.what() << std::endl; 
     }
+     if (d_filterList)
+            CHECK_CUDA(cudaFree(d_filterList));
+    CHECK_CUDA(cudaFree(d_ptrList));
+      
+        
     if(!output_filename.empty()) writer.close();
     cap.release(); 
     return 0;
