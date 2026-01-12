@@ -1,3 +1,4 @@
+#define CURRENT_VERSION "v1.0"
 #include<opencv2/opencv.hpp>
 #include<opencv2/core/cuda.hpp>
 #include<opencv2/cudaimgproc.hpp>
@@ -200,7 +201,9 @@ void signalHandler(int signum) {
 }
 
 int main(int argc, char** argv) {
-    std::cout << "Acid Cam GPU cli" << std::endl;
+    std::cout << "acidcam-gpu-cli " << CURRENT_VERSION << std::endl;
+    std::cout << "https://lostsidedead.biz" << std::endl;
+    std::cout.flush();
     checkDevices();
     auto cuda_device = cv::cuda::getDevice();
     cv::cuda::DeviceInfo device(cuda_device);
@@ -226,7 +229,6 @@ int main(int argc, char** argv) {
     bool expose = false;
     bool silent = false;
     double fps = 0.0;
-
     argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video")
     .addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID")
     .addOptionSingleValue('f', "filters").addOptionDoubleValue(256, "filters", "Filter IDs")
@@ -408,7 +410,7 @@ int main(int argc, char** argv) {
             if(expose) 
                 cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 1); 
 #else
-            cap.open(cameraINdex);
+            cap.open(camera_index);
 #endif
         }
         else {
