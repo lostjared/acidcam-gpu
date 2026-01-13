@@ -172,6 +172,11 @@ void MainWindow::initControls() {
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
     QString path = appSettings.value("shaders", "").toString();
+    // Clean up path: remove trailing slashes and whitespace
+    path = path.trimmed();
+    while(path.endsWith("/") || path.endsWith("\\")) {
+        path.chop(1);
+    }
 #ifdef _WIN32
         executable_path = appSettings.value("exePath", "acmx2.exe").toString();
 #else
@@ -181,8 +186,30 @@ void MainWindow::initControls() {
     bool useCustomStyle = appSettings.value("useCustomStyle", true).toBool();
     styleSheetAction->setChecked(useCustomStyle);
     if(!path.isEmpty()) {
-        shader_path = path;
-        loadShaders(path);
+        Log("DEBUG: Loaded shader path from settings: '" + path + "'");
+        QFileInfo pathInfo(path);
+        QFileInfo indexInfo(path + "/index.txt");
+        
+        Log("DEBUG: Path exists: " + QString::number(pathInfo.exists()) + 
+            ", Is dir: " + QString::number(pathInfo.isDir()) + 
+            ", Is readable: " + QString::number(pathInfo.isReadable()));
+        Log("DEBUG: index.txt exists: " + QString::number(indexInfo.exists()));
+        
+        if(pathInfo.exists() && pathInfo.isDir() && indexInfo.exists()) {
+            shader_path = path;
+            loadShaders(path);
+            Log("Successfully loaded saved shader path");
+        } else {
+            QString errorMsg = "Warning: Saved shader path is invalid: " + path + " - ";
+            if(!pathInfo.exists()) {
+                errorMsg += "directory does not exist";
+            } else if(!pathInfo.isDir()) {
+                errorMsg += "path is not a directory";
+            } else if(!indexInfo.exists()) {
+                errorMsg += "index.txt not found in directory";
+            }
+            Log(errorMsg);
+        }
     }
     customStyleSheet = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
                     "* { color: red; font-weight: bold; } "
@@ -212,6 +239,7 @@ void MainWindow::newList() {
         loadShaders(shader_path);
         QSettings appSettings("LostSideDead");
         appSettings.setValue("shaders", shader_path);
+        appSettings.sync();
     }
 }
 
@@ -333,6 +361,7 @@ void MainWindow::newShader() {
         loadShaders(shader_path);
         QSettings appSettings("LostSideDead");
         appSettings.setValue("shaders", shader_path);
+        appSettings.sync();
     }
 }
 
@@ -479,7 +508,6 @@ void MainWindow::fileOpenProp() {
         QString exePath = propWindow.exePathLineEdit->text();
         QString shaderDir = propWindow.shaderDirLineEdit->text();
         QString prefix = propWindow.screenshotDirLineEdit->text();
-
         if(exePath.length()==0) {
             QMessageBox::information(this, "No Path", "Requires Executable path");
             return;
@@ -488,13 +516,29 @@ void MainWindow::fileOpenProp() {
             QMessageBox::information(this, "Shader Path", "Requires Shader Path");
             return;
         }
+
+        QFileInfo shaderDirInfo(shaderDir);
+        QFileInfo indexFileInfo(shaderDir + "/index.txt");        
+        if(!shaderDirInfo.exists()) {
+            QMessageBox::warning(this, "Invalid Shader Path", "Shader directory does not exist:\n" + shaderDir);
+            return;
+        }
         
+        if(!shaderDirInfo.isDir()) {
+            QMessageBox::warning(this, "Invalid Shader Path", "Shader path is not a directory:\n" + shaderDir);
+            return;
+        }
+        
+        if(!indexFileInfo.exists()) {
+            QMessageBox::warning(this, "Missing index.txt", "Shader directory does not contain index.txt:\n" + shaderDir + "/index.txt");
+            return;
+        }
         
         QSettings appSettings("LostSideDead");
         appSettings.setValue("exePath", exePath);
         appSettings.setValue("prefix_path", prefix);
         appSettings.setValue("shaders", shaderDir);
-        
+        appSettings.sync();
         
         executable_path = exePath;
         prefix_path = prefix;
@@ -530,16 +574,12 @@ bool MainWindow::loadShaders(const QString &path) {
         if (line.isEmpty()) {
             continue;
         }
-        
-        
         QString fullPath = path + "/" + line;
         QFileInfo fileInfo(fullPath);
         if (!fileInfo.exists() || !fileInfo.isFile()) {
             Log("Skipping non-existent file: " + line);
             continue;
-        }
-        
-        
+        }       
         if (!uniqueItems.contains(line, Qt::CaseInsensitive)) {
             uniqueItems.append(line);
             Log("Added shader: " + line);
@@ -548,8 +588,6 @@ bool MainWindow::loadShaders(const QString &path) {
         }
     }
     file.close();
-    
-    
     items = uniqueItems;
     model->setStringList(items);
     
