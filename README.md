@@ -29,7 +29,7 @@ Before running ACMX2, your system must have:
 > ⚠️ **Important**
 > This build uses NVIDIA CUDA.
 > It will **not run on AMD or Intel GPUs**.
-
+> For shader/Model files to use with the app: https://lostsidedead.biz/packs/
 ---
 
 ## Step 1: Pull the ACMX2 Container Image
