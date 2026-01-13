@@ -25,11 +25,12 @@ Before running ACMX2, your system must have:
 - X11 or XWayland
 - Webcam device (`/dev/video0`) for camera input
 - Audio input device (microphone)
+- Shader/Model files: https://lostsidedead.biz/packs/
 
 > ⚠️ **Important**
 > This build uses NVIDIA CUDA.
 > It will **not run on AMD or Intel GPUs**.
-> For shader/Model files to use with the app: https://lostsidedead.biz/packs/
+
 ---
 
 ## Step 1: Pull the ACMX2 Container Image
