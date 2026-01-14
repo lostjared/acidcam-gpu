@@ -166,11 +166,11 @@ Early Example (as a GIF)
 
 # Latest Shader Pack
 
-https://lostsidedead.biz/activity/shader.pack.2025.12.07.zip
+https://lostsidedead.biz/packs
 
 # Latest 3D Geometry 
 
-https://lostsidedead.biz/activity/models.2025.12.08.zip
+https://lostsidedead.biz/packs
 
 # ACMX2 Container Environment Documentation
 
