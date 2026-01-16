@@ -150,16 +150,19 @@ public:
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboID);
         glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, NULL, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        cudaGraphicsGLRegisterBuffer(&cudaPboResource, pboID, cudaGraphicsMapFlagsWriteDiscard);
+        CHECK_CUDA(cudaGraphicsGLRegisterBuffer(&cudaPboResource, pboID, cudaGraphicsMapFlagsWriteDiscard));
     }
 
     void update(const cv::cuda::GpuMat& gpuFrame) {
+        if (gpuFrame.cols != width || gpuFrame.rows != height) {
+            init(gpuFrame.cols, gpuFrame.rows);
+        }
         void* pboPointer = nullptr;
         size_t numBytes = 0;
-        cudaGraphicsMapResources(1, &cudaPboResource, 0);
-        cudaGraphicsResourceGetMappedPointer(&pboPointer, &numBytes, cudaPboResource);
-        cudaMemcpy2D(pboPointer, width * 4, gpuFrame.data, gpuFrame.step, width * 4, height, cudaMemcpyDeviceToDevice);
-        cudaGraphicsUnmapResources(1, &cudaPboResource, 0);
+        CHECK_CUDA(cudaGraphicsMapResources(1, &cudaPboResource, 0));
+        CHECK_CUDA(cudaGraphicsResourceGetMappedPointer(&pboPointer, &numBytes, cudaPboResource));
+        CHECK_CUDA(cudaMemcpy2D(pboPointer, width * 4, gpuFrame.data, gpuFrame.step, width * 4, height, cudaMemcpyDeviceToDevice));
+        CHECK_CUDA(cudaGraphicsUnmapResources(1, &cudaPboResource, 0));
         glBindTexture(GL_TEXTURE_2D, textureID);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboID);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
@@ -169,7 +172,7 @@ public:
 
     void cleanup() {
         if (cudaPboResource) {
-            cudaGraphicsUnregisterResource(cudaPboResource);
+            CHECK_CUDA(cudaGraphicsUnregisterResource(cudaPboResource));
             cudaPboResource = nullptr;
         }
         if (pboID) {
@@ -1141,13 +1144,13 @@ public:
                         gpu_frame_dir = 1;
                     }
                 }
-                
-                CHECK_CUDA(cudaMemcpy(d_ptrList, gpu_frame_buffer->deviceFrames.data(),
-                                      gpu_frame_buffer->arraySize * sizeof(unsigned char*),
-                                      cudaMemcpyHostToDevice));
+           
+                CHECK_CUDA(cudaMemcpy(d_ptrList, gpu_frame_buffer->rawPointers.data(), 
+                      gpu_frame_buffer->arraySize * sizeof(unsigned char*), 
+                      cudaMemcpyHostToDevice));
                 
                 CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.ptr<unsigned char>(), gpuWorkingBuffer.step,
-                                        gpu_frame_buffer->deviceFrames[gpu_frame_buffer->arraySize - 1],
+                                        gpu_frame_buffer->deviceFrames[gpu_frame_buffer->arraySize - 1].data,
                                         gpu_frame_buffer->framePitch,
                                         gpu_frame_buffer->w * 4, gpu_frame_buffer->h,
                                         cudaMemcpyDeviceToDevice));
