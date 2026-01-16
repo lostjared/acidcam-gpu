@@ -93,19 +93,18 @@ void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer,
     }
     
     
-    CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.deviceFrames.data(), 
+   CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.getDeviceFramePointers(), 
                           buffer.arraySize * sizeof(unsigned char*), 
                           cudaMemcpyHostToDevice));
 
-    
-    CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.ptr<unsigned char>(), gpuWorkingBuffer.step,
-                            buffer.deviceFrames[buffer.arraySize - 1], buffer.framePitch,
+    CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.data, gpuWorkingBuffer.step,
+                            buffer.deviceFrames.back().data, buffer.framePitch,
                             buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice));
     
     launch_filter(
         activeFilters, 
         filterCount, 
-        gpuWorkingBuffer.ptr<unsigned char>(), 
+        gpuWorkingBuffer.data,
         d_ptrList, 
         buffer.arraySize, 
         gpuWorkingBuffer.cols, 
