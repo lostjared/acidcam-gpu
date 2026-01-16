@@ -3,6 +3,8 @@
 
 #include <opencv2/opencv.hpp>
 #include <cuda_runtime.h>
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaimgproc.hpp>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -21,9 +23,16 @@
 namespace ac_gpu {
 
     inline const int AC_FILTER_MAX = 736;
+    
+    
+    struct GPUFilter {
+        int index;
+    };
+    
     struct Filter {
         int index;
         std::string name;
+        GPUFilter toGPU() const { return {index}; }
     };
 
     class ACException {
@@ -34,96 +43,62 @@ namespace ac_gpu {
         std::string txt;
     };
     
-    class DynamicFrameBuffer {
+   class DynamicFrameBuffer {
     public:
         int arraySize;
         int w, h;
         size_t framePitch;
-        size_t frameSize;
-        std::vector<unsigned char*> deviceFrames;
+        std::vector<cv::cuda::GpuMat> deviceFrames; 
+        std::vector<unsigned char*> rawPointers;    
         int completedFrames;
+        cv::cuda::GpuMat d_uploadBuffer;
 
-        DynamicFrameBuffer(int size) : arraySize(size), w(0), h(0), framePitch(0), frameSize(0), completedFrames(0) {
-            deviceFrames.assign(size, nullptr); 
+        DynamicFrameBuffer(int size) : arraySize(size), w(0), h(0), framePitch(0), completedFrames(0) {
+            deviceFrames.resize(size);
+            rawPointers.resize(size, nullptr);
         }
 
-        ~DynamicFrameBuffer() { release(); }
-
-        void update(cv::Mat &inputFrame) {
-            bool resized = checkResize(inputFrame.cols, inputFrame.rows);
-
-            cv::Mat rgba;
-            if (inputFrame.channels() == 3) {
-                cv::cvtColor(inputFrame, rgba, cv::COLOR_BGR2RGBA);
-            } else {
-                rgba = inputFrame;
-            }
-
-            if (resized) {
-                fillAll(rgba);
-                completedFrames = 0;
-            } else {
-                shiftAndAdd(rgba);
-                if (completedFrames < arraySize) ++completedFrames;
-            }
-        }
-
-        void release() {
-            for (size_t i = 0; i < deviceFrames.size(); ++i) {
-                if (deviceFrames[i] != nullptr) {
-                    cudaFree(deviceFrames[i]);
-                    deviceFrames[i] = nullptr; 
-                }
-            }
-        }
-
-    private:
-        bool checkResize(int newW, int newH) {
-            if (newW != w || newH != h) {
-                w = newW;
-                h = newH;
-                release(); 
+        void update(const cv::Mat& inputFrame) {
+            d_uploadBuffer.upload(inputFrame);
+            if (d_uploadBuffer.cols != w || d_uploadBuffer.rows != h) {
+                w = d_uploadBuffer.cols;
+                h = d_uploadBuffer.rows;
+                
                 for (int i = 0; i < arraySize; ++i) {
-                    cudaError_t err = cudaMallocPitch(&deviceFrames[i], &framePitch, w * 4, h);
-                    if (err != cudaSuccess) {
-                        deviceFrames[i] = nullptr; 
-                    }
+                    deviceFrames[i].create(h, w, CV_8UC4);
                 }
-                frameSize = framePitch * h;
-                return true;
+                framePitch = deviceFrames[0].step;
+                completedFrames = 0;
             }
-            return false;
-        }
+            
+            std::rotate(deviceFrames.begin(), deviceFrames.begin() + 1, deviceFrames.end());
+            
+            if (d_uploadBuffer.channels() == 3) {
+                cv::cuda::cvtColor(d_uploadBuffer, deviceFrames.back(), cv::COLOR_BGR2RGBA);
+            } else {
+                d_uploadBuffer.copyTo(deviceFrames.back());
+            }
 
-        void fillAll(cv::Mat &rgba) {
-            for (int i = 0; i < arraySize; ++i) {
-                if (deviceFrames[i])
-                    cudaMemcpy2D(deviceFrames[i], framePitch, rgba.data, w * 4, w * 4, h, cudaMemcpyHostToDevice);
+            for(int i=0; i<arraySize; ++i) {
+                rawPointers[i] = deviceFrames[i].data;
             }
-        }
 
-        void shiftAndAdd(cv::Mat &rgba) {
-            unsigned char* oldestFramePtr = deviceFrames[0];
-            for (int i = 0; i < arraySize - 1; ++i) {
-                deviceFrames[i] = deviceFrames[i + 1];
-            }
-            deviceFrames[arraySize - 1] = oldestFramePtr;
-            cudaMemcpy2D(deviceFrames[arraySize - 1], framePitch, 
-                        rgba.data, w * 4, 
-                        w * 4, h, 
-                        cudaMemcpyHostToDevice);
+            if (completedFrames < arraySize) ++completedFrames;
+        }
+        
+        unsigned char** getDeviceFramePointers() {
+            return rawPointers.data();
         }
     };
-
     extern Filter filters[];
-}
+} 
 
 extern "C" {
     void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* data, unsigned char** allFrames,
                             int numFrames, int width, int height, size_t step,
                             float alpha, bool isNegative, int square_size,
                             int start_index, int start_dir, 
-                            ac_gpu::Filter** d_list_ptr, bool& changed);
+                            ac_gpu::GPUFilter** d_list_ptr, bool& changed);
 }
 
 #endif

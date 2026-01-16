@@ -1,6 +1,7 @@
 #include "ac-gpu/ac-gpu.hpp"
 #include <cuda_runtime.h>
 #include <string>
+#include <vector>
 namespace ac_gpu {
     Filter filters[] = {
         { 0, "SelfAlphaBlend" },
@@ -6351,8 +6352,8 @@ namespace ac_gpu {
     }
     __device__ void processEmbossShift(int x, int y, unsigned char* data, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
-        if (x > 0 && y > 0 && x < width - 1 && y < height - 1) {
-            int shift = 1 + (params.frame_count % 3);
+        int shift = 1 + (params.frame_count % 3);
+        if (x >= shift && y >= shift && x < width - 1 && y < height - 1) {
             for (int j = 0; j < 3; ++j) {
                 int diff = data[idx + j] - data[(y - shift) * step + (x - shift) * 4 + j];
                 data[idx + j] = (unsigned char)(128 + diff);
@@ -8225,7 +8226,7 @@ namespace ac_gpu {
         }
     }
 
-    __global__ void unifiedFilterKernel(Filter *filters, size_t count, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, FilterParams params) {
+    __global__ void unifiedFilterKernel(GPUFilter *filters, size_t count, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
         if (x >= width || y >= height) {
@@ -9118,13 +9119,21 @@ namespace ac_gpu {
         setAlpha(data, y * step + x * 4, params.isNegative);
     }
 }
-extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* data, unsigned char** allFrames, int numFrames, int width, int height, size_t step, float alpha, bool isNegative, int square_size, int start_index, int start_dir, ac_gpu::Filter** d_list_ptr, bool& changed) {
+extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* data, unsigned char** allFrames, int numFrames, int width, int height, size_t step, float alpha, bool isNegative, int square_size, int start_index, int start_dir, ac_gpu::GPUFilter** d_list_ptr, bool& changed) {
+    if (c == 0 || width <= 0 || height <= 0 || numFrames <= 0) {
+        return;
+    }
     if (changed || *d_list_ptr == nullptr) {
+        CHECK_CUDA(cudaDeviceSynchronize());
         if (*d_list_ptr != nullptr) {
             CHECK_CUDA(cudaFree(*d_list_ptr));
         }
-        CHECK_CUDA(cudaMalloc(d_list_ptr, sizeof(ac_gpu::Filter) * c));
-        CHECK_CUDA(cudaMemcpy(*d_list_ptr, f_host, sizeof(ac_gpu::Filter) * c, cudaMemcpyHostToDevice));
+        std::vector<ac_gpu::GPUFilter> gpuFilters(c);
+        for (size_t i = 0; i < c; ++i) {
+            gpuFilters[i] = f_host[i].toGPU();
+        }
+        CHECK_CUDA(cudaMalloc(d_list_ptr, sizeof(ac_gpu::GPUFilter) * c));
+        CHECK_CUDA(cudaMemcpy(*d_list_ptr, gpuFilters.data(), sizeof(ac_gpu::GPUFilter) * c, cudaMemcpyHostToDevice));
         changed = false; 
     }
     dim3 blockSize(16, 16);
@@ -9148,6 +9157,9 @@ extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* d
     params.threshold = 15;
     params.sw = 16 + (frame_counter % 48);
     params.sh = 16 + (frame_counter % 48);
+    if (*d_list_ptr == nullptr || data == nullptr || allFrames == nullptr) {
+        return;
+    }
     ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(*d_list_ptr, c, data, allFrames, width, height, step, params);
     CHECK_CUDA(cudaDeviceSynchronize());
 }

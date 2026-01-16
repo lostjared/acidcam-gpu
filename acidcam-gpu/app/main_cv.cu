@@ -51,7 +51,7 @@ cv::Size extractResolution(const std::string &text) {
 void updateAndDraw(cv::Mat& frame, ac_gpu::DynamicFrameBuffer& buffer, 
                     cv::cuda::GpuMat& gpuWorkingBuffer, unsigned char** d_ptrList,
                     ac_gpu::Filter* activeFilters, size_t filterCount, 
-                    ac_gpu::Filter** d_list_ptr, bool& changed) {
+                    ac_gpu::GPUFilter** d_list_ptr, bool& changed) {
     
     
     if (gState.alpha_dir == 1) {
@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
     bool camera_mode = false;
     int camera_index = 0, filter_index = 0, dynamic_buffer = 10;
     unsigned char** d_ptrList = nullptr;
-    ac_gpu::Filter* d_filterList = nullptr;
+    ac_gpu::GPUFilter* d_filterList = nullptr;
     cv::Size vres(0,0), cres (1920, 1080);
     bool filtersChanged = true; 
     std::string inputArg, filtersArg, bufferArg, cameraArg, output_filename, tally;

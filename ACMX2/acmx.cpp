@@ -692,7 +692,7 @@ public:
     cv::cuda::GpuMat gpuWorkingBuffer;
     cv::Mat gpuFilteredFrame;
     unsigned char** d_ptrList = nullptr;
-    ac_gpu::Filter* d_filterList = nullptr;
+    ac_gpu::GPUFilter* d_filterList = nullptr;
     bool gpu_filtersChanged = true;
     float gpu_alpha = 1.0f;
     int gpu_alpha_dir = 1;
@@ -1574,7 +1574,8 @@ public:
                             gpu_current_filter_index--;
                             if(gpu_current_filter_index < 0)
                                 gpu_current_filter_index = ac_gpu::AC_FILTER_MAX - 1;
-                            gpu_filters[0] = {gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name};
+                            gpu_filters.clear();
+                            gpu_filters.push_back({gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name});
                             gpu_filtersChanged = true;
                             mx::system_out << "acmx2: GPU Filter: " << ac_gpu::filters[gpu_current_filter_index].name << " [" << gpu_current_filter_index << "]\n";
                             fflush(stdout);
@@ -1585,7 +1586,8 @@ public:
                             gpu_current_filter_index++;
                             if(gpu_current_filter_index >= ac_gpu::AC_FILTER_MAX)
                                 gpu_current_filter_index = 0;
-                            gpu_filters[0] = {gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name};
+                            gpu_filters.clear();
+                            gpu_filters.push_back({gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name});
                             gpu_filtersChanged = true;
                             mx::system_out << "acmx2: GPU Filter: " << ac_gpu::filters[gpu_current_filter_index].name << " [" << gpu_current_filter_index << "]\n";
                             fflush(stdout);
