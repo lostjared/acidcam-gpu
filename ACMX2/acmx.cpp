@@ -2100,7 +2100,7 @@ int main(int argc, char **argv) {
           .addOptionDouble(302, "list-devices", "list audio devices")
 #endif
           .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
-          .addOptionDouble(405, "silent", "Silent mode - process video without window, output progress to terminal (video files only)");
+          .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)");
 
     if(argc == 1) {
         printAbout(parser);
