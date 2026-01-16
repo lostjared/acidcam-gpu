@@ -33,6 +33,7 @@
 #include <opencv2/cudaimgproc.hpp>
 #include <model.hpp>
 #include <ac-gpu/ac-gpu.hpp>
+#include <cuda_gl_interop.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 void transfer_audio(std::string_view, std::string_view);
@@ -124,6 +125,62 @@ public:
 private:
     std::size_t num_frames;       
     std::deque<cv::Mat> frames;   
+};
+
+class TextureUploader {
+public:
+    GLuint textureID = 0;
+    GLuint pboID = 0;
+    cudaGraphicsResource* cudaPboResource = nullptr;
+    int width = 0;
+    int height = 0;
+
+    void init(int w, int h) {
+        if (textureID != 0) cleanup(); 
+        width = w;
+        height = h;
+        glGenTextures(1, &textureID);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glGenBuffers(1, &pboID);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboID);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, NULL, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        cudaGraphicsGLRegisterBuffer(&cudaPboResource, pboID, cudaGraphicsMapFlagsWriteDiscard);
+    }
+
+    void update(const cv::cuda::GpuMat& gpuFrame) {
+        void* pboPointer = nullptr;
+        size_t numBytes = 0;
+        cudaGraphicsMapResources(1, &cudaPboResource, 0);
+        cudaGraphicsResourceGetMappedPointer(&pboPointer, &numBytes, cudaPboResource);
+        cudaMemcpy2D(pboPointer, width * 4, gpuFrame.data, gpuFrame.step, width * 4, height, cudaMemcpyDeviceToDevice);
+        cudaGraphicsUnmapResources(1, &cudaPboResource, 0);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboID);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    void cleanup() {
+        if (cudaPboResource) {
+            cudaGraphicsUnregisterResource(cudaPboResource);
+            cudaPboResource = nullptr;
+        }
+        if (pboID) {
+            glDeleteBuffers(1, &pboID);
+            pboID = 0;
+        }
+        if (textureID) {
+            glDeleteTextures(1, &textureID);
+            textureID = 0;
+        }
+    }
 };
 
 class ShaderLibrary {
@@ -570,6 +627,7 @@ class ACView : public gl::GLObject {
     int pboIndex = 0;
     int pboNextIndex = 1;
     SnapshotThreadPool snapshot_pool{2};
+    TextureUploader tex_uploader;
 public:
     ACView(const MXArguments &args)
         : crf{args.crf},
@@ -647,6 +705,7 @@ public:
     bool counter_disabled = false;
 
     ~ACView() override {
+        tex_uploader.cleanup();
         if(d_ptrList) {
             cudaFree(d_ptrList);
             d_ptrList = nullptr;
@@ -953,8 +1012,8 @@ public:
             fflush(stdout);
         }
         sprite.initSize(win->w, win->h);
-        cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
-        camera_texture = loadTexture(blankMat);
+        tex_uploader.init(win->w, win->h);
+        camera_texture = tex_uploader.textureID;
         sprite.setName("samp");
         sprite.initWithTexture(library.shader(), camera_texture, 0, 0, win->w, win->h);
         setupCaptureFBO(win->w, win->h);
@@ -1055,10 +1114,10 @@ public:
         }
         if(!isFrozen && !newFrame.empty()) {
             if(gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
-                gpu_frame_buffer->update(newFrame);
+                gpu_frame_buffer->update(newFrame);                
                 
                 if(gpuWorkingBuffer.empty() || gpuWorkingBuffer.cols != newFrame.cols || gpuWorkingBuffer.rows != newFrame.rows) {
-                    gpuWorkingBuffer.create(newFrame.rows, newFrame.cols, CV_8UC4);
+                   gpuWorkingBuffer.create(newFrame.rows, newFrame.cols, CV_8UC4);
                 }
                 
                 if(gpu_alpha_dir == 1) {
@@ -1111,11 +1170,7 @@ public:
                     gpu_filtersChanged
                 );
                 gpu_filtersChanged = false;
-                
-                gpuWorkingBuffer.download(gpuFilteredFrame);
-                
-                glActiveTexture(GL_TEXTURE0);
-                updateTextureRGBA(camera_texture, gpuFilteredFrame);
+                tex_uploader.update(gpuWorkingBuffer);
             } else {
                 glActiveTexture(GL_TEXTURE0);
                 updateTexture(camera_texture, newFrame);
