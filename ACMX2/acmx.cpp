@@ -184,7 +184,7 @@ public:
             }
 
             if(name.find("cache") != std::string::npos) {
-                for(int i = 0; i < 4; ++i) {
+                for(int i = 0; i < 8; ++i) {
                     program_names[pos].texture_cache_loc[i] = glGetUniformLocation(programs.back()->id(), std::string("samp" + std::to_string(i+1)).c_str());
                 }
             }
@@ -296,7 +296,7 @@ public:
                     }
 
                     if(name.find("cache") != std::string::npos) {
-                        for(int i = 0; i < 4; ++i) {
+                        for(int i = 0; i < 8; ++i) {
                             program_names[pos].texture_cache_loc[i] = glGetUniformLocation(programs.back()->id(), std::string("samp" + std::to_string(i+1)).c_str());
                         }
                     }
@@ -499,7 +499,7 @@ private:
 #ifdef AUDIO_ENABLED
         GLuint amp, amp_untouched;
 #endif
-        GLuint texture_cache_loc[4];
+        GLuint texture_cache_loc[8];
         GLuint iFrame;
         GLuint iTimeDelta;
         GLuint iDate; 
@@ -542,6 +542,7 @@ struct MXArguments {
     unsigned int audio_channels = 2;
     float audio_sensitivty = 0.25f;
 #endif
+    bool silent = false;
     bool gpu_filter_enabled = false;
     std::vector<int> gpu_filter_indices;
     int gpu_frame_buffer_size = 8;
@@ -583,11 +584,12 @@ public:
           fps{args.fps_value},
           repeat{args.repeat},
           full{args.full},
-          frame_cache{4},
+          frame_cache{8},
           texture_cache{args.cache},
           cache_delay{args.cache_delay},
           copy_audio{args.copy_audio},
-          gpu_cuda_device{args.cuda_device} {
+          gpu_cuda_device{args.cuda_device},
+          silent_mode{args.silent} {
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
@@ -728,8 +730,8 @@ public:
         }
 
         if(texture_cache) {
-            glDeleteTextures(4, cache_textures);
-            for(int i = 0; i < 4; i++) {
+            glDeleteTextures(8, cache_textures);
+            for(int i = 0; i < 8; i++) {
                 cache_textures[i] = 0;
             }
         }
@@ -943,7 +945,7 @@ public:
         library.useProgram();
         if(texture_cache) {
             cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
-            for(int i = 0; i < 4; ++i) {
+            for(int i = 0; i < 8; ++i) {
                 cache_textures[i] = loadTexture(blankMat);
             }
             frame_cache.fill(blankMat);
@@ -1029,6 +1031,9 @@ public:
                            mx::system_out << "acmx2: cannot read after looping.\n";
                         }
                     } else {
+                        if (silent_mode) {
+                            std::cout << "\n";  
+                        }
                         running = false;
                         finished = true;
                         win->quit();
@@ -1122,8 +1127,8 @@ public:
                     counter = 0;
                 }
                 if(frame_cache.isFull()) {
-                    for(int i = 0; i < 4; ++i) {
-                        library.setUniform("samp" + std::to_string(i+1), (i+1));
+                    for(int i = 0; i < 8; ++i) {
+                        library.setUniform("samp" + std::to_string(i+1), i);
                         glActiveTexture(GL_TEXTURE1 + i);
                         updateTexture(cache_textures[i], frame_cache.at(i));
                         glBindTexture(GL_TEXTURE_2D, cache_textures[i]);
@@ -1393,7 +1398,28 @@ public:
 
         } else if (cap.isOpened() && !filename.empty()) {
             frame_counter = static_cast<unsigned int>(cap.get(cv::CAP_PROP_POS_FRAMES));
-            if (std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 3) {
+        
+            if (silent_mode && totalFrames > 0.0) {
+                int current_percent = static_cast<int>((static_cast<double>(frame_counter) / totalFrames) * 100.0);
+                if (current_percent > last_progress_percent && current_percent <= 100) {
+                    last_progress_percent = current_percent;
+                    int64_t frames_written = writer.is_open() ? writer.get_frame_count() : 0;
+                    double elapsed_secs = static_cast<double>(frame_counter) / fps;
+                    uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600);
+                    uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60) % 60;
+                    uint64_t seconds = static_cast<uint64_t>(elapsed_secs) % 60;
+                    
+                    std::cout << "\racmx2: [" << std::setw(3) << current_percent << "%] "
+                              << "Frame " << frame_counter << "/" << static_cast<int>(totalFrames)
+                              << " | Written: " << frames_written
+                              << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
+                              << std::setfill('0') << std::setw(2) << minutes << ":"
+                              << std::setfill('0') << std::setw(2) << seconds
+                              << std::setfill(' ') << "     " << std::flush;
+                }
+            }
+            
+            if (!silent_mode && std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 3) {
                 if (totalFrames <= 0.0) {
                     totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
                 }
@@ -1609,7 +1635,7 @@ private:
     std::chrono::steady_clock::time_point captureStartTime;
     FrameCache frame_cache;
     bool texture_cache = false;
-    GLuint cache_textures[4] = {0};
+    GLuint cache_textures[8] = {0};
     int cache_delay = 1;
     std::atomic<bool> finished{false};
     std::atomic<bool> copy_audio{false};
@@ -1621,6 +1647,8 @@ private:
     float cameraDistance = 0.0f;
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
+    bool silent_mode = false;
+    int last_progress_percent = -1;
 private:
     std::atomic<uint64_t> frames_dropped{0};
     int win_w = 0;
@@ -1851,7 +1879,7 @@ private:
                         });
                     }
 
-                    // skip first frame
+                    
                     if(writer.is_open() && !filename.empty() && written_frame_counter == 0) {
                         written_frame_counter++;
                         continue;
@@ -1911,20 +1939,33 @@ private:
 };
 
 class MainWindow : public gl::GLWindow {
-public:
-    MainWindow(const MXArguments &args) : gl::GLWindow("ACMX2", args.tw, args.th, false) {
+    bool silent_mode = false;
+    
+    void initCommon(const MXArguments &args) {
         util.path = args.path;
-        SDL_Surface *ico = png::LoadPNG(util.getFilePath("data/win-icon.png").c_str());
-        if(!ico) {
-            throw mx::Exception("Could not load icon: " + util.getFilePath("data/win-icon.png"));
+        
+        if (!silent_mode) {
+            SDL_Surface *ico = png::LoadPNG(util.getFilePath("data/win-icon.png").c_str());
+            if(!ico) {
+                throw mx::Exception("Could not load icon: " + util.getFilePath("data/win-icon.png"));
+            }
+            setWindowIcon(ico);
+            SDL_FreeSurface(ico);
         }
-        setWindowIcon(ico);
-        SDL_FreeSurface(ico);
 
         setObject(new ACView(args));
         object->load(this);
         fflush(stdout);
         fflush(stderr);
+    }
+public:
+    
+    MainWindow(const MXArguments &args) : gl::GLWindow("ACMX2", args.tw, args.th, false), silent_mode(args.silent) {
+        initCommon(args);
+    }
+    
+    MainWindow(const MXArguments &args, bool headless) : gl::GLWindow(args.tw, args.th, gl::GLMode::DESKTOP), silent_mode(true) {
+        initCommon(args);
     }
 
     ~MainWindow() override {}
@@ -2058,7 +2099,8 @@ int main(int argc, char **argv) {
           .addOptionDoubleValue(301, "audio-output", "Audio output device")
           .addOptionDouble(302, "list-devices", "list audio devices")
 #endif
-          .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)");
+          .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
+          .addOptionDouble(405, "silent", "Silent mode - process video without window, output progress to terminal (video files only)");
 
     if(argc == 1) {
         printAbout(parser);
@@ -2262,6 +2304,9 @@ int main(int argc, char **argv) {
                     exit(EXIT_SUCCESS);
                 break;
 #endif
+                case 405:
+                    args.silent = true;
+                    break;
             }
                }
     } catch (const ArgException<std::string>& e) {
@@ -2282,8 +2327,35 @@ int main(int argc, char **argv) {
         if(args.filename.empty() && args.cache) {
             throw mx::Exception("Texture cache only works in video mode\n");
         }
-        MainWindow main_window(args);
-        main_window.loop();
+        
+        if (args.silent) {
+            if (args.filename.empty()) {
+                mx::system_err << "acmx2: Error: --silent mode requires a video input file (-i/--input)\n";
+                mx::system_err << "       Silent mode only works with video files, not camera or graphics input.\n";
+                mx::system_err.flush();
+                return EXIT_FAILURE;
+            }
+            if (args.ofilename.empty()) {
+                mx::system_err << "acmx2: Error: --silent mode requires an output file (-o/--output)\n";
+                mx::system_err.flush();
+                return EXIT_FAILURE;
+            }
+            if (!args.graphic_file.empty()) {
+                mx::system_err << "acmx2: Error: --silent mode cannot be used with graphics input (-g/--graphic)\n";
+                mx::system_err << "       Silent mode only works with video files.\n";
+                mx::system_err.flush();
+                return EXIT_FAILURE;
+            }
+            mx::system_out << "acmx2: Silent mode enabled - processing without window\n";
+        }
+        
+        if (args.silent) {
+            MainWindow main_window(args, true); 
+            main_window.loop();
+        } else {
+            MainWindow main_window(args); 
+            main_window.loop();
+        }
     } 
     catch(const mx::Exception &e) {
         mx::system_err << "acmx2: Exception: " << e.text() << "\n";
