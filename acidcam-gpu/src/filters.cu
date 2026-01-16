@@ -8198,9 +8198,9 @@ namespace ac_gpu {
         data[idx + ch] = (unsigned char)fminf(255.0f, fmaxf(0.0f, temp[ch] + shift));
         data[idx + (ch + 1) % 3] = (unsigned char)fminf(255.0f, fmaxf(0.0f, temp[(ch + 1) % 3] - shift / 2));
     }
-    __device__ void Blur(int x, int y, unsigned char* data, unsigned char** allFrames, size_t step, const FilterParams& params) {
+    __device__ void Blur(int x, int y, unsigned char* data, unsigned char** allFrames, int width, int height, size_t step, const FilterParams& params) {
         int idx = y * step + x * 4;
-        if (x < 2 || y < 2) return;
+        if (x < 2 || y < 2 || x >= width - 2 || y >= height - 2) return;
         unsigned char values[3][25];
         int count = 0;
         for (int dy = -2; dy <= 2; ++dy) {
