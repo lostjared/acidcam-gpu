@@ -340,12 +340,24 @@ public:
         return shader_bypass;
     }
 
-    void loadPrograms(gl::GLWindow *win, const std::string &text) {
+    void loadPrograms(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
         std::fstream file;
         file.open(text + "/index.txt", std::ios::in);
         if(!file.is_open()) {
             throw mx::Exception("acmx2: Could not load index.txt at shader path: " + text);
-        }        
+        }
+        size_t total_shaders = 0;
+        {
+            std::string line;
+            while(std::getline(file, line)) {
+                if(!line.empty() && std::filesystem::exists(text + "/" + line) && line.find("material") == std::string::npos) {
+                    total_shaders++;
+                }
+            }
+            file.clear();
+            file.seekg(0);
+        }
+        
         size_t shader_index = 0;
         while(!file.eof()) {
             std::string line_data;
@@ -379,13 +391,20 @@ public:
                         throw;
                     }
                     setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text + "/" + line_data);
-                }
-                
+                }     
                 shader_index++;
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                if(loadingFont.handle().has_value()) {
+                    std::string loadingText = "Loading Shader " + std::to_string(shader_index) + "/" + std::to_string(total_shaders) + "...";
+                    win->text.printText_Blended(loadingFont, 10, 10, loadingText);
+                }
+                SDL_GL_SwapWindow(win->getWindow());
+                SDL_PumpEvents();
             }
         }
         file.close();
-        mx::system_out << "acmx2: Loaded " << shader_index << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+        mx::system_out << "acmx2: Loaded " << shader_index << " Shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
     }
 
@@ -1067,9 +1086,14 @@ public:
         }
 
         library.is3D(is3d_enabled);
-        library.enableDualMode(is3d_enabled); 
+        library.enableDualMode(is3d_enabled);
+        if(overlayFont.handle().has_value()) {
+            win->text.init(win->w, win->h);
+            win->text.setColor({255, 255, 255, 255});
+        }
+        
         if(std::get<0>(flib) == 1)
-            library.loadPrograms(win, std::get<1>(flib));
+            library.loadPrograms(win, std::get<1>(flib), overlayFont);
         else
             library.loadProgram(win, std::get<1>(flib));
         library.setIndex(std::get<2>(flib));
@@ -1119,10 +1143,6 @@ public:
             glBufferData(GL_PIXEL_PACK_BUFFER, pboSize, nullptr, GL_STREAM_READ);
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        if(overlayFont.handle().has_value()) {
-            win->text.init(win->w, win->h);
-            win->text.setColor({255, 255, 255, 255});
-        }
         
         if(!graphic.empty())
             win->setWindowTitle("ACMX2 - Graphics Input");
