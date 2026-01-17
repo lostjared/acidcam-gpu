@@ -16,22 +16,16 @@ void ShaderPassDialog::setupUI()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     
-    // Enable checkbox
     enableCheckBox = new QCheckBox("Enable Multi-Pass Shader Processing", this);
     mainLayout->addWidget(enableCheckBox);
     
-    // Info label
     QLabel *infoLabel = new QLabel(
         "Multi-pass rendering applies multiple shaders in sequence.\n"
         "Each shader processes the output of the previous shader.", this);
     infoLabel->setWordWrap(true);
     mainLayout->addWidget(infoLabel);
-    
-    // Shader selection group
     QGroupBox *shaderGroup = new QGroupBox("Shader Pass Selection", this);
     QVBoxLayout *shaderMainLayout = new QVBoxLayout(shaderGroup);
-    
-    // Search
     QHBoxLayout *searchLayout = new QHBoxLayout();
     QLabel *searchLabel = new QLabel("Search:", this);
     searchLineEdit = new QLineEdit(this);
@@ -41,7 +35,6 @@ void ShaderPassDialog::setupUI()
     searchLayout->addWidget(searchLineEdit, 1);
     shaderMainLayout->addLayout(searchLayout);
     
-    // Combo box for shader selection
     QHBoxLayout *comboLayout = new QHBoxLayout();
     QLabel *availableLabel = new QLabel("Available Shaders:", this);
     shaderComboBox = new QComboBox(this);
@@ -59,7 +52,6 @@ void ShaderPassDialog::setupUI()
     comboLayout->addWidget(shaderComboBox, 1);
     shaderMainLayout->addLayout(comboLayout);
     
-    // Buttons
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     addButton = new QPushButton("Add →", this);
     removeButton = new QPushButton("← Remove", this);
@@ -73,7 +65,6 @@ void ShaderPassDialog::setupUI()
     buttonLayout->addWidget(clearButton);
     shaderMainLayout->addLayout(buttonLayout);
     
-    // Selected shaders list
     QLabel *selectedLabel = new QLabel("Shader Pass Order (processed in sequence):", this);
     shaderMainLayout->addWidget(selectedLabel);
     selectedShadersList = new QListWidget(this);
@@ -82,7 +73,6 @@ void ShaderPassDialog::setupUI()
     
     mainLayout->addWidget(shaderGroup);
     
-    // Dialog buttons
     QHBoxLayout *dialogButtonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
@@ -91,7 +81,6 @@ void ShaderPassDialog::setupUI()
     dialogButtonLayout->addWidget(cancelButton);
     mainLayout->addLayout(dialogButtonLayout);
     
-    // Connections
     connect(addButton, &QPushButton::clicked, this, &ShaderPassDialog::addShader);
     connect(removeButton, &QPushButton::clicked, this, &ShaderPassDialog::removeShader);
     connect(upButton, &QPushButton::clicked, this, &ShaderPassDialog::moveUp);
@@ -101,7 +90,6 @@ void ShaderPassDialog::setupUI()
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(searchLineEdit, &QLineEdit::textChanged, this, &ShaderPassDialog::filterSearchChanged);
     
-    // Enable/disable controls based on checkbox
     connect(enableCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         shaderComboBox->setEnabled(checked);
         selectedShadersList->setEnabled(checked);
@@ -113,7 +101,6 @@ void ShaderPassDialog::setupUI()
         clearButton->setEnabled(checked);
     });
 
-    // Initial state - disabled
     enableCheckBox->setChecked(false);
     shaderComboBox->setEnabled(false);
     selectedShadersList->setEnabled(false);
@@ -124,7 +111,6 @@ void ShaderPassDialog::setupUI()
     downButton->setEnabled(false);
     clearButton->setEnabled(false);
     
-    // Apply style
     QString style = "QDialog { background-color: black; }"
                     "QGroupBox { color: cyan; border: 1px solid cyan; margin-top: 10px; padding-top: 10px; }"
                     "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
