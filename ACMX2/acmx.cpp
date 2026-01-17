@@ -222,8 +222,7 @@ public:
     ShaderLibrary() = default;
     ~ShaderLibrary() {}
 
-    void loadProgram(gl::GLWindow *win, const std::string text) {
-        
+    void loadProgram(gl::GLWindow *win, const std::string text) {     
         programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
         if(!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text)) {
             throw mx::Exception("Error loading 2D shader program: " + text);
