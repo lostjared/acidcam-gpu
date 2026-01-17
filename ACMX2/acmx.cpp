@@ -229,14 +229,16 @@ public:
             throw mx::Exception("Error loading 2D shader program: " + text);
         }
         setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text);
-        
-        programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
-        if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text)) {
-            throw mx::Exception("Error loading 3D shader program: " + text);
+        if(dual_mode) {
+            programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
+            if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text)) {
+                throw mx::Exception("Error loading 3D shader program: " + text);
+            }
+            setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text);
+            mx::system_out << "acmx2: Compiled Shader 0 (2D+3D): " << text << "\n";
+        } else {
+            mx::system_out << "acmx2: Compiled Shader 0 (2D): " << text << "\n";
         }
-        setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text);
-        
-        mx::system_out << "acmx2: Compiled Shader 0 (2D+3D): " << text << "\n";
     }
     
     void setupProgramUniforms(gl::GLWindow *win, gl::ShaderProgram *prog, 
@@ -246,8 +248,7 @@ public:
         if(error != GL_NO_ERROR){
             throw mx::Exception("OpenGL Error: on ShaderLibary::loadProgram: " + std::to_string(error));
         }
-        prog->useProgram();
-        
+        prog->useProgram();        
         GLint loc = glGetUniformLocation(prog->id(), "iResolution");
         glUniform2f(loc, win->w, win->h);
         error = glGetError();
@@ -307,8 +308,21 @@ public:
     void is3D(bool is3d) {
         this->is3d = is3d;
     }
+
+    void enableDualMode(bool enable) {
+        dual_mode = enable;
+    }
+    
+    bool isDualMode() const {
+        return dual_mode;
+    }
     
     void toggle3D() {
+        if(!dual_mode) {
+            mx::system_out << "acmx2: Cannot switch to 3D - dual mode not enabled\n";
+            fflush(stdout);
+            return;
+        }
         is3d = !is3d;
         mx::system_out << "acmx2: Switched to " << (is3d ? "3D" : "2D") << " mode\n";
         fflush(stdout);
@@ -338,11 +352,9 @@ public:
             std::string line_data;
             std::getline(file, line_data);
             if(file && !line_data.empty() && std::filesystem::exists(text + "/" + line_data) && line_data.find("material") == std::string::npos) {
-                mx::system_out << "acmx2: Compiling Shader: " << shader_index << ": [" << line_data << "] (2D+3D)\n";
+                mx::system_out << "acmx2: Compiling Shader: " << shader_index << ": [" << line_data << "] (" << (dual_mode ? "2D+3D" : "2D") << ")\n";
                 fflush(stdout);
                 fflush(stderr);
-                
-                // Load 2D version
                 programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
                 try {
                     if(!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
@@ -355,26 +367,26 @@ public:
                     throw;
                 }
                 setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text + "/" + line_data);
-                
-                // Load 3D version
-                programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
-                try {
-                    if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
-                        throw mx::Exception("acmx2: Error could not load 3D shader: " + line_data);
+                if(dual_mode) {
+                    programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
+                    try {
+                        if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
+                            throw mx::Exception("acmx2: Error could not load 3D shader: " + line_data);
+                        }
+                    } catch(mx::Exception &e) {
+                        mx::system_err << "\n";
+                        fflush(stdout);
+                        fflush(stderr);
+                        throw;
                     }
-                } catch(mx::Exception &e) {
-                    mx::system_err << "\n";
-                    fflush(stdout);
-                    fflush(stderr);
-                    throw;
+                    setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text + "/" + line_data);
                 }
-                setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text + "/" + line_data);
                 
                 shader_index++;
             }
         }
         file.close();
-        mx::system_out << "acmx2: Loaded " << shader_index << " shaders (both 2D and 3D versions)\n";
+        mx::system_out << "acmx2: Loaded " << shader_index << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
     }
 
@@ -416,8 +428,7 @@ public:
         auto &progs = is3d ? programs_3d : programs_2d;
         return progs[index()].get(); 
     }
-    
-    // Get shader from current mode (2D or 3D based on is3d flag)
+
     gl::ShaderProgram *getShader(size_t idx) { 
         auto &progs = is3d ? programs_3d : programs_2d;
         if(idx < progs.size()) 
@@ -425,14 +436,12 @@ public:
         return nullptr;
     }
     
-    // Explicitly get 2D shader (for multipass texture processing)
     gl::ShaderProgram *getShader2D(size_t idx) { 
         if(idx < programs_2d.size()) 
             return programs_2d[idx].get(); 
         return nullptr;
     }
     
-    // Explicitly get 3D shader (for mesh rendering)
     gl::ShaderProgram *getShader3D(size_t idx) { 
         if(idx < programs_3d.size()) 
             return programs_3d[idx].get(); 
@@ -460,7 +469,6 @@ public:
 #endif
     }
     
-    // Update 2D shader uniforms (for multipass)
     void updateShaderUniforms2D(gl::GLWindow *win, size_t idx) {
         if(idx >= programs_2d.size()) return;
         
@@ -744,7 +752,6 @@ public:
         }
         counter_disabled = args.disable_counter;
         
-        // Initialize shader pass list
         if(args.shader_pass_enabled && !args.shader_pass_list.empty()) {
             shader_pass_list = args.shader_pass_list;
             shader_pass_enabled = true;
@@ -772,8 +779,6 @@ public:
     int gpu_square_size = 8;
     int gpu_frame_index = 0;
     int gpu_frame_dir = 1;
-
-    // Shader pass list for multi-pass rendering
     std::vector<int> shader_pass_list;
     bool shader_pass_enabled = false;
 
@@ -1063,6 +1068,7 @@ public:
         }
 
         library.is3D(is3d_enabled);
+        library.enableDualMode(is3d_enabled); 
         if(std::get<0>(flib) == 1)
             library.loadPrograms(win, std::get<1>(flib));
         else
@@ -1381,8 +1387,6 @@ public:
                 1000.0f
             );
             glm::mat4 mvMatrix = viewMatrix * modelMatrix;
-            
-            // Apply multipass effects to camera texture BEFORE mapping to 3D mesh
             GLuint textureForMesh = camera_texture;
             if(shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
                 glDisable(GL_DEPTH_TEST);
@@ -1402,8 +1406,6 @@ public:
                 
                 GLuint inputTex = camera_texture;
                 int pingpong = 0;
-                
-                // Use 2D shaders for texture processing
                 for(size_t i = 0; i < shader_pass_list.size(); ++i) {
                     int shader_idx = shader_pass_list[i];
                     if(shader_idx >= 0 && shader_idx < static_cast<int>(library.size2d())) {
@@ -1429,8 +1431,6 @@ public:
                 }
                 
                 textureForMesh = inputTex;
-                
-                // Switch back to captureFBO for 3D rendering
                 glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
                 glViewport(0, 0, win->w, win->h);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1443,7 +1443,7 @@ public:
             if(library.isBypassed()) {
                 activeShader = &fshader3d;
             } else {
-                activeShader = library.shader();  // Uses 3D shader (library.is3d is true)
+                activeShader = library.shader(); 
             }
             activeShader->useProgram();
             activeShader->setUniform("mv_matrix", mvMatrix);
@@ -1845,7 +1845,10 @@ public:
                         }
                         break;
                     case SDLK_3:
-                        if(cube.meshes.empty()) {
+                        if(!library.isDualMode()) {
+                            mx::system_out << "acmx2: Cannot switch to 3D mode - 3D shaders not compiled (use --enable-3d at startup)\n";
+                            fflush(stdout);
+                        } else if(cube.meshes.empty()) {
                             mx::system_out << "acmx2: Cannot switch to 3D mode - no model loaded (use --enable-3d)\n";
                             fflush(stdout);
                         } else {
