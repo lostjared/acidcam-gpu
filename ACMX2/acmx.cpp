@@ -983,8 +983,10 @@ public:
         } else if(filename.empty()) {
 #ifdef _WIN32
             cap.open(camera_index, cv::CAP_DSHOW);
-#else
+#elif defined(__linux__)
             cap.open(camera_index, cv::CAP_V4L2);
+#else
+            cap.open(camera_index);
 #endif
             if(!cap.isOpened()) {
                 throw mx::Exception("Could not open camera index: " + std::to_string(camera_index));
@@ -1710,7 +1712,6 @@ public:
             if (std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 1) {
                 std::string timeStr = getTimeString();
                 int64_t currentFrames = getFrameCount();
-
                 std::ostringstream stream;
                 stream << "ACMX2 - Capture Mode - "
                        << timeStr
