@@ -190,15 +190,9 @@ void MainWindow::initControls() {
     bool useCustomStyle = appSettings.value("useCustomStyle", true).toBool();
     styleSheetAction->setChecked(useCustomStyle);
     if(!path.isEmpty()) {
-        Log("DEBUG: Loaded shader path from settings: '" + path + "'");
+        
         QFileInfo pathInfo(path);
         QFileInfo indexInfo(path + "/index.txt");
-        
-        Log("DEBUG: Path exists: " + QString::number(pathInfo.exists()) + 
-            ", Is dir: " + QString::number(pathInfo.isDir()) + 
-            ", Is readable: " + QString::number(pathInfo.isReadable()));
-        Log("DEBUG: index.txt exists: " + QString::number(indexInfo.exists()));
-        
         if(pathInfo.exists() && pathInfo.isDir() && indexInfo.exists()) {
             shader_path = path;
             loadShaders(path);
@@ -645,8 +639,6 @@ void MainWindow::menuShaderPassSettings() {
     }
     
     ShaderPassDialog passDialog(items, this);
-    
-    // Restore previous settings
     passDialog.setEnabled(shader_pass_enabled);
     if(!shader_pass_indices.isEmpty()) {
         passDialog.setSelectedIndices(shader_pass_indices.split(","));
