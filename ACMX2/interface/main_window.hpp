@@ -17,6 +17,7 @@
 #include"shader.hpp"
 #include"shaderlibrary.hpp"
 #include"gpufilter.hpp"
+#include"shaderpass.hpp"
 
 class ReadOnlyStringListModel : public QStringListModel {
     Q_OBJECT
@@ -57,6 +58,7 @@ public slots:
     void menuSearch();
     void menuFindNext();
     void menuGPUFilterSettings();
+    void menuShaderPassSettings();
 protected:
     bool addShaderToList(const QString &shaderName);
 
@@ -121,9 +123,13 @@ private:
     QString gpu_filter_indices;
     int gpu_buffer_size = 8;
     QAction *gpuFilterAction;
+    QAction *shaderPassAction;
     QAction *styleSheetAction;
     QString customStyleSheet;
     void applyCustomStyleSheet(bool enable);
+    // Shader pass settings
+    bool shader_pass_enabled = false;
+    QString shader_pass_indices;
 };
 
 

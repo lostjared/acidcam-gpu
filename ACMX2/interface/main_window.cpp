@@ -101,6 +101,10 @@ void MainWindow::initControls() {
         process->terminate();
     });
     playbackMenu->addAction(play_stop);
+    playbackMenu->addSeparator();
+    shaderPassAction = new QAction(tr("Multi-Pass Shader Settings..."), this);
+    connect(shaderPassAction, &QAction::triggered, this, &MainWindow::menuShaderPassSettings);
+    playbackMenu->addAction(shaderPassAction);
     listMenu_new = new QAction(tr("New Shader Library"), this);
     connect(listMenu_new,  &QAction::triggered, this, &MainWindow::newList);
     listMenu->addAction(listMenu_new);
@@ -633,6 +637,32 @@ void MainWindow::menuGPUFilterSettings() {
     }
 }
 
+void MainWindow::menuShaderPassSettings() {
+    if(shader_path.isEmpty() || items.isEmpty()) {
+        QMessageBox::information(this, "Load Shaders First", 
+            "Please load a shader library before configuring multi-pass shaders.");
+        return;
+    }
+    
+    ShaderPassDialog passDialog(items, this);
+    
+    // Restore previous settings
+    passDialog.setEnabled(shader_pass_enabled);
+    if(!shader_pass_indices.isEmpty()) {
+        passDialog.setSelectedIndices(shader_pass_indices.split(","));
+    }
+    
+    if(passDialog.exec() == QDialog::Accepted) {
+        shader_pass_enabled = passDialog.isShaderPassEnabled();
+        shader_pass_indices = passDialog.getShaderPassArgument();
+        if(shader_pass_enabled) {
+            Log("Multi-Pass Shader Settings Saved: Passes=" + shader_pass_indices);
+        } else {
+            Log("Multi-Pass Shader Disabled");
+        }
+    }
+}
+
 void MainWindow::cameraSettings() {
     SettingsWindow settingsWindow(this);
     if(settingsWindow.exec() == QDialog::Accepted) {
@@ -899,6 +929,10 @@ void MainWindow::runAll() {
     if(gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
         arguments << "--gpu-filter" << gpu_filter_indices;
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
+    }
+
+    if(shader_pass_enabled && !shader_pass_indices.isEmpty()) {
+        arguments << "--shader-pass" << shader_pass_indices;
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
