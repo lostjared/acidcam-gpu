@@ -562,8 +562,6 @@ int main(int argc, char** argv) {
                 }
             }
 
-
-
             if(camera_mode ==false && tick_count == 1) {
                 auto end_time = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
