@@ -91,7 +91,7 @@ private:
     QAction *helpMenu_about;
     QAction *listMenu_findNext;
     QString lastSearchText;  
-    int lastFoundIndex = 0;    
+    int lastFoundIndex = -1;    
     QString executable_path;
     QAction *listMenu_search;
     QString shader_path;
@@ -107,6 +107,8 @@ private:
     QString concatList(const QStringList lst);
     QVector<QPointer<TextEditor>> open_files;
     QString readFileContents(const QString &filePath);
+    QString sanitizeShaderName(const QString &name);
+    void cleanupClosedEditors();
     bool audio_enabled = false;
     unsigned int audio_channels = 2;
     float audio_sense = 0.25f;
@@ -119,7 +121,6 @@ private:
     int audio_input = -1;
     int audio_output = -1;
     QString model_file;
-    // GPU Filter settings
     bool gpu_filter_enabled = false;
     QString gpu_filter_indices;
     int gpu_buffer_size = 8;
@@ -128,9 +129,9 @@ private:
     QAction *styleSheetAction;
     QString customStyleSheet;
     void applyCustomStyleSheet(bool enable);
-    // Shader pass settings
     bool shader_pass_enabled = false;
-    QString shader_pass_indices;
+    QStringList shader_pass_names;  
+    QString getShaderPassIndicesFromNames() const;
 };
 
 

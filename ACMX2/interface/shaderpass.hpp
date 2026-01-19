@@ -23,10 +23,12 @@ public:
     bool isShaderPassEnabled() const;
     QStringList getSelectedShaderIndices() const;
     QString getShaderPassArgument() const;
+    QStringList getSelectedShaderNames() const;
     
     // Set the current state
     void setEnabled(bool enabled);
     void setSelectedIndices(const QStringList &indices);
+    void setSelectedShaderNames(const QStringList &names);
 
 public slots:
     void addShader();

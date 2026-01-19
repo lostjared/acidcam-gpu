@@ -174,7 +174,6 @@ void TextEditor::init() {
     });
     
     connect(m_textEdit, &QPlainTextEdit::cursorPositionChanged, this, &TextEditor::updateCursorPosition);
-    
     setAttribute(Qt::WA_DeleteOnClose);
 }
 

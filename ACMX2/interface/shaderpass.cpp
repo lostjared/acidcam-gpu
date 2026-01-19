@@ -244,3 +244,27 @@ void ShaderPassDialog::setSelectedIndices(const QStringList &indices)
         }
     }
 }
+
+QStringList ShaderPassDialog::getSelectedShaderNames() const
+{
+    QStringList names;
+    for (int i = 0; i < selectedShadersList->count(); ++i) {
+        QListWidgetItem *item = selectedShadersList->item(i);
+        names.append(item->text());
+    }
+    return names;
+}
+
+void ShaderPassDialog::setSelectedShaderNames(const QStringList &names)
+{
+    selectedShadersList->clear();
+    for (const QString &name : names) {
+        if (shaderNameToIndex.contains(name)) {
+            int idx = shaderNameToIndex[name];
+            QListWidgetItem *item = new QListWidgetItem(name);
+            item->setData(Qt::UserRole, idx);
+            selectedShadersList->addItem(item);
+        }
+        // Silently skip names that no longer exist in the shader list
+    }
+}

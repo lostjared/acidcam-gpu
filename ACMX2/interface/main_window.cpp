@@ -22,13 +22,13 @@ void MainWindow::initControls() {
     lastFoundIndex = -1;
     lastSearchText = QString();
     process = new QProcess(this);
-    connect(process, &QProcess::readyReadStandardOutput, this, [=]() {
+    connect(process, &QProcess::readyReadStandardOutput, this, [this]() {
         QString output = process->readAllStandardOutput();
         output.replace("\n", "<br>");
         this->Write(output);
     });
 
-    connect(process, &QProcess::readyReadStandardError, this, [=]() {
+    connect(process, &QProcess::readyReadStandardError, this, [this]() {
         QString errorOutput = process->readAllStandardError();
         if(!errorOutput.contains("GStreamer")) {
             errorOutput.replace("\n", "<br>"); 
@@ -261,19 +261,19 @@ void MainWindow::menuSearch() {
         QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
         return;
     }
-    QStringList items = model->stringList();
+    QStringList shaderList = model->stringList();
     int foundIndex = -1;
     
-    for (int i = 0; i < items.size(); ++i) {
-        if (items[i].compare(searchText, Qt::CaseInsensitive) == 0) {
+    for (int i = 0; i < shaderList.size(); ++i) {
+        if (shaderList[i].compare(searchText, Qt::CaseInsensitive) == 0) {
             foundIndex = i;
             break;
         }
     }
     
     if (foundIndex == -1) {
-        for (int i = 0; i < items.size(); ++i) {
-            if (items[i].contains(searchText, Qt::CaseInsensitive)) {
+        for (int i = 0; i < shaderList.size(); ++i) {
+            if (shaderList[i].contains(searchText, Qt::CaseInsensitive)) {
                 foundIndex = i;
                 break;
             }
@@ -287,7 +287,7 @@ void MainWindow::menuSearch() {
         list_view->selectionModel()->select(matchIndex, QItemSelectionModel::ClearAndSelect);
         list_view->scrollTo(matchIndex, QAbstractItemView::PositionAtCenter);
         
-        Log("Found shader: " + items[foundIndex] + " at index " + QString::number(foundIndex));
+        Log("Found shader: " + shaderList[foundIndex] + " at index " + QString::number(foundIndex));
     } else {
         QMessageBox::information(this, 
                                 tr("Not Found"), 
@@ -310,17 +310,17 @@ void MainWindow::menuFindNext() {
         return;
     }
     
-    QStringList items = model->stringList();
-    if (items.isEmpty()) {
+    QStringList shaderList = model->stringList();
+    if (shaderList.isEmpty()) {
         return;
     }
     
     int foundIndex = -1;
-    int startIndex = (lastFoundIndex + 1) % items.size();  
+    int startIndex = (lastFoundIndex + 1) % shaderList.size();  
     
     
-    for (int i = startIndex; i < items.size(); ++i) {
-        if (items[i].contains(lastSearchText, Qt::CaseInsensitive)) {
+    for (int i = startIndex; i < shaderList.size(); ++i) {
+        if (shaderList[i].contains(lastSearchText, Qt::CaseInsensitive)) {
             foundIndex = i;
             break;
         }
@@ -328,7 +328,7 @@ void MainWindow::menuFindNext() {
     
     if (foundIndex == -1 && startIndex > 0) {
         for (int i = 0; i < startIndex; ++i) {
-            if (items[i].contains(lastSearchText, Qt::CaseInsensitive)) {
+            if (shaderList[i].contains(lastSearchText, Qt::CaseInsensitive)) {
                 foundIndex = i;
                 break;
             }
@@ -342,7 +342,7 @@ void MainWindow::menuFindNext() {
         list_view->selectionModel()->select(matchIndex, QItemSelectionModel::ClearAndSelect);
         list_view->scrollTo(matchIndex, QAbstractItemView::PositionAtCenter);
         
-        Log("Found next: " + items[foundIndex] + " at index " + QString::number(foundIndex));
+        Log("Found next: " + shaderList[foundIndex] + " at index " + QString::number(foundIndex));
     } else {
         QMessageBox::information(this, 
                                 tr("No More Results"), 
@@ -435,9 +435,9 @@ void MainWindow::menuUp() {
     if (currentRow == 0) {
         return;
     }
-    QStringList items = model->stringList();
-    items.swapItemsAt(currentRow, currentRow - 1);
-    model->setStringList(items);
+    QStringList shaderList = model->stringList();
+    shaderList.swapItemsAt(currentRow, currentRow - 1);
+    model->setStringList(shaderList);
     QModelIndex newIndex = model->index(currentRow - 1);
     list_view->selectionModel()->setCurrentIndex(newIndex, QItemSelectionModel::Select);
     updateIndex();
@@ -463,9 +463,9 @@ void MainWindow::menuDown() {
         return;
     }
 
-    QStringList items = model->stringList();
-    items.swapItemsAt(currentRow, currentRow + 1);
-    model->setStringList(items);
+    QStringList shaderList = model->stringList();
+    shaderList.swapItemsAt(currentRow, currentRow + 1);
+    model->setStringList(shaderList);
     QModelIndex newIndex = model->index(currentRow + 1);
     list_view->selectionModel()->setCurrentIndex(newIndex, QItemSelectionModel::Select);
     updateIndex();
@@ -488,7 +488,12 @@ QString MainWindow::readFileContents(const QString &filePath)
 void MainWindow::listClicked(const QModelIndex &i) {
    if (!i.isValid())
         return;
-    QString itemText = i.data(Qt::DisplayRole).toString();
+    QString itemText = sanitizeShaderName(i.data(Qt::DisplayRole).toString());
+    if (itemText.isEmpty()) {
+        Log("Invalid shader name");
+        return;
+    }
+    cleanupClosedEditors();
     TextEditor *editor = new TextEditor(this);
     QString filePath = shader_path + "/" + itemText;
     editor->setText(readFileContents(filePath));
@@ -651,15 +656,15 @@ void MainWindow::menuShaderPassSettings() {
     
     ShaderPassDialog passDialog(items, this);
     passDialog.setEnabled(shader_pass_enabled);
-    if(!shader_pass_indices.isEmpty()) {
-        passDialog.setSelectedIndices(shader_pass_indices.split(","));
+    if(!shader_pass_names.isEmpty()) {
+        passDialog.setSelectedShaderNames(shader_pass_names);
     }
     
     if(passDialog.exec() == QDialog::Accepted) {
         shader_pass_enabled = passDialog.isShaderPassEnabled();
-        shader_pass_indices = passDialog.getShaderPassArgument();
+        shader_pass_names = passDialog.getSelectedShaderNames();
         if(shader_pass_enabled) {
-            Log("Multi-Pass Shader Settings Saved: Passes=" + shader_pass_indices);
+            Log("Multi-Pass Shader Settings Saved: " + QString::number(shader_pass_names.size()) + " passes");
         } else {
             Log("Multi-Pass Shader Disabled");
         }
@@ -942,8 +947,11 @@ void MainWindow::runAll() {
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
 
-    if(shader_pass_enabled && !shader_pass_indices.isEmpty()) {
-        arguments << "--shader-pass" << shader_pass_indices;
+    if(shader_pass_enabled && !shader_pass_names.isEmpty()) {
+        QString passIndices = getShaderPassIndicesFromNames();
+        if(!passIndices.isEmpty()) {
+            arguments << "--shader-pass" << passIndices;
+        }
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
@@ -965,21 +973,52 @@ QString MainWindow::concatList(const QStringList lst) {
      return text;
 }
 
+QString MainWindow::getShaderPassIndicesFromNames() const {
+    QStringList indices;
+    for (const QString &name : shader_pass_names) {
+        int idx = items.indexOf(name);
+        if (idx >= 0) {
+            indices.append(QString::number(idx));
+        }
+    }
+    return indices.join(",");
+}
+
+QString MainWindow::sanitizeShaderName(const QString &name) {
+    QString sanitized = name.trimmed();
+    if (sanitized.contains("..") || sanitized.contains("/") || sanitized.contains("\\")) {
+        Log("Warning: Invalid shader name detected (path traversal attempt): " + name);
+        return QString();
+    }
+    while (sanitized.startsWith('.')) {
+        sanitized = sanitized.mid(1);
+    }
+    return sanitized;
+}
+
+void MainWindow::cleanupClosedEditors() {
+    open_files.erase(
+        std::remove_if(open_files.begin(), open_files.end(),
+            [](const QPointer<TextEditor> &ptr) { return ptr.isNull(); }),
+        open_files.end()
+    );
+}
+
 void MainWindow::menuShuffle() {
     QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
     if (!model) {
         QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
         return;
     }
-    QStringList items = model->stringList();
-    if (items.isEmpty()) {
+    QStringList shaderList = model->stringList();
+    if (shaderList.isEmpty()) {
         return;
     }
     std::random_device rd;
     std::mt19937 g(rd());
-    std::shuffle(items.begin(), items.end(), g);
+    std::shuffle(shaderList.begin(), shaderList.end(), g);
     
-    model->setStringList(items);
+    model->setStringList(shaderList);
     updateIndex();
     Log("Shaders shuffled");
 }
@@ -990,12 +1029,12 @@ void MainWindow::menuSort() {
         QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
         return;
     }
-    QStringList items = model->stringList();
-    if (items.isEmpty()) {
+    QStringList shaderList = model->stringList();
+    if (shaderList.isEmpty()) {
         return;
     }
-    items.sort(Qt::CaseInsensitive);
-    model->setStringList(items);
+    shaderList.sort(Qt::CaseInsensitive);
+    model->setStringList(shaderList);
     updateIndex();
     Log("Shaders sorted alphabetically");
 }
