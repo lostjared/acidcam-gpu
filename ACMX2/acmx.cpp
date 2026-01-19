@@ -234,9 +234,9 @@ public:
                 throw mx::Exception("Error loading 3D shader program: " + text);
             }
             setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text);
-            mx::system_out << "acmx2: Compiled Shader 0 (2D+3D): " << text << "\n";
+            mx::system_out << "acmx2: Compiled Shader 0 (2D+3D): " << text << " ✔ \n";
         } else {
-            mx::system_out << "acmx2: Compiled Shader 0 (2D): " << text << "\n";
+            mx::system_out << "acmx2: Compiled Shader 0 (2D): " << text << " ✔ \n";
         }
     }
     
@@ -363,14 +363,16 @@ public:
             std::string line_data;
             std::getline(file, line_data);
             if(file && !line_data.empty() && std::filesystem::exists(text + "/" + line_data) && line_data.find("material") == std::string::npos) {
-                mx::system_out << "acmx2: Compiling Shader: " << shader_index << ": [" << line_data << "] (" << (dual_mode ? "2D+3D" : "2D") << ")\n";
+                mx::system_out << "acmx2: Compiling Shader: " << shader_index << ": [" << line_data << "] (" << (dual_mode ? "2D+3D" : "2D") << ") ";
                 fflush(stdout);
                 fflush(stderr);
                 programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
                 try {
                     if(!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
-                        throw mx::Exception("acmx2: Error could not load 2D shader: " + line_data);
+                        mx::system_out << " ❌ \n";
+                        throw mx::Exception("\nacmx2: Error could not load 2D shader: " + line_data);
                     }
+                    mx::system_out << " ✔ \n";
                 } catch(mx::Exception &e) {
                     mx::system_err << "\n";
                     fflush(stdout);
@@ -382,8 +384,10 @@ public:
                     programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
                     try {
                         if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
+                            mx::system_out << " ❌ \n";
                             throw mx::Exception("acmx2: Error could not load 3D shader: " + line_data);
                         }
+                        mx::system_out << " ✔ \n";
                     } catch(mx::Exception &e) {
                         mx::system_err << "\n";
                         fflush(stdout);
@@ -1015,7 +1019,6 @@ public:
                 h = sizev.value().height;
                 mx::system_out << "acmx2: Resolution stretched to: " << w << "x" << h << "\n";
             }
-
             win->setWindowSize(w, h);
             SDL_GL_GetDrawableSize(win->getWindow(), &win->w, &win->h);
             if(win->w != w || win->h != h) {
