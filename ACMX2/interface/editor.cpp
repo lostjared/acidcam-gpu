@@ -22,7 +22,7 @@
 
 TextEditor::TextEditor(QWidget *parent)
     : QDialog(parent), m_modified(false), m_textEdit(nullptr), m_highlighter(nullptr), 
-      m_statusBar(nullptr), m_lineColLabel(nullptr), vec(nullptr), index(-1), m_fontSize(24)
+      m_statusBar(nullptr), m_lineColLabel(nullptr), m_fontSize(24)
 {
     init();
 }
@@ -175,16 +175,6 @@ void TextEditor::init() {
     
     connect(m_textEdit, &QPlainTextEdit::cursorPositionChanged, this, &TextEditor::updateCursorPosition);
     
-    connect(this, &QDialog::finished, this, [this]() {
-        if (vec) {
-            // Find this editor in the vector by pointer comparison, not by stale index
-            int foundIndex = vec->indexOf(this);
-            if (foundIndex >= 0) {
-                vec->removeAt(foundIndex);
-            }
-        }
-    });
-    
     setAttribute(Qt::WA_DeleteOnClose);
 }
 
@@ -327,11 +317,6 @@ void TextEditor::updateCursorPosition() {
     int line = cursor.blockNumber() + 1;
     int col = cursor.columnNumber() + 1;
     m_lineColLabel->setText(QString("Line: %1, Col: %2").arg(line).arg(col));
-}
-
-void TextEditor::setIndex(QVector<TextEditor *> *v, int i) {
-    index = i;
-    vec = v;
 }
 
 void TextEditor::closeEvent(QCloseEvent *event) {

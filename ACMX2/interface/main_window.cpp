@@ -489,12 +489,12 @@ void MainWindow::listClicked(const QModelIndex &i) {
    if (!i.isValid())
         return;
     QString itemText = i.data(Qt::DisplayRole).toString();
-    open_files.append(new TextEditor(this));
+    TextEditor *editor = new TextEditor(this);
     QString filePath = shader_path + "/" + itemText;
-    open_files.back()->setText(readFileContents(filePath));
-    open_files.back()->setFileName(filePath);
-    open_files.back()->setIndex(&open_files, open_files.size()-1);
-    open_files.back()->show();
+    editor->setText(readFileContents(filePath));
+    editor->setFileName(filePath);
+    open_files.append(editor);
+    editor->show();
 }
 
 void MainWindow::Log(const QString &message) {

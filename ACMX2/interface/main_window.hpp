@@ -12,6 +12,7 @@
 #include<QMenuBar>
 #include<QProcess>
 #include<QSettings>
+#include<QPointer>
 #include"prop.hpp"
 #include"editor.hpp"
 #include"shader.hpp"
@@ -104,7 +105,7 @@ private:
     int output_kbps = 10000;
     double output_fps = 24.0f;
     QString concatList(const QStringList lst);
-    QVector<TextEditor *> open_files;
+    QVector<QPointer<TextEditor>> open_files;
     QString readFileContents(const QString &filePath);
     bool audio_enabled = false;
     unsigned int audio_channels = 2;

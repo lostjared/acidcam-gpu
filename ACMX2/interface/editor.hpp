@@ -25,7 +25,6 @@ public:
     explicit TextEditor(QWidget *parent = nullptr);
     void setText(const QString &text);
     void setFileName(const QString &filename);
-    void setIndex(QVector<TextEditor *> *v, int i);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -50,10 +49,8 @@ private:
     GlslSyntaxHighlighter *m_highlighter = nullptr;
     QStatusBar *m_statusBar = nullptr;
     QLabel *m_lineColLabel = nullptr;
-    QVector<TextEditor *> *vec = nullptr;
     QString filename;
     QString m_lastSearchText;
-    int index = -1;
     int m_fontSize = 24;
 };
 
