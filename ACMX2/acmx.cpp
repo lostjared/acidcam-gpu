@@ -372,7 +372,8 @@ public:
                         mx::system_out << " ❌ \n";
                         throw mx::Exception("\nacmx2: Error could not load 2D shader: " + line_data);
                     }
-                    mx::system_out << " ✔ \n";
+                    if(!dual_mode)
+                        mx::system_out << " ✔ \n";
                 } catch(mx::Exception &e) {
                     mx::system_err << "\n";
                     fflush(stdout);
@@ -2061,16 +2062,24 @@ private:
     void updateTexture(GLuint texture, cv::Mat &frame) {
         glBindTexture(GL_TEXTURE_2D, texture);
         cv::Mat temp;
-        cv::cvtColor(frame, temp, cv::COLOR_BGR2RGBA);  
-        glTexSubImage2D(GL_TEXTURE_2D, 
-                        0, 0, 0,
-                        temp.cols, temp.rows,
-                        GL_RGBA,
-                        GL_UNSIGNED_BYTE,
-                        temp.ptr());
+        cv::cvtColor(frame, temp, cv::COLOR_BGR2RGBA);
+        GLint texWidth = 0, texHeight = 0;
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
+        
+        if (texWidth != temp.cols || texHeight != temp.rows) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, temp.cols, temp.rows,
+                         0, GL_RGBA, GL_UNSIGNED_BYTE, temp.ptr());
+        } else {
+            glTexSubImage2D(GL_TEXTURE_2D, 
+                            0, 0, 0,
+                            temp.cols, temp.rows,
+                            GL_RGBA,
+                            GL_UNSIGNED_BYTE,
+                            temp.ptr());
+        }
         glBindTexture(GL_TEXTURE_2D, 0);
     }
-
     
     void updateTextureRGBA(GLuint texture, cv::Mat &frame) {
         glBindTexture(GL_TEXTURE_2D, texture);
