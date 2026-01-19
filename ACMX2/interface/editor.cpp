@@ -176,8 +176,12 @@ void TextEditor::init() {
     connect(m_textEdit, &QPlainTextEdit::cursorPositionChanged, this, &TextEditor::updateCursorPosition);
     
     connect(this, &QDialog::finished, this, [this]() {
-        if (vec && index >= 0 && index < vec->size()) {
-            vec->removeAt(index);
+        if (vec) {
+            // Find this editor in the vector by pointer comparison, not by stale index
+            int foundIndex = vec->indexOf(this);
+            if (foundIndex >= 0) {
+                vec->removeAt(foundIndex);
+            }
         }
     });
     

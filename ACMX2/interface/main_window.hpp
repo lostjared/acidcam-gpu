@@ -78,8 +78,8 @@ private:
     QTextEdit   *bottomTextBox;
     QMenu *fileMenu;
     QMenu *cameraMenu;
-    QMenu *runMenu;
     QMenu *playbackMenu;
+    QMenu *runMenu;
     QMenu *listMenu;
     QMenu *helpMenu;
     QAction *fileMenu_prop, *fileMenu_exit;
@@ -90,7 +90,7 @@ private:
     QAction *helpMenu_about;
     QAction *listMenu_findNext;
     QString lastSearchText;  
-    int lastFoundIndex;    
+    int lastFoundIndex = 0;    
     QString executable_path;
     QAction *listMenu_search;
     QString shader_path;

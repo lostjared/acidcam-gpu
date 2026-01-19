@@ -19,6 +19,8 @@
 #endif
 
 void MainWindow::initControls() {
+    lastFoundIndex = -1;
+    lastSearchText = QString();
     process = new QProcess(this);
     connect(process, &QProcess::readyReadStandardOutput, this, [=]() {
         QString output = process->readAllStandardOutput();
@@ -176,7 +178,6 @@ void MainWindow::initControls() {
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
     QString path = appSettings.value("shaders", "").toString();
-    // Clean up path: remove trailing slashes and whitespace
     path = path.trimmed();
     while(path.endsWith("/") || path.endsWith("\\")) {
         path.chop(1);
@@ -190,7 +191,6 @@ void MainWindow::initControls() {
     bool useCustomStyle = appSettings.value("useCustomStyle", true).toBool();
     styleSheetAction->setChecked(useCustomStyle);
     if(!path.isEmpty()) {
-        
         QFileInfo pathInfo(path);
         QFileInfo indexInfo(path + "/index.txt");
         if(pathInfo.exists() && pathInfo.isDir() && indexInfo.exists()) {
@@ -255,8 +255,7 @@ void MainWindow::menuSearch() {
     }
     
     lastSearchText = searchText;  
-    lastFoundIndex = -1;          // Reset for new search
-    
+    lastFoundIndex = -1;
     QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
     if (!model) {
         QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
@@ -364,7 +363,11 @@ void MainWindow::newShader() {
 }
 
 void MainWindow::menuRemove() {
-    QModelIndex currentIndex = list_view->selectionModel()->currentIndex();
+    QItemSelectionModel *selModel = list_view->selectionModel();
+    if (!selModel) {
+        return;
+    }
+    QModelIndex currentIndex = selModel->currentIndex();
     if (!currentIndex.isValid()) {
         return;
     }
@@ -420,7 +423,11 @@ void MainWindow::menuUp() {
         QMessageBox::warning(list_view, "Error", "The model is not a QStringListModel.");
         return;
     }
-    QModelIndex currentIndex = list_view->selectionModel()->currentIndex();
+    QItemSelectionModel *selModel = list_view->selectionModel();
+    if (!selModel) {
+        return;
+    }
+    QModelIndex currentIndex = selModel->currentIndex();
     if (!currentIndex.isValid()) {
         return;
     }
@@ -441,7 +448,11 @@ void MainWindow::menuDown() {
     if (!model) {
         return;
     }
-    QModelIndex currentIndex = list_view->selectionModel()->currentIndex();
+    QItemSelectionModel *selModel = list_view->selectionModel();
+    if (!selModel) {
+        return;
+    }
+    QModelIndex currentIndex = selModel->currentIndex();
     if (!currentIndex.isValid()) {
         return;
     }
@@ -704,6 +715,10 @@ void MainWindow::cameraSettings() {
 }
 
 void MainWindow::runSelected() {
+    if(process->state() == QProcess::Running) {
+        QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
+        return;
+    }
 
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -817,6 +832,10 @@ void MainWindow::runSelected() {
 }
 
 void MainWindow::runAll() {
+    if(process->state() == QProcess::Running) {
+        QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
+        return;
+    }
 
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
