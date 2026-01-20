@@ -2337,7 +2337,7 @@ const char *message = R"(
     V - Toggle view rotation
     O - Oscillation Toggle
     X - Reset camera distance
-    +, - increase / decrease camera distance
+    ( +, - ) - increase / decrease camera distance
     B - increase movement speed
     N - decrease movement speed
 }
