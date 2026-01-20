@@ -2,6 +2,8 @@
 #include<QMessageBox>
 #include<QSettings>
 #include<QSet>
+#include<QProcess>
+#include<QRegularExpression>
 #ifdef __linux__
 #include<unistd.h>
 #include<fcntl.h>
@@ -22,7 +24,8 @@ SettingsWindow::SettingsWindow(QWidget *parent)
       saveOutputVideoFile(false),
       graphicsFile(""),
       graphicsDuration(10),
-      modelFile("data/cube.mxmod.z") {
+      modelFile("data/cube.mxmod.z"),
+      selectedCudaDevice(0) {
     init();
 }
 
@@ -46,6 +49,41 @@ void SettingsWindow::populateCameraDevices() {
     }
 }
 
+void SettingsWindow::populateCudaDevices() {
+    QProcess process;
+    process.start("acmx2", QStringList() << "--list-cuda-devices");
+    process.waitForFinished(5000);
+    
+    QString output = process.readAllStandardOutput();
+    
+    if (output.isEmpty() || process.exitCode() != 0) {
+        cudaDeviceComboBox->addItem("No CUDA devices found", 0);
+        return;
+    }
+    
+    QStringList lines = output.split('\n');
+    QRegularExpression deviceRegex("Device\\s+(\\d+):\\s*\"?([^\"\\n]+)\"?");
+    
+    bool foundDevice = false;
+    for (const QString &line : lines) {
+        QRegularExpressionMatch match = deviceRegex.match(line);
+        if (match.hasMatch()) {
+            int deviceIndex = match.captured(1).toInt();
+            QString deviceName = match.captured(2).trimmed();
+            int parenPos = deviceName.indexOf('(');
+            if (parenPos > 0) {
+                deviceName = deviceName.left(parenPos).trimmed();
+            }
+            cudaDeviceComboBox->addItem(QString("%1 [%2]").arg(deviceName).arg(deviceIndex), deviceIndex);
+            foundDevice = true;
+        }
+    }
+    
+    if (!foundDevice) {
+        cudaDeviceComboBox->addItem("No CUDA devices found", 0);
+    }
+}
+
 void SettingsWindow::init() {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     cameraOptionRadioButton = new QRadioButton("Use Camera", this);
@@ -58,6 +96,11 @@ void SettingsWindow::init() {
     QLabel *cameraIndexLabel = new QLabel("Select Camera Index:", this);
     cameraIndexComboBox = new QComboBox(this);
     populateCameraDevices();
+    
+    QLabel *cudaDeviceLabel = new QLabel("Select CUDA Device:", this);
+    cudaDeviceComboBox = new QComboBox(this);
+    populateCudaDevices();
+    
     QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
                     "* { color: red; font-weight: bold; } "
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
@@ -291,6 +334,8 @@ void SettingsWindow::init() {
     mainLayout->addLayout(fullScreenLayout);
     mainLayout->addLayout(enable3d_layout);
     mainLayout->addLayout(modelFileLayout);
+    mainLayout->addWidget(cudaDeviceLabel);
+    mainLayout->addWidget(cudaDeviceComboBox);
     mainLayout->addLayout(buttonLayout);
  
   
@@ -382,6 +427,10 @@ QString SettingsWindow::getModelFile() const {
     return modelFile;
 }
 
+int SettingsWindow::getSelectedCudaDevice() const {
+    return selectedCudaDevice;
+}
+
 QString SettingsWindow::getCameraName(int device_index) {
     QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(device_index);
     QFile file(sysfs_path);
@@ -444,6 +493,8 @@ void SettingsWindow::acceptSettings() {
     if (enable3dCheckBox->isChecked()) {
         modelFile = modelFileLineEdit->text();
     }
+    
+    selectedCudaDevice = cudaDeviceComboBox->currentData().toInt();
     
     accept();
 }

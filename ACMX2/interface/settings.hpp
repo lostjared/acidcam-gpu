@@ -34,6 +34,7 @@ public:
     bool isCopyAudioEnabled() const;
     bool is3dEnabled() const;
     QString getModelFile() const;
+    int getSelectedCudaDevice() const;
     QString getCameraName(int device_index);   
 private slots:
     void acceptSettings();
@@ -46,6 +47,7 @@ private slots:
 private:
     void init();
     void populateCameraDevices();
+    void populateCudaDevices();
 
     QComboBox *cameraIndexComboBox;
     QComboBox *cameraResolutionComboBox;
@@ -71,6 +73,7 @@ private:
     QCheckBox *enable3dCheckBox;
     QLineEdit *modelFileLineEdit;
     QPushButton *browseModelButton;
+    QComboBox *cudaDeviceComboBox;
 
     int selectedCameraIndex;
     QSize selectedCameraResolution;
@@ -85,6 +88,7 @@ private:
     QString graphicsFile;
     int graphicsDuration;
     QString modelFile;
+    int selectedCudaDevice;
 };
 
 #endif
