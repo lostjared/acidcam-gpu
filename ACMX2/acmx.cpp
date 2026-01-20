@@ -48,8 +48,11 @@ public:
                     {
                         std::unique_lock<std::mutex> lock(this->queue_mutex);
                         this->condition.wait(lock, [this]{ return this->stop || !this->tasks.empty(); });
-                        if(this->stop) {
+                        if(this->stop && this->tasks.empty()) {
                             return;
+                        }
+                        if(this->tasks.empty()) {
+                            continue;
                         }
                         task = std::move(this->tasks.front());
                         this->tasks.pop();
@@ -104,7 +107,12 @@ public:
     cv::Mat& at(std::size_t index) {
         return frames.at(index);
     }
-    cv::Mat& operator[](std::size_t index) { return frames[index]; }
+    cv::Mat& operator[](std::size_t index) { 
+        if(index >= frames.size()) {
+            throw std::out_of_range("FrameCache index out of range");
+        }
+        return frames[index]; 
+    }
     std::size_t size() const {
         return frames.size();
     }
@@ -293,6 +301,9 @@ public:
 
     void setFPS(float fps_value) {
         auto &names = is3d ? program_names_3d : program_names_2d;
+        if(names.find(index()) == names.end()) {
+            return; 
+        }
         GLuint iFrameRateLoc = names[index()].iFrameRate;
         if(iFrameRateLoc != GL_INVALID_INDEX) {
             glUniform1f(iFrameRateLoc, fps_value);
@@ -300,7 +311,13 @@ public:
     }
 
     void setUniform(const std::string &name, int value) {
+        if(value < 0 || value >= 8) {
+            return; 
+        }
         auto &names = is3d ? program_names_3d : program_names_2d;
+        if(names.find(index()) == names.end()) {
+            return; 
+        }
         glUniform1i(names[index()].texture_cache_loc[value], value+1);
     }
 
@@ -513,7 +530,9 @@ public:
 
     void update(gl::GLWindow *win) {
         auto &names = is3d ? program_names_3d : program_names_2d;
-        
+        if(names.find(index()) == names.end()) {
+            return; 
+        }
         static Uint64 start_time = SDL_GetPerformanceCounter();
         static Uint64 last_frame_time = start_time;
         static uint64_t frame_counter = 0;
@@ -1375,7 +1394,7 @@ public:
                 }
                 if (keystate[SDL_SCANCODE_S]) {
                     cameraPitch -= cameraRotationSpeed * 0.33f;
-                    if (cameraPitch < -89.0f) cameraPitch = -89.0;
+                    if (cameraPitch < -89.0f) cameraPitch = -89.0f;
                 }
                 if (keystate[SDL_SCANCODE_A]) {
                     cameraYaw -= cameraRotationSpeed * 0.3f;
@@ -2066,7 +2085,6 @@ private:
         GLint texWidth = 0, texHeight = 0;
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
-        
         if (texWidth != temp.cols || texHeight != temp.rows) {
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, temp.cols, temp.rows,
                          0, GL_RGBA, GL_UNSIGNED_BYTE, temp.ptr());
