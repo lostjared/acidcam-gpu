@@ -717,6 +717,7 @@ void MainWindow::cameraSettings() {
     }
     enable_3d = settingsWindow.is3dEnabled();
     model_file = settingsWindow.getModelFile();
+    cuda_device = settingsWindow.getSelectedCudaDevice();
 }
 
 void MainWindow::runSelected() {
@@ -825,6 +826,8 @@ void MainWindow::runSelected() {
         arguments << "--gpu-filter" << gpu_filter_indices;
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
+
+    arguments << "--cuda-device" << QString::number(cuda_device);
  
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
@@ -953,6 +956,8 @@ void MainWindow::runAll() {
             arguments << "--shader-pass" << passIndices;
         }
     }
+
+    arguments << "--cuda-device" << QString::number(cuda_device);
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);

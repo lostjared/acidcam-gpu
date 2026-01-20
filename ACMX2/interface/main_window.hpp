@@ -132,6 +132,7 @@ private:
     bool shader_pass_enabled = false;
     QStringList shader_pass_names;  
     QString getShaderPassIndicesFromNames() const;
+    int cuda_device = 0;
 };
 
 
