@@ -87,7 +87,7 @@ private:
     std::queue<std::function<void()>> tasks;
     std::mutex queue_mutex;
     std::condition_variable condition;
-    bool stop;
+    bool stop = false;
 };
 
 class FrameCache {
@@ -203,19 +203,19 @@ class ShaderLibrary {
     
     struct ProgramData {
         std::string name;
-        GLuint loc, iTime, iMouse, time_f, iResolution;
+        GLuint loc = 0, iTime = 0, iMouse = 0, time_f = 0, iResolution = 0;
 #ifdef AUDIO_ENABLED
-        GLuint amp, amp_untouched;
+        GLuint amp = 0, amp_untouched = 0;
 #endif
-        GLuint texture_cache_loc[8];
-        GLuint iFrame;
-        GLuint iTimeDelta;
-        GLuint iDate; 
-        GLuint iChannelTime[4];
-        GLuint iChannelResolution[4];
-        GLuint iSampleRate;
-        GLuint iFrameRate; 
-        GLuint iMouseClick;
+        GLuint texture_cache_loc[8] = {0};
+        GLuint iFrame = 0;
+        GLuint iTimeDelta = 0;
+        GLuint iDate = 0; 
+        GLuint iChannelTime[4] = {0};
+        GLuint iChannelResolution[4] = {0};
+        GLuint iSampleRate = 0;
+        GLuint iFrameRate = 0; 
+        GLuint iMouseClick = 0;
     };
     
     size_t library_index = 0;
@@ -492,6 +492,7 @@ public:
         auto &progs = is3d ? programs_3d : programs_2d;
         auto &names = is3d ? program_names_3d : program_names_2d;
         if(idx >= progs.size()) return;
+        if(names.find(idx) == names.end()) return;
         
         static Uint64 start_time = SDL_GetPerformanceCounter();
         Uint64 now_time = SDL_GetPerformanceCounter();
@@ -511,6 +512,7 @@ public:
     
     void updateShaderUniforms2D(gl::GLWindow *win, size_t idx) {
         if(idx >= programs_2d.size()) return;
+        if(program_names_2d.find(idx) == program_names_2d.end()) return;
         
         static Uint64 start_time = SDL_GetPerformanceCounter();
         Uint64 now_time = SDL_GetPerformanceCounter();
@@ -569,13 +571,18 @@ public:
         GLuint iDateLoc = names[index()].iDate;
         auto now = std::chrono::system_clock::now();
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        std::tm* localTime = std::localtime(&now_c);
-        float year = static_cast<float>(localTime->tm_year + 1900);
-        float month = static_cast<float>(localTime->tm_mon + 1);
-        float day = static_cast<float>(localTime->tm_mday);
-        float seconds = static_cast<float>(localTime->tm_hour * 3600 + 
-                                           localTime->tm_min * 60 + 
-                                           localTime->tm_sec);
+        std::tm localTime_buf{};
+#ifdef _WIN32
+        localtime_s(&localTime_buf, &now_c);
+#else
+        localtime_r(&now_c, &localTime_buf);
+#endif
+        float year = static_cast<float>(localTime_buf.tm_year + 1900);
+        float month = static_cast<float>(localTime_buf.tm_mon + 1);
+        float day = static_cast<float>(localTime_buf.tm_mday);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + 
+                                     localTime_buf.tm_min * 60 + 
+                                     localTime_buf.tm_sec);
         glUniform4f(iDateLoc, year, month, day, seconds);
         
         GLuint iFrameRateLoc = names[index()].iFrameRate;
@@ -1755,10 +1762,10 @@ public:
         
         if (writer.is_open()) {
             frameCount = writer.get_frame_count();
-            timeSeconds = static_cast<double>(frameCount) / fps;
+            timeSeconds = (fps > 0.0) ? static_cast<double>(frameCount) / fps : 0.0;
         } else {
             frameCount = static_cast<int64_t>(frame_counter);
-            timeSeconds = static_cast<double>(frameCount) / fps;
+            timeSeconds = (fps > 0.0) ? static_cast<double>(frameCount) / fps : 0.0;
         }
         
         uint64_t hours = static_cast<uint64_t>(timeSeconds / 3600);
@@ -2189,7 +2196,12 @@ private:
                         snapshot_pool.enqueue([this, fd, current_offset] {
                             auto now1 = std::chrono::system_clock::now();
                             std::time_t now_c = std::chrono::system_clock::to_time_t(now1);
-                            std::tm localTime = *std::localtime(&now_c);
+                            std::tm localTime{};
+#ifdef _WIN32
+                            localtime_s(&localTime, &now_c);
+#else
+                            localtime_r(&now_c, &localTime);
+#endif
 
                             std::ostringstream oss;
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
@@ -2247,7 +2259,7 @@ private:
         if(recording) {
             writer.close();
             int64_t final_frame_count = writer.get_frame_count();
-            double total_secs = static_cast<double>(final_frame_count) / fps;
+            double total_secs = (fps > 0.0) ? static_cast<double>(final_frame_count) / fps : 0.0;
             uint64_t hours = 0, minutes = 0, seconds = 0;
             hours = static_cast<uint64_t>(total_secs / 3600);
             minutes = static_cast<uint64_t>(total_secs / 60) % 60;
@@ -2510,7 +2522,7 @@ int main(int argc, char **argv) {
                 case 'F':
                 case 'f':
                     args.mode = 0;
-                                       args.fragment = arg.arg_value;
+                    args.fragment = arg.arg_value;
                     break;
                 case 'h':
                 case 'H':
