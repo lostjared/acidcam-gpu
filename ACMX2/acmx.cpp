@@ -1141,6 +1141,8 @@ public:
             throw mx::Exception("Could not open model: cube.mxmod.z");
         }
         cube.setShaderProgram(library.shader(), "samp");
+        cube.saveOriginal();
+
         if(!fshader.loadProgram(win->util.getFilePath("data/vert.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
             throw mx::Exception("Error loading shader");
         }
@@ -1502,12 +1504,60 @@ public:
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, textureForMesh);
             glUniform1i(glGetUniformLocation(activeShader->id(), "samp"), 0);
-            
             if(!library.isBypassed()) {
                 cube.setShaderProgram(activeShader);
             } else {
                 cube.setShaderProgram(&fshader3d);
             }
+            cube.resetToOriginal();
+            if (waveActive) {
+                static float amp_x = 0.0f;
+                static float amp_y = 0.0f;
+                static float amp_z = 0.0f;
+                static int dir_x = 1;
+                static int dir_y = 1;
+                static int dir_z = 1;
+                static const float wave_speed = 0.005f;
+                static const float wave_max = 0.5f;
+                static const float wave_min = 0.0f;
+                static float phase = 0.0f;
+              
+                phase += 0.05f;
+                if (phase > 360.0f) phase -= 360.0f;
+                
+                amp_x += wave_speed * dir_x;
+                if (amp_x >= wave_max) {
+                    amp_x = wave_max;
+                    dir_x = -1;
+                } else if (amp_x <= wave_min) {
+                    amp_x = wave_min;
+                    dir_x = 1;
+                }
+                
+                amp_y += wave_speed * dir_y;
+                if (amp_y >= wave_max) {
+                    amp_y = wave_max;
+                    dir_y = -1;
+                } else if (amp_y <= wave_min) {
+                    amp_y = wave_min;
+                    dir_y = 1;
+                }
+                
+                amp_z += wave_speed * dir_z;
+                if (amp_z >= wave_max) {
+                    amp_z = wave_max;
+                    dir_z = -1;
+                } else if (amp_z <= wave_min) {
+                    amp_z = wave_min;
+                    dir_z = 1;
+                }
+                cube.wave(mx::DeformAxis::X, amp_x, 2.0f, phase);
+                cube.wave(mx::DeformAxis::Y, amp_y, 2.0f, phase + 120.0f);
+                cube.wave(mx::DeformAxis::Z, amp_z, 2.0f, phase + 240.0f);
+            }
+            
+            cube.updateBuffers();
+            cube.recalculateNormals();
             
             for(auto &m : cube.meshes) {
                 m.draw();
@@ -1883,6 +1933,12 @@ public:
                                        << (oscillateScale ? "enabled" : "disabled") << "\n";
                         fflush(stdout);
                         break;
+                    case SDLK_c:
+                        waveActive = !waveActive;
+                        mx::system_out << "acmx2: Wave effect "
+                                       << (waveActive ? "enabled" : "disabled") << "\n";
+                        fflush(stdout);
+                        break;
                     case SDLK_m:
                         if(!shader_pass_list.empty()) {
                             shader_pass_enabled = !shader_pass_enabled;
@@ -1974,6 +2030,7 @@ private:
     const float cameraRotationSpeed = 5.0f; 
     bool viewRotationActive = false; 
     bool oscillateScale = false;
+    bool waveActive = false;
     float cameraDistance = 0.0f;
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
@@ -2352,6 +2409,7 @@ const char *message = R"(
     ( +, - ) - increase / decrease camera distance
     B - increase movement speed
     N - decrease movement speed
+    C - Toggle Object Wave
 }
 )";
 
