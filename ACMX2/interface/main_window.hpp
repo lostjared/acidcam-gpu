@@ -60,6 +60,9 @@ public slots:
     void menuFindNext();
     void menuGPUFilterSettings();
     void menuShaderPassSettings();
+    void menuBuildShaderCache();
+    void menuRunFromCache();
+    void menuRecompileShaders();
 protected:
     bool addShaderToList(const QString &shaderName);
 
@@ -127,12 +130,16 @@ private:
     QAction *gpuFilterAction;
     QAction *shaderPassAction;
     QAction *styleSheetAction;
+    QAction *buildCacheAction;
+    QAction *runFromCacheAction;
+    QAction *recompileShadersAction;
     QString customStyleSheet;
     void applyCustomStyleSheet(bool enable);
     bool shader_pass_enabled = false;
     QStringList shader_pass_names;  
     QString getShaderPassIndicesFromNames() const;
     int cuda_device = 0;
+    bool use_shader_cache = true;  // Whether to use cached shaders when running
 };
 
 
