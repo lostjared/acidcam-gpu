@@ -23,6 +23,7 @@
 #include <sstream>
 #include <deque>
 #include <mxwrite.hpp>
+#include <functional>
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
 #endif
@@ -194,10 +195,135 @@ public:
     }
 };
 
+struct ShaderCacheEntry {
+    std::string shader_name;
+    std::vector<char> binary_2d;
+    GLenum format_2d;
+    std::vector<char> binary_3d;
+    GLenum format_3d;
+    uint64_t source_hash;
+};
+
+struct ShaderCache {
+    static constexpr uint32_t CACHE_MAGIC = 0x53484452; 
+    static constexpr uint32_t CACHE_VERSION = 2;  // Bumped: now checks driver version
+    std::string gl_renderer;
+    std::string gl_version;
+    bool dual_mode = false;
+    std::vector<ShaderCacheEntry> entries;
+    
+    bool save(const std::string &path) const {
+        std::ofstream file(path, std::ios::binary);
+        if (!file.is_open()) return false;
+        
+        file.write(reinterpret_cast<const char*>(&CACHE_MAGIC), sizeof(CACHE_MAGIC));
+        file.write(reinterpret_cast<const char*>(&CACHE_VERSION), sizeof(CACHE_VERSION));
+        
+        auto writeString = [&file](const std::string &s) {
+            uint32_t len = static_cast<uint32_t>(s.size());
+            file.write(reinterpret_cast<const char*>(&len), sizeof(len));
+            file.write(s.data(), len);
+        };
+        
+        writeString(gl_renderer);
+        writeString(gl_version);
+        file.write(reinterpret_cast<const char*>(&dual_mode), sizeof(dual_mode));
+        
+        uint32_t count = static_cast<uint32_t>(entries.size());
+        file.write(reinterpret_cast<const char*>(&count), sizeof(count));
+        
+        for (const auto &e : entries) {
+            writeString(e.shader_name);
+            file.write(reinterpret_cast<const char*>(&e.source_hash), sizeof(e.source_hash));
+            file.write(reinterpret_cast<const char*>(&e.format_2d), sizeof(e.format_2d));
+            uint32_t size_2d = static_cast<uint32_t>(e.binary_2d.size());
+            file.write(reinterpret_cast<const char*>(&size_2d), sizeof(size_2d));
+            file.write(e.binary_2d.data(), size_2d);
+            
+            file.write(reinterpret_cast<const char*>(&e.format_3d), sizeof(e.format_3d));
+            uint32_t size_3d = static_cast<uint32_t>(e.binary_3d.size());
+            file.write(reinterpret_cast<const char*>(&size_3d), sizeof(size_3d));
+            file.write(e.binary_3d.data(), size_3d);
+        }
+        return file.good();
+    }
+    
+    bool load(const std::string &path) {
+        std::ifstream file(path, std::ios::binary);
+        if (!file.is_open()) return false;
+        
+        uint32_t magic, version;
+        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+        file.read(reinterpret_cast<char*>(&version), sizeof(version));
+        
+        if (magic != CACHE_MAGIC || version != CACHE_VERSION) return false;
+        
+        auto readString = [&file]() -> std::string {
+            uint32_t len;
+            file.read(reinterpret_cast<char*>(&len), sizeof(len));
+            std::string s(len, '\0');
+            file.read(s.data(), len);
+            return s;
+        };
+        
+        gl_renderer = readString();
+        gl_version = readString();
+        file.read(reinterpret_cast<char*>(&dual_mode), sizeof(dual_mode));
+        
+        uint32_t count;
+        file.read(reinterpret_cast<char*>(&count), sizeof(count));
+        entries.resize(count);
+        
+        for (auto &e : entries) {
+            e.shader_name = readString();
+            file.read(reinterpret_cast<char*>(&e.source_hash), sizeof(e.source_hash));
+            file.read(reinterpret_cast<char*>(&e.format_2d), sizeof(e.format_2d));
+            uint32_t size_2d;
+            file.read(reinterpret_cast<char*>(&size_2d), sizeof(size_2d));
+            e.binary_2d.resize(size_2d);
+            file.read(e.binary_2d.data(), size_2d);
+            
+            file.read(reinterpret_cast<char*>(&e.format_3d), sizeof(e.format_3d));
+            uint32_t size_3d;
+            file.read(reinterpret_cast<char*>(&size_3d), sizeof(size_3d));
+            e.binary_3d.resize(size_3d);
+            file.read(e.binary_3d.data(), size_3d);
+        }
+        return file.good();
+    }
+};
+
+uint64_t hashFileContents(const std::string &filepath) {
+    std::ifstream file(filepath, std::ios::binary);
+    if (!file.is_open()) return 0;
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    std::string content = ss.str();
+    return std::hash<std::string>{}(content);
+}
+
+typedef void (APIENTRYP PFNGLGETPROGRAMBINARYPROC_LOCAL)(GLuint program, GLsizei bufSize, GLsizei *length, GLenum *binaryFormat, void *binary);
+typedef void (APIENTRYP PFNGLPROGRAMBINARYPROC_LOCAL)(GLuint program, GLenum binaryFormat, const void *binary, GLsizei length);
+
+static PFNGLGETPROGRAMBINARYPROC_LOCAL glGetProgramBinaryFunc = nullptr;
+static PFNGLPROGRAMBINARYPROC_LOCAL glProgramBinaryFunc = nullptr;
+
+bool loadProgramBinaryFunctions() {
+    if (glGetProgramBinaryFunc != nullptr) return true;  
+    glGetProgramBinaryFunc = (PFNGLGETPROGRAMBINARYPROC_LOCAL)SDL_GL_GetProcAddress("glGetProgramBinary");
+    glProgramBinaryFunc = (PFNGLPROGRAMBINARYPROC_LOCAL)SDL_GL_GetProcAddress("glProgramBinary");
+    
+    if (glGetProgramBinaryFunc == nullptr || glProgramBinaryFunc == nullptr) {
+        mx::system_err << "acmx2: Failed to load glGetProgramBinary/glProgramBinary functions\n";
+        return false;
+    }
+    return true;
+}
+
 class ShaderLibrary {
     float alpha = 1.0;
-    float time_f = 1.0;
     bool time_active = true;
+    float time_f = 1.0;
     bool is3d = false;
     bool dual_mode = false; 
     
@@ -229,6 +355,14 @@ class ShaderLibrary {
 public:
     ShaderLibrary() = default;
     ~ShaderLibrary() {}
+
+    void clear() {
+        programs_2d.clear();
+        programs_3d.clear();
+        program_names_2d.clear();
+        program_names_3d.clear();
+        library_index = 0;
+    }
 
     void loadProgram(gl::GLWindow *win, const std::string text) {     
         programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
@@ -428,6 +562,359 @@ public:
         file.close();
         mx::system_out << "acmx2: Loaded " << shader_index << " Shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
+    }
+    
+    bool buildShaderCache(gl::GLWindow *win, const std::string &library_path, const std::string &vert_2d, const std::string &vert_3d) {
+        GLint numFormats = 0;
+        glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &numFormats);
+        if (numFormats == 0) {
+            mx::system_err << "acmx2: Error - OpenGL driver does not support program binaries\n";
+            return false;
+        }
+        mx::system_out << "acmx2: OpenGL supports " << numFormats << " program binary format(s)\n";
+        fflush(stdout);
+        
+        if (!loadProgramBinaryFunctions()) {
+            mx::system_err << "acmx2: Error - Failed to load program binary extension functions\n";
+            return false;
+        }
+        mx::system_out << "acmx2: Program binary functions loaded successfully\n";
+        fflush(stdout);
+        
+        std::string cache_file = library_path + "/.shader_cache";
+        std::fstream file;
+        file.open(library_path + "/index.txt", std::ios::in);
+        if (!file.is_open()) {
+            mx::system_err << "acmx2: Could not open index.txt at: " << library_path << "\n";
+            return false;
+        }
+
+        ShaderCache cache;
+        cache.gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        cache.gl_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        cache.dual_mode = true;  
+
+        std::vector<std::string> shader_files;
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!line.empty() && std::filesystem::exists(library_path + "/" + line) && line.find("material") == std::string::npos) {
+                shader_files.push_back(line);
+            }
+        }
+        file.close();
+
+        mx::system_out << "acmx2: Building shader cache for " << shader_files.size() << " shaders...\n";
+        fflush(stdout);
+
+        for (size_t i = 0; i < shader_files.size(); ++i) {
+            const std::string &shader_file = shader_files[i];
+            std::string full_path = library_path + "/" + shader_file;
+            
+            mx::system_out << "acmx2: Caching Shader " << i << "/" << shader_files.size() << ": [" << shader_file << "] \n";
+            fflush(stdout);
+
+            ShaderCacheEntry entry;
+            std::filesystem::path file_path(shader_file);
+            entry.shader_name = file_path.stem().string();
+            
+            mx::system_out << "  - Computing hash... ";
+            fflush(stdout);
+            entry.source_hash = hashFileContents(full_path);
+            mx::system_out << "done\n";
+            fflush(stdout);
+
+            try {
+                mx::system_out << "  - Compiling 2D shader... ";
+                fflush(stdout);
+                
+                gl::ShaderProgram prog_2d;
+                prog_2d.setSilent(true);
+                if (!prog_2d.loadProgram(vert_2d, full_path)) {
+                    mx::system_out << " ❌ (2D compile failed)\n";
+                    fflush(stdout);
+                    continue;
+                }
+                mx::system_out << "done (id=" << prog_2d.id() << ")\n";
+                fflush(stdout);
+
+                GLint link_status = 0;
+                glGetProgramiv(prog_2d.id(), GL_LINK_STATUS, &link_status);
+                if (link_status != GL_TRUE) {
+                    mx::system_out << "  - ❌ Program not properly linked\n";
+                    fflush(stdout);
+                    continue;
+                }
+                
+                GLint binary_retrievable = 0;
+                glGetProgramiv(prog_2d.id(), GL_PROGRAM_BINARY_RETRIEVABLE_HINT, &binary_retrievable);
+                mx::system_out << "  - Binary retrievable hint: " << binary_retrievable << "\n";
+                fflush(stdout);
+
+                mx::system_out << "  - Getting binary length... ";
+                fflush(stdout);
+                
+                GLint binary_length = 0;
+                glGetProgramiv(prog_2d.id(), GL_PROGRAM_BINARY_LENGTH, &binary_length);
+                GLenum gl_error = glGetError();
+                
+                mx::system_out << binary_length << " bytes\n";
+                fflush(stdout);
+                
+                if (gl_error != GL_NO_ERROR) {
+                    mx::system_out << " ❌ (GL error: " << gl_error << ")\n";
+                    fflush(stdout);
+                    continue;
+                }
+                
+                if (binary_length > 0) {
+                    mx::system_out << "  - Extracting binary... ";
+                    fflush(stdout);
+                    
+                    void* binary_buffer = malloc(binary_length);
+                    if (!binary_buffer) {
+                        mx::system_out << "❌ (malloc failed)\n";
+                        fflush(stdout);
+                        continue;
+                    }
+                    
+                    GLsizei actual_length = 0;
+                    GLenum format = 0;
+                    
+                    mx::system_out << "calling glGetProgramBinary... ";
+                    fflush(stdout);
+                    
+                    glGetProgramBinaryFunc(prog_2d.id(), binary_length, &actual_length, &format, binary_buffer);
+                    gl_error = glGetError();
+                    
+                    mx::system_out << "done. actual=" << actual_length << ", format=" << format << "\n";
+                    fflush(stdout);
+                    
+                    if (gl_error != GL_NO_ERROR || actual_length == 0) {
+                        mx::system_out << " ❌ (binary extraction failed, gl_error=" << gl_error << ")\n";
+                        fflush(stdout);
+                        free(binary_buffer);
+                        continue;
+                    }
+                    
+                    entry.binary_2d.resize(actual_length);
+                    memcpy(entry.binary_2d.data(), binary_buffer, actual_length);
+                    entry.format_2d = format;
+                    free(binary_buffer);
+                } else {
+                    mx::system_out << " ❌ (no binary available)\n";
+                    fflush(stdout);
+                    continue;
+                }
+
+                {
+                    mx::system_out << "  - Compiling 3D shader... ";
+                    fflush(stdout);
+                    
+                    gl::ShaderProgram prog_3d;
+                    prog_3d.setSilent(true);
+                    if (!prog_3d.loadProgram(vert_3d, full_path)) {
+                        mx::system_out << " ❌ (3D compile failed)\n";
+                        fflush(stdout);
+                        continue;
+                    }
+                    
+                    mx::system_out << "done (id=" << prog_3d.id() << ")\n";
+                    fflush(stdout);
+
+                    mx::system_out << "  - Getting 3D binary... ";
+                    fflush(stdout);
+                    
+                    GLint binary_length_3d = 0;
+                    glGetProgramiv(prog_3d.id(), GL_PROGRAM_BINARY_LENGTH, &binary_length_3d);
+                    
+                    mx::system_out << binary_length_3d << " bytes\n";
+                    fflush(stdout);
+                    
+                    if (binary_length_3d > 0) {
+                        entry.binary_3d.resize(binary_length_3d);
+                        GLsizei actual_length_3d = 0;
+                        glGetProgramBinaryFunc(prog_3d.id(), binary_length_3d, &actual_length_3d, &entry.format_3d, entry.binary_3d.data());
+                        entry.binary_3d.resize(actual_length_3d);
+                        mx::system_out << "  - 3D binary extracted: " << actual_length_3d << " bytes\n";
+                        fflush(stdout);
+                    }
+                }
+
+                cache.entries.push_back(std::move(entry));
+                mx::system_out << "  ✔ SUCCESS\n";
+                fflush(stdout);
+            } catch (const std::exception &e) {
+                mx::system_out << " ❌ (exception: " << e.what() << ")\n";
+                fflush(stdout);
+                continue;
+            } catch (...) {
+                mx::system_out << " ❌ (unknown exception)\n";
+                fflush(stdout);
+                continue;
+            }
+        }
+
+        if (cache.save(cache_file)) {
+            mx::system_out << "acmx2: Shader cache saved to: " << cache_file << "\n";
+            mx::system_out << "acmx2: Cached " << cache.entries.size() << " shaders (2D+3D)\n";
+            fflush(stdout);
+            return true;
+        } else {
+            mx::system_err << "acmx2: Failed to save shader cache\n";
+            return false;
+        }
+    }
+
+    bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont) {
+        std::string cache_file = library_path + "/.shader_cache";
+        
+        mx::system_out << "acmx2: Checking for shader cache at: " << cache_file << "\n";
+        fflush(stdout);
+        
+        if (!std::filesystem::exists(cache_file)) {
+            mx::system_out << "acmx2: No shader cache found, will compile shaders\n";
+            fflush(stdout);
+            return false;
+        }
+
+        mx::system_out << "acmx2: Found shader cache, loading...\n";
+        fflush(stdout);
+
+        ShaderCache cache;
+        if (!cache.load(cache_file)) {
+            mx::system_out << "acmx2: Shader cache corrupted or incompatible, will recompile\n";
+            return false;
+        }
+
+        
+        if (!loadProgramBinaryFunctions()) {
+            mx::system_out << "acmx2: Could not load program binary extension, will recompile\n";
+            return false;
+        }
+
+        std::string current_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        std::string current_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        
+        if (cache.gl_renderer != current_renderer) {
+            mx::system_out << "acmx2: GPU changed (was: " << cache.gl_renderer << ", now: " << current_renderer << "), will recompile\n";
+            return false;
+        }
+        
+        if (cache.gl_version != current_version) {
+            mx::system_out << "acmx2: Driver version changed (was: " << cache.gl_version << ", now: " << current_version << "), will recompile\n";
+            return false;
+        }
+
+        
+        if (!cache.dual_mode) {
+            mx::system_out << "acmx2: Cache was built in 2D-only mode, will rebuild with 2D+3D\n";
+            return false;
+        }
+
+        std::fstream file;
+        file.open(library_path + "/index.txt", std::ios::in);
+        if (!file.is_open()) {
+            return false;
+        }
+
+        std::vector<std::string> shader_files;
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!line.empty() && std::filesystem::exists(library_path + "/" + line) && line.find("material") == std::string::npos) {
+                shader_files.push_back(line);
+            }
+        }
+        file.close();
+
+        if (shader_files.size() != cache.entries.size()) {
+            mx::system_out << "acmx2: Shader count changed, will recompile\n";
+            return false;
+        }
+
+        for (size_t i = 0; i < shader_files.size(); ++i) {
+            std::string full_path = library_path + "/" + shader_files[i];
+            uint64_t current_hash = hashFileContents(full_path);
+            if (current_hash != cache.entries[i].source_hash) {
+                mx::system_out << "acmx2: Shader source changed: " << shader_files[i] << ", will recompile\n";
+                return false;
+            }
+        }
+
+        mx::system_out << "acmx2: Loading " << cache.entries.size() << " shaders from cache...\n";
+        fflush(stdout);
+
+        for (size_t i = 0; i < cache.entries.size(); ++i) {
+            const auto &entry = cache.entries[i];
+            
+            mx::system_out << "acmx2: Loading Cached Shader " << i << "/" << cache.entries.size() << ": [" << entry.shader_name << "] ";
+            fflush(stdout);
+
+            programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
+            GLuint prog_id_2d = glCreateProgram();
+            
+            GLenum gl_err = glGetError();  // Clear any prior errors
+            glProgramBinaryFunc(prog_id_2d, entry.format_2d, entry.binary_2d.data(), static_cast<GLsizei>(entry.binary_2d.size()));
+            gl_err = glGetError();
+            
+            GLint link_status = 0;
+            glGetProgramiv(prog_id_2d, GL_LINK_STATUS, &link_status);
+            if (link_status != GL_TRUE) {
+                GLchar info_log[512];
+                glGetProgramInfoLog(prog_id_2d, 512, nullptr, info_log);
+                mx::system_out << " ❌ (2D binary load failed, gl_err=" << gl_err 
+                               << ", format=" << entry.format_2d 
+                               << ", size=" << entry.binary_2d.size()
+                               << ", log=" << info_log << ")\n";
+                fflush(stdout);
+                glDeleteProgram(prog_id_2d);
+                programs_2d.pop_back();
+                return false;
+            }
+            
+            *programs_2d.back() = gl::ShaderProgram(prog_id_2d);
+            setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, library_path + "/" + shader_files[i]);
+
+            
+            if (dual_mode && !entry.binary_3d.empty()) {
+                programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
+                GLuint prog_id_3d = glCreateProgram();
+                glProgramBinaryFunc(prog_id_3d, entry.format_3d, entry.binary_3d.data(), static_cast<GLsizei>(entry.binary_3d.size()));
+                
+                glGetProgramiv(prog_id_3d, GL_LINK_STATUS, &link_status);
+                if (link_status != GL_TRUE) {
+                    mx::system_out << " ❌ (3D binary load failed)\n";
+                    glDeleteProgram(prog_id_3d);
+                    programs_3d.pop_back();
+                    return false;
+                }
+                
+                *programs_3d.back() = gl::ShaderProgram(prog_id_3d);
+                setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, library_path + "/" + shader_files[i]);
+            }
+
+            mx::system_out << " ✔\n";
+            fflush(stdout);
+
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            if (loadingFont.handle().has_value()) {
+                std::string loadingText = "Loading Cached Shader " + std::to_string(i + 1) + "/" + std::to_string(cache.entries.size()) + "...";
+                win->text.printText_Blended(loadingFont, 10, 10, loadingText);
+            }
+            SDL_GL_SwapWindow(win->getWindow());
+            SDL_PumpEvents();
+        }
+
+        mx::system_out << "acmx2: Loaded " << cache.entries.size() << " shaders from cache (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+        fflush(stdout);
+        return true;
+    }
+
+    void loadProgramsWithCache(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
+        if (loadFromCache(win, text, loadingFont)) {
+            return;
+        }
+        loadPrograms(win, text, loadingFont);
     }
 
     bool isCache() {
@@ -687,6 +1174,8 @@ public:
 #ifdef AUDIO_ENABLED
     bool timeActive() const { return time_active; }
     bool timeAudio() const { return time_audio; }
+    float getAmp() const { return get_amp(); }
+    float getAmpUntouched() const { return get_sense(); }
 #endif
     void event(SDL_Event &e) {  }
 };
@@ -727,6 +1216,9 @@ struct MXArguments {
     int cuda_device = 0;
     std::vector<int> shader_pass_list; 
     bool shader_pass_enabled = false;
+    bool build_cache = false;
+    std::string build_library_path;
+    bool use_shader_cache = true;  
 };
 
 struct FrameData {
@@ -769,7 +1261,8 @@ public:
           cache_delay{args.cache_delay},
           copy_audio{args.copy_audio},
           gpu_cuda_device{args.cuda_device},
-          silent_mode{args.silent} {
+          silent_mode{args.silent},
+          use_shader_cache_flag{args.use_shader_cache} {
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
@@ -1124,10 +1617,14 @@ public:
             win->text.setColor({255, 255, 255, 255});
         }
         
-        if(std::get<0>(flib) == 1)
-            library.loadPrograms(win, std::get<1>(flib), overlayFont);
-        else
+        if(std::get<0>(flib) == 1) {
+            if(use_shader_cache_flag)
+                library.loadProgramsWithCache(win, std::get<1>(flib), overlayFont);
+            else
+                library.loadPrograms(win, std::get<1>(flib), overlayFont);
+        } else {
             library.loadProgram(win, std::get<1>(flib));
+        }
         library.setIndex(std::get<2>(flib));
 
         std::string m_file_path;
@@ -1522,7 +2019,14 @@ public:
                 static const float wave_min = 0.0f;
                 static float phase = 0.0f;
               
+#ifdef AUDIO_ENABLED
+                if(audio_is_enabled && library.timeAudio())
+                    phase += (library.getAmp() * library.getAmpUntouched());
+                else
+                    phase += 0.05f;
+#else
                 phase += 0.05f;
+#endif
                 if (phase > 360.0f) phase -= 360.0f;
                 
                 amp_x += wave_speed * dir_x;
@@ -2035,6 +2539,7 @@ private:
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
     bool silent_mode = false;
+    bool use_shader_cache_flag = true;  
     int last_progress_percent = -1;
 private:
     std::atomic<uint64_t> frames_dropped{0};
@@ -2506,7 +3011,9 @@ int main(int argc, char **argv) {
 #endif
           .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
           .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
-          .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)");
+          .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)")
+          .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
+          .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)");
 
     if(argc == 1) {
         printAbout(parser);
@@ -2740,6 +3247,14 @@ int main(int argc, char **argv) {
                     }
                     break;
                 }
+                case 407:
+                    args.build_cache = true;
+                    args.build_library_path = arg.arg_value;
+                    break;
+                case 408:
+                    args.use_shader_cache = false;
+                    mx::system_out << "acmx2: Shader caching disabled\n";
+                    break;
             }
                }
     } catch (const ArgException<std::string>& e) {
@@ -2751,6 +3266,93 @@ int main(int argc, char **argv) {
     if(args.path.empty()) {
         args.path = ".";
         mx::system_out << "acmx2: Path name not provided, using current path...\n";
+    }
+    if (args.build_cache) {
+        if (args.build_library_path.empty()) {
+            mx::system_err << "acmx2: Error: --build requires a shader library path\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        }
+        if (!std::filesystem::exists(args.build_library_path + "/index.txt")) {
+            mx::system_err << "acmx2: Error: No index.txt found at: " << args.build_library_path << "\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        }
+
+        try {
+            mx::system_out << "acmx2: Creating build window...\n";
+            fflush(stdout);
+            
+            class BuildWindow : public gl::GLWindow {
+            public:
+                ShaderLibrary library;
+                std::string lib_path;
+                bool enable_3d;
+                std::string assets_path;
+                bool success = false;
+                bool build_done = false;
+                bool active = true;
+
+                BuildWindow(const std::string &path, bool is3d, const std::string &assets) 
+                    : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false), 
+                      lib_path(path), enable_3d(is3d), assets_path(assets) {
+                    mx::system_out << "acmx2: Window created, setting up...\n";
+                    fflush(stdout);
+                    util.path = assets_path;
+                    library.enableDualMode(enable_3d);
+                }
+
+                void draw() override {
+                    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                    glClear(GL_COLOR_BUFFER_BIT);
+                    
+                    if (!build_done) {
+                        build_done = true;
+                        
+                        std::string vert_2d = util.getFilePath("data/vert.glsl");
+                        std::string vert_3d = util.getFilePath("data/vertex.glsl");
+                        
+                        mx::system_out << "acmx2: Building shader cache for: " << lib_path << "\n";
+                        mx::system_out << "acmx2: Mode: " << (enable_3d ? "2D+3D" : "2D only") << "\n";
+                        mx::system_out << "acmx2: OpenGL Renderer: " << glGetString(GL_RENDERER) << "\n";
+                        mx::system_out << "acmx2: OpenGL Version: " << glGetString(GL_VERSION) << "\n";
+                        fflush(stdout);
+                        success = library.buildShaderCache(this, lib_path, vert_2d, vert_3d);
+                        library.clear();
+                        active = false;
+                    }
+                    
+                    swap();
+                }
+
+                void event(SDL_Event &e) override {}
+                void buildLoop() {
+                    SDL_Event ev;
+                    while (active) {
+                        while (SDL_PollEvent(&ev)) {
+                            if (ev.type == SDL_QUIT) {
+                                active = false;
+                            }
+                            event(ev);
+                        }
+                        draw();
+                    }
+                }
+            };
+
+            BuildWindow build_win(args.build_library_path, args.is3d, args.path);
+            build_win.buildLoop();
+            
+            return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
+        } catch (const mx::Exception &e) {
+            mx::system_err << "acmx2: Build failed: " << e.text() << "\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        } catch (std::exception &e) {
+            mx::system_err << "acmx2: Build failed: " << e.what() << "\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        }
     }
 
     try {
