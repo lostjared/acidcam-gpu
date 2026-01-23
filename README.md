@@ -163,6 +163,7 @@ Early Example (as a GIF)
 
 ![jaredrgb](https://github.com/user-attachments/assets/1d2115ba-7b86-4c30-8845-1f2154af00c2)
 
+![fractal](https://github.com/lostjared/acidcam-gpu/blob/main/ac.gif)
 
 # Latest Shader Pack
 
