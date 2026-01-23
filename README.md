@@ -152,7 +152,7 @@ cmake .. -DAUDIO=ON
 make -j$(nproc) && sudo make install
 cd ../interface
 mkdir build && cd build
-qmake6 ..
+cmake ..
 make -j $(nproc)
 cp -rf ../data/ .
 cd ../../
@@ -261,7 +261,7 @@ exec podman run -it \
     # Double check audio inside before launching
     echo "Checking audio connection..."
     pactl info || echo "pactl failed, continuing anyway..."
-    exec /opt/src/acidcam-gpu/ACMX2/interface/build/interface
+    exec /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface
   '
 ```
 
@@ -278,7 +278,7 @@ chmod +x acmx2-run.sh
 ### A. Program to Run
 - **Run**
   ```bash
-  ./interface
+  ./acmx2_interface
   ```
 
 ### B. File Paths (Shaders & Models)
