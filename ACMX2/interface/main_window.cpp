@@ -125,9 +125,9 @@ void MainWindow::initControls() {
     });
     playbackMenu->addAction(runFromCacheAction);
     
-    recompileShadersAction = new QAction(tr("Recompile All Shaders"), this);
-    connect(recompileShadersAction, &QAction::triggered, this, &MainWindow::menuRecompileShaders);
-    playbackMenu->addAction(recompileShadersAction);
+    //recompileShadersAction = new QAction(tr("Recompile All Shaders"), this);
+    //connect(recompileShadersAction, &QAction::triggered, this, &MainWindow::menuRecompileShaders);
+    //playbackMenu->addAction(recompileShadersAction);
     
     listMenu_new = new QAction(tr("New Shader Library"), this);
     connect(listMenu_new,  &QAction::triggered, this, &MainWindow::newList);
