@@ -1,12 +1,10 @@
 # acidcam-gpu
 
-![screenshot](https://github.com/lostjared/acidcam-gpu/raw/main/ACMX2-ss.png)
+![screenshot](https://github.com/lostjared/acidcam-gpu/raw/main/acmx2.png)
 
 [![License: BSD 2-Clause](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
 [![Hardware: NVIDIA RTX](https://img.shields.io/badge/Hardware-NVIDIA%20RTX%202070-green.svg)](https://www.nvidia.com/en-us/geforce/rtx/)
 [![Framework: CUDA](https://img.shields.io/badge/Framework-CUDA%2012.x-76b900.svg)](https://developer.nvidia.com/cuda-zone)
-
-# In Early stages of Development
 
 # ACMX2 – Linux (NVIDIA GPU Required)
 
