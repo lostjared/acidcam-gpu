@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACMX2 Podman Container Guide</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0d0d0d;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #252525;
+            --accent-primary: #e63946;
+            --accent-secondary: #ff6b6b;
+            --accent-glow: rgba(230, 57, 70, 0.3);
+            --text-primary: #f8f8f8;
+            --text-secondary: #b0b0b0;
+            --text-muted: #707070;
+            --border-color: #333;
+            --success: #2ecc71;
+            --warning: #f39c12;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            border-bottom: 3px solid var(--accent-primary);
+            padding: 60px 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at center, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .logo {
+            font-size: 4rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+            text-shadow: 0 0 30px var(--accent-glow);
+            letter-spacing: 0.1em;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .logo span {
+            color: var(--text-primary);
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-container {
+            margin-top: 25px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge-icon {
+            color: var(--accent-primary);
+        }
+
+        /* Navigation */
+        nav {
+            background: var(--bg-secondary);
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        nav ul {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            list-style: none;
+            max-width: 1200px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            padding: 8px 16px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        nav a:hover {
+            color: var(--accent-primary);
+            background: rgba(230, 57, 70, 0.1);
+        }
+
+        /* Main Content */
+        main {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 50px 20px;
+        }
+
+        section {
+            margin-bottom: 60px;
+        }
+
+        h2 {
+            font-size: 2rem;
+            color: var(--accent-primary);
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        h2 .step-number {
+            background: var(--accent-primary);
+            color: var(--bg-primary);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        h3 {
+            font-size: 1.3rem;
+            color: var(--text-primary);
+            margin: 25px 0 15px;
+        }
+
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        /* Info Boxes */
+        .info-box {
+            background: var(--bg-secondary);
+            border-left: 4px solid var(--accent-primary);
+            padding: 20px 25px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .info-box.warning {
+            border-left-color: var(--warning);
+        }
+
+        .info-box.success {
+            border-left-color: var(--success);
+        }
+
+        .info-box-title {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-box.warning .info-box-title {
+            color: var(--warning);
+        }
+
+        .info-box.success .info-box-title {
+            color: var(--success);
+        }
+
+        /* Code Blocks */
+        .code-container {
+            position: relative;
+            margin: 20px 0;
+        }
+
+        .code-header {
+            background: var(--bg-tertiary);
+            padding: 10px 20px;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code-lang {
+            color: var(--accent-secondary);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .copy-btn {
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent-secondary);
+        }
+
+        pre {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0 0 8px 8px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 0;
+        }
+
+        code {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .inline-code {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: var(--accent-secondary);
+        }
+
+        /* Lists */
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        li {
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        li strong {
+            color: var(--text-primary);
+        }
+
+        /* Requirements Grid */
+        .requirements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
+        }
+
+        .requirement-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .requirement-card:hover {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .requirement-card h4 {
+            color: var(--accent-primary);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .requirement-card p {
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        /* Table of Contents */
+        .toc {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 25px 30px;
+            margin-bottom: 40px;
+        }
+
+        .toc h3 {
+            margin-top: 0;
+            color: var(--accent-primary);
+            margin-bottom: 15px;
+        }
+
+        .toc ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .toc a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .toc a:hover {
+            color: var(--accent-primary);
+        }
+
+        /* Footer */
+        footer {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        footer p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        footer a {
+            color: var(--accent-primary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Syntax Highlighting */
+        .comment { color: #6a9955; }
+        .string { color: #ce9178; }
+        .keyword { color: #569cd6; }
+        .variable { color: #9cdcfe; }
+        .command { color: #dcdcaa; }
+        .flag { color: #c586c0; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 2.5rem;
+            }
+
+            nav ul {
+                gap: 15px;
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+
+            .requirements-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">ACM<span>X2</span></div>
+        <p class="tagline">Podman Container Deployment Guide</p>
+        <div class="badge-container">
+            <span class="badge"><span class="badge-icon">🐳</span> Podman / Docker</span>
+            <span class="badge"><span class="badge-icon">🎮</span> NVIDIA GPU</span>
+            <span class="badge"><span class="badge-icon">🎬</span> Real-time Effects</span>
+            <span class="badge"><span class="badge-icon">🔊</span> Audio Support</span>
+        </div>
+    </header>
+
+    <nav>
+        <ul>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#prerequisites">Prerequisites</a></li>
+            <li><a href="#pull-image">Pull Image</a></li>
+            <li><a href="#run-script">Run Script</a></li>
+            <li><a href="#execution">Execution</a></li>
+            <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <div class="toc">
+            <h3>📋 Table of Contents</h3>
+            <ol>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#prerequisites">System Prerequisites</a></li>
+                <li><a href="#pull-image">Pulling the Container Image</a></li>
+                <li><a href="#run-script">Creating the Run Script</a></li>
+                <li><a href="#execution">Running ACMX2</a></li>
+                <li><a href="#troubleshooting">Troubleshooting Common Issues</a></li>
+            </ol>
+        </div>
+
+        <!-- Overview Section -->
+        <section id="overview">
+            <h2><span class="step-number">1</span> Overview</h2>
+            <p>
+                <strong>ACMX2</strong> is a powerful GPU-accelerated video processing tool that applies real-time OpenGL shader effects 
+                to webcam feeds or video files. This guide provides step-by-step instructions for deploying ACMX2 using a pre-built 
+                Podman container, eliminating the need to manually compile dependencies like OpenCV, CUDA, and Qt6.
+            </p>
+            
+            <div class="info-box">
+                <div class="info-box-title">💡 What's Included in the Container</div>
+                <p>The ACMX2 container comes pre-built with:</p>
+                <ul>
+                    <li><strong>NVIDIA CUDA 13.1</strong> - GPU acceleration support</li>
+                    <li><strong>OpenCV 4.13.0</strong> - Built with CUDA support for optimized video processing</li>
+                    <li><strong>Qt6</strong> - Modern graphical user interface</li>
+                    <li><strong>FFmpeg</strong> - Video encoding and decoding</li>
+                    <li><strong>libmx2 (MX2 Engine)</strong> - Core rendering engine</li>
+                    <li><strong>Pre-loaded Shaders & Models</strong> - Ready-to-use effect libraries</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Prerequisites Section -->
+        <section id="prerequisites">
+            <h2><span class="step-number">2</span> System Prerequisites</h2>
+            <p>Before pulling and running the ACMX2 container, ensure your system meets the following requirements:</p>
+
+            <div class="requirements-grid">
+                <div class="requirement-card">
+                    <h4>🐧 Linux Operating System</h4>
+                    <p>Ubuntu 20.04+, Fedora 35+, Arch Linux, or any modern Linux distribution with X11 display server.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>🎮 NVIDIA GPU</h4>
+                    <p>NVIDIA GPU with compute capability 7.5+ (GTX 16 series, RTX 20/30/40 series or newer).</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>🐳 Podman Installed</h4>
+                    <p>Podman container runtime with NVIDIA Container Toolkit (CDI) configured.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>🔊 PulseAudio</h4>
+                    <p>PulseAudio sound server for audio passthrough to the container.</p>
+                </div>
+            </div>
+
+            <h3>Installing Podman</h3>
+            <p>If Podman is not already installed on your system, install it using your package manager:</p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Ubuntu / Debian</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="command">sudo</span> apt update
+<span class="command">sudo</span> apt install <span class="flag">-y</span> podman</code></pre>
+            </div>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Fedora / RHEL</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="command">sudo</span> dnf install <span class="flag">-y</span> podman</code></pre>
+            </div>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Arch Linux</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="command">sudo</span> pacman <span class="flag">-S</span> podman</code></pre>
+            </div>
+
+            <h3>Installing NVIDIA Container Toolkit</h3>
+            <p>The NVIDIA Container Toolkit enables GPU access within containers. Follow these steps to install it:</p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Add NVIDIA Container Toolkit repository</span>
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+<span class="command">curl</span> <span class="flag">-s</span> <span class="flag">-L</span> https://nvidia.github.io/libnvidia-container/gpgkey | \
+    <span class="command">sudo</span> apt-key add -
+<span class="command">curl</span> <span class="flag">-s</span> <span class="flag">-L</span> https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+    <span class="command">sudo</span> tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+<span class="comment"># Install the toolkit</span>
+<span class="command">sudo</span> apt update
+<span class="command">sudo</span> apt install <span class="flag">-y</span> nvidia-container-toolkit
+
+<span class="comment"># Generate CDI specification for Podman</span>
+<span class="command">sudo</span> nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+
+<span class="comment"># Verify the CDI configuration</span>
+<span class="command">nvidia-ctk</span> cdi list</code></pre>
+            </div>
+
+            <div class="info-box warning">
+                <div class="info-box-title">⚠️ Important</div>
+                <p>After installing the NVIDIA Container Toolkit, you may need to restart your system or re-login for the changes to take effect. Verify your GPU is accessible by running <span class="inline-code">nvidia-smi</span>.</p>
+            </div>
+        </section>
+
+        <!-- Pull Image Section -->
+        <section id="pull-image">
+            <h2><span class="step-number">3</span> Pulling the Container Image</h2>
+            <p>The ACMX2 container image is hosted on GitHub Container Registry (GHCR). Pull the latest version using the following command:</p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Pull the ACMX2 container image from GitHub Container Registry</span>
+<span class="command">podman</span> pull ghcr.io/lostjared/acmx2:latest</code></pre>
+            </div>
+
+            <p>This will download the complete ACMX2 environment including all dependencies. The image size is approximately <strong>5-8 GB</strong> depending on compression, so the download may take some time on slower connections.</p>
+
+            <h3>Verify the Image</h3>
+            <p>After pulling, verify the image was downloaded successfully:</p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># List all downloaded images</span>
+<span class="command">podman</span> images
+
+<span class="comment"># You should see output similar to:</span>
+<span class="comment"># REPOSITORY                    TAG       IMAGE ID       CREATED        SIZE</span>
+<span class="comment"># ghcr.io/lostjared/acmx2       latest    abc123def456   2 days ago     7.2 GB</span></code></pre>
+            </div>
+
+            <div class="info-box success">
+                <div class="info-box-title">✅ Success</div>
+                <p>Once you see the <span class="inline-code">ghcr.io/lostjared/acmx2</span> image listed, you're ready to create the run script.</p>
+            </div>
+        </section>
+
+        <!-- Run Script Section -->
+        <section id="run-script">
+            <h2><span class="step-number">4</span> Creating the Run Script</h2>
+            <p>Create a shell script that configures all the necessary environment variables, volume mounts, and device passthrough settings to run ACMX2 with full GPU, audio, and display support.</p>
+
+            <h3>Step 4.1: Create the Script File</h3>
+            <p>Create a new file called <span class="inline-code">run-acmx2.sh</span> in your preferred location:</p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Create the script file</span>
+<span class="command">touch</span> ~/run-acmx2.sh
+<span class="command">chmod</span> +x ~/run-acmx2.sh</code></pre>
+            </div>
+
+            <h3>Step 4.2: Add the Script Content</h3>
+            <p>Open the file in your favorite text editor and add the following content:</p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">run-acmx2.sh</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment">#!/bin/bash</span>
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># ACMX2 Podman Container Launch Script</span>
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># This script launches the ACMX2 container with full GPU, audio, and display</span>
+<span class="comment"># support. It configures X11 forwarding, PulseAudio passthrough, and mounts</span>
+<span class="comment"># a shared directory for file exchange with the container.</span>
+<span class="comment"># ==============================================================================</span>
+
+<span class="comment"># Enable X11 access for the container</span>
+xhost +local:docker
+
+<span class="comment"># Exit on error, unset variables, and pipe failures</span>
+<span class="keyword">set</span> <span class="flag">-euo</span> pipefail
+
+<span class="comment"># Container image to use</span>
+<span class="variable">IMAGE</span>=<span class="string">"ghcr.io/lostjared/acmx2:latest"</span>
+
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># AUDIO CONFIGURATION</span>
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># Get the path to the PulseAudio socket and cookie for audio passthrough</span>
+<span class="variable">PULSE_SOCKET</span>=<span class="string">"/run/user/$(id -u)/pulse/native"</span>
+<span class="variable">PULSE_COOKIE</span>=<span class="string">"$HOME/.config/pulse/cookie"</span>
+
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># SHARED DIRECTORY</span>
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># Create a shared directory for exchanging files with the container</span>
+<span class="comment"># This folder will be accessible inside the container at /root/share</span>
+<span class="variable">HOST_SHARE</span>=<span class="string">"$HOME/container_share"</span>
+<span class="command">mkdir</span> <span class="flag">-p</span> <span class="string">"$HOST_SHARE"</span>
+
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># X11 PERMISSIONS</span>
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># Allow root user inside container to access X11 display</span>
+<span class="keyword">if</span> <span class="command">command</span> <span class="flag">-v</span> xhost &gt;/dev/null 2&gt;&amp;1; <span class="keyword">then</span>
+  xhost +si:localuser:root &gt;/dev/null 2&gt;&amp;1 || <span class="keyword">true</span>
+<span class="keyword">fi</span>
+
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># AUDIO CHECK</span>
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># Warn if PulseAudio cookie is missing (audio may not work)</span>
+<span class="keyword">if</span> [ ! <span class="flag">-f</span> <span class="string">"$PULSE_COOKIE"</span> ]; <span class="keyword">then</span>
+    <span class="command">echo</span> <span class="string">"Warning: PulseAudio cookie not found at $PULSE_COOKIE"</span>
+    <span class="command">echo</span> <span class="string">"Audio passthrough may not work correctly."</span>
+<span class="keyword">fi</span>
+
+<span class="comment"># ==============================================================================</span>
+<span class="comment"># LAUNCH CONTAINER</span>
+<span class="comment"># ==============================================================================</span>
+<span class="keyword">exec</span> <span class="command">podman</span> run <span class="flag">-it</span> \
+  <span class="flag">--security-opt</span>=label=disable \
+  <span class="flag">--net</span>=host \
+  <span class="flag">--cap-add</span>=SYS_NICE \
+  <span class="flag">--cap-add</span>=SYS_RESOURCE \
+  <span class="flag">--device</span> nvidia.com/gpu=all \
+  <span class="flag">--device</span> /dev/video0 \
+  <span class="flag">--device</span> /dev/snd \
+  <span class="flag">-e</span> DISPLAY=<span class="string">"${DISPLAY:-}"</span> \
+  <span class="flag">-e</span> QT_QPA_PLATFORM=xcb \
+  <span class="flag">-e</span> XDG_RUNTIME_DIR=/tmp/xdg \
+  <span class="flag">-e</span> PULSE_SERVER=unix:/tmp/pulse-socket \
+  <span class="flag">-e</span> PULSE_COOKIE=/tmp/pulse-cookie \
+  <span class="flag">-v</span> <span class="string">"$PULSE_SOCKET"</span>:/tmp/pulse-socket \
+  <span class="flag">-v</span> <span class="string">"$PULSE_COOKIE"</span>:/tmp/pulse-cookie \
+  <span class="flag">-v</span> /tmp/.X11-unix:/tmp/.X11-unix \
+  <span class="flag">-v</span> <span class="string">"$HOST_SHARE"</span>:/root/share \
+  <span class="string">"$IMAGE"</span> bash <span class="flag">-lc</span> <span class="string">'
+    mkdir -p /tmp/xdg
+    chmod 700 /tmp/xdg
+    echo "Checking audio connection..."
+    pactl info || echo "pactl failed, continuing anyway..."
+    exec /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface
+  '</span></code></pre>
+            </div>
+
+            <h3>Script Breakdown</h3>
+            <p>Here's what each part of the script does:</p>
+
+            <div class="info-box">
+                <div class="info-box-title">🔧 Configuration Options Explained</div>
+                <ul>
+                    <li><strong><span class="inline-code">--device nvidia.com/gpu=all</span></strong> - Passes all NVIDIA GPUs to the container via CDI</li>
+                    <li><strong><span class="inline-code">--device /dev/video0</span></strong> - Provides access to your webcam (adjust if using a different camera device)</li>
+                    <li><strong><span class="inline-code">--device /dev/snd</span></strong> - Enables sound device access</li>
+                    <li><strong><span class="inline-code">-e DISPLAY</span></strong> - Forwards the X11 display for GUI rendering</li>
+                    <li><strong><span class="inline-code">-v /tmp/.X11-unix</span></strong> - Mounts X11 socket for display communication</li>
+                    <li><strong><span class="inline-code">-v "$HOST_SHARE":/root/share</span></strong> - Creates a shared folder between host and container</li>
+                    <li><strong><span class="inline-code">PULSE_*</span></strong> - Environment variables and mounts for audio passthrough</li>
+                </ul>
+            </div>
+
+            <h3>Alternative: Shell Access Script</h3>
+            <p>If you want to access the container's shell instead of launching the GUI directly, create an alternative script:</p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">exec-acmx2.sh</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment">#!/bin/bash</span>
+<span class="comment"># ACMX2 Container Shell Access Script</span>
+<span class="comment"># Use this script to get a bash shell inside the container</span>
+
+xhost +local:docker
+<span class="keyword">set</span> <span class="flag">-euo</span> pipefail
+
+<span class="variable">IMAGE</span>=<span class="string">"ghcr.io/lostjared/acmx2:latest"</span>
+<span class="variable">PULSE_SOCKET</span>=<span class="string">"/run/user/$(id -u)/pulse/native"</span>
+<span class="variable">PULSE_COOKIE</span>=<span class="string">"$HOME/.config/pulse/cookie"</span>
+
+<span class="keyword">if</span> <span class="command">command</span> <span class="flag">-v</span> xhost &gt;/dev/null 2&gt;&amp;1; <span class="keyword">then</span>
+  xhost +si:localuser:root &gt;/dev/null 2&gt;&amp;1 || <span class="keyword">true</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">if</span> [ ! <span class="flag">-f</span> <span class="string">"$PULSE_COOKIE"</span> ]; <span class="keyword">then</span>
+    <span class="command">echo</span> <span class="string">"Warning: PulseAudio cookie not found at $PULSE_COOKIE"</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">exec</span> <span class="command">podman</span> run <span class="flag">-it</span> \
+  <span class="flag">--name</span> acmx2_shell \
+  <span class="flag">--security-opt</span>=label=disable \
+  <span class="flag">--net</span>=host \
+  <span class="flag">--cap-add</span>=SYS_NICE \
+  <span class="flag">--cap-add</span>=SYS_RESOURCE \
+  <span class="flag">--device</span> nvidia.com/gpu=all \
+  <span class="flag">--device</span> /dev/video0 \
+  <span class="flag">--device</span> /dev/snd \
+  <span class="flag">-e</span> DISPLAY=<span class="string">"${DISPLAY:-}"</span> \
+  <span class="flag">-e</span> QT_QPA_PLATFORM=xcb \
+  <span class="flag">-e</span> XDG_RUNTIME_DIR=/tmp/xdg \
+  <span class="flag">-e</span> PULSE_SERVER=unix:/tmp/pulse-socket \
+  <span class="flag">-e</span> PULSE_COOKIE=/tmp/pulse-cookie \
+  <span class="flag">-v</span> <span class="string">"$PULSE_SOCKET"</span>:/tmp/pulse-socket \
+  <span class="flag">-v</span> <span class="string">"$PULSE_COOKIE"</span>:/tmp/pulse-cookie \
+  <span class="flag">-v</span> /tmp/.X11-unix:/tmp/.X11-unix \
+  <span class="string">"$IMAGE"</span> bash <span class="flag">-lc</span> <span class="string">'
+    mkdir -p /tmp/xdg
+    chmod 700 /tmp/xdg
+    echo "Checking audio connection..."
+    pactl info || echo "pactl failed, continuing anyway..."
+    exec bash
+  '</span></code></pre>
+            </div>
+        </section>
+
+        <!-- Execution Section -->
+        <section id="execution">
+            <h2><span class="step-number">5</span> Running ACMX2</h2>
+            <p>With the container image pulled and your run script created, you're ready to launch ACMX2!</p>
+
+            <h3>Step 5.1: Execute the Script</h3>
+            <p>Run the script from your terminal:</p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Navigate to where you saved the script</span>
+<span class="command">cd</span> ~
+
+<span class="comment"># Run the ACMX2 container</span>
+./run-acmx2.sh</code></pre>
+            </div>
+
+            <h3>Step 5.2: What to Expect</h3>
+            <p>When the container starts successfully, you should see:</p>
+            <ol>
+                <li>A brief audio check message indicating PulseAudio status</li>
+                <li>The ACMX2 Qt6 graphical interface window appearing on your screen</li>
+                <li>Your webcam feed (if connected) ready for shader effects</li>
+            </ol>
+
+            <div class="info-box success">
+                <div class="info-box-title">🎉 You're Ready!</div>
+                <p>ACMX2 is now running! Use the interface to:</p>
+                <ul>
+                    <li>Select and apply shader effects in real-time</li>
+                    <li>Record processed video output</li>
+                    <li>Take snapshots of your effects</li>
+                    <li>Edit and create custom shaders with the built-in code editor</li>
+                </ul>
+            </div>
+
+            <h3>Using the Shared Folder</h3>
+            <p>The <span class="inline-code">~/container_share</span> folder on your host machine is mapped to <span class="inline-code">/root/share</span> inside the container. Use this to:</p>
+            <ul>
+                <li>Copy custom shaders into the container</li>
+                <li>Export recorded videos to your host system</li>
+                <li>Share any files between the host and container environments</li>
+            </ul>
+        </section>
+
+        <!-- Troubleshooting Section -->
+        <section id="troubleshooting">
+            <h2><span class="step-number">6</span> Troubleshooting</h2>
+            <p>If you encounter issues, here are solutions to common problems:</p>
+
+            <h3>🔴 GPU Not Detected</h3>
+            <div class="info-box warning">
+                <div class="info-box-title">Error: "nvidia.com/gpu=all" device not found</div>
+                <p><strong>Solution:</strong> Ensure the NVIDIA Container Toolkit is properly installed and CDI is configured:</p>
+            </div>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Regenerate CDI configuration</span>
+<span class="command">sudo</span> nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+
+<span class="comment"># Verify GPU is listed</span>
+<span class="command">nvidia-ctk</span> cdi list | grep nvidia</code></pre>
+            </div>
+
+            <h3>🔴 Display Connection Failed</h3>
+            <div class="info-box warning">
+                <div class="info-box-title">Error: "Cannot open display" or blank window</div>
+                <p><strong>Solution:</strong> Ensure X11 permissions are set correctly:</p>
+            </div>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Allow all local connections to X11</span>
+<span class="command">xhost</span> +local:
+
+<span class="comment"># Verify DISPLAY variable is set</span>
+<span class="command">echo</span> $DISPLAY   <span class="comment"># Should output something like :0 or :1</span></code></pre>
+            </div>
+
+            <h3>🔴 Audio Not Working</h3>
+            <div class="info-box warning">
+                <div class="info-box-title">Error: "pactl failed" or no audio output</div>
+                <p><strong>Solution:</strong> Check PulseAudio is running and the socket exists:</p>
+            </div>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Check if PulseAudio is running</span>
+<span class="command">pulseaudio</span> <span class="flag">--check</span> && <span class="command">echo</span> <span class="string">"PulseAudio is running"</span>
+
+<span class="comment"># Verify the socket exists</span>
+<span class="command">ls</span> <span class="flag">-la</span> /run/user/$(id -u)/pulse/native
+
+<span class="comment"># If missing, start PulseAudio</span>
+<span class="command">pulseaudio</span> <span class="flag">--start</span></code></pre>
+            </div>
+
+            <h3>🔴 Webcam Not Found</h3>
+            <div class="info-box warning">
+                <div class="info-box-title">Error: Camera device not accessible</div>
+                <p><strong>Solution:</strong> Verify your webcam device path and update the script:</p>
+            </div>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># List available video devices</span>
+<span class="command">ls</span> <span class="flag">-la</span> /dev/video*
+
+<span class="comment"># If your camera is /dev/video1 instead of video0,</span>
+<span class="comment"># update the --device flag in the run script:</span>
+<span class="comment"># --device /dev/video1</span></code></pre>
+            </div>
+
+            <h3>🔴 Container Already Exists</h3>
+            <div class="info-box warning">
+                <div class="info-box-title">Error: "container name already in use"</div>
+                <p><strong>Solution:</strong> Remove the existing container before running again:</p>
+            </div>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Remove existing container</span>
+<span class="command">podman</span> rm acmx2_shell
+
+<span class="comment"># Or use --rm flag in the run script to auto-remove on exit</span>
+<span class="comment"># Add: --rm after "podman run -it"</span></code></pre>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>
+            <strong>ACMX2</strong> &mdash; GPU-Accelerated Real-Time Video Effects<br>
+            Created by <a href="https://github.com/lostjared" target="_blank">LostJared</a> |
+            <a href="https://github.com/lostjared/acidcam-gpu" target="_blank">GitHub Repository</a>
+        </p>
+        <p style="margin-top: 15px;">
+            Container Image: <span class="inline-code">ghcr.io/lostjared/acmx2:latest</span>
+        </p>
+    </footer>
+
+    <script>
+        function copyCode(button) {
+            const codeBlock = button.closest('.code-container').querySelector('code');
+            const text = codeBlock.innerText;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.innerText;
+                button.innerText = 'Copied!';
+                button.style.background = '#2ecc71';
+                
+                setTimeout(() => {
+                    button.innerText = originalText;
+                    button.style.background = '';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
