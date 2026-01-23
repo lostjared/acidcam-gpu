@@ -44,5 +44,5 @@ exec podman run -it \
     # Double check audio inside before launching
     echo "Checking audio connection..."
     pactl info || echo "pactl failed, continuing anyway..."
-    exec /opt/src/acidcam-gpu/ACMX2/interface/build/interface
+    exec /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface
   '
