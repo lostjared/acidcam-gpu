@@ -235,7 +235,15 @@ if [ ! -f "$PULSE_COOKIE" ]; then
     echo "Warning: Pulse Cookie not found at $PULSE_COOKIE"
 fi
 
-# 3. Ensure the share directory exists on host
+# 3. Get Video Device
+VIDEO_DEVICES=""
+for i in 0 1 2 3 4 5 6 7 8 9; do
+  if [ -e "/dev/video$i" ]; then
+    VIDEO_DEVICES="$VIDEO_DEVICES --device /dev/video$i"
+  fi
+done
+
+# 4. Ensure the share directory exists on host
 mkdir -p "$HOST_SHARE"
 
 exec podman run -it \
@@ -244,7 +252,7 @@ exec podman run -it \
   --cap-add=SYS_NICE \
   --cap-add=SYS_RESOURCE \
   --device nvidia.com/gpu=all \
-  --device /dev/video0 \
+  $VIDEO_DEVICES \
   --device /dev/snd \
   -e DISPLAY="${DISPLAY:-}" \
   -e QT_QPA_PLATFORM=xcb \
