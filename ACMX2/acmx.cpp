@@ -206,7 +206,7 @@ struct ShaderCacheEntry {
 
 struct ShaderCache {
     static constexpr uint32_t CACHE_MAGIC = 0x53484452; 
-    static constexpr uint32_t CACHE_VERSION = 2;  // Bumped: now checks driver version
+    static constexpr uint32_t CACHE_VERSION = 2;  
     std::string gl_renderer;
     std::string gl_version;
     bool dual_mode = false;
@@ -852,7 +852,7 @@ public:
             programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
             GLuint prog_id_2d = glCreateProgram();
             
-            GLenum gl_err = glGetError();  // Clear any prior errors
+            GLenum gl_err = glGetError();  
             glProgramBinaryFunc(prog_id_2d, entry.format_2d, entry.binary_2d.data(), static_cast<GLsizei>(entry.binary_2d.size()));
             gl_err = glGetError();
             
@@ -1640,6 +1640,35 @@ public:
         cube.setShaderProgram(library.shader(), "samp");
         cube.saveOriginal();
 
+        if(is3d_enabled && !cube.meshes.empty()) {
+            float minX = std::numeric_limits<float>::max();
+            float minY = std::numeric_limits<float>::max();
+            float minZ = std::numeric_limits<float>::max();
+            float maxX = std::numeric_limits<float>::lowest();
+            float maxY = std::numeric_limits<float>::lowest();
+            float maxZ = std::numeric_limits<float>::lowest();
+            for(const auto &mesh : cube.meshes) {
+                for(size_t i = 0; i + 2 < mesh.vert.size(); i += 3) {
+                    float x = mesh.vert[i];
+                    float y = mesh.vert[i + 1];
+                    float z = mesh.vert[i + 2];
+                    minX = std::min(minX, x);
+                    minY = std::min(minY, y);
+                    minZ = std::min(minZ, z);
+                    maxX = std::max(maxX, x);
+                    maxY = std::max(maxY, y);
+                    maxZ = std::max(maxZ, z);
+                }
+            }
+            float dx = maxX - minX;
+            float dy = maxY - minY;
+            float dz = maxZ - minZ;
+            modelSize = std::sqrt(dx * dx + dy * dy + dz * dz);
+            if(modelSize < 0.001f) modelSize = 1.0f;  
+            mx::system_out << "acmx2: Model bounding diagonal: " << modelSize << "\n";
+            fflush(stdout);
+        }
+
         if(!fshader.loadProgram(win->util.getFilePath("data/vert.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
             throw mx::Exception("Error loading shader");
         }
@@ -1872,12 +1901,12 @@ public:
                 }
 
                 if (keystate[SDL_SCANCODE_EQUALS] || keystate[SDL_SCANCODE_KP_PLUS]) {
-                    cameraDistance += movementSpeed;
+                    cameraDistance += movementSpeed * modelSize * 0.5f;
                     mx::system_out << "acmx2: cameraDistance increased: " << cameraDistance << "\n";
                     fflush(stdout);
                 }
                 if (keystate[SDL_SCANCODE_MINUS] || keystate[SDL_SCANCODE_KP_MINUS]) {
-                    cameraDistance -= movementSpeed;
+                    cameraDistance -= movementSpeed * modelSize * 0.5f;
                     mx::system_out << "acmx2: cameraDistance decreased: " << cameraDistance << "\n";
                     fflush(stdout);
                 }
@@ -2536,6 +2565,7 @@ private:
     bool oscillateScale = false;
     bool waveActive = false;
     float cameraDistance = 0.0f;
+    float modelSize = 1.0f; 
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
     bool silent_mode = false;
