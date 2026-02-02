@@ -5,17 +5,82 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 include(CheckIncludeFileCXX)
 
+# Homebrew support for Intel and Apple Silicon
+if(APPLE)
+    # Detect architecture
+    if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
+        set(HOMEBREW_PREFIX "/opt/homebrew" CACHE PATH "Homebrew prefix for Apple Silicon")
+    else()
+        set(HOMEBREW_PREFIX "/usr/local" CACHE PATH "Homebrew prefix for Intel")
+    endif()
+    
+    # If not explicitly set, try to detect
+    if(NOT DEFINED HOMEBREW_PREFIX OR HOMEBREW_PREFIX STREQUAL "")
+        execute_process(
+            COMMAND brew --prefix
+            OUTPUT_VARIABLE HOMEBREW_PREFIX
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+    endif()
+    
+    if(HOMEBREW_PREFIX)
+        message(STATUS "Using Homebrew prefix: ${HOMEBREW_PREFIX}")
+        list(APPEND CMAKE_PREFIX_PATH "${HOMEBREW_PREFIX}")
+        list(APPEND PKG_CONFIG_PATH "${HOMEBREW_PREFIX}/lib/pkgconfig")
+        set(ENV{PKG_CONFIG_PATH} "${HOMEBREW_PREFIX}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+    endif()
+endif()
+
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+pkg_check_modules(FFMPEG IMPORTED_TARGET
     libavcodec>=58.0.0
     libavformat>=58.0.0
     libavutil>=56.0.0
     libswscale>=5.0.0
 )
 
+
 if(NOT FFMPEG_FOUND)
-    message(FATAL_ERROR "FFmpeg libraries not found. Please install FFmpeg development packages.")
+    message(STATUS "FFmpeg not found via pkg-config, attempting manual search...")
+    
+    if(APPLE AND HOMEBREW_PREFIX)
+        # Search in Homebrew directories
+        find_path(FFMPEG_INCLUDE_DIR libavcodec/avcodec.h
+            HINTS "${HOMEBREW_PREFIX}/include"
+            NO_DEFAULT_PATH
+        )
+        find_library(AVCODEC_LIBRARY avcodec
+            HINTS "${HOMEBREW_PREFIX}/lib"
+            NO_DEFAULT_PATH
+        )
+        find_library(AVFORMAT_LIBRARY avformat
+            HINTS "${HOMEBREW_PREFIX}/lib"
+            NO_DEFAULT_PATH
+        )
+        find_library(AVUTIL_LIBRARY avutil
+            HINTS "${HOMEBREW_PREFIX}/lib"
+            NO_DEFAULT_PATH
+        )
+        find_library(SWSCALE_LIBRARY swscale
+            HINTS "${HOMEBREW_PREFIX}/lib"
+            NO_DEFAULT_PATH
+        )
+        
+        if(FFMPEG_INCLUDE_DIR AND AVCODEC_LIBRARY AND AVFORMAT_LIBRARY AND AVUTIL_LIBRARY AND SWSCALE_LIBRARY)
+            set(FFMPEG_FOUND TRUE)
+            set(FFMPEG_INCLUDE_DIRS "${FFMPEG_INCLUDE_DIR}")
+            set(FFMPEG_LIBRARIES ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY})
+            message(STATUS "Found FFmpeg in Homebrew: ${HOMEBREW_PREFIX}")
+        endif()
+    endif()
+    
+    if(NOT FFMPEG_FOUND)
+        message(FATAL_ERROR "FFmpeg libraries not found. Please install FFmpeg: brew install ffmpeg")
+    endif()
+else()
+    message(STATUS "Found FFmpeg via pkg-config")
 endif()
 
 set(CMAKE_REQUIRED_INCLUDES ${FFMPEG_INCLUDE_DIRS})
@@ -90,7 +155,14 @@ target_include_directories(mxwrite PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     ${FFMPEG_INCLUDE_DIRS}
 )
-target_link_libraries(mxwrite PUBLIC PkgConfig::FFMPEG Threads::Threads)
+
+# Link libraries - handle both pkg-config and manual search
+if(FFMPEG_FOUND AND TARGET PkgConfig::FFMPEG)
+    target_link_libraries(mxwrite PUBLIC PkgConfig::FFMPEG Threads::Threads)
+else()
+    target_link_libraries(mxwrite PUBLIC ${FFMPEG_LIBRARIES} Threads::Threads)
+endif()
+
 target_compile_options(mxwrite PRIVATE -O3 -Wall -Wextra -pedantic)
 include(CMakePackageConfigHelpers)
 
