@@ -182,6 +182,7 @@ set_target_properties(acmx2 PROPERTIES
     INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
+target_compile_definitions(acmx2 PRIVATE WITH_GL)
 if(AUDIO)
     target_compile_definitions(acmx2 PRIVATE AUDIO_ENABLED)
 endif()
@@ -203,12 +204,14 @@ target_include_directories(acmx2 PRIVATE
 )
 target_link_libraries(acmx2 PRIVATE 
     libmx2::mx 
+    mxgl
     ${OpenCV_LIBRARIES} 
     ${AUDIO_LIBS}
     MXWrite::mxwrite
     acidcam-gpu::acidcam-gpu
     CUDA::cudart
     OpenGL::OpenGL
+    GL
     Threads::Threads
 )
 install(TARGETS acmx2 DESTINATION bin)
