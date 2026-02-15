@@ -765,6 +765,47 @@ public:
         }
     }
 
+    std::string getFullShaderName() {
+        std::string name;
+        auto &names = is3d ? program_names_3d : program_names_2d;
+        if(names.find(library_index) != names.end()) {
+            name = std::to_string(library_index) + ": " + names[library_index].name;
+        }
+        return name;
+    }
+
+    std::string getShaderNameByIndex(size_t idx) {
+        auto &names = is3d ? program_names_3d : program_names_2d;
+        if(names.find(idx) != names.end()) {
+            return names[idx].name;
+        }
+        return "";
+    }
+
+    std::string getFullShaderName(const std::vector<int> &pass_list) {
+        std::string name;
+        auto &names = is3d ? program_names_3d : program_names_2d;
+        if(names.find(library_index) != names.end()) {
+            name = std::to_string(library_index) + ": " + names[library_index].name;
+        }
+        if(!pass_list.empty()) {
+            name += " [";
+            for(size_t i = 0; i < pass_list.size(); ++i) {
+                int idx = pass_list[i];
+                if(names.find(idx) != names.end()) {
+                    name += names[idx].name;
+                } else {
+                    name += std::to_string(idx);
+                }
+                if(i + 1 < pass_list.size()) {
+                    name += ", ";
+                }
+            }
+            name += "]";
+        }
+        return name;
+    }
+
     bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont) {
         std::string cache_file = library_path + "/.shader_cache";
         
@@ -1323,6 +1364,13 @@ public:
     int gpu_frame_dir = 1;
     std::vector<int> shader_pass_list;
     bool shader_pass_enabled = false;
+    std::string cached_shader_name;
+
+    void updateShaderNameCache() {
+        cached_shader_name = shader_pass_enabled 
+            ? library.getFullShaderName(shader_pass_list) 
+            : library.getFullShaderName();
+    }
 
     mx::Font overlayFont;
     std::chrono::steady_clock::time_point sessionStartTime;
@@ -1626,6 +1674,7 @@ public:
             library.loadProgram(win, std::get<1>(flib));
         }
         library.setIndex(std::get<2>(flib));
+        updateShaderNameCache();
 
         std::string m_file_path;
         if(std::filesystem::exists(m_file)) {
@@ -2272,6 +2321,8 @@ public:
             fpsStr << std::fixed << std::setprecision(1) << displayFPS << " FPS";
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            win->text.setColor({0,0,255,255});
+            win->text.printText_Blended(overlayFont, 10, 10, cached_shader_name);
             win->text.setColor({255,255,255,255});
             win->text.printText_Blended(overlayFont, 10, 40, timerStr);
             win->text.printText_Blended(overlayFont, 10, 70, fpsStr.str());
@@ -2402,6 +2453,7 @@ public:
                             cube.setShaderProgram(library.shader());
                         else
                             sprite.setShader(library.shader());
+                        updateShaderNameCache();
                         break;
                     case SDLK_DOWN:
                         library.inc();
@@ -2409,7 +2461,7 @@ public:
                             cube.setShaderProgram(library.shader());
                         else
                             sprite.setShader(library.shader());
-                        
+                        updateShaderNameCache();
                         break;
                     case SDLK_LEFT:
                         if(gpu_filter_enabled && !gpu_filters.empty()) {
@@ -2437,6 +2489,7 @@ public:
                         break;
                     case SDLK_SPACE:
                         library.toggleBypass();
+                        updateShaderNameCache();
                         break;
                     case SDLK_p:
                         if(!filename.empty() || !graphic.empty()) {
@@ -2498,6 +2551,7 @@ public:
                     case SDLK_m:
                         if(!shader_pass_list.empty()) {
                             shader_pass_enabled = !shader_pass_enabled;
+                            updateShaderNameCache();
                             mx::system_out << "acmx2: Multi-shader pass "
                                            << (shader_pass_enabled ? "enabled" : "disabled") << "\n";
                             fflush(stdout);
@@ -2516,6 +2570,7 @@ public:
                         } else {
                             is3d_enabled = !is3d_enabled;
                             library.is3D(is3d_enabled);
+                            updateShaderNameCache();
                             mx::system_out << "acmx2: " << (is3d_enabled ? "3D" : "2D") << " mode " 
                                            << (is3d_enabled ? "enabled" : "disabled") << "\n";
                             fflush(stdout);
