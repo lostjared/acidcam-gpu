@@ -2156,6 +2156,30 @@ public:
                 library.useProgram();
             }
         }
+
+        // Blit clean fboTexture to screen FIRST (before watermark)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, win->w, win->h);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
+        
+        fshader.useProgram();
+        fshader.setUniform("mv_matrix", glm::mat4(1.0f));
+        fshader.setUniform("proj_matrix", glm::mat4(1.0f));
+        sprite.setShader(&fshader);
+        sprite.draw(fboTexture, 0, 0, win->w, win->h);
+
+        // Now draw watermark into captureFBO (video only, not on screen)
+        if (enableWatermark && writer.is_open() && overlayFont.handle().has_value()) {
+            glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+            glViewport(0, 0, win->w, win->h);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            win->text.setColor({255, 0, 150, 255});
+            win->text.printText_Blended(overlayFont, 10, 10, "LostSideDead.biz");
+            glDisable(GL_BLEND);
+        }
+
         bool needWriter = (writer.is_open() || snapshot_state > 0) && !isFrozen;
         
         if (needWriter) {
@@ -2232,14 +2256,6 @@ public:
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, win->w, win->h);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDisable(GL_DEPTH_TEST);
-        
-        fshader.useProgram();
-        fshader.setUniform("mv_matrix", glm::mat4(1.0f));
-        fshader.setUniform("proj_matrix", glm::mat4(1.0f));
-        sprite.setShader(&fshader);
-        sprite.draw(fboTexture, 0, 0, win->w, win->h);
 
         if(!counter_disabled && overlayFont.handle().has_value()) {
             fpsFrameCount++;
@@ -2256,8 +2272,9 @@ public:
             fpsStr << std::fixed << std::setprecision(1) << displayFPS << " FPS";
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            win->text.printText_Blended(overlayFont, 10, 10, timerStr);
-            win->text.printText_Blended(overlayFont, 10, 40, fpsStr.str());
+            win->text.setColor({255,255,255,255});
+            win->text.printText_Blended(overlayFont, 10, 40, timerStr);
+            win->text.printText_Blended(overlayFont, 10, 70, fpsStr.str());
             glDisable(GL_BLEND);
         }
 
@@ -2472,6 +2489,12 @@ public:
                                        << (waveActive ? "enabled" : "disabled") << "\n";
                         fflush(stdout);
                         break;
+                    case SDLK_e:
+                        enableWatermark = !enableWatermark;
+                        mx::system_out << "acmx2: Watermark "
+                                       << (enableWatermark ? "enabled" : "disabled") << "\n";
+                        fflush(stdout);
+                        break;
                     case SDLK_m:
                         if(!shader_pass_list.empty()) {
                             shader_pass_enabled = !shader_pass_enabled;
@@ -2571,6 +2594,7 @@ private:
     bool silent_mode = false;
     bool use_shader_cache_flag = true;  
     int last_progress_percent = -1;
+    bool enableWatermark = false;
 private:
     std::atomic<uint64_t> frames_dropped{0};
     int win_w = 0;
@@ -2945,6 +2969,7 @@ const char *message = R"(
     B - increase movement speed
     N - decrease movement speed
     C - Toggle Object Wave
+    O - Enable/Disable Watermark
 }
 )";
 
