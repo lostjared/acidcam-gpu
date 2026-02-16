@@ -1373,6 +1373,7 @@ public:
     }
 
     mx::Font overlayFont;
+    mx::Font waterFont;
     std::chrono::steady_clock::time_point sessionStartTime;
     double displayFPS = 0.0;
     int fpsFrameCount = 0;
@@ -1664,6 +1665,10 @@ public:
             win->text.init(win->w, win->h);
             win->text.setColor({255, 255, 255, 255});
         }
+        int waterFontSize = std::max(12, static_cast<int>(win->h / 40.0f));
+        waterFont.tryLoadFont(win->util.getFilePath("data/font.ttf"), waterFontSize);
+        mx::system_out << "acmx2: Watermark font loaded at size: " << waterFontSize << " for " << win->w << "x" << win->h << "\n";
+        fflush(stdout);
         
         if(std::get<0>(flib) == 1) {
             if(use_shader_cache_flag)
@@ -2206,7 +2211,7 @@ public:
             }
         }
 
-        // Blit clean fboTexture to screen FIRST (before watermark)
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, win->w, win->h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -2218,14 +2223,13 @@ public:
         sprite.setShader(&fshader);
         sprite.draw(fboTexture, 0, 0, win->w, win->h);
 
-        // Now draw watermark into captureFBO (video only, not on screen)
-        if (enableWatermark && writer.is_open() && overlayFont.handle().has_value()) {
+        if (enableWatermark && writer.is_open() && waterFont.handle().has_value()) {
             glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
             glViewport(0, 0, win->w, win->h);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             win->text.setColor({255, 0, 150, 255});
-            win->text.printText_Blended(overlayFont, 10, 10, "LostSideDead.biz");
+            win->text.printText_Blended(waterFont, 10, 10, "LostSideDead.biz");
             glDisable(GL_BLEND);
         }
 
