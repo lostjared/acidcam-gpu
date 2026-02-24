@@ -600,6 +600,14 @@ bool MainWindow::loadShaders(const QString &path) {
         QMessageBox::warning(this, "Could not open index file", "Failed to open file:" + file.errorString());
         return false;
     }
+    
+    // Save currently selected item
+    QString previouslySelected;
+    QModelIndex currentIndex = list_view->currentIndex();
+    if (currentIndex.isValid()) {
+        previouslySelected = model->data(currentIndex, Qt::DisplayRole).toString();
+    }
+    
     items.clear();
     QStringList uniqueItems; 
     QTextStream in(&file);
@@ -627,7 +635,11 @@ bool MainWindow::loadShaders(const QString &path) {
     items = uniqueItems;
     model->setStringList(items);
     
-    if (!items.isEmpty()) {
+    if (!previouslySelected.isEmpty() && items.contains(previouslySelected)) {
+        QModelIndex restoredIndex = model->index(items.indexOf(previouslySelected), 0);
+        list_view->setCurrentIndex(restoredIndex);
+        list_view->selectionModel()->select(restoredIndex, QItemSelectionModel::ClearAndSelect);
+    } else if (!items.isEmpty()) {
         QModelIndex firstIndex = model->index(0, 0);
         list_view->setCurrentIndex(firstIndex);
         list_view->selectionModel()->select(firstIndex, QItemSelectionModel::ClearAndSelect);
