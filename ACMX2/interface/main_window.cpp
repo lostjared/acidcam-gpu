@@ -670,7 +670,15 @@ void MainWindow::menuGPUFilterSettings() {
 }
 
 void MainWindow::menuShaderPassSettings() {
-    if(shader_path.isEmpty() || items.isEmpty()) {
+    if(shader_path.isEmpty()) {
+        QMessageBox::information(this, "Load Shaders First", 
+            "Please load a shader library before configuring multi-pass shaders.");
+        return;
+    }
+    
+    loadShaders(shader_path);
+    
+    if(items.isEmpty()) {
         QMessageBox::information(this, "Load Shaders First", 
             "Please load a shader library before configuring multi-pass shaders.");
         return;
@@ -1008,7 +1016,8 @@ QString MainWindow::concatList(const QStringList lst) {
      return text;
 }
 
-QString MainWindow::getShaderPassIndicesFromNames() const {
+QString MainWindow::getShaderPassIndicesFromNames() {
+    loadShaders(shader_path);
     QStringList indices;
     for (const QString &name : shader_pass_names) {
         int idx = items.indexOf(name);

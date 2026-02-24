@@ -137,7 +137,7 @@ private:
     void applyCustomStyleSheet(bool enable);
     bool shader_pass_enabled = false;
     QStringList shader_pass_names;  
-    QString getShaderPassIndicesFromNames() const;
+    QString getShaderPassIndicesFromNames();
     int cuda_device = 0;
     bool use_shader_cache = true;  // Whether to use cached shaders when running
 };

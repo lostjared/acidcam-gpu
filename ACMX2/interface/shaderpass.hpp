@@ -29,6 +29,7 @@ public:
     void setEnabled(bool enabled);
     void setSelectedIndices(const QStringList &indices);
     void setSelectedShaderNames(const QStringList &names);
+    void updateShaderList(const QStringList &shaderNames);
 
 public slots:
     void addShader();

@@ -129,6 +129,8 @@ void ShaderPassDialog::setupUI()
 
 void ShaderPassDialog::loadShaders(const QStringList &shaderNames)
 {
+    QStringList selectedNames = getSelectedShaderNames();
+    
     shaderNamesList.clear();
     shaderNameToIndex.clear();
     shaderModel->clear();
@@ -140,6 +142,10 @@ void ShaderPassDialog::loadShaders(const QStringList &shaderNames)
         QStandardItem *item = new QStandardItem(name);
         item->setData(i, Qt::UserRole);
         shaderModel->appendRow(item);
+    }
+    
+    if (!selectedNames.isEmpty()) {
+        setSelectedShaderNames(selectedNames);
     }
     
     if (shaderNamesList.isEmpty()) {
@@ -265,6 +271,10 @@ void ShaderPassDialog::setSelectedShaderNames(const QStringList &names)
             item->setData(Qt::UserRole, idx);
             selectedShadersList->addItem(item);
         }
-        // Silently skip names that no longer exist in the shader list
     }
+}
+
+void ShaderPassDialog::updateShaderList(const QStringList &shaderNames)
+{
+    loadShaders(shaderNames);
 }
