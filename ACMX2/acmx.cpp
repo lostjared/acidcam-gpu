@@ -508,7 +508,7 @@ public:
             file.clear();
             file.seekg(0);
         }
-        
+
         size_t shader_index = 0;
         while(!file.eof()) {
             std::string line_data;
@@ -806,7 +806,8 @@ public:
         return name;
     }
 
-    bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont) {
+    bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont, 
+                       const std::string &vert_2d = "", const std::string &vert_3d = "") {
         std::string cache_file = library_path + "/.shader_cache";
         
         mx::system_out << "acmx2: Checking for shader cache at: " << cache_file << "\n";
@@ -868,7 +869,19 @@ public:
         file.close();
 
         if (shader_files.size() != cache.entries.size()) {
-            mx::system_out << "acmx2: Shader count changed, will recompile\n";
+            mx::system_out << "acmx2: Shader count mismatch: index.txt has " << shader_files.size() 
+                          << " shaders but cache has " << cache.entries.size() 
+                          << " entries. Rebuilding cache...\n";
+            fflush(stdout);
+            if (!vert_2d.empty() && !vert_3d.empty()) {
+                programs_2d.clear();
+                programs_3d.clear();
+                program_names_2d.clear();
+                program_names_3d.clear();
+                buildShaderCache(win, library_path, vert_2d, vert_3d);
+                mx::system_out << "acmx2: Cache rebuilt. Loading shaders from source...\n";
+                fflush(stdout);
+            }
             return false;
         }
 
@@ -886,7 +899,6 @@ public:
 
         for (size_t i = 0; i < cache.entries.size(); ++i) {
             const auto &entry = cache.entries[i];
-            
             mx::system_out << "acmx2: Loading Cached Shader " << i << "/" << cache.entries.size() << ": [" << entry.shader_name << "] ";
             fflush(stdout);
 
@@ -952,7 +964,9 @@ public:
     }
 
     void loadProgramsWithCache(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
-        if (loadFromCache(win, text, loadingFont)) {
+        std::string vert_2d = win->util.getFilePath("data/vert.glsl");
+        std::string vert_3d = win->util.getFilePath("data/vertex.glsl");
+        if (loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
             return;
         }
         loadPrograms(win, text, loadingFont);
