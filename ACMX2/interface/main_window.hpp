@@ -38,7 +38,7 @@ public:
     void initControls();
     void Log(const QString &message);
     void Write(const QString &message);
-    bool loadShaders(const QString &path);
+    bool loadShaders(const QString &path, bool force = false);
     void updateIndex();
     QDateTime indexTimestamp;    
 public slots:

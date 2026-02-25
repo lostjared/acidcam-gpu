@@ -378,7 +378,7 @@ void MainWindow::newShader() {
     ShaderDialog new_shader(this);
     new_shader.setShaderPath(shader_path);
     if(new_shader.exec() == QDialog::Accepted) {
-        loadShaders(shader_path);
+        loadShaders(shader_path, true);
         QSettings appSettings("LostSideDead");
         appSettings.setValue("shaders", shader_path);
         appSettings.sync();
@@ -432,7 +432,6 @@ void MainWindow::updateIndex() {
         }
         file.close();
         
-        // refresh timestamp so future calls know the file is up to date
         indexTimestamp = QFileInfo(shader_path + "/index.txt").lastModified();
 
         if (writtenItems.size() != rowCount) {
@@ -598,7 +597,7 @@ void MainWindow::fileOpenProp() {
     }
 }
 
-bool MainWindow::loadShaders(const QString &path) {
+bool MainWindow::loadShaders(const QString &path, bool force) {
     QFileInfo info(path + "/index.txt");
     if (!info.exists() || !info.isFile()) {
         QMessageBox::warning(this, "Could not open index file", "Failed to open file: " + path + "/index.txt");
@@ -606,7 +605,7 @@ bool MainWindow::loadShaders(const QString &path) {
     }
 
     QDateTime modified = info.lastModified();
-    if (path == shader_path && !indexTimestamp.isNull() && modified <= indexTimestamp) {
+    if (force == false && path == shader_path && !indexTimestamp.isNull() && modified <= indexTimestamp) {
         return true; 
     }
     QFile file(path + "/index.txt");
@@ -660,6 +659,9 @@ bool MainWindow::loadShaders(const QString &path) {
     
     Log("Loaded " + QString::number(items.size()) + " unique shader files");
     menuSort();
+
+
+
     return true;
 }
 
@@ -701,7 +703,7 @@ void MainWindow::menuShaderPassSettings() {
         return;
     }
     
-    loadShaders(shader_path);
+    loadShaders(shader_path, true);
     
     if(items.isEmpty()) {
         QMessageBox::information(this, "Load Shaders First", 
@@ -1042,7 +1044,7 @@ QString MainWindow::concatList(const QStringList lst) {
 }
 
 QString MainWindow::getShaderPassIndicesFromNames() {
-    loadShaders(shader_path);
+    loadShaders(shader_path, true);
     QStringList indices;
     for (const QString &name : shader_pass_names) {
         int idx = items.indexOf(name);
