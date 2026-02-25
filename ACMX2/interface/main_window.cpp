@@ -382,7 +382,6 @@ void MainWindow::newShader() {
         appSettings.setValue("shaders", shader_path);
         appSettings.sync();
         loadShaders(shader_path, true);
-        update_shader_list = true;
     }
 }
 
@@ -398,7 +397,6 @@ void MainWindow::menuRemove() {
     model->removeRow(currentIndex.row());
     updateIndex();
     loadShaders(shader_path, true);
-    update_shader_list = true;
 }
 
 void MainWindow::updateIndex() {
@@ -618,8 +616,12 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     }
     shader_path = path;
     indexTimestamp = modified;
-    QString previouslySelected;
+    int previousRow = -1;
     QModelIndex currentIndex = list_view->currentIndex();
+    if (currentIndex.isValid()) {
+        previousRow = currentIndex.row();
+    }
+    QString previouslySelected;
     if (currentIndex.isValid()) {
         previouslySelected = model->data(currentIndex, Qt::DisplayRole).toString();
     }
@@ -649,19 +651,25 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     file.close();
     items = uniqueItems;
     model->setStringList(items);
-    
-    if (!previouslySelected.isEmpty() && items.contains(previouslySelected)) {
-        QModelIndex restoredIndex = model->index(items.indexOf(previouslySelected), 0);
-        list_view->setCurrentIndex(restoredIndex);
-        list_view->selectionModel()->select(restoredIndex, QItemSelectionModel::ClearAndSelect);
-    } else if (!items.isEmpty()) {
-        QModelIndex firstIndex = model->index(0, 0);
-        list_view->setCurrentIndex(firstIndex);
-        list_view->selectionModel()->select(firstIndex, QItemSelectionModel::ClearAndSelect);
-    }
-    
+
     Log("Loaded " + QString::number(items.size()) + " unique shader files");
     menuSort();
+
+    if (!items.isEmpty()) {
+        int restoredRow = previousRow;
+        if (restoredRow < 0 || restoredRow >= items.size()) {
+            if (!previouslySelected.isEmpty() && items.contains(previouslySelected)) {
+                restoredRow = items.indexOf(previouslySelected);
+            } else {
+                restoredRow = 0;
+            }
+        }
+        QModelIndex restoredIndex = model->index(restoredRow, 0);
+        list_view->setCurrentIndex(restoredIndex);
+        list_view->selectionModel()->select(restoredIndex, QItemSelectionModel::ClearAndSelect);
+        list_view->scrollTo(restoredIndex, QAbstractItemView::PositionAtCenter);
+    }
+
     return true;
 }
 
@@ -1044,15 +1052,14 @@ QString MainWindow::concatList(const QStringList lst) {
 }
 
 QString MainWindow::getShaderPassIndicesFromNames() {
-    loadShaders(shader_path, update_shader_list);
     QStringList indices;
+    loadShaders(shader_path, true);
     for (const QString &name : shader_pass_names) {
         int idx = items.indexOf(name);
         if (idx >= 0) {
             indices.append(QString::number(idx));
         }
     }
-    update_shader_list = false;
     return indices.join(",");
 }
 
