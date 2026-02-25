@@ -140,7 +140,7 @@ private:
     QString getShaderPassIndicesFromNames();
     int cuda_device = 0;
     bool use_shader_cache = true; 
-    bool added_new_shader = false;
+    bool update_shader_list = false;
 };
 
 

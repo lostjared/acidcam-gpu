@@ -378,11 +378,11 @@ void MainWindow::newShader() {
     ShaderDialog new_shader(this);
     new_shader.setShaderPath(shader_path);
     if(new_shader.exec() == QDialog::Accepted) {
-        loadShaders(shader_path, true);
         QSettings appSettings("LostSideDead");
         appSettings.setValue("shaders", shader_path);
         appSettings.sync();
-        added_new_shader = true;
+        loadShaders(shader_path, true);
+        update_shader_list = true;
     }
 }
 
@@ -398,7 +398,7 @@ void MainWindow::menuRemove() {
     model->removeRow(currentIndex.row());
     updateIndex();
     loadShaders(shader_path, true);
-    added_new_shader = true;
+    update_shader_list = true;
 }
 
 void MainWindow::updateIndex() {
@@ -641,7 +641,7 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
         }       
         if (!uniqueItems.contains(line, Qt::CaseInsensitive)) {
             uniqueItems.append(line);
-            Log("Added shader: " + line);
+            //Log("Added shader: " + line);
         } else {
             Log("Skipping duplicate shader: " + line);
         }
@@ -662,9 +662,6 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     
     Log("Loaded " + QString::number(items.size()) + " unique shader files");
     menuSort();
-
-
-
     return true;
 }
 
@@ -1047,7 +1044,7 @@ QString MainWindow::concatList(const QStringList lst) {
 }
 
 QString MainWindow::getShaderPassIndicesFromNames() {
-    loadShaders(shader_path, added_new_shader);
+    loadShaders(shader_path, update_shader_list);
     QStringList indices;
     for (const QString &name : shader_pass_names) {
         int idx = items.indexOf(name);
@@ -1055,7 +1052,7 @@ QString MainWindow::getShaderPassIndicesFromNames() {
             indices.append(QString::number(idx));
         }
     }
-    added_new_shader = false;
+    update_shader_list = false;
     return indices.join(",");
 }
 
