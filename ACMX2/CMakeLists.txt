@@ -177,7 +177,7 @@ target_link_libraries(audio_transfer PRIVATE
     MXWrite::mxwrite
     PkgConfig::FFMPEG
 )
-add_executable(acmx2 acmx.cpp ${AUDIO_SRC})
+add_executable(acmx2 acmx.cpp program.cpp ${AUDIO_SRC})
 set_target_properties(acmx2 PROPERTIES
     INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
     BUILD_WITH_INSTALL_RPATH TRUE

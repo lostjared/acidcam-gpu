@@ -36,8 +36,10 @@
 #include <ac-gpu/ac-gpu.hpp>
 #include <cuda_gl_interop.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include"program.hpp"
 
 void transfer_audio(std::string_view, std::string_view);
+
 
 class SnapshotThreadPool {
 public:
@@ -293,13 +295,25 @@ struct ShaderCache {
     }
 };
 
+static uint64_t fnv1a64_file(const std::string &filepath) {
+    std::ifstream f(filepath, std::ios::binary);
+    if(!f.is_open()) return 0;
+
+    uint64_t h = 1469598103934665603ull;
+    char buf[1 << 15];
+    while (f.good()) {
+        f.read(buf, sizeof(buf));
+        std::streamsize n = f.gcount();
+        for (std::streamsize i = 0; i < n; ++i) {
+            h ^= (uint8_t)buf[i];
+            h *= 1099511628211ull;
+        }
+    }
+    return h;
+}
+
 uint64_t hashFileContents(const std::string &filepath) {
-    std::ifstream file(filepath, std::ios::binary);
-    if (!file.is_open()) return 0;
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    std::string content = ss.str();
-    return std::hash<std::string>{}(content);
+    return fnv1a64_file(filepath);
 }
 
 typedef void (APIENTRYP PFNGLGETPROGRAMBINARYPROC_LOCAL)(GLuint program, GLsizei bufSize, GLsizei *length, GLenum *binaryFormat, void *binary);
@@ -329,22 +343,22 @@ class ShaderLibrary {
     
     struct ProgramData {
         std::string name;
-        GLuint loc = 0, iTime = 0, iMouse = 0, time_f = 0, iResolution = 0;
-#ifdef AUDIO_ENABLED
-        GLuint amp = 0, amp_untouched = 0;
-#endif
-        GLuint texture_cache_loc[8] = {0};
-        GLuint iFrame = 0;
-        GLuint iTimeDelta = 0;
-        GLuint iDate = 0; 
-        GLuint iChannelTime[4] = {0};
-        GLuint iChannelResolution[4] = {0};
-        GLuint iSampleRate = 0;
-        GLuint iFrameRate = 0; 
-        GLuint iMouseClick = 0;
+        GLint loc = -1, iTime = -1, iMouse = -1, time_f = -1, iResolution = -1;
+    #ifdef AUDIO_ENABLED
+        GLint amp = -1, amp_untouched = -1;
+    #endif
+        GLint texture_cache_loc[8] = {-1,-1,-1,-1,-1,-1,-1,-1};
+        GLint iFrame = -1;
+        GLint iTimeDelta = -1;
+        GLint iDate = -1;
+        GLint iChannelTime[4] = {-1,-1,-1,-1};
+        GLint iChannelResolution[4] = {-1,-1,-1,-1};
+        GLint iSampleRate = -1;
+        GLint iFrameRate = -1;
+        GLint iMouseClick = -1;
     };
-    
     size_t library_index = 0;
+    bool use_cache = false;
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_2d;
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_3d;
     bool time_audio = false;
@@ -352,9 +366,16 @@ class ShaderLibrary {
     std::unordered_map<int, ProgramData> program_names_3d;
     bool shader_bypass = false;
     
+    std::unique_ptr<gl::ShaderProgram> makeProgram() {
+        if(use_cache) return std::make_unique<ac::ShaderProgram>();
+        return std::make_unique<gl::ShaderProgram>();
+    }
+
 public:
     ShaderLibrary() = default;
     ~ShaderLibrary() {}
+
+    void enableCache(bool enable) { use_cache = enable; }
 
     void clear() {
         programs_2d.clear();
@@ -365,13 +386,13 @@ public:
     }
 
     void loadProgram(gl::GLWindow *win, const std::string text) {     
-        programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
+        programs_2d.push_back(makeProgram());
         if(!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text)) {
             throw mx::Exception("Error loading 2D shader program: " + text);
         }
         setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text);
         if(dual_mode) {
-            programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
+            programs_3d.push_back(makeProgram());
             if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text)) {
                 throw mx::Exception("Error loading 3D shader program: " + text);
             }
@@ -435,13 +456,10 @@ public:
 
     void setFPS(float fps_value) {
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(names.find(index()) == names.end()) {
-            return; 
-        }
-        GLuint iFrameRateLoc = names[index()].iFrameRate;
-        if(iFrameRateLoc != GL_INVALID_INDEX) {
-            glUniform1f(iFrameRateLoc, fps_value);
-        }
+        auto it = names.find(index());
+        if(it == names.end()) return;
+        GLint loc = it->second.iFrameRate;
+        if(loc != -1) glUniform1f(loc, fps_value);
     }
 
     void setUniform(const std::string &name, int value) {
@@ -517,7 +535,7 @@ public:
                 mx::system_out << "acmx2: Compiling Shader: " << shader_index << ": [" << line_data << "] (" << (dual_mode ? "2D+3D" : "2D") << ") ";
                 fflush(stdout);
                 fflush(stderr);
-                programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
+                programs_2d.push_back(makeProgram());
                 try {
                     if(!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
                         mx::system_out << " ❌ \n";
@@ -533,7 +551,7 @@ public:
                 }
                 setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text + "/" + line_data);
                 if(dual_mode) {
-                    programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
+                    programs_3d.push_back(makeProgram());
                     try {
                         if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
                             mx::system_out << " ❌ \n";
@@ -889,7 +907,17 @@ public:
             std::string full_path = library_path + "/" + shader_files[i];
             uint64_t current_hash = hashFileContents(full_path);
             if (current_hash != cache.entries[i].source_hash) {
-                mx::system_out << "acmx2: Shader source changed: " << shader_files[i] << ", will recompile\n";
+                mx::system_out << "acmx2: Shader source changed: " << shader_files[i] << ", rebuilding cache...\n";
+                fflush(stdout);
+                if (!vert_2d.empty() && !vert_3d.empty()) {
+                    programs_2d.clear();
+                    programs_3d.clear();
+                    program_names_2d.clear();
+                    program_names_3d.clear();
+                    buildShaderCache(win, library_path, vert_2d, vert_3d);
+                    mx::system_out << "acmx2: Cache rebuilt. Loading shaders from source...\n";
+                    fflush(stdout);
+                }
                 return false;
             }
         }
@@ -902,7 +930,7 @@ public:
             mx::system_out << "acmx2: Loading Cached Shader " << i << "/" << cache.entries.size() << ": [" << entry.shader_name << "] ";
             fflush(stdout);
 
-            programs_2d.push_back(std::make_unique<gl::ShaderProgram>());
+            programs_2d.push_back(makeProgram());
             GLuint prog_id_2d = glCreateProgram();
             
             GLenum gl_err = glGetError();  
@@ -929,7 +957,7 @@ public:
 
             
             if (dual_mode && !entry.binary_3d.empty()) {
-                programs_3d.push_back(std::make_unique<gl::ShaderProgram>());
+                programs_3d.push_back(makeProgram());
                 GLuint prog_id_3d = glCreateProgram();
                 glProgramBinaryFunc(prog_id_3d, entry.format_3d, entry.binary_3d.data(), static_cast<GLsizei>(entry.binary_3d.size()));
                 
@@ -1037,17 +1065,54 @@ public:
         if(names.find(idx) == names.end()) return;
         
         static Uint64 start_time = SDL_GetPerformanceCounter();
+        static Uint64 last_frame_time = start_time;
+        static uint64_t frame_counter = 0;
         Uint64 now_time = SDL_GetPerformanceCounter();
         double elapsed_time = (double)(now_time - start_time) / SDL_GetPerformanceFrequency();
+        double delta_time = (double)(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
+        last_frame_time = now_time;
+        frame_counter++;
         auto &n = names[idx];
         progs[idx]->useProgram();
+        glUniform1f(n.loc, alpha);
         glUniform1f(n.iTime, static_cast<float>(elapsed_time));
         glUniform1f(n.time_f, time_f);
+        glUniform1i(n.iFrame, static_cast<int>(frame_counter % INT_MAX));
+        glUniform1f(n.iTimeDelta, static_cast<float>(delta_time));
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        std::tm localTime_buf{};
+#ifdef _WIN32
+        localtime_s(&localTime_buf, &now_c);
+#else
+        localtime_r(&now_c, &localTime_buf);
+#endif
+        float year = static_cast<float>(localTime_buf.tm_year + 1900);
+        float month = static_cast<float>(localTime_buf.tm_mon + 1);
+        float day = static_cast<float>(localTime_buf.tm_mday);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + 
+                                     localTime_buf.tm_min * 60 + 
+                                     localTime_buf.tm_sec);
+        glUniform4f(n.iDate, year, month, day, seconds);
+        if(n.iFrameRate != -1) {
+            glUniform1f(n.iFrameRate, 24.0f);
+        }
+        int mouseX = 0, mouseY = 0;
+        SDL_GetMouseState(&mouseX, &mouseY);
+        float currentY = static_cast<float>(win->h - mouseY);
+        float currentX = static_cast<float>(mouseX);
+        glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
+        if(n.iMouseClick != -1) {
+            glUniform2f(n.iMouseClick, currentX, currentY);
+        }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
 #ifdef AUDIO_ENABLED
         if(time_audio) {
             glUniform1f(n.amp, get_amp());
             glUniform1f(n.amp_untouched, get_sense());
+        }
+        if(n.iSampleRate != -1) {
+            glUniform1f(n.iSampleRate, 44100.0f);
         }
 #endif
     }
@@ -1057,17 +1122,54 @@ public:
         if(program_names_2d.find(idx) == program_names_2d.end()) return;
         
         static Uint64 start_time = SDL_GetPerformanceCounter();
+        static Uint64 last_frame_time = start_time;
+        static uint64_t frame_counter = 0;
         Uint64 now_time = SDL_GetPerformanceCounter();
         double elapsed_time = (double)(now_time - start_time) / SDL_GetPerformanceFrequency();
+        double delta_time = (double)(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
+        last_frame_time = now_time;
+        frame_counter++;
         auto &n = program_names_2d[idx];
         programs_2d[idx]->useProgram();
+        glUniform1f(n.loc, alpha);
         glUniform1f(n.iTime, static_cast<float>(elapsed_time));
         glUniform1f(n.time_f, time_f);
+        glUniform1i(n.iFrame, static_cast<int>(frame_counter % INT_MAX));
+        glUniform1f(n.iTimeDelta, static_cast<float>(delta_time));
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        std::tm localTime_buf{};
+#ifdef _WIN32
+        localtime_s(&localTime_buf, &now_c);
+#else
+    localtime_r(&now_c, &localTime_buf);
+#endif
+        float year = static_cast<float>(localTime_buf.tm_year + 1900);
+        float month = static_cast<float>(localTime_buf.tm_mon + 1);
+        float day = static_cast<float>(localTime_buf.tm_mday);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + 
+                                     localTime_buf.tm_min * 60 + 
+                                     localTime_buf.tm_sec);
+        glUniform4f(n.iDate, year, month, day, seconds);
+        if(n.iFrameRate != -1) {
+            glUniform1f(n.iFrameRate, 24.0f);
+        }
+        int mouseX = 0, mouseY = 0;
+        SDL_GetMouseState(&mouseX, &mouseY);
+        float currentY = static_cast<float>(win->h - mouseY);
+        float currentX = static_cast<float>(mouseX);
+        glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
+        if(n.iMouseClick != -1) {
+            glUniform2f(n.iMouseClick, currentX, currentY);
+        }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
 #ifdef AUDIO_ENABLED
         if(time_audio) {
             glUniform1f(n.amp, get_amp());
             glUniform1f(n.amp_untouched, get_sense());
+        }
+        if(n.iSampleRate != -1) {
+            glUniform1f(n.iSampleRate, 44100.0f);
         }
 #endif
     }
@@ -1103,14 +1205,14 @@ public:
         glUniform1f(time_f_loc, time_f);
         GLint loc = names[index()].loc;
         glUniform1f(loc, alpha);
-        GLuint iTimeLoc = names[index()].iTime;
+        GLint iTimeLoc = names[index()].iTime;
         double currentTime = (double)SDL_GetTicks64() / 1000.0f; 
         glUniform1f(iTimeLoc, currentTime);   
-        GLuint iFrameLoc = names[index()].iFrame;
+        GLint iFrameLoc = names[index()].iFrame;
         glUniform1i(iFrameLoc, static_cast<int>(frame_counter % INT_MAX));
-        GLuint iTimeDeltaLoc = names[index()].iTimeDelta;
+        GLint iTimeDeltaLoc = names[index()].iTimeDelta;
         glUniform1f(iTimeDeltaLoc, static_cast<float>(delta_time));
-        GLuint iDateLoc = names[index()].iDate;
+        GLint iDateLoc = names[index()].iDate;
         auto now = std::chrono::system_clock::now();
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
         std::tm localTime_buf{};
@@ -1127,9 +1229,9 @@ public:
                                      localTime_buf.tm_sec);
         glUniform4f(iDateLoc, year, month, day, seconds);
         
-        GLuint iFrameRateLoc = names[index()].iFrameRate;
-        if(iFrameRateLoc != GL_INVALID_INDEX) {
-            glUniform1f(iFrameRateLoc, 24.0f);
+        GLint iFrameRateLoc = names[index()].iFrameRate;
+        if(iFrameRateLoc != -1) {
+           glUniform1f(iFrameRateLoc, 24.0f);
         }
         
         static bool isDragging = false;
@@ -1139,8 +1241,8 @@ public:
         static float lastClickX = 0.0f;
         static float lastClickY = 0.0f;
         
-        GLuint iMouseLoc = names[index()].iMouse;
-        GLuint iMouseClickLoc = names[index()].iMouseClick;
+        GLint iMouseLoc = names[index()].iMouse;
+        GLint iMouseClickLoc = names[index()].iMouseClick;
         
         int mouseX = 0, mouseY = 0;
         Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
@@ -1166,11 +1268,11 @@ public:
             glUniform4f(iMouseLoc, currentX, currentY, 0.0f, 0.0f);
         }
         
-        if(wasClicked && iMouseClickLoc != GL_INVALID_INDEX) {
+        if(wasClicked && iMouseClickLoc != -1) {
             glUniform2f(iMouseClickLoc, lastClickX, lastClickY);
         }
         
-        GLuint iResolution = names[index()].iResolution;
+        GLint iResolution = names[index()].iResolution;
         glUniform2f(iResolution, win->w, win->h);
         
 #ifdef AUDIO_ENABLED
@@ -1185,8 +1287,8 @@ public:
         glUniform1f(amp_i, amplitude);
         GLuint amp_u = names[index()].amp_untouched;
         glUniform1f(amp_u, get_amp());
-        GLuint iSampleRateLoc = names[index()].iSampleRate;
-        if(iSampleRateLoc != GL_INVALID_INDEX) {
+        GLint iSampleRateLoc = names[index()].iSampleRate;
+        if(iSampleRateLoc != -1) {
             glUniform1f(iSampleRateLoc, 44100.0f);
         }
 #endif
@@ -1684,6 +1786,7 @@ public:
         mx::system_out << "acmx2: Watermark font loaded at size: " << waterFontSize << " for " << win->w << "x" << win->h << "\n";
         fflush(stdout);
         
+        library.enableCache(use_shader_cache_flag);
         if(std::get<0>(flib) == 1) {
             if(use_shader_cache_flag)
                 library.loadProgramsWithCache(win, std::get<1>(flib), overlayFont);
@@ -2037,6 +2140,15 @@ public:
             GLuint textureForMesh = camera_texture;
             if(shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
                 glDisable(GL_DEPTH_TEST);
+                auto logPassWarning3D = [](const std::string &msg) {
+                    static Uint64 last_warn_tick = 0;
+                    Uint64 now_tick = SDL_GetTicks64();
+                    if(now_tick - last_warn_tick >= 1000) {
+                        mx::system_out << "acmx2: multipass(3D) " << msg << "\n";
+                        fflush(stdout);
+                        last_warn_tick = now_tick;
+                    }
+                };
                 
                 if(passFBO[0] == 0) {
                     for(int p = 0; p < 2; ++p) {
@@ -2048,11 +2160,15 @@ public:
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                         glBindFramebuffer(GL_FRAMEBUFFER, passFBO[p]);
                         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, passTexture[p], 0);
+                        if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                            throw mx::Exception("acmx2: 3D pass framebuffer is not complete");
+                        }
                     }
                 }
                 
                 GLuint inputTex = camera_texture;
                 int pingpong = 0;
+                bool pass_applied = false;
                 for(size_t i = 0; i < shader_pass_list.size(); ++i) {
                     int shader_idx = shader_pass_list[i];
                     if(shader_idx >= 0 && shader_idx < static_cast<int>(library.size2d())) {
@@ -2071,10 +2187,18 @@ public:
                             sprite.setShader(pass_shader);
                             sprite.setName("samp");
                             sprite.draw(inputTex, 0, 0, win->w, win->h);
+                            pass_applied = true;
                             inputTex = passTexture[pingpong];
                             pingpong = 1 - pingpong;
+                        } else {
+                            logPassWarning3D("skipping pass index " + std::to_string(shader_idx) + " (null shader)");
                         }
+                    } else {
+                        logPassWarning3D("skipping invalid pass index " + std::to_string(shader_idx) + " (valid range 0-" + std::to_string(static_cast<int>(library.size2d()) - 1) + ")");
                     }
+                }
+                if(!pass_applied) {
+                    logPassWarning3D("no pass applied; using base camera texture");
                 }
                 
                 textureForMesh = inputTex;
@@ -2178,6 +2302,15 @@ public:
             sprite.setName("samp");
             sprite.draw(camera_texture, 0, 0, win->w, win->h);
             if(shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
+                auto logPassWarning2D = [](const std::string &msg) {
+                    static Uint64 last_warn_tick = 0;
+                    Uint64 now_tick = SDL_GetTicks64();
+                    if(now_tick - last_warn_tick >= 1000) {
+                        mx::system_out << "acmx2: multipass(2D) " << msg << "\n";
+                        fflush(stdout);
+                        last_warn_tick = now_tick;
+                    }
+                };
                 if(passFBO[0] == 0) {
                     for(int p = 0; p < 2; ++p) {
                         glGenFramebuffers(1, &passFBO[p]);
@@ -2188,12 +2321,16 @@ public:
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                         glBindFramebuffer(GL_FRAMEBUFFER, passFBO[p]);
                         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, passTexture[p], 0);
+                        if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                            throw mx::Exception("acmx2: pass framebuffer is not complete");
+                        }
                     }
                     glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
                 }
                 
                 GLuint inputTex = fboTexture;
                 int pingpong = 0;
+                bool pass_applied = false;
                 
                 for(size_t i = 0; i < shader_pass_list.size(); ++i) {
                     int shader_idx = shader_pass_list[i];
@@ -2201,26 +2338,44 @@ public:
                         gl::ShaderProgram *pass_shader = library.getShader(shader_idx);
                         if(pass_shader) {
                             glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
+                            glViewport(0, 0, win->w, win->h);
                             glClear(GL_COLOR_BUFFER_BIT);
                             pass_shader->useProgram();
                             library.updateShaderUniforms(win, shader_idx);
                             pass_shader->setUniform("mv_matrix", glm::mat4(1.0f));
                             pass_shader->setUniform("proj_matrix", glm::mat4(1.0f));
+                            glActiveTexture(GL_TEXTURE0);
+                            glBindTexture(GL_TEXTURE_2D, inputTex);
+                            glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
                             sprite.setShader(pass_shader);
                             sprite.setName("samp");
                             sprite.draw(inputTex, 0, 0, win->w, win->h);
+                            pass_applied = true;
                             inputTex = passTexture[pingpong];
                             pingpong = 1 - pingpong;
+                        } else {
+                            logPassWarning2D("skipping pass index " + std::to_string(shader_idx) + " (null shader)");
                         }
+                    } else {
+                        logPassWarning2D("skipping invalid pass index " + std::to_string(shader_idx) + " (valid range 0-" + std::to_string(static_cast<int>(library.size()) - 1) + ")");
                     }
                 }
-                glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
-                glClear(GL_COLOR_BUFFER_BIT);
-                fshader.useProgram();
-                fshader.setUniform("mv_matrix", glm::mat4(1.0f));
-                fshader.setUniform("proj_matrix", glm::mat4(1.0f));
-                sprite.setShader(&fshader);
-                sprite.draw(inputTex, 0, 0, win->w, win->h);
+                if(!pass_applied) {
+                    logPassWarning2D("no pass applied; keeping base frame");
+                }
+                if(pass_applied) {
+                    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+                    glViewport(0, 0, win->w, win->h);
+                    glClear(GL_COLOR_BUFFER_BIT);
+                    fshader.useProgram();
+                    fshader.setUniform("mv_matrix", glm::mat4(1.0f));
+                    fshader.setUniform("proj_matrix", glm::mat4(1.0f));
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, inputTex);
+                    glUniform1i(glGetUniformLocation(fshader.id(), "samp"), 0);
+                    sprite.setShader(&fshader);
+                    sprite.draw(inputTex, 0, 0, win->w, win->h);
+                }
                 library.useProgram();
             }
         }
