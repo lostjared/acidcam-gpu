@@ -40,7 +40,7 @@ public:
     void Write(const QString &message);
     bool loadShaders(const QString &path);
     void updateIndex();
-    
+    QDateTime indexTimestamp;    
 public slots:
     void fileOpenProp();
     void fileExit();
@@ -139,7 +139,7 @@ private:
     QStringList shader_pass_names;  
     QString getShaderPassIndicesFromNames();
     int cuda_device = 0;
-    bool use_shader_cache = true;  // Whether to use cached shaders when running
+    bool use_shader_cache = true; 
 };
 
 

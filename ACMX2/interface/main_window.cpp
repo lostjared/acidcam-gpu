@@ -7,6 +7,7 @@
 #include<QTextStream>
 #include<QInputDialog>
 #include<QFileInfo>
+#include<QDateTime>
 #include"settings.hpp"
 #include"audio-window.hpp"
 #include <random>
@@ -431,6 +432,9 @@ void MainWindow::updateIndex() {
         }
         file.close();
         
+        // refresh timestamp so future calls know the file is up to date
+        indexTimestamp = QFileInfo(shader_path + "/index.txt").lastModified();
+
         if (writtenItems.size() != rowCount) {
             items = writtenItems;
             stringModel->setStringList(items);
@@ -595,19 +599,28 @@ void MainWindow::fileOpenProp() {
 }
 
 bool MainWindow::loadShaders(const QString &path) {
-    QFile file(path+"/index.txt");
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, "Could not open index file", "Failed to open file:" + file.errorString());
+    QFileInfo info(path + "/index.txt");
+    if (!info.exists() || !info.isFile()) {
+        QMessageBox::warning(this, "Could not open index file", "Failed to open file: " + path + "/index.txt");
         return false;
     }
-    
-    // Save currently selected item
+
+    QDateTime modified = info.lastModified();
+    if (path == shader_path && !indexTimestamp.isNull() && modified <= indexTimestamp) {
+        return true; 
+    }
+    QFile file(path + "/index.txt");
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Could not open index file", "Failed to open file: " + file.errorString());
+        return false;
+    }
+    shader_path = path;
+    indexTimestamp = modified;
     QString previouslySelected;
     QModelIndex currentIndex = list_view->currentIndex();
     if (currentIndex.isValid()) {
         previouslySelected = model->data(currentIndex, Qt::DisplayRole).toString();
     }
-    
     items.clear();
     QStringList uniqueItems; 
     QTextStream in(&file);
