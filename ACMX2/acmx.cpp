@@ -2290,17 +2290,7 @@ public:
             glFrontFace(GL_CCW);
         } else {
             glDisable(GL_DEPTH_TEST);
-            gl::ShaderProgram *activeShader;
-            if(library.isBypassed()) {
-                activeShader = &fshader;
-            } else {
-                activeShader = library.shader();
-            }
-            activeShader->setUniform("mv_matrix", glm::mat4(1.0f));
-            activeShader->setUniform("proj_matrix", glm::mat4(1.0f));
-            sprite.setShader(activeShader);
-            sprite.setName("samp");
-            sprite.draw(camera_texture, 0, 0, win->w, win->h);
+            GLuint textureForSprite = camera_texture;
             if(shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
                 auto logPassWarning2D = [](const std::string &msg) {
                     static Uint64 last_warn_tick = 0;
@@ -2328,7 +2318,7 @@ public:
                     glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
                 }
                 
-                GLuint inputTex = fboTexture;
+                GLuint inputTex = camera_texture;
                 int pingpong = 0;
                 bool pass_applied = false;
                 
@@ -2361,23 +2351,27 @@ public:
                     }
                 }
                 if(!pass_applied) {
-                    logPassWarning2D("no pass applied; keeping base frame");
+                    logPassWarning2D("no pass applied; using base camera texture");
+                } else {
+                    textureForSprite = inputTex;
                 }
-                if(pass_applied) {
-                    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
-                    glViewport(0, 0, win->w, win->h);
-                    glClear(GL_COLOR_BUFFER_BIT);
-                    fshader.useProgram();
-                    fshader.setUniform("mv_matrix", glm::mat4(1.0f));
-                    fshader.setUniform("proj_matrix", glm::mat4(1.0f));
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, inputTex);
-                    glUniform1i(glGetUniformLocation(fshader.id(), "samp"), 0);
-                    sprite.setShader(&fshader);
-                    sprite.draw(inputTex, 0, 0, win->w, win->h);
-                }
-                library.useProgram();
+                glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+                glViewport(0, 0, win->w, win->h);
+                glClear(GL_COLOR_BUFFER_BIT);
             }
+
+            gl::ShaderProgram *activeShader;
+            if(library.isBypassed()) {
+                activeShader = &fshader;
+            } else {
+                activeShader = library.shader();
+            }
+            activeShader->useProgram();
+            activeShader->setUniform("mv_matrix", glm::mat4(1.0f));
+            activeShader->setUniform("proj_matrix", glm::mat4(1.0f));
+            sprite.setShader(activeShader);
+            sprite.setName("samp");
+            sprite.draw(textureForSprite, 0, 0, win->w, win->h);
         }
 
 
