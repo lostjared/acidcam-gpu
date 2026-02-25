@@ -382,6 +382,7 @@ void MainWindow::newShader() {
         QSettings appSettings("LostSideDead");
         appSettings.setValue("shaders", shader_path);
         appSettings.sync();
+        added_new_shader = true;
     }
 }
 
@@ -396,6 +397,8 @@ void MainWindow::menuRemove() {
     }
     model->removeRow(currentIndex.row());
     updateIndex();
+    loadShaders(shader_path, true);
+    added_new_shader = true;
 }
 
 void MainWindow::updateIndex() {
@@ -1044,7 +1047,7 @@ QString MainWindow::concatList(const QStringList lst) {
 }
 
 QString MainWindow::getShaderPassIndicesFromNames() {
-    loadShaders(shader_path, true);
+    loadShaders(shader_path, added_new_shader);
     QStringList indices;
     for (const QString &name : shader_pass_names) {
         int idx = items.indexOf(name);
@@ -1052,6 +1055,7 @@ QString MainWindow::getShaderPassIndicesFromNames() {
             indices.append(QString::number(idx));
         }
     }
+    added_new_shader = false;
     return indices.join(",");
 }
 
