@@ -3191,7 +3191,7 @@ const char *message = R"(
     B - increase movement speed
     N - decrease movement speed
     C - Toggle Object Wave
-    O - Enable/Disable Watermark
+    E - Enable/Disable Watermark
 }
 )";
 
