@@ -2618,16 +2618,14 @@ public:
                         library.dec();
                         if(is3d_enabled)
                             cube.setShaderProgram(library.shader());
-                        else
-                            sprite.setShader(library.shader());
+                        sprite.setShader(library.shader());
                         updateShaderNameCache();
                         break;
                     case SDLK_DOWN:
                         library.inc();
                         if(is3d_enabled)
                             cube.setShaderProgram(library.shader());
-                        else
-                            sprite.setShader(library.shader());
+                        sprite.setShader(library.shader());
                         updateShaderNameCache();
                         break;
                     case SDLK_LEFT:
