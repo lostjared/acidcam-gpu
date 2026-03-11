@@ -9163,3 +9163,4 @@ extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char* d
     ac_gpu::unifiedFilterKernel<<<gridSize, blockSize>>>(*d_list_ptr, c, data, allFrames, width, height, step, params);
     CHECK_CUDA(cudaDeviceSynchronize());
 }
+

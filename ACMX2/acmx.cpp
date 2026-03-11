@@ -527,24 +527,23 @@ public:
             file.seekg(0);
         }
 
+        mx::system_out << "acmx2: Compiling " << total_shaders << " shaders (" << (dual_mode ? "2D+3D" : "2D") << ")...\n";
+        fflush(stdout);
+
+        int last_percent_reported = -1;
         size_t shader_index = 0;
         while(!file.eof()) {
             std::string line_data;
             std::getline(file, line_data);
             if(file && !line_data.empty() && std::filesystem::exists(text + "/" + line_data) && line_data.find("material") == std::string::npos) {
-                mx::system_out << "acmx2: Compiling Shader: " << shader_index << ": [" << line_data << "] (" << (dual_mode ? "2D+3D" : "2D") << ") ";
-                fflush(stdout);
-                fflush(stderr);
                 programs_2d.push_back(makeProgram());
                 try {
                     if(!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
-                        mx::system_out << " ❌ \n";
+                        mx::system_out << "acmx2: ❌ Failed to compile 2D shader: " << line_data << "\n";
+                        fflush(stdout);
                         throw mx::Exception("\nacmx2: Error could not load 2D shader: " + line_data);
                     }
-                    if(!dual_mode)
-                        mx::system_out << " ✔ \n";
                 } catch(mx::Exception &e) {
-                    mx::system_err << "\n";
                     fflush(stdout);
                     fflush(stderr);
                     throw;
@@ -554,12 +553,11 @@ public:
                     programs_3d.push_back(makeProgram());
                     try {
                         if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
-                            mx::system_out << " ❌ \n";
+                            mx::system_out << "acmx2: ❌ Failed to compile 3D shader: " << line_data << "\n";
+                            fflush(stdout);
                             throw mx::Exception("acmx2: Error could not load 3D shader: " + line_data);
                         }
-                        mx::system_out << " ✔ \n";
                     } catch(mx::Exception &e) {
-                        mx::system_err << "\n";
                         fflush(stdout);
                         fflush(stderr);
                         throw;
@@ -567,18 +565,27 @@ public:
                     setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text + "/" + line_data);
                 }     
                 shader_index++;
-                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                glClear(GL_COLOR_BUFFER_BIT);
-                if(loadingFont.handle().has_value()) {
-                    std::string loadingText = "Loading Shader " + std::to_string(shader_index) + "/" + std::to_string(total_shaders) + "...";
-                    win->text.printText_Blended(loadingFont, 10, 10, loadingText);
+
+                int percent = static_cast<int>(shader_index * 100 / total_shaders);
+                int percent_bucket = (percent / 10) * 10;
+                if (percent_bucket > last_percent_reported) {
+                    last_percent_reported = percent_bucket;
+                    mx::system_out << "acmx2: Compiling... " << percent_bucket << "% (" << shader_index << "/" << total_shaders << " shaders)\n";
+                    fflush(stdout);
+
+                    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                    glClear(GL_COLOR_BUFFER_BIT);
+                    if(loadingFont.handle().has_value()) {
+                        std::string loadingText = "Compiling Shader " + std::to_string(shader_index) + "/" + std::to_string(total_shaders) + "...";
+                        win->text.printText_Blended(loadingFont, 10, 10, loadingText);
+                    }
+                    SDL_GL_SwapWindow(win->getWindow());
+                    SDL_PumpEvents();
                 }
-                SDL_GL_SwapWindow(win->getWindow());
-                SDL_PumpEvents();
             }
         }
         file.close();
-        mx::system_out << "acmx2: Loaded " << shader_index << " Shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+        mx::system_out << "acmx2: Compiled " << shader_index << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
     }
     
@@ -610,7 +617,7 @@ public:
         ShaderCache cache;
         cache.gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
         cache.gl_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-        cache.dual_mode = true;  
+        cache.dual_mode = dual_mode;
 
         std::vector<std::string> shader_files;
         std::string line;
@@ -724,7 +731,7 @@ public:
                     continue;
                 }
 
-                {
+                if(dual_mode) {
                     mx::system_out << "  - Compiling 3D shader... ";
                     fflush(stdout);
                     
@@ -774,7 +781,7 @@ public:
 
         if (cache.save(cache_file)) {
             mx::system_out << "acmx2: Shader cache saved to: " << cache_file << "\n";
-            mx::system_out << "acmx2: Cached " << cache.entries.size() << " shaders (2D+3D)\n";
+            mx::system_out << "acmx2: Cached " << cache.entries.size() << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
             fflush(stdout);
             return true;
         } else {
@@ -866,8 +873,8 @@ public:
         }
 
         
-        if (!cache.dual_mode) {
-            mx::system_out << "acmx2: Cache was built in 2D-only mode, will rebuild with 2D+3D\n";
+        if (dual_mode && !cache.dual_mode) {
+            mx::system_out << "acmx2: Cache was built in 2D-only mode but 3D is enabled, will rebuild with 2D+3D\n";
             return false;
         }
 
@@ -925,10 +932,10 @@ public:
         mx::system_out << "acmx2: Loading " << cache.entries.size() << " shaders from cache...\n";
         fflush(stdout);
 
+        int last_percent_reported = -1;
+
         for (size_t i = 0; i < cache.entries.size(); ++i) {
             const auto &entry = cache.entries[i];
-            mx::system_out << "acmx2: Loading Cached Shader " << i << "/" << cache.entries.size() << ": [" << entry.shader_name << "] ";
-            fflush(stdout);
 
             programs_2d.push_back(makeProgram());
             GLuint prog_id_2d = glCreateProgram();
@@ -942,10 +949,10 @@ public:
             if (link_status != GL_TRUE) {
                 GLchar info_log[512];
                 glGetProgramInfoLog(prog_id_2d, 512, nullptr, info_log);
-                mx::system_out << " ❌ (2D binary load failed, gl_err=" << gl_err 
+                mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 2D binary load failed, gl_err=" << gl_err 
                                << ", format=" << entry.format_2d 
                                << ", size=" << entry.binary_2d.size()
-                               << ", log=" << info_log << ")\n";
+                               << ", log=" << info_log << "\n";
                 fflush(stdout);
                 glDeleteProgram(prog_id_2d);
                 programs_2d.pop_back();
@@ -963,7 +970,8 @@ public:
                 
                 glGetProgramiv(prog_id_3d, GL_LINK_STATUS, &link_status);
                 if (link_status != GL_TRUE) {
-                    mx::system_out << " ❌ (3D binary load failed)\n";
+                    mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 3D binary load failed\n";
+                    fflush(stdout);
                     glDeleteProgram(prog_id_3d);
                     programs_3d.pop_back();
                     return false;
@@ -973,17 +981,22 @@ public:
                 setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, library_path + "/" + shader_files[i]);
             }
 
-            mx::system_out << " ✔\n";
-            fflush(stdout);
+            int percent = static_cast<int>((i + 1) * 100 / cache.entries.size());
+            int percent_bucket = (percent / 10) * 10;
+            if (percent_bucket > last_percent_reported) {
+                last_percent_reported = percent_bucket;
+                mx::system_out << "acmx2: Cache loading... " << percent_bucket << "% (" << (i + 1) << "/" << cache.entries.size() << " shaders)\n";
+                fflush(stdout);
 
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            if (loadingFont.handle().has_value()) {
-                std::string loadingText = "Loading Cached Shader " + std::to_string(i + 1) + "/" + std::to_string(cache.entries.size()) + "...";
-                win->text.printText_Blended(loadingFont, 10, 10, loadingText);
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                if (loadingFont.handle().has_value()) {
+                    std::string loadingText = "Loading Cached Shader " + std::to_string(i + 1) + "/" + std::to_string(cache.entries.size()) + "...";
+                    win->text.printText_Blended(loadingFont, 10, 10, loadingText);
+                }
+                SDL_GL_SwapWindow(win->getWindow());
+                SDL_PumpEvents();
             }
-            SDL_GL_SwapWindow(win->getWindow());
-            SDL_PumpEvents();
         }
 
         mx::system_out << "acmx2: Loaded " << cache.entries.size() << " shaders from cache (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";

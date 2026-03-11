@@ -34,7 +34,7 @@ endif()
 
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(FFMPEG
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libavcodec>=58.0.0
     libavformat>=58.0.0
     libavutil>=56.0.0
@@ -163,7 +163,7 @@ if(FFMPEG_LIBRARY_DIRS)
     target_link_directories(mxwrite PUBLIC ${FFMPEG_LIBRARY_DIRS})
 endif()
 
-target_link_libraries(mxwrite PUBLIC ${FFMPEG_LIBRARIES} Threads::Threads)
+target_link_libraries(mxwrite PUBLIC PkgConfig::FFMPEG Threads::Threads)
 
 target_compile_options(mxwrite PRIVATE -O3 -Wall -Wextra -pedantic)
 include(CMakePackageConfigHelpers)
