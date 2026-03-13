@@ -9,6 +9,10 @@
 # ACMX2 – Linux (NVIDIA GPU Required)
 ![screenshot](https://lostsidedead.biz/tux/tux3.png)
 
+Technical Documentation:
+
+https://lostsidedead.biz/acmx2-explained.html
+
 ACMX2 is distributed as a **Podman container** for Linux.
 This makes installation simple and avoids dependency issues, but it **requires an NVIDIA GPU**.
 
