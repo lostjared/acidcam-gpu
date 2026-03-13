@@ -7,6 +7,7 @@
 [![Framework: CUDA](https://img.shields.io/badge/Framework-CUDA%2012.x-76b900.svg)](https://developer.nvidia.com/cuda-zone)
 
 # ACMX2 – Linux (NVIDIA GPU Required)
+![screenshot](https://lostsidedead.biz/tux/tux3.png)
 
 ACMX2 is distributed as a **Podman container** for Linux.
 This makes installation simple and avoids dependency issues, but it **requires an NVIDIA GPU**.
