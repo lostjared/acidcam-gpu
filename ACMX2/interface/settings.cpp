@@ -528,7 +528,7 @@ void SettingsWindow::browseGraphicsFile() {
 }
 
 void SettingsWindow::browseModelFile() {
-    QString fileName = QFileDialog::getOpenFileName(this, "Select 3D Model File", "", "Model Files (*.mxmod *.mxmod.z)");
+    QString fileName = QFileDialog::getOpenFileName(this, "Select 3D Model File", "", "Model Files (*.mxmod *.mxmod.z *.obj)");
     if (!fileName.isEmpty()) {
         modelFileLineEdit->setText(fileName);
     }
