@@ -324,8 +324,8 @@ static PFNGLPROGRAMBINARYPROC_LOCAL glProgramBinaryFunc = nullptr;
 
 bool loadProgramBinaryFunctions() {
     if (glGetProgramBinaryFunc != nullptr) return true;  
-    glGetProgramBinaryFunc = (PFNGLGETPROGRAMBINARYPROC_LOCAL)SDL_GL_GetProcAddress("glGetProgramBinary");
-    glProgramBinaryFunc = (PFNGLPROGRAMBINARYPROC_LOCAL)SDL_GL_GetProcAddress("glProgramBinary");
+    glGetProgramBinaryFunc = reinterpret_cast<PFNGLGETPROGRAMBINARYPROC_LOCAL>(SDL_GL_GetProcAddress("glGetProgramBinary"));
+    glProgramBinaryFunc = reinterpret_cast<PFNGLPROGRAMBINARYPROC_LOCAL>(SDL_GL_GetProcAddress("glProgramBinary"));
     
     if (glGetProgramBinaryFunc == nullptr || glProgramBinaryFunc == nullptr) {
         mx::system_err << "acmx2: Failed to load glGetProgramBinary/glProgramBinary functions\n";
@@ -1087,8 +1087,8 @@ public:
         static Uint64 last_frame_time = start_time;
         static uint64_t frame_counter = 0;
         Uint64 now_time = SDL_GetPerformanceCounter();
-        double elapsed_time = (double)(now_time - start_time) / SDL_GetPerformanceFrequency();
-        double delta_time = (double)(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
+        double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
+        double delta_time = static_cast<double>(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
         last_frame_time = now_time;
         frame_counter++;
         auto &n = names[idx];
@@ -1160,8 +1160,8 @@ public:
         static Uint64 last_frame_time = start_time;
         static uint64_t frame_counter = 0;
         Uint64 now_time = SDL_GetPerformanceCounter();
-        double elapsed_time = (double)(now_time - start_time) / SDL_GetPerformanceFrequency();
-        double delta_time = (double)(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
+        double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
+        double delta_time = static_cast<double>(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
         last_frame_time = now_time;
         frame_counter++;
         auto &n = program_names_2d[idx];
@@ -1235,8 +1235,8 @@ public:
         static uint64_t frame_counter = 0;
         
         Uint64 now_time = SDL_GetPerformanceCounter();
-        double elapsed_time = (double)(now_time - start_time) / SDL_GetPerformanceFrequency();
-        double delta_time = (double)(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
+        double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
+        double delta_time = static_cast<double>(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
         last_frame_time = now_time;
         frame_counter++;
 
@@ -1257,7 +1257,7 @@ public:
         GLint loc = names[index()].loc;
         glUniform1f(loc, alpha);
         GLint iTimeLoc = names[index()].iTime;
-        double currentTime = (double)SDL_GetTicks64() / 1000.0f; 
+        double currentTime = static_cast<double>(SDL_GetTicks64()) / 1000.0f; 
         glUniform1f(iTimeLoc, currentTime);   
         GLint iFrameLoc = names[index()].iFrame;
         glUniform1i(iFrameLoc, static_cast<int>(frame_counter % INT_MAX));
@@ -1563,7 +1563,7 @@ public:
         if (pboIds[0] && writer.is_open() && win_w > 0 && win_h > 0) {
             for (int i = 0; i < 2; i++) {
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[i]);
-                GLubyte* src = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+                GLubyte* src = static_cast<GLubyte*>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
                 
                 if (src) {
                     std::vector<unsigned char> pixels(win_w * win_h * 4);
@@ -2464,7 +2464,7 @@ public:
                 
                 if (writer.is_open() || is_snapshot_frame) {
                     glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboNextIndex]);
-                    GLubyte* src = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+                    GLubyte* src = static_cast<GLubyte*>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
                     
                     if (src) {
                         std::vector<unsigned char> pixels(win->w * win->h * 4);
@@ -2868,7 +2868,7 @@ private:
         if (!pboIds[0]) return;
            for (int i = 0; i < 2; i++) {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[i]);
-            GLubyte* src = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+            GLubyte* src = static_cast<GLubyte*>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
             
             if (src) {
                 std::vector<unsigned char> pixels(win->w * win->h * 4);
