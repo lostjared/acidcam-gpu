@@ -365,7 +365,13 @@ class ShaderLibrary {
     std::unordered_map<int, ProgramData> program_names_2d;
     std::unordered_map<int, ProgramData> program_names_3d;
     bool shader_bypass = false;
-    
+    bool isDragging = false;
+    bool wasClicked = false;
+    float clickStartX = 0.0f;
+    float clickStartY = 0.0f;
+    float lastClickX = 0.0f;
+    float lastClickY = 0.0f;
+
     std::unique_ptr<gl::ShaderProgram> makeProgram() {
         if(use_cache) return std::make_unique<ac::ShaderProgram>();
         return std::make_unique<gl::ShaderProgram>();
@@ -1111,12 +1117,28 @@ public:
             glUniform1f(n.iFrameRate, 24.0f);
         }
         int mouseX = 0, mouseY = 0;
-        SDL_GetMouseState(&mouseX, &mouseY);
+        Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
         float currentY = static_cast<float>(win->h - mouseY);
         float currentX = static_cast<float>(mouseX);
-        glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
-        if(n.iMouseClick != -1) {
-            glUniform2f(n.iMouseClick, currentX, currentY);
+        if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+            if (!isDragging) {
+                clickStartX = currentX;
+                clickStartY = currentY;
+                lastClickX = currentX;
+                lastClickY = currentY;
+                isDragging = true;
+                wasClicked = true;
+            }
+        } else {
+            isDragging = false;
+        }
+        if (isDragging) {
+            glUniform4f(n.iMouse, currentX, currentY, clickStartX, clickStartY);
+        } else {
+            glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
+        }
+        if(wasClicked && n.iMouseClick != -1) {
+            glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
 #ifdef AUDIO_ENABLED
@@ -1168,12 +1190,28 @@ public:
             glUniform1f(n.iFrameRate, 24.0f);
         }
         int mouseX = 0, mouseY = 0;
-        SDL_GetMouseState(&mouseX, &mouseY);
+        Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
         float currentY = static_cast<float>(win->h - mouseY);
         float currentX = static_cast<float>(mouseX);
-        glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
-        if(n.iMouseClick != -1) {
-            glUniform2f(n.iMouseClick, currentX, currentY);
+        if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+            if (!isDragging) {
+                clickStartX = currentX;
+                clickStartY = currentY;
+                lastClickX = currentX;
+                lastClickY = currentY;
+                isDragging = true;
+                wasClicked = true;
+            }
+        } else {
+            isDragging = false;
+        }
+        if (isDragging) {
+            glUniform4f(n.iMouse, currentX, currentY, clickStartX, clickStartY);
+        } else {
+            glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
+        }
+        if(wasClicked && n.iMouseClick != -1) {
+            glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
 #ifdef AUDIO_ENABLED
@@ -1246,13 +1284,6 @@ public:
         if(iFrameRateLoc != -1) {
            glUniform1f(iFrameRateLoc, 24.0f);
         }
-        
-        static bool isDragging = false;
-        static bool wasClicked = false;
-        static float clickStartX = 0.0f;
-        static float clickStartY = 0.0f;
-        static float lastClickX = 0.0f;
-        static float lastClickY = 0.0f;
         
         GLint iMouseLoc = names[index()].iMouse;
         GLint iMouseClickLoc = names[index()].iMouseClick;
