@@ -1769,7 +1769,10 @@ public:
             }
         } 
         else if(!filename.empty() && graphic.empty()) {
-            cap.open(filename);
+            std::vector<int> file_params = {
+                cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY
+            };
+            cap.open(filename, cv::CAP_FFMPEG, file_params);
             if(!cap.isOpened()) {
                 throw mx::Exception("Could not open video file: " + filename);
             }
@@ -1784,6 +1787,18 @@ public:
             mx::system_out << "acmx2: Video opened: " << w << "x" << h 
                            << " at FPS: " << fps 
                            << " Total Frames: " << totalFrames << "\n"; 
+           
+            int hw_accel = static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
+            mx::system_out << "acmx2: HW Acceleration result: " << hw_accel
+                            << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" :
+                                hw_accel == cv::VIDEO_ACCELERATION_ANY  ? " (auto preference)" :
+                                hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)" :
+                                hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)" :
+                                hw_accel == cv::VIDEO_ACCELERATION_MFX ? " (MFX)" :
+                                hw_accel == cv::VIDEO_ACCELERATION_DRM ? " (DRM)" :
+                                " (other)") << "\n";
+
+
             fflush(stdout);
             fflush(stderr);
 
