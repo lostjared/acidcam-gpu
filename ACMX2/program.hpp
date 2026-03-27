@@ -2,7 +2,7 @@
 
 namespace ac {
     class ShaderProgram : public gl::ShaderProgram {
-    public:
+      public:
         ShaderProgram() = default;
         ShaderProgram(GLuint id) : gl::ShaderProgram(id) {}
         ~ShaderProgram() = default;
@@ -13,4 +13,4 @@ namespace ac {
         bool loadProgram(const std::string &v, const std::string &f);
         bool loadProgramFromText(const std::string &v, const std::string &f);
     };
-}
+} // namespace ac

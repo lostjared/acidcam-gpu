@@ -1,23 +1,22 @@
 #ifndef __SYNTAX__H_
 #define __SYNTAX__H_
 
-#include <QSyntaxHighlighter>
 #include <QRegularExpression>
-#include <QVector>
 #include <QStringList>
+#include <QSyntaxHighlighter>
 #include <QTextCharFormat>
+#include <QVector>
 
-class GlslSyntaxHighlighter : public QSyntaxHighlighter { 
+class GlslSyntaxHighlighter : public QSyntaxHighlighter {
     Q_OBJECT
-public:
+  public:
     explicit GlslSyntaxHighlighter(QTextDocument *parent = nullptr);
 
-protected:
+  protected:
     void highlightBlock(const QString &text) override;
 
-private:
-    struct HighlightingRule
-    {
+  private:
+    struct HighlightingRule {
         QRegularExpression pattern;
         QTextCharFormat format;
     };
@@ -30,4 +29,4 @@ private:
     QTextCharFormat m_multiLineCommentFormat;
 };
 
-#endif 
+#endif

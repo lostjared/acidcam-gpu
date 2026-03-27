@@ -1,22 +1,21 @@
-#include"main_window.hpp"
-#include<QIcon>
-#include<QLayout>
-#include<QApplication>
-#include<QMessageBox>
-#include<QFile>
-#include<QTextStream>
-#include<QInputDialog>
-#include<QFileInfo>
-#include<QDateTime>
-#include"settings.hpp"
-#include"audio-window.hpp"
-#include <random>
+#include "main_window.hpp"
+#include "audio-window.hpp"
+#include "settings.hpp"
+#include <QApplication>
+#include <QDateTime>
+#include <QFile>
+#include <QFileInfo>
+#include <QIcon>
+#include <QInputDialog>
+#include <QLayout>
+#include <QMessageBox>
+#include <QProcess>
+#include <QTextStream>
 #include <algorithm>
-#include<QProcess>
-#include<QTextStream>
+#include <random>
 #ifdef __linux__
-#include<unistd.h>
-#include<sys/types.h>
+#include <sys/types.h>
+#include <unistd.h>
 #endif
 
 void MainWindow::initControls() {
@@ -31,22 +30,22 @@ void MainWindow::initControls() {
 
     connect(process, &QProcess::readyReadStandardError, this, [this]() {
         QString errorOutput = process->readAllStandardError();
-        if(!errorOutput.contains("GStreamer")) {
-            errorOutput.replace("\n", "<br>"); 
+        if (!errorOutput.contains("GStreamer")) {
+            errorOutput.replace("\n", "<br>");
             this->Write("<b style='color:red;'>Error:</b> " + errorOutput);
         }
     });
 
-      connect(process,
-        static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
-        this,
-        [this](int exitCode, QProcess::ExitStatus) {
-            QString text;
-            QTextStream stream(&text);
-            stream << "acmx2: Exited with Code: " << exitCode;
-            Log(text + "<br>");
-            play_stop->setEnabled(false);
-        });
+    connect(process,
+            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
+            this,
+            [this](int exitCode, QProcess::ExitStatus) {
+                QString text;
+                QTextStream stream(&text);
+                stream << "acmx2: Exited with Code: " << exitCode;
+                Log(text + "<br>");
+                play_stop->setEnabled(false);
+            });
 
     setStyleSheet(" QMainWindow { background-color: rgb(0,0,0); }");
     camera_index = 0;
@@ -55,7 +54,7 @@ void MainWindow::initControls() {
     setGeometry(150, 150, 1280, 720);
     setWindowTitle("ACMX2 - Interface");
     QMenuBar *menuBarPtr = menuBar();
-    
+
     menuBar()->setNativeMenuBar(false);
     fileMenu = menuBarPtr->addMenu(tr("File"));
     cameraMenu = menuBarPtr->addMenu(tr("Session"));
@@ -74,7 +73,7 @@ void MainWindow::initControls() {
     connect(cameraSet, &QAction::triggered, this, &MainWindow::cameraSettings);
     cameraMenu->addAction(cameraSet);
     audioSet = new QAction(tr("Audio Settings"), this);
-    connect(audioSet,&QAction::triggered, this, &MainWindow::menuAudioSettings);
+    connect(audioSet, &QAction::triggered, this, &MainWindow::menuAudioSettings);
     cameraMenu->addAction(audioSet);
     gpuFilterAction = new QAction(tr("GPU Filter Settings"), this);
     connect(gpuFilterAction, &QAction::triggered, this, &MainWindow::menuGPUFilterSettings);
@@ -100,7 +99,7 @@ void MainWindow::initControls() {
     playbackMenu->addAction(play_repeat);
     play_stop = new QAction(tr("Stop"), this);
     play_stop->setEnabled(false);
-    connect(play_stop, &QAction::triggered, this,   [=]() {
+    connect(play_stop, &QAction::triggered, this, [=]() {
         process->terminate();
     });
     playbackMenu->addAction(play_stop);
@@ -112,7 +111,7 @@ void MainWindow::initControls() {
     buildCacheAction = new QAction(tr("Rebuild Shader Cache"), this);
     connect(buildCacheAction, &QAction::triggered, this, &MainWindow::menuBuildShaderCache);
     playbackMenu->addAction(buildCacheAction);
-    
+
     runFromCacheAction = new QAction(tr("Run from Cache"), this);
     runFromCacheAction->setCheckable(true);
     runFromCacheAction->setChecked(true);
@@ -125,16 +124,16 @@ void MainWindow::initControls() {
         }
     });
     playbackMenu->addAction(runFromCacheAction);
-    
-    //recompileShadersAction = new QAction(tr("Recompile All Shaders"), this);
-    //connect(recompileShadersAction, &QAction::triggered, this, &MainWindow::menuRecompileShaders);
-    //playbackMenu->addAction(recompileShadersAction);
-    
+
+    // recompileShadersAction = new QAction(tr("Recompile All Shaders"), this);
+    // connect(recompileShadersAction, &QAction::triggered, this, &MainWindow::menuRecompileShaders);
+    // playbackMenu->addAction(recompileShadersAction);
+
     listMenu_new = new QAction(tr("New Shader Library"), this);
-    connect(listMenu_new,  &QAction::triggered, this, &MainWindow::newList);
+    connect(listMenu_new, &QAction::triggered, this, &MainWindow::newList);
     listMenu->addAction(listMenu_new);
     listMenu_shader = new QAction(tr("New Shader GLSL File"), this);
-    connect(listMenu_shader,  &QAction::triggered, this, &MainWindow::newShader);
+    connect(listMenu_shader, &QAction::triggered, this, &MainWindow::newShader);
     listMenu->addAction(listMenu_shader);
     listMenu->addSeparator();
     listMenu_remove = new QAction(tr("Remove Shader"), this);
@@ -142,15 +141,15 @@ void MainWindow::initControls() {
     listMenu->addAction(listMenu_remove);
     listMenu->addSeparator();
     listMenu_up = new QAction(tr("Shift Shader Up"), this);
-    connect(listMenu_up,  &QAction::triggered, this, &MainWindow::menuUp);
+    connect(listMenu_up, &QAction::triggered, this, &MainWindow::menuUp);
     listMenu->addAction(listMenu_up);
     listMenu_down = new QAction(tr("Shift Shader Down"), this);
-    connect(listMenu_down,  &QAction::triggered, this, &MainWindow::menuDown);
+    connect(listMenu_down, &QAction::triggered, this, &MainWindow::menuDown);
     listMenu->addAction(listMenu_down);
     listMenu_shuffle = new QAction(tr("Shuffle Shaders"), this);
     connect(listMenu_shuffle, &QAction::triggered, this, &MainWindow::menuShuffle);
     listMenu->addAction(listMenu_shuffle);
-    
+
     listMenu_sort = new QAction(tr("Sort Shaders"), this);
     connect(listMenu_sort, &QAction::triggered, this, &MainWindow::menuSort);
     listMenu->addAction(listMenu_sort);
@@ -165,7 +164,7 @@ void MainWindow::initControls() {
     listMenu->addAction(listMenu_findNext);
     helpMenu_about = new QAction("About", this);
 
-    connect(helpMenu_about, &QAction::triggered, this, [=](){
+    connect(helpMenu_about, &QAction::triggered, this, [=]() {
         QMessageBox box(this);
         box.setWindowTitle("About ACMX2");
         box.setWindowIcon(QIcon(":/win-icon.png"));
@@ -173,7 +172,7 @@ void MainWindow::initControls() {
         QTextStream stream(&info);
         stream << "ACMX2 " << VERSION_INFO << "\n(C) 2026 " << VERSION_AUTHOR << " Software\nhttps://lostsidedead.biz\nThis software is dedicated to all that have experienced mental illness.\n";
         box.setText(info);
-        QPixmap bigIcon(":/win-icon.png"); 
+        QPixmap bigIcon(":/win-icon.png");
         if (!bigIcon.isNull()) {
             QPixmap resizedIcon = bigIcon.scaled(64, 64, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
             box.setIconPixmap(resizedIcon);
@@ -192,60 +191,58 @@ void MainWindow::initControls() {
     bottomTextBox->setStyleSheet("QTextEdit { background-color: black; color: lime; font-size: 24px; font-family: 'Courier New', Courier, monospace;; }");
     bottomTextBox->setReadOnly(true);
     connect(list_view, &QListView::doubleClicked,
-        this, &MainWindow::listClicked);
+            this, &MainWindow::listClicked);
     QWidget *centralWidget = new QWidget(this);
     QVBoxLayout *layout = new QVBoxLayout(centralWidget);
-    layout->addWidget(list_view, 3);   
-    layout->addWidget(bottomTextBox, 1); 
+    layout->addWidget(list_view, 3);
+    layout->addWidget(bottomTextBox, 1);
     centralWidget->setLayout(layout);
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
     QString path = appSettings.value("shaders", "").toString();
     path = path.trimmed();
-    while(path.endsWith("/") || path.endsWith("\\")) {
+    while (path.endsWith("/") || path.endsWith("\\")) {
         path.chop(1);
     }
 #ifdef _WIN32
-        executable_path = appSettings.value("exePath", "acmx2.exe").toString();
+    executable_path = appSettings.value("exePath", "acmx2.exe").toString();
 #else
-        executable_path = appSettings.value("exePath", "acmx2").toString();
+    executable_path = appSettings.value("exePath", "acmx2").toString();
 #endif
     prefix_path = appSettings.value("prefix_path", ".").toString();
     bool useCustomStyle = appSettings.value("useCustomStyle", true).toBool();
     styleSheetAction->setChecked(useCustomStyle);
-    if(!path.isEmpty()) {
+    if (!path.isEmpty()) {
         QFileInfo pathInfo(path);
         QFileInfo indexInfo(path + "/index.txt");
-        if(pathInfo.exists() && pathInfo.isDir() && indexInfo.exists()) {
+        if (pathInfo.exists() && pathInfo.isDir() && indexInfo.exists()) {
             shader_path = path;
             loadShaders(path);
             Log("Successfully loaded saved shader path");
         } else {
             QString errorMsg = "Warning: Saved shader path is invalid: " + path + " - ";
-            if(!pathInfo.exists()) {
+            if (!pathInfo.exists()) {
                 errorMsg += "directory does not exist";
-            } else if(!pathInfo.isDir()) {
+            } else if (!pathInfo.isDir()) {
                 errorMsg += "path is not a directory";
-            } else if(!indexInfo.exists()) {
+            } else if (!indexInfo.exists()) {
                 errorMsg += "index.txt not found in directory";
             }
             Log(errorMsg);
         }
     }
     customStyleSheet = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
-                    "* { color: red; font-weight: bold; } "
-                    "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
-                    "QPushButton:hover { background-color: red; color: black; }";
+                       "* { color: red; font-weight: bold; } "
+                       "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
+                       "QPushButton:hover { background-color: red; color: black; }";
 
     applyCustomStyleSheet(useCustomStyle);
-    
 }
 
-void MainWindow::applyCustomStyleSheet(bool enable)
-{
+void MainWindow::applyCustomStyleSheet(bool enable) {
     QSettings appSettings("LostSideDead");
     appSettings.setValue("useCustomStyle", enable);
-    if(enable) {
+    if (enable) {
         setStyleSheet(customStyleSheet);
     } else {
         setStyleSheet("");
@@ -255,7 +252,7 @@ void MainWindow::applyCustomStyleSheet(bool enable)
 void MainWindow::newList() {
     LibraryWindow library(this);
 
-    if(library.exec() == QDialog::Accepted) {
+    if (library.exec() == QDialog::Accepted) {
         shader_path = library.getShaderPath();
         loadShaders(shader_path);
         QSettings appSettings("LostSideDead");
@@ -266,18 +263,18 @@ void MainWindow::newList() {
 
 void MainWindow::menuSearch() {
     bool ok;
-    QString searchText = QInputDialog::getText(this, 
+    QString searchText = QInputDialog::getText(this,
                                                tr("Search Shaders"),
-                                               tr("Enter shader name to search:"), 
+                                               tr("Enter shader name to search:"),
                                                QLineEdit::Normal,
-                                               lastSearchText,  
+                                               lastSearchText,
                                                &ok);
-    
+
     if (!ok || searchText.isEmpty()) {
         return;
     }
-    
-    lastSearchText = searchText;  
+
+    lastSearchText = searchText;
     lastFoundIndex = -1;
     QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
     if (!model) {
@@ -286,14 +283,14 @@ void MainWindow::menuSearch() {
     }
     QStringList shaderList = model->stringList();
     int foundIndex = -1;
-    
+
     for (int i = 0; i < shaderList.size(); ++i) {
         if (shaderList[i].compare(searchText, Qt::CaseInsensitive) == 0) {
             foundIndex = i;
             break;
         }
     }
-    
+
     if (foundIndex == -1) {
         for (int i = 0; i < shaderList.size(); ++i) {
             if (shaderList[i].contains(searchText, Qt::CaseInsensitive)) {
@@ -302,53 +299,52 @@ void MainWindow::menuSearch() {
             }
         }
     }
-    
+
     if (foundIndex != -1) {
-        lastFoundIndex = foundIndex;  
+        lastFoundIndex = foundIndex;
         QModelIndex matchIndex = model->index(foundIndex, 0);
         list_view->setCurrentIndex(matchIndex);
         list_view->selectionModel()->select(matchIndex, QItemSelectionModel::ClearAndSelect);
         list_view->scrollTo(matchIndex, QAbstractItemView::PositionAtCenter);
-        
+
         Log("Found shader: " + shaderList[foundIndex] + " at index " + QString::number(foundIndex));
     } else {
-        QMessageBox::information(this, 
-                                tr("Not Found"), 
-                                tr("Shader \"") + searchText + tr("\" not found in the list."));
+        QMessageBox::information(this,
+                                 tr("Not Found"),
+                                 tr("Shader \"") + searchText + tr("\" not found in the list."));
         Log("Shader not found: " + searchText);
     }
 }
 
 void MainWindow::menuFindNext() {
     if (lastSearchText.isEmpty()) {
-        QMessageBox::information(this, 
-                                tr("No Search"), 
-                                tr("Please perform a search first (Ctrl+F)."));
+        QMessageBox::information(this,
+                                 tr("No Search"),
+                                 tr("Please perform a search first (Ctrl+F)."));
         return;
     }
-    
+
     QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
     if (!model) {
         QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
         return;
     }
-    
+
     QStringList shaderList = model->stringList();
     if (shaderList.isEmpty()) {
         return;
     }
-    
+
     int foundIndex = -1;
-    int startIndex = (lastFoundIndex + 1) % shaderList.size();  
-    
-    
+    int startIndex = (lastFoundIndex + 1) % shaderList.size();
+
     for (int i = startIndex; i < shaderList.size(); ++i) {
         if (shaderList[i].contains(lastSearchText, Qt::CaseInsensitive)) {
             foundIndex = i;
             break;
         }
     }
-    
+
     if (foundIndex == -1 && startIndex > 0) {
         for (int i = 0; i < startIndex; ++i) {
             if (shaderList[i].contains(lastSearchText, Qt::CaseInsensitive)) {
@@ -357,19 +353,19 @@ void MainWindow::menuFindNext() {
             }
         }
     }
-    
+
     if (foundIndex != -1) {
         lastFoundIndex = foundIndex;
         QModelIndex matchIndex = model->index(foundIndex, 0);
         list_view->setCurrentIndex(matchIndex);
         list_view->selectionModel()->select(matchIndex, QItemSelectionModel::ClearAndSelect);
         list_view->scrollTo(matchIndex, QAbstractItemView::PositionAtCenter);
-        
+
         Log("Found next: " + shaderList[foundIndex] + " at index " + QString::number(foundIndex));
     } else {
-        QMessageBox::information(this, 
-                                tr("No More Results"), 
-                                tr("No more matches for \"") + lastSearchText + tr("\"."));
+        QMessageBox::information(this,
+                                 tr("No More Results"),
+                                 tr("No more matches for \"") + lastSearchText + tr("\"."));
         Log("No more matches for: " + lastSearchText);
     }
 }
@@ -377,7 +373,7 @@ void MainWindow::menuFindNext() {
 void MainWindow::newShader() {
     ShaderDialog new_shader(this);
     new_shader.setShaderPath(shader_path);
-    if(new_shader.exec() == QDialog::Accepted) {
+    if (new_shader.exec() == QDialog::Accepted) {
         QSettings appSettings("LostSideDead");
         appSettings.setValue("shaders", shader_path);
         appSettings.sync();
@@ -407,21 +403,19 @@ void MainWindow::updateIndex() {
         if (!stringModel) {
             return;
         }
-        
-        QStringList writtenItems; 
+
+        QStringList writtenItems;
         int rowCount = stringModel->rowCount();
-        
+
         for (int row = 0; row < rowCount; ++row) {
             QModelIndex index = stringModel->index(row, 0);
             QVariant data = stringModel->data(index, Qt::DisplayRole);
             QString shaderName = data.toString().trimmed();
-            
-            
+
             if (shaderName.isEmpty() || writtenItems.contains(shaderName, Qt::CaseInsensitive)) {
                 continue;
             }
-            
-            
+
             QString fullPath = shader_path + "/" + shaderName;
             QFileInfo fileInfo(fullPath);
             if (fileInfo.exists() && fileInfo.isFile()) {
@@ -432,7 +426,7 @@ void MainWindow::updateIndex() {
             }
         }
         file.close();
-        
+
         indexTimestamp = QFileInfo(shader_path + "/index.txt").lastModified();
 
         if (writtenItems.size() != rowCount) {
@@ -496,9 +490,8 @@ void MainWindow::menuDown() {
     list_view->selectionModel()->setCurrentIndex(newIndex, QItemSelectionModel::Select);
     updateIndex();
 }
- 
-QString MainWindow::readFileContents(const QString &filePath)
-{
+
+QString MainWindow::readFileContents(const QString &filePath) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         Log("Failed to open file: " + filePath);
@@ -507,12 +500,12 @@ QString MainWindow::readFileContents(const QString &filePath)
 
     QTextStream in(&file);
     QString contents = in.readAll();
-    file.close(); 
+    file.close();
     return contents;
 }
 
 void MainWindow::listClicked(const QModelIndex &i) {
-   if (!i.isValid())
+    if (!i.isValid())
         return;
     QString itemText = sanitizeShaderName(i.data(Qt::DisplayRole).toString());
     if (itemText.isEmpty()) {
@@ -548,47 +541,47 @@ void MainWindow::fileOpenProp() {
         QString exePath = propWindow.exePathLineEdit->text();
         QString shaderDir = propWindow.shaderDirLineEdit->text();
         QString prefix = propWindow.screenshotDirLineEdit->text();
-        if(exePath.length()==0) {
+        if (exePath.length() == 0) {
             QMessageBox::information(this, "No Path", "Requires Executable path");
             return;
         }
-        if(shaderDir.length()==0) {
+        if (shaderDir.length() == 0) {
             QMessageBox::information(this, "Shader Path", "Requires Shader Path");
             return;
         }
 
         QFileInfo shaderDirInfo(shaderDir);
-        QFileInfo indexFileInfo(shaderDir + "/index.txt");        
-        if(!shaderDirInfo.exists()) {
+        QFileInfo indexFileInfo(shaderDir + "/index.txt");
+        if (!shaderDirInfo.exists()) {
             QMessageBox::warning(this, "Invalid Shader Path", "Shader directory does not exist:\n" + shaderDir);
             return;
         }
-        
-        if(!shaderDirInfo.isDir()) {
+
+        if (!shaderDirInfo.isDir()) {
             QMessageBox::warning(this, "Invalid Shader Path", "Shader path is not a directory:\n" + shaderDir);
             return;
         }
-        
-        if(!indexFileInfo.exists()) {
+
+        if (!indexFileInfo.exists()) {
             QMessageBox::warning(this, "Missing index.txt", "Shader directory does not contain index.txt:\n" + shaderDir + "/index.txt");
             return;
         }
-        
+
         QSettings appSettings("LostSideDead");
         appSettings.setValue("exePath", exePath);
         appSettings.setValue("prefix_path", prefix);
         appSettings.setValue("shaders", shaderDir);
         appSettings.sync();
-        
+
         executable_path = exePath;
         prefix_path = prefix;
         shader_path = shaderDir;
-        
+
         Log("Executable Path: " + exePath);
         Log("Prefix Path: " + prefix);
         Log("Shader Directory: " + shaderDir);
-        
-        if(loadShaders(shaderDir)) {
+
+        if (loadShaders(shaderDir)) {
             Log("Successfully loaded shaders from new directory<br>");
         } else {
             Log("Warning: Could not load shaders from new directory<br>");
@@ -607,7 +600,7 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
 
     QDateTime modified = info.lastModified();
     if (force == false && path == shader_path && !indexTimestamp.isNull() && modified <= indexTimestamp) {
-        return true; 
+        return true;
     }
     QFile file(path + "/index.txt");
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -626,12 +619,12 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
         previouslySelected = model->data(currentIndex, Qt::DisplayRole).toString();
     }
     items.clear();
-    QStringList uniqueItems; 
+    QStringList uniqueItems;
     QTextStream in(&file);
-    
+
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
-        
+
         if (line.isEmpty()) {
             continue;
         }
@@ -640,10 +633,10 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
         if (!fileInfo.exists() || !fileInfo.isFile()) {
             Log("Skipping non-existent file: " + line);
             continue;
-        }       
+        }
         if (!uniqueItems.contains(line, Qt::CaseInsensitive)) {
             uniqueItems.append(line);
-            //Log("Added shader: " + line);
+            // Log("Added shader: " + line);
         } else {
             Log("Skipping duplicate shader: " + line);
         }
@@ -679,7 +672,7 @@ void MainWindow::fileExit() {
 
 void MainWindow::menuAudioSettings() {
     AudioSettings audio_set(this);
-    if(audio_set.exec() == QDialog::Accepted) {
+    if (audio_set.exec() == QDialog::Accepted) {
         audio_enabled = audio_set.isAudioReactivityEnabled();
         audio_channels = audio_set.getNumberOfChannels();
         audio_sense = audio_set.getSensitivity();
@@ -692,11 +685,11 @@ void MainWindow::menuAudioSettings() {
 
 void MainWindow::menuGPUFilterSettings() {
     GPUFilterDialog gpuDialog(executable_path, this);
-    if(gpuDialog.exec() == QDialog::Accepted) {
+    if (gpuDialog.exec() == QDialog::Accepted) {
         gpu_filter_enabled = gpuDialog.isGPUFilterEnabled();
         gpu_filter_indices = gpuDialog.getFilterArgument();
         gpu_buffer_size = gpuDialog.getBufferSize();
-        if(gpu_filter_enabled) {
+        if (gpu_filter_enabled) {
             Log("GPU Filter Settings Saved: Filters=" + gpu_filter_indices + ", Buffer=" + QString::number(gpu_buffer_size));
         } else {
             Log("GPU Filtering Disabled");
@@ -705,30 +698,30 @@ void MainWindow::menuGPUFilterSettings() {
 }
 
 void MainWindow::menuShaderPassSettings() {
-    if(shader_path.isEmpty()) {
-        QMessageBox::information(this, "Load Shaders First", 
-            "Please load a shader library before configuring multi-pass shaders.");
+    if (shader_path.isEmpty()) {
+        QMessageBox::information(this, "Load Shaders First",
+                                 "Please load a shader library before configuring multi-pass shaders.");
         return;
     }
-    
+
     loadShaders(shader_path, true);
-    
-    if(items.isEmpty()) {
-        QMessageBox::information(this, "Load Shaders First", 
-            "Please load a shader library before configuring multi-pass shaders.");
+
+    if (items.isEmpty()) {
+        QMessageBox::information(this, "Load Shaders First",
+                                 "Please load a shader library before configuring multi-pass shaders.");
         return;
     }
-    
+
     ShaderPassDialog passDialog(items, this);
     passDialog.setEnabled(shader_pass_enabled);
-    if(!shader_pass_names.isEmpty()) {
+    if (!shader_pass_names.isEmpty()) {
         passDialog.setSelectedShaderNames(shader_pass_names);
     }
-    
-    if(passDialog.exec() == QDialog::Accepted) {
+
+    if (passDialog.exec() == QDialog::Accepted) {
         shader_pass_enabled = passDialog.isShaderPassEnabled();
         shader_pass_names = passDialog.getSelectedShaderNames();
-        if(shader_pass_enabled) {
+        if (shader_pass_enabled) {
             Log("Multi-Pass Shader Settings Saved: " + QString::number(shader_pass_names.size()) + " passes");
         } else {
             Log("Multi-Pass Shader Disabled");
@@ -738,14 +731,14 @@ void MainWindow::menuShaderPassSettings() {
 
 void MainWindow::cameraSettings() {
     SettingsWindow settingsWindow(this);
-    if(settingsWindow.exec() == QDialog::Accepted) {
+    if (settingsWindow.exec() == QDialog::Accepted) {
         full_screen_value = settingsWindow.isFullscreen();
         if (settingsWindow.isUsingInputVideoFile()) {
             QString videoFile = settingsWindow.getInputVideoFile();
             QSize screenResolution = settingsWindow.getSelectedScreenResolution();
             screen_res = screenResolution;
             video_file = videoFile;
-            graphics_file = ""; 
+            graphics_file = "";
             cache_enabled = settingsWindow.isTextureCacheEnabled();
             cache_delay = settingsWindow.getCacheDelay();
             copy_audio = settingsWindow.isCopyAudioEnabled();
@@ -754,7 +747,7 @@ void MainWindow::cameraSettings() {
             QSize screenResolution = settingsWindow.getSelectedScreenResolution();
             screen_res = screenResolution;
             graphics_file = graphicsFile;
-            video_file = ""; 
+            video_file = "";
             output_fps = settingsWindow.getCameraFPS();
             cache_enabled = false;
             cache_delay = 1;
@@ -764,15 +757,15 @@ void MainWindow::cameraSettings() {
             QSize cameraResolution = settingsWindow.getSelectedCameraResolution();
             QSize screenResolution = settingsWindow.getSelectedScreenResolution();
             screen_res = screenResolution;
-            camera_index  = cameraIndex;
+            camera_index = cameraIndex;
             video_file = "";
-            graphics_file = ""; 
+            graphics_file = "";
             camera_res = cameraResolution;
             output_fps = settingsWindow.getCameraFPS();
             cache_enabled = false;
             cache_delay = 1;
         }
-        if(settingsWindow.isSavingToOutputVideoFile()) {
+        if (settingsWindow.isSavingToOutputVideoFile()) {
             output_file = settingsWindow.getOutputVideoFile();
             output_kbps = settingsWindow.getSaveFileKbps();
         } else {
@@ -786,30 +779,30 @@ void MainWindow::cameraSettings() {
 }
 
 void MainWindow::runSelected() {
-    if(process->state() == QProcess::Running) {
+    if (process->state() == QProcess::Running) {
         QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
         return;
     }
 
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    QString uid = QString::number(getuid()); 
+    QString uid = QString::number(getuid());
     QString user_run_path = "/run/user/" + uid;
     env.insert("SDL_VIDEODRIVER", "x11");
     if (QDir(user_run_path).exists()) {
         env.insert("XDG_RUNTIME_DIR", user_run_path);
         env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
-    } 
-    env.insert("CUDA_VISIBLE_DEVICES", "0"); 
+    }
+    env.insert("CUDA_VISIBLE_DEVICES", "0");
     env.insert("vblank_mode", "0");
     process->setProcessEnvironment(env);
 #endif
 
-   if(shader_path.length()==0) {
+    if (shader_path.length() == 0) {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
-   }
-   QItemSelectionModel *selectionModel = list_view->selectionModel();
+    }
+    QItemSelectionModel *selectionModel = list_view->selectionModel();
     if (!selectionModel->hasSelection()) {
         Log("<b>No item selected.</b>");
         return;
@@ -826,81 +819,81 @@ void MainWindow::runSelected() {
     QString res;
     QTextStream stream(&res);
     stream << camera_res.width() << "x" << camera_res.height();
-    
+
     QString scr_res;
     QTextStream stream_r(&scr_res);
     stream_r << screen_res.width() << "x" << screen_res.height();
-       
-    if(full_screen_value)
+
+    if (full_screen_value)
         arguments << "--fullscreen";
 
-    if(!graphics_file.isEmpty()) {
+    if (!graphics_file.isEmpty()) {
         arguments << "--graphic" << graphics_file;
-        if(screen_res.width() != 0)
+        if (screen_res.width() != 0)
             arguments << "--resolution" << scr_res;
         arguments << "--fps" << QString::number(output_fps);
-    } else if(video_file.isEmpty()) {
+    } else if (video_file.isEmpty()) {
         arguments << "--camera-res" << res;
-        if(screen_res.width() != 0)
+        if (screen_res.width() != 0)
             arguments << "--resolution" << scr_res;
         arguments << "--device" << QString::number(camera_index);
         arguments << "--fps" << QString::number(output_fps);
     } else {
         arguments << "--input" << video_file;
-        if(screen_res.width() != 0)
+        if (screen_res.width() != 0)
             arguments << "--resolution" << scr_res;
-        if(play_repeat->isChecked())
+        if (play_repeat->isChecked())
             arguments << "--repeat";
-        if(cache_enabled) {
+        if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
         }
-        if(copy_audio)
+        if (copy_audio)
             arguments << "--copy-audio";
     }
     arguments << "--prefix" << prefix_path;
 
-    if(!output_file.isEmpty()) {
+    if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
         arguments << "--bitrate" << QString::number(output_kbps);
     }
-    if(audio_enabled) {
+    if (audio_enabled) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
         arguments << "--sense" << QString::number(audio_sense);
-        if(audio_passthrough)
+        if (audio_passthrough)
             arguments << "--pass-through";
 
-        if(audio_input == -1)
+        if (audio_input == -1)
             arguments << "--audio-input" << "default";
         else
             arguments << "--audio-input" << QString::number(audio_input);
 
-        if(audio_output == -1) 
+        if (audio_output == -1)
             arguments << "--audio-output" << "default";
         else
             arguments << "--audio-output" << QString::number(audio_output);
     }
 
-    if(enable_3d) {
+    if (enable_3d) {
         arguments << "--enable-3d";
         arguments << "--model" << model_file;
     }
 
-    if(gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
+    if (gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
         arguments << "--gpu-filter" << gpu_filter_indices;
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
 
     arguments << "--cuda-device" << QString::number(cuda_device);
 
-    if(!use_shader_cache) {
+    if (!use_shader_cache) {
         arguments << "--no-cache";
     }
- 
+
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
-    if(!process->waitForStarted()) {
+    if (!process->waitForStarted()) {
         Log("<b style='color:red;'>Failed to start the program.</b>");
         QMessageBox::critical(this, "Error", "Failed to start the program.");
     } else {
@@ -909,25 +902,25 @@ void MainWindow::runSelected() {
 }
 
 void MainWindow::runAll() {
-    if(process->state() == QProcess::Running) {
+    if (process->state() == QProcess::Running) {
         QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
         return;
     }
 
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    QString uid = QString::number(getuid()); 
+    QString uid = QString::number(getuid());
     QString user_run_path = "/run/user/" + uid;
     env.insert("SDL_VIDEODRIVER", "x11");
     if (QDir(user_run_path).exists()) {
         env.insert("XDG_RUNTIME_DIR", user_run_path);
         env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
-    } 
-    env.insert("CUDA_VISIBLE_DEVICES", "0"); 
+    }
+    env.insert("CUDA_VISIBLE_DEVICES", "0");
     env.insert("vblank_mode", "0");
     process->setProcessEnvironment(env);
 #endif
-    if(shader_path.length()==0) {
+    if (shader_path.length() == 0) {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
     }
@@ -956,85 +949,85 @@ void MainWindow::runAll() {
     QString scr_res;
     QTextStream stream_r(&scr_res);
     stream_r << screen_res.width() << "x" << screen_res.height();
- 
-   if(full_screen_value)
+
+    if (full_screen_value)
         arguments << "--fullscreen";
 
-    if(!graphics_file.isEmpty()) {
+    if (!graphics_file.isEmpty()) {
         arguments << "--graphic" << graphics_file;
-        if(screen_res.width() != 0)
+        if (screen_res.width() != 0)
             arguments << "--resolution" << scr_res;
         arguments << "--fps" << QString::number(output_fps);
-    } else if(video_file.isEmpty()) {
+    } else if (video_file.isEmpty()) {
         arguments << "--camera-res" << res;
-        if(screen_res.width() != 0)
+        if (screen_res.width() != 0)
             arguments << "--resolution" << scr_res;
         arguments << "--device" << QString::number(camera_index);
         arguments << "--fps" << QString::number(output_fps);
     } else {
         arguments << "--input" << video_file;
-        if(screen_res.width() != 0)
-        arguments << "--resolution" << scr_res;
-        if(play_repeat->isChecked())
+        if (screen_res.width() != 0)
+            arguments << "--resolution" << scr_res;
+        if (play_repeat->isChecked())
             arguments << "--repeat";
-        if(cache_enabled) {
+        if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
         }
-        if(copy_audio)
+        if (copy_audio)
             arguments << "--copy-audio";
     }
     arguments << "--prefix" << prefix_path;
-    if(!output_file.isEmpty()) {
+    if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
         arguments << "--bitrate" << QString::number(output_kbps);
     }
     arguments << "--shader" << QString::number(index);
 
-    if(audio_enabled) {
+    if (audio_enabled) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
         arguments << "--sense" << QString::number(audio_sense);
-        if(audio_passthrough)
+        if (audio_passthrough)
             arguments << "--pass-through";
 
-        if(audio_input == -1)
+        if (audio_input == -1)
             arguments << "--audio-input" << "default";
         else
             arguments << "--audio-input" << QString::number(audio_input);
 
-        if(audio_output == -1) 
+        if (audio_output == -1)
             arguments << "--audio-output" << "default";
         else
             arguments << "--audio-output" << QString::number(audio_output);
     }
 
-    if(enable_3d) {
+    if (enable_3d) {
         arguments << "--enable-3d";
         arguments << "--model" << model_file;
     }
 
-    if(gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
+    if (gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
         arguments << "--gpu-filter" << gpu_filter_indices;
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
 
-    if(shader_pass_enabled && !shader_pass_names.isEmpty()) {
+    if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
         QString passIndices = getShaderPassIndicesFromNames();
-        if(!passIndices.isEmpty()) {
+        if (!passIndices.isEmpty()) {
             arguments << "--shader-pass" << passIndices;
         }
     }
 
     arguments << "--cuda-device" << QString::number(cuda_device);
 
-    if(!use_shader_cache) {
+    if (!use_shader_cache) {
         arguments << "--no-cache";
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
-    if(!process->waitForStarted()) {
+    if (!process->waitForStarted()) {
         Log("<b style='color:red;'>Failed to start the program.</b>");
         QMessageBox::critical(this, "Error", "Failed to start the program.");
     } else {
@@ -1043,12 +1036,12 @@ void MainWindow::runAll() {
 }
 
 QString MainWindow::concatList(const QStringList lst) {
-     QString text;
-     QTextStream stream(&text);
-     for(auto &i : lst) {
+    QString text;
+    QTextStream stream(&text);
+    for (auto &i : lst) {
         stream << i << " ";
-     }
-     return text;
+    }
+    return text;
 }
 
 QString MainWindow::getShaderPassIndicesFromNames() {
@@ -1078,9 +1071,8 @@ QString MainWindow::sanitizeShaderName(const QString &name) {
 void MainWindow::cleanupClosedEditors() {
     open_files.erase(
         std::remove_if(open_files.begin(), open_files.end(),
-            [](const QPointer<TextEditor> &ptr) { return ptr.isNull(); }),
-        open_files.end()
-    );
+                       [](const QPointer<TextEditor> &ptr) { return ptr.isNull(); }),
+        open_files.end());
 }
 
 void MainWindow::menuShuffle() {
@@ -1096,7 +1088,7 @@ void MainWindow::menuShuffle() {
     std::random_device rd;
     std::mt19937 g(rd());
     std::shuffle(shaderList.begin(), shaderList.end(), g);
-    
+
     model->setStringList(shaderList);
     updateIndex();
     Log("Shaders shuffled");
@@ -1124,38 +1116,38 @@ void MainWindow::menuBuildShaderCache() {
         QSettings appSettings("LostSideDead");
         build_path = appSettings.value("shaders", "").toString();
     }
-    
+
     if (build_path.isEmpty()) {
         QMessageBox::warning(this, "Error", "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
         return;
     }
-    
+
     if (process->state() == QProcess::Running) {
         QMessageBox::warning(this, "Error", "A process is already running. Please wait for it to finish.");
         return;
     }
-    
+
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
     QString assets_path = dirPath + "/../Helpers";
 #else
     QString assets_path = dirPath;
 #endif
-    
+
     QStringList args;
     args << "--build" << build_path;
     args << "-p" << assets_path;
-    
+
     if (enable_3d) {
         args << "--enable-3d";
     }
-    
+
     Log("Building shader cache for: " + build_path);
     Log("Command: " + executable_path + " " + args.join(" "));
-    
+
     play_stop->setEnabled(true);
     process->start(executable_path, args);
-    
+
     if (!process->waitForStarted()) {
         Log("<b style='color:red;'>Error:</b> Failed to start shader cache build process");
         play_stop->setEnabled(false);
@@ -1163,22 +1155,21 @@ void MainWindow::menuBuildShaderCache() {
 }
 
 void MainWindow::menuRunFromCache() {
-    
 }
 
 void MainWindow::menuRecompileShaders() {
     QString recompile_path = shader_path;
-    
+
     if (recompile_path.isEmpty()) {
         QSettings appSettings("LostSideDead");
         recompile_path = appSettings.value("shaders", "").toString();
     }
-    
+
     if (recompile_path.isEmpty()) {
         QMessageBox::warning(this, "Error", "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
         return;
     }
-    
+
     QString cacheFile = recompile_path + "/.shader_cache";
     QFile cache(cacheFile);
     if (cache.exists()) {
@@ -1190,14 +1181,13 @@ void MainWindow::menuRecompileShaders() {
     } else {
         Log("No existing shader cache found");
     }
-    
+
     QMessageBox::StandardButton reply = QMessageBox::question(
-        this, 
+        this,
         "Rebuild Cache?",
         "Shader cache has been cleared. Would you like to rebuild the cache now?",
-        QMessageBox::Yes | QMessageBox::No
-    );
-    
+        QMessageBox::Yes | QMessageBox::No);
+
     if (reply == QMessageBox::Yes) {
         QString old_path = shader_path;
         shader_path = recompile_path;

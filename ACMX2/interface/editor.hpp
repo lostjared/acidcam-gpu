@@ -1,35 +1,33 @@
 #ifndef EDITOR_HPP
 #define EDITOR_HPP
 
+#include "syntax.hpp"
+#include <QCloseEvent>
 #include <QDialog>
+#include <QLabel>
 #include <QPlainTextEdit>
+#include <QStatusBar>
 #include <QSyntaxHighlighter>
 #include <QVector>
-#include <QStatusBar>
-#include <QLabel>
-#include <QCloseEvent>
-#include "syntax.hpp"
 
-class CustomTextEdit : public QPlainTextEdit
-{
+class CustomTextEdit : public QPlainTextEdit {
     Q_OBJECT
-public:
+  public:
     using QPlainTextEdit::QPlainTextEdit;
 };
 
-class TextEditor : public QDialog
-{
+class TextEditor : public QDialog {
     Q_OBJECT
 
-public:
+  public:
     explicit TextEditor(QWidget *parent = nullptr);
     void setText(const QString &text);
     void setFileName(const QString &filename);
 
-protected:
+  protected:
     void closeEvent(QCloseEvent *event) override;
 
-private:
+  private:
     void init();
     void saveContents();
     void saveAs();
@@ -43,9 +41,9 @@ private:
     void updateFontSize();
     void updateCursorPosition();
     void updateWindowTitle();
-    
+
     bool m_modified = false;
-    CustomTextEdit *m_textEdit = nullptr; 
+    CustomTextEdit *m_textEdit = nullptr;
     GlslSyntaxHighlighter *m_highlighter = nullptr;
     QStatusBar *m_statusBar = nullptr;
     QLabel *m_lineColLabel = nullptr;

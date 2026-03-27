@@ -1,9 +1,9 @@
 #include "audio.hpp"
-#include <vector>
-#include <string>
-#include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
+#include <string>
+#include <vector>
 
 float gAmplitude = 0.0f;
 float amp_sense = 25.0f;
@@ -11,15 +11,16 @@ unsigned int input_channels = 2;
 unsigned int output_channels = 0;
 bool output_buffer = false;
 
-int audioCallback(void* outputBuffer, void* inputBuffer, unsigned int nBufferFrames,
-    double streamTime, RtAudioStreamStatus status, void* userData) {
+int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
+                  double streamTime, RtAudioStreamStatus status, void *userData) {
 
-    float* in = static_cast<float*>(inputBuffer);
-    float* out = static_cast<float*>(outputBuffer);
+    float *in = static_cast<float *>(inputBuffer);
+    float *out = static_cast<float *>(outputBuffer);
     float sum = 0.0f;
 
     if (status || in == nullptr) {
-        if (out && output_channels > 0) std::fill_n(out, nBufferFrames * output_channels, 0.0f);
+        if (out && output_channels > 0)
+            std::fill_n(out, nBufferFrames * output_channels, 0.0f);
         return 0;
     }
 
@@ -56,8 +57,10 @@ void list_audio_devices() {
     for (unsigned int i = 0; i < devices; i++) {
         RtAudio::DeviceInfo info = audio.getDeviceInfo(i);
         std::cout << "  Device " << i << ": " << info.name;
-        if (info.isDefaultInput) std::cout << " [DEFAULT INPUT]";
-        if (info.isDefaultOutput) std::cout << " [DEFAULT OUTPUT]";
+        if (info.isDefaultInput)
+            std::cout << " [DEFAULT INPUT]";
+        if (info.isDefaultOutput)
+            std::cout << " [DEFAULT OUTPUT]";
         std::cout << "\n";
         std::cout << "    Input channels: " << info.inputChannels << "\n";
         std::cout << "    Output channels: " << info.outputChannels << "\n";
@@ -124,15 +127,15 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
         audio.startStream();
         if (audio.isStreamOpen())
             std::cout << "acmx2: Audio input stream opened...\n";
-    }
-    catch (std::exception& e) {
+    } catch (std::exception &e) {
         std::cerr << "acmx2: Standard exception: " << e.what() << std::endl;
-        if (audio.isStreamOpen()) audio.closeStream();
+        if (audio.isStreamOpen())
+            audio.closeStream();
         return 1;
-    }
-    catch (...) {
+    } catch (...) {
         std::cerr << "acmx2: Unknown error occurred!" << std::endl;
-        if (audio.isStreamOpen()) audio.closeStream();
+        if (audio.isStreamOpen())
+            audio.closeStream();
         return 1;
     }
 

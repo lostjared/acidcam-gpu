@@ -1,13 +1,11 @@
 #include "syntax.hpp"
 
 GlslSyntaxHighlighter::GlslSyntaxHighlighter(QTextDocument *parent)
-    : QSyntaxHighlighter(parent)
-{
+    : QSyntaxHighlighter(parent) {
     initHighlightingRules();
 }
 
-void GlslSyntaxHighlighter::highlightBlock(const QString &text)
-{
+void GlslSyntaxHighlighter::highlightBlock(const QString &text) {
     for (const HighlightingRule &rule : m_highlightingRules) {
         QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
         while (matchIterator.hasNext()) {
@@ -37,8 +35,7 @@ void GlslSyntaxHighlighter::highlightBlock(const QString &text)
     }
 }
 
-void GlslSyntaxHighlighter::initHighlightingRules()
-{
+void GlslSyntaxHighlighter::initHighlightingRules() {
     QStringList keywordPatterns = {
         "\\bif\\b", "\\belse\\b", "\\bfor\\b", "\\bwhile\\b", "\\bdo\\b",
         "\\bbreak\\b", "\\bcontinue\\b", "\\breturn\\b", "\\bdiscard\\b",
@@ -48,8 +45,7 @@ void GlslSyntaxHighlighter::initHighlightingRules()
         "\\buniform\\b", "\\bvarying\\b", "\\battribute\\b",
         "\\bcentroid\\b", "\\bflat\\b", "\\bsmooth\\b", "\\bnoperspective\\b",
         "\\blayout\\b", "\\bprecision\\b", "\\bhighp\\b", "\\bmediump\\b", "\\blowp\\b",
-        "\\binvariant\\b", "\\bprecise\\b"
-    };
+        "\\binvariant\\b", "\\bprecise\\b"};
 
     QTextCharFormat keywordFormat;
     keywordFormat.setForeground(QColor(86, 156, 214));
@@ -79,8 +75,7 @@ void GlslSyntaxHighlighter::initHighlightingRules()
         "\\bsampler1DArray\\b", "\\bsampler2DArray\\b",
         "\\bsampler2DRect\\b", "\\bsampler2DMS\\b",
         "\\bisampler1D\\b", "\\bisampler2D\\b", "\\bisampler3D\\b",
-        "\\busampler1D\\b", "\\busampler2D\\b", "\\busampler3D\\b"
-    };
+        "\\busampler1D\\b", "\\busampler2D\\b", "\\busampler3D\\b"};
 
     QTextCharFormat typeFormat;
     typeFormat.setForeground(QColor(78, 201, 176));
@@ -132,8 +127,7 @@ void GlslSyntaxHighlighter::initHighlightingRules()
         "\\bimageAtomicCompSwap\\b",
         "\\bpackUnorm2x16\\b", "\\bpackSnorm2x16\\b", "\\bpackUnorm4x8\\b", "\\bpackSnorm4x8\\b",
         "\\bunpackUnorm2x16\\b", "\\bunpackSnorm2x16\\b", "\\bunpackUnorm4x8\\b", "\\bunpackSnorm4x8\\b",
-        "\\bpackHalf2x16\\b", "\\bunpackHalf2x16\\b", "\\bpackDouble2x32\\b", "\\bunpackDouble2x32\\b"
-    };
+        "\\bpackHalf2x16\\b", "\\bunpackHalf2x16\\b", "\\bpackDouble2x32\\b", "\\bunpackDouble2x32\\b"};
 
     QTextCharFormat builtinFormat;
     builtinFormat.setForeground(QColor(220, 220, 170));
@@ -161,8 +155,7 @@ void GlslSyntaxHighlighter::initHighlightingRules()
         "\\bgl_MaxGeometryTextureImageUnits\\b", "\\bgl_MaxGeometryOutputVertices\\b",
         "\\bgl_MaxGeometryTotalOutputComponents\\b", "\\bgl_MaxGeometryUniformComponents\\b",
         "\\bgl_MaxGeometryVaryingComponents\\b",
-        "\\btrue\\b", "\\bfalse\\b"
-    };
+        "\\btrue\\b", "\\bfalse\\b"};
 
     QTextCharFormat constantFormat;
     constantFormat.setForeground(QColor(181, 206, 168));

@@ -1,9 +1,9 @@
 
 #include "shaderlibrary.hpp"
-#include<QFile>
-#include<QDir>
-#include<QTextStream>
-#include<QSettings>
+#include <QDir>
+#include <QFile>
+#include <QSettings>
+#include <QTextStream>
 
 LibraryWindow::LibraryWindow(QWidget *parent) : QDialog(parent) {
     init();
@@ -46,7 +46,7 @@ void LibraryWindow::init() {
                     "QPushButton:hover { background-color: red; color: black; }";
 
     QSettings appSettings("LostSideDead");
-    if(appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", true).toBool()) {
         setStyleSheet(style);
     }
 }
@@ -78,31 +78,30 @@ void LibraryWindow::onOkButtonClicked() {
     }
 
     QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "Confirm", 
+        this, "Confirm",
         QString("Do you want to create a shader index file in the folder: %1?").arg(folderPath),
-        QMessageBox::Yes | QMessageBox::No
-    );
+        QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
-            QDir dir;
-            dir.mkpath(folderPath);
-            createShaderIndexFile(folderPath);
-            path = folderPath;
-        
+        QDir dir;
+        dir.mkpath(folderPath);
+        createShaderIndexFile(folderPath);
+        path = folderPath;
+
         if (createDefaultShaderCheckBox->isChecked()) {
-              QFile file(folderPath + "/default.glsl");
-              if(file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QFile file(folderPath + "/default.glsl");
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 QTextStream out(&file);
                 out << defaultFile << "\n";
                 file.close();
-              }
+            }
         } else {
 
             QFile file(folderPath + "/default.glsl");
-            if(file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 QTextStream out(&file);
                 out << "\n";
-                file.close();    
+                file.close();
             }
         }
 

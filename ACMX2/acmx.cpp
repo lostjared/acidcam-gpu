@@ -1,60 +1,58 @@
 #include "version_info.hpp"
-#include <mx.hpp>
-#include <argz.hpp>
-#include <gl.hpp>
-#include <vector>
-#include <fstream>
-#include <string>
 #include <algorithm>
+#include <argz.hpp>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <ctime>
+#include <deque>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <gl.hpp>
+#include <iomanip>
+#include <mutex>
+#include <mx.hpp>
+#include <mxwrite.hpp>
+#include <opencv2/opencv.hpp>
+#include <optional>
+#include <queue>
+#include <sstream>
+#include <string>
+#include <thread>
 #include <tuple>
 #include <unordered_map>
-#include <opencv2/opencv.hpp>
-#include <filesystem>
-#include <chrono>
-#include <thread>
-#include <ctime>
-#include <optional>
-#include <mutex>
-#include <condition_variable>
-#include <queue>
-#include <atomic>
-#include <iomanip>
-#include <ctime>
-#include <sstream>
-#include <deque>
-#include <mxwrite.hpp>
-#include <functional>
+#include <vector>
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
 #endif
-#include<string_view>
-#include <deque>
-#include <opencv2/opencv.hpp>
-#include <opencv2/core/cuda.hpp>
-#include <opencv2/cudaimgproc.hpp>
-#include <model.hpp>
+#include "program.hpp"
 #include <ac-gpu/ac-gpu.hpp>
 #include <cuda_gl_interop.h>
+#include <deque>
 #include <glm/gtc/matrix_transform.hpp>
-#include"program.hpp"
+#include <model.hpp>
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaimgproc.hpp>
+#include <opencv2/opencv.hpp>
+#include <string_view>
 
 void transfer_audio(std::string_view, std::string_view);
 
-
 class SnapshotThreadPool {
-public:
+  public:
     SnapshotThreadPool(size_t threads) : stop(false) {
-        for(size_t i = 0; i < threads; ++i)
+        for (size_t i = 0; i < threads; ++i)
             workers.emplace_back([this] {
-                for(;;) {
+                for (;;) {
                     std::function<void()> task;
                     {
                         std::unique_lock<std::mutex> lock(this->queue_mutex);
-                        this->condition.wait(lock, [this]{ return this->stop || !this->tasks.empty(); });
-                        if(this->stop && this->tasks.empty()) {
+                        this->condition.wait(lock, [this] { return this->stop || !this->tasks.empty(); });
+                        if (this->stop && this->tasks.empty()) {
                             return;
                         }
-                        if(this->tasks.empty()) {
+                        if (this->tasks.empty()) {
                             continue;
                         }
                         task = std::move(this->tasks.front());
@@ -65,11 +63,12 @@ public:
             });
     }
 
-    template<class F>
-    void enqueue(F&& f) {
+    template <class F>
+    void enqueue(F &&f) {
         {
             std::unique_lock<std::mutex> lock(queue_mutex);
-            if(stop) throw std::runtime_error("enqueue on stopped SnapshotThreadPool");
+            if (stop)
+                throw std::runtime_error("enqueue on stopped SnapshotThreadPool");
             tasks.emplace(std::forward<F>(f));
         }
         condition.notify_one();
@@ -81,11 +80,11 @@ public:
             stop = true;
         }
         condition.notify_all();
-        for(std::thread &worker: workers)
+        for (std::thread &worker : workers)
             worker.join();
     }
 
-private:
+  private:
     std::vector<std::thread> workers;
     std::queue<std::function<void()>> tasks;
     std::mutex queue_mutex;
@@ -94,12 +93,12 @@ private:
 };
 
 class FrameCache {
-public:
+  public:
     explicit FrameCache(std::size_t num)
-        : num_frames(num)  {
+        : num_frames(num) {
     }
     ~FrameCache() = default;
-    void push(cv::Mat&& frame) {
+    void push(cv::Mat &&frame) {
         if (frames.size() < num_frames) {
             frames.emplace_back(std::move(frame));
         } else {
@@ -107,47 +106,48 @@ public:
             frames.emplace_back(std::move(frame));
         }
     }
-    cv::Mat& at(std::size_t index) {
+    cv::Mat &at(std::size_t index) {
         return frames.at(index);
     }
-    cv::Mat& operator[](std::size_t index) { 
-        if(index >= frames.size()) {
+    cv::Mat &operator[](std::size_t index) {
+        if (index >= frames.size()) {
             throw std::out_of_range("FrameCache index out of range");
         }
-        return frames[index]; 
+        return frames[index];
     }
     std::size_t size() const {
         return frames.size();
     }
 
     bool isFull() {
-        if(size() == num_frames) 
+        if (size() == num_frames)
             return true;
         return false;
     }
 
     void fill(cv::Mat &frame) {
-        for(size_t i = 0; i < num_frames; ++i) {
-            if(frames.size() < num_frames)
+        for (size_t i = 0; i < num_frames; ++i) {
+            if (frames.size() < num_frames)
                 frames.push_back(frame);
         }
     }
 
-private:
-    std::size_t num_frames;       
-    std::deque<cv::Mat> frames;   
+  private:
+    std::size_t num_frames;
+    std::deque<cv::Mat> frames;
 };
 
 class TextureUploader {
-public:
+  public:
     GLuint textureID = 0;
     GLuint pboID = 0;
-    cudaGraphicsResource* cudaPboResource = nullptr;
+    cudaGraphicsResource *cudaPboResource = nullptr;
     int width = 0;
     int height = 0;
 
     void init(int w, int h) {
-        if (textureID != 0) cleanup(); 
+        if (textureID != 0)
+            cleanup();
         width = w;
         height = h;
         glGenTextures(1, &textureID);
@@ -164,11 +164,11 @@ public:
         CHECK_CUDA(cudaGraphicsGLRegisterBuffer(&cudaPboResource, pboID, cudaGraphicsMapFlagsWriteDiscard));
     }
 
-    void update(const cv::cuda::GpuMat& gpuFrame) {
+    void update(const cv::cuda::GpuMat &gpuFrame) {
         if (gpuFrame.cols != width || gpuFrame.rows != height) {
             init(gpuFrame.cols, gpuFrame.rows);
         }
-        void* pboPointer = nullptr;
+        void *pboPointer = nullptr;
         size_t numBytes = 0;
         CHECK_CUDA(cudaGraphicsMapResources(1, &cudaPboResource, 0));
         CHECK_CUDA(cudaGraphicsResourceGetMappedPointer(&pboPointer, &numBytes, cudaPboResource));
@@ -207,87 +207,90 @@ struct ShaderCacheEntry {
 };
 
 struct ShaderCache {
-    static constexpr uint32_t CACHE_MAGIC = 0x53484452; 
-    static constexpr uint32_t CACHE_VERSION = 2;  
+    static constexpr uint32_t CACHE_MAGIC = 0x53484452;
+    static constexpr uint32_t CACHE_VERSION = 2;
     std::string gl_renderer;
     std::string gl_version;
     bool dual_mode = false;
     std::vector<ShaderCacheEntry> entries;
-    
+
     bool save(const std::string &path) const {
         std::ofstream file(path, std::ios::binary);
-        if (!file.is_open()) return false;
-        
-        file.write(reinterpret_cast<const char*>(&CACHE_MAGIC), sizeof(CACHE_MAGIC));
-        file.write(reinterpret_cast<const char*>(&CACHE_VERSION), sizeof(CACHE_VERSION));
-        
+        if (!file.is_open())
+            return false;
+
+        file.write(reinterpret_cast<const char *>(&CACHE_MAGIC), sizeof(CACHE_MAGIC));
+        file.write(reinterpret_cast<const char *>(&CACHE_VERSION), sizeof(CACHE_VERSION));
+
         auto writeString = [&file](const std::string &s) {
             uint32_t len = static_cast<uint32_t>(s.size());
-            file.write(reinterpret_cast<const char*>(&len), sizeof(len));
+            file.write(reinterpret_cast<const char *>(&len), sizeof(len));
             file.write(s.data(), len);
         };
-        
+
         writeString(gl_renderer);
         writeString(gl_version);
-        file.write(reinterpret_cast<const char*>(&dual_mode), sizeof(dual_mode));
-        
+        file.write(reinterpret_cast<const char *>(&dual_mode), sizeof(dual_mode));
+
         uint32_t count = static_cast<uint32_t>(entries.size());
-        file.write(reinterpret_cast<const char*>(&count), sizeof(count));
-        
+        file.write(reinterpret_cast<const char *>(&count), sizeof(count));
+
         for (const auto &e : entries) {
             writeString(e.shader_name);
-            file.write(reinterpret_cast<const char*>(&e.source_hash), sizeof(e.source_hash));
-            file.write(reinterpret_cast<const char*>(&e.format_2d), sizeof(e.format_2d));
+            file.write(reinterpret_cast<const char *>(&e.source_hash), sizeof(e.source_hash));
+            file.write(reinterpret_cast<const char *>(&e.format_2d), sizeof(e.format_2d));
             uint32_t size_2d = static_cast<uint32_t>(e.binary_2d.size());
-            file.write(reinterpret_cast<const char*>(&size_2d), sizeof(size_2d));
+            file.write(reinterpret_cast<const char *>(&size_2d), sizeof(size_2d));
             file.write(e.binary_2d.data(), size_2d);
-            
-            file.write(reinterpret_cast<const char*>(&e.format_3d), sizeof(e.format_3d));
+
+            file.write(reinterpret_cast<const char *>(&e.format_3d), sizeof(e.format_3d));
             uint32_t size_3d = static_cast<uint32_t>(e.binary_3d.size());
-            file.write(reinterpret_cast<const char*>(&size_3d), sizeof(size_3d));
+            file.write(reinterpret_cast<const char *>(&size_3d), sizeof(size_3d));
             file.write(e.binary_3d.data(), size_3d);
         }
         return file.good();
     }
-    
+
     bool load(const std::string &path) {
         std::ifstream file(path, std::ios::binary);
-        if (!file.is_open()) return false;
-        
+        if (!file.is_open())
+            return false;
+
         uint32_t magic, version;
-        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-        file.read(reinterpret_cast<char*>(&version), sizeof(version));
-        
-        if (magic != CACHE_MAGIC || version != CACHE_VERSION) return false;
-        
+        file.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+        file.read(reinterpret_cast<char *>(&version), sizeof(version));
+
+        if (magic != CACHE_MAGIC || version != CACHE_VERSION)
+            return false;
+
         auto readString = [&file]() -> std::string {
             uint32_t len;
-            file.read(reinterpret_cast<char*>(&len), sizeof(len));
+            file.read(reinterpret_cast<char *>(&len), sizeof(len));
             std::string s(len, '\0');
             file.read(s.data(), len);
             return s;
         };
-        
+
         gl_renderer = readString();
         gl_version = readString();
-        file.read(reinterpret_cast<char*>(&dual_mode), sizeof(dual_mode));
-        
+        file.read(reinterpret_cast<char *>(&dual_mode), sizeof(dual_mode));
+
         uint32_t count;
-        file.read(reinterpret_cast<char*>(&count), sizeof(count));
+        file.read(reinterpret_cast<char *>(&count), sizeof(count));
         entries.resize(count);
-        
+
         for (auto &e : entries) {
             e.shader_name = readString();
-            file.read(reinterpret_cast<char*>(&e.source_hash), sizeof(e.source_hash));
-            file.read(reinterpret_cast<char*>(&e.format_2d), sizeof(e.format_2d));
+            file.read(reinterpret_cast<char *>(&e.source_hash), sizeof(e.source_hash));
+            file.read(reinterpret_cast<char *>(&e.format_2d), sizeof(e.format_2d));
             uint32_t size_2d;
-            file.read(reinterpret_cast<char*>(&size_2d), sizeof(size_2d));
+            file.read(reinterpret_cast<char *>(&size_2d), sizeof(size_2d));
             e.binary_2d.resize(size_2d);
             file.read(e.binary_2d.data(), size_2d);
-            
-            file.read(reinterpret_cast<char*>(&e.format_3d), sizeof(e.format_3d));
+
+            file.read(reinterpret_cast<char *>(&e.format_3d), sizeof(e.format_3d));
             uint32_t size_3d;
-            file.read(reinterpret_cast<char*>(&size_3d), sizeof(size_3d));
+            file.read(reinterpret_cast<char *>(&size_3d), sizeof(size_3d));
             e.binary_3d.resize(size_3d);
             file.read(e.binary_3d.data(), size_3d);
         }
@@ -297,7 +300,8 @@ struct ShaderCache {
 
 static uint64_t fnv1a64_file(const std::string &filepath) {
     std::ifstream f(filepath, std::ios::binary);
-    if(!f.is_open()) return 0;
+    if (!f.is_open())
+        return 0;
 
     uint64_t h = 1469598103934665603ull;
     char buf[1 << 15];
@@ -316,17 +320,18 @@ uint64_t hashFileContents(const std::string &filepath) {
     return fnv1a64_file(filepath);
 }
 
-typedef void (APIENTRYP PFNGLGETPROGRAMBINARYPROC_LOCAL)(GLuint program, GLsizei bufSize, GLsizei *length, GLenum *binaryFormat, void *binary);
-typedef void (APIENTRYP PFNGLPROGRAMBINARYPROC_LOCAL)(GLuint program, GLenum binaryFormat, const void *binary, GLsizei length);
+typedef void(APIENTRYP PFNGLGETPROGRAMBINARYPROC_LOCAL)(GLuint program, GLsizei bufSize, GLsizei *length, GLenum *binaryFormat, void *binary);
+typedef void(APIENTRYP PFNGLPROGRAMBINARYPROC_LOCAL)(GLuint program, GLenum binaryFormat, const void *binary, GLsizei length);
 
 static PFNGLGETPROGRAMBINARYPROC_LOCAL glGetProgramBinaryFunc = nullptr;
 static PFNGLPROGRAMBINARYPROC_LOCAL glProgramBinaryFunc = nullptr;
 
 bool loadProgramBinaryFunctions() {
-    if (glGetProgramBinaryFunc != nullptr) return true;  
+    if (glGetProgramBinaryFunc != nullptr)
+        return true;
     glGetProgramBinaryFunc = reinterpret_cast<PFNGLGETPROGRAMBINARYPROC_LOCAL>(SDL_GL_GetProcAddress("glGetProgramBinary"));
     glProgramBinaryFunc = reinterpret_cast<PFNGLPROGRAMBINARYPROC_LOCAL>(SDL_GL_GetProcAddress("glProgramBinary"));
-    
+
     if (glGetProgramBinaryFunc == nullptr || glProgramBinaryFunc == nullptr) {
         mx::system_err << "acmx2: Failed to load glGetProgramBinary/glProgramBinary functions\n";
         return false;
@@ -339,20 +344,20 @@ class ShaderLibrary {
     bool time_active = true;
     float time_f = 1.0;
     bool is3d = false;
-    bool dual_mode = false; 
-    
+    bool dual_mode = false;
+
     struct ProgramData {
         std::string name;
         GLint loc = -1, iTime = -1, iMouse = -1, time_f = -1, iResolution = -1;
-    #ifdef AUDIO_ENABLED
+#ifdef AUDIO_ENABLED
         GLint amp = -1, amp_untouched = -1;
-    #endif
-        GLint texture_cache_loc[8] = {-1,-1,-1,-1,-1,-1,-1,-1};
+#endif
+        GLint texture_cache_loc[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
         GLint iFrame = -1;
         GLint iTimeDelta = -1;
         GLint iDate = -1;
-        GLint iChannelTime[4] = {-1,-1,-1,-1};
-        GLint iChannelResolution[4] = {-1,-1,-1,-1};
+        GLint iChannelTime[4] = {-1, -1, -1, -1};
+        GLint iChannelResolution[4] = {-1, -1, -1, -1};
         GLint iSampleRate = -1;
         GLint iFrameRate = -1;
         GLint iMouseClick = -1;
@@ -373,11 +378,12 @@ class ShaderLibrary {
     float lastClickY = 0.0f;
 
     std::unique_ptr<gl::ShaderProgram> makeProgram() {
-        if(use_cache) return std::make_unique<ac::ShaderProgram>();
+        if (use_cache)
+            return std::make_unique<ac::ShaderProgram>();
         return std::make_unique<gl::ShaderProgram>();
     }
 
-public:
+  public:
     ShaderLibrary() = default;
     ~ShaderLibrary() {}
 
@@ -391,15 +397,15 @@ public:
         library_index = 0;
     }
 
-    void loadProgram(gl::GLWindow *win, const std::string text) {     
+    void loadProgram(gl::GLWindow *win, const std::string text) {
         programs_2d.push_back(makeProgram());
-        if(!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text)) {
+        if (!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text)) {
             throw mx::Exception("Error loading 2D shader program: " + text);
         }
         setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text);
-        if(dual_mode) {
+        if (dual_mode) {
             programs_3d.push_back(makeProgram());
-            if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text)) {
+            if (!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text)) {
                 throw mx::Exception("Error loading 3D shader program: " + text);
             }
             setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text);
@@ -408,25 +414,25 @@ public:
             mx::system_out << "acmx2: Compiled Shader 0 (2D): " << text << " ✔ \n";
         }
     }
-    
-    void setupProgramUniforms(gl::GLWindow *win, gl::ShaderProgram *prog, 
-                               std::unordered_map<int, ProgramData> &names, size_t pos, 
-                               const std::string &text) {
+
+    void setupProgramUniforms(gl::GLWindow *win, gl::ShaderProgram *prog,
+                              std::unordered_map<int, ProgramData> &names, size_t pos,
+                              const std::string &text) {
         GLenum error = glGetError();
-        if(error != GL_NO_ERROR){
+        if (error != GL_NO_ERROR) {
             throw mx::Exception("OpenGL Error: on ShaderLibary::loadProgram: " + std::to_string(error));
         }
-        prog->useProgram();        
+        prog->useProgram();
         GLint loc = glGetUniformLocation(prog->id(), "iResolution");
         glUniform2f(loc, win->w, win->h);
         error = glGetError();
-        if(error != GL_NO_ERROR) {
+        if (error != GL_NO_ERROR) {
             throw mx::Exception("setUniform");
         }
-        
+
         std::filesystem::path file_path(text);
         std::string name = file_path.stem().string();
-        if(!name.empty()) {
+        if (!name.empty()) {
             names[pos].name = name;
             names[pos].loc = glGetUniformLocation(prog->id(), "alpha");
             names[pos].iTime = glGetUniformLocation(prog->id(), "iTime");
@@ -438,17 +444,17 @@ public:
             names[pos].iDate = glGetUniformLocation(prog->id(), "iDate");
             names[pos].iFrameRate = glGetUniformLocation(prog->id(), "iFrameRate");
             names[pos].iMouseClick = glGetUniformLocation(prog->id(), "iMouseClick");
-            
-            for(int i = 0; i < 4; ++i) {
+
+            for (int i = 0; i < 4; ++i) {
                 std::string channelTime = "iChannelTime[" + std::to_string(i) + "]";
                 std::string channelRes = "iChannelResolution[" + std::to_string(i) + "]";
                 names[pos].iChannelTime[i] = glGetUniformLocation(prog->id(), channelTime.c_str());
                 names[pos].iChannelResolution[i] = glGetUniformLocation(prog->id(), channelRes.c_str());
             }
 
-            if(name.find("cache") != std::string::npos) {
-                for(int i = 0; i < 8; ++i) {
-                    names[pos].texture_cache_loc[i] = glGetUniformLocation(prog->id(), std::string("samp" + std::to_string(i+1)).c_str());
+            if (name.find("cache") != std::string::npos) {
+                for (int i = 0; i < 8; ++i) {
+                    names[pos].texture_cache_loc[i] = glGetUniformLocation(prog->id(), std::string("samp" + std::to_string(i + 1)).c_str());
                 }
             }
 
@@ -463,20 +469,22 @@ public:
     void setFPS(float fps_value) {
         auto &names = is3d ? program_names_3d : program_names_2d;
         auto it = names.find(index());
-        if(it == names.end()) return;
+        if (it == names.end())
+            return;
         GLint loc = it->second.iFrameRate;
-        if(loc != -1) glUniform1f(loc, fps_value);
+        if (loc != -1)
+            glUniform1f(loc, fps_value);
     }
 
     void setUniform(const std::string &name, int value) {
-        if(value < 0 || value >= 8) {
-            return; 
+        if (value < 0 || value >= 8) {
+            return;
         }
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(names.find(index()) == names.end()) {
-            return; 
+        if (names.find(index()) == names.end()) {
+            return;
         }
-        glUniform1i(names[index()].texture_cache_loc[value], value+1);
+        glUniform1i(names[index()].texture_cache_loc[value], value + 1);
     }
 
     void is3D(bool is3d) {
@@ -486,13 +494,13 @@ public:
     void enableDualMode(bool enable) {
         dual_mode = enable;
     }
-    
+
     bool isDualMode() const {
         return dual_mode;
     }
-    
+
     void toggle3D() {
-        if(!dual_mode) {
+        if (!dual_mode) {
             mx::system_out << "acmx2: Cannot switch to 3D - dual mode not enabled\n";
             fflush(stdout);
             return;
@@ -501,7 +509,7 @@ public:
         mx::system_out << "acmx2: Switched to " << (is3d ? "3D" : "2D") << " mode\n";
         fflush(stdout);
     }
-    
+
     bool get3D() const { return is3d; }
 
     void toggleBypass() {
@@ -518,14 +526,14 @@ public:
     void loadPrograms(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
         std::fstream file;
         file.open(text + "/index.txt", std::ios::in);
-        if(!file.is_open()) {
+        if (!file.is_open()) {
             throw mx::Exception("acmx2: Could not load index.txt at shader path: " + text);
         }
         size_t total_shaders = 0;
         {
             std::string line;
-            while(std::getline(file, line)) {
-                if(!line.empty() && std::filesystem::exists(text + "/" + line) && line.find("material") == std::string::npos) {
+            while (std::getline(file, line)) {
+                if (!line.empty() && std::filesystem::exists(text + "/" + line) && line.find("material") == std::string::npos) {
                     total_shaders++;
                 }
             }
@@ -538,38 +546,38 @@ public:
 
         int last_percent_reported = -1;
         size_t shader_index = 0;
-        while(!file.eof()) {
+        while (!file.eof()) {
             std::string line_data;
             std::getline(file, line_data);
-            if(file && !line_data.empty() && std::filesystem::exists(text + "/" + line_data) && line_data.find("material") == std::string::npos) {
+            if (file && !line_data.empty() && std::filesystem::exists(text + "/" + line_data) && line_data.find("material") == std::string::npos) {
                 programs_2d.push_back(makeProgram());
                 try {
-                    if(!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
+                    if (!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
                         mx::system_out << "acmx2: ❌ Failed to compile 2D shader: " << line_data << "\n";
                         fflush(stdout);
                         throw mx::Exception("\nacmx2: Error could not load 2D shader: " + line_data);
                     }
-                } catch(mx::Exception &e) {
+                } catch (mx::Exception &e) {
                     fflush(stdout);
                     fflush(stderr);
                     throw;
                 }
                 setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text + "/" + line_data);
-                if(dual_mode) {
+                if (dual_mode) {
                     programs_3d.push_back(makeProgram());
                     try {
-                        if(!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
+                        if (!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
                             mx::system_out << "acmx2: ❌ Failed to compile 3D shader: " << line_data << "\n";
                             fflush(stdout);
                             throw mx::Exception("acmx2: Error could not load 3D shader: " + line_data);
                         }
-                    } catch(mx::Exception &e) {
+                    } catch (mx::Exception &e) {
                         fflush(stdout);
                         fflush(stderr);
                         throw;
                     }
                     setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text + "/" + line_data);
-                }     
+                }
                 shader_index++;
 
                 int percent = static_cast<int>(shader_index * 100 / total_shaders);
@@ -581,7 +589,7 @@ public:
 
                     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                     glClear(GL_COLOR_BUFFER_BIT);
-                    if(loadingFont.handle().has_value()) {
+                    if (loadingFont.handle().has_value()) {
                         std::string loadingText = "Compiling Shader " + std::to_string(shader_index) + "/" + std::to_string(total_shaders) + "...";
                         win->text.printText_Blended(loadingFont, 10, 10, loadingText);
                     }
@@ -594,7 +602,7 @@ public:
         mx::system_out << "acmx2: Compiled " << shader_index << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
     }
-    
+
     bool buildShaderCache(gl::GLWindow *win, const std::string &library_path, const std::string &vert_2d, const std::string &vert_3d) {
         GLint numFormats = 0;
         glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &numFormats);
@@ -604,14 +612,14 @@ public:
         }
         mx::system_out << "acmx2: OpenGL supports " << numFormats << " program binary format(s)\n";
         fflush(stdout);
-        
+
         if (!loadProgramBinaryFunctions()) {
             mx::system_err << "acmx2: Error - Failed to load program binary extension functions\n";
             return false;
         }
         mx::system_out << "acmx2: Program binary functions loaded successfully\n";
         fflush(stdout);
-        
+
         std::string cache_file = library_path + "/.shader_cache";
         std::fstream file;
         file.open(library_path + "/index.txt", std::ios::in);
@@ -621,8 +629,8 @@ public:
         }
 
         ShaderCache cache;
-        cache.gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-        cache.gl_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        cache.gl_renderer = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
+        cache.gl_version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
         cache.dual_mode = dual_mode;
 
         std::vector<std::string> shader_files;
@@ -640,14 +648,14 @@ public:
         for (size_t i = 0; i < shader_files.size(); ++i) {
             const std::string &shader_file = shader_files[i];
             std::string full_path = library_path + "/" + shader_file;
-            
+
             mx::system_out << "acmx2: Caching Shader " << i << "/" << shader_files.size() << ": [" << shader_file << "] \n";
             fflush(stdout);
 
             ShaderCacheEntry entry;
             std::filesystem::path file_path(shader_file);
             entry.shader_name = file_path.stem().string();
-            
+
             mx::system_out << "  - Computing hash... ";
             fflush(stdout);
             entry.source_hash = hashFileContents(full_path);
@@ -657,7 +665,7 @@ public:
             try {
                 mx::system_out << "  - Compiling 2D shader... ";
                 fflush(stdout);
-                
+
                 gl::ShaderProgram prog_2d;
                 prog_2d.setSilent(true);
                 if (!prog_2d.loadProgram(vert_2d, full_path)) {
@@ -675,7 +683,7 @@ public:
                     fflush(stdout);
                     continue;
                 }
-                
+
                 GLint binary_retrievable = 0;
                 glGetProgramiv(prog_2d.id(), GL_PROGRAM_BINARY_RETRIEVABLE_HINT, &binary_retrievable);
                 mx::system_out << "  - Binary retrievable hint: " << binary_retrievable << "\n";
@@ -683,50 +691,50 @@ public:
 
                 mx::system_out << "  - Getting binary length... ";
                 fflush(stdout);
-                
+
                 GLint binary_length = 0;
                 glGetProgramiv(prog_2d.id(), GL_PROGRAM_BINARY_LENGTH, &binary_length);
                 GLenum gl_error = glGetError();
-                
+
                 mx::system_out << binary_length << " bytes\n";
                 fflush(stdout);
-                
+
                 if (gl_error != GL_NO_ERROR) {
                     mx::system_out << " ❌ (GL error: " << gl_error << ")\n";
                     fflush(stdout);
                     continue;
                 }
-                
+
                 if (binary_length > 0) {
                     mx::system_out << "  - Extracting binary... ";
                     fflush(stdout);
-                    
-                    void* binary_buffer = malloc(binary_length);
+
+                    void *binary_buffer = malloc(binary_length);
                     if (!binary_buffer) {
                         mx::system_out << "❌ (malloc failed)\n";
                         fflush(stdout);
                         continue;
                     }
-                    
+
                     GLsizei actual_length = 0;
                     GLenum format = 0;
-                    
+
                     mx::system_out << "calling glGetProgramBinary... ";
                     fflush(stdout);
-                    
+
                     glGetProgramBinaryFunc(prog_2d.id(), binary_length, &actual_length, &format, binary_buffer);
                     gl_error = glGetError();
-                    
+
                     mx::system_out << "done. actual=" << actual_length << ", format=" << format << "\n";
                     fflush(stdout);
-                    
+
                     if (gl_error != GL_NO_ERROR || actual_length == 0) {
                         mx::system_out << " ❌ (binary extraction failed, gl_error=" << gl_error << ")\n";
                         fflush(stdout);
                         free(binary_buffer);
                         continue;
                     }
-                    
+
                     entry.binary_2d.resize(actual_length);
                     memcpy(entry.binary_2d.data(), binary_buffer, actual_length);
                     entry.format_2d = format;
@@ -737,10 +745,10 @@ public:
                     continue;
                 }
 
-                if(dual_mode) {
+                if (dual_mode) {
                     mx::system_out << "  - Compiling 3D shader... ";
                     fflush(stdout);
-                    
+
                     gl::ShaderProgram prog_3d;
                     prog_3d.setSilent(true);
                     if (!prog_3d.loadProgram(vert_3d, full_path)) {
@@ -748,19 +756,19 @@ public:
                         fflush(stdout);
                         continue;
                     }
-                    
+
                     mx::system_out << "done (id=" << prog_3d.id() << ")\n";
                     fflush(stdout);
 
                     mx::system_out << "  - Getting 3D binary... ";
                     fflush(stdout);
-                    
+
                     GLint binary_length_3d = 0;
                     glGetProgramiv(prog_3d.id(), GL_PROGRAM_BINARY_LENGTH, &binary_length_3d);
-                    
+
                     mx::system_out << binary_length_3d << " bytes\n";
                     fflush(stdout);
-                    
+
                     if (binary_length_3d > 0) {
                         entry.binary_3d.resize(binary_length_3d);
                         GLsizei actual_length_3d = 0;
@@ -799,7 +807,7 @@ public:
     std::string getFullShaderName() {
         std::string name;
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(names.find(library_index) != names.end()) {
+        if (names.find(library_index) != names.end()) {
             name = std::to_string(library_index) + ": " + names[library_index].name;
         }
         return name;
@@ -807,7 +815,7 @@ public:
 
     std::string getShaderNameByIndex(size_t idx) {
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(names.find(idx) != names.end()) {
+        if (names.find(idx) != names.end()) {
             return names[idx].name;
         }
         return "";
@@ -816,19 +824,19 @@ public:
     std::string getFullShaderName(const std::vector<int> &pass_list) {
         std::string name;
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(names.find(library_index) != names.end()) {
+        if (names.find(library_index) != names.end()) {
             name = std::to_string(library_index) + ": " + names[library_index].name;
         }
-        if(!pass_list.empty()) {
+        if (!pass_list.empty()) {
             name += " [";
-            for(size_t i = 0; i < pass_list.size(); ++i) {
+            for (size_t i = 0; i < pass_list.size(); ++i) {
                 int idx = pass_list[i];
-                if(names.find(idx) != names.end()) {
+                if (names.find(idx) != names.end()) {
                     name += names[idx].name;
                 } else {
                     name += std::to_string(idx);
                 }
-                if(i + 1 < pass_list.size()) {
+                if (i + 1 < pass_list.size()) {
                     name += ", ";
                 }
             }
@@ -837,13 +845,13 @@ public:
         return name;
     }
 
-    bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont, 
+    bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont,
                        const std::string &vert_2d = "", const std::string &vert_3d = "") {
         std::string cache_file = library_path + "/.shader_cache";
-        
+
         mx::system_out << "acmx2: Checking for shader cache at: " << cache_file << "\n";
         fflush(stdout);
-        
+
         if (!std::filesystem::exists(cache_file)) {
             mx::system_out << "acmx2: No shader cache found, will compile shaders\n";
             fflush(stdout);
@@ -859,26 +867,24 @@ public:
             return false;
         }
 
-        
         if (!loadProgramBinaryFunctions()) {
             mx::system_out << "acmx2: Could not load program binary extension, will recompile\n";
             return false;
         }
 
-        std::string current_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-        std::string current_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-        
+        std::string current_renderer = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
+        std::string current_version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
+
         if (cache.gl_renderer != current_renderer) {
             mx::system_out << "acmx2: GPU changed (was: " << cache.gl_renderer << ", now: " << current_renderer << "), will recompile\n";
             return false;
         }
-        
+
         if (cache.gl_version != current_version) {
             mx::system_out << "acmx2: Driver version changed (was: " << cache.gl_version << ", now: " << current_version << "), will recompile\n";
             return false;
         }
 
-        
         if (dual_mode && !cache.dual_mode) {
             mx::system_out << "acmx2: Cache was built in 2D-only mode but 3D is enabled, will rebuild with 2D+3D\n";
             return false;
@@ -900,9 +906,9 @@ public:
         file.close();
 
         if (shader_files.size() != cache.entries.size()) {
-            mx::system_out << "acmx2: Shader count mismatch: index.txt has " << shader_files.size() 
-                          << " shaders but cache has " << cache.entries.size() 
-                          << " entries. Rebuilding cache...\n";
+            mx::system_out << "acmx2: Shader count mismatch: index.txt has " << shader_files.size()
+                           << " shaders but cache has " << cache.entries.size()
+                           << " entries. Rebuilding cache...\n";
             fflush(stdout);
             if (!vert_2d.empty() && !vert_3d.empty()) {
                 programs_2d.clear();
@@ -945,18 +951,18 @@ public:
 
             programs_2d.push_back(makeProgram());
             GLuint prog_id_2d = glCreateProgram();
-            
-            GLenum gl_err = glGetError();  
+
+            GLenum gl_err = glGetError();
             glProgramBinaryFunc(prog_id_2d, entry.format_2d, entry.binary_2d.data(), static_cast<GLsizei>(entry.binary_2d.size()));
             gl_err = glGetError();
-            
+
             GLint link_status = 0;
             glGetProgramiv(prog_id_2d, GL_LINK_STATUS, &link_status);
             if (link_status != GL_TRUE) {
                 GLchar info_log[512];
                 glGetProgramInfoLog(prog_id_2d, 512, nullptr, info_log);
-                mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 2D binary load failed, gl_err=" << gl_err 
-                               << ", format=" << entry.format_2d 
+                mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 2D binary load failed, gl_err=" << gl_err
+                               << ", format=" << entry.format_2d
                                << ", size=" << entry.binary_2d.size()
                                << ", log=" << info_log << "\n";
                 fflush(stdout);
@@ -964,16 +970,15 @@ public:
                 programs_2d.pop_back();
                 return false;
             }
-            
+
             *programs_2d.back() = gl::ShaderProgram(prog_id_2d);
             setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, library_path + "/" + shader_files[i]);
 
-            
             if (dual_mode && !entry.binary_3d.empty()) {
                 programs_3d.push_back(makeProgram());
                 GLuint prog_id_3d = glCreateProgram();
                 glProgramBinaryFunc(prog_id_3d, entry.format_3d, entry.binary_3d.data(), static_cast<GLsizei>(entry.binary_3d.size()));
-                
+
                 glGetProgramiv(prog_id_3d, GL_LINK_STATUS, &link_status);
                 if (link_status != GL_TRUE) {
                     mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 3D binary load failed\n";
@@ -982,7 +987,7 @@ public:
                     programs_3d.pop_back();
                     return false;
                 }
-                
+
                 *programs_3d.back() = gl::ShaderProgram(prog_id_3d);
                 setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, library_path + "/" + shader_files[i]);
             }
@@ -1021,7 +1026,7 @@ public:
 
     bool isCache() {
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(library_index < names.size() && names[library_index].name.find("cache") != std::string::npos)
+        if (library_index < names.size() && names[library_index].name.find("cache") != std::string::npos)
             return true;
         return false;
     }
@@ -1029,60 +1034,62 @@ public:
     void setIndex(size_t i) {
         auto &progs = is3d ? programs_3d : programs_2d;
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(i < progs.size()) {
-            library_index = i;   
+        if (i < progs.size()) {
+            library_index = i;
             mx::system_out << "acmx2: Set Shader to Index: " << i << " [" << names[i].name << "] (" << (is3d ? "3D" : "2D") << ")\n";
             fflush(stdout);
         }
     }
     void inc() {
         auto &progs = is3d ? programs_3d : programs_2d;
-        if(library_index+1 < progs.size())
-            setIndex(library_index+1);
+        if (library_index + 1 < progs.size())
+            setIndex(library_index + 1);
     }
     void dec() {
-        if(library_index > 0)
-            setIndex(library_index-1);
+        if (library_index > 0)
+            setIndex(library_index - 1);
     }
     size_t index() { return library_index; }
     size_t size() { return is3d ? programs_3d.size() : programs_2d.size(); }
     size_t size2d() { return programs_2d.size(); }
     size_t size3d() { return programs_3d.size(); }
 
-    void useProgram() { 
+    void useProgram() {
         auto &progs = is3d ? programs_3d : programs_2d;
-        progs[index()]->useProgram(); 
+        progs[index()]->useProgram();
     }
-    gl::ShaderProgram *shader() { 
+    gl::ShaderProgram *shader() {
         auto &progs = is3d ? programs_3d : programs_2d;
-        return progs[index()].get(); 
+        return progs[index()].get();
     }
 
-    gl::ShaderProgram *getShader(size_t idx) { 
+    gl::ShaderProgram *getShader(size_t idx) {
         auto &progs = is3d ? programs_3d : programs_2d;
-        if(idx < progs.size()) 
-            return progs[idx].get(); 
+        if (idx < progs.size())
+            return progs[idx].get();
         return nullptr;
     }
-    
-    gl::ShaderProgram *getShader2D(size_t idx) { 
-        if(idx < programs_2d.size()) 
-            return programs_2d[idx].get(); 
+
+    gl::ShaderProgram *getShader2D(size_t idx) {
+        if (idx < programs_2d.size())
+            return programs_2d[idx].get();
         return nullptr;
     }
-    
-    gl::ShaderProgram *getShader3D(size_t idx) { 
-        if(idx < programs_3d.size()) 
-            return programs_3d[idx].get(); 
+
+    gl::ShaderProgram *getShader3D(size_t idx) {
+        if (idx < programs_3d.size())
+            return programs_3d[idx].get();
         return nullptr;
     }
-    
+
     void updateShaderUniforms(gl::GLWindow *win, size_t idx) {
         auto &progs = is3d ? programs_3d : programs_2d;
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(idx >= progs.size()) return;
-        if(names.find(idx) == names.end()) return;
-        
+        if (idx >= progs.size())
+            return;
+        if (names.find(idx) == names.end())
+            return;
+
         static Uint64 start_time = SDL_GetPerformanceCounter();
         static Uint64 last_frame_time = start_time;
         static uint64_t frame_counter = 0;
@@ -1109,11 +1116,11 @@ public:
         float year = static_cast<float>(localTime_buf.tm_year + 1900);
         float month = static_cast<float>(localTime_buf.tm_mon + 1);
         float day = static_cast<float>(localTime_buf.tm_mday);
-        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + 
-                                     localTime_buf.tm_min * 60 + 
-                                     localTime_buf.tm_sec);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 +
+                                           localTime_buf.tm_min * 60 +
+                                           localTime_buf.tm_sec);
         glUniform4f(n.iDate, year, month, day, seconds);
-        if(n.iFrameRate != -1) {
+        if (n.iFrameRate != -1) {
             glUniform1f(n.iFrameRate, 24.0f);
         }
         int mouseX = 0, mouseY = 0;
@@ -1137,25 +1144,27 @@ public:
         } else {
             glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
         }
-        if(wasClicked && n.iMouseClick != -1) {
+        if (wasClicked && n.iMouseClick != -1) {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
 #ifdef AUDIO_ENABLED
-        if(time_audio) {
+        if (time_audio) {
             glUniform1f(n.amp, get_amp());
             glUniform1f(n.amp_untouched, get_sense());
         }
-        if(n.iSampleRate != -1) {
+        if (n.iSampleRate != -1) {
             glUniform1f(n.iSampleRate, 44100.0f);
         }
 #endif
     }
-    
+
     void updateShaderUniforms2D(gl::GLWindow *win, size_t idx) {
-        if(idx >= programs_2d.size()) return;
-        if(program_names_2d.find(idx) == program_names_2d.end()) return;
-        
+        if (idx >= programs_2d.size())
+            return;
+        if (program_names_2d.find(idx) == program_names_2d.end())
+            return;
+
         static Uint64 start_time = SDL_GetPerformanceCounter();
         static Uint64 last_frame_time = start_time;
         static uint64_t frame_counter = 0;
@@ -1177,16 +1186,16 @@ public:
 #ifdef _WIN32
         localtime_s(&localTime_buf, &now_c);
 #else
-    localtime_r(&now_c, &localTime_buf);
+        localtime_r(&now_c, &localTime_buf);
 #endif
         float year = static_cast<float>(localTime_buf.tm_year + 1900);
         float month = static_cast<float>(localTime_buf.tm_mon + 1);
         float day = static_cast<float>(localTime_buf.tm_mday);
-        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + 
-                                     localTime_buf.tm_min * 60 + 
-                                     localTime_buf.tm_sec);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 +
+                                           localTime_buf.tm_min * 60 +
+                                           localTime_buf.tm_sec);
         glUniform4f(n.iDate, year, month, day, seconds);
-        if(n.iFrameRate != -1) {
+        if (n.iFrameRate != -1) {
             glUniform1f(n.iFrameRate, 24.0f);
         }
         int mouseX = 0, mouseY = 0;
@@ -1210,16 +1219,16 @@ public:
         } else {
             glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
         }
-        if(wasClicked && n.iMouseClick != -1) {
+        if (wasClicked && n.iMouseClick != -1) {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
 #ifdef AUDIO_ENABLED
-        if(time_audio) {
+        if (time_audio) {
             glUniform1f(n.amp, get_amp());
             glUniform1f(n.amp_untouched, get_sense());
         }
-        if(n.iSampleRate != -1) {
+        if (n.iSampleRate != -1) {
             glUniform1f(n.iSampleRate, 44100.0f);
         }
 #endif
@@ -1227,29 +1236,29 @@ public:
 
     void update(gl::GLWindow *win) {
         auto &names = is3d ? program_names_3d : program_names_2d;
-        if(names.find(index()) == names.end()) {
-            return; 
+        if (names.find(index()) == names.end()) {
+            return;
         }
         static Uint64 start_time = SDL_GetPerformanceCounter();
         static Uint64 last_frame_time = start_time;
         static uint64_t frame_counter = 0;
-        
+
         Uint64 now_time = SDL_GetPerformanceCounter();
         double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
         double delta_time = static_cast<double>(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
         last_frame_time = now_time;
         frame_counter++;
 
-        if(time_audio == false && time_active) {
+        if (time_audio == false && time_active) {
             time_f = static_cast<float>(elapsed_time);
         } else {
 #ifdef AUDIO_ENABLED
-            if(time_audio) {
+            if (time_audio) {
                 time_f += (get_amp() * get_sense());
             }
 #endif
         }
-        if(std::isnan(time_f) || std::isinf(time_f))
+        if (std::isnan(time_f) || std::isinf(time_f))
             time_f = 1.0;
 
         GLuint time_f_loc = names[index()].time_f;
@@ -1257,8 +1266,8 @@ public:
         GLint loc = names[index()].loc;
         glUniform1f(loc, alpha);
         GLint iTimeLoc = names[index()].iTime;
-        double currentTime = static_cast<double>(SDL_GetTicks64()) / 1000.0f; 
-        glUniform1f(iTimeLoc, currentTime);   
+        double currentTime = static_cast<double>(SDL_GetTicks64()) / 1000.0f;
+        glUniform1f(iTimeLoc, currentTime);
         GLint iFrameLoc = names[index()].iFrame;
         glUniform1i(iFrameLoc, static_cast<int>(frame_counter % INT_MAX));
         GLint iTimeDeltaLoc = names[index()].iTimeDelta;
@@ -1275,24 +1284,24 @@ public:
         float year = static_cast<float>(localTime_buf.tm_year + 1900);
         float month = static_cast<float>(localTime_buf.tm_mon + 1);
         float day = static_cast<float>(localTime_buf.tm_mday);
-        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + 
-                                     localTime_buf.tm_min * 60 + 
-                                     localTime_buf.tm_sec);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 +
+                                           localTime_buf.tm_min * 60 +
+                                           localTime_buf.tm_sec);
         glUniform4f(iDateLoc, year, month, day, seconds);
-        
+
         GLint iFrameRateLoc = names[index()].iFrameRate;
-        if(iFrameRateLoc != -1) {
-           glUniform1f(iFrameRateLoc, 24.0f);
+        if (iFrameRateLoc != -1) {
+            glUniform1f(iFrameRateLoc, 24.0f);
         }
-        
+
         GLint iMouseLoc = names[index()].iMouse;
         GLint iMouseClickLoc = names[index()].iMouseClick;
-        
+
         int mouseX = 0, mouseY = 0;
         Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
         float currentY = static_cast<float>(win->h - mouseY);
         float currentX = static_cast<float>(mouseX);
-        
+
         if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
             if (!isDragging) {
                 clickStartX = currentX;
@@ -1305,20 +1314,20 @@ public:
         } else {
             isDragging = false;
         }
-        
+
         if (isDragging) {
             glUniform4f(iMouseLoc, currentX, currentY, clickStartX, clickStartY);
         } else {
             glUniform4f(iMouseLoc, currentX, currentY, 0.0f, 0.0f);
         }
-        
-        if(wasClicked && iMouseClickLoc != -1) {
+
+        if (wasClicked && iMouseClickLoc != -1) {
             glUniform2f(iMouseClickLoc, lastClickX, lastClickY);
         }
-        
+
         GLint iResolution = names[index()].iResolution;
         glUniform2f(iResolution, win->w, win->h);
-        
+
 #ifdef AUDIO_ENABLED
         GLuint amp_i = names[index()].amp;
         static float amplitude = 1.0;
@@ -1332,14 +1341,14 @@ public:
         GLuint amp_u = names[index()].amp_untouched;
         glUniform1f(amp_u, get_amp());
         GLint iSampleRateLoc = names[index()].iSampleRate;
-        if(iSampleRateLoc != -1) {
+        if (iSampleRateLoc != -1) {
             glUniform1f(iSampleRateLoc, 44100.0f);
         }
 #endif
     }
 
     void incTime(float value) {
-        if(!time_active) {
+        if (!time_active) {
             time_f += value;
             mx::system_out << "acmx2: Time step forward: " << time_f << "\n";
             fflush(stdout);
@@ -1347,8 +1356,8 @@ public:
     }
 
     void decTime(float value) {
-        if(!time_active) {
-            if(time_f - value > 1.0) {
+        if (!time_active) {
+            if (time_f - value > 1.0) {
                 time_f -= value;
                 mx::system_out << "acmx2: Time step back: " << time_f << "\n";
             } else {
@@ -1378,7 +1387,7 @@ public:
     float getAmp() const { return get_amp(); }
     float getAmpUntouched() const { return get_sense(); }
 #endif
-    void event(SDL_Event &e) {  }
+    void event(SDL_Event &e) {}
 };
 
 struct MXArguments {
@@ -1415,20 +1424,19 @@ struct MXArguments {
     int gpu_frame_buffer_size = 8;
     bool disable_counter = false;
     int cuda_device = 0;
-    std::vector<int> shader_pass_list; 
+    std::vector<int> shader_pass_list;
     bool shader_pass_enabled = false;
     bool build_cache = false;
     std::string build_library_path;
-    bool use_shader_cache = true;  
+    bool use_shader_cache = true;
 };
 
 struct FrameData {
     std::vector<unsigned char> pixels;
     int width = 0;
     int height = 0;
-    bool isSnapshot = false; 
+    bool isSnapshot = false;
 };
-
 
 class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
@@ -1438,12 +1446,13 @@ class ACView : public gl::GLObject {
 #endif
     bool isPaused = false;
     bool isFrozen = false;
-    GLuint pboIds[2] = {0, 0};  
+    GLuint pboIds[2] = {0, 0};
     int pboIndex = 0;
     int pboNextIndex = 1;
     SnapshotThreadPool snapshot_pool{2};
     TextureUploader tex_uploader;
-public:
+
+  public:
     ACView(const MXArguments &args)
         : crf{args.crf},
           prefix_path{args.prefix_path},
@@ -1467,8 +1476,8 @@ public:
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
-        if(args.audio_enabled) {
-            if(init_audio(args.audio_channels, args.audio_sensitivty, audio_input_device, audio_output_device) != 0) {
+        if (args.audio_enabled) {
+            if (init_audio(args.audio_channels, args.audio_sensitivty, audio_input_device, audio_output_device) != 0) {
                 mx::system_err << "acmx2: Error could not initalize audio\n";
             } else {
                 audio_is_enabled = true;
@@ -1481,25 +1490,25 @@ public:
         m_file = args.model_file;
 
         gpu_filter_enabled = args.gpu_filter_enabled;
-        if(gpu_filter_enabled && !args.gpu_filter_indices.empty()) {
-            for(int idx : args.gpu_filter_indices) {
-                if(idx >= 0 && idx < ac_gpu::AC_FILTER_MAX) {
+        if (gpu_filter_enabled && !args.gpu_filter_indices.empty()) {
+            for (int idx : args.gpu_filter_indices) {
+                if (idx >= 0 && idx < ac_gpu::AC_FILTER_MAX) {
                     gpu_filters.push_back({idx, ac_gpu::filters[idx].name});
                     mx::system_out << "acmx2: GPU filter added: " << ac_gpu::filters[idx].name << " (index " << idx << ")\n";
                 }
             }
             gpu_current_filter_index = args.gpu_filter_indices[0];
             gpu_frame_buffer = std::make_unique<ac_gpu::DynamicFrameBuffer>(args.gpu_frame_buffer_size);
-            CHECK_CUDA(cudaMalloc(&d_ptrList, args.gpu_frame_buffer_size * sizeof(unsigned char*)));
+            CHECK_CUDA(cudaMalloc(&d_ptrList, args.gpu_frame_buffer_size * sizeof(unsigned char *)));
             mx::system_out << "acmx2: GPU filtering enabled with " << gpu_filters.size() << " filter(s)\n";
         }
         counter_disabled = args.disable_counter;
-        
-        if(args.shader_pass_enabled && !args.shader_pass_list.empty()) {
+
+        if (args.shader_pass_enabled && !args.shader_pass_list.empty()) {
             shader_pass_list = args.shader_pass_list;
             shader_pass_enabled = true;
             mx::system_out << "acmx2: Shader pass list enabled with " << shader_pass_list.size() << " shader(s)\n";
-            for(int idx : shader_pass_list) {
+            for (int idx : shader_pass_list) {
                 mx::system_out << "  - Shader index: " << idx << "\n";
             }
             fflush(stdout);
@@ -1514,8 +1523,8 @@ public:
     std::unique_ptr<ac_gpu::DynamicFrameBuffer> gpu_frame_buffer;
     cv::cuda::GpuMat gpuWorkingBuffer;
     cv::Mat gpuFilteredFrame;
-    unsigned char** d_ptrList = nullptr;
-    ac_gpu::GPUFilter* d_filterList = nullptr;
+    unsigned char **d_ptrList = nullptr;
+    ac_gpu::GPUFilter *d_filterList = nullptr;
     bool gpu_filtersChanged = true;
     float gpu_alpha = 1.0f;
     int gpu_alpha_dir = 1;
@@ -1527,9 +1536,9 @@ public:
     std::string cached_shader_name;
 
     void updateShaderNameCache() {
-        cached_shader_name = shader_pass_enabled 
-            ? library.getFullShaderName(shader_pass_list) 
-            : library.getFullShaderName();
+        cached_shader_name = shader_pass_enabled
+                                 ? library.getFullShaderName(shader_pass_list)
+                                 : library.getFullShaderName();
     }
 
     mx::Font overlayFont;
@@ -1542,37 +1551,37 @@ public:
 
     ~ACView() override {
         tex_uploader.cleanup();
-        if(d_ptrList) {
+        if (d_ptrList) {
             cudaFree(d_ptrList);
             d_ptrList = nullptr;
         }
-        if(d_filterList) {
+        if (d_filterList) {
             cudaFree(d_filterList);
             d_filterList = nullptr;
         }
         gpu_frame_buffer.reset();
 
 #ifdef AUDIO_ENABLED
-        if(audio_is_enabled) {
+        if (audio_is_enabled) {
             close_audio();
         }
 #endif
 
-        stopCaptureThread(); 
-    
+        stopCaptureThread();
+
         if (pboIds[0] && writer.is_open() && win_w > 0 && win_h > 0) {
             for (int i = 0; i < 2; i++) {
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[i]);
-                GLubyte* src = static_cast<GLubyte*>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
-                
+                GLubyte *src = static_cast<GLubyte *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
+
                 if (src) {
                     std::vector<unsigned char> pixels(win_w * win_h * 4);
                     std::memcpy(pixels.data(), src, pixels.size());
                     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-                    
+
                     std::vector<unsigned char> flipped_pixels(win_w * win_h * 4);
                     for (int y = 0; y < win_h; ++y) {
-                        int src_row_start  = y * win_w * 4;
+                        int src_row_start = y * win_w * 4;
                         int dest_row_start = (win_h - 1 - y) * win_w * 4;
                         std::copy(pixels.begin() + src_row_start,
                                   pixels.begin() + src_row_start + (win_w * 4),
@@ -1581,7 +1590,7 @@ public:
 
                     FrameData fd;
                     fd.pixels = std::move(flipped_pixels);
-                    fd.width  = win_w;
+                    fd.width = win_w;
                     fd.height = win_h;
                     fd.isSnapshot = false;
 
@@ -1593,15 +1602,12 @@ public:
                 }
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
             }
-            
-            
+
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-        
-        
+
         stopWriterThread();
-        
-        
+
         if (pboIds[0]) {
             glDeleteBuffers(2, pboIds);
             pboIds[0] = pboIds[1] = 0;
@@ -1615,66 +1621,65 @@ public:
             glDeleteTextures(1, &fboTexture);
             fboTexture = 0;
         }
-        for(int p = 0; p < 2; ++p) {
-            if(passFBO[p]) {
+        for (int p = 0; p < 2; ++p) {
+            if (passFBO[p]) {
                 glDeleteFramebuffers(1, &passFBO[p]);
                 passFBO[p] = 0;
             }
-            if(passTexture[p]) {
+            if (passTexture[p]) {
                 glDeleteTextures(1, &passTexture[p]);
                 passTexture[p] = 0;
             }
         }
-         if (depthBuffer) {
+        if (depthBuffer) {
             glDeleteRenderbuffers(1, &depthBuffer);
             depthBuffer = 0;
         }
-        if(camera_texture) {
+        if (camera_texture) {
             glDeleteTextures(1, &camera_texture);
             camera_texture = 0;
         }
 
-        if(texture_cache) {
+        if (texture_cache) {
             glDeleteTextures(8, cache_textures);
-            for(int i = 0; i < 8; i++) {
+            for (int i = 0; i < 8; i++) {
                 cache_textures[i] = 0;
             }
         }
 
-        if(cap.isOpened())
+        if (cap.isOpened())
             cap.release();
     }
-    
+
     mx::Model cube;
     gl::ShaderProgram fshader, fshader3d;
     std::string m_file;
-    
+
     virtual void load(gl::GLWindow *win) override {
         cudaError_t cuda_err = cudaSetDevice(gpu_cuda_device);
-        if(cuda_err != cudaSuccess) {
+        if (cuda_err != cudaSuccess) {
             throw mx::Exception("Failed to set CUDA device " + std::to_string(gpu_cuda_device) + ": " + std::string(cudaGetErrorString(cuda_err)));
         }
         mx::system_out << "acmx2: Using CUDA device: " << gpu_cuda_device << "\n";
         fflush(stdout);
-        
+
         frame_counter = 0;
         sessionStartTime = std::chrono::steady_clock::now();
         fpsLastTime = sessionStartTime;
         fpsFrameCount = 0;
         displayFPS = 0.0;
-        
+
         overlayFont.tryLoadFont(win->util.getFilePath("data/font.ttf"), 24);
 
-        
         int w = 1280, h = 720;
         int frame_w = w, frame_h = h;
 
-        if(!graphic.empty()) {
+        if (!graphic.empty()) {
             graphic_frame = cv::imread(graphic);
-            if(graphic_frame.empty()) {
+            if (graphic_frame.empty()) {
                 throw mx::Exception("Graphics file not found: " + graphic);
             }
-            
+
             w = graphic_frame.cols;
             h = graphic_frame.rows;
             frame_w = w;
@@ -1682,7 +1687,7 @@ public:
             mx::system_out << "acmx2: Graphics file loaded: " << w << "x" << h << " at FPS: " << fps << "\n";
             fflush(stdout);
             fflush(stderr);
-            if(sizev.has_value()) {
+            if (sizev.has_value()) {
                 w = sizev.value().width;
                 h = sizev.value().height;
                 mx::system_out << "acmx2: Resolution stretched to: " << w << "x" << h << "\n";
@@ -1692,28 +1697,28 @@ public:
 
             win->setWindowSize(w, h);
             SDL_PumpEvents();
-            SDL_Delay(50);  
-            SDL_PumpEvents();            
+            SDL_Delay(50);
+            SDL_PumpEvents();
             SDL_GL_GetDrawableSize(win->getWindow(), &win->w, &win->h);
-            if(win->w != w || win->h != h) {
+            if (win->w != w || win->h != h) {
                 win->w = w;
                 win->h = h;
             }
             glViewport(0, 0, win->w, win->h);
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-            if(!ofilename.empty()) {
-                if(writer.open(ofilename, w, h, fps, crf.c_str())) {
-                    mx::system_out << "acmx2: Opened: " << ofilename 
-                                   << " for writing at: CRF: " << crf 
-                                   << " FPS: " << fps <<"\n";
+            if (!ofilename.empty()) {
+                if (writer.open(ofilename, w, h, fps, crf.c_str())) {
+                    mx::system_out << "acmx2: Opened: " << ofilename
+                                   << " for writing at: CRF: " << crf
+                                   << " FPS: " << fps << "\n";
 
                     fflush(stdout);
                     fflush(stderr);
                 } else {
-                    throw mx::Exception("Could not open output video file: " +  ofilename);
+                    throw mx::Exception("Could not open output video file: " + ofilename);
                 }
             }
-        } else if(filename.empty()) {
+        } else if (filename.empty()) {
 #ifdef _WIN32
             cap.open(camera_index, cv::CAP_DSHOW);
 #elif defined(__linux__)
@@ -1721,18 +1726,18 @@ public:
 #else
             cap.open(camera_index);
 #endif
-            if(!cap.isOpened()) {
+            if (!cap.isOpened()) {
                 throw mx::Exception("Could not open camera index: " + std::to_string(camera_index));
             }
             cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
-            if(sizec.has_value()) {
+            if (sizec.has_value()) {
                 cap.set(cv::CAP_PROP_FRAME_WIDTH, sizec.value().width);
                 cap.set(cv::CAP_PROP_FRAME_HEIGHT, sizec.value().height);
             } else {
                 cap.set(cv::CAP_PROP_FRAME_WIDTH, win->w);
                 cap.set(cv::CAP_PROP_FRAME_HEIGHT, win->h);
             }
-            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
+            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
             cap.set(cv::CAP_PROP_FPS, fps);
             w = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
             h = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
@@ -1743,14 +1748,14 @@ public:
             fflush(stderr);
             fflush(stdout);
 
-            if(sizev.has_value()) {
+            if (sizev.has_value()) {
                 w = sizev.value().width;
                 h = sizev.value().height;
                 mx::system_out << "acmx2: Resolution stretched to: " << w << "x" << h << "\n";
             }
             win->setWindowSize(w, h);
             SDL_GL_GetDrawableSize(win->getWindow(), &win->w, &win->h);
-            if(win->w != w || win->h != h) {
+            if (win->w != w || win->h != h) {
                 win->w = w;
                 win->h = h;
             }
@@ -1758,71 +1763,68 @@ public:
 
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
-            if(!ofilename.empty()) {
-                if(writer.open_ts(ofilename, w, h, fps, crf.c_str())) {
-                    mx::system_out << "acmx2: Opened: " << ofilename 
-                                   << " for writing at: CRF: " << crf 
-                                   << " FPS: " << fps <<"\n";
+            if (!ofilename.empty()) {
+                if (writer.open_ts(ofilename, w, h, fps, crf.c_str())) {
+                    mx::system_out << "acmx2: Opened: " << ofilename
+                                   << " for writing at: CRF: " << crf
+                                   << " FPS: " << fps << "\n";
                 } else {
-                    throw mx::Exception("Could not open output video file: " +  ofilename);
+                    throw mx::Exception("Could not open output video file: " + ofilename);
                 }
             }
-        } 
-        else if(!filename.empty() && graphic.empty()) {
+        } else if (!filename.empty() && graphic.empty()) {
             std::vector<int> file_params = {
-                cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY
-            };
+                cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY};
             cap.open(filename, cv::CAP_FFMPEG, file_params);
-            if(!cap.isOpened()) {
+            if (!cap.isOpened()) {
                 throw mx::Exception("Could not open video file: " + filename);
             }
             w = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
             h = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
             fps = cap.get(cv::CAP_PROP_FPS);
-            totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT); 
+            totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
 
             frame_w = w;
             frame_h = h;
 
-            mx::system_out << "acmx2: Video opened: " << w << "x" << h 
-                           << " at FPS: " << fps 
-                           << " Total Frames: " << totalFrames << "\n"; 
-           
+            mx::system_out << "acmx2: Video opened: " << w << "x" << h
+                           << " at FPS: " << fps
+                           << " Total Frames: " << totalFrames << "\n";
+
             int hw_accel = static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
             mx::system_out << "acmx2: HW Acceleration result: " << hw_accel
-                            << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" :
-                                hw_accel == cv::VIDEO_ACCELERATION_ANY  ? " (auto preference)" :
-                                hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)" :
-                                hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)" :
-                                hw_accel == cv::VIDEO_ACCELERATION_MFX ? " (MFX)" :
-                                hw_accel == cv::VIDEO_ACCELERATION_DRM ? " (DRM)" :
-                                " (other)") << "\n";
-
+                           << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (auto preference)"
+                                                                                              : hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)"
+                                                                                              : hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)"
+                                                                                              : hw_accel == cv::VIDEO_ACCELERATION_MFX   ? " (MFX)"
+                                                                                              : hw_accel == cv::VIDEO_ACCELERATION_DRM   ? " (DRM)"
+                                                                                                                                         : " (other)")
+                           << "\n";
 
             fflush(stdout);
             fflush(stderr);
 
-            if(sizev.has_value()) {
+            if (sizev.has_value()) {
                 w = sizev.value().width;
                 h = sizev.value().height;
-                mx::system_out << "acmx2: Resolution stretched to: " 
-                            << w << "x" << h << "\n";
+                mx::system_out << "acmx2: Resolution stretched to: "
+                               << w << "x" << h << "\n";
                 fflush(stdout);
                 fflush(stderr);
             }
 
             win->setWindowSize(w, h);
             SDL_GL_GetDrawableSize(win->getWindow(), &win->w, &win->h);
-            if(win->w != w || win->h != h) {
+            if (win->w != w || win->h != h) {
                 win->w = w;
                 win->h = h;
             }
             glViewport(0, 0, w, h);
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
-            if(!ofilename.empty()) {
-                if(writer.open(ofilename, w, h, fps, crf.c_str())) {
-                    mx::system_out << "acmx2: Opened: " << ofilename 
+            if (!ofilename.empty()) {
+                if (writer.open(ofilename, w, h, fps, crf.c_str())) {
+                    mx::system_out << "acmx2: Opened: " << ofilename
                                    << " for writing at: CRF: " << crf << "\n";
                     fflush(stdout);
                     fflush(stderr);
@@ -1830,13 +1832,13 @@ public:
                     throw mx::Exception("Could not open output video file: " + ofilename);
                 }
             }
-        } else if(graphic.empty() && filename.empty()) {
+        } else if (graphic.empty() && filename.empty()) {
             throw mx::Exception("Requires input from a file, or camera.");
         }
 
         library.is3D(is3d_enabled);
         library.enableDualMode(is3d_enabled);
-        if(overlayFont.handle().has_value()) {
+        if (overlayFont.handle().has_value()) {
             win->text.init(win->w, win->h);
             win->text.setColor({255, 255, 255, 255});
         }
@@ -1844,10 +1846,10 @@ public:
         waterFont.tryLoadFont(win->util.getFilePath("data/font.ttf"), waterFontSize);
         mx::system_out << "acmx2: Watermark font loaded at size: " << waterFontSize << " for " << win->w << "x" << win->h << "\n";
         fflush(stdout);
-        
+
         library.enableCache(use_shader_cache_flag);
-        if(std::get<0>(flib) == 1) {
-            if(use_shader_cache_flag)
+        if (std::get<0>(flib) == 1) {
+            if (use_shader_cache_flag)
                 library.loadProgramsWithCache(win, std::get<1>(flib), overlayFont);
             else
                 library.loadPrograms(win, std::get<1>(flib), overlayFont);
@@ -1858,27 +1860,27 @@ public:
         updateShaderNameCache();
 
         std::string m_file_path;
-        if(std::filesystem::exists(m_file)) {
+        if (std::filesystem::exists(m_file)) {
             m_file_path = m_file;
         } else {
-            m_file_path =  win->util.getFilePath("data/" + m_file);
+            m_file_path = win->util.getFilePath("data/" + m_file);
         }
 
-        if(is3d_enabled && !cube.openModel(m_file_path)) {
+        if (is3d_enabled && !cube.openModel(m_file_path)) {
             throw mx::Exception("Could not open model: cube.mxmod.z");
         }
         cube.setShaderProgram(library.shader(), "samp");
         cube.saveOriginal();
 
-        if(is3d_enabled && !cube.meshes.empty()) {
+        if (is3d_enabled && !cube.meshes.empty()) {
             float minX = std::numeric_limits<float>::max();
             float minY = std::numeric_limits<float>::max();
             float minZ = std::numeric_limits<float>::max();
             float maxX = std::numeric_limits<float>::lowest();
             float maxY = std::numeric_limits<float>::lowest();
             float maxZ = std::numeric_limits<float>::lowest();
-            for(const auto &mesh : cube.meshes) {
-                for(size_t i = 0; i + 2 < mesh.vert.size(); i += 3) {
+            for (const auto &mesh : cube.meshes) {
+                for (size_t i = 0; i + 2 < mesh.vert.size(); i += 3) {
                     float x = mesh.vert[i];
                     float y = mesh.vert[i + 1];
                     float z = mesh.vert[i + 2];
@@ -1894,15 +1896,16 @@ public:
             float dy = maxY - minY;
             float dz = maxZ - minZ;
             modelSize = std::sqrt(dx * dx + dy * dy + dz * dz);
-            if(modelSize < 0.001f) modelSize = 1.0f;  
+            if (modelSize < 0.001f)
+                modelSize = 1.0f;
             mx::system_out << "acmx2: Model bounding diagonal: " << modelSize << "\n";
             fflush(stdout);
         }
 
-        if(!fshader.loadProgram(win->util.getFilePath("data/vert.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
+        if (!fshader.loadProgram(win->util.getFilePath("data/vert.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
             throw mx::Exception("Error loading shader");
         }
-         if(!fshader3d.loadProgram(win->util.getFilePath("data/vertex.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
+        if (!fshader3d.loadProgram(win->util.getFilePath("data/vertex.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
             throw mx::Exception("Error loading shader");
         }
         GLenum error = glGetError();
@@ -1911,9 +1914,9 @@ public:
         }
 
         library.useProgram();
-        if(texture_cache) {
+        if (texture_cache) {
             cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
-            for(int i = 0; i < 8; ++i) {
+            for (int i = 0; i < 8; ++i) {
                 cache_textures[i] = loadTexture(blankMat);
             }
             frame_cache.fill(blankMat);
@@ -1933,23 +1936,23 @@ public:
             glBufferData(GL_PIXEL_PACK_BUFFER, pboSize, nullptr, GL_STREAM_READ);
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        
-        if(!graphic.empty())
+
+        if (!graphic.empty())
             win->setWindowTitle("ACMX2 - Graphics Input");
-        else if(filename.empty())
+        else if (filename.empty())
             win->setWindowTitle("ACMX2 - Capture Input");
         else
             win->setWindowTitle("ACMX2 - [" + filename + "] 0 seconds, frame 0");
 
-        if(full) {
+        if (full) {
             win->setFullScreen(true);
         }
         running = true;
-        if(writer.is_open() || true /* snapshots possible */) {
+        if (writer.is_open() || true /* snapshots possible */) {
             startWriterThread();
         }
 
-        if(filename.empty() && cap.isOpened()) {
+        if (filename.empty() && cap.isOpened()) {
             startCaptureThread();
         }
     }
@@ -1971,32 +1974,32 @@ public:
             lastFrameTime += frame_duration;
         }
 
-        if(!running) {
+        if (!running) {
             win->quit();
             return;
         }
 
-        if(!isPaused && !isFrozen) {
-            if(!graphic.empty()) {
+        if (!isPaused && !isFrozen) {
+            if (!graphic.empty()) {
                 newFrame = graphic_frame.clone();
                 cv::flip(newFrame, newFrame, 0);
-            } else if(filename.empty()) {
+            } else if (filename.empty()) {
                 std::unique_lock<std::mutex> lock(captureQueueMutex);
                 if (!captureQueue.empty()) {
                     newFrame = std::move(captureQueue.front());
                     captureQueue.pop();
                 }
             } else {
-                if(!cap.read(newFrame)) {
-                    if(!filename.empty() && repeat) {
+                if (!cap.read(newFrame)) {
+                    if (!filename.empty() && repeat) {
                         mx::system_out << "acmx2: video loop...\n";
                         cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-                        if(!cap.read(newFrame)) {
-                           mx::system_out << "acmx2: cannot read after looping.\n";
+                        if (!cap.read(newFrame)) {
+                            mx::system_out << "acmx2: cannot read after looping.\n";
                         }
                     } else {
                         if (silent_mode) {
-                            std::cout << "\n";  
+                            std::cout << "\n";
                         }
                         running = false;
                         finished = true;
@@ -2004,12 +2007,12 @@ public:
                         return;
                     }
                 }
-                if(!newFrame.empty())
+                if (!newFrame.empty())
                     cv::flip(newFrame, newFrame, 0);
             }
         }
-        if(library.isBypassed()) {
-            if(is3d_enabled) {
+        if (library.isBypassed()) {
+            if (is3d_enabled) {
                 fshader3d.useProgram();
             } else {
                 fshader.useProgram();
@@ -2017,46 +2020,48 @@ public:
         } else {
             library.useProgram();
         }
-        if(!isFrozen && !newFrame.empty()) {
-            if(gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
-                gpu_frame_buffer->update(newFrame);                
-                
-                if(gpuWorkingBuffer.empty() || gpuWorkingBuffer.cols != newFrame.cols || gpuWorkingBuffer.rows != newFrame.rows) {
-                   gpuWorkingBuffer.create(newFrame.rows, newFrame.cols, CV_8UC4);
+        if (!isFrozen && !newFrame.empty()) {
+            if (gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
+                gpu_frame_buffer->update(newFrame);
+
+                if (gpuWorkingBuffer.empty() || gpuWorkingBuffer.cols != newFrame.cols || gpuWorkingBuffer.rows != newFrame.rows) {
+                    gpuWorkingBuffer.create(newFrame.rows, newFrame.cols, CV_8UC4);
                 }
-                
-                if(gpu_alpha_dir == 1) {
+
+                if (gpu_alpha_dir == 1) {
                     gpu_alpha += 0.01f;
-                    if(gpu_alpha >= 3.0f) gpu_alpha_dir = 0;
+                    if (gpu_alpha >= 3.0f)
+                        gpu_alpha_dir = 0;
                 } else {
                     gpu_alpha -= 0.01f;
-                    if(gpu_alpha <= 1.0f) gpu_alpha_dir = 1;
+                    if (gpu_alpha <= 1.0f)
+                        gpu_alpha_dir = 1;
                 }
-                
-                if(gpu_frame_dir == 1) {
+
+                if (gpu_frame_dir == 1) {
                     gpu_frame_index++;
-                    if(gpu_frame_index >= gpu_frame_buffer->arraySize - 1) {
+                    if (gpu_frame_index >= gpu_frame_buffer->arraySize - 1) {
                         gpu_frame_index = gpu_frame_buffer->arraySize - 1;
                         gpu_frame_dir = 0;
                     }
                 } else {
                     gpu_frame_index--;
-                    if(gpu_frame_index <= 0) {
+                    if (gpu_frame_index <= 0) {
                         gpu_frame_index = 0;
                         gpu_frame_dir = 1;
                     }
                 }
-           
-                CHECK_CUDA(cudaMemcpy(d_ptrList, gpu_frame_buffer->rawPointers.data(), 
-                      gpu_frame_buffer->arraySize * sizeof(unsigned char*), 
-                      cudaMemcpyHostToDevice));
-                
+
+                CHECK_CUDA(cudaMemcpy(d_ptrList, gpu_frame_buffer->rawPointers.data(),
+                                      gpu_frame_buffer->arraySize * sizeof(unsigned char *),
+                                      cudaMemcpyHostToDevice));
+
                 CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.ptr<unsigned char>(), gpuWorkingBuffer.step,
                                         gpu_frame_buffer->deviceFrames[gpu_frame_buffer->arraySize - 1].data,
                                         gpu_frame_buffer->framePitch,
                                         gpu_frame_buffer->w * 4, gpu_frame_buffer->h,
                                         cudaMemcpyDeviceToDevice));
-                
+
                 launch_filter(
                     gpu_filters.data(),
                     gpu_filters.size(),
@@ -2072,59 +2077,58 @@ public:
                     gpu_frame_index,
                     gpu_frame_dir,
                     &d_filterList,
-                    gpu_filtersChanged
-                );
+                    gpu_filtersChanged);
                 gpu_filtersChanged = false;
                 tex_uploader.update(gpuWorkingBuffer);
             } else {
                 glActiveTexture(GL_TEXTURE0);
                 updateTexture(camera_texture, newFrame);
             }
-            if(texture_cache && library.isCache() && (!filename.empty() || !graphic.empty())) { 
+            if (texture_cache && library.isCache() && (!filename.empty() || !graphic.empty())) {
                 static int counter = 0;
-                if(++counter > cache_delay) {
+                if (++counter > cache_delay) {
                     frame_cache.push(std::move(newFrame));
                     counter = 0;
                 }
-                if(frame_cache.isFull()) {
-                    for(int i = 0; i < 8; ++i) {
-                        library.setUniform("samp" + std::to_string(i+1), i);
+                if (frame_cache.isFull()) {
+                    for (int i = 0; i < 8; ++i) {
+                        library.setUniform("samp" + std::to_string(i + 1), i);
                         glActiveTexture(GL_TEXTURE1 + i);
                         updateTexture(cache_textures[i], frame_cache.at(i));
                         glBindTexture(GL_TEXTURE_2D, cache_textures[i]);
                     }
-                } 
-            } 
-        }          
+                }
+            }
+        }
         glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
         glViewport(0, 0, win->w, win->h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if(!isFrozen && !library.isBypassed()) {
+        if (!isFrozen && !library.isBypassed()) {
             library.useProgram();
             library.update(win);
-            library.setFPS(static_cast<float>(fps)); 
+            library.setFPS(static_cast<float>(fps));
         }
 
         if (is3d_enabled) {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LESS);
             glDepthMask(GL_TRUE);
-            glDisable(GL_CULL_FACE);  
-  
+            glDisable(GL_CULL_FACE);
+
             static float rotation = 0.0f;
             rotation = fmod(rotation + 0.5f, 360.0f);
-            
-            const Uint8* keystate = SDL_GetKeyboardState(NULL);
+
+            const Uint8 *keystate = SDL_GetKeyboardState(NULL);
             if (!oscillateScale) {
 
-                if(keystate[SDL_SCANCODE_B]) {
+                if (keystate[SDL_SCANCODE_B]) {
                     movementSpeed += 0.01f;
                     mx::system_out << "acmx2: movement increased: " << movementSpeed << "\n";
                     fflush(stdout);
                 }
 
-                if(keystate[SDL_SCANCODE_N]) {
+                if (keystate[SDL_SCANCODE_N]) {
                     movementSpeed -= 0.01f;
                     mx::system_out << "acmx2: movement decreased: " << movementSpeed << "\n";
                     fflush(stdout);
@@ -2151,15 +2155,17 @@ public:
             glm::mat4 modelMatrix = glm::mat4(1.0f);
             glm::vec3 cameraPosBase = glm::vec3(0.0f, 0.0f, 0.0f);
             glm::vec3 lookDirection;
-        
+
             if (!viewRotationActive) {
                 if (keystate[SDL_SCANCODE_W]) {
                     cameraPitch += cameraRotationSpeed * 0.3f;
-                    if (cameraPitch > 89.0f) cameraPitch = 89.0f;
+                    if (cameraPitch > 89.0f)
+                        cameraPitch = 89.0f;
                 }
                 if (keystate[SDL_SCANCODE_S]) {
                     cameraPitch -= cameraRotationSpeed * 0.33f;
-                    if (cameraPitch < -89.0f) cameraPitch = -89.0f;
+                    if (cameraPitch < -89.0f)
+                        cameraPitch = -89.0f;
                 }
                 if (keystate[SDL_SCANCODE_A]) {
                     cameraYaw -= cameraRotationSpeed * 0.3f;
@@ -2193,24 +2199,23 @@ public:
                 glm::radians(120.0f),
                 static_cast<float>(win->w) / static_cast<float>(win->h),
                 0.01f,
-                1000.0f
-            );
+                1000.0f);
             glm::mat4 mvMatrix = viewMatrix * modelMatrix;
             GLuint textureForMesh = camera_texture;
-            if(shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
+            if (shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
                 glDisable(GL_DEPTH_TEST);
                 auto logPassWarning3D = [](const std::string &msg) {
                     static Uint64 last_warn_tick = 0;
                     Uint64 now_tick = SDL_GetTicks64();
-                    if(now_tick - last_warn_tick >= 1000) {
+                    if (now_tick - last_warn_tick >= 1000) {
                         mx::system_out << "acmx2: multipass(3D) " << msg << "\n";
                         fflush(stdout);
                         last_warn_tick = now_tick;
                     }
                 };
-                
-                if(passFBO[0] == 0) {
-                    for(int p = 0; p < 2; ++p) {
+
+                if (passFBO[0] == 0) {
+                    for (int p = 0; p < 2; ++p) {
                         glGenFramebuffers(1, &passFBO[p]);
                         glGenTextures(1, &passTexture[p]);
                         glBindTexture(GL_TEXTURE_2D, passTexture[p]);
@@ -2219,20 +2224,20 @@ public:
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                         glBindFramebuffer(GL_FRAMEBUFFER, passFBO[p]);
                         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, passTexture[p], 0);
-                        if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
                             throw mx::Exception("acmx2: 3D pass framebuffer is not complete");
                         }
                     }
                 }
-                
+
                 GLuint inputTex = camera_texture;
                 int pingpong = 0;
                 bool pass_applied = false;
-                for(size_t i = 0; i < shader_pass_list.size(); ++i) {
+                for (size_t i = 0; i < shader_pass_list.size(); ++i) {
                     int shader_idx = shader_pass_list[i];
-                    if(shader_idx >= 0 && shader_idx < static_cast<int>(library.size2d())) {
+                    if (shader_idx >= 0 && shader_idx < static_cast<int>(library.size2d())) {
                         gl::ShaderProgram *pass_shader = library.getShader2D(shader_idx);
-                        if(pass_shader) {
+                        if (pass_shader) {
                             glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
                             glViewport(0, 0, win->w, win->h);
                             glClear(GL_COLOR_BUFFER_BIT);
@@ -2256,10 +2261,10 @@ public:
                         logPassWarning3D("skipping invalid pass index " + std::to_string(shader_idx) + " (valid range 0-" + std::to_string(static_cast<int>(library.size2d()) - 1) + ")");
                     }
                 }
-                if(!pass_applied) {
+                if (!pass_applied) {
                     logPassWarning3D("no pass applied; using base camera texture");
                 }
-                
+
                 textureForMesh = inputTex;
                 glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
                 glViewport(0, 0, win->w, win->h);
@@ -2268,12 +2273,12 @@ public:
                 glDepthFunc(GL_LESS);
                 glDepthMask(GL_TRUE);
             }
-            
+
             gl::ShaderProgram *activeShader;
-            if(library.isBypassed()) {
+            if (library.isBypassed()) {
                 activeShader = &fshader3d;
             } else {
-                activeShader = library.shader(); 
+                activeShader = library.shader();
             }
             activeShader->useProgram();
             activeShader->setUniform("mv_matrix", mvMatrix);
@@ -2281,7 +2286,7 @@ public:
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, textureForMesh);
             glUniform1i(glGetUniformLocation(activeShader->id(), "samp"), 0);
-            if(!library.isBypassed()) {
+            if (!library.isBypassed()) {
                 cube.setShaderProgram(activeShader);
             } else {
                 cube.setShaderProgram(&fshader3d);
@@ -2298,17 +2303,18 @@ public:
                 static const float wave_max = 0.5f;
                 static const float wave_min = 0.0f;
                 static float phase = 0.0f;
-              
+
 #ifdef AUDIO_ENABLED
-                if(audio_is_enabled && library.timeAudio())
+                if (audio_is_enabled && library.timeAudio())
                     phase += (library.getAmp() * library.getAmpUntouched());
                 else
                     phase += 0.05f;
 #else
                 phase += 0.05f;
 #endif
-                if (phase > 360.0f) phase -= 360.0f;
-                
+                if (phase > 360.0f)
+                    phase -= 360.0f;
+
                 amp_x += wave_speed * dir_x;
                 if (amp_x >= wave_max) {
                     amp_x = wave_max;
@@ -2317,7 +2323,7 @@ public:
                     amp_x = wave_min;
                     dir_x = 1;
                 }
-                
+
                 amp_y += wave_speed * dir_y;
                 if (amp_y >= wave_max) {
                     amp_y = wave_max;
@@ -2326,7 +2332,7 @@ public:
                     amp_y = wave_min;
                     dir_y = 1;
                 }
-                
+
                 amp_z += wave_speed * dir_z;
                 if (amp_z >= wave_max) {
                     amp_z = wave_max;
@@ -2339,29 +2345,29 @@ public:
                 cube.wave(mx::DeformAxis::Y, amp_y, 2.0f, phase + 120.0f);
                 cube.wave(mx::DeformAxis::Z, amp_z, 2.0f, phase + 240.0f);
             }
-            
+
             cube.updateBuffers();
             cube.recalculateNormals();
-            
-            for(auto &m : cube.meshes) {
+
+            for (auto &m : cube.meshes) {
                 m.draw();
             }
             glFrontFace(GL_CCW);
         } else {
             glDisable(GL_DEPTH_TEST);
             GLuint textureForSprite = camera_texture;
-            if(shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
+            if (shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
                 auto logPassWarning2D = [](const std::string &msg) {
                     static Uint64 last_warn_tick = 0;
                     Uint64 now_tick = SDL_GetTicks64();
-                    if(now_tick - last_warn_tick >= 1000) {
+                    if (now_tick - last_warn_tick >= 1000) {
                         mx::system_out << "acmx2: multipass(2D) " << msg << "\n";
                         fflush(stdout);
                         last_warn_tick = now_tick;
                     }
                 };
-                if(passFBO[0] == 0) {
-                    for(int p = 0; p < 2; ++p) {
+                if (passFBO[0] == 0) {
+                    for (int p = 0; p < 2; ++p) {
                         glGenFramebuffers(1, &passFBO[p]);
                         glGenTextures(1, &passTexture[p]);
                         glBindTexture(GL_TEXTURE_2D, passTexture[p]);
@@ -2370,22 +2376,22 @@ public:
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                         glBindFramebuffer(GL_FRAMEBUFFER, passFBO[p]);
                         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, passTexture[p], 0);
-                        if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
                             throw mx::Exception("acmx2: pass framebuffer is not complete");
                         }
                     }
                     glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
                 }
-                
+
                 GLuint inputTex = camera_texture;
                 int pingpong = 0;
                 bool pass_applied = false;
-                
-                for(size_t i = 0; i < shader_pass_list.size(); ++i) {
+
+                for (size_t i = 0; i < shader_pass_list.size(); ++i) {
                     int shader_idx = shader_pass_list[i];
-                    if(shader_idx >= 0 && shader_idx < static_cast<int>(library.size())) {
+                    if (shader_idx >= 0 && shader_idx < static_cast<int>(library.size())) {
                         gl::ShaderProgram *pass_shader = library.getShader(shader_idx);
-                        if(pass_shader) {
+                        if (pass_shader) {
                             glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
                             glViewport(0, 0, win->w, win->h);
                             glClear(GL_COLOR_BUFFER_BIT);
@@ -2409,7 +2415,7 @@ public:
                         logPassWarning2D("skipping invalid pass index " + std::to_string(shader_idx) + " (valid range 0-" + std::to_string(static_cast<int>(library.size()) - 1) + ")");
                     }
                 }
-                if(!pass_applied) {
+                if (!pass_applied) {
                     logPassWarning2D("no pass applied; using base camera texture");
                 } else {
                     textureForSprite = inputTex;
@@ -2420,7 +2426,7 @@ public:
             }
 
             gl::ShaderProgram *activeShader;
-            if(library.isBypassed()) {
+            if (library.isBypassed()) {
                 activeShader = &fshader;
             } else {
                 activeShader = library.shader();
@@ -2433,12 +2439,11 @@ public:
             sprite.draw(textureForSprite, 0, 0, win->w, win->h);
         }
 
-
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, win->w, win->h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
-        
+
         fshader.useProgram();
         fshader.setUniform("mv_matrix", glm::mat4(1.0f));
         fshader.setUniform("proj_matrix", glm::mat4(1.0f));
@@ -2456,39 +2461,38 @@ public:
         }
 
         bool needWriter = (writer.is_open() || snapshot_state > 0) && !isFrozen;
-        
+
         if (needWriter) {
-            
+
             if (snapshot_state == 1) {
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
                 glBindTexture(GL_TEXTURE_2D, 0);
-                
+
                 pboIndex = (pboIndex + 1) % 2;
                 pboNextIndex = (pboNextIndex + 1) % 2;
-                snapshot_state = 2; 
+                snapshot_state = 2;
             } else {
                 bool is_snapshot_frame = (snapshot_state == 2);
 
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
-                glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0); 
-                
-                
+                glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
                 if (writer.is_open() || is_snapshot_frame) {
                     glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboNextIndex]);
-                    GLubyte* src = static_cast<GLubyte*>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
-                    
+                    GLubyte *src = static_cast<GLubyte *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
+
                     if (src) {
                         std::vector<unsigned char> pixels(win->w * win->h * 4);
                         std::memcpy(pixels.data(), src, pixels.size());
                         glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-                        
+
                         std::vector<unsigned char> flipped_pixels(win->w * win->h * 4);
                         for (int y = 0; y < win->h; ++y) {
-                            int src_row_start  = y * win->w * 4;
+                            int src_row_start = y * win->w * 4;
                             int dest_row_start = (win->h - 1 - y) * win->w * 4;
                             std::copy(pixels.begin() + src_row_start,
                                       pixels.begin() + src_row_start + (win->w * 4),
@@ -2497,18 +2501,18 @@ public:
 
                         FrameData fd;
                         fd.pixels = std::move(flipped_pixels);
-                        fd.width  = win->w;
+                        fd.width = win->w;
                         fd.height = win->h;
                         fd.isSnapshot = is_snapshot_frame;
-                        
+
                         if (is_snapshot_frame) {
-                            snapshot_state = 0; 
+                            snapshot_state = 0;
                         }
 
                         {
                             std::unique_lock<std::mutex> lock(queueMutex);
                             bool is_camera_mode = filename.empty() && graphic.empty();
-                            if (is_camera_mode && !is_snapshot_frame) { 
+                            if (is_camera_mode && !is_snapshot_frame) {
                                 if (frameQueue.size() > 30) {
                                     frames_dropped++;
                                     frameQueue.pop();
@@ -2521,9 +2525,9 @@ public:
                         queueCondVar.notify_one();
                     }
                 }
-                
+
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-                glBindTexture(GL_TEXTURE_2D, 0);                
+                glBindTexture(GL_TEXTURE_2D, 0);
                 pboIndex = (pboIndex + 1) % 2;
                 pboNextIndex = (pboNextIndex + 1) % 2;
             }
@@ -2532,31 +2536,31 @@ public:
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, win->w, win->h);
 
-        if(!counter_disabled && overlayFont.handle().has_value()) {
+        if (!counter_disabled && overlayFont.handle().has_value()) {
             fpsFrameCount++;
             auto currentTime = std::chrono::steady_clock::now();
             auto fpsDelta = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - fpsLastTime).count();
-            if(fpsDelta >= 500) {
+            if (fpsDelta >= 500) {
                 displayFPS = (fpsFrameCount * 1000.0) / fpsDelta;
                 fpsFrameCount = 0;
                 fpsLastTime = currentTime;
             }
 
-            std::string timerStr = getTimeString();            
+            std::string timerStr = getTimeString();
             std::ostringstream fpsStr;
             fpsStr << std::fixed << std::setprecision(1) << displayFPS << " FPS";
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            win->text.setColor({0,0,255,255});
+            win->text.setColor({0, 0, 255, 255});
             win->text.printText_Blended(overlayFont, 10, 10, cached_shader_name);
-            win->text.setColor({255,255,255,255});
+            win->text.setColor({255, 255, 255, 255});
             win->text.printText_Blended(overlayFont, 10, 40, timerStr);
             win->text.printText_Blended(overlayFont, 10, 70, fpsStr.str());
             glDisable(GL_BLEND);
         }
 
         static auto lastUpdate = std::chrono::steady_clock::now();
-        auto now = std::chrono::steady_clock::now();        
+        auto now = std::chrono::steady_clock::now();
 
         if (!graphic.empty()) {
             if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate).count() >= 250) {
@@ -2576,7 +2580,7 @@ public:
 
         } else if (cap.isOpened() && !filename.empty()) {
             frame_counter = static_cast<unsigned int>(cap.get(cv::CAP_PROP_POS_FRAMES));
-        
+
             if (silent_mode && totalFrames > 0.0) {
                 int current_percent = static_cast<int>((static_cast<double>(frame_counter) / totalFrames) * 100.0);
                 if (current_percent > last_progress_percent && current_percent <= 100) {
@@ -2586,7 +2590,7 @@ public:
                     uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600);
                     uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60) % 60;
                     uint64_t seconds = static_cast<uint64_t>(elapsed_secs) % 60;
-                    
+
                     std::cout << "\racmx2: [" << std::setw(3) << current_percent << "%] "
                               << "Frame " << frame_counter << "/" << static_cast<int>(totalFrames)
                               << " | Written: " << frames_written
@@ -2596,7 +2600,7 @@ public:
                               << std::setfill(' ') << "     " << std::flush;
                 }
             }
-            
+
             if (!silent_mode && std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 3) {
                 if (totalFrames <= 0.0) {
                     totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
@@ -2636,7 +2640,7 @@ public:
     std::string getTimeString() {
         int64_t frameCount = 0;
         double timeSeconds = 0.0;
-        
+
         if (writer.is_open()) {
             frameCount = writer.get_frame_count();
             timeSeconds = (fps > 0.0) ? static_cast<double>(frameCount) / fps : 0.0;
@@ -2644,24 +2648,24 @@ public:
             frameCount = static_cast<int64_t>(frame_counter);
             timeSeconds = (fps > 0.0) ? static_cast<double>(frameCount) / fps : 0.0;
         }
-        
+
         uint64_t hours = static_cast<uint64_t>(timeSeconds / 3600);
         uint64_t minutes = static_cast<uint64_t>(timeSeconds / 60) % 60;
         uint64_t seconds = static_cast<uint64_t>(timeSeconds) % 60;
-        
+
         std::ostringstream timerStr;
         if (!filename.empty() && totalFrames > 0.0) {
             double currentFrame = static_cast<double>(frame_counter);
             double percentage = (currentFrame / totalFrames) * 100.0;
             timerStr << std::fixed << std::setprecision(1) << percentage << "% - ";
         }
-        
+
         timerStr << std::setfill('0') << std::setw(2) << hours << ":"
                  << std::setfill('0') << std::setw(2) << minutes << ":"
                  << std::setfill('0') << std::setw(2) << seconds;
         return timerStr.str();
     }
-    
+
     int64_t getFrameCount() {
         if (writer.is_open()) {
             return writer.get_frame_count();
@@ -2670,155 +2674,155 @@ public:
     }
 
     virtual void event(gl::GLWindow *win, SDL_Event &e) override {
-        switch(e.type) {
-            case SDL_KEYUP:
-                switch(e.key.keysym.sym) {
-                    case SDLK_UP:
-                        library.dec();
-                        if(is3d_enabled)
-                            cube.setShaderProgram(library.shader());
-                        sprite.setShader(library.shader());
-                        updateShaderNameCache();
-                        break;
-                    case SDLK_DOWN:
-                        library.inc();
-                        if(is3d_enabled)
-                            cube.setShaderProgram(library.shader());
-                        sprite.setShader(library.shader());
-                        updateShaderNameCache();
-                        break;
-                    case SDLK_LEFT:
-                        if(gpu_filter_enabled && !gpu_filters.empty()) {
-                            gpu_current_filter_index--;
-                            if(gpu_current_filter_index < 0)
-                                gpu_current_filter_index = ac_gpu::AC_FILTER_MAX - 1;
-                            gpu_filters.clear();
-                            gpu_filters.push_back({gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name});
-                            gpu_filtersChanged = true;
-                            mx::system_out << "acmx2: GPU Filter: " << ac_gpu::filters[gpu_current_filter_index].name << " [" << gpu_current_filter_index << "]\n";
-                            fflush(stdout);
-                        }
-                        break;
-                    case SDLK_RIGHT:
-                        if(gpu_filter_enabled && !gpu_filters.empty()) {
-                            gpu_current_filter_index++;
-                            if(gpu_current_filter_index >= ac_gpu::AC_FILTER_MAX)
-                                gpu_current_filter_index = 0;
-                            gpu_filters.clear();
-                            gpu_filters.push_back({gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name});
-                            gpu_filtersChanged = true;
-                            mx::system_out << "acmx2: GPU Filter: " << ac_gpu::filters[gpu_current_filter_index].name << " [" << gpu_current_filter_index << "]\n";
-                            fflush(stdout);
-                        }
-                        break;
-                    case SDLK_SPACE:
-                        library.toggleBypass();
-                        updateShaderNameCache();
-                        break;
-                    case SDLK_p:
-                        if(!filename.empty() || !graphic.empty()) {
-                            isPaused = !isPaused;
-                            mx::system_out << "acmx2: paused: " << ((isPaused == true) ? "enabled" : "disabled") << "\n";
-                            fflush(stdout);
-                            fflush(stderr);
-                        }
-                        break;
-                    case SDLK_l:
-                        if(!filename.empty() || !graphic.empty()) {
-                            isFrozen = !isFrozen;
-                            mx::system_out << "acmx2: frozen: " << ((isFrozen == true) ? "enabled" : "disabled") << "\n";
-                            fflush(stdout);
-                            fflush(stderr);
-                        }
-                        break;
-                    case SDLK_z:
-                        if (snapshot_state == 0) { 
-                            snapshot_state = 1;
-                        }
-                        break;
+        switch (e.type) {
+        case SDL_KEYUP:
+            switch (e.key.keysym.sym) {
+            case SDLK_UP:
+                library.dec();
+                if (is3d_enabled)
+                    cube.setShaderProgram(library.shader());
+                sprite.setShader(library.shader());
+                updateShaderNameCache();
+                break;
+            case SDLK_DOWN:
+                library.inc();
+                if (is3d_enabled)
+                    cube.setShaderProgram(library.shader());
+                sprite.setShader(library.shader());
+                updateShaderNameCache();
+                break;
+            case SDLK_LEFT:
+                if (gpu_filter_enabled && !gpu_filters.empty()) {
+                    gpu_current_filter_index--;
+                    if (gpu_current_filter_index < 0)
+                        gpu_current_filter_index = ac_gpu::AC_FILTER_MAX - 1;
+                    gpu_filters.clear();
+                    gpu_filters.push_back({gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name});
+                    gpu_filtersChanged = true;
+                    mx::system_out << "acmx2: GPU Filter: " << ac_gpu::filters[gpu_current_filter_index].name << " [" << gpu_current_filter_index << "]\n";
+                    fflush(stdout);
+                }
+                break;
+            case SDLK_RIGHT:
+                if (gpu_filter_enabled && !gpu_filters.empty()) {
+                    gpu_current_filter_index++;
+                    if (gpu_current_filter_index >= ac_gpu::AC_FILTER_MAX)
+                        gpu_current_filter_index = 0;
+                    gpu_filters.clear();
+                    gpu_filters.push_back({gpu_current_filter_index, ac_gpu::filters[gpu_current_filter_index].name});
+                    gpu_filtersChanged = true;
+                    mx::system_out << "acmx2: GPU Filter: " << ac_gpu::filters[gpu_current_filter_index].name << " [" << gpu_current_filter_index << "]\n";
+                    fflush(stdout);
+                }
+                break;
+            case SDLK_SPACE:
+                library.toggleBypass();
+                updateShaderNameCache();
+                break;
+            case SDLK_p:
+                if (!filename.empty() || !graphic.empty()) {
+                    isPaused = !isPaused;
+                    mx::system_out << "acmx2: paused: " << ((isPaused == true) ? "enabled" : "disabled") << "\n";
+                    fflush(stdout);
+                    fflush(stderr);
+                }
+                break;
+            case SDLK_l:
+                if (!filename.empty() || !graphic.empty()) {
+                    isFrozen = !isFrozen;
+                    mx::system_out << "acmx2: frozen: " << ((isFrozen == true) ? "enabled" : "disabled") << "\n";
+                    fflush(stdout);
+                    fflush(stderr);
+                }
+                break;
+            case SDLK_z:
+                if (snapshot_state == 0) {
+                    snapshot_state = 1;
+                }
+                break;
 #ifdef AUDIO_ENABLED
-                    case SDLK_t:
-                        library.activeTime(!library.timeActive());
-                        break;
-                    case SDLK_q:
-                        library.audioTime(!library.timeAudio());
-                        break;
+            case SDLK_t:
+                library.activeTime(!library.timeActive());
+                break;
+            case SDLK_q:
+                library.audioTime(!library.timeAudio());
+                break;
 #endif
-                     case SDLK_v:
-                        viewRotationActive = !viewRotationActive;
-                        mx::system_out << "acmx2: View rotation: " << (viewRotationActive ? "enabled" : "disabled") << "\n";
-                        fflush(stdout);
-                        break;
-                    case SDLK_x:
-                        cameraDistance = 0.0f;
-                        mx::system_out << "acmx2: Camera distance reset\n";
-                        fflush(stdout);
-                        break;
-                    case SDLK_o:   
-                        oscillateScale = !oscillateScale;
-                        mx::system_out << "acmx2: Scale oscillation "
-                                       << (oscillateScale ? "enabled" : "disabled") << "\n";
-                        fflush(stdout);
-                        break;
-                    case SDLK_c:
-                        waveActive = !waveActive;
-                        mx::system_out << "acmx2: Wave effect "
-                                       << (waveActive ? "enabled" : "disabled") << "\n";
-                        fflush(stdout);
-                        break;
-                    case SDLK_e:
-                        enableWatermark = !enableWatermark;
-                        mx::system_out << "acmx2: Watermark "
-                                       << (enableWatermark ? "enabled" : "disabled") << "\n";
-                        fflush(stdout);
-                        break;
-                    case SDLK_m:
-                        if(!shader_pass_list.empty()) {
-                            shader_pass_enabled = !shader_pass_enabled;
-                            updateShaderNameCache();
-                            mx::system_out << "acmx2: Multi-shader pass "
-                                           << (shader_pass_enabled ? "enabled" : "disabled") << "\n";
-                            fflush(stdout);
-                        } else {
-                            mx::system_out << "acmx2: No shader pass list defined (use --shader-pass)\n";
-                            fflush(stdout);
-                        }
-                        break;
-                    case SDLK_3:
-                        if(!library.isDualMode()) {
-                            mx::system_out << "acmx2: Cannot switch to 3D mode - 3D shaders not compiled (use --enable-3d at startup)\n";
-                            fflush(stdout);
-                        } else if(cube.meshes.empty()) {
-                            mx::system_out << "acmx2: Cannot switch to 3D mode - no model loaded (use --enable-3d)\n";
-                            fflush(stdout);
-                        } else {
-                            is3d_enabled = !is3d_enabled;
-                            library.is3D(is3d_enabled);
-                            updateShaderNameCache();
-                            mx::system_out << "acmx2: " << (is3d_enabled ? "3D" : "2D") << " mode " 
-                                           << (is3d_enabled ? "enabled" : "disabled") << "\n";
-                            fflush(stdout);
-                        }
-                        break;
+            case SDLK_v:
+                viewRotationActive = !viewRotationActive;
+                mx::system_out << "acmx2: View rotation: " << (viewRotationActive ? "enabled" : "disabled") << "\n";
+                fflush(stdout);
+                break;
+            case SDLK_x:
+                cameraDistance = 0.0f;
+                mx::system_out << "acmx2: Camera distance reset\n";
+                fflush(stdout);
+                break;
+            case SDLK_o:
+                oscillateScale = !oscillateScale;
+                mx::system_out << "acmx2: Scale oscillation "
+                               << (oscillateScale ? "enabled" : "disabled") << "\n";
+                fflush(stdout);
+                break;
+            case SDLK_c:
+                waveActive = !waveActive;
+                mx::system_out << "acmx2: Wave effect "
+                               << (waveActive ? "enabled" : "disabled") << "\n";
+                fflush(stdout);
+                break;
+            case SDLK_e:
+                enableWatermark = !enableWatermark;
+                mx::system_out << "acmx2: Watermark "
+                               << (enableWatermark ? "enabled" : "disabled") << "\n";
+                fflush(stdout);
+                break;
+            case SDLK_m:
+                if (!shader_pass_list.empty()) {
+                    shader_pass_enabled = !shader_pass_enabled;
+                    updateShaderNameCache();
+                    mx::system_out << "acmx2: Multi-shader pass "
+                                   << (shader_pass_enabled ? "enabled" : "disabled") << "\n";
+                    fflush(stdout);
+                } else {
+                    mx::system_out << "acmx2: No shader pass list defined (use --shader-pass)\n";
+                    fflush(stdout);
                 }
                 break;
-            case SDL_KEYDOWN:
-                switch(e.key.keysym.sym) {
-                    case SDLK_u:
-                        library.incTime(0.05f);
-                        break;
-                    case SDLK_i:
-                        library.decTime(0.05f);
-                        break;
+            case SDLK_3:
+                if (!library.isDualMode()) {
+                    mx::system_out << "acmx2: Cannot switch to 3D mode - 3D shaders not compiled (use --enable-3d at startup)\n";
+                    fflush(stdout);
+                } else if (cube.meshes.empty()) {
+                    mx::system_out << "acmx2: Cannot switch to 3D mode - no model loaded (use --enable-3d)\n";
+                    fflush(stdout);
+                } else {
+                    is3d_enabled = !is3d_enabled;
+                    library.is3D(is3d_enabled);
+                    updateShaderNameCache();
+                    mx::system_out << "acmx2: " << (is3d_enabled ? "3D" : "2D") << " mode "
+                                   << (is3d_enabled ? "enabled" : "disabled") << "\n";
+                    fflush(stdout);
                 }
                 break;
+            }
+            break;
+        case SDL_KEYDOWN:
+            switch (e.key.keysym.sym) {
+            case SDLK_u:
+                library.incTime(0.05f);
+                break;
+            case SDLK_i:
+                library.decTime(0.05f);
+                break;
+            }
+            break;
         }
         library.event(e);
     }
 
-private:
+  private:
     unsigned int frame_counter = 0;
-    unsigned int written_frame_counter = 0; 
+    unsigned int written_frame_counter = 0;
     std::string crf = "23";
     std::string prefix_path;
     std::string filename, ofilename, graphic;
@@ -2830,7 +2834,7 @@ private:
     double fps = 30;
     bool repeat = false;
     bool full = false;
-    int snapshot_state = 0; 
+    int snapshot_state = 0;
     double totalFrames = 0;
     cv::VideoCapture cap;
     cv::Mat graphic_frame;
@@ -2843,8 +2847,8 @@ private:
     GLuint passTexture[2] = {0, 0};
     std::thread writerThread;
     std::atomic<bool> running{false};
-    std::atomic<bool> captureRunning{false};    
-    std::atomic<bool> writerRunning{false};    
+    std::atomic<bool> captureRunning{false};
+    std::atomic<bool> writerRunning{false};
     std::queue<FrameData> frameQueue;
     std::mutex queueMutex;
     std::condition_variable queueCondVar;
@@ -2860,39 +2864,41 @@ private:
     int cache_delay = 1;
     std::atomic<bool> finished{false};
     std::atomic<bool> copy_audio{false};
-    float cameraYaw = 270.0f;   
-    float cameraPitch = 0.0f; 
-    const float cameraRotationSpeed = 5.0f; 
-    bool viewRotationActive = false; 
+    float cameraYaw = 270.0f;
+    float cameraPitch = 0.0f;
+    const float cameraRotationSpeed = 5.0f;
+    bool viewRotationActive = false;
     bool oscillateScale = false;
     bool waveActive = false;
     float cameraDistance = 0.0f;
-    float modelSize = 1.0f; 
+    float modelSize = 1.0f;
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
     bool silent_mode = false;
-    bool use_shader_cache_flag = true;  
+    bool use_shader_cache_flag = true;
     int last_progress_percent = -1;
     bool enableWatermark = false;
-private:
+
+  private:
     std::atomic<uint64_t> frames_dropped{0};
     int win_w = 0;
     int win_h = 0;
-    
+
     void flushPBOs(gl::GLWindow *win) {
-        if (!pboIds[0]) return;
-           for (int i = 0; i < 2; i++) {
+        if (!pboIds[0])
+            return;
+        for (int i = 0; i < 2; i++) {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[i]);
-            GLubyte* src = static_cast<GLubyte*>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
-            
+            GLubyte *src = static_cast<GLubyte *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
+
             if (src) {
                 std::vector<unsigned char> pixels(win->w * win->h * 4);
                 std::memcpy(pixels.data(), src, pixels.size());
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-                
+
                 std::vector<unsigned char> flipped_pixels(win->w * win->h * 4);
                 for (int y = 0; y < win->h; ++y) {
-                    int src_row_start  = y * win->w * 4;
+                    int src_row_start = y * win->w * 4;
                     int dest_row_start = (win->h - 1 - y) * win->w * 4;
                     std::copy(pixels.begin() + src_row_start,
                               pixels.begin() + src_row_start + (win->w * 4),
@@ -2901,7 +2907,7 @@ private:
 
                 FrameData fd;
                 fd.pixels = std::move(flipped_pixels);
-                fd.width  = win->w;
+                fd.width = win->w;
                 fd.height = win->h;
                 fd.isSnapshot = false;
 
@@ -2991,7 +2997,7 @@ private:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, temp.cols, temp.rows,
                          0, GL_RGBA, GL_UNSIGNED_BYTE, temp.ptr());
         } else {
-            glTexSubImage2D(GL_TEXTURE_2D, 
+            glTexSubImage2D(GL_TEXTURE_2D,
                             0, 0, 0,
                             temp.cols, temp.rows,
                             GL_RGBA,
@@ -3000,10 +3006,10 @@ private:
         }
         glBindTexture(GL_TEXTURE_2D, 0);
     }
-    
+
     void updateTextureRGBA(GLuint texture, cv::Mat &frame) {
         glBindTexture(GL_TEXTURE_2D, texture);
-        glTexSubImage2D(GL_TEXTURE_2D, 
+        glTexSubImage2D(GL_TEXTURE_2D,
                         0, 0, 0,
                         frame.cols, frame.rows,
                         GL_RGBA,
@@ -3013,38 +3019,38 @@ private:
     }
 
     void startCaptureThread() {
-        if(captureThread.joinable()) {
-            return; 
+        if (captureThread.joinable()) {
+            return;
         }
         captureRunning = true;
         captureThread = std::thread([this]() {
             try {
-                
-                while(captureRunning) {
+
+                while (captureRunning) {
                     cv::Mat localFrame;
-                    if(!cap.read(localFrame)) {
+                    if (!cap.read(localFrame)) {
                         mx::system_err << "acmx2: camera read failed.\n";
                         captureRunning = false;
-                        running = false;  
+                        running = false;
                         break;
                     }
-                    if(localFrame.empty()) {
+                    if (localFrame.empty()) {
                         continue;
                     }
                     cv::flip(localFrame, localFrame, 0);
                     {
                         std::lock_guard<std::mutex> lock(captureQueueMutex);
-                        if(captureQueue.size() >= 4) {
-                            captureQueue.pop(); 
+                        if (captureQueue.size() >= 4) {
+                            captureQueue.pop();
                         }
                         captureQueue.push(std::move(localFrame));
                     }
                     captureQueueCondVar.notify_one();
                 }
-            } catch(const std::exception &e) {
+            } catch (const std::exception &e) {
                 mx::system_err << "acmx2: Capture thread exception: " << e.what() << "\n";
                 captureRunning = false;
-                running = false;  
+                running = false;
             }
         });
     }
@@ -3057,10 +3063,8 @@ private:
         }
     }
 
-    
-
     void startWriterThread() {
-        if (writerThread.joinable()) 
+        if (writerThread.joinable())
             return;
         writerRunning = true;
         written_frame_counter = 0;
@@ -3100,24 +3104,18 @@ private:
 
                             std::ostringstream oss;
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
-                            std::string name = prefix_path + "/ACMX2.Snapshot-"
-                                            + oss.str() + "-"
-                                            + std::to_string(fd.width) + "x"
-                                            + std::to_string(fd.height) + "-"
-                                            + std::to_string(current_offset) 
-                                            + ".png";
+                            std::string name = prefix_path + "/ACMX2.Snapshot-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".png";
 
-                            png::SavePNG_RGBA(name.c_str(), 
-                                            const_cast<unsigned char*>(fd.pixels.data()), 
-                                            fd.width, fd.height);
+                            png::SavePNG_RGBA(name.c_str(),
+                                              const_cast<unsigned char *>(fd.pixels.data()),
+                                              fd.width, fd.height);
 
                             mx::system_out << "acmx2: Took snapshot: " << name << "\n";
                             fflush(stdout);
                         });
                     }
 
-                    
-                    if(writer.is_open() && !filename.empty() && written_frame_counter == 0) {
+                    if (writer.is_open() && !filename.empty() && written_frame_counter == 0) {
                         written_frame_counter++;
                         continue;
                     } else if (writer.is_open() && written_frame_counter <= 30 && filename.empty() && graphic.empty()) {
@@ -3125,8 +3123,8 @@ private:
                         continue;
                     }
 
-                    if (writer.is_open() && !fd.isSnapshot) { 
-                        if(!filename.empty() || !graphic.empty()) { 
+                    if (writer.is_open() && !fd.isSnapshot) {
+                        if (!filename.empty() || !graphic.empty()) {
                             writer.write(fd.pixels.data());
                         } else {
                             writer.write_ts(fd.pixels.data());
@@ -3134,10 +3132,10 @@ private:
                         written_frame_counter++;
                     }
                 }
-            } catch(const std::exception &e) {
+            } catch (const std::exception &e) {
                 mx::system_err << "acmx2: Writer thread exception: " << e.what() << "\n";
                 writerRunning = false;
-                running = false;  
+                running = false;
                 fflush(stderr);
                 fflush(stdout);
             }
@@ -3151,7 +3149,7 @@ private:
         if (writerThread.joinable()) {
             writerThread.join();
         }
-        if(recording) {
+        if (recording) {
             writer.close();
             int64_t final_frame_count = writer.get_frame_count();
             double total_secs = (fps > 0.0) ? static_cast<double>(final_frame_count) / fps : 0.0;
@@ -3163,9 +3161,9 @@ private:
             timerStr << std::setfill('0') << std::setw(2) << hours << ":"
                      << std::setfill('0') << std::setw(2) << minutes << ":"
                      << std::setfill('0') << std::setw(2) << seconds;
-            
+
             mx::system_out << "acmx2: " << " wrote " << timerStr.str() << " (" << final_frame_count << " frames) to file: " << ofilename << "\n";
-            if(!filename.empty() && repeat == false && copy_audio && finished) {
+            if (!filename.empty() && repeat == false && copy_audio && finished) {
                 transfer_audio(filename, ofilename);
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
@@ -3177,13 +3175,13 @@ private:
 
 class MainWindow : public gl::GLWindow {
     bool silent_mode = false;
-    
+
     void initCommon(const MXArguments &args) {
         util.path = args.path;
-        
+
         if (!silent_mode) {
             SDL_Surface *ico = png::LoadPNG(util.getFilePath("data/win-icon.png").c_str());
-            if(!ico) {
+            if (!ico) {
                 throw mx::Exception("Could not load icon: " + util.getFilePath("data/win-icon.png"));
             }
             setWindowIcon(ico);
@@ -3195,12 +3193,12 @@ class MainWindow : public gl::GLWindow {
         fflush(stdout);
         fflush(stderr);
     }
-public:
-    
+
+  public:
     MainWindow(const MXArguments &args) : gl::GLWindow("ACMX2", args.tw, args.th, false), silent_mode(args.silent) {
         initCommon(args);
     }
-    
+
     MainWindow(const MXArguments &args, bool headless) : gl::GLWindow(args.tw, args.th, gl::GLMode::DESKTOP), silent_mode(true) {
         initCommon(args);
     }
@@ -3217,7 +3215,6 @@ public:
     }
 
     void event(SDL_Event &e) override {
-        
     }
 };
 
@@ -3252,7 +3249,6 @@ const char *message = R"(
 }
 )";
 
-
 void checkDevices(bool list_only = false) {
     int device_count = 0;
     cudaError_t error = cudaGetDeviceCount(&device_count);
@@ -3263,8 +3259,8 @@ void checkDevices(bool list_only = false) {
         exit(EXIT_FAILURE);
     } else {
         std::cout << "🚀 GPU Acceleration Active: " << device_count << " device(s) found." << std::endl;
-        if(list_only) {
-            for(int i = 0; i < device_count; ++i) {
+        if (list_only) {
+            for (int i = 0; i < device_count; ++i) {
                 cudaSetDevice(i);
                 cv::cuda::printShortCudaDeviceInfo(i);
             }
@@ -3274,8 +3270,8 @@ void checkDevices(bool list_only = false) {
     }
 }
 
-template<typename T>
-void printAbout(Argz<T> &parser) { 
+template <typename T>
+void printAbout(Argz<T> &parser) {
     mx::system_out << PROGRAM_NAME << ": " << VERSION_INFO << "\n";
     mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
@@ -3286,70 +3282,70 @@ void printAbout(Argz<T> &parser) {
 
 int main(int argc, char **argv) {
     fflush(stdout);
-    Argz<std::string> parser(argc, argv);    
+    Argz<std::string> parser(argc, argv);
     parser.addOptionSingle('v', "Display help message")
-          .addOptionSingleValue('p', "assets path")
-          .addOptionDoubleValue('P', "path", "assets path")
-          .addOptionSingleValue('r',"Resolution WidthxHeight")
-          .addOptionDoubleValue('R',"resolution", "Resolution WidthxHeight")
-          .addOptionSingleValue('d', "Camera Device")
-          .addOptionDoubleValue('D', "device", "Device Index")
-          .addOptionSingleValue('c', "Camera Resolution")
-          .addOptionDoubleValue('C', "camera-res", "Camera Resolution")
-          .addOptionSingleValue('i', "Input file")
-          .addOptionSingleValue('g', "Input Image")
-          .addOptionDoubleValue('G', "graphic", "Input graphics file")
-          .addOptionDoubleValue('I', "input", "Input file")
-          .addOptionSingleValue('s', "Shader Library Index File")
-          .addOptionDoubleValue('S', "shaders", "Shader Library Index File")
-          .addOptionSingleValue('f', "Fragment Shader")
-          .addOptionDoubleValue('F', "fragment", "Fragment Shader")
-          .addOptionSingleValue('h', "Shader Index")
-          .addOptionDoubleValue('H', "shader", "Shader Index")
-          .addOptionSingleValue('e', "Save Prefix")
-          .addOptionDoubleValue('E', "prefix", "Save Prefix")
-          .addOptionSingleValue('o', "output file")
-          .addOptionDoubleValue('O', "output", "output file")
-          .addOptionSingleValue('b', "Bitrate in CRF")
-          .addOptionDoubleValue('B', "bitrate", "Bitrate in CRF")
-          .addOptionSingleValue('u', "frames per second")
-          .addOptionDoubleValue('U', "fps", "Frames per second")
-          .addOptionSingle('a', "Repeat")
-          .addOptionDouble('A', "repeat", "Video repeat")
-          .addOptionSingle('n', "fullscreen")
-          .addOptionDouble(256, "texture-cache", "Enable texture cache")
-          .addOptionDoubleValue(257, "cache-delay", "Cache delay in frames")
-          .addOptionDouble(258, "copy-audio", "Copy audio track")
-          .addOptionDouble(259, "enable-3d", "Enable 3D cube")
-          .addOptionDoubleValue(260, "model", "Model file")
-          .addOptionDouble(261, "help", "print help info")
-          .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
-          .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
-          .addOptionDouble(402, "list-filters", "List available GPU filters")
-          .addOptionDouble(403, "disable-counter", "Disable timer and FPS counter overlay")
-          .addOptionSingleValue('m', "CUDA device index")
-          .addOptionDoubleValue('M', "cuda-device", "CUDA device index")
-          .addOptionDouble(404, "list-cuda-devices", "List available CUDA devices")
+        .addOptionSingleValue('p', "assets path")
+        .addOptionDoubleValue('P', "path", "assets path")
+        .addOptionSingleValue('r', "Resolution WidthxHeight")
+        .addOptionDoubleValue('R', "resolution", "Resolution WidthxHeight")
+        .addOptionSingleValue('d', "Camera Device")
+        .addOptionDoubleValue('D', "device", "Device Index")
+        .addOptionSingleValue('c', "Camera Resolution")
+        .addOptionDoubleValue('C', "camera-res", "Camera Resolution")
+        .addOptionSingleValue('i', "Input file")
+        .addOptionSingleValue('g', "Input Image")
+        .addOptionDoubleValue('G', "graphic", "Input graphics file")
+        .addOptionDoubleValue('I', "input", "Input file")
+        .addOptionSingleValue('s', "Shader Library Index File")
+        .addOptionDoubleValue('S', "shaders", "Shader Library Index File")
+        .addOptionSingleValue('f', "Fragment Shader")
+        .addOptionDoubleValue('F', "fragment", "Fragment Shader")
+        .addOptionSingleValue('h', "Shader Index")
+        .addOptionDoubleValue('H', "shader", "Shader Index")
+        .addOptionSingleValue('e', "Save Prefix")
+        .addOptionDoubleValue('E', "prefix", "Save Prefix")
+        .addOptionSingleValue('o', "output file")
+        .addOptionDoubleValue('O', "output", "output file")
+        .addOptionSingleValue('b', "Bitrate in CRF")
+        .addOptionDoubleValue('B', "bitrate", "Bitrate in CRF")
+        .addOptionSingleValue('u', "frames per second")
+        .addOptionDoubleValue('U', "fps", "Frames per second")
+        .addOptionSingle('a', "Repeat")
+        .addOptionDouble('A', "repeat", "Video repeat")
+        .addOptionSingle('n', "fullscreen")
+        .addOptionDouble(256, "texture-cache", "Enable texture cache")
+        .addOptionDoubleValue(257, "cache-delay", "Cache delay in frames")
+        .addOptionDouble(258, "copy-audio", "Copy audio track")
+        .addOptionDouble(259, "enable-3d", "Enable 3D cube")
+        .addOptionDoubleValue(260, "model", "Model file")
+        .addOptionDouble(261, "help", "print help info")
+        .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
+        .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
+        .addOptionDouble(402, "list-filters", "List available GPU filters")
+        .addOptionDouble(403, "disable-counter", "Disable timer and FPS counter overlay")
+        .addOptionSingleValue('m', "CUDA device index")
+        .addOptionDoubleValue('M', "cuda-device", "CUDA device index")
+        .addOptionDouble(404, "list-cuda-devices", "List available CUDA devices")
 #ifdef AUDIO_ENABLED
-          .addOptionSingle('w', "Enable Audio Reactivity")
-          .addOptionDouble('W', "enable-audio", "enabled audio reacitivty")
-          .addOptionSingleValue('l', "Audio channels")
-          .addOptionDoubleValue('L', "channels", "Audio channels")
-          .addOptionSingleValue('q', "Audio Sensitivty")
-          .addOptionDoubleValue('Q', "sense", "Audio sensitivty")
-          .addOptionSingle('y', "Enable Audio Pass-through")
-          .addOptionDouble('Y', "pass-through", "Enable audio pass through")
-          .addOptionDoubleValue(300, "audio-input", "Audio input device")
-          .addOptionDoubleValue(301, "audio-output", "Audio output device")
-          .addOptionDouble(302, "list-devices", "list audio devices")
+        .addOptionSingle('w', "Enable Audio Reactivity")
+        .addOptionDouble('W', "enable-audio", "enabled audio reacitivty")
+        .addOptionSingleValue('l', "Audio channels")
+        .addOptionDoubleValue('L', "channels", "Audio channels")
+        .addOptionSingleValue('q', "Audio Sensitivty")
+        .addOptionDoubleValue('Q', "sense", "Audio sensitivty")
+        .addOptionSingle('y', "Enable Audio Pass-through")
+        .addOptionDouble('Y', "pass-through", "Enable audio pass through")
+        .addOptionDoubleValue(300, "audio-input", "Audio input device")
+        .addOptionDoubleValue(301, "audio-output", "Audio output device")
+        .addOptionDouble(302, "list-devices", "list audio devices")
 #endif
-          .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
-          .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
-          .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)")
-          .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
-          .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)");
+        .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
+        .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
+        .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)")
+        .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
+        .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)");
 
-    if(argc == 1) {
+    if (argc == 1) {
         printAbout(parser);
         exit(EXIT_SUCCESS);
     }
@@ -3362,242 +3358,243 @@ int main(int argc, char **argv) {
     MXArguments args;
     int value = 0;
     try {
-        while((value = parser.proc(arg)) != -1) {
-            switch(value) {
-                case 'v':
-                case 261:
-                    printAbout(parser);
-                    exit(EXIT_SUCCESS);
-                    break;
-                case 'p':
-                case 'P':
-                    args.path = arg.arg_value;
-                    break;
-                case 'r':
-                case 'R': {
-                    auto pos = arg.arg_value.find("x");
-                    if(pos == std::string::npos)  {
-                        mx::system_err << "Error invalid resolution use WidthxHeight\n";
-                        mx::system_err.flush();
-                        exit(EXIT_FAILURE);
-                    }
-                    std::string left, right;
-                    left = arg.arg_value.substr(0, pos);
-                    right = arg.arg_value.substr(pos+1);
-                    args.tw = atoi(left.c_str());
-                    args.th = atoi(right.c_str());
-                    args.sizev = cv::Size(args.tw, args.th);
+        while ((value = parser.proc(arg)) != -1) {
+            switch (value) {
+            case 'v':
+            case 261:
+                printAbout(parser);
+                exit(EXIT_SUCCESS);
+                break;
+            case 'p':
+            case 'P':
+                args.path = arg.arg_value;
+                break;
+            case 'r':
+            case 'R': {
+                auto pos = arg.arg_value.find("x");
+                if (pos == std::string::npos) {
+                    mx::system_err << "Error invalid resolution use WidthxHeight\n";
+                    mx::system_err.flush();
+                    exit(EXIT_FAILURE);
                 }
+                std::string left, right;
+                left = arg.arg_value.substr(0, pos);
+                right = arg.arg_value.substr(pos + 1);
+                args.tw = atoi(left.c_str());
+                args.th = atoi(right.c_str());
+                args.sizev = cv::Size(args.tw, args.th);
+            } break;
+            case 'G':
+            case 'g':
+                args.graphic_file = arg.arg_value;
                 break;
-                case 'G':
-                case 'g':
-                    args.graphic_file = arg.arg_value;
-                break;
-                case 'C':
-                case 'c': {
-                    auto pos = arg.arg_value.find("x");
-                    if(pos == std::string::npos)  {
-                        mx::system_err << "Error invalid camera resolution use WidthxHeight\n";
-                        mx::system_err.flush();
-                        exit(EXIT_FAILURE);
-                    }
-                    std::string left, right;
-                    left = arg.arg_value.substr(0, pos);
-                    right = arg.arg_value.substr(pos+1);
-                    int xw = atoi(left.c_str());
-                    int xh = atoi(right.c_str());
-                    args.csize = cv::Size(xw, xh);
+            case 'C':
+            case 'c': {
+                auto pos = arg.arg_value.find("x");
+                if (pos == std::string::npos) {
+                    mx::system_err << "Error invalid camera resolution use WidthxHeight\n";
+                    mx::system_err.flush();
+                    exit(EXIT_FAILURE);
                 }
+                std::string left, right;
+                left = arg.arg_value.substr(0, pos);
+                right = arg.arg_value.substr(pos + 1);
+                int xw = atoi(left.c_str());
+                int xh = atoi(right.c_str());
+                args.csize = cv::Size(xw, xh);
+            } break;
+            case 'd':
+            case 'D':
+                args.camera_device = atoi(arg.arg_value.c_str());
                 break;
-                case 'd':
-                case 'D':
-                    args.camera_device = atoi(arg.arg_value.c_str());
-                    break;
-                case 's':
-                case 'S':
-                    args.mode = 1;
-                    args.library = arg.arg_value;
-                    break;
-                case 'F':
-                case 'f':
-                    args.mode = 0;
-                    args.fragment = arg.arg_value;
-                    break;
-                case 'h':
-                case 'H':
-                    args.shader_index = atoi(arg.arg_value.c_str());
-                    break;
-                case 'e':
-                case 'E':
-                    args.prefix_path = arg.arg_value;
-                    break;
-                case 'i':
-                case 'I':
-                    args.filename = arg.arg_value;
-                    break;
-                case 'o':
-                case 'O':
-                    args.ofilename = arg.arg_value;
-                    break;
-                case 'b':
-                case 'B':
-                    args.crf = arg.arg_value;
-                    break;
-                case 'u':
-                case 'U':
-                    args.fps_value = atof(arg.arg_value.c_str());
-                    break;
-                case 'a':
-                case 'A':
-                    args.repeat = true;
-                    break;
-                case 'n':
-                case 'N':
-                    args.full = true;
-                    break;
-                case 256:
-                    args.cache = true;
-                    mx::system_out << "acmx2: Texture cache enabled.\n";
-                    break;
-                case 257:
-                    args.cache_delay = atoi(arg.arg_value.c_str());
-                    mx::system_out << "acmx2: Cache delay set to: " << args.cache_delay << "\n";
-                    break;
-                case 258:
-                    args.copy_audio = true;
-                    break;
-                case 259:
-                    args.is3d = true;
-                    mx::system_out << "acmx2: 3D cube enabled.\n";
-                    break;
-                case 260:
-                    args.model_file = arg.arg_value;
-                    break;
-                case 400: {
-                    args.gpu_filter_enabled = true;
-                    std::string list = arg.arg_value;
-                    size_t start = 0;
-                    while(true) {
-                        size_t pos = list.find(',', start);
-                        std::string tok = (pos == std::string::npos) ? list.substr(start) : list.substr(start, pos - start);
-                        if(!tok.empty()) {
-                            int idx = std::stoi(tok);
-                            if(idx >= 0 && idx < ac_gpu::AC_FILTER_MAX) {
-                                args.gpu_filter_indices.push_back(idx);
-                            } else {
-                                mx::system_err << "acmx2: Invalid GPU filter index: " << idx << " (max: " << ac_gpu::AC_FILTER_MAX - 1 << ")\n";
-                            }
+            case 's':
+            case 'S':
+                args.mode = 1;
+                args.library = arg.arg_value;
+                break;
+            case 'F':
+            case 'f':
+                args.mode = 0;
+                args.fragment = arg.arg_value;
+                break;
+            case 'h':
+            case 'H':
+                args.shader_index = atoi(arg.arg_value.c_str());
+                break;
+            case 'e':
+            case 'E':
+                args.prefix_path = arg.arg_value;
+                break;
+            case 'i':
+            case 'I':
+                args.filename = arg.arg_value;
+                break;
+            case 'o':
+            case 'O':
+                args.ofilename = arg.arg_value;
+                break;
+            case 'b':
+            case 'B':
+                args.crf = arg.arg_value;
+                break;
+            case 'u':
+            case 'U':
+                args.fps_value = atof(arg.arg_value.c_str());
+                break;
+            case 'a':
+            case 'A':
+                args.repeat = true;
+                break;
+            case 'n':
+            case 'N':
+                args.full = true;
+                break;
+            case 256:
+                args.cache = true;
+                mx::system_out << "acmx2: Texture cache enabled.\n";
+                break;
+            case 257:
+                args.cache_delay = atoi(arg.arg_value.c_str());
+                mx::system_out << "acmx2: Cache delay set to: " << args.cache_delay << "\n";
+                break;
+            case 258:
+                args.copy_audio = true;
+                break;
+            case 259:
+                args.is3d = true;
+                mx::system_out << "acmx2: 3D cube enabled.\n";
+                break;
+            case 260:
+                args.model_file = arg.arg_value;
+                break;
+            case 400: {
+                args.gpu_filter_enabled = true;
+                std::string list = arg.arg_value;
+                size_t start = 0;
+                while (true) {
+                    size_t pos = list.find(',', start);
+                    std::string tok = (pos == std::string::npos) ? list.substr(start) : list.substr(start, pos - start);
+                    if (!tok.empty()) {
+                        int idx = std::stoi(tok);
+                        if (idx >= 0 && idx < ac_gpu::AC_FILTER_MAX) {
+                            args.gpu_filter_indices.push_back(idx);
+                        } else {
+                            mx::system_err << "acmx2: Invalid GPU filter index: " << idx << " (max: " << ac_gpu::AC_FILTER_MAX - 1 << ")\n";
                         }
-                        if(pos == std::string::npos) break;
-                        start = pos + 1;
                     }
+                    if (pos == std::string::npos)
+                        break;
+                    start = pos + 1;
                 }
-                    break;
-                case 401:
-                    args.gpu_frame_buffer_size = std::stoi(arg.arg_value);
-                    if(args.gpu_frame_buffer_size < 4) args.gpu_frame_buffer_size = 4;
-                    if(args.gpu_frame_buffer_size > 32) args.gpu_frame_buffer_size = 32;
-                    mx::system_out << "acmx2: GPU frame buffer size: " << args.gpu_frame_buffer_size << "\n";
-                    break;
-                case 402:
-                    mx::system_out << "Available GPU Filters (" << ac_gpu::AC_FILTER_MAX << " total):\n";
-                    for(int i = 0; i < ac_gpu::AC_FILTER_MAX; ++i) {
-                        mx::system_out << "  " << i << ": " << ac_gpu::filters[i].name << "\n";
-                    }
-                    exit(EXIT_SUCCESS);
-                    break;
-                case 403:
-                    args.disable_counter = true;
-                    break;
-                case 'm':
-                case 'M':
-                    args.cuda_device = atoi(arg.arg_value.c_str());
-                    break;
-                case 404:
-                    checkDevices(true);
-                    exit(EXIT_SUCCESS);
-                    break;
+            } break;
+            case 401:
+                args.gpu_frame_buffer_size = std::stoi(arg.arg_value);
+                if (args.gpu_frame_buffer_size < 4)
+                    args.gpu_frame_buffer_size = 4;
+                if (args.gpu_frame_buffer_size > 32)
+                    args.gpu_frame_buffer_size = 32;
+                mx::system_out << "acmx2: GPU frame buffer size: " << args.gpu_frame_buffer_size << "\n";
+                break;
+            case 402:
+                mx::system_out << "Available GPU Filters (" << ac_gpu::AC_FILTER_MAX << " total):\n";
+                for (int i = 0; i < ac_gpu::AC_FILTER_MAX; ++i) {
+                    mx::system_out << "  " << i << ": " << ac_gpu::filters[i].name << "\n";
+                }
+                exit(EXIT_SUCCESS);
+                break;
+            case 403:
+                args.disable_counter = true;
+                break;
+            case 'm':
+            case 'M':
+                args.cuda_device = atoi(arg.arg_value.c_str());
+                break;
+            case 404:
+                checkDevices(true);
+                exit(EXIT_SUCCESS);
+                break;
 #ifdef AUDIO_ENABLED
-                case 'W':
-                case 'w':
-                    args.audio_enabled = true;
-                    break;
-                case 'l':
-                case 'L':
-                    args.audio_channels = atoi(arg.arg_value.c_str());
-                    break;
-                case 'Q':
-                case 'q':
-                    args.audio_sensitivty = atof(arg.arg_value.c_str());
-                    break;
-                               case 'Y':
-                case 'y':
-                    set_output(true);
-                    break;
-                 case 300:
-                    if(arg.arg_value == "default")
-                        args.audio_input = -1;
-                    else
-                        args.audio_input = atoi(arg.arg_value.c_str());
+            case 'W':
+            case 'w':
+                args.audio_enabled = true;
                 break;
-                case 301:
-                    if(arg.arg_value == "default") 
-                        args.audio_output= -1;
-                    else
-                        args.audio_output = atoi(arg.arg_value.c_str());
+            case 'l':
+            case 'L':
+                args.audio_channels = atoi(arg.arg_value.c_str());
                 break;
-                case 302:
-                    list_audio_devices();
-                    exit(EXIT_SUCCESS);
+            case 'Q':
+            case 'q':
+                args.audio_sensitivty = atof(arg.arg_value.c_str());
+                break;
+            case 'Y':
+            case 'y':
+                set_output(true);
+                break;
+            case 300:
+                if (arg.arg_value == "default")
+                    args.audio_input = -1;
+                else
+                    args.audio_input = atoi(arg.arg_value.c_str());
+                break;
+            case 301:
+                if (arg.arg_value == "default")
+                    args.audio_output = -1;
+                else
+                    args.audio_output = atoi(arg.arg_value.c_str());
+                break;
+            case 302:
+                list_audio_devices();
+                exit(EXIT_SUCCESS);
                 break;
 #endif
-                case 405:
-                    args.silent = true;
-                    break;
-                case 406: {
-                    std::string pass_list = arg.arg_value;
-                    size_t start = 0;
-                    while (true) {
-                        size_t pos = pass_list.find(',', start);
-                        std::string tok = (pos == std::string::npos) 
-                            ? pass_list.substr(start) 
-                            : pass_list.substr(start, pos - start);
-                        if (!tok.empty()) {
-                            try {
-                                int idx = std::stoi(tok);
-                                if (idx >= 0) {
-                                    args.shader_pass_list.push_back(idx);
-                                }
-                            } catch (...) {
-                                mx::system_err << "acmx2: Warning: Invalid shader pass index: " << tok << "\n";
+            case 405:
+                args.silent = true;
+                break;
+            case 406: {
+                std::string pass_list = arg.arg_value;
+                size_t start = 0;
+                while (true) {
+                    size_t pos = pass_list.find(',', start);
+                    std::string tok = (pos == std::string::npos)
+                                          ? pass_list.substr(start)
+                                          : pass_list.substr(start, pos - start);
+                    if (!tok.empty()) {
+                        try {
+                            int idx = std::stoi(tok);
+                            if (idx >= 0) {
+                                args.shader_pass_list.push_back(idx);
                             }
+                        } catch (...) {
+                            mx::system_err << "acmx2: Warning: Invalid shader pass index: " << tok << "\n";
                         }
-                        if (pos == std::string::npos) break;
-                        start = pos + 1;
                     }
-                    if (!args.shader_pass_list.empty()) {
-                        args.shader_pass_enabled = true;
-                        mx::system_out << "acmx2: Shader pass list enabled with " << args.shader_pass_list.size() << " passes\n";
-                    }
-                    break;
+                    if (pos == std::string::npos)
+                        break;
+                    start = pos + 1;
                 }
-                case 407:
-                    args.build_cache = true;
-                    args.build_library_path = arg.arg_value;
-                    break;
-                case 408:
-                    args.use_shader_cache = false;
-                    mx::system_out << "acmx2: Shader caching disabled\n";
-                    break;
+                if (!args.shader_pass_list.empty()) {
+                    args.shader_pass_enabled = true;
+                    mx::system_out << "acmx2: Shader pass list enabled with " << args.shader_pass_list.size() << " passes\n";
+                }
+                break;
             }
-               }
-    } catch (const ArgException<std::string>& e) {
+            case 407:
+                args.build_cache = true;
+                args.build_library_path = arg.arg_value;
+                break;
+            case 408:
+                args.use_shader_cache = false;
+                mx::system_out << "acmx2: Shader caching disabled\n";
+                break;
+            }
+        }
+    } catch (const ArgException<std::string> &e) {
         mx::system_err << e.text() << "\n";
         mx::system_err.flush();
         return EXIT_FAILURE;
-    }    
+    }
     checkDevices();
-    if(args.path.empty()) {
+    if (args.path.empty()) {
         args.path = ".";
         mx::system_out << "acmx2: Path name not provided, using current path...\n";
     }
@@ -3616,9 +3613,9 @@ int main(int argc, char **argv) {
         try {
             mx::system_out << "acmx2: Creating build window...\n";
             fflush(stdout);
-            
+
             class BuildWindow : public gl::GLWindow {
-            public:
+              public:
                 ShaderLibrary library;
                 std::string lib_path;
                 bool enable_3d;
@@ -3627,8 +3624,8 @@ int main(int argc, char **argv) {
                 bool build_done = false;
                 bool active = true;
 
-                BuildWindow(const std::string &path, bool is3d, const std::string &assets) 
-                    : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false), 
+                BuildWindow(const std::string &path, bool is3d, const std::string &assets)
+                    : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false),
                       lib_path(path), enable_3d(is3d), assets_path(assets) {
                     mx::system_out << "acmx2: Window created, setting up...\n";
                     fflush(stdout);
@@ -3639,13 +3636,13 @@ int main(int argc, char **argv) {
                 void draw() override {
                     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                     glClear(GL_COLOR_BUFFER_BIT);
-                    
+
                     if (!build_done) {
                         build_done = true;
-                        
+
                         std::string vert_2d = util.getFilePath("data/vert.glsl");
                         std::string vert_3d = util.getFilePath("data/vertex.glsl");
-                        
+
                         mx::system_out << "acmx2: Building shader cache for: " << lib_path << "\n";
                         mx::system_out << "acmx2: Mode: " << (enable_3d ? "2D+3D" : "2D only") << "\n";
                         mx::system_out << "acmx2: OpenGL Renderer: " << glGetString(GL_RENDERER) << "\n";
@@ -3655,7 +3652,7 @@ int main(int argc, char **argv) {
                         library.clear();
                         active = false;
                     }
-                    
+
                     swap();
                 }
 
@@ -3676,7 +3673,7 @@ int main(int argc, char **argv) {
 
             BuildWindow build_win(args.build_library_path, args.is3d, args.path);
             build_win.buildLoop();
-            
+
             return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
         } catch (const mx::Exception &e) {
             mx::system_err << "acmx2: Build failed: " << e.text() << "\n";
@@ -3690,13 +3687,13 @@ int main(int argc, char **argv) {
     }
 
     try {
-        args.slib = std::make_tuple(args.mode, 
-                                    (args.mode == 0) ? args.fragment : args.library, 
+        args.slib = std::make_tuple(args.mode,
+                                    (args.mode == 0) ? args.fragment : args.library,
                                     (args.mode == 0) ? 0 : args.shader_index);
-        if(args.filename.empty() && args.cache) {
+        if (args.filename.empty() && args.cache) {
             throw mx::Exception("Texture cache only works in video mode\n");
         }
-        
+
         if (args.silent) {
             if (args.filename.empty()) {
                 mx::system_err << "acmx2: Error: --silent mode requires a video input file (-i/--input)\n";
@@ -3717,26 +3714,23 @@ int main(int argc, char **argv) {
             }
             mx::system_out << "acmx2: Silent mode enabled - processing without window\n";
         }
-        
+
         if (args.silent) {
-            MainWindow main_window(args, true); 
+            MainWindow main_window(args, true);
             main_window.loop();
         } else {
-            MainWindow main_window(args); 
+            MainWindow main_window(args);
             main_window.loop();
         }
-    } 
-    catch(const mx::Exception &e) {
+    } catch (const mx::Exception &e) {
         mx::system_err << "acmx2: Exception: " << e.text() << "\n";
         mx::system_err.flush();
         return EXIT_FAILURE;
-    } 
-    catch(std::exception &e) {
+    } catch (std::exception &e) {
         mx::system_err << "acmx2: Exception: " << e.what() << "\n";
         mx::system_err.flush();
         return EXIT_FAILURE;
-    } 
-    catch(...) {
+    } catch (...) {
         mx::system_err << "acmx2: Unknown exception occurred.\n";
         mx::system_err.flush();
         return EXIT_FAILURE;

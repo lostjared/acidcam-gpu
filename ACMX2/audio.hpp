@@ -1,10 +1,10 @@
 #ifndef __AUDIO__H_
 #define __AUDIO__H_
 
-#include<RtAudio.h>
+#include <RtAudio.h>
 
 int init_audio(unsigned int channels, float sense, int in_device, int out_device);
-void list_audio_devices(); 
+void list_audio_devices();
 void close_audio();
 float get_amp();
 float get_sense();

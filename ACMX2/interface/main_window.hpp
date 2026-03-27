@@ -1,37 +1,37 @@
-//#define BUILD_BUNDLE 
-//uncomment above if building BUNDLE
+// #define BUILD_BUNDLE
+// uncomment above if building BUNDLE
 
 #ifndef __APP_WINDOW_H_
 #define __APP_WINDOW_H_
-#include "version_info.hpp"//defines VERSION_INFO
-#include<random>
-#include<QMainWindow>
-#include<QListView>
-#include<QStringListModel>
-#include<QTextEdit>
-#include<QMenuBar>
-#include<QProcess>
-#include<QSettings>
-#include<QPointer>
-#include"prop.hpp"
-#include"editor.hpp"
-#include"shader.hpp"
-#include"shaderlibrary.hpp"
-#include"gpufilter.hpp"
-#include"shaderpass.hpp"
+#include "editor.hpp"
+#include "gpufilter.hpp"
+#include "prop.hpp"
+#include "shader.hpp"
+#include "shaderlibrary.hpp"
+#include "shaderpass.hpp"
+#include "version_info.hpp" //defines VERSION_INFO
+#include <QListView>
+#include <QMainWindow>
+#include <QMenuBar>
+#include <QPointer>
+#include <QProcess>
+#include <QSettings>
+#include <QStringListModel>
+#include <QTextEdit>
+#include <random>
 
 class ReadOnlyStringListModel : public QStringListModel {
     Q_OBJECT
-public:
-    using QStringListModel::QStringListModel; 
+  public:
+    using QStringListModel::QStringListModel;
     Qt::ItemFlags flags(const QModelIndex &index) const override {
         return QStringListModel::flags(index) & ~Qt::ItemIsEditable;
     }
 };
 
 class MainWindow : public QMainWindow {
-Q_OBJECT
-public:
+    Q_OBJECT
+  public:
     MainWindow(QWidget *parent = 0) : QMainWindow(parent) {
         initControls();
     }
@@ -40,8 +40,8 @@ public:
     void Write(const QString &message);
     bool loadShaders(const QString &path, bool force = false);
     void updateIndex();
-    QDateTime indexTimestamp;    
-public slots:
+    QDateTime indexTimestamp;
+  public slots:
     void fileOpenProp();
     void fileExit();
     void runSelected();
@@ -63,23 +63,25 @@ public slots:
     void menuBuildShaderCache();
     void menuRunFromCache();
     void menuRecompileShaders();
-protected:
+
+  protected:
     bool addShaderToList(const QString &shaderName);
 
-     void closeEvent(QCloseEvent *event) override {
+    void closeEvent(QCloseEvent *event) override {
         if (process->state() == QProcess::Running) {
             process->terminate();
             if (!process->waitForFinished(10000)) {
-                process->kill(); 
+                process->kill();
             }
         }
-        QMainWindow::closeEvent(event); 
+        QMainWindow::closeEvent(event);
     }
-private:
-    QListView        *list_view;
-    QStringList       items;
+
+  private:
+    QListView *list_view;
+    QStringList items;
     ReadOnlyStringListModel *model;
-    QTextEdit   *bottomTextBox;
+    QTextEdit *bottomTextBox;
     QMenu *fileMenu;
     QMenu *cameraMenu;
     QMenu *playbackMenu;
@@ -90,11 +92,11 @@ private:
     QAction *cameraSet, *audioSet;
     QAction *runMenu_select, *runMenu_all;
     QAction *play_repeat, *play_stop;
-    QAction *listMenu_new,*listMenu_shader, *listMenu_remove, *listMenu_up, *listMenu_down, *listMenu_shuffle, *listMenu_sort;
+    QAction *listMenu_new, *listMenu_shader, *listMenu_remove, *listMenu_up, *listMenu_down, *listMenu_shuffle, *listMenu_sort;
     QAction *helpMenu_about;
     QAction *listMenu_findNext;
-    QString lastSearchText;  
-    int lastFoundIndex = -1;    
+    QString lastSearchText;
+    int lastFoundIndex = -1;
     QString executable_path;
     QAction *listMenu_search;
     QString shader_path;
@@ -136,11 +138,10 @@ private:
     QString customStyleSheet;
     void applyCustomStyleSheet(bool enable);
     bool shader_pass_enabled = false;
-    QStringList shader_pass_names;  
+    QStringList shader_pass_names;
     QString getShaderPassIndicesFromNames();
     int cuda_device = 0;
-    bool use_shader_cache = true; 
+    bool use_shader_cache = true;
 };
-
 
 #endif

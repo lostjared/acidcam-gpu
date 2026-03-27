@@ -1,14 +1,13 @@
 #include "settings.hpp"
-#include<QMessageBox>
-#include<QSettings>
-#include<QSet>
-#include<QProcess>
-#include<QRegularExpression>
+#include <QMessageBox>
+#include <QProcess>
+#include <QRegularExpression>
+#include <QSet>
+#include <QSettings>
 #ifdef __linux__
-#include<unistd.h>
-#include<fcntl.h>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
-
 
 SettingsWindow::SettingsWindow(QWidget *parent)
     : QDialog(parent),
@@ -31,7 +30,7 @@ SettingsWindow::SettingsWindow(QWidget *parent)
 
 void SettingsWindow::populateCameraDevices() {
     QSet<QString> addedCameras;
-    
+
     for (int i = 0; i < 20; ++i) {
         QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(i);
         QFile file(sysfs_path);
@@ -43,7 +42,7 @@ void SettingsWindow::populateCameraDevices() {
             }
         }
     }
-    
+
     if (cameraIndexComboBox->count() == 0) {
         cameraIndexComboBox->addItem("No cameras found", -1);
     }
@@ -53,17 +52,17 @@ void SettingsWindow::populateCudaDevices() {
     QProcess process;
     process.start("acmx2", QStringList() << "--list-cuda-devices");
     process.waitForFinished(5000);
-    
+
     QString output = process.readAllStandardOutput();
-    
+
     if (output.isEmpty() || process.exitCode() != 0) {
         cudaDeviceComboBox->addItem("No CUDA devices found", 0);
         return;
     }
-    
+
     QStringList lines = output.split('\n');
     QRegularExpression deviceRegex("Device\\s+(\\d+):\\s*\"?([^\"\\n]+)\"?");
-    
+
     bool foundDevice = false;
     for (const QString &line : lines) {
         QRegularExpressionMatch match = deviceRegex.match(line);
@@ -78,7 +77,7 @@ void SettingsWindow::populateCudaDevices() {
             foundDevice = true;
         }
     }
-    
+
     if (!foundDevice) {
         cudaDeviceComboBox->addItem("No CUDA devices found", 0);
     }
@@ -96,41 +95,41 @@ void SettingsWindow::init() {
     QLabel *cameraIndexLabel = new QLabel("Select Camera Index:", this);
     cameraIndexComboBox = new QComboBox(this);
     populateCameraDevices();
-    
+
     QLabel *cudaDeviceLabel = new QLabel("Select CUDA Device:", this);
     cudaDeviceComboBox = new QComboBox(this);
     populateCudaDevices();
-    
+
     QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
                     "* { color: red; font-weight: bold; } "
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
 
     QSettings appSettings("LostSideDead");
-    if(appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", true).toBool()) {
         setStyleSheet(style);
     }
-    
+
     QLabel *cameraResolutionLabel = new QLabel("Select Camera Resolution:", this);
     cameraResolutionComboBox = new QComboBox(this);
     QStringList cameraResolutions;
     cameraResolutions << "Default"
-                     << "320x240"
-                     << "640x360"
-                     << "640x480"
-                     << "720x480"
-                     << "800x600"
-                     << "960x720"
-                     << "1024x768"
-                     << "1280x720"
-                     << "1280x960"
-                     << "1280x1024"
-                     << "1600x1200"
-                     << "1920x1080"
-                     << "1920x1200"
-                     << "2560x1440"
-                     << "2560x1600"
-                     << "3840x2160";
+                      << "320x240"
+                      << "640x360"
+                      << "640x480"
+                      << "720x480"
+                      << "800x600"
+                      << "960x720"
+                      << "1024x768"
+                      << "1280x720"
+                      << "1280x960"
+                      << "1280x1024"
+                      << "1600x1200"
+                      << "1920x1080"
+                      << "1920x1200"
+                      << "2560x1440"
+                      << "2560x1600"
+                      << "3840x2160";
     cameraResolutionComboBox->addItems(cameraResolutions);
     cameraResolutionComboBox->setCurrentIndex(8);
 
@@ -139,7 +138,6 @@ void SettingsWindow::init() {
     cameraFPSSpinBox->setRange(1, 120);
     cameraFPSSpinBox->setValue(30);
 
-    
     QHBoxLayout *inputVideoFileLayout = new QHBoxLayout;
     inputVideoFileLineEdit = new QLineEdit(this);
     inputVideoFileLineEdit->setReadOnly(true);
@@ -153,7 +151,7 @@ void SettingsWindow::init() {
     browseGraphicsButton = new QPushButton("Browse", this);
     graphicsFileLayout->addWidget(graphicsFileLineEdit);
     graphicsFileLayout->addWidget(browseGraphicsButton);
-    
+
     saveOutputVideoCheckBox = new QCheckBox("Save Output to Video File", this);
 
     QHBoxLayout *outputVideoFileLayout = new QHBoxLayout;
@@ -198,14 +196,13 @@ void SettingsWindow::init() {
         "2560x1920", "1920x2560",
         "3440x1440", "1440x3440",
         "3840x1600", "1600x3840",
-        "3840x2160", "2160x3840"
-    };
+        "3840x2160", "2160x3840"};
     screenResolutionComboBox->addItems(screenResolutions);
     screenResolutionComboBox->setCurrentIndex(0);
 
     textureCacheCheckBox = new QCheckBox("Enable Texture Cache", this);
     cacheDelaySpinBox = new QSpinBox(this);
-    cacheDelaySpinBox->setRange(1, 8); 
+    cacheDelaySpinBox->setRange(1, 8);
     cacheDelaySpinBox->setValue(1);
     cacheDelaySpinBox->setEnabled(false);
     textureCacheCheckBox->setEnabled(false);
@@ -284,8 +281,7 @@ void SettingsWindow::init() {
     copyAudioCheckBox = new QCheckBox("Copy Audio Track", this);
     mainLayout->addWidget(copyAudioCheckBox);
     copyAudioCheckBox->setChecked(false);
-    
-    
+
     connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
         bool enableAudio = checked && saveOutputVideoCheckBox->isChecked();
         copyAudioCheckBox->setEnabled(enableAudio);
@@ -308,7 +304,7 @@ void SettingsWindow::init() {
 
     QHBoxLayout *modelFileLayout = new QHBoxLayout;
     modelFileLineEdit = new QLineEdit(this);
-    modelFileLineEdit->setText("data/cube.mxmod.z"); 
+    modelFileLineEdit->setText("data/cube.mxmod.z");
     modelFileLineEdit->setReadOnly(true);
     modelFileLineEdit->setEnabled(false);
     browseModelButton = new QPushButton("Model", this);
@@ -337,8 +333,7 @@ void SettingsWindow::init() {
     mainLayout->addWidget(cudaDeviceLabel);
     mainLayout->addWidget(cudaDeviceComboBox);
     mainLayout->addLayout(buttonLayout);
- 
-  
+
     setLayout(mainLayout);
     setWindowTitle("Settings");
 
@@ -349,7 +344,6 @@ void SettingsWindow::init() {
     connect(browseGraphicsButton, &QPushButton::clicked, this, &SettingsWindow::browseGraphicsFile);
     connect(browseModelButton, &QPushButton::clicked, this, &SettingsWindow::browseModelFile);
 
-    
     inputVideoFileLineEdit->setEnabled(false);
     browseInputVideoButton->setEnabled(false);
     graphicsFileLineEdit->setEnabled(false);
@@ -450,19 +444,19 @@ void SettingsWindow::acceptSettings() {
     saveOutputVideoFile = saveOutputVideoCheckBox->isChecked();
 
     if (useInputVideoFile) {
-        if(inputVideoFileLineEdit->text().isEmpty()) {
+        if (inputVideoFileLineEdit->text().isEmpty()) {
             QMessageBox::information(this, "Video file required", "When using video file mode, a selected video file is required");
             return;
         }
         inputVideoFile = inputVideoFileLineEdit->text();
     } else if (useGraphicsFile) {
-        if(graphicsFileLineEdit->text().isEmpty()) {
+        if (graphicsFileLineEdit->text().isEmpty()) {
             QMessageBox::information(this, "Graphics file required", "When using graphics file mode, a selected graphics file is required");
             return;
         }
         graphicsFile = graphicsFileLineEdit->text();
     } else {
-        
+
         selectedCameraIndex = cameraIndexComboBox->currentData().toInt();
         QStringList cameraResParts = cameraResolutionComboBox->currentText().split('x');
         if (cameraResParts.size() == 2) {
@@ -481,21 +475,20 @@ void SettingsWindow::acceptSettings() {
 
     if (saveOutputVideoFile) {
         outputVideoFile = outputVideoFileLineEdit->text();
-        if(outputVideoFile.isEmpty()) {
+        if (outputVideoFile.isEmpty()) {
             QMessageBox::information(this, "Output required", "Requires you set a output filename");
             reject();
             return;
         }
         saveFileKbps = saveFileKbpsSpinBox->value();
     }
-    
-    
+
     if (enable3dCheckBox->isChecked()) {
         modelFile = modelFileLineEdit->text();
     }
-    
+
     selectedCudaDevice = cudaDeviceComboBox->currentData().toInt();
-    
+
     accept();
 }
 

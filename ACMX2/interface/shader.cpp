@@ -1,5 +1,5 @@
-#include"shader.hpp"
-#include<QSettings>
+#include "shader.hpp"
+#include <QSettings>
 
 ShaderDialog::ShaderDialog(QWidget *parent) : QDialog(parent) {
     init();
@@ -38,10 +38,9 @@ void ShaderDialog::init() {
                     "QPushButton:hover { background-color: red; color: black; }";
 
     QSettings appSettings("LostSideDead");
-    if(appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", true).toBool()) {
         setStyleSheet(style);
     }
-    
 }
 
 void ShaderDialog::onOkButtonClicked() {
@@ -51,7 +50,7 @@ void ShaderDialog::onOkButtonClicked() {
         return;
     }
 
-    if(!shaderName.contains(".glsl")) {
+    if (!shaderName.contains(".glsl")) {
         shaderName += ".glsl";
     }
 
@@ -62,7 +61,7 @@ void ShaderDialog::onOkButtonClicked() {
         QTextStream out(&file);
         out << shaderName << "\n";
         file.close();
-    } 
+    }
     QMessageBox::information(this, "Success", "Shader file created successfully.");
     accept();
 }
@@ -100,13 +99,13 @@ void main(void) {
     
 )";
 
-
 void ShaderDialog::createShaderFile(const QString &shaderName, bool includeDefaultCode) {
     QFile file(shaderName);
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&file);
         if (includeDefaultCode) {
-            out << defaultShFile << "\n";;
+            out << defaultShFile << "\n";
+            ;
         }
         file.close();
     } else {

@@ -1,6 +1,6 @@
 #include "prop.hpp"
-#include<QMainWindow>
-#include<QStandardPaths>
+#include <QMainWindow>
+#include <QStandardPaths>
 
 PropWindow::PropWindow(QWidget *parent) : QDialog(parent) {
     init();
@@ -82,7 +82,7 @@ void PropWindow::init() {
     QString filePath = appSettings.value("exePath", "acmx2").toString();
 #else
     QString filePath = appSettings.value("exePath", "acmx2.exe").toString();
-#endif    
+#endif
     QString shader_ = appSettings.value("shaders", "").toString();
     QString screenshotDir = appSettings.value("prefix_path", defaultPicturesDir).toString();
     exePathLineEdit->setText(filePath);
@@ -102,7 +102,7 @@ void PropWindow::init() {
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
 
-    if(appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", true).toBool()) {
         setStyleSheet(style);
     }
 }
@@ -145,12 +145,12 @@ void PropWindow::selectScreenshotDirectory() {
 
 void PropWindow::restoreDefaults() {
     QMessageBox::StandardButton reply;
-    reply = QMessageBox::question(this, "Restore Defaults", 
-                                   "Are you sure you want to restore default settings?",
-                                   QMessageBox::Yes | QMessageBox::No);
+    reply = QMessageBox::question(this, "Restore Defaults",
+                                  "Are you sure you want to restore default settings?",
+                                  QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
         QString defaultPicturesDir = getDefaultPicturesDirectory();
-        
+
 #ifdef _WIN32
         exePathLineEdit->setText("acmx2.exe");
 #else
@@ -158,12 +158,12 @@ void PropWindow::restoreDefaults() {
 #endif
         shaderDirLineEdit->setText("");
         screenshotDirLineEdit->setText(defaultPicturesDir);
-        
+
         QSettings appSettings("LostSideDead");
         appSettings.setValue("exePath", exePathLineEdit->text());
         appSettings.setValue("shaders", shaderDirLineEdit->text());
         appSettings.setValue("prefix_path", screenshotDirLineEdit->text());
-        
+
         QMessageBox::information(this, "Defaults Restored", "Default settings have been restored.");
     }
 }

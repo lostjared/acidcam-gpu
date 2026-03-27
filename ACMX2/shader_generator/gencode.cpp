@@ -1,22 +1,21 @@
-#include"mx2-ollama.hpp"
+#include "mx2-ollama.hpp"
 
 int main(int argc, char **argv) {
     std::string filename = "shader.glsl";
     std::string host = "localhost";
     std::string model = "codellama:7b";
-    
-    if(argc >= 2)
+
+    if (argc >= 2)
         host = argv[1];
-    if(argc >= 3)
+    if (argc >= 3)
         model = argv[2];
-    if(argc >= 4)
+    if (argc >= 4)
         filename = argv[3];
 
     std::cout << "ACMX2 Ai Shader Generator..\n";
     std::cout << "(C) 2025 LostSideDead Software\n";
     std::cout.flush();
-    
-   
+
     std::cout << "What do you want the shader to do: ";
     std::string total;
     std::getline(std::cin, total);

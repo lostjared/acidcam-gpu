@@ -4,24 +4,23 @@
 #include <algorithm>
 
 ShaderPassDialog::ShaderPassDialog(const QStringList &shaderNames, QWidget *parent)
-    : QDialog(parent)
-{
+    : QDialog(parent) {
     setWindowTitle("Multi-Pass Shader Settings");
     setMinimumSize(500, 500);
     setupUI();
     loadShaders(shaderNames);
 }
 
-void ShaderPassDialog::setupUI()
-{
+void ShaderPassDialog::setupUI() {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    
+
     enableCheckBox = new QCheckBox("Enable Multi-Pass Shader Processing", this);
     mainLayout->addWidget(enableCheckBox);
-    
+
     QLabel *infoLabel = new QLabel(
         "Multi-pass rendering applies multiple shaders in sequence.\n"
-        "Each shader processes the output of the previous shader.", this);
+        "Each shader processes the output of the previous shader.",
+        this);
     infoLabel->setWordWrap(true);
     mainLayout->addWidget(infoLabel);
     QGroupBox *shaderGroup = new QGroupBox("Shader Pass Selection", this);
@@ -34,24 +33,24 @@ void ShaderPassDialog::setupUI()
     searchLayout->addWidget(searchLabel);
     searchLayout->addWidget(searchLineEdit, 1);
     shaderMainLayout->addLayout(searchLayout);
-    
+
     QHBoxLayout *comboLayout = new QHBoxLayout();
     QLabel *availableLabel = new QLabel("Available Shaders:", this);
     shaderComboBox = new QComboBox(this);
     shaderComboBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     shaderComboBox->setMaxVisibleItems(20);
-    
+
     shaderModel = new QStandardItemModel(this);
     proxyModel = new QSortFilterProxyModel(this);
     proxyModel->setSourceModel(shaderModel);
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
     shaderComboBox->setModel(proxyModel);
-    
+
     comboLayout->addWidget(availableLabel);
     comboLayout->addWidget(shaderComboBox, 1);
     shaderMainLayout->addLayout(comboLayout);
-    
+
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     addButton = new QPushButton("Add →", this);
     removeButton = new QPushButton("← Remove", this);
@@ -64,15 +63,15 @@ void ShaderPassDialog::setupUI()
     buttonLayout->addWidget(downButton);
     buttonLayout->addWidget(clearButton);
     shaderMainLayout->addLayout(buttonLayout);
-    
+
     QLabel *selectedLabel = new QLabel("Shader Pass Order (processed in sequence):", this);
     shaderMainLayout->addWidget(selectedLabel);
     selectedShadersList = new QListWidget(this);
     selectedShadersList->setMinimumHeight(200);
     shaderMainLayout->addWidget(selectedShadersList);
-    
+
     mainLayout->addWidget(shaderGroup);
-    
+
     QHBoxLayout *dialogButtonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
@@ -80,7 +79,7 @@ void ShaderPassDialog::setupUI()
     dialogButtonLayout->addWidget(okButton);
     dialogButtonLayout->addWidget(cancelButton);
     mainLayout->addLayout(dialogButtonLayout);
-    
+
     connect(addButton, &QPushButton::clicked, this, &ShaderPassDialog::addShader);
     connect(removeButton, &QPushButton::clicked, this, &ShaderPassDialog::removeShader);
     connect(upButton, &QPushButton::clicked, this, &ShaderPassDialog::moveUp);
@@ -89,7 +88,7 @@ void ShaderPassDialog::setupUI()
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(searchLineEdit, &QLineEdit::textChanged, this, &ShaderPassDialog::filterSearchChanged);
-    
+
     connect(enableCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         shaderComboBox->setEnabled(checked);
         selectedShadersList->setEnabled(checked);
@@ -110,7 +109,7 @@ void ShaderPassDialog::setupUI()
     upButton->setEnabled(false);
     downButton->setEnabled(false);
     clearButton->setEnabled(false);
-    
+
     QString style = "QDialog { background-color: black; }"
                     "QGroupBox { color: cyan; border: 1px solid cyan; margin-top: 10px; padding-top: 10px; }"
                     "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
@@ -122,19 +121,18 @@ void ShaderPassDialog::setupUI()
                     "QPushButton { border: 1px solid cyan; background-color: #001111; color: cyan; padding: 5px; }"
                     "QPushButton:hover { background-color: cyan; color: black; }";
     QSettings appSettings("LostSideDead");
-    if(appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", true).toBool()) {
         setStyleSheet(style);
     }
 }
 
-void ShaderPassDialog::loadShaders(const QStringList &shaderNames)
-{
+void ShaderPassDialog::loadShaders(const QStringList &shaderNames) {
     QStringList selectedNames = getSelectedShaderNames();
-    
+
     shaderNamesList.clear();
     shaderNameToIndex.clear();
     shaderModel->clear();
-    
+
     for (int i = 0; i < shaderNames.size(); ++i) {
         QString name = shaderNames[i];
         shaderNamesList.append(name);
@@ -143,31 +141,29 @@ void ShaderPassDialog::loadShaders(const QStringList &shaderNames)
         item->setData(i, Qt::UserRole);
         shaderModel->appendRow(item);
     }
-    
+
     if (!selectedNames.isEmpty()) {
         setSelectedShaderNames(selectedNames);
     }
-    
+
     if (shaderNamesList.isEmpty()) {
-        QMessageBox::warning(this, "Warning", 
-            "No shaders loaded. Please load a shader library first.");
+        QMessageBox::warning(this, "Warning",
+                             "No shaders loaded. Please load a shader library first.");
     }
 }
 
-void ShaderPassDialog::filterSearchChanged(const QString &text)
-{
+void ShaderPassDialog::filterSearchChanged(const QString &text) {
     proxyModel->setFilterFixedString(text);
     if (proxyModel->rowCount() > 0) {
         shaderComboBox->setCurrentIndex(0);
     }
 }
 
-void ShaderPassDialog::addShader()
-{
+void ShaderPassDialog::addShader() {
     if (shaderComboBox->currentIndex() < 0) {
         return;
     }
-    
+
     QString shaderName = shaderComboBox->currentText();
     QListWidgetItem *item = new QListWidgetItem(shaderName);
     if (shaderNameToIndex.contains(shaderName)) {
@@ -176,16 +172,14 @@ void ShaderPassDialog::addShader()
     selectedShadersList->addItem(item);
 }
 
-void ShaderPassDialog::removeShader()
-{
+void ShaderPassDialog::removeShader() {
     QListWidgetItem *item = selectedShadersList->currentItem();
     if (item) {
         delete selectedShadersList->takeItem(selectedShadersList->row(item));
     }
 }
 
-void ShaderPassDialog::moveUp()
-{
+void ShaderPassDialog::moveUp() {
     int currentRow = selectedShadersList->currentRow();
     if (currentRow > 0) {
         QListWidgetItem *item = selectedShadersList->takeItem(currentRow);
@@ -194,8 +188,7 @@ void ShaderPassDialog::moveUp()
     }
 }
 
-void ShaderPassDialog::moveDown()
-{
+void ShaderPassDialog::moveDown() {
     int currentRow = selectedShadersList->currentRow();
     if (currentRow >= 0 && currentRow < selectedShadersList->count() - 1) {
         QListWidgetItem *item = selectedShadersList->takeItem(currentRow);
@@ -204,18 +197,15 @@ void ShaderPassDialog::moveDown()
     }
 }
 
-void ShaderPassDialog::clearAll()
-{
+void ShaderPassDialog::clearAll() {
     selectedShadersList->clear();
 }
 
-bool ShaderPassDialog::isShaderPassEnabled() const
-{
+bool ShaderPassDialog::isShaderPassEnabled() const {
     return enableCheckBox->isChecked() && selectedShadersList->count() > 0;
 }
 
-QStringList ShaderPassDialog::getSelectedShaderIndices() const
-{
+QStringList ShaderPassDialog::getSelectedShaderIndices() const {
     QStringList indices;
     for (int i = 0; i < selectedShadersList->count(); ++i) {
         QListWidgetItem *item = selectedShadersList->item(i);
@@ -225,19 +215,16 @@ QStringList ShaderPassDialog::getSelectedShaderIndices() const
     return indices;
 }
 
-QString ShaderPassDialog::getShaderPassArgument() const
-{
+QString ShaderPassDialog::getShaderPassArgument() const {
     QStringList indices = getSelectedShaderIndices();
     return indices.join(",");
 }
 
-void ShaderPassDialog::setEnabled(bool enabled)
-{
+void ShaderPassDialog::setEnabled(bool enabled) {
     enableCheckBox->setChecked(enabled);
 }
 
-void ShaderPassDialog::setSelectedIndices(const QStringList &indices)
-{
+void ShaderPassDialog::setSelectedIndices(const QStringList &indices) {
     selectedShadersList->clear();
     for (const QString &idxStr : indices) {
         bool ok;
@@ -251,8 +238,7 @@ void ShaderPassDialog::setSelectedIndices(const QStringList &indices)
     }
 }
 
-QStringList ShaderPassDialog::getSelectedShaderNames() const
-{
+QStringList ShaderPassDialog::getSelectedShaderNames() const {
     QStringList names;
     for (int i = 0; i < selectedShadersList->count(); ++i) {
         QListWidgetItem *item = selectedShadersList->item(i);
@@ -261,8 +247,7 @@ QStringList ShaderPassDialog::getSelectedShaderNames() const
     return names;
 }
 
-void ShaderPassDialog::setSelectedShaderNames(const QStringList &names)
-{
+void ShaderPassDialog::setSelectedShaderNames(const QStringList &names) {
     selectedShadersList->clear();
     for (const QString &name : names) {
         if (shaderNameToIndex.contains(name)) {
@@ -274,7 +259,6 @@ void ShaderPassDialog::setSelectedShaderNames(const QStringList &names)
     }
 }
 
-void ShaderPassDialog::updateShaderList(const QStringList &shaderNames)
-{
+void ShaderPassDialog::updateShaderList(const QStringList &shaderNames) {
     loadShaders(shaderNames);
 }

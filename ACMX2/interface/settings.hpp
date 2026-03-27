@@ -1,21 +1,21 @@
 #ifndef SETTINGS_HPP
 #define SETTINGS_HPP
 
-#include <QDialog>
+#include <QCheckBox>
 #include <QComboBox>
-#include <QSpinBox>
-#include <QPushButton>
-#include <QVBoxLayout>
+#include <QDialog>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QRadioButton>
-#include <QCheckBox>
-#include <QFileDialog>
+#include <QSpinBox>
+#include <QVBoxLayout>
 
 class SettingsWindow : public QDialog {
     Q_OBJECT
-public:
+  public:
     explicit SettingsWindow(QWidget *parent = nullptr);
     int getSelectedCameraIndex() const;
     QSize getSelectedCameraResolution() const;
@@ -35,8 +35,8 @@ public:
     bool is3dEnabled() const;
     QString getModelFile() const;
     int getSelectedCudaDevice() const;
-    QString getCameraName(int device_index);   
-private slots:
+    QString getCameraName(int device_index);
+  private slots:
     void acceptSettings();
     void rejectSettings();
     void browseInputVideoFile();
@@ -44,7 +44,7 @@ private slots:
     void browseGraphicsFile();
     void browseModelFile();
 
-private:
+  private:
     void init();
     void populateCameraDevices();
     void populateCudaDevices();

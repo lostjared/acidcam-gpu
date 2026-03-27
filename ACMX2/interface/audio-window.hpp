@@ -1,20 +1,20 @@
 #ifndef AUDIOSETTINGS_HPP
 #define AUDIOSETTINGS_HPP
 
-#include <QDialog>
 #include <QCheckBox>
-#include <QSpinBox>
-#include <QSlider>
-#include <QPushButton>
-#include <QVBoxLayout>
+#include <QComboBox>
+#include <QDialog>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QComboBox>
+#include <QPushButton>
+#include <QSlider>
+#include <QSpinBox>
+#include <QVBoxLayout>
 
 class AudioSettings : public QDialog {
     Q_OBJECT
 
-public:
+  public:
     explicit AudioSettings(QWidget *parent = nullptr);
 
     bool isAudioReactivityEnabled() const;
@@ -24,7 +24,7 @@ public:
     int getInputDeviceIndex() const;
     int getOutputDeviceIndex() const;
 
-private:
+  private:
     void populateAudioDevices();
 
     QCheckBox *audioReactivityCheckBox;

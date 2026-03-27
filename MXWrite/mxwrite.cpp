@@ -5,8 +5,8 @@
 #include <numeric>
 #include <thread>
 extern "C" {
-#include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/opt.h>
@@ -15,20 +15,23 @@ extern "C" {
 
 std::mutex transfer_audio_mutex;
 
-bool is_format_supported(const char* filename) {
-    const char* ext = strrchr(filename, '.');
-    if (!ext) return false;
-    return (strcmp(ext, ".mp4") == 0 || 
+bool is_format_supported(const char *filename) {
+    const char *ext = strrchr(filename, '.');
+    if (!ext)
+        return false;
+    return (strcmp(ext, ".mp4") == 0 ||
             strcmp(ext, ".mkv") == 0 ||
             strcmp(ext, ".avi") == 0 ||
             strcmp(ext, ".mov") == 0);
 }
 
-void cleanup_contexts(AVFormatContext* source_ctx, 
-                     AVFormatContext* dest_ctx,
-                     AVFormatContext* output_ctx) {
-    if (source_ctx) avformat_close_input(&source_ctx);
-    if (dest_ctx) avformat_close_input(&dest_ctx);
+void cleanup_contexts(AVFormatContext *source_ctx,
+                      AVFormatContext *dest_ctx,
+                      AVFormatContext *output_ctx) {
+    if (source_ctx)
+        avformat_close_input(&source_ctx);
+    if (dest_ctx)
+        avformat_close_input(&dest_ctx);
     if (output_ctx) {
         if (!(output_ctx->oformat->flags & AVFMT_NOFILE))
             avio_closep(&output_ctx->pb);
@@ -61,7 +64,6 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
         return;
     }
 
-
     for (unsigned i = 0; i < source_ctx->nb_streams; ++i) {
         if (source_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
             source_audio_idx = i;
@@ -69,11 +71,12 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
         }
     }
 
-
     for (unsigned i = 0; i < dest_ctx->nb_streams; ++i) {
         AVMediaType type = dest_ctx->streams[i]->codecpar->codec_type;
-        if (type == AVMEDIA_TYPE_VIDEO) dest_video_idx = i;
-        else if (type == AVMEDIA_TYPE_AUDIO) dest_audio_idx = i;
+        if (type == AVMEDIA_TYPE_VIDEO)
+            dest_video_idx = i;
+        else if (type == AVMEDIA_TYPE_AUDIO)
+            dest_audio_idx = i;
     }
 
     if (source_audio_idx == -1 || dest_video_idx == -1) {
@@ -98,20 +101,18 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
         return;
     }
 
- 
-    const AVCodec* audio_codec = avcodec_find_decoder(source_ctx->streams[source_audio_idx]->codecpar->codec_id);
+    const AVCodec *audio_codec = avcodec_find_decoder(source_ctx->streams[source_audio_idx]->codecpar->codec_id);
     if (!audio_codec) {
         std::cerr << "Failed to find audio decoder\n";
         cleanup_contexts(source_ctx, dest_ctx, output_ctx);
         return;
     }
 
-    
     for (unsigned i = 0; i < dest_ctx->nb_streams; ++i) {
         if (dest_ctx->streams[i]->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) {
-            continue;  
+            continue;
         }
-        
+
         AVStream *dest_stream = dest_ctx->streams[i];
         AVStream *out_stream = avformat_new_stream(output_ctx, nullptr);
         if (!out_stream) {
@@ -125,12 +126,11 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
             cleanup_contexts(source_ctx, dest_ctx, output_ctx);
             return;
         }
-        
+
         out_stream->time_base = dest_stream->time_base;
         out_stream->codecpar->codec_tag = 0;
     }
 
-    
     AVStream *out_stream = avformat_new_stream(output_ctx, audio_codec);
     if (!out_stream) {
         std::cerr << "Failed to create audio stream\n";
@@ -138,7 +138,7 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
         return;
     }
 
-    AVCodecParameters* source_params = source_ctx->streams[source_audio_idx]->codecpar;
+    AVCodecParameters *source_params = source_ctx->streams[source_audio_idx]->codecpar;
     if (avcodec_parameters_copy(out_stream->codecpar, source_params) < 0) {
         std::cerr << "Failed to copy audio parameters\n";
         cleanup_contexts(source_ctx, dest_ctx, output_ctx);
@@ -150,7 +150,7 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
     } else {
         out_stream->codecpar->frame_size = source_params->frame_size;
     }
-    
+
     out_stream->time_base = source_ctx->streams[source_audio_idx]->time_base;
     out_stream->codecpar->codec_tag = 0;
     dest_audio_idx = out_stream->index;
@@ -211,7 +211,7 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
 }
 
 void Writer::calculateFPSFraction(float fps, int &fps_num, int &fps_den) {
-    const float epsilon = 0.001f; 
+    const float epsilon = 0.001f;
     fps_den = 1001;
     if (std::fabs(fps - 29.97f) < epsilon) {
         fps_num = 30000;
@@ -229,10 +229,10 @@ void Writer::calculateFPSFraction(float fps, int &fps_num, int &fps_den) {
     }
 }
 
-bool Writer::open(const std::string& filename, int w, int h, float fps, const char *crf) {
+bool Writer::open(const std::string &filename, int w, int h, float fps, const char *crf) {
     std::lock_guard<std::mutex> lock(writer_mutex);
     avformat_network_init();
-    av_log_set_level(AV_LOG_ERROR); 
+    av_log_set_level(AV_LOG_ERROR);
     opened = false;
 
     if (avformat_alloc_output_context2(&format_ctx, nullptr, "mp4", filename.c_str()) < 0) {
@@ -240,7 +240,7 @@ bool Writer::open(const std::string& filename, int w, int h, float fps, const ch
         return false;
     }
 
-    const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    const AVCodec *codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (!codec) {
         std::cerr << "Could not find H.264 encoder.\n";
         avformat_free_context(format_ctx);
@@ -273,20 +273,19 @@ bool Writer::open(const std::string& filename, int w, int h, float fps, const ch
     codec_ctx->time_base = stream->time_base;
     codec_ctx->framerate = AVRational{fps_num, fps_den};
     codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    codec_ctx->gop_size = 30;  
-    codec_ctx->max_b_frames = 0; 
+    codec_ctx->gop_size = 30;
+    codec_ctx->max_b_frames = 0;
     codec_ctx->thread_count = std::thread::hardware_concurrency();
-    codec_ctx->thread_type = FF_THREAD_SLICE; 
-    codec_ctx->slices = 4;  
-    
+    codec_ctx->thread_type = FF_THREAD_SLICE;
+    codec_ctx->slices = 4;
+
     av_opt_set(codec_ctx->priv_data, "preset", "ultrafast", 0);
     av_opt_set(codec_ctx->priv_data, "tune", "zerolatency", 0);
     av_opt_set(codec_ctx->priv_data, "crf", crf, 0);
     av_opt_set(codec_ctx->priv_data, "x264-params", "bframes=0:ref=1:me=dia:subme=0", 0);
-    
-    
+
     av_opt_set(codec_ctx->priv_data, "force_cfr", "1", 0);
-    
+
     AVBufferRef *hw_device_ctx = nullptr;
     if (av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, nullptr, nullptr, 0) == 0) {
         codec_ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
@@ -297,7 +296,7 @@ bool Writer::open(const std::string& filename, int w, int h, float fps, const ch
     } else {
         std::cerr << "MXWrite: hardware acceleration not available, using CPU encoding\n";
     }
-    
+
     time_base = tb;
 
     if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
@@ -372,7 +371,7 @@ bool Writer::open(const std::string& filename, int w, int h, float fps, const ch
         return false;
     }
 
-    sws_ctx = sws_getContext(width, height, AV_PIX_FMT_RGBA, width, height, AV_PIX_FMT_YUV420P, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr); 
+    sws_ctx = sws_getContext(width, height, AV_PIX_FMT_RGBA, width, height, AV_PIX_FMT_YUV420P, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
     if (!sws_ctx) {
         std::cerr << "Could not initialize the conversion context.\n";
         av_frame_free(&frameRGBA);
@@ -383,12 +382,12 @@ bool Writer::open(const std::string& filename, int w, int h, float fps, const ch
         return false;
     }
 
-    opened = true; 
+    opened = true;
     recordingStart = std::chrono::steady_clock::now();
     return true;
 }
 
-void Writer::write(void* rgba_buffer) {
+void Writer::write(void *rgba_buffer) {
     std::lock_guard<std::mutex> lock(writer_mutex);
     if (!opened || !rgba_buffer) {
         return;
@@ -414,11 +413,11 @@ void Writer::write(void* rgba_buffer) {
         std::cerr << "Error sending frame to encoder: " << ret << std::endl;
         return;
     }
-    AVPacket* pkt = av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
     while (true) {
         ret = avcodec_receive_packet(codec_ctx, pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-            break; 
+            break;
         } else if (ret < 0) {
             std::cerr << "Error receiving packet: " << ret << std::endl;
             av_packet_free(&pkt);
@@ -438,7 +437,7 @@ void Writer::write(void* rgba_buffer) {
     av_packet_free(&pkt);
 }
 
-bool Writer::open_ts(const std::string& filename, int w, int h, float fps, const char *crf) {
+bool Writer::open_ts(const std::string &filename, int w, int h, float fps, const char *crf) {
     avformat_network_init();
     av_log_set_level(AV_LOG_ERROR);
     opened = false;
@@ -447,7 +446,7 @@ bool Writer::open_ts(const std::string& filename, int w, int h, float fps, const
         return false;
     }
 
-    const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    const AVCodec *codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (!codec) {
         std::cerr << "Could not find H.264 encoder.\n";
         avformat_free_context(format_ctx);
@@ -465,8 +464,7 @@ bool Writer::open_ts(const std::string& filename, int w, int h, float fps, const
     height = h;
     calculateFPSFraction(fps, fps_num, fps_den);
 
-    
-    AVRational precise_tb = { fps_den, fps_num };
+    AVRational precise_tb = {fps_den, fps_num};
     stream->time_base = precise_tb;
 
     codec_ctx = avcodec_alloc_context3(codec);
@@ -476,24 +474,24 @@ bool Writer::open_ts(const std::string& filename, int w, int h, float fps, const
         return false;
     }
 
-    codec_ctx->width        = width;
-    codec_ctx->height       = height;
-    codec_ctx->time_base    = precise_tb;
-    codec_ctx->framerate    = AVRational{ fps_num, fps_den };
-    codec_ctx->pix_fmt      = AV_PIX_FMT_YUV420P;
-    codec_ctx->gop_size     = 30;
+    codec_ctx->width = width;
+    codec_ctx->height = height;
+    codec_ctx->time_base = precise_tb;
+    codec_ctx->framerate = AVRational{fps_num, fps_den};
+    codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    codec_ctx->gop_size = 30;
     codec_ctx->thread_count = std::thread::hardware_concurrency();
-    codec_ctx->thread_type  = FF_THREAD_SLICE;
-    codec_ctx->slices       = 4;
+    codec_ctx->thread_type = FF_THREAD_SLICE;
+    codec_ctx->slices = 4;
     codec_ctx->max_b_frames = 0;
-    codec_ctx->delay        = 0;
-    codec_ctx->flags       |= AV_CODEC_FLAG_LOW_DELAY;
+    codec_ctx->delay = 0;
+    codec_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
 
-    av_opt_set(codec_ctx->priv_data, "preset",       "ultrafast",    0);
-    av_opt_set(codec_ctx->priv_data, "tune",         "zerolatency",  0);
-    av_opt_set(codec_ctx->priv_data, "crf",          crf,            0);
-    av_opt_set(codec_ctx->priv_data, "x264-params",  "bframes=0:ref=1:me=dia:subme=0", 0);
-    av_opt_set(codec_ctx->priv_data, "force_cfr",    "1",            0);
+    av_opt_set(codec_ctx->priv_data, "preset", "ultrafast", 0);
+    av_opt_set(codec_ctx->priv_data, "tune", "zerolatency", 0);
+    av_opt_set(codec_ctx->priv_data, "crf", crf, 0);
+    av_opt_set(codec_ctx->priv_data, "x264-params", "bframes=0:ref=1:me=dia:subme=0", 0);
+    av_opt_set(codec_ctx->priv_data, "force_cfr", "1", 0);
 
     AVBufferRef *hw_device_ctx = nullptr;
     if (av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, nullptr, nullptr, 0) == 0) {
@@ -537,7 +535,7 @@ bool Writer::open_ts(const std::string& filename, int w, int h, float fps, const
         return false;
     }
     frameRGBA->format = AV_PIX_FMT_RGBA;
-    frameRGBA->width  = width;
+    frameRGBA->width = width;
     frameRGBA->height = height;
     if (av_frame_get_buffer(frameRGBA, 32) < 0) {
         std::cerr << "Could not allocate frame buffer for RGBA frame.\n";
@@ -549,18 +547,17 @@ bool Writer::open_ts(const std::string& filename, int w, int h, float fps, const
         return false;
     }
     frameYUV->format = AV_PIX_FMT_YUV420P;
-    frameYUV->width  = width;
+    frameYUV->width = width;
     frameYUV->height = height;
     if (av_frame_get_buffer(frameYUV, 32) < 0) {
         std::cerr << "Could not allocate frame buffer for YUV frame.\n";
         return false;
-    } 
+    }
     sws_ctx = sws_getContext(
         width, height, AV_PIX_FMT_RGBA,
         width, height, AV_PIX_FMT_YUV420P,
-        SWS_FAST_BILINEAR,   
-        nullptr, nullptr, nullptr
-    );
+        SWS_FAST_BILINEAR,
+        nullptr, nullptr, nullptr);
     if (!sws_ctx) {
         std::cerr << "Could not create sws context.\n";
         return false;
@@ -570,21 +567,20 @@ bool Writer::open_ts(const std::string& filename, int w, int h, float fps, const
     return true;
 }
 
-
-void Writer::write_ts(void* rgba_buffer) {
+void Writer::write_ts(void *rgba_buffer) {
     std::lock_guard<std::mutex> lock(writer_mutex);
     if (!opened || !rgba_buffer) {
         return;
     }
 
     const int src_stride = width * 4;
-    uint8_t* src_data[1] = { static_cast<uint8_t*>(rgba_buffer) };
-    int src_linesize[1] = { src_stride };
-    
+    uint8_t *src_data[1] = {static_cast<uint8_t *>(rgba_buffer)};
+    int src_linesize[1] = {src_stride};
+
     sws_scale(sws_ctx, src_data, src_linesize, 0, height, frameYUV->data, frameYUV->linesize);
-    
+
     frameYUV->pts = frame_count;
-    
+
     int ret = avcodec_send_frame(codec_ctx, frameYUV);
     if (ret < 0) {
         std::cerr << "Error sending frame to encoder: " << ret << "\n";
@@ -593,7 +589,7 @@ void Writer::write_ts(void* rgba_buffer) {
 
     frame_count++;
 
-    AVPacket* pkt = av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
     while (true) {
         ret = avcodec_receive_packet(codec_ctx, pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
@@ -629,7 +625,7 @@ void Writer::close() {
         last_duration = static_cast<double>(frame_count) * static_cast<double>(fps_den) / static_cast<double>(fps_num);
     }
 
-    AVPacket* pkt = av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
     avcodec_send_frame(codec_ctx, nullptr);
 
     while (true) {

@@ -9,7 +9,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     setWindowTitle("Audio Settings");
 
     audioReactivityCheckBox = new QCheckBox("Enable Audio Reactivity", this);
-    audioPassThroughCheckBox = new QCheckBox("Enable Audio Pass Through", this); 
+    audioPassThroughCheckBox = new QCheckBox("Enable Audio Pass Through", this);
 
     QLabel *channelLabel = new QLabel("Number of Channels:", this);
     channelSpinBox = new QSpinBox(this);
@@ -19,11 +19,11 @@ AudioSettings::AudioSettings(QWidget *parent)
     QLabel *sensitivityLabel = new QLabel("Sensitivity:", this);
     sensitivitySlider = new QSlider(Qt::Horizontal, this);
     sensitivitySlider->setRange(1, 200);
-    sensitivitySlider->setValue(5);    
+    sensitivitySlider->setValue(5);
 
-    QLabel *sensitivityValueLabel = new QLabel("0.5", this); 
+    QLabel *sensitivityValueLabel = new QLabel("0.5", this);
     connect(sensitivitySlider, &QSlider::valueChanged, this, [this, sensitivityValueLabel](int value) {
-        double floatValue = value / 10.0; 
+        double floatValue = value / 10.0;
         sensitivityValueLabel->setText(QString::number(floatValue, 'f', 1));
     });
 
@@ -33,18 +33,16 @@ AudioSettings::AudioSettings(QWidget *parent)
                     "QPushButton:hover { background-color: red; color: black; }";
 
     QSettings appSettings("LostSideDead");
-    if(appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", true).toBool()) {
         setStyleSheet(style);
     }
-    
+
     QLabel *inputDeviceLabel = new QLabel("Input Device:", this);
     inputDeviceComboBox = new QComboBox(this);
-    
-    
+
     QLabel *outputDeviceLabel = new QLabel("Output Device:", this);
     outputDeviceComboBox = new QComboBox(this);
-    
-    
+
     populateAudioDevices();
 
     okButton = new QPushButton("OK", this);
@@ -55,7 +53,7 @@ AudioSettings::AudioSettings(QWidget *parent)
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(audioReactivityCheckBox);
-    mainLayout->addWidget(audioPassThroughCheckBox); 
+    mainLayout->addWidget(audioPassThroughCheckBox);
 
     QHBoxLayout *channelLayout = new QHBoxLayout();
     channelLayout->addWidget(channelLabel);
@@ -65,16 +63,14 @@ AudioSettings::AudioSettings(QWidget *parent)
     QHBoxLayout *sensitivityLayout = new QHBoxLayout();
     sensitivityLayout->addWidget(sensitivityLabel);
     sensitivityLayout->addWidget(sensitivitySlider);
-    sensitivityLayout->addWidget(sensitivityValueLabel); 
+    sensitivityLayout->addWidget(sensitivityValueLabel);
     mainLayout->addLayout(sensitivityLayout);
 
-    
     QHBoxLayout *inputDeviceLayout = new QHBoxLayout();
     inputDeviceLayout->addWidget(inputDeviceLabel);
     inputDeviceLayout->addWidget(inputDeviceComboBox);
     mainLayout->addLayout(inputDeviceLayout);
 
-    
     QHBoxLayout *outputDeviceLayout = new QHBoxLayout();
     outputDeviceLayout->addWidget(outputDeviceLabel);
     outputDeviceLayout->addWidget(outputDeviceComboBox);
@@ -91,7 +87,7 @@ AudioSettings::AudioSettings(QWidget *parent)
 void AudioSettings::populateAudioDevices() {
     inputDeviceComboBox->addItem("Default", -1);
     outputDeviceComboBox->addItem("Default", -1);
-    for(int i = 0; i < 10; i++) {
+    for (int i = 0; i < 10; i++) {
         inputDeviceComboBox->addItem(QString::number(i), i);
         outputDeviceComboBox->addItem(QString::number(i), i);
     }
@@ -103,7 +99,7 @@ bool AudioSettings::isAudioReactivityEnabled() const {
     return audioReactivityCheckBox->isChecked();
 }
 
-bool AudioSettings::isAudioPassThroughEnabled() const { 
+bool AudioSettings::isAudioPassThroughEnabled() const {
     return audioPassThroughCheckBox->isChecked();
 }
 
@@ -112,7 +108,7 @@ int AudioSettings::getNumberOfChannels() const {
 }
 
 double AudioSettings::getSensitivity() const {
-    return sensitivitySlider->value() / 10.0; 
+    return sensitivitySlider->value() / 10.0;
 }
 
 int AudioSettings::getInputDeviceIndex() const {

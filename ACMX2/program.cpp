@@ -2,15 +2,15 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "program.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
-#include "program.hpp"
 
 namespace {
     static uint64_t fnv1a64_bytes(const void *data, size_t n) {
@@ -29,7 +29,8 @@ namespace {
 
     static uint64_t fnv1a64_file(const std::string &filepath) {
         std::ifstream f(filepath, std::ios::binary);
-        if(!f) return 0;
+        if (!f)
+            return 0;
 
         uint64_t h = 1469598103934665603ull;
         char buf[16384];
@@ -45,7 +46,7 @@ namespace {
     }
 
     static uint64_t mix64(uint64_t a, uint64_t b) {
-        uint64_t x = a ^ (b + 0x9e3779b97f4a7c15ull + (a<<6) + (a>>2));
+        uint64_t x = a ^ (b + 0x9e3779b97f4a7c15ull + (a << 6) + (a >> 2));
         x ^= (x >> 33);
         x *= 0xff51afd7ed558ccdull;
         x ^= (x >> 33);
@@ -56,8 +57,9 @@ namespace {
 
     static std::string glStr(GLenum e) {
         const GLubyte *p = glGetString(e);
-        if(!p) return {};
-        return std::string((const char*)p);
+        if (!p)
+            return {};
+        return std::string((const char *)p);
     }
 
     struct CacheHeader {
@@ -74,13 +76,15 @@ namespace {
 
     static bool readWholeFile(const std::string &path, std::vector<uint8_t> &out) {
         std::ifstream f(path, std::ios::binary);
-        if(!f) return false;
+        if (!f)
+            return false;
         f.seekg(0, std::ios::end);
         std::streamoff sz = f.tellg();
-        if(sz <= 0) return false;
+        if (sz <= 0)
+            return false;
         f.seekg(0, std::ios::beg);
         out.resize((size_t)sz);
-        f.read((char*)out.data(), (std::streamsize)out.size());
+        f.read((char *)out.data(), (std::streamsize)out.size());
         return f.good();
     }
 
@@ -91,18 +95,20 @@ namespace {
         std::string tmp = path + ".tmp";
         {
             std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-            if(!out) return false;
-            out.write((const char*)data, (std::streamsize)size);
-            if(!out.good()) return false;
+            if (!out)
+                return false;
+            out.write((const char *)data, (std::streamsize)size);
+            if (!out.good())
+                return false;
         }
 
         std::error_code ec;
         std::filesystem::rename(tmp, path, ec);
-        if(ec) {
+        if (ec) {
             std::filesystem::remove(path, ec);
             ec.clear();
             std::filesystem::rename(tmp, path, ec);
-            if(ec) {
+            if (ec) {
                 std::filesystem::remove(tmp, ec);
                 return false;
             }
@@ -161,25 +167,32 @@ namespace {
     static bool tryLoadProgramBinary(uint64_t key, GLuint &outProg) {
         std::vector<uint8_t> data;
         std::string path = cacheFilePath(key);
-        if(!readWholeFile(path, data)) return false;
-        if(data.size() < sizeof(CacheHeader)) return false;
+        if (!readWholeFile(path, data))
+            return false;
+        if (data.size() < sizeof(CacheHeader))
+            return false;
 
         CacheHeader hdr{};
         std::memcpy(&hdr, data.data(), sizeof(CacheHeader));
-        if(hdr.magic != kMagic) return false;
-        if(hdr.version != kVersion) return false;
-        if(hdr.key != key) return false;
-        if(hdr.binaryLength == 0) return false;
+        if (hdr.magic != kMagic)
+            return false;
+        if (hdr.version != kVersion)
+            return false;
+        if (hdr.key != key)
+            return false;
+        if (hdr.binaryLength == 0)
+            return false;
 
         size_t need = sizeof(CacheHeader) + (size_t)hdr.binaryLength;
-        if(data.size() != need) return false;
+        if (data.size() != need)
+            return false;
 
         GLuint prog = glCreateProgram();
         glProgramBinary(prog, (GLenum)hdr.binaryFormat, data.data() + sizeof(CacheHeader), (GLsizei)hdr.binaryLength);
 
         GLint ok = 0;
         glGetProgramiv(prog, GL_LINK_STATUS, &ok);
-        if(!ok) {
+        if (!ok) {
             glDeleteProgram(prog);
             return false;
         }
@@ -191,7 +204,8 @@ namespace {
     static bool saveProgramBinary(uint64_t key, GLuint prog) {
         GLint binLen = 0;
         glGetProgramiv(prog, GL_PROGRAM_BINARY_LENGTH, &binLen);
-        if(binLen <= 0) return false;
+        if (binLen <= 0)
+            return false;
 
         std::vector<uint8_t> blob;
         blob.resize(sizeof(CacheHeader) + (size_t)binLen);
@@ -204,7 +218,8 @@ namespace {
         GLenum fmt = 0;
         GLsizei got = 0;
         glGetProgramBinary(prog, (GLsizei)binLen, &got, &fmt, blob.data() + sizeof(CacheHeader));
-        if(got <= 0) return false;
+        if (got <= 0)
+            return false;
 
         hdr.binaryFormat = (uint32_t)fmt;
         hdr.binaryLength = (uint32_t)got;
@@ -214,10 +229,10 @@ namespace {
         return writeFileAtomic(cacheFilePath(key), blob.data(), blob.size());
     }
 
-} 
+} // namespace
 
 namespace ac {
-    
+
     bool ShaderProgram::loadProgram(const std::string &v, const std::string &f) {
         uint64_t key = computeProgramKeyFromFiles(v, f);
         GLuint cached = 0;
@@ -225,20 +240,22 @@ namespace ac {
             static_cast<gl::ShaderProgram &>(*this) = gl::ShaderProgram(cached);
             return true;
         }
-        if (!gl::ShaderProgram::loadProgram(v, f)) return false;
+        if (!gl::ShaderProgram::loadProgram(v, f))
+            return false;
         saveProgramBinary(key, id());
         return true;
-        }
+    }
 
-        bool ShaderProgram::loadProgramFromText(const std::string &v, const std::string &f) {
+    bool ShaderProgram::loadProgramFromText(const std::string &v, const std::string &f) {
         uint64_t key = computeProgramKeyFromText(v, f);
         GLuint cached = 0;
         if (tryLoadProgramBinary(key, cached)) {
             static_cast<gl::ShaderProgram &>(*this) = gl::ShaderProgram(cached);
             return true;
         }
-        if (!gl::ShaderProgram::loadProgramFromText(v, f)) return false;
+        if (!gl::ShaderProgram::loadProgramFromText(v, f))
+            return false;
         saveProgramBinary(key, id());
         return true;
     }
-} 
+} // namespace ac

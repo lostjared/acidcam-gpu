@@ -1,25 +1,25 @@
 #ifndef __SHADER_LIB_H__Y
 #define __SHADER_LIB_H__Y
 
-#include <QDialog>
-#include <QPushButton>
 #include <QCheckBox>
-#include <QLabel>
-#include <QVBoxLayout>
+#include <QDialog>
+#include <QDir>
+#include <QFile>
 #include <QFileDialog>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
-#include<QFile>
-#include<QDir>
-#include<QTextStream>
+#include <QPushButton>
+#include <QTextStream>
+#include <QVBoxLayout>
 
 class LibraryWindow : public QDialog {
     Q_OBJECT
 
-public:
+  public:
     LibraryWindow(QWidget *parent = nullptr);
 
-private:
+  private:
     QLineEdit *folderPathEdit;
     QPushButton *browseButton;
     QPushButton *okButton;
@@ -27,15 +27,17 @@ private:
     QCheckBox *createDefaultShaderCheckBox;
     void init();
     void createShaderIndexFile(const QString &folderPath);
-public:
+
+  public:
     QString getShaderPath();
 
-private slots:
+  private slots:
     void onBrowseButtonClicked();
     void onOkButtonClicked();
     void onCancelButtonClicked();
-private:
+
+  private:
     QString path;
 };
 
-#endif 
+#endif
