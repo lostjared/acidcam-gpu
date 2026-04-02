@@ -52,8 +52,11 @@ void LibraryWindow::init() {
 }
 
 void LibraryWindow::onBrowseButtonClicked() {
-    QString folderPath = QFileDialog::getExistingDirectory(this, "Select Folder");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastLibraryDir", "").toString();
+    QString folderPath = QFileDialog::getExistingDirectory(this, "Select Folder", lastDir);
     if (!folderPath.isEmpty()) {
+        appSettings.setValue("lastLibraryDir", folderPath);
         folderPathEdit->setText(folderPath + "/shaders");
     }
 }

@@ -1898,6 +1898,12 @@ class ACView : public gl::GLObject {
             modelSize = std::sqrt(dx * dx + dy * dy + dz * dz);
             if (modelSize < 0.001f)
                 modelSize = 1.0f;
+            glm::vec3 modelCenter = glm::vec3((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, (minZ + maxZ) * 0.5f);
+            modelCenterOffset = -modelCenter;
+            float maxExtent = std::max(dx, std::max(dy, dz));
+            const float targetSize = 2.5f;
+            if (maxExtent > 1e-6f)
+                modelRenderScale = targetSize / maxExtent;
             mx::system_out << "acmx2: Model bounding diagonal: " << modelSize << "\n";
             fflush(stdout);
         }
@@ -2152,10 +2158,6 @@ class ACView : public gl::GLObject {
                 oscOffset = 0.3f * std::sin(t);
             }
 
-            glm::mat4 modelMatrix = glm::mat4(1.0f);
-            glm::vec3 cameraPosBase = glm::vec3(0.0f, 0.0f, 0.0f);
-            glm::vec3 lookDirection;
-
             if (!viewRotationActive) {
                 if (keystate[SDL_SCANCODE_W]) {
                     cameraPitch += cameraRotationSpeed * 0.3f;
@@ -2176,6 +2178,7 @@ class ACView : public gl::GLObject {
                     cameraYaw = fmod(cameraYaw, 360.0f);
                 }
             }
+            glm::vec3 lookDirection;
             if (viewRotationActive) {
                 static float viewRotation = 0.0f;
                 viewRotation = fmod(viewRotation + 0.3f, 360.0f);
@@ -2191,6 +2194,7 @@ class ACView : public gl::GLObject {
             }
 
             float finalOffset = oscillateScale ? oscOffset : cameraDistance;
+            glm::vec3 cameraPosBase = glm::vec3(0.0f, 0.0f, 0.0f);
             glm::vec3 cameraPos = cameraPosBase - glm::normalize(lookDirection) * finalOffset;
             glm::vec3 cameraTarget = cameraPos + lookDirection;
             glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -2200,6 +2204,11 @@ class ACView : public gl::GLObject {
                 static_cast<float>(win->w) / static_cast<float>(win->h),
                 0.01f,
                 1000.0f);
+
+            glm::mat4 modelMatrix = glm::mat4(1.0f);
+            modelMatrix = glm::scale(modelMatrix, glm::vec3(modelRenderScale));
+            modelMatrix = glm::translate(modelMatrix, modelCenterOffset);
+
             glm::mat4 mvMatrix = viewMatrix * modelMatrix;
             GLuint textureForMesh = camera_texture;
             if (shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
@@ -2872,6 +2881,8 @@ class ACView : public gl::GLObject {
     bool waveActive = false;
     float cameraDistance = 0.0f;
     float modelSize = 1.0f;
+    float modelRenderScale = 1.0f;
+    glm::vec3 modelCenterOffset = glm::vec3(0.0f);
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
     bool silent_mode = false;

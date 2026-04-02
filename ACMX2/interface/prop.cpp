@@ -1,5 +1,7 @@
 #include "prop.hpp"
+#include <QFileInfo>
 #include <QMainWindow>
+#include <QSettings>
 #include <QStandardPaths>
 
 PropWindow::PropWindow(QWidget *parent) : QDialog(parent) {
@@ -120,25 +122,34 @@ QString PropWindow::getDefaultPicturesDirectory() {
 }
 
 void PropWindow::selectExecutable() {
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastExeDir", "").toString();
     QString filePath = QFileDialog::getOpenFileName(
-        this, "Select Program Executable", "", "Executable Files (*.exe);;All Files (*)");
+        this, "Select Program Executable", lastDir, "Executable Files (*.exe);;All Files (*)");
     if (!filePath.isEmpty()) {
+        appSettings.setValue("lastExeDir", QFileInfo(filePath).absolutePath());
         exePathLineEdit->setText(filePath);
     }
 }
 
 void PropWindow::selectShaderDirectory() {
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastShaderDir", "").toString();
     QString dirPath = QFileDialog::getExistingDirectory(
-        this, "Select Shader Directory", "", QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+        this, "Select Shader Directory", lastDir, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (!dirPath.isEmpty()) {
+        appSettings.setValue("lastShaderDir", dirPath);
         shaderDirLineEdit->setText(dirPath);
     }
 }
 
 void PropWindow::selectScreenshotDirectory() {
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastScreenshotDir", "").toString();
     QString dirPath = QFileDialog::getExistingDirectory(
-        this, "Select Screenshot Directory", "", QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+        this, "Select Screenshot Directory", lastDir, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (!dirPath.isEmpty()) {
+        appSettings.setValue("lastScreenshotDir", dirPath);
         screenshotDirLineEdit->setText(dirPath);
     }
 }

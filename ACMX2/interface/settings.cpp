@@ -4,6 +4,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QSettings>
+#include <QFileInfo>
 #ifdef __linux__
 #include <fcntl.h>
 #include <unistd.h>
@@ -497,15 +498,21 @@ void SettingsWindow::rejectSettings() {
 }
 
 void SettingsWindow::browseInputVideoFile() {
-    QString fileName = QFileDialog::getOpenFileName(this, "Select Input Video File", "", "Video Files (*.mp4 *.avi *.mkv *.mov)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastInputVideoDir", "").toString();
+    QString fileName = QFileDialog::getOpenFileName(this, "Select Input Video File", lastDir, "Video Files (*.mp4 *.avi *.mkv *.mov)");
     if (!fileName.isEmpty()) {
+        appSettings.setValue("lastInputVideoDir", QFileInfo(fileName).absolutePath());
         inputVideoFileLineEdit->setText(fileName);
     }
 }
 
 void SettingsWindow::browseOutputVideoFile() {
-    QString fileName = QFileDialog::getSaveFileName(this, "Select Output Video File", "", "MP4 Files (*.mp4)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastOutputVideoDir", "").toString();
+    QString fileName = QFileDialog::getSaveFileName(this, "Select Output Video File", lastDir, "MP4 Files (*.mp4)");
     if (!fileName.isEmpty()) {
+        appSettings.setValue("lastOutputVideoDir", QFileInfo(fileName).absolutePath());
         if (!fileName.endsWith(".mp4")) {
             fileName += ".mp4";
         }
@@ -514,15 +521,21 @@ void SettingsWindow::browseOutputVideoFile() {
 }
 
 void SettingsWindow::browseGraphicsFile() {
-    QString fileName = QFileDialog::getOpenFileName(this, "Select Graphics File", "", "Image Files (*.jpg *.jpeg *.png *.bmp *.tiff *.gif)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastGraphicsDir", "").toString();
+    QString fileName = QFileDialog::getOpenFileName(this, "Select Graphics File", lastDir, "Image Files (*.jpg *.jpeg *.png *.bmp *.tiff *.gif)");
     if (!fileName.isEmpty()) {
+        appSettings.setValue("lastGraphicsDir", QFileInfo(fileName).absolutePath());
         graphicsFileLineEdit->setText(fileName);
     }
 }
 
 void SettingsWindow::browseModelFile() {
-    QString fileName = QFileDialog::getOpenFileName(this, "Select 3D Model File", "", "Model Files (*.mxmod *.mxmod.z *.obj)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastModelDir", "").toString();
+    QString fileName = QFileDialog::getOpenFileName(this, "Select 3D Model File", lastDir, "Model Files (*.mxmod *.mxmod.z *.obj)");
     if (!fileName.isEmpty()) {
+        appSettings.setValue("lastModelDir", QFileInfo(fileName).absolutePath());
         modelFileLineEdit->setText(fileName);
     }
 }

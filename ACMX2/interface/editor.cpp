@@ -13,6 +13,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QStatusBar>
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
@@ -199,10 +200,13 @@ void TextEditor::saveContents() {
 }
 
 void TextEditor::saveAs() {
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastEditorSaveDir", QFileInfo(filename).absolutePath()).toString();
     QString newFileName = QFileDialog::getSaveFileName(
-        this, "Save File As", filename, "GLSL Files (*.glsl *.frag *.vert);;All Files (*)");
+        this, "Save File As", lastDir + "/" + QFileInfo(filename).fileName(), "GLSL Files (*.glsl *.frag *.vert);;All Files (*)");
 
     if (!newFileName.isEmpty()) {
+        appSettings.setValue("lastEditorSaveDir", QFileInfo(newFileName).absolutePath());
         filename = newFileName;
         saveContents();
     }
