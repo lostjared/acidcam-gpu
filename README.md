@@ -11,7 +11,9 @@
 
 Technical Documentation:
 
-https://lostsidedead.biz/acmx2-explained.html
+[Project Documentation](https://lostsidedead.biz/acmx2-explained.html)
+
+[GPU Filters Explained](https://lostsidedead.biz/acmx2/filter_browser.html)
 
 ACMX2 is distributed as a **Podman container** for Linux.
 This makes installation simple and avoids dependency issues, but it **requires an NVIDIA GPU**.
