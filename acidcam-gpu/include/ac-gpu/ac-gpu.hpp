@@ -21,7 +21,7 @@
 
 namespace ac_gpu {
 
-    inline const int AC_FILTER_MAX = 736;
+    inline const int AC_FILTER_MAX = 857;
 
     struct GPUFilter {
         int index;

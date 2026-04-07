@@ -739,7 +739,129 @@ namespace ac_gpu {
         {732, "HologramScan"},
         {733, "HorizonBend"},
         {734, "HotSpot"},
-        {735, "HueWobble"}};
+        {735, "HueWobble"},
+        {736, "glitch_alpha_diamond1"},
+        {737, "glitch_alpha_diamond2"},
+        {738, "glitch_alpha_diamond3"},
+        {739, "glitch_alpha_diamond4"},
+        {740, "glitch_alpha_diamond5"},
+        {741, "glitch_alphatrails"},
+        {742, "glitch_color_fade_ex1"},
+        {743, "glitch_color_fade_ex2"},
+        {744, "glitch_color_shift"},
+        {745, "glitch_colorxor01"},
+        {746, "glitch_colorxor02"},
+        {747, "glitch_colorxor03"},
+        {748, "glitch_colorxor04"},
+        {749, "glitch_colorxor05"},
+        {750, "glitch_colorxor06"},
+        {751, "glitch_colorxor07"},
+        {752, "glitch_colorxor08"},
+        {753, "glitch_colorxor09"},
+        {754, "glitch_colorxor10"},
+        {755, "glitch_colorxor11"},
+        {756, "glitch_colorxor12"},
+        {757, "glitch_colorxor13"},
+        {758, "glitch_colorxor14"},
+        {759, "glitch_colorxor15"},
+        {760, "glitch_colorxor16"},
+        {761, "glitch_colorxor17"},
+        {762, "glitch_colorxor18"},
+        {763, "glitch_colorxor19"},
+        {764, "glitch_colorxor20"},
+        {765, "glitch_distort_picture"},
+        {766, "glitch_echo"},
+        {767, "glitch_fast_monocolortrails"},
+        {768, "glitch_frame_pixels"},
+        {769, "glitch_frame_resize_stretch"},
+        {770, "glitch_frame_skip"},
+        {771, "glitch_frame_skip_resize"},
+        {772, "glitch_frame_skip_shadow"},
+        {773, "glitch_frame_skip_shadow_x2"},
+        {774, "glitch_frame_slide01"},
+        {775, "glitch_frame_slide02"},
+        {776, "glitch_frame_slide03"},
+        {777, "glitch_frame_slide04"},
+        {778, "glitch_frame_square_col"},
+        {779, "glitch_frame_stutter_filter"},
+        {780, "glitch_glitch_x1"},
+        {781, "glitch_gpt1"},
+        {782, "glitch_gpt2"},
+        {783, "glitch_gpt3"},
+        {784, "glitch_invertflash"},
+        {785, "glitch_line_across_side01"},
+        {786, "glitch_line_across_side02"},
+        {787, "glitch_line_across_side03"},
+        {788, "glitch_line_across_side04"},
+        {789, "glitch_line_across_side05"},
+        {790, "glitch_line_across_side06"},
+        {791, "glitch_line_collection01"},
+        {792, "glitch_line_collection02"},
+        {793, "glitch_line_collection03"},
+        {794, "glitch_line_collection04"},
+        {795, "glitch_line_collection05"},
+        {796, "glitch_line_collection06"},
+        {797, "glitch_line_collection07"},
+        {798, "glitch_line_offset_inout"},
+        {799, "glitch_line_offset_inout2"},
+        {800, "glitch_line_offset_inout3"},
+        {801, "glitch_newrandblend"},
+        {802, "glitch_newstretchlines"},
+        {803, "glitch_newvarlines"},
+        {804, "glitch_outoforder"},
+        {805, "glitch_pic_adjust1"},
+        {806, "glitch_pic_adjust2"},
+        {807, "glitch_picture_jump01"},
+        {808, "glitch_picture_jump02"},
+        {809, "glitch_picture_jump03"},
+        {810, "glitch_picture_jump04"},
+        {811, "glitch_picture_jump05"},
+        {812, "glitch_picture_jump06"},
+        {813, "glitch_picture_jump07"},
+        {814, "glitch_picture_jump08"},
+        {815, "glitch_picture_jump09"},
+        {816, "glitch_picture_jump10"},
+        {817, "glitch_picture_jump11"},
+        {818, "glitch_picture_jump12"},
+        {819, "glitch_picture_jump13"},
+        {820, "glitch_picture_jump14"},
+        {821, "glitch_picture_jump15"},
+        {822, "glitch_picture_jump16"},
+        {823, "glitch_picture_jump17"},
+        {824, "glitch_picture_jump18"},
+        {825, "glitch_picture_jump19"},
+        {826, "glitch_picture_jump20"},
+        {827, "glitch_picture_jump21"},
+        {828, "glitch_picture_jump22"},
+        {829, "glitch_picture_jump23"},
+        {830, "glitch_picture_jump24"},
+        {831, "glitch_picture_jump25"},
+        {832, "glitch_picture_jump26"},
+        {833, "glitch_picture_jump27"},
+        {834, "glitch_picture_jump28"},
+        {835, "glitch_picture_jump29"},
+        {836, "glitch_picture_jump30"},
+        {837, "glitch_picture_jump31"},
+        {838, "glitch_rect_size"},
+        {839, "glitch_rsquare2"},
+        {840, "glitch_rsquare3"},
+        {841, "glitch_rsquare4"},
+        {842, "glitch_rsquare5"},
+        {843, "glitch_slice_frame"},
+        {844, "glitch_slice_frame_w"},
+        {845, "glitch_square_block_v2a"},
+        {846, "glitch_square_block_v2b"},
+        {847, "glitch_square_block_v2c"},
+        {848, "glitch_square_block_v2d"},
+        {849, "glitch_square_block_v2e"},
+        {850, "glitch_square_block_v2f"},
+        {851, "glitch_square_block_v2g"},
+        {852, "glitch_square_block_v2h"},
+        {853, "glitch_square_xor"},
+        {854, "glitch_store_frame10"},
+        {855, "glitch_stuckframe"},
+        {856, "glitch_stutter_long"},
+        {857, "glitch_stutter_sbrv"}};
     struct FilterParams {
         float alpha;
         bool isNegative;
@@ -8632,6 +8754,1561 @@ namespace ac_gpu {
         }
     }
 
+    // ========== GLITCH.GUI EXAMPLE FILTERS ==========
+    // Auto-generated from glitch.gui/examples/
+
+    __device__ unsigned char gpu_wrap_cast(float d) {
+        unsigned long val = static_cast<unsigned long>(fabsf(d));
+        if(val > 255)
+            val = val % 256;
+        return static_cast<unsigned char>(val);
+    }
+    __device__ int gpu_AC_GetFX(int oldw, int x, int nw) {
+        if(nw <= 0 || oldw <= 0) return 0;
+        float xp = (float)x * (float)oldw / (float)nw;
+        int result = (int)xp;
+        if(result >= oldw) result = oldw - 1;
+        if(result < 0) result = 0;
+        return result;
+    }
+    __device__ int gpu_AC_GetFZ(int oldh, int y, int nh) {
+        if(nh <= 0 || oldh <= 0) return 0;
+        float yp = (float)y * (float)oldh / (float)nh;
+        int result = (int)yp;
+        if(result >= oldh) result = oldh - 1;
+        if(result < 0) result = 0;
+        return result;
+    }
+    __device__ int gpu_triangle_wave(int t, int period) {
+        if(period <= 0) return 0;
+        int mod = 2 * period;
+        int pos = t % mod;
+        if(pos < 0) pos += mod;
+        return (pos < period) ? pos : (mod - pos);
+    }
+    __device__ void process_glitch_AlphaDiamond1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int index = ((params.frame_count % width) + width) % width;
+        int offset = gpu_triangle_wave(params.frame_count, 7) + 1;
+        int start_x = ((index + y) % width + width) % width;
+        int src_x = ((start_x + x) % width + width) % width;
+        unsigned char *ref = allFrames[offset % params.numFrames];
+        if(ref) {
+            int src_idx = y * step + src_x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_AlphaDiamond2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int index = ((params.frame_count * 3) % width + width) % width;
+        int offset = gpu_triangle_wave(params.frame_count, 7) + 1;
+        int src_x = ((index + y + x) % width + width) % width;
+        unsigned char *ref = allFrames[offset % params.numFrames];
+        if(ref) {
+            int src_idx = y * step + src_x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_AlphaDiamond3(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float alpha = 0.1f + 0.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f));
+        int index = ((params.frame_count * 2) % width + width) % width;
+        int offset = gpu_triangle_wave(params.frame_count, 7) + 1;
+        int src_x = ((index + y + x) % width + width) % width;
+        unsigned char *ref = allFrames[offset % params.numFrames];
+        if(ref) {
+            int src_idx = y * step + src_x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_AlphaDiamond4(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float alpha = 0.1f + 0.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f));
+        int index = ((params.frame_count * 2) % width + width) % width;
+        int offset = gpu_triangle_wave(params.frame_count, 7) + 1;
+        int src_x = ((index + y + x) % width + width) % width;
+        int fsel = (int)(gpu_rand(x, y, params.seed) * 9.0f) % params.numFrames;
+        unsigned char *ref = allFrames[fsel];
+        if(ref) {
+            int src_idx = y * step + src_x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_AlphaDiamond5(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float alpha = 0.1f + 0.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.03f));
+        int index = ((params.frame_count * 3) % width + width) % width;
+        int src_x = ((index + y + x) % width + width) % width;
+        int fsel = (int)(gpu_rand(x, y, params.seed + params.frame_count) * 9.0f) % params.numFrames;
+        unsigned char *ref = allFrames[fsel];
+        if(ref) {
+            int src_idx = y * step + src_x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_Alphatrails(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float alpha = 0.1f + 0.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f));
+        int f_indices[3] = {1 % params.numFrames, (params.numFrames / 2) % params.numFrames, (params.numFrames - 1) % params.numFrames};
+        for(int j = 0; j < 3; ++j) {
+            unsigned char *ref = allFrames[f_indices[j]];
+            if(ref) {
+                data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[idx]);
+            }
+        }
+    }
+    __device__ void process_glitch_ColorFadeEx1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float color_val = fmodf((float)(y * width + x + params.frame_count * 7 + j * 83), 254.0f);
+            data[idx + j] = gpu_wrap_cast(data[idx + j] + color_val);
+        }
+    }
+    __device__ void process_glitch_ColorFadeEx2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float color0 = fmodf(params.frame_count * 13.0f + 50.0f, 254.0f);
+        float color1 = fmodf(params.frame_count * 17.0f + 100.0f, 254.0f);
+        float color2 = fmodf(params.frame_count * 23.0f + 150.0f, 254.0f);
+        data[idx] = gpu_wrap_cast(data[idx] + color0);
+        data[idx + 1] = gpu_wrap_cast(data[idx + 1] + color1);
+        data[idx + 2] = gpu_wrap_cast(data[idx + 2] + color2);
+    }
+    __device__ void process_glitch_ColorShift(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int offset_r = ((x + params.seed) % width + width) % width;
+        int offset_g = ((x + params.seed + width / 3) % width + width) % width;
+        int offset_b = ((x + params.seed + 2 * width / 3) % width + width) % width;
+        int f1 = 1 % params.numFrames;
+        int f2 = (params.numFrames / 2) % params.numFrames;
+        int f3 = (params.numFrames - 1) % params.numFrames;
+        unsigned char *r1 = allFrames[f1];
+        unsigned char *r2 = allFrames[f2];
+        unsigned char *r3 = allFrames[f3];
+        bool strobe = (params.frame_count % 2) == 0;
+        if(r1 && r2 && r3) {
+            if(strobe) {
+                data[idx] = r1[y * step + offset_r * 4];
+                data[idx + 1] = r2[y * step + offset_g * 4 + 1];
+                data[idx + 2] = r3[y * step + offset_b * 4 + 2];
+            } else {
+                data[idx] = r1[y * step + offset_b * 4];
+                data[idx + 1] = r2[y * step + offset_r * 4 + 1];
+                data[idx + 2] = r3[y * step + offset_g * 4 + 2];
+            }
+        }
+    }
+    __device__ void process_glitch_Colorxor01(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.1f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor02(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.07f + gpu_rand(x,y,params.seed)*0.5f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor03(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f + j * 1.5f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor04(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + fmodf(params.frame_count * 0.03f + j * 0.7f, 2.0f);
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor05(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int op_type = (params.frame_count + (int)(gpu_rand(x, y, params.seed) * 3.0f)) % 3;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.08f + j * 2.1f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            if(op_type == 0) data[idx + j] = data[idx + j] ^ val;
+            else if(op_type == 1) data[idx + j] = data[idx + j] & val;
+            else data[idx + j] = data[idx + j] | val;
+        }
+    }
+    __device__ void process_glitch_Colorxor06(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int op_type = (params.frame_count + (int)(gpu_rand(x, y, params.seed) * 3.0f)) % 3;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * cosf(params.frame_count * 0.06f + j * 1.3f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            if(op_type == 0) data[idx + j] = data[idx + j] ^ val;
+            else if(op_type == 1) data[idx + j] = data[idx + j] & val;
+            else data[idx + j] = data[idx + j] | val;
+        }
+    }
+    __device__ void process_glitch_Colorxor07(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.04f + j * 0.9f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor08(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.035f + j * 1.1f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor09(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.03f + j * 0.8f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor10(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * cosf(params.frame_count * 0.03f + j * 0.6f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor11(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.025f + j * 1.7f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor12(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.0f + 3.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.028f + j * 2.0f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor13(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.1f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.04f + j * 1.2f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor14(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.1f + 1.9f * (0.5f + 0.5f * cosf(params.frame_count * 0.035f + j * 1.4f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor15(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.1f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.038f + j * 1.6f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor16(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.1f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.033f + j * 1.8f + x * 0.001f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor17(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.1f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.042f + j * 2.2f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor18(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 1.1f + 1.9f * (0.5f + 0.5f * cosf(params.frame_count * 0.045f + j * 1.0f));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor19(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        for(int j = 0; j < 3; ++j) {
+            float a = 0.5f * (1.0f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.04f + j * 1.3f)));
+            unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+            data[idx + j] = data[idx + j] ^ val;
+        }
+    }
+    __device__ void process_glitch_Colorxor20(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq_x = (int)(gpu_rand(x, y, params.seed) * width);
+        int sq_y = (int)(gpu_rand(y, x, params.seed) * height);
+        int sq_w = (int)(gpu_rand(x + y, y - x, params.seed) * width);
+        int sq_h = (int)(gpu_rand(x * y, x + y, params.seed) * height);
+        if(x >= sq_x && x < sq_x + sq_w && y >= sq_y && y < sq_y + sq_h) {
+            for(int j = 0; j < 3; ++j) {
+                float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f + j * 1.5f));
+                unsigned char val = gpu_wrap_cast(a * data[idx + j]);
+                data[idx + j] = data[idx + j] ^ val;
+            }
+        }
+    }
+    __device__ void process_glitch_DistortPicture(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int rwidth = 1 + ((params.seed + y * 5) % width);
+        int offx = gpu_AC_GetFX(width - 1, x, rwidth);
+        int offset = (y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[offset];
+        if(ref && offx >= 0 && offx < width) {
+            int src_idx = y * step + offx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_Echo(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int cx = width / 2, cy = height / 2;
+        int x2 = cx + (x - cx) / 2, y2 = cy + (y - cy) / 2;
+        int x3 = cx + (x - cx) / 4, y3 = cy + (y - cy) / 4;
+        if(x2 >= 0 && x2 < width && y2 >= 0 && y2 < height && x3 >= 0 && x3 < width && y3 >= 0 && y3 < height) {
+            int idx2 = y2 * step + x2 * 4;
+            int idx3 = y3 * step + x3 * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = (unsigned char)(0.4f * data[idx + j] + 0.3f * data[idx2 + j] + 0.3f * data[idx3 + j]);
+        }
+    }
+    __device__ void process_glitch_FastMonocolortrails(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int f_indices[3] = {1 % params.numFrames, (params.numFrames / 2) % params.numFrames, (params.numFrames - 1) % params.numFrames};
+        for(int j = 0; j < 3; ++j) {
+            unsigned char *ref = allFrames[f_indices[j]];
+            if(ref) data[idx + j] = ref[idx];
+        }
+    }
+    __device__ void process_glitch_FramePixels(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int bx = x / 64, by = y / 64;
+        int sub_x = x % 64, sub_y = y % 64;
+        int off = ((bx + by) * 8 + (sub_x / 8 + sub_y / 8)) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_FrameResizeStretch(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int frame_size = width / 32;
+        if(frame_size < 1) frame_size = 1;
+        int off = ((y / frame_size) + params.frame_count) % params.numFrames;
+        int frame_x_off = (int)(gpu_rand(0, y / frame_size, params.seed) * (width / 16));
+        int off_x = gpu_AC_GetFX(width - 1, x, width + frame_x_off);
+        unsigned char *ref = allFrames[off];
+        if(ref && off_x >= 0 && off_x < width) {
+            int src_idx = y * step + off_x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_FrameSkip(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        bool on = ((params.frame_count / 10) % 2) == 0;
+        int off = params.frame_count % params.numFrames;
+        if(on) {
+            unsigned char *ref = allFrames[off];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_FrameSkipResize(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        bool on = ((params.frame_count / 12) % 2) == 0;
+        int off = params.frame_count % params.numFrames;
+        if(on) {
+            int bsize = 8 + gpu_triangle_wave(params.frame_count, 16);
+            int bx = (x / bsize) * bsize;
+            int by = (y / bsize) * bsize;
+            unsigned char *ref = allFrames[off];
+            if(ref && bx < width && by < height) {
+                int src_idx = by * step + bx * 4;
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[src_idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_FrameSkipShadow(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        bool on = ((params.frame_count / 15) % 2) == 0;
+        int off = gpu_triangle_wave(params.frame_count, params.numFrames - 1);
+        if(on) {
+            unsigned char *ref = allFrames[off % params.numFrames];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+            }
+        }
+    }
+    __device__ void process_glitch_FrameSkipShadowX2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        bool on = ((params.frame_count / 15) % 2) == 0;
+        int off = gpu_triangle_wave(params.frame_count, params.numFrames - 1);
+        if(on) {
+            unsigned char *ref1 = allFrames[off % params.numFrames];
+            unsigned char *ref2 = allFrames[(params.numFrames - 2) % params.numFrames];
+            if(ref1 && ref2) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.33f * data[idx + j] + 0.33f * ref1[idx + j] + 0.33f * ref2[idx + j]);
+            }
+        }
+    }
+    __device__ void process_glitch_FrameSlide01(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int half_w = width / 2;
+        int offset_x = gpu_triangle_wave(params.frame_count * 10, width - half_w - 1);
+        int off = params.frame_count % params.numFrames;
+        if(x >= offset_x && x < offset_x + half_w) {
+            unsigned char *ref = allFrames[off];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_FrameSlide02(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int half_h = height / 2;
+        int offset_y = gpu_triangle_wave(params.frame_count * 10, height - half_h - 1);
+        int off = params.frame_count % params.numFrames;
+        if(y >= offset_y && y < offset_y + half_h) {
+            unsigned char *ref = allFrames[off];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_FrameSlide03(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int half_w = width / 2;
+        int offset_x = gpu_triangle_wave(params.frame_count * 10, width - half_w - 1);
+        int off = (int)(gpu_rand(0, 0, params.seed) * params.numFrames) % params.numFrames;
+        if(x >= offset_x && x < offset_x + half_w) {
+            unsigned char *ref = allFrames[off];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_FrameSlide04(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int half_h = height / 2;
+        int offset_y = gpu_triangle_wave(params.frame_count * 10, height - half_h - 1);
+        int off = (int)(gpu_rand(0, 0, params.seed) * params.numFrames) % params.numFrames;
+        if(y >= offset_y && y < offset_y + half_h) {
+            unsigned char *ref = allFrames[off];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_FrameSquareCol(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int bx = x / 34, by = y / 34;
+        int inner_x = x % 34, inner_y = y % 34;
+        if(inner_x < 30 && inner_y < 30) {
+            int off = gpu_triangle_wave(bx + by * (width / 34), params.numFrames - 1);
+            unsigned char *ref = allFrames[off % params.numFrames];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_FrameStutterFilter(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        bool stutter = ((params.frame_count / 8) % 3) != 0;
+        if(stutter) {
+            int off = (params.frame_count / 8) % params.numFrames;
+            unsigned char *ref = allFrames[off];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_GlitchX1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int divisor = height / 4;
+        if(divisor < 1) divisor = 1;
+        int band = y / divisor;
+        float r = gpu_rand(0, band, params.seed + params.frame_count);
+        if(r > 0.25f) {
+            int off = ((int)(r * 100) + params.frame_count) % params.numFrames;
+            unsigned char *ref = allFrames[off];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_Gpt1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int col_shift = (int)(gpu_rand(0, 0, params.seed) * (width / 4));
+        int row_shift = (int)(gpu_rand(1, 1, params.seed) * (height / 4));
+        int sx = (x + col_shift) % width;
+        int sy = (y + row_shift) % height;
+        data[idx + 2] = data[y * step + sx * 4 + 2];
+        data[idx + 1] = data[sy * step + x * 4 + 1];
+        if(gpu_rand(x, y, params.seed) < 0.2f)
+            data[idx] = (unsigned char)(gpu_rand(x, y, params.seed + 1) * 255.0f);
+    }
+    __device__ void process_glitch_Gpt2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float amplitude = 25.0f;
+        float frequency = 2.0f * 3.14159f / 180.0f;
+        float phase = params.frame_count * 0.05f;
+        int dx = (int)(amplitude * sinf(frequency * y + phase));
+        int dy = (int)(amplitude * cosf(frequency * x + phase));
+        int nx = x + dx;
+        int ny = y + dy;
+        if(nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            int src_idx = ny * step + nx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_Gpt3(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float cx = width / 2.0f, cy = height / 2.0f;
+        float dx = x - cx, dy = y - cy;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float maxDist = sqrtf(cx * cx + cy * cy);
+        float factor = 1.0f + 0.3f * sinf(params.frame_count * 0.05f) * (dist / maxDist);
+        int nx = (int)(cx + dx * factor);
+        int ny = (int)(cy + dy * factor);
+        if(nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            int src_idx = ny * step + nx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = data[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_Invertflash(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        if((params.frame_count / 4) % 2 == 0) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = 255 - data[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineAcrossSide01(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int row_col = gpu_triangle_wave(y + params.frame_count * 25, width) + x;
+        int row_x = gpu_AC_GetFX(width - 1, x, row_col);
+        int off = (y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && row_x >= 0 && row_x < width) {
+            int src_idx = y * step + row_x * 4;
+            for(int j = 0; j < 3; ++j) {
+                if(1.0f < 1.0f)
+                    data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[src_idx + j]);
+                else
+                    data[idx + j] = ref[src_idx + j];
+                
+            }
+        }
+    }
+    __device__ void process_glitch_LineAcrossSide02(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int row_col = gpu_triangle_wave(y + params.frame_count * 25, width) + x;
+        int row_x = gpu_AC_GetFX(width - 1, x, row_col);
+        int off = (y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && row_x >= 0 && row_x < width) {
+            int src_idx = y * step + row_x * 4;
+            for(int j = 0; j < 3; ++j) {
+                if(1.0f < 1.0f)
+                    data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[src_idx + j]);
+                else
+                    data[idx + j] = ref[src_idx + j];
+                
+            }
+        }
+    }
+    __device__ void process_glitch_LineAcrossSide03(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int row_col = gpu_triangle_wave(y + params.frame_count * 25, width) + x;
+        int row_x = gpu_AC_GetFX(width - 1, x, row_col);
+        int off = (y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && row_x >= 0 && row_x < width) {
+            int src_idx = y * step + row_x * 4;
+            for(int j = 0; j < 3; ++j) {
+                if(0.5f < 1.0f)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
+                else
+                    data[idx + j] = ref[src_idx + j];
+                
+            }
+        }
+    }
+    __device__ void process_glitch_LineAcrossSide04(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int row_col = gpu_triangle_wave(y + params.frame_count * 25, width) + x;
+        int row_x = gpu_AC_GetFX(width - 1, x, row_col);
+        int off = (y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && row_x >= 0 && row_x < width) {
+            int src_idx = y * step + row_x * 4;
+            for(int j = 0; j < 3; ++j) {
+                if(0.5f < 1.0f)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
+                else
+                    data[idx + j] = ref[src_idx + j];
+                data[idx + j] ^= ref[src_idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_LineAcrossSide05(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int row_col = gpu_triangle_wave(y + params.frame_count * 25, width) + x;
+        int row_x = gpu_AC_GetFX(width - 1, x, row_col);
+        int off = (y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && row_x >= 0 && row_x < width) {
+            int src_idx = y * step + row_x * 4;
+            for(int j = 0; j < 3; ++j) {
+                if(0.5f < 1.0f)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
+                else
+                    data[idx + j] = ref[src_idx + j];
+                
+            }
+        }
+    }
+    __device__ void process_glitch_LineAcrossSide06(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int row_col = gpu_triangle_wave(y + params.frame_count * 25, width) + x;
+        int row_x = gpu_AC_GetFX(width - 1, x, row_col);
+        int off = (y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && row_x >= 0 && row_x < width) {
+            int src_idx = y * step + row_x * 4;
+            for(int j = 0; j < 3; ++j) {
+                if(1.0f < 1.0f)
+                    data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[src_idx + j]);
+                else
+                    data[idx + j] = ref[src_idx + j];
+                
+            }
+        }
+    }
+    __device__ void process_glitch_LineCollection01(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int band = width / 32;
+        if(band < 1) band = 1;
+        int seg = x / band;
+        int off = (seg + y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineCollection02(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int band = width / 32;
+        if(band < 1) band = 1;
+        int seg = x / band;
+        int off = (seg + y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineCollection03(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int band = 2;
+        if(band < 1) band = 1;
+        int seg = x / band;
+        int off = (seg + y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineCollection04(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int band = 10;
+        if(band < 1) band = 1;
+        int seg = x / band;
+        int off = (seg + y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineCollection05(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int band = 50;
+        if(band < 1) band = 1;
+        int seg = x / band;
+        int off = (seg + y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineCollection06(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int band = 50;
+        if(band < 1) band = 1;
+        int seg = x / band;
+        int off = (seg + y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineCollection07(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int band = 50;
+        if(band < 1) band = 1;
+        int seg = x / band;
+        int off = (seg + y + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineOffsetInout(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int num = 1 + (int)(gpu_rand(0, y, params.seed) * 50.0f);
+        if(num < 1) num = 1;
+        int off = (y / num + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineOffsetInout2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int num = 1 + (int)(gpu_rand(0, y, params.seed + 1) * 250.0f);
+        if(num < 1) num = 1;
+        int off = gpu_triangle_wave(y / num + params.frame_count, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_LineOffsetInout3(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int num = 1 + (int)(gpu_rand(0, y, params.seed + 2) * 250.0f);
+        if(num < 1) num = 1;
+        int off = gpu_triangle_wave(y / num + params.frame_count, params.numFrames - 1);
+        int offx = gpu_AC_GetFX(width - 1, x, width + num);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref && offx >= 0 && offx < width) {
+            int src_idx = y * step + offx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_Newrandblend(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int off = (int)(gpu_rand(x, y, params.seed + params.frame_count) * params.numFrames) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+        }
+    }
+    __device__ void process_glitch_Newstretchlines(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int stretch = width + gpu_triangle_wave(y + params.frame_count, width / 2);
+        int sx = gpu_AC_GetFX(width - 1, x, stretch);
+        int off = params.frame_count % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && sx >= 0 && sx < width) {
+            int src_idx = y * step + sx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_Newvarlines(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int var = 2 + (int)(gpu_rand(0, y, params.seed) * 30.0f);
+        int off = (x / var + params.frame_count) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_Outoforder(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int scramble = (int)(gpu_rand(0, y / 4, params.seed) * params.numFrames);
+        int off = scramble % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_PicAdjust1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float factor = 1.0f + 0.5f * sinf(params.frame_count * 0.05f);
+        for(int j = 0; j < 3; ++j) {
+            float val = data[idx + j] * factor;
+            data[idx + j] = (unsigned char)fminf(255.0f, fmaxf(0.0f, val));
+        }
+    }
+    __device__ void process_glitch_PicAdjust2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float r_factor = 1.0f + 0.3f * sinf(params.frame_count * 0.03f);
+        float g_factor = 1.0f + 0.3f * sinf(params.frame_count * 0.05f);
+        float b_factor = 1.0f + 0.3f * sinf(params.frame_count * 0.07f);
+        data[idx] = (unsigned char)fminf(255.0f, data[idx] * b_factor);
+        data[idx + 1] = (unsigned char)fminf(255.0f, data[idx + 1] * g_factor);
+        data[idx + 2] = (unsigned char)fminf(255.0f, data[idx + 2] * r_factor);
+    }
+    __device__ void process_glitch_PictureJump01(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = height / 16 + y + params.frame_count * 1;
+        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 1) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_PictureJump02(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = height / 16 + y + params.frame_count * 2;
+        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 2) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_PictureJump03(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = height / 16 + y + params.frame_count * 3;
+        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 3) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_PictureJump04(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_x = width / 16 + y + params.frame_count * 4;
+        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 4) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cx >= 0 && cx < width) {
+            int src_idx = y * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump05(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 1, height * 2);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 5) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump06(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = height / 16 + y + params.frame_count * 6;
+        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 6) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_PictureJump07(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = height / 16 + y + params.frame_count * 7;
+        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 7) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_PictureJump08(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = height / 16 + y + params.frame_count * 8;
+        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 8) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_PictureJump09(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = height / 16 + y + params.frame_count * 9;
+        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 9) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
+        }
+    }
+    __device__ void process_glitch_PictureJump10(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = (int)(gpu_rand(0, y / (height / 2 + 1), params.seed) * (height - 1)) + 1;
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 10) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump11(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_x = width / 16 + y + params.frame_count * 11;
+        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 11) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cx >= 0 && cx < width) {
+            int src_idx = y * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump12(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_x = width / 16 + y + params.frame_count * 12;
+        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 12) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cx >= 0 && cx < width) {
+            int src_idx = y * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump13(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_x = width / 16 + y + params.frame_count * 13;
+        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 13) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cx >= 0 && cx < width) {
+            int src_idx = y * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump14(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_x = width / 16 + y + params.frame_count * 14;
+        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 14) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cx >= 0 && cx < width) {
+            int src_idx = y * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump15(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 11, height * 2);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 15) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump16(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 12, height * 2);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 16) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump17(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 13, height * 2);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 17) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump18(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 14, height * 2);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 18) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump19(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 15, height * 2);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 19) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump20(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 16, height * 2);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int off = (params.frame_count + 20) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height) {
+            int src_idx = cy * step + x * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump21(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 1, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 2, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 21) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump22(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 2, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 3, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 22) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump23(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 3, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 4, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 23) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump24(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 4, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 5, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 24) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump25(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 5, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 1, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 25) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump26(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 6, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 2, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 26) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump27(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 7, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 3, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 27) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump28(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 1, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 4, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 28) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump29(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 2, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 5, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 29) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump30(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 3, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 1, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 30) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_PictureJump31(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int size_y = 2 + gpu_triangle_wave(y + params.frame_count * 4, height);
+        int size_x = 2 + gpu_triangle_wave(x + params.frame_count * 2, width);
+        int cy = gpu_AC_GetFZ(height - 1, y, size_y);
+        int cx = gpu_AC_GetFX(width - 1, x, size_x);
+        int off = (params.frame_count + 31) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+            int src_idx = cy * step + cx * 4;
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[src_idx + j];
+        }
+    }
+    __device__ void process_glitch_RectSize(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int num = 8 + gpu_triangle_wave(params.frame_count * 2, 56);
+        if(num < 1) num = 1;
+        int row_size = height / num;
+        int col_size = width / num;
+        if(row_size < 1) row_size = 1;
+        if(col_size < 1) col_size = 1;
+        int bx = x / col_size, by = y / row_size;
+        int off = (int)(gpu_rand(bx, by, params.seed) * params.numFrames) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+        }
+    }
+    __device__ void process_glitch_Rsquare2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float r1 = gpu_rand(x / 32, y / 32, params.seed + 0);
+        float r2 = gpu_rand(x / 64, y / 64, params.seed + 0 + 100);
+        int off = (int)(r1 * params.numFrames) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && r2 > 0.3f) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_Rsquare3(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float r1 = gpu_rand(x / 32, y / 32, params.seed + 1);
+        float r2 = gpu_rand(x / 64, y / 64, params.seed + 1 + 100);
+        int off = (int)(r1 * params.numFrames) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && r2 > 0.3f) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_Rsquare4(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float r1 = gpu_rand(x / 32, y / 32, params.seed + 2);
+        float r2 = gpu_rand(x / 64, y / 64, params.seed + 2 + 100);
+        int off = (int)(r1 * params.numFrames) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && r2 > 0.3f) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_Rsquare5(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float r1 = gpu_rand(x / 32, y / 32, params.seed + 3);
+        float r2 = gpu_rand(x / 64, y / 64, params.seed + 3 + 100);
+        int off = (int)(r1 * params.numFrames) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref && r2 > 0.3f) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_SliceFrame(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        bool active = ((params.frame_count / 30) % 2) == 0;
+        if(active) {
+            int rand_start = (int)(gpu_rand(0, 0, params.seed) * (height / 8));
+            int half = width / 2;
+            int offset_y = (x < half) ? rand_start : (int)(gpu_rand(1, 1, params.seed) * (height / 8));
+            int src_y = y - offset_y;
+            if(src_y >= 0 && src_y < height) {
+                int src_idx = src_y * step + x * 4;
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+            }
+        }
+    }
+    __device__ void process_glitch_SliceFrameW(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        bool active = ((params.frame_count / 30) % 2) == 0;
+        if(active) {
+            int rand_start = (int)(gpu_rand(0, 0, params.seed) * (width / 8));
+            int half = height / 2;
+            int offset_x = (y < half) ? rand_start : (int)(gpu_rand(1, 1, params.seed) * (width / 8));
+            int src_x = x - offset_x;
+            if(src_x >= 0 && src_x < width) {
+                int src_idx = y * step + src_x * 4;
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
+            }
+        }
+    }
+    __device__ void process_glitch_SquareBlockV2A(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 0, 6);
+        if(sq < 1) sq = 1;
+        int row_band = y / sq;
+        int off = gpu_triangle_wave(row_band + 0, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            if(1.0f < 1.0f) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[idx + j]);
+            } else {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_SquareBlockV2B(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 3, 6);
+        if(sq < 1) sq = 1;
+        int row_band = y / sq;
+        int off = gpu_triangle_wave(row_band + 1, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            if(1.0f < 1.0f) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[idx + j]);
+            } else {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_SquareBlockV2C(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 6, 6);
+        if(sq < 1) sq = 1;
+        int row_band = y / sq;
+        int off = gpu_triangle_wave(row_band + 2, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            if(0.5f < 1.0f) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+            } else {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_SquareBlockV2D(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 9, 6);
+        if(sq < 1) sq = 1;
+        int row_band = y / sq;
+        int off = gpu_triangle_wave(row_band + 3, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            if(0.5f < 1.0f) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+            } else {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_SquareBlockV2E(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 12, 6);
+        if(sq < 1) sq = 1;
+        int row_band = y / sq;
+        int off = gpu_triangle_wave(row_band + 4, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            if(0.5f < 1.0f) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+            } else {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_SquareBlockV2F(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 15, 6);
+        if(sq < 1) sq = 1;
+        int row_band = y / sq;
+        int off = gpu_triangle_wave(row_band + 5, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            if(0.5f < 1.0f) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+            } else {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_SquareBlockV2G(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 18, 6);
+        if(sq < 1) sq = 1;
+        int row_band = y / sq;
+        int off = gpu_triangle_wave(row_band + 6, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            if(0.5f < 1.0f) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+            } else {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_SquareBlockV2H(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 21, 6);
+        if(sq < 1) sq = 1;
+        int row_band = y / sq;
+        int off = gpu_triangle_wave(row_band + 7, params.numFrames - 1);
+        unsigned char *ref = allFrames[off % params.numFrames];
+        if(ref) {
+            if(0.5f < 1.0f) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
+            } else {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_SquareXor(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        float alpha = 1.0f + 24.0f * (0.5f + 0.5f * sinf((x + y + params.frame_count) * 0.05f));
+        if(x + 1 < width && y + 1 < height) {
+            unsigned char total[3] = {0, 0, 0};
+            for(int dy = 0; dy <= 1 && y + dy < height; ++dy) {
+                for(int dx = 0; dx <= 1 && x + dx < width; ++dx) {
+                    int sidx = (y + dy) * step + (x + dx) * 4;
+                    for(int j = 0; j < 3; ++j)
+                        total[j] = (unsigned char)fminf(255.0f, total[j] + data[sidx + j] * 0.25f);
+                }
+            }
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] ^= (unsigned char)(alpha * total[j]);
+        }
+    }
+    __device__ void process_glitch_StoreFrame10(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int off = (params.frame_count / 4) % params.numFrames;
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_Stuckframe(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int arr[] = {1, 2, 2, 3, 3, 3};
+        int arr_off = ((params.frame_count % 6) + 6) % 6;
+        int pixel_idx = y * width + x;
+        int off = 0;
+        for(int k = 0; k < pixel_idx % 16; ++k) {
+            off += arr[(arr_off + k) % 6];
+            if(off >= params.numFrames) off = off % params.numFrames;
+        }
+        unsigned char *ref = allFrames[off];
+        if(ref) {
+            for(int j = 0; j < 3; ++j)
+                data[idx + j] = ref[idx + j];
+        }
+    }
+    __device__ void process_glitch_StutterLong(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int period = 15 + (int)(gpu_rand(0, 0, params.seed) * 15.0f);
+        if(period < 1) period = 1;
+        bool show = (params.frame_count % period) == 0;
+        if(show) {
+            int off = gpu_triangle_wave(params.frame_count / period, params.numFrames - 1);
+            unsigned char *ref = allFrames[off % params.numFrames];
+            if(ref) {
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[idx + j];
+            }
+        }
+    }
+    __device__ void process_glitch_StutterSbrv(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        int idx = y * step + x * 4;
+        int period = 10 + (int)(gpu_rand(0, 0, params.seed + 1) * 20.0f);
+        if(period < 1) period = 1;
+        bool show = (params.frame_count % period) < (period / 2);
+        if(show) {
+            int sq = 4 + gpu_triangle_wave(params.frame_count, 12);
+            int bx = (x / sq) * sq;
+            int by = (y / sq) * sq;
+            int off = params.frame_count % params.numFrames;
+            unsigned char *ref = allFrames[off];
+            if(ref && bx < width && by < height) {
+                int src_idx = by * step + bx * 4;
+                for(int j = 0; j < 3; ++j)
+                    data[idx + j] = ref[src_idx + j];
+            }
+        }
+    }
+
     __global__ void unifiedFilterKernel(GPUFilter *filters, size_t count, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -10970,6 +12647,372 @@ namespace ac_gpu {
                 break;
             case 735:
                 processHueWobble(x, y, data, step, params);
+                break;
+            case 736:
+                process_glitch_AlphaDiamond1(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 737:
+                process_glitch_AlphaDiamond2(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 738:
+                process_glitch_AlphaDiamond3(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 739:
+                process_glitch_AlphaDiamond4(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 740:
+                process_glitch_AlphaDiamond5(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 741:
+                process_glitch_Alphatrails(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 742:
+                process_glitch_ColorFadeEx1(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 743:
+                process_glitch_ColorFadeEx2(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 744:
+                process_glitch_ColorShift(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 745:
+                process_glitch_Colorxor01(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 746:
+                process_glitch_Colorxor02(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 747:
+                process_glitch_Colorxor03(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 748:
+                process_glitch_Colorxor04(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 749:
+                process_glitch_Colorxor05(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 750:
+                process_glitch_Colorxor06(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 751:
+                process_glitch_Colorxor07(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 752:
+                process_glitch_Colorxor08(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 753:
+                process_glitch_Colorxor09(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 754:
+                process_glitch_Colorxor10(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 755:
+                process_glitch_Colorxor11(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 756:
+                process_glitch_Colorxor12(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 757:
+                process_glitch_Colorxor13(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 758:
+                process_glitch_Colorxor14(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 759:
+                process_glitch_Colorxor15(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 760:
+                process_glitch_Colorxor16(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 761:
+                process_glitch_Colorxor17(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 762:
+                process_glitch_Colorxor18(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 763:
+                process_glitch_Colorxor19(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 764:
+                process_glitch_Colorxor20(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 765:
+                process_glitch_DistortPicture(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 766:
+                process_glitch_Echo(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 767:
+                process_glitch_FastMonocolortrails(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 768:
+                process_glitch_FramePixels(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 769:
+                process_glitch_FrameResizeStretch(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 770:
+                process_glitch_FrameSkip(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 771:
+                process_glitch_FrameSkipResize(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 772:
+                process_glitch_FrameSkipShadow(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 773:
+                process_glitch_FrameSkipShadowX2(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 774:
+                process_glitch_FrameSlide01(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 775:
+                process_glitch_FrameSlide02(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 776:
+                process_glitch_FrameSlide03(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 777:
+                process_glitch_FrameSlide04(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 778:
+                process_glitch_FrameSquareCol(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 779:
+                process_glitch_FrameStutterFilter(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 780:
+                process_glitch_GlitchX1(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 781:
+                process_glitch_Gpt1(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 782:
+                process_glitch_Gpt2(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 783:
+                process_glitch_Gpt3(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 784:
+                process_glitch_Invertflash(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 785:
+                process_glitch_LineAcrossSide01(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 786:
+                process_glitch_LineAcrossSide02(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 787:
+                process_glitch_LineAcrossSide03(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 788:
+                process_glitch_LineAcrossSide04(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 789:
+                process_glitch_LineAcrossSide05(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 790:
+                process_glitch_LineAcrossSide06(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 791:
+                process_glitch_LineCollection01(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 792:
+                process_glitch_LineCollection02(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 793:
+                process_glitch_LineCollection03(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 794:
+                process_glitch_LineCollection04(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 795:
+                process_glitch_LineCollection05(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 796:
+                process_glitch_LineCollection06(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 797:
+                process_glitch_LineCollection07(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 798:
+                process_glitch_LineOffsetInout(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 799:
+                process_glitch_LineOffsetInout2(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 800:
+                process_glitch_LineOffsetInout3(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 801:
+                process_glitch_Newrandblend(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 802:
+                process_glitch_Newstretchlines(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 803:
+                process_glitch_Newvarlines(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 804:
+                process_glitch_Outoforder(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 805:
+                process_glitch_PicAdjust1(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 806:
+                process_glitch_PicAdjust2(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 807:
+                process_glitch_PictureJump01(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 808:
+                process_glitch_PictureJump02(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 809:
+                process_glitch_PictureJump03(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 810:
+                process_glitch_PictureJump04(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 811:
+                process_glitch_PictureJump05(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 812:
+                process_glitch_PictureJump06(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 813:
+                process_glitch_PictureJump07(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 814:
+                process_glitch_PictureJump08(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 815:
+                process_glitch_PictureJump09(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 816:
+                process_glitch_PictureJump10(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 817:
+                process_glitch_PictureJump11(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 818:
+                process_glitch_PictureJump12(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 819:
+                process_glitch_PictureJump13(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 820:
+                process_glitch_PictureJump14(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 821:
+                process_glitch_PictureJump15(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 822:
+                process_glitch_PictureJump16(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 823:
+                process_glitch_PictureJump17(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 824:
+                process_glitch_PictureJump18(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 825:
+                process_glitch_PictureJump19(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 826:
+                process_glitch_PictureJump20(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 827:
+                process_glitch_PictureJump21(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 828:
+                process_glitch_PictureJump22(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 829:
+                process_glitch_PictureJump23(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 830:
+                process_glitch_PictureJump24(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 831:
+                process_glitch_PictureJump25(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 832:
+                process_glitch_PictureJump26(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 833:
+                process_glitch_PictureJump27(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 834:
+                process_glitch_PictureJump28(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 835:
+                process_glitch_PictureJump29(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 836:
+                process_glitch_PictureJump30(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 837:
+                process_glitch_PictureJump31(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 838:
+                process_glitch_RectSize(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 839:
+                process_glitch_Rsquare2(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 840:
+                process_glitch_Rsquare3(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 841:
+                process_glitch_Rsquare4(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 842:
+                process_glitch_Rsquare5(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 843:
+                process_glitch_SliceFrame(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 844:
+                process_glitch_SliceFrameW(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 845:
+                process_glitch_SquareBlockV2A(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 846:
+                process_glitch_SquareBlockV2B(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 847:
+                process_glitch_SquareBlockV2C(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 848:
+                process_glitch_SquareBlockV2D(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 849:
+                process_glitch_SquareBlockV2E(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 850:
+                process_glitch_SquareBlockV2F(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 851:
+                process_glitch_SquareBlockV2G(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 852:
+                process_glitch_SquareBlockV2H(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 853:
+                process_glitch_SquareXor(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 854:
+                process_glitch_StoreFrame10(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 855:
+                process_glitch_Stuckframe(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 856:
+                process_glitch_StutterLong(x, y, data, allFrames, width, height, step, params);
+                break;
+            case 857:
+                process_glitch_StutterSbrv(x, y, data, allFrames, width, height, step, params);
                 break;
             }
         }
