@@ -1,0 +1,114 @@
+FROM archlinux:latest
+
+# NVIDIA Container Toolkit passthrough labels & env
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,video,display
+LABEL com.nvidia.volumes.needed="nvidia_driver"
+
+# ---- Step 1: Base system update + build tools ----
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm --needed \
+    base-devel git cmake ninja pkg-config curl unzip \
+    && rm -rf /var/cache/pacman/pkg/*
+
+# ---- Step 2: NVIDIA + CUDA ----
+RUN pacman -S --noconfirm --needed \
+    nvidia-utils cuda \
+    && rm -rf /var/cache/pacman/pkg/*
+
+# ---- Step 3: OpenCV with CUDA ----
+RUN pacman -S --noconfirm --needed \
+    opencv-cuda hdf5 vtk fmt glew \
+    && rm -rf /var/cache/pacman/pkg/*
+
+# ---- Step 4: SDL2 + Qt6 ----
+RUN pacman -S --noconfirm --needed \
+    sdl2 sdl2_ttf sdl2_mixer sdl2_image \
+    qt6-base qt6-tools qt6-multimedia \
+    && rm -rf /var/cache/pacman/pkg/*
+
+# ---- Step 5: Remaining libs ----
+RUN pacman -S --noconfirm --needed \
+    glm mesa libglvnd ffmpeg \
+    rtaudio pulseaudio libpulse \
+    && rm -rf /var/cache/pacman/pkg/*
+
+# ---- Step 6: Fonts ----
+RUN pacman -S --noconfirm --needed \
+    ttf-dejavu ttf-liberation noto-fonts \
+    && rm -rf /var/cache/pacman/pkg/* \
+    && fc-cache -fv
+
+# Arch installs CUDA to /opt/cuda
+ENV PATH="/opt/cuda/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/cuda/lib64:/usr/lib:${LD_LIBRARY_PATH}"
+ENV CUDACXX="/opt/cuda/bin/nvcc"
+
+# Limit parallel jobs to avoid OOM during CUDA compilation
+ENV BUILDJOBS=4
+
+# ---- Build & install libmx2 ----
+WORKDIR /opt/src
+RUN git clone --depth=1 https://github.com/lostjared/libmx2.git
+WORKDIR /opt/src/libmx2/libmx
+RUN cmake -S . -B build -G Ninja \
+      -DEXAMPLES=OFF -DOPENGL=ON \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build build -j${BUILDJOBS} \
+    && cmake --install build \
+    && ldconfig
+
+# ---- Clone acidcam-gpu repo ----
+WORKDIR /opt/src
+RUN git clone --depth=1 https://github.com/lostjared/acidcam-gpu.git
+
+# ---- Build & install MXWrite ----
+WORKDIR /opt/src/acidcam-gpu/MXWrite
+RUN cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build build -j${BUILDJOBS} \
+    && cmake --install build \
+    && ldconfig
+
+# ---- Build & install acidcam-gpu library (CUDA heavy) ----
+WORKDIR /opt/src/acidcam-gpu/acidcam-gpu
+RUN cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_CUDA_ARCHITECTURES="75" \
+    && cmake --build build -j${BUILDJOBS} \
+    && cmake --install build \
+    && ldconfig
+
+# ---- Build ACMX2 ----
+WORKDIR /opt/src/acidcam-gpu/ACMX2
+RUN cmake -S . -B build -G Ninja \
+      -DAUDIO=ON \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build build -j${BUILDJOBS} \
+    && cmake --install build \
+    && ldconfig
+
+# ---- Build ACMX2 Qt interface ----
+WORKDIR /opt/src/acidcam-gpu/ACMX2/interface
+RUN cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build build -j${BUILDJOBS} \
+    && cp -rf data/ build/
+
+# ---- Download shader packs & models ----
+WORKDIR /opt/src
+RUN mkdir -p files/shaders \
+    && cd files/shaders \
+    && curl -L https://lostsidedead.biz/acmx2/shaders.zip -o shaders.zip \
+    && unzip shaders.zip \
+    && cd .. \
+    && curl -L https://lostsidedead.biz/acmx2/models.zip -o models.zip \
+    && unzip models.zip
+
+WORKDIR /opt/src/acidcam-gpu/ACMX2/interface/build
+CMD ["/opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface"]

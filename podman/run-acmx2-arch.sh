@@ -2,7 +2,7 @@
 xhost +local:docker
 set -euo pipefail
 
-IMAGE="ghcr.io/lostjared/acmx2:latest"
+IMAGE="acmx2-arch:latest"
 
 # 1. Get Host Audio Paths
 PULSE_SOCKET="/run/user/$(id -u)/pulse/native"
@@ -43,14 +43,16 @@ exec podman run -it \
   -e XDG_RUNTIME_DIR=/tmp/xdg \
   -e PULSE_SERVER=unix:/tmp/pulse-socket \
   -e PULSE_COOKIE=/tmp/pulse-cookie \
+  -e NVIDIA_VISIBLE_DEVICES=all \
+  -e NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,video,display \
   -v "$PULSE_SOCKET":/tmp/pulse-socket \
   -v "$PULSE_COOKIE":/tmp/pulse-cookie \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v "$HOST_SHARE":/root/share \
+  -v /usr/share/fonts:/usr/share/fonts:ro \
   "$IMAGE" bash -lc '
     mkdir -p /tmp/xdg
     chmod 700 /tmp/xdg
-    # Double check audio inside before launching
     echo "Checking audio connection..."
     pactl info || echo "pactl failed, continuing anyway..."
     exec /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface
