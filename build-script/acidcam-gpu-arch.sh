@@ -81,7 +81,7 @@ echo "Models installed to: /opt/src/files/models"
 # ---- Fix ownership of installed binaries ----
 if [ -n "${SUDO_USER}" ]; then
 #    chown "${SUDO_USER}:${SUDO_USER}" /usr/bin/acmx2 2>/dev/null || true
-    chown "${SUDO_USER}:${SUDO_USER}"-R /opt/src/acidcam-gpu/ACMX2/interface
+     chown -R "${SUDO_USER}:${SUDO_USER}" /opt/src/acidcam-gpu/ACMX2/interface
 fi
 echo "Interface located at: /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface"
 
