@@ -81,6 +81,5 @@ echo "Models installed to: /opt/src/files/models"
 # ---- Fix ownership of installed binaries ----
 if [ -n "${SUDO_USER}" ]; then
     chown "${SUDO_USER}:${SUDO_USER}" /usr/bin/launcher /usr/bin/acmx2 2>/dev/null || true
-    chown "${USDO_USER}:${SUDO_USER}" /oopt/src/acidcma-gpu/ACMX2/interface/build/acmx2_interface || true
-    echo "Ownership of binaries transferred to ${SUDO_USER}"
+    chown "${SUDO_USER}:${SUDO_USER}" /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface || true
 fi
