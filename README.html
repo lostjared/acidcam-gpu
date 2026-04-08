@@ -22,7 +22,7 @@
         }
 
         * {
-            margin: 0;
+            margin: 1;
             padding: 0;
             box-sizing: border-box;
         }
@@ -437,10 +437,10 @@
         <ul>
             <li><a href="#overview">Overview</a></li>
             <li><a href="#prerequisites">Prerequisites</a></li>
-            <li><a href="#pull-image">Pull Image</a></li>
             <li><a href="#run-script">Run Script</a></li>
             <li><a href="#execution">Execution</a></li>
             <li><a href="#troubleshooting">Troubleshooting</a></li>
+            <li><a href="#build-arch">Build (Arch)</a></li>
         </ul>
     </nav>
 
@@ -450,10 +450,10 @@
             <ol>
                 <li><a href="#overview">Overview</a></li>
                 <li><a href="#prerequisites">System Prerequisites</a></li>
-                <li><a href="#pull-image">Pulling the Container Image</a></li>
                 <li><a href="#run-script">Creating the Run Script</a></li>
                 <li><a href="#execution">Running ACMX2</a></li>
                 <li><a href="#troubleshooting">Troubleshooting Common Issues</a></li>
+                <li><a href="#build-arch">Building from Source (Arch Linux)</a></li>
             </ol>
         </div>
 
@@ -564,44 +564,6 @@ distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
             <div class="info-box warning">
                 <div class="info-box-title">⚠️ Important</div>
                 <p>After installing the NVIDIA Container Toolkit, you may need to restart your system or re-login for the changes to take effect. Verify your GPU is accessible by running <span class="inline-code">nvidia-smi</span>.</p>
-            </div>
-        </section>
-
-        <!-- Pull Image Section -->
-        <section id="pull-image">
-            <h2><span class="step-number">3</span> Pulling the Container Image</h2>
-            <p>The ACMX2 container image is hosted on GitHub Container Registry (GHCR). Pull the latest version using the following command:</p>
-
-            <div class="code-container">
-                <div class="code-header">
-                    <span class="code-lang">Bash</span>
-                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-                </div>
-                <pre><code><span class="comment"># Pull the ACMX2 container image from GitHub Container Registry</span>
-<span class="command">podman</span> pull ghcr.io/lostjared/acmx2:latest</code></pre>
-            </div>
-
-            <p>This will download the complete ACMX2 environment including all dependencies. The image size is approximately <strong>5-8 GB</strong> depending on compression, so the download may take some time on slower connections.</p>
-
-            <h3>Verify the Image</h3>
-            <p>After pulling, verify the image was downloaded successfully:</p>
-
-            <div class="code-container">
-                <div class="code-header">
-                    <span class="code-lang">Bash</span>
-                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-                </div>
-                <pre><code><span class="comment"># List all downloaded images</span>
-<span class="command">podman</span> images
-
-<span class="comment"># You should see output similar to:</span>
-<span class="comment"># REPOSITORY                    TAG       IMAGE ID       CREATED        SIZE</span>
-<span class="comment"># ghcr.io/lostjared/acmx2       latest    abc123def456   2 days ago     7.2 GB</span></code></pre>
-            </div>
-
-            <div class="info-box success">
-                <div class="info-box-title">✅ Success</div>
-                <p>Once you see the <span class="inline-code">ghcr.io/lostjared/acmx2</span> image listed, you're ready to create the run script.</p>
             </div>
         </section>
 
@@ -920,6 +882,95 @@ xhost +local:docker
 
 <span class="comment"># Or use --rm flag in the run script to auto-remove on exit</span>
 <span class="comment"># Add: --rm after "podman run -it"</span></code></pre>
+            </div>
+        </section>
+
+        <!-- Build from Source (Arch Linux) Section -->
+        <section id="build-arch">
+            <h2><span class="step-number">★</span> Building from Source (Arch Linux)</h2>
+            <p>
+                If you prefer to build the container image yourself, the repository includes
+                <span class="inline-code">podman/Containerfile.arch</span> — an Arch Linux-based build that
+                installs <span class="inline-code">opencv-cuda</span> directly from pacman, skipping a manual
+                OpenCV compile.
+            </p>
+
+            <div class="info-box">
+                <div class="info-box-title">💡 Prerequisites</div>
+                <ul>
+                    <li>Podman installed with NVIDIA Container Toolkit (CDI) configured</li>
+                    <li>At least <strong>20 GB</strong> of free disk space</li>
+                    <li>At least <strong>8 GB RAM</strong> (build is capped at 4 parallel jobs to avoid OOM)</li>
+                </ul>
+            </div>
+
+            <h3>Step 1: Enter the podman directory</h3>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="command">cd</span> acidcam-gpu/podman</code></pre>
+            </div>
+
+            <h3>Step 2: Build the container image</h3>
+            <p>Packages are installed in separate cached layers so a failed build resumes from the last completed step.</p>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="comment"># Build and tag as acmx2-arch</span>
+<span class="command">podman</span> build <span class="flag">-t</span> acmx2-arch <span class="flag">-f</span> Containerfile.arch .</code></pre>
+            </div>
+
+            <div class="info-box warning">
+                <div class="info-box-title">⚠️ Build Time &amp; Disk Space</div>
+                <p>Expect 30–90 minutes depending on internet speed and CPU. To free space from failed attempts:</p>
+                <div class="code-container" style="margin-top:10px">
+                    <div class="code-header"><span class="code-lang">Bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+                    <pre><code><span class="command">podman</span> system df
+<span class="command">podman</span> image prune <span class="flag">--force</span></code></pre>
+                </div>
+            </div>
+
+            <h3>Step 3: CUDA architecture (optional)</h3>
+            <p>The Containerfile defaults to <span class="inline-code">CMAKE_CUDA_ARCHITECTURES="75"</span> (Turing / RTX 20xx).  Edit <span class="inline-code">Containerfile.arch</span> before building if your GPU differs:</p>
+            <ul>
+                <li><strong>75</strong> &mdash; GTX 16xx / RTX 20xx (Turing)</li>
+                <li><strong>86</strong> &mdash; RTX 30xx (Ampere)</li>
+                <li><strong>89</strong> &mdash; RTX 40xx (Ada Lovelace)</li>
+            </ul>
+
+            <h3>Step 4: Verify the image</h3>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="command">podman</span> images | <span class="command">grep</span> acmx2-arch</code></pre>
+            </div>
+
+            <h3>Step 5: Launch with the Arch run script</h3>
+            <p>Use <span class="inline-code">run-acmx2-arch.sh</span> from the <span class="inline-code">podman/</span> directory. It handles GPU passthrough, X11, PulseAudio, all webcam devices, and a shared host directory.</p>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code><span class="command">chmod</span> +x run-acmx2-arch.sh
+<span class="command">./run-acmx2-arch.sh</span></code></pre>
+            </div>
+
+            <div class="info-box success">
+                <div class="info-box-title">✅ What the script configures</div>
+                <ul>
+                    <li>X11 display forwarding via <span class="inline-code">xhost</span></li>
+                    <li>All <span class="inline-code">/dev/video*</span> webcam devices auto-detected and passed through</li>
+                    <li>PulseAudio socket &amp; cookie mounted for audio</li>
+                    <li><span class="inline-code">--device nvidia.com/gpu=all</span> for full NVIDIA GPU access</li>
+                    <li><span class="inline-code">~/container_share</span> mounted at <span class="inline-code">/root/share</span> for file exchange</li>
+                </ul>
             </div>
         </section>
     </main>
