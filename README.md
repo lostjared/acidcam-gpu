@@ -101,12 +101,12 @@ sudo bash build-script/acidcam-gpu-arch.sh
 
 ## NVIDIA License Notice
 
-This container includes NVIDIA CUDA libraries.
+This poject uses NVIDIA CUDA libraries.
 
-Use of the container is subject to the NVIDIA Deep Learning Container License:
+Use of CUDA is subject to the NVIDIA Deep Learning Container License:
 https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
 
-By pulling or running this container, you agree to NVIDIA’s license terms.
+By running this container, you agree to NVIDIA’s license terms.
 
 ---
 
@@ -234,91 +234,6 @@ mkdir -p ~/container_share
   Shared volume. Files placed here are visible to both the host and the container.
 
 ---
-
-## 2. Building the Image
-
-Navigate to the directory containing your `Containerfile` and build the image. We tag it as `dev` to match the launch script.
-
-```bash
-podman build -t acmx2-cuda-opencv:dev -f Containerfile .
-```
-
----
-
-## 3. The Launch Script (`acmx2-run.sh`)
-
-Use this script to launch the container. It handles the complex flags required for GPU, Webcam, and X11/Wayland compatibility.
-
-Create a file named `acn20run.sh` on your host:
-
-```bash
-#!/bin/bash
-xhost +local:docker
-set -euo pipefail
-
-IMAGE="ghcr.io/lostjared/acmx2:latest"
-
-# 1. Get Host Audio Paths
-PULSE_SOCKET="/run/user/$(id -u)/pulse/native"
-PULSE_COOKIE="$HOME/.config/pulse/cookie"
-HOST_SHARE="$HOME/container_share"
-
-if command -v xhost >/dev/null 2>&1; then
-  xhost +si:localuser:root >/dev/null 2>&1 || true
-fi
-
-# 2. Check if cookie exists
-if [ ! -f "$PULSE_COOKIE" ]; then
-    echo "Warning: Pulse Cookie not found at $PULSE_COOKIE"
-fi
-
-# 3. Get Video Device
-VIDEO_DEVICES=""
-for i in 0 1 2 3 4 5 6 7 8 9; do
-  if [ -e "/dev/video$i" ]; then
-    VIDEO_DEVICES="$VIDEO_DEVICES --device /dev/video$i"
-  fi
-done
-
-# 4. Ensure the share directory exists on host
-mkdir -p "$HOST_SHARE"
-
-exec podman run -it \
-  --security-opt=label=disable \
-  --net=host \
-  --cap-add=SYS_NICE \
-  --cap-add=SYS_RESOURCE \
-  --device nvidia.com/gpu=all \
-  $VIDEO_DEVICES \
-  --device /dev/snd \
-  -e DISPLAY="${DISPLAY:-}" \
-  -e QT_QPA_PLATFORM=xcb \
-  -e XDG_RUNTIME_DIR=/tmp/xdg \
-  -e PULSE_SERVER=unix:/tmp/pulse-socket \
-  -e PULSE_COOKIE=/tmp/pulse-cookie \
-  -v "$PULSE_SOCKET":/tmp/pulse-socket \
-  -v "$PULSE_COOKIE":/tmp/pulse-cookie \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -v "$HOST_SHARE":/root/share \
-  "$IMAGE" bash -lc '
-    mkdir -p /tmp/xdg
-    chmod 700 /tmp/xdg
-    # Double check audio inside before launching
-    echo "Checking audio connection..."
-    pactl info || echo "pactl failed, continuing anyway..."
-    exec /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface
-  '
-```
-
-Make it executable:
-
-```bash
-chmod +x acmx2-run.sh
-```
-
----
-
-## 4. Workflow & Usage
 
 ### A. Program to Run
 - **Run**
