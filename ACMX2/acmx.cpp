@@ -1311,7 +1311,7 @@ class ShaderLibrary {
         } else {
 #ifdef AUDIO_ENABLED
             if (time_audio) {
-                time_f += (get_amp() * get_sense());
+                time_f += (get_amp() * get_sense()) * static_cast<float>(delta_time);
             }
 #endif
         }
@@ -1391,7 +1391,7 @@ class ShaderLibrary {
 #ifdef AUDIO_ENABLED
         GLuint amp_i = names[index()].amp;
         static float amplitude = 1.0;
-        float new_amp = amplitude + (get_amp() * get_sense() * time_speed);
+        float new_amp = amplitude + (get_amp() * get_sense() * time_speed * static_cast<float>(delta_time));
         if (std::isnan(new_amp) || std::isinf(new_amp) || new_amp > 1e6f) {
             amplitude = 1.0f;
         } else {
