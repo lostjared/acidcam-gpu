@@ -41,7 +41,52 @@ This project is developed and tested on **Bazzite Linux** using **Arch Linux** c
 ### Prerequisites
 * **NVIDIA GPU:** RTX 20-series or newer.
 * **Drivers:** NVIDIA Proprietary Drivers (v535+).
-* **Environment:** Arch Linux (with `cuda`, `opencv` (compiled with CUDA support), `sdl2`, `sdl2-ttf` / `sdl2-mixer`, `glm`, `cmake`, `gcc` (g++), `qt6` (for the interface) installed via `pacman`).
+* **Environment:** Arch Linux (or compatible). Install all dependencies via `pacman`:
+
+**Build Tools:**
+```bash
+sudo pacman -S --needed base-devel git cmake ninja pkg-config curl unzip
+```
+
+**NVIDIA & CUDA:**
+```bash
+sudo pacman -S --needed nvidia-utils cuda
+```
+
+**OpenCV (with CUDA support):**
+```bash
+sudo pacman -S --needed opencv-cuda hdf5 vtk fmt glew
+```
+
+**SDL2 & Qt6:**
+```bash
+sudo pacman -S --needed sdl2 sdl2_ttf sdl2_mixer sdl2_image qt6-base qt6-tools qt6-multimedia
+```
+
+**Graphics, Audio & Media Libraries:**
+```bash
+sudo pacman -S --needed glm mesa libglvnd ffmpeg rtaudio pulseaudio libpulse libjpeg-turbo libpng
+```
+
+**libmx2 (built from source):**
+```bash
+git clone https://github.com/lostjared/libmx2.git
+cd libmx2/libmx
+mkdir build && cd build
+cmake .. -DEXAMPLES=OFF -DOPENGL=ON
+make -j$(nproc)
+sudo make install
+```
+
+**Fonts:**
+```bash
+sudo pacman -S --needed ttf-dejavu ttf-liberation noto-fonts
+```
+
+Or install everything at once using the provided script:
+```bash
+sudo bash build-script/install-deps-arch.sh
+```
 
 ---
 
