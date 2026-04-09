@@ -385,10 +385,12 @@ def generate_description(filename: str, comments: list[str], code: str, traits: 
 
 
 def process_shaders():
-    """Read all shaders and return structured data."""
-    pattern = os.path.join(SHADER_DIR, "*.glsl")
-    files = sorted(glob.glob(pattern))
-    print(f"Found {len(files)} shader files")
+    """Read shaders listed in index.txt and return structured data."""
+    index_path = os.path.join(SHADER_DIR, "index.txt")
+    with open(index_path, 'r') as f:
+        filenames = [line.strip() for line in f if line.strip()]
+    files = [os.path.join(SHADER_DIR, fn) for fn in filenames]
+    print(f"Loaded {len(files)} shaders from index.txt")
 
     shaders = []
     for i, filepath in enumerate(files):
