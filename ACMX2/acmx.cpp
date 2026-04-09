@@ -31,6 +31,7 @@
 #include <cuda_gl_interop.h>
 #include <deque>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <model.hpp>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaimgproc.hpp>
@@ -340,11 +341,22 @@ bool loadProgramBinaryFunctions() {
 }
 
 class ShaderLibrary {
-    float alpha = 1.0;
+    float alpha = 0.1f;
     bool time_active = true;
     float time_f = 1.0;
     bool is3d = false;
     bool dual_mode = false;
+
+    // acidcamGL-compatible uniform state
+    float color_alpha_r = 0.1f;
+    float color_alpha_g = 0.2f;
+    float color_alpha_b = 0.3f;
+    bool alpha_dir = true;
+    glm::vec4 optx = glm::vec4(0.5f, 0.5f, 0.5f, 0.5f);
+    glm::vec4 random_var = glm::vec4(0.0f);
+    glm::vec4 inc_value = glm::vec4(0.0f);
+    glm::vec4 inc_valuex = glm::vec4(0.0f);
+    bool restore_black = false;
 
     struct ProgramData {
         std::string name;
@@ -361,6 +373,16 @@ class ShaderLibrary {
         GLint iSampleRate = -1;
         GLint iFrameRate = -1;
         GLint iMouseClick = -1;
+        // acidcamGL-compatible uniform locations
+        GLint value_alpha_r = -1, value_alpha_g = -1, value_alpha_b = -1;
+        GLint alpha_r_loc = -1, alpha_g_loc = -1, alpha_b_loc = -1;
+        GLint alpha_value = -1;
+        GLint index_value = -1;
+        GLint optx_loc = -1;
+        GLint random_var_loc = -1;
+        GLint restore_black_loc = -1;
+        GLint inc_value_loc = -1;
+        GLint inc_valuex_loc = -1;
     };
     size_t library_index = 0;
     bool use_cache = false;
@@ -463,6 +485,20 @@ class ShaderLibrary {
             names[pos].amp_untouched = glGetUniformLocation(prog->id(), "uamp");
             names[pos].iSampleRate = glGetUniformLocation(prog->id(), "iSampleRate");
 #endif
+            // acidcamGL-compatible uniform locations
+            names[pos].value_alpha_r = glGetUniformLocation(prog->id(), "value_alpha_r");
+            names[pos].value_alpha_g = glGetUniformLocation(prog->id(), "value_alpha_g");
+            names[pos].value_alpha_b = glGetUniformLocation(prog->id(), "value_alpha_b");
+            names[pos].alpha_r_loc = glGetUniformLocation(prog->id(), "alpha_r");
+            names[pos].alpha_g_loc = glGetUniformLocation(prog->id(), "alpha_g");
+            names[pos].alpha_b_loc = glGetUniformLocation(prog->id(), "alpha_b");
+            names[pos].alpha_value = glGetUniformLocation(prog->id(), "alpha_value");
+            names[pos].index_value = glGetUniformLocation(prog->id(), "index_value");
+            names[pos].optx_loc = glGetUniformLocation(prog->id(), "optx");
+            names[pos].random_var_loc = glGetUniformLocation(prog->id(), "random_var");
+            names[pos].restore_black_loc = glGetUniformLocation(prog->id(), "restore_black");
+            names[pos].inc_value_loc = glGetUniformLocation(prog->id(), "inc_value");
+            names[pos].inc_valuex_loc = glGetUniformLocation(prog->id(), "inc_valuex");
         }
     }
 
@@ -1148,6 +1184,7 @@ class ShaderLibrary {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
+        uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
         if (time_audio) {
             glUniform1f(n.amp, get_amp());
@@ -1223,6 +1260,7 @@ class ShaderLibrary {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
+        uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
         if (time_audio) {
             glUniform1f(n.amp, get_amp());
@@ -1328,6 +1366,9 @@ class ShaderLibrary {
         GLint iResolution = names[index()].iResolution;
         glUniform2f(iResolution, win->w, win->h);
 
+        stepAcidCamUniforms();
+        uploadAcidCamUniforms(names[index()], index());
+
 #ifdef AUDIO_ENABLED
         GLuint amp_i = names[index()].amp;
         static float amplitude = 1.0;
@@ -1345,6 +1386,41 @@ class ShaderLibrary {
             glUniform1f(iSampleRateLoc, 44100.0f);
         }
 #endif
+    }
+
+    void stepAcidCamUniforms() {
+        color_alpha_r += (rand() % 100) * 0.01f;
+        color_alpha_g += (rand() % 100) * 0.01f;
+        color_alpha_b += (rand() % 100) * 0.01f;
+        if (color_alpha_r > 1.5f) color_alpha_r = 0.1f;
+        if (color_alpha_g > 1.5f) color_alpha_g = 0.1f;
+        if (color_alpha_b > 1.5f) color_alpha_b = 0.1f;
+
+        if (alpha_dir) {
+            alpha += 0.1f;
+            if (alpha >= 6.0f) alpha_dir = false;
+        } else {
+            alpha -= 0.1f;
+            if (alpha <= 1.0f) alpha_dir = true;
+        }
+
+        random_var = glm::vec4(rand() % 255, rand() % 255, rand() % 255, rand() % 255);
+    }
+
+    void uploadAcidCamUniforms(const ProgramData &n, size_t idx) {
+        if (n.value_alpha_r != -1) glUniform1f(n.value_alpha_r, color_alpha_r);
+        if (n.value_alpha_g != -1) glUniform1f(n.value_alpha_g, color_alpha_g);
+        if (n.value_alpha_b != -1) glUniform1f(n.value_alpha_b, color_alpha_b);
+        if (n.alpha_r_loc != -1) glUniform1f(n.alpha_r_loc, color_alpha_r);
+        if (n.alpha_g_loc != -1) glUniform1f(n.alpha_g_loc, color_alpha_g);
+        if (n.alpha_b_loc != -1) glUniform1f(n.alpha_b_loc, color_alpha_b);
+        if (n.alpha_value != -1) glUniform1f(n.alpha_value, alpha);
+        if (n.index_value != -1) glUniform1f(n.index_value, static_cast<float>(idx));
+        if (n.optx_loc != -1) glUniform4fv(n.optx_loc, 1, glm::value_ptr(optx));
+        if (n.random_var_loc != -1) glUniform4fv(n.random_var_loc, 1, glm::value_ptr(random_var));
+        if (n.restore_black_loc != -1) glUniform1f(n.restore_black_loc, restore_black ? 1.0f : 0.0f);
+        if (n.inc_value_loc != -1) glUniform4fv(n.inc_value_loc, 1, glm::value_ptr(inc_value));
+        if (n.inc_valuex_loc != -1) glUniform4fv(n.inc_valuex_loc, 1, glm::value_ptr(inc_valuex));
     }
 
     void incTime(float value) {
