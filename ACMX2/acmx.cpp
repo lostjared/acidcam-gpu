@@ -390,6 +390,7 @@ class ShaderLibrary {
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_2d;
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_3d;
     bool time_audio = false;
+    bool audio_delta = false;
     std::unordered_map<int, ProgramData> program_names_2d;
     std::unordered_map<int, ProgramData> program_names_3d;
     bool shader_bypass = false;
@@ -1299,10 +1300,15 @@ class ShaderLibrary {
         static Uint64 start_time = SDL_GetPerformanceCounter();
         static Uint64 last_frame_time = start_time;
         static uint64_t frame_counter = 0;
+        static double last_good_delta = 1.0 / 60.0;
 
         Uint64 now_time = SDL_GetPerformanceCounter();
 //        double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
         double delta_time = static_cast<double>(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
+        if (delta_time <= 0.0)
+            delta_time = last_good_delta;
+        else
+            last_good_delta = delta_time;
         last_frame_time = now_time;
         frame_counter++;
 
@@ -1311,7 +1317,9 @@ class ShaderLibrary {
         } else {
 #ifdef AUDIO_ENABLED
             if (time_audio) {
-                time_f += (get_amp() * get_sense()) * static_cast<float>(delta_time);
+                float dt_scalex = audio_delta ? static_cast<float>(delta_time) : 1.0f;
+                float new_ampx = ((get_amp() * get_sense()) * (time_speed * dt_scalex));
+                time_f += new_ampx;
             }
 #endif
         }
@@ -1390,8 +1398,9 @@ class ShaderLibrary {
 
 #ifdef AUDIO_ENABLED
         GLuint amp_i = names[index()].amp;
-        static float amplitude = 1.0;
-        float new_amp = amplitude + (get_amp() * get_sense() * time_speed * static_cast<float>(delta_time));
+        float amplitude = 1.0f;
+        float dt_scale = audio_delta ? static_cast<float>(delta_time) : 1.0f;
+        float new_amp = (get_amp() * get_sense()) * (time_speed * dt_scale);
         if (std::isnan(new_amp) || std::isinf(new_amp) || new_amp > 1e6f) {
             amplitude = 1.0f;
         } else {
@@ -1476,6 +1485,12 @@ class ShaderLibrary {
         mx::system_out << "acmx2: audio time: " << enabled << "\n";
         fflush(stdout);
     }
+    void toggleAudioDelta() {
+        audio_delta = !audio_delta;
+        mx::system_out << "acmx2: audio delta time: " << (audio_delta ? "on" : "off") << "\n";
+        fflush(stdout);
+    }
+    bool audioDelta() const { return audio_delta; }
 #ifdef AUDIO_ENABLED
     bool timeActive() const { return time_active; }
     bool timeAudio() const { return time_audio; }
@@ -2865,6 +2880,9 @@ class ACView : public gl::GLObject {
             case SDLK_q:
                 library.audioTime(!library.timeAudio());
                 break;
+            case SDLK_HOME:
+                library.toggleAudioDelta();
+                break;
 #endif
             case SDLK_v:
                 viewRotationActive = !viewRotationActive;
@@ -3355,6 +3373,7 @@ const char *message = R"(
     M - toggle multi-pass
     F - toggle fullscreen
     Q - toggle reactive time (if AUDIO_ENABLED)
+    Home - toggle audio delta time scaling on/off
     M - toggle multi-shader pass (if --shader-pass set)
     3 - toggle 2D/3D mode (switches between 2D and 3D rendering)
     3D mode controls:
