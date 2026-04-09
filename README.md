@@ -15,14 +15,14 @@ Technical Documentation:
 
 [GPU Filters Explained](https://lostsidedead.biz/acmx2/filter_browser.html)
 
-ACMX2 is distributed as a **Podman container** for Linux.
-This makes installation simple and avoids dependency issues, but it **requires an NVIDIA GPU**.
+ACMX2 is built locally using a **Podman container** via the included `Containerfile.arch`.
+This avoids dependency issues and produces a self-contained image, but it **requires an NVIDIA GPU**.
 
 ---
 
 ## System Requirements
 
-Before running ACMX2, your system must have:
+Before building and running ACMX2, your system must have:
 
 - Linux (x86_64)
 - NVIDIA GPU
@@ -40,19 +40,26 @@ Before running ACMX2, your system must have:
 
 ---
 
-## Step 1: Pull the ACMX2 Container Image
+## Step 1: Build the ACMX2 Container Image
 
-```bash
-podman pull ghcr.io/lostjared/acmx2:latest
-```
-
----
-
-## Step 2: Go to the Podman Script Directory
+From the repository root, build the image using the Arch Linux Containerfile:
 
 ```bash
 cd podman
-chmod +x run-acmx2.sh
+podman build -t acmx2-arch:latest -f Containerfile.arch .
+```
+
+> **Note:** The default CUDA architecture is `75` (Turing / RTX 20xx / GTX 16xx).
+> Edit `Containerfile.arch` if your GPU differs:
+> - RTX 30xx (Ampere): `86`
+> - RTX 40xx (Ada Lovelace): `89`
+
+---
+
+## Step 2: Verify the Image
+
+```bash
+podman images | grep acmx2-arch
 ```
 
 ---
@@ -60,13 +67,32 @@ chmod +x run-acmx2.sh
 ## Step 3: Run ACMX2
 
 ```bash
-./run-acmx2.sh
+cd podman
+chmod +x run-acmx2-arch.sh
+./run-acmx2-arch.sh
 ```
 
 The script:
+- Detects all `/dev/video*` webcam devices
 - Enables NVIDIA GPU acceleration
-- Passes through camera and audio devices
+- Mounts PulseAudio for audio input
+- Passes `--device nvidia.com/gpu=all` for GPU access
+- Mounts `~/container_share` at `/root/share` for file exchange
 - Opens the ACMX2 interface window on your desktop
+
+---
+
+## Native Build (Without Container)
+
+You can also build directly on Arch Linux using the scripts in `build-script/`:
+
+```bash
+# Install all dependencies
+sudo bash build-script/install-deps-arch.sh
+
+# Build and install ACMX2
+sudo bash build-script/acidcam-gpu-arch.sh
+```
 
 ---
 
@@ -94,9 +120,10 @@ nvidia-smi
 ## Quick Start Summary
 
 ```bash
-podman pull ghcr.io/lostjared/acmx2:latest
 cd podman
-./run-acmx2.sh
+podman build -t acmx2-arch:latest -f Containerfile.arch .
+chmod +x run-acmx2-arch.sh
+./run-acmx2-arch.sh
 ```
 
 ---
