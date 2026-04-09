@@ -344,6 +344,7 @@ class ShaderLibrary {
     float alpha = 0.1f;
     bool time_active = true;
     float time_f = 1.0;
+    float time_speed = 1.0f;
     bool is3d = false;
     bool dual_mode = false;
 
@@ -525,6 +526,24 @@ class ShaderLibrary {
 
     void is3D(bool is3d) {
         this->is3d = is3d;
+    }
+
+    void setTimeSpeed(float speed) {
+        time_speed = speed;
+    }
+
+    void incTimeSpeed(float step) {
+        time_speed += step;
+        mx::system_out << "acmx2: Time speed: " << time_speed << "\n";
+    }
+
+    void decTimeSpeed(float step) {
+        if (time_speed - step > 0.0f) {
+            time_speed -= step;
+        } else {
+            time_speed = 0.0f;
+        }
+        mx::system_out << "acmx2: Time speed: " << time_speed << "\n";
     }
 
     void enableDualMode(bool enable) {
@@ -1288,7 +1307,7 @@ class ShaderLibrary {
         frame_counter++;
 
         if (time_audio == false && time_active) {
-            time_f = static_cast<float>(elapsed_time);
+            time_f += static_cast<float>(delta_time) * time_speed;
         } else {
 #ifdef AUDIO_ENABLED
             if (time_audio) {
@@ -1505,6 +1524,7 @@ struct MXArguments {
     bool build_cache = false;
     std::string build_library_path;
     bool use_shader_cache = true;
+    float time_speed = 1.0f;
 };
 
 struct FrameData {
@@ -1562,6 +1582,7 @@ class ACView : public gl::GLObject {
 
 #endif
         library.is3D(args.is3d);
+        library.setTimeSpeed(args.time_speed);
         is3d_enabled = args.is3d;
         m_file = args.model_file;
 
@@ -2899,6 +2920,12 @@ class ACView : public gl::GLObject {
             case SDLK_i:
                 library.decTime(0.05f);
                 break;
+            case SDLK_PAGEUP:
+                library.incTimeSpeed(0.1f);
+                break;
+            case SDLK_PAGEDOWN:
+                library.decTimeSpeed(0.1f);
+                break;
             }
             break;
         }
@@ -3316,6 +3343,7 @@ const char *message = R"(
     P - Enable/Disable pause video (Video/Image Modes)
     T - enable/disable time
     U/I - step time if not disabled
+    Page Up/Page Down - increase/decrease time speed
     Z - take snapshot
     3 - toggle 2D/3D mode
     M - toggle multi-pass
@@ -3430,7 +3458,8 @@ int main(int argc, char **argv) {
         .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
         .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)")
         .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
-        .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)");
+        .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)")
+        .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)");
 
     if (argc == 1) {
         printAbout(parser);
@@ -3672,6 +3701,10 @@ int main(int argc, char **argv) {
             case 408:
                 args.use_shader_cache = false;
                 mx::system_out << "acmx2: Shader caching disabled\n";
+                break;
+            case 409:
+                args.time_speed = static_cast<float>(atof(arg.arg_value.c_str()));
+                mx::system_out << "acmx2: Time speed set to: " << args.time_speed << "\n";
                 break;
             }
         }

@@ -333,6 +333,18 @@ void SettingsWindow::init() {
     mainLayout->addLayout(modelFileLayout);
     mainLayout->addWidget(cudaDeviceLabel);
     mainLayout->addWidget(cudaDeviceComboBox);
+
+    QHBoxLayout *timeSpeedLayout = new QHBoxLayout;
+    QLabel *timeSpeedLabel = new QLabel("Time Speed:", this);
+    timeSpeedSpinBox = new QDoubleSpinBox(this);
+    timeSpeedSpinBox->setRange(0.0, 100.0);
+    timeSpeedSpinBox->setSingleStep(0.1);
+    timeSpeedSpinBox->setDecimals(2);
+    timeSpeedSpinBox->setValue(1.0);
+    timeSpeedLayout->addWidget(timeSpeedLabel);
+    timeSpeedLayout->addWidget(timeSpeedSpinBox);
+    mainLayout->addLayout(timeSpeedLayout);
+
     mainLayout->addLayout(buttonLayout);
 
     setLayout(mainLayout);
@@ -424,6 +436,10 @@ QString SettingsWindow::getModelFile() const {
 
 int SettingsWindow::getSelectedCudaDevice() const {
     return selectedCudaDevice;
+}
+
+float SettingsWindow::getTimeSpeed() const {
+    return static_cast<float>(timeSpeedSpinBox->value());
 }
 
 QString SettingsWindow::getCameraName(int device_index) {

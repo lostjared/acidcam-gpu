@@ -776,6 +776,7 @@ void MainWindow::cameraSettings() {
     enable_3d = settingsWindow.is3dEnabled();
     model_file = settingsWindow.getModelFile();
     cuda_device = settingsWindow.getSelectedCudaDevice();
+    time_speed = settingsWindow.getTimeSpeed();
 }
 
 void MainWindow::runSelected() {
@@ -886,6 +887,10 @@ void MainWindow::runSelected() {
     }
 
     arguments << "--cuda-device" << QString::number(cuda_device);
+
+    if (time_speed != 1.0f) {
+        arguments << "--time-speed" << QString::number(static_cast<double>(time_speed), 'f', 2);
+    }
 
     if (!use_shader_cache) {
         arguments << "--no-cache";
@@ -1020,6 +1025,10 @@ void MainWindow::runAll() {
     }
 
     arguments << "--cuda-device" << QString::number(cuda_device);
+
+    if (time_speed != 1.0f) {
+        arguments << "--time-speed" << QString::number(static_cast<double>(time_speed), 'f', 2);
+    }
 
     if (!use_shader_cache) {
         arguments << "--no-cache";

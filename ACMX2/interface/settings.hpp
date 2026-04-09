@@ -4,6 +4,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -35,6 +36,7 @@ class SettingsWindow : public QDialog {
     bool is3dEnabled() const;
     QString getModelFile() const;
     int getSelectedCudaDevice() const;
+    float getTimeSpeed() const;
     QString getCameraName(int device_index);
   private slots:
     void acceptSettings();
@@ -74,6 +76,7 @@ class SettingsWindow : public QDialog {
     QLineEdit *modelFileLineEdit;
     QPushButton *browseModelButton;
     QComboBox *cudaDeviceComboBox;
+    QDoubleSpinBox *timeSpeedSpinBox;
 
     int selectedCameraIndex;
     QSize selectedCameraResolution;

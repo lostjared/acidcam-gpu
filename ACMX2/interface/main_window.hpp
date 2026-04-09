@@ -141,6 +141,7 @@ class MainWindow : public QMainWindow {
     QStringList shader_pass_names;
     QString getShaderPassIndicesFromNames();
     int cuda_device = 0;
+    float time_speed = 1.0f;
     bool use_shader_cache = true;
 };
 
