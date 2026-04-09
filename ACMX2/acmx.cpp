@@ -1301,7 +1301,7 @@ class ShaderLibrary {
         static uint64_t frame_counter = 0;
 
         Uint64 now_time = SDL_GetPerformanceCounter();
-        double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
+//        double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
         double delta_time = static_cast<double>(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
         last_frame_time = now_time;
         frame_counter++;
@@ -2213,6 +2213,16 @@ class ACView : public gl::GLObject {
             library.setFPS(static_cast<float>(fps));
         }
 
+        {
+            const Uint8 *keystate = SDL_GetKeyboardState(NULL);
+            if (keystate[SDL_SCANCODE_PAGEUP]) {
+                library.incTimeSpeed(0.1f);
+            }
+            if (keystate[SDL_SCANCODE_PAGEDOWN]) {
+                library.decTimeSpeed(0.1f);
+            }
+        }
+
         if (is3d_enabled) {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LESS);
@@ -2919,12 +2929,6 @@ class ACView : public gl::GLObject {
                 break;
             case SDLK_i:
                 library.decTime(0.05f);
-                break;
-            case SDLK_PAGEUP:
-                library.incTimeSpeed(0.1f);
-                break;
-            case SDLK_PAGEDOWN:
-                library.decTimeSpeed(0.1f);
                 break;
             }
             break;
