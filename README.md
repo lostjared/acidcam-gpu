@@ -9,14 +9,6 @@
 # ACMX2 – Linux (NVIDIA GPU Required)
 ![screenshot](https://github.com/lostjared/acidcam-gpu/blob/main/image.jpg)
 
-Technical Documentation:
-
-[Project Documentation](https://lostsidedead.biz/acmx2-explained.html)
-
-[GPU Filters Explained](https://lostsidedead.biz/acmx2/filter_browser.html)
- 
-[Example Shaders](https://lostsidedead.biz/acmx2/shader_browser.html)
-
 # acidcam-gpu / ACMX2
 
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch  art. Part of the **ACMX2** and **libmx2** ecosystem, it offloads complex glitch filters to **NVIDIA GPUs**, enabling fluid, high-resolution visual transformations at 60+ FPS. Requires you have OpenCV 4 compiled with CUDA support.
@@ -50,6 +42,16 @@ This project is developed and tested on **Bazzite Linux** using **Arch Linux** c
 * **NVIDIA GPU:** RTX 20-series or newer.
 * **Drivers:** NVIDIA Proprietary Drivers (v535+).
 * **Environment:** Arch Linux (with `cuda`, `opencv` (compiled with CUDA support), `sdl2`, `sdl2-ttf` / `sdl2-mixer`, `glm`, `cmake`, `gcc` (g++), `qt6` (for the interface) installed via `pacman`).
+
+---
+
+# Technical Documentation:
+
+[Project Documentation](https://lostsidedead.biz/acmx2-explained.html)
+
+[GPU Filters Explained](https://lostsidedead.biz/acmx2/filter_browser.html)
+ 
+[Example Shaders](https://lostsidedead.biz/acmx2/shader_browser.html)
 
 ---
 
