@@ -2217,9 +2217,11 @@ class ACView : public gl::GLObject {
             const Uint8 *keystate = SDL_GetKeyboardState(NULL);
             if (keystate[SDL_SCANCODE_PAGEUP]) {
                 library.incTimeSpeed(0.1f);
+                fflush(stdout);
             }
             if (keystate[SDL_SCANCODE_PAGEDOWN]) {
                 library.decTimeSpeed(0.1f);
+                fflush(stdout);
             }
         }
 
