@@ -1,16 +1,22 @@
-# LostSideDead  ACMX2 Explained
+# LostSideDead — ACMX2 Technical Reference
 
-Original page: [https://lostsidedead.biz/acmx2-explained.html](https://lostsidedead.biz/acmx2-explained.html)
+![Sreenshot1](https://lostsidedead.biz/acmx2.jpg)
 
-# acidcam-gpu + ACMX2  Complete Technical Reference
+Source: <https://github.com/lostjared/acidcam-gpu>
 
-**acidcam-gpu** is a CUDA-accelerated real-time video effects engine. It contains a library of **736 GPU filter kernels** that run entirely on the NVIDIA GPU, a **unified dispatch kernel** that chains any ordered subset of those filters per frame, a rotating device-side frame history buffer for temporal effects, and a CLI application that drives the full pipeline from camera or file input through to live display and optional MXWrite output encoding.
+---
 
-**ACMX2** is the Qt-based orchestration layerit wraps the same library and CLI with a visual interface, shader pass ordering, session persistence, and process monitoring. Together they form a layered creative tool: CUDA for pixel-level power, OpenGL for display, Qt for control, and Podman containers for distribution.
+# acidcam-gpu + ACMX2 — Complete Technical Reference
 
-The system operates as a **two-stage GPU pipeline**: first, CUDA kernels process every pixel in parallel on the GPUs streaming multiprocessors (one thread per pixel), applying a user-defined chain of filters entirely in device memory. Then, the CUDA output is transferred to OpenGL via a Pixel Buffer Object (PBO)  a zero-copy GPU-to-GPU transfer  where it becomes a texture. GLSL fragment shaders then apply additional full-frame visual effects in one or more stacked passes using ping-pong framebuffers. Both the CUDA filter chain and the GLSL shader pass stack are independently configurable and orderable, producing a combinatorial explosion of possible visual outcomes.
+**acidcam-gpu** is a CUDA-accelerated real-time video effects engine. It contains a library of **905 GPU filter kernels** that run entirely on the NVIDIA GPU, a **unified dispatch kernel** that chains any ordered subset of those filters per frame, a rotating device-side frame history buffer for temporal effects, and a CLI application that drives the full pipeline from camera or file input through to live display and optional MXWrite output encoding.
 
-Source: **https://github.com/lostjared/acidcam-gpu**  C++20 / CUDA 12.x / OpenCV CUDA / OpenGL / Qt6 / MXWrite.
+**ACMX2** is the Qt-based orchestration layer — it wraps the same library and CLI with a visual interface, shader pass ordering, session persistence, and process monitoring. Together they form a layered creative tool: CUDA for pixel-level power, OpenGL for display, Qt for control, and Podman containers for distribution.
+
+The system operates as a **two-stage GPU pipeline**: first, CUDA kernels process every pixel in parallel on the GPU's streaming multiprocessors (one thread per pixel), applying a user-defined chain of filters entirely in device memory. Then, the CUDA output is transferred to OpenGL via a Pixel Buffer Object (PBO) — a zero-copy GPU-to-GPU transfer — where it becomes a texture. GLSL fragment shaders then apply additional full-frame visual effects in one or more stacked passes using ping-pong framebuffers. Both the CUDA filter chain and the GLSL shader pass stack are independently configurable and orderable, producing a combinatorial explosion of possible visual outcomes.
+
+*Stack: C++20 / CUDA 12.x / OpenCV CUDA / OpenGL / Qt6 / MXWrite*
+
+---
 
 ## Program Screenshot
 
@@ -18,46 +24,52 @@ This is the current desktop ACMX2/acidcam-gpu interface in action.
 
 ![ACMX2 and acidcam-gpu running on desktop](https://lostsidedead.biz/screen.png)
 
+---
+
 ## Project Origin and Purpose
 
-The Acid Cam project originated as a CPU-based filter library (**libacidcam**) that applied artistic glitch effects to camera and video frames. As resolutions grew and filter stacks became more complex, CPU-based pixel processing became a bottleneck  applying dozens of per-pixel transforms on high-resolution video ate into frame budget quickly.
+The Acid Cam project originated as a CPU-based filter library (**libacidcam**) that applied artistic glitch effects to camera and video frames. As resolutions grew and filter stacks became more complex, CPU-based pixel processing became a bottleneck — applying dozens of per-pixel transforms on high-resolution video ate into frame budget quickly.
 
-**acidcam-gpu** was created to solve this. The solution was to port the entire filter library to NVIDIA CUDA, so all pixel work runs massively in parallel on the GPU. A unified dispatch kernel allows any ordered combination of the 736 available filters to run in a single GPU pass per frame, without recompiling. The result is a system capable of applying complex multi-layer visual transforms at full framerate on modern NVIDIA hardware.
+**acidcam-gpu** was created to solve this. The solution was to port the entire filter library to NVIDIA CUDA, so all pixel work runs massively in parallel on the GPU. A unified dispatch kernel allows any ordered combination of the 905 available filters to run in a single GPU pass per frame, without recompiling. The result is a system capable of applying complex multi-layer visual transforms at full framerate on modern NVIDIA hardware.
 
 ### Why CUDA Kernels and GLSL Shaders?
 
-Both CUDA kernels and GLSL shaders execute on the **same physical hardware**  the GPUs streaming multiprocessors (often marketed as CUDA cores). The difference is the **programming model**, not the silicon. CUDA is NVIDIAs general-purpose compute API: kernels can freely read from arbitrary device memory, perform complex conditional logic, access a ring buffer of historical frames, and do per-pixel computation without any graphics pipeline constraints. GLSL runs through the OpenGL graphics pipeline as fragment shader programs, which excel at texture sampling, interpolation, and full-frame image processing with Shadertoy-compatible uniforms like time, resolution, and mouse position. By using both programming models on the same GPU hardware, the system gets the best of each approach.
+Both CUDA kernels and GLSL shaders execute on the **same physical hardware** — the GPU's streaming multiprocessors (often marketed as "CUDA cores"). The difference is the **programming model**, not the silicon. CUDA is NVIDIA's general-purpose compute API: kernels can freely read from arbitrary device memory, perform complex conditional logic, access a ring buffer of historical frames, and do per-pixel computation without any graphics pipeline constraints. GLSL runs through the OpenGL graphics pipeline as fragment shader programs, which excel at texture sampling, interpolation, and full-frame image processing with Shadertoy-compatible uniforms like time, resolution, and mouse position. By using both programming models on the same GPU hardware, the system gets the best of each approach.
 
 ### How Each Technology Is Used
 
-- **CUDA (pixel-level compute):** The 736 filter kernels run as CUDA threads  one thread per pixel  across the GPUs streaming multiprocessors simultaneously. A 19201080 frame launches over 2 million threads in parallel. The unified kernel loops through the user's selected filter chain, applying each filter sequentially to the pixel data in-place. Filters can read from a ring buffer of prior frames stored entirely in GPU memory, enabling temporal effects like `MedianBlend` (averaging across all history frames), `AuraTrails` (blending against frames at indices 1, 4, and 7), and `MatrixOutline` (comparing against a frame from 4 steps back). This kind of arbitrary multi-frame memory access is natural in the CUDA compute model but difficult or impossible within the GLSL fragment shader pipeline, which is designed around single-texture-per-pass processing.
-- **GLSL (full-frame shader effects):** After CUDA processing, the result is transferred to an OpenGL texture via PBO interop (no CPU round-trip). GLSL fragment shaders  running on the same GPU hardware via the OpenGL graphics pipeline  then process the entire frame as a texture, applying effects like color grading, distortion, glow, CRT simulation, and other post-processing transforms. The shader library supports Shadertoy-compatible uniforms (`iTime`, `iResolution`, `iMouse`, `iFrame`, etc.) and can render onto 2D quads or 3D model geometry via MXMOD meshes.
-- **Composition:** CUDA filters and GLSL shaders compose at the frame level. CUDA runs first on the raw pixel data, then GLSL operates on the CUDA-filtered result. Both stages support stacking  multiple CUDA filters chain inside a single kernel launch, and multiple GLSL shaders chain via ping-pong framebuffer passes. The full pipeline is: Camera  CUDA filter chain  PBO transfer  GLSL shader pass 1  GLSL shader pass 2    Screen.
+- **CUDA (pixel-level compute):** The 905 filter kernels run as CUDA threads — one thread per pixel — across the GPU's streaming multiprocessors simultaneously. A 1920×1080 frame launches over 2 million threads in parallel. The unified kernel loops through the user's selected filter chain, applying each filter sequentially to the pixel data in-place. Filters can read from a ring buffer of prior frames stored entirely in GPU memory, enabling temporal effects like `MedianBlend` (averaging across all history frames), `AuraTrails` (blending against frames at indices 1, 4, and 7), and `MatrixOutline` (comparing against a frame from 4 steps back). This kind of arbitrary multi-frame memory access is natural in the CUDA compute model but difficult or impossible within the GLSL fragment shader pipeline, which is designed around single-texture-per-pass processing.
+- **GLSL (full-frame shader effects):** After CUDA processing, the result is transferred to an OpenGL texture via PBO interop (no CPU round-trip). GLSL fragment shaders — running on the same GPU hardware via the OpenGL graphics pipeline — then process the entire frame as a texture, applying effects like color grading, distortion, glow, CRT simulation, and other post-processing transforms. The shader library supports Shadertoy-compatible uniforms (`iTime`, `iResolution`, `iMouse`, `iFrame`, etc.) and can render onto 2D quads or 3D model geometry via MXMOD meshes.
+- **Composition:** CUDA filters and GLSL shaders compose at the frame level. CUDA runs first on the raw pixel data, then GLSL operates on the CUDA-filtered result. Both stages support stacking — multiple CUDA filters chain inside a single kernel launch, and multiple GLSL shaders chain via ping-pong framebuffer passes. The full pipeline is: Camera → CUDA filter chain → PBO transfer → GLSL shader pass 1 → GLSL shader pass 2 → … → Screen.
 
-## ACMX2 Qt Application  Orchestration Layer
+---
 
-**ACMX2** is the Qt6 application that wraps the acidcam-gpu CLI and library into a controllable desktop session. It handles shader pass management, GPU filter ordering, session persistence, and process lifecycle  it does not re-implement any pixel processing itself.
+## ACMX2 Qt Application — Orchestration Layer
 
-- **Main window:** `ACMX2/interface/main_window.cpp`  QProcess supervision, log rendering, session menu
-- **GPU filter dialog:** `ACMX2/interface/gpufilter.cpp`  calls `--list-filters`, parses output, stores ordered selection
-- **Shader pass ordering:** `ACMX2/interface/shaderpass.cpp`  explicit multi-pass chain, output of pass N feeds into pass N+1
-- **Audio integration:** `ACMX2/audio.cpp/.hpp`  RtAudio amplitude extraction, reactive parameter modulation
-- **Shader cache:** `ACMX2/program.cpp/.hpp`  binary cache with source+driver fingerprinting to skip recompile
-- **3D geometry:** `ACMX2/models/*.mxmod`  MXMOD-format geometry used in scene-influenced render stages
-- **Build:** `ACMX2/CMakeLists.txt` and `ACMX2/interface/CMakeLists.txt`  validates CUDA, OpenCV CUDA headers, FFmpeg, MXWrite, Qt6, RtAudio at configure time
+**ACMX2** is the Qt6 application that wraps the acidcam-gpu CLI and library into a controllable desktop session. It handles shader pass management, GPU filter ordering, session persistence, and process lifecycle — it does not re-implement any pixel processing itself.
+
+- **Main window:** `ACMX2/interface/main_window.cpp` — QProcess supervision, log rendering, session menu
+- **GPU filter dialog:** `ACMX2/interface/gpufilter.cpp` — calls `--list-filters`, parses output, stores ordered selection
+- **Shader pass ordering:** `ACMX2/interface/shaderpass.cpp` — explicit multi-pass chain, output of pass N feeds into pass N+1
+- **Audio integration:** `ACMX2/audio.cpp/.hpp` — RtAudio amplitude extraction, reactive parameter modulation
+- **Shader cache:** `ACMX2/program.cpp/.hpp` — binary cache with source+driver fingerprinting to skip recompile
+- **3D geometry:** `ACMX2/models/*.mxmod` — MXMOD-format geometry used in scene-influenced render stages
+- **Build:** `ACMX2/CMakeLists.txt` and `ACMX2/interface/CMakeLists.txt` — validates CUDA, OpenCV CUDA headers, FFmpeg, MXWrite, Qt6, RtAudio at configure time
 
 ### How the Qt Interface Works
 
-1. **Filter discovery:** `gpufilter.cpp` spawns the `acmx2` binary with `--list-filters`, reads `index:name` lines from stdout, sorts the list alphabetically, and populates a selection dialog. The user picks from the full 736-filter catalog and reorders them via drag or list controls.
+1. **Filter discovery:** `gpufilter.cpp` spawns the `acmx2` binary with `--list-filters`, reads `index:name` lines from stdout, sorts the list alphabetically, and populates a selection dialog. The user picks from the full 905-filter catalog and reorders them via drag or list controls.
 2. **Chain persistence:** selected filter order is stored as an ordered index list and passed back to `acmx2` as arguments at run time. Changing the order produces a completely different visual output without touching any code.
 3. **Process supervision:** `main_window.cpp` binds a `QProcess` to the `acmx2` executable (built from `ACMX2/acmx.cpp`). stdout/stderr streams are captured and shown in the UI log panel so runtime errors (bad camera index, missing CUDA device, encoder failure) are immediately visible.
 4. **Session settings:** `QSettings` persists executable path, shader directory, preferred styles, and last-used filter chain so sessions can be resumed exactly.
 5. **Shader pass layer:** `shaderpass.cpp` manages an ordered list of GLSL pass configs. Each pass uses the previous pass output as input, compositing GLSL effects on top of the CUDA-processed frame.
 6. **Audio-reactive path:** when RtAudio is enabled at compile time, an audio callback computes per-buffer amplitude average. This value can modulate alpha or other per-frame parameters, making output visually reactive to microphone or line input.
 
-## Standalone CLI  acidcam-gpu/app/main_cv.cu
+---
 
-The standalone CLI app (`app/main_cv.cu`) is an independent tool that drives the CUDA filter pipeline directly from the command line without ACMX2. It handles input device management, argument parsing, frame loop control, animation state evolution, and output encoding. It is written in CUDA C++ (compiled by nvcc) and targets C++20. Note: the ACMX2 Qt interface does **not** supervise this file  instead, `QProcess` launches and monitors the `acmx2` executable (built from `ACMX2/acmx.cpp`), which contains its own runtime loop and GL/CUDA pipeline.
+## Standalone CLI — acidcam-gpu/app/main_cv.cu
+
+The standalone CLI app (`app/main_cv.cu`) is an independent tool that drives the CUDA filter pipeline directly from the command line without ACMX2. It handles input device management, argument parsing, frame loop control, animation state evolution, and output encoding. It is written in CUDA C++ (compiled by nvcc) and targets C++20. Note: the ACMX2 Qt interface does **not** supervise this file — instead, `QProcess` launches and monitors the `acmx2` executable (built from `ACMX2/acmx.cpp`), which contains its own runtime loop and GL/CUDA pipeline.
 
 ### Startup: Device and Camera Discovery
 
@@ -604,6 +616,6 @@ Beyond visuals, the project includes practical operational pathways for repeatab
 
 ## Project Summary
 
-acidcam-gpu + ACMX2 is a layered real-time visual computing system built entirely around NVIDIA CUDA. At the bottom: a 9,165-line CUDA file (`filters.cu`) implementing 736 per-pixel GPU effects dispatched through a single unified kernel. In the middle: a rotating device-side frame history buffer (`DynamicFrameBuffer`), a per-frame evolving parameter bundle (`FilterParams`), and a lazy-rebuild filter list mechanism that makes chain reconfiguration zero-cost. At the top: a CLI application with an oscillating `AnimationState` that continuously evolves alpha, block size, and temporal frame selection, plus a Qt6 orchestration interface with session persistence, process supervision, and multi-pass shader support. Distribution via Podman containers removes the painful dependency build requirement for end users.
+acidcam-gpu + ACMX2 is a layered real-time visual computing system built entirely around NVIDIA CUDA. At the bottom: a 9,165-line CUDA file (`filters.cu`) implementing 905 per-pixel GPU effects dispatched through a single unified kernel. In the middle: a rotating device-side frame history buffer (`DynamicFrameBuffer`), a per-frame evolving parameter bundle (`FilterParams`), and a lazy-rebuild filter list mechanism that makes chain reconfiguration zero-cost. At the top: a CLI application with an oscillating `AnimationState` that continuously evolves alpha, block size, and temporal frame selection, plus a Qt6 orchestration interface with session persistence, process supervision, and multi-pass shader support. Distribution via Podman containers removes the painful dependency build requirement for end users.
 
-The core creative insight is that **filter order is the language**. The same 736 effects, ordered differently, with different animated parameters, on different input material, produce an effectively unbounded space of visual outcomes  all running at real-time framerates on a single consumer NVIDIA GPU.
+The core creative insight is that **filter order is the language**. The same 905 effects, ordered differently, with different animated parameters, on different input material, produce an effectively unbounded space of visual outcomes — all running at real-time framerates on a single consumer NVIDIA GPU.
