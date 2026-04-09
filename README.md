@@ -18,6 +18,40 @@ Technical Documentation:
 [Example Shaders](https://lostsidedead.biz/acmx2/shader_browser.html)
 
 
+**acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch  art. Part of the **ACMX2** and **libmx2** ecosystem, it offloads complex glitch filters to **NVIDIA GPUs**, enabling fluid, high-resolution visual transformations at 60+ FPS. Requires you have OpenCV 4 compiled with CUDA support.
+
+## 🚀 Purpose & Vision
+The original project brought a massive library of "glitch" filters to digital artists. However, as resolutions climbed to 4K and filter stacks became more complex, CPU-based processing hit a bottleneck. 
+
+**acidcam-gpu** solves this by:
+* **Parallelizing the Chaos:** Using custom CUDA kernels to process millions of pixels simultaneously.
+
+## 🛠 Tech Stack
+* **Language:** C++20
+* **Parallel Computing:** NVIDIA CUDA (Optimized for **RTX 2070**)
+* **Graphics API:** OpenGL / SDL (Hardware-accelerated rendering)
+* **Format Support:** Native **MX2 MXMOD** 3D model parsing for real-time geometry glitching.
+
+## ⚡ Why NVIDIA & CUDA?
+This project is built specifically for the NVIDIA ecosystem to leverage:
+* **Shared Memory:** Fast on-chip memory to speed up neighborhood-based filters.
+* **Massive Throughput:** Harnessing thousands of CUDA cores to apply multiple glitch layers in a single pass.
+
+## Project Goals:
+* **Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
+* **Visual User Interface** Simple to use User interface
+* **Command line tool** Command line tool
+
+## 📦 Installation & Environment
+This project is developed and tested on **Bazzite Linux** using **Arch Linux** containers via **Distrobox**.
+
+### Prerequisites
+* **NVIDIA GPU:** RTX 20-series or newer.
+* **Drivers:** NVIDIA Proprietary Drivers (v535+).
+* **Environment:** Arch Linux (with `cuda`, `opencv` (compiled with CUDA support), `sdl2`, `sdl2-ttf` / `sdl2-mixer`, `glm`, `cmake`, `gcc` (g++), `qt6` (for the interface) installed via `pacman`).
+
+---
+
 ACMX2 is built locally using a **Podman container** via the included `Containerfile.arch`.
 This avoids dependency issues and produces a self-contained image, but it **requires an NVIDIA GPU**.
 
@@ -128,40 +162,7 @@ podman build -t acmx2-arch:latest -f Containerfile.arch .
 chmod +x run-acmx2-arch.sh
 ./run-acmx2-arch.sh
 ```
-
 ---
-
-**acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch  art. Part of the **ACMX2** and **libmx2** ecosystem, it offloads complex glitch filters to **NVIDIA GPUs**, enabling fluid, high-resolution visual transformations at 60+ FPS. Requires you have OpenCV 4 compiled with CUDA support.
-
-## 🚀 Purpose & Vision
-The original project brought a massive library of "glitch" filters to digital artists. However, as resolutions climbed to 4K and filter stacks became more complex, CPU-based processing hit a bottleneck. 
-
-**acidcam-gpu** solves this by:
-* **Parallelizing the Chaos:** Using custom CUDA kernels to process millions of pixels simultaneously.
-
-## 🛠 Tech Stack
-* **Language:** C++20
-* **Parallel Computing:** NVIDIA CUDA (Optimized for **RTX 2070**)
-* **Graphics API:** OpenGL / SDL (Hardware-accelerated rendering)
-* **Format Support:** Native **MX2 MXMOD** 3D model parsing for real-time geometry glitching.
-
-## ⚡ Why NVIDIA & CUDA?
-This project is built specifically for the NVIDIA ecosystem to leverage:
-* **Shared Memory:** Fast on-chip memory to speed up neighborhood-based filters.
-* **Massive Throughput:** Harnessing thousands of CUDA cores to apply multiple glitch layers in a single pass.
-
-## Project Goals:
-* **Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
-* **Visual User Interface** Simple to use User interface
-* **Command line tool** Command line tool
-
-## 📦 Installation & Environment
-This project is developed and tested on **Bazzite Linux** using **Arch Linux** containers via **Distrobox**.
-
-### Prerequisites
-* **NVIDIA GPU:** RTX 20-series or newer.
-* **Drivers:** NVIDIA Proprietary Drivers (v535+).
-* **Environment:** Arch Linux (with `cuda`, `opencv` (compiled with CUDA support), `sdl2`, `sdl2-ttf` / `sdl2-mixer`, `glm`, `cmake`, `gcc` (g++), `qt6` (for the interface) installed via `pacman`).
 
 ### Build Instructions
 ```bash
