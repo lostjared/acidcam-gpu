@@ -106,7 +106,7 @@ The header `acidcam-gpu/include/ac-gpu/ac-gpu.hpp` defines the complete ABI cont
 
 ### Key Types and Definitions
 
-- **`AC_FILTER_MAX = 736`**  the total number of available filters. Filter indices run from 0 to 735 inclusive. This constant lets callers validate index bounds before dispatch.
+- **`AC_FILTER_MAX = 905`**  the total number of available filters. Filter indices run from 0 to 735 inclusive. This constant lets callers validate index bounds before dispatch.
 - **`struct GPUFilter { int index; }`**  the lightweight device-side representation of a filter. Only the integer index crosses to the GPU; names and metadata stay on the host.
 - **`struct Filter { int index; std::string name; GPUFilter toGPU() const; }`**  the host-side filter descriptor. `toGPU()` produces the compact `GPUFilter` for device transfer.
 - **`class ACException`**  thin exception type for runtime errors (bad resolution strings, missing devices). Carries a message string via `why()`.
@@ -161,7 +161,7 @@ The `FilterParams` struct is defined inside the `ac_gpu` namespace in `filters.c
 
 ## The Unified Kernel  unifiedFilterKernel
 
-The `__global__ void unifiedFilterKernel` is the single CUDA kernel that executes the entire filter chain per frame. It is the pixel-level engine of the whole project. Understanding how it works explains why the system can run any combination of 736 effects in real-time.
+The `__global__ void unifiedFilterKernel` is the single CUDA kernel that executes the entire filter chain per frame. It is the pixel-level engine of the whole project. Understanding how it works explains why the system can run any combination of 905 effects in real-time.
 
 ### Thread Layout and Pixel Assignment
 
@@ -199,7 +199,7 @@ After the loop completes, `setAlpha(data, y * step + x * 4, params.isNegative)` 
 - **`__device__ void setAlpha(unsigned char* data, int idx, bool isNegative)`**  if `isNegative`, inverts R, G, B (three bytes at idx, idx+1, idx+2). Always writes `255` to the alpha byte (idx+3), ensuring fully opaque output regardless of what filters wrote to that byte.
 - **`__device__ bool colorBounds(r1,g1,b1, r2,g2,b2, ir,ig,ib)`**  returns true if the absolute difference of each channel pair is within the given threshold. Used by motion-detection effects: `StrangeGlitch` uses it to detect when a pixel has changed significantly between frames and swap in the historical pixel value; `MatrixOutline` uses it to zero out pixels that match a reference frame (creating a motion-outline effect).
 
-## The Filter Catalog  736 Effects Across All Categories
+## The Filter Catalog  905 Effects Across All Categories
 
 The filter table is defined at the top of `filters.cu` as a static array of `Filter` structs. Index 0 through 735 are defined. Each filter has its own `__device__` implementation function but all are dispatched through the single unified kernel switch. Here is a breakdown of the major effect families that make up the library:
 
@@ -361,7 +361,7 @@ The systems visual power comes from combining two distinct GPU programming model
 
 NVIDIA GPUs contain thousands of streaming multiprocessors (SMs), each capable of running many threads in parallel. Both CUDA kernels and GLSL shaders execute on this same hardware  the difference is the programming model. acidcam-gpu uses the **CUDA compute model** to assign **one thread to each pixel** of the video frame. For a 19201080 frame, the system launches **2,088,960 threads simultaneously**, organized into 1616 blocks of 256 threads each (8,160 blocks total). Every pixel in the frame is processed in parallel  there is no sequential per-pixel loop on the CPU.
 
-Each thread runs the **unified dispatch kernel** (`unifiedFilterKernel`), which loops through the users selected filter list and applies each filter to that threads pixel in order. The kernel contains a 736-case `switch` statement  each case calls a `__device__` function that reads and writes the pixels RGBA values at `data[y * step + x * 4]`. Because every thread in a warp processes the same filter index at the same time (the filter list is shared, not per-pixel), the dispatch is **warp-coherent** and runs at full GPU throughput.
+Each thread runs the **unified dispatch kernel** (`unifiedFilterKernel`), which loops through the users selected filter list and applies each filter to that threads pixel in order. The kernel contains a 905-case `switch` statement  each case calls a `__device__` function that reads and writes the pixels RGBA values at `data[y * step + x * 4]`. Because every thread in a warp processes the same filter index at the same time (the filter list is shared, not per-pixel), the dispatch is **warp-coherent** and runs at full GPU throughput.
 
 Crucially, the CUDA filters have access to a **ring buffer of historical frames** stored entirely in GPU device memory (`DynamicFrameBuffer`). This means filters like `MedianBlend` can average across all prior frames, `AuraTrails` can blend against frames at specific history indices, and `MatrixOutline` can compare against a frame from several steps back  all without any data leaving the GPU. This kind of arbitrary random-access memory read across multiple frame buffers is what makes the CUDA compute model essential  GLSL fragment shaders run on the same GPU cores but operate within the graphics pipeline, which doesnt support this kind of free-form device memory access.
 
@@ -387,7 +387,7 @@ The system provides **two independent stacking mechanisms** that compose togethe
 
 ### CUDA Filter Chain (Stacking Inside the Kernel)
 
-Users select any subset of the 736 available CUDA filters and arrange them in a specific order. This ordered list is uploaded to GPU memory as an array of `GPUFilter` structs. Inside the kernel, every pixel thread loops through this array:
+Users select any subset of the 905 available CUDA filters and arrange them in a specific order. This ordered list is uploaded to GPU memory as an array of `GPUFilter` structs. Inside the kernel, every pixel thread loops through this array:
 
 ```
 for (int i = 0; i < count; ++i) {
@@ -447,7 +447,7 @@ If you choose **n** distinct filters and order them, permutations are **n!**. Ev
 - 8 filters  40,320 orderings
 - 10 filters  3,628,800 orderings
 
-With 736 CUDA filters to choose from, plus an independent library of GLSL shaders that also stack and reorder, the combinatorial space multiplies further. Add in the continuously evolving per-frame parameters (alpha oscillation, frame history index, square size, random seeds, frame count) and the visual output becomes effectively unbounded  the same filter chain produces different results every frame because the parameters driving it are always changing.
+With 905 CUDA filters to choose from, plus an independent library of GLSL shaders that also stack and reorder, the combinatorial space multiplies further. Add in the continuously evolving per-frame parameters (alpha oscillation, frame history index, square size, random seeds, frame count) and the visual output becomes effectively unbounded  the same filter chain produces different results every frame because the parameters driving it are always changing.
 
 ### In-Depth: Why Order Dominates Output
 
