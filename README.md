@@ -14,6 +14,9 @@ Technical Documentation:
 [Project Documentation](https://lostsidedead.biz/acmx2-explained.html)
 
 [GPU Filters Explained](https://lostsidedead.biz/acmx2/filter_browser.html)
+ 
+[Example Shaders](https://lostsidedead.biz/acmx2/shader_browser.html)
+
 
 ACMX2 is built locally using a **Podman container** via the included `Containerfile.arch`.
 This avoids dependency issues and produces a self-contained image, but it **requires an NVIDIA GPU**.
