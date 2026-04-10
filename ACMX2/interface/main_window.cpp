@@ -29,10 +29,20 @@ void MainWindow::initControls() {
     });
 
     connect(process, &QProcess::readyReadStandardError, this, [this]() {
-        QString errorOutput = process->readAllStandardError();
-        if (!errorOutput.contains("GStreamer")) {
-            errorOutput.replace("\n", "<br>");
-            this->Write("<b style='color:red;'>Error:</b> " + errorOutput);
+        stderrBuffer += process->readAllStandardError();
+        int idx;
+        while ((idx = stderrBuffer.indexOf('\n')) != -1) {
+            QString line = stderrBuffer.left(idx);
+            stderrBuffer.remove(0, idx + 1);
+            if (!line.contains("GStreamer")) {
+                this->Write("<b style='color:red;'>Error:</b> " + line + "<br>");
+            }
+        }
+        if (stderrBuffer.size() > 4096) {
+            if (!stderrBuffer.contains("GStreamer")) {
+                this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
+            }
+            stderrBuffer.clear();
         }
     });
 
@@ -40,6 +50,10 @@ void MainWindow::initControls() {
             static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
             this,
             [this](int exitCode, QProcess::ExitStatus) {
+                if (!stderrBuffer.isEmpty() && !stderrBuffer.contains("GStreamer")) {
+                    this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
+                    stderrBuffer.clear();
+                }
                 QString text;
                 QTextStream stream(&text);
                 stream << "acmx2: Exited with Code: " << exitCode;
