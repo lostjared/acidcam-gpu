@@ -547,6 +547,18 @@ void MainWindow::Write(const QString &message) {
     cursor.movePosition(QTextCursor::End);
     cursor.insertHtml(message);
     bottomTextBox->setTextCursor(cursor);
+
+    constexpr int MAX_BLOCKS = 5000;
+    QTextDocument *doc = bottomTextBox->document();
+    int excess = doc->blockCount() - MAX_BLOCKS;
+    if (excess > 0) {
+        QTextCursor trim(doc);
+        trim.movePosition(QTextCursor::Start);
+        trim.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor, excess);
+        trim.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+        trim.removeSelectedText();
+        trim.deleteChar();
+    }
 }
 
 void MainWindow::fileOpenProp() {
