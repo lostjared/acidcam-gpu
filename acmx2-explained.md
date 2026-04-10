@@ -397,7 +397,7 @@ for (int i = 0; i < count; ++i) {
     switch (filters[i].index) {
         case 0: processSelfAlphaBlend(x, y, data, step, params); break;
         case 1: processMedianBlend(x, y, data, allFrames, step, params); break;
-        // ... 734 more cases ...
+        // ... 903 more cases ...
     }
 }
 ```
