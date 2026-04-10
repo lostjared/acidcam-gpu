@@ -184,7 +184,7 @@ for (int i = 0; i < count; ++i) {
         case 0: processSelfAlphaBlend(x, y, data, step, params); break;
         case 1: processMedianBlend(x, y, data, allFrames, step, params); break;
         // ... 734 more cases ...
-        case 735: processHueWobble(x, y, data, step, params); break;
+        case 904: processHueWobble(x, y, data, step, params); break;
     }
 }
 ```
@@ -482,10 +482,11 @@ The project requires a very specific dependency stack  not all of it is availabl
 
 ### Container Distribution (Podman)
 
-The primary distribution mechanism for end users is a Podman container image: `ghcr.io/lostjared/acmx2:latest`. This avoids requiring users to compile OpenCV from source. The container includes all runtime dependencies including NVIDIA CUDA libraries (subject to NVIDIA's Deep Learning Container License). To run it:
+The primary distribution mechanism for end users is a Podman container image: [Podman Container file](https://github.com/lostjared/acidcam-gpu/tree/main/podman). This automates the build process. To run it:
 
 - Host must have NVIDIA drivers and NVIDIA Container Toolkit for Podman installed.
-- The run script (`podman/run-acmx2.sh`) passes GPU access, camera device (`/dev/video0`), audio device, and X11 display socket into the container so the app appears on the host desktop with full hardware access.
+- `podman build -t acmx2-arch:latest -f Containerfile.arch`
+- The run script (`podman/run-acmx2-arch.sh`) passes GPU access, camera device (`/dev/video0`), audio device, and X11 display socket into the container so the app appears on the host desktop with full hardware access.
 - This approach means users on Bazzite, Arch, or other NVIDIA-equipped Linux systems can run a fully GPU-accelerated visual effects tool without any build steps.
 
 ### Development Environment
@@ -524,8 +525,8 @@ The project is developed on **Bazzite Linux** using **Arch Linux containers via 
 
 ### Ops + Deployment
 
-- `podman/Containerfile`  containerized runtime image
-- `podman/run-acmx2.sh`  GPU/camera/audio passthrough run script
+- `podman/Containerfile.arch`  Build containerized runtime image
+- `podman/run-acmx2-arch.sh`  GPU/camera/audio passthrough run script
 - `acidcam-gpu/scripts/*`  OpenCV CUDA and environment helper scripts
 
 ### Expanded Meaning of Each Code Map Item
