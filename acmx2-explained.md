@@ -1,5 +1,5 @@
 # LostSideDead — ACMX2 Technical Reference
-
+u
 ![Sreenshot1](https://lostsidedead.biz/acmx2.jpg)
 
 Source: <https://github.com/lostjared/acidcam-gpu>
@@ -183,8 +183,11 @@ for (int i = 0; i < count; ++i) {
     switch (filters[i].index) {
         case 0: processSelfAlphaBlend(x, y, data, step, params); break;
         case 1: processMedianBlend(x, y, data, allFrames, step, params); break;
-        // ... 734 more cases ...
-        case 904: processHueWobble(x, y, data, step, params); break;
+        // ... 902 more cases ...
+	case 904:
+                acgl_glitch_NewVarBlendLines(x, y, data, allFrames, width, height, step, params);
+                break;
+
     }
 }
 ```
