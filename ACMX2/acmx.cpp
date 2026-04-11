@@ -3230,7 +3230,8 @@ class ACView : public gl::GLObject {
 
                     if (fd.isSnapshot) {
                         uint64_t current_offset = snapshotOffset.fetch_add(1);
-                        snapshot_pool.enqueue([this, fd, current_offset] {
+                        std::string snap_prefix = prefix_path;
+                        snapshot_pool.enqueue([snap_prefix, fd, current_offset] {
                             auto now1 = std::chrono::system_clock::now();
                             std::time_t now_c = std::chrono::system_clock::to_time_t(now1);
                             std::tm localTime{};
@@ -3242,7 +3243,7 @@ class ACView : public gl::GLObject {
 
                             std::ostringstream oss;
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
-                            std::string name = prefix_path + "/ACMX2.Snapshot-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".png";
+                            std::string name = snap_prefix + "/ACMX2.Snapshot-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".png";
 
                             png::SavePNG_RGBA(name.c_str(),
                                               const_cast<unsigned char *>(fd.pixels.data()),
