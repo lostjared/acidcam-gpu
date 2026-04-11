@@ -1228,7 +1228,7 @@ class ShaderLibrary {
             glUniform1f(n.iamp, get_freq());
         }
         {
-            float sense = get_sense() * 12.0f;
+            float sense = get_sense() * 4.0f;
             if (n.amp_peak != -1) {
                 glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
             }
@@ -1328,7 +1328,7 @@ class ShaderLibrary {
             glUniform1f(n.iamp, get_freq());
         }
         {
-            float sense = get_sense() * 12.0f;
+            float sense = get_sense() * 4.0f;
             if (n.amp_peak != -1) {
                 glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
             }
@@ -1476,7 +1476,7 @@ class ShaderLibrary {
             glUniform1f(names[index()].iamp, get_freq());
         }
         {
-            float sense = get_sense() * 12.0f;
+            float sense = get_sense() * 4.0f;
             auto &n = names[index()];
             if (n.amp_peak != -1) {
                 glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
