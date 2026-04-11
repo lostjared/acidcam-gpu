@@ -364,6 +364,9 @@ class ShaderLibrary {
         GLint loc = -1, iTime = -1, iMouse = -1, time_f = -1, iResolution = -1;
 #ifdef AUDIO_ENABLED
         GLint amp = -1, amp_untouched = -1;
+        GLint iamp = -1;
+        GLint amp_peak = -1, amp_rms = -1, amp_smooth = -1;
+        GLint amp_low = -1, amp_mid = -1, amp_high = -1;
 #endif
         GLint texture_cache_loc[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
         GLint iFrame = -1;
@@ -485,6 +488,13 @@ class ShaderLibrary {
 #ifdef AUDIO_ENABLED
             names[pos].amp = glGetUniformLocation(prog->id(), "amp");
             names[pos].amp_untouched = glGetUniformLocation(prog->id(), "uamp");
+            names[pos].iamp = glGetUniformLocation(prog->id(), "iamp");
+            names[pos].amp_peak = glGetUniformLocation(prog->id(), "amp_peak");
+            names[pos].amp_rms = glGetUniformLocation(prog->id(), "amp_rms");
+            names[pos].amp_smooth = glGetUniformLocation(prog->id(), "amp_smooth");
+            names[pos].amp_low = glGetUniformLocation(prog->id(), "amp_low");
+            names[pos].amp_mid = glGetUniformLocation(prog->id(), "amp_mid");
+            names[pos].amp_high = glGetUniformLocation(prog->id(), "amp_high");
             names[pos].iSampleRate = glGetUniformLocation(prog->id(), "iSampleRate");
 #endif
             // acidcamGL-compatible uniform locations
@@ -1213,6 +1223,27 @@ class ShaderLibrary {
         if (n.iSampleRate != -1) {
             glUniform1f(n.iSampleRate, 44100.0f);
         }
+        if (n.iamp != -1) {
+            glUniform1f(n.iamp, get_freq());
+        }
+        if (n.amp_peak != -1) {
+            glUniform1f(n.amp_peak, get_amp_peak());
+        }
+        if (n.amp_rms != -1) {
+            glUniform1f(n.amp_rms, get_amp_rms());
+        }
+        if (n.amp_smooth != -1) {
+            glUniform1f(n.amp_smooth, get_amp_smooth());
+        }
+        if (n.amp_low != -1) {
+            glUniform1f(n.amp_low, get_amp_low());
+        }
+        if (n.amp_mid != -1) {
+            glUniform1f(n.amp_mid, get_amp_mid());
+        }
+        if (n.amp_high != -1) {
+            glUniform1f(n.amp_high, get_amp_high());
+        }
 #endif
     }
 
@@ -1288,6 +1319,27 @@ class ShaderLibrary {
         }
         if (n.iSampleRate != -1) {
             glUniform1f(n.iSampleRate, 44100.0f);
+        }
+        if (n.iamp != -1) {
+            glUniform1f(n.iamp, get_freq());
+        }
+        if (n.amp_peak != -1) {
+            glUniform1f(n.amp_peak, get_amp_peak());
+        }
+        if (n.amp_rms != -1) {
+            glUniform1f(n.amp_rms, get_amp_rms());
+        }
+        if (n.amp_smooth != -1) {
+            glUniform1f(n.amp_smooth, get_amp_smooth());
+        }
+        if (n.amp_low != -1) {
+            glUniform1f(n.amp_low, get_amp_low());
+        }
+        if (n.amp_mid != -1) {
+            glUniform1f(n.amp_mid, get_amp_mid());
+        }
+        if (n.amp_high != -1) {
+            glUniform1f(n.amp_high, get_amp_high());
         }
 #endif
     }

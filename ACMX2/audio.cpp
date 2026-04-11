@@ -6,10 +6,18 @@
 #include <vector>
 
 float gAmplitude = 0.0f;
+float gFrequency = 0.0f;
+float gPeak = 0.0f;
+float gRMS = 0.0f;
+float gSmooth = 0.0f;
+float gLow = 0.0f;
+float gMid = 0.0f;
+float gHigh = 0.0f;
 float amp_sense = 25.0f;
 unsigned int input_channels = 2;
 unsigned int output_channels = 0;
 bool output_buffer = false;
+unsigned int gSampleRate = 44100;
 
 int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
                   double streamTime, RtAudioStreamStatus status, void *userData) {
@@ -38,11 +46,67 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFra
     }
 
     gAmplitude = sum / (nBufferFrames * input_channels);
+
+    // Peak absolute sample value
+    float peak = 0.0f;
+    float sumSq = 0.0f;
+    for (unsigned int i = 0; i < nBufferFrames; ++i) {
+        float s = std::abs(in[i * input_channels]);
+        if (s > peak) peak = s;
+        sumSq += s * s;
+    }
+    gPeak = peak;
+    gRMS = std::sqrt(sumSq / nBufferFrames);
+
+    // Exponentially smoothed amplitude (low-pass on amplitude)
+    constexpr float SMOOTH_ALPHA = 0.15f;
+    gSmooth += SMOOTH_ALPHA * (gAmplitude - gSmooth);
+
+    // 3-band energy via simple single-pole filters on channel 0
+    // Low-pass  cutoff ~300 Hz, Mid-pass ~300-3000 Hz, High-pass ~3000 Hz
+    static float lpState = 0.0f;
+    static float mpState = 0.0f;
+    float lpCoeff = 1.0f - std::exp(-2.0f * 3.14159f * 300.0f / gSampleRate);
+    float mpCoeff = 1.0f - std::exp(-2.0f * 3.14159f * 3000.0f / gSampleRate);
+    float lowSum = 0.0f, midSum = 0.0f, highSum = 0.0f;
+    for (unsigned int i = 0; i < nBufferFrames; ++i) {
+        float s = in[i * input_channels];
+        lpState += lpCoeff * (s - lpState);
+        mpState += mpCoeff * (s - mpState);
+        float lo = lpState;
+        float mid = mpState - lpState;
+        float hi = s - mpState;
+        lowSum += lo * lo;
+        midSum += mid * mid;
+        highSum += hi * hi;
+    }
+    gLow = std::sqrt(lowSum / nBufferFrames);
+    gMid = std::sqrt(midSum / nBufferFrames);
+    gHigh = std::sqrt(highSum / nBufferFrames);
+
+    // Estimate dominant frequency via zero-crossing rate
+    unsigned int crossings = 0;
+    for (unsigned int i = 1; i < nBufferFrames; ++i) {
+        float prev = in[(i - 1) * input_channels];
+        float curr = in[i * input_channels];
+        if ((prev >= 0.0f && curr < 0.0f) || (prev < 0.0f && curr >= 0.0f)) {
+            ++crossings;
+        }
+    }
+    gFrequency = (static_cast<float>(crossings) * gSampleRate) / (2.0f * nBufferFrames);
+
     return 0;
 }
 
 float get_amp() { return gAmplitude; }
 float get_sense() { return amp_sense; }
+float get_freq() { return gFrequency; }
+float get_amp_peak() { return gPeak; }
+float get_amp_rms() { return gRMS; }
+float get_amp_smooth() { return gSmooth; }
+float get_amp_low() { return gLow; }
+float get_amp_mid() { return gMid; }
+float get_amp_high() { return gHigh; }
 
 RtAudio audio(RtAudio::LINUX_PULSE);
 
@@ -123,6 +187,7 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
     }
 
     try {
+        gSampleRate = sampleRate;
         audio.openStream(nullptr, &inputParams, RTAUDIO_FLOAT32, sampleRate, &bufferFrames, &audioCallback);
         audio.startStream();
         if (audio.isStreamOpen())

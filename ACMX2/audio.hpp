@@ -8,6 +8,13 @@ void list_audio_devices();
 void close_audio();
 float get_amp();
 float get_sense();
+float get_freq();
+float get_amp_peak();
+float get_amp_rms();
+float get_amp_smooth();
+float get_amp_low();
+float get_amp_mid();
+float get_amp_high();
 void set_output(bool o);
 
 #endif
