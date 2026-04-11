@@ -100,6 +100,7 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFra
 
 float get_amp() { return gAmplitude; }
 float get_sense() { return amp_sense; }
+void set_sense(float s) { amp_sense = s; }
 float get_freq() { return gFrequency; }
 float get_amp_peak() { return gPeak; }
 float get_amp_rms() { return gRMS; }

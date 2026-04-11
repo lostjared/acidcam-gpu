@@ -8,6 +8,7 @@ void list_audio_devices();
 void close_audio();
 float get_amp();
 float get_sense();
+void set_sense(float s);
 float get_freq();
 float get_amp_peak();
 float get_amp_rms();

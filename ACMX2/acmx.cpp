@@ -3009,6 +3009,23 @@ class ACView : public gl::GLObject {
             case SDLK_i:
                 library.decTime(0.05f);
                 break;
+#ifdef AUDIO_ENABLED
+            case SDLK_INSERT: {
+                float s = get_sense() + 0.5f;
+                set_sense(s);
+                mx::system_out << "acmx2: Audio sensitivity increased to " << s << "\n";
+                fflush(stdout);
+                break;
+            }
+            case SDLK_DELETE: {
+                float s = get_sense() - 0.5f;
+                if (s < 0.5f) s = 0.5f;
+                set_sense(s);
+                mx::system_out << "acmx2: Audio sensitivity decreased to " << s << "\n";
+                fflush(stdout);
+                break;
+            }
+#endif
             }
             break;
         }
@@ -3433,6 +3450,8 @@ const char *message = R"(
     M - toggle multi-pass
     F - toggle fullscreen
     Q - toggle reactive time (if AUDIO_ENABLED)
+    Insert - increase audio sensitivity
+    Delete - decrease audio sensitivity
     Home - toggle audio delta time scaling on/off
     M - toggle multi-shader pass (if --shader-pass set)
     3 - toggle 2D/3D mode (switches between 2D and 3D rendering)
