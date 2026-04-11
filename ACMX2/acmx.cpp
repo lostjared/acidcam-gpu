@@ -3,6 +3,7 @@
 #include <argz.hpp>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <ctime>
 #include <deque>
@@ -1226,23 +1227,26 @@ class ShaderLibrary {
         if (n.iamp != -1) {
             glUniform1f(n.iamp, get_freq());
         }
-        if (n.amp_peak != -1) {
-            glUniform1f(n.amp_peak, get_amp_peak());
-        }
-        if (n.amp_rms != -1) {
-            glUniform1f(n.amp_rms, get_amp_rms());
-        }
-        if (n.amp_smooth != -1) {
-            glUniform1f(n.amp_smooth, get_amp_smooth());
-        }
-        if (n.amp_low != -1) {
-            glUniform1f(n.amp_low, get_amp_low());
-        }
-        if (n.amp_mid != -1) {
-            glUniform1f(n.amp_mid, get_amp_mid());
-        }
-        if (n.amp_high != -1) {
-            glUniform1f(n.amp_high, get_amp_high());
+        {
+            float sense = get_sense() * 4.0f;
+            if (n.amp_peak != -1) {
+                glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
+            }
+            if (n.amp_rms != -1) {
+                glUniform1f(n.amp_rms, std::sqrt(get_amp_rms()) * sense);
+            }
+            if (n.amp_smooth != -1) {
+                glUniform1f(n.amp_smooth, std::sqrt(get_amp_smooth()) * sense);
+            }
+            if (n.amp_low != -1) {
+                glUniform1f(n.amp_low, std::sqrt(get_amp_low()) * sense);
+            }
+            if (n.amp_mid != -1) {
+                glUniform1f(n.amp_mid, std::sqrt(get_amp_mid()) * sense);
+            }
+            if (n.amp_high != -1) {
+                glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
+            }
         }
 #endif
     }
@@ -1323,23 +1327,26 @@ class ShaderLibrary {
         if (n.iamp != -1) {
             glUniform1f(n.iamp, get_freq());
         }
-        if (n.amp_peak != -1) {
-            glUniform1f(n.amp_peak, get_amp_peak());
-        }
-        if (n.amp_rms != -1) {
-            glUniform1f(n.amp_rms, get_amp_rms());
-        }
-        if (n.amp_smooth != -1) {
-            glUniform1f(n.amp_smooth, get_amp_smooth());
-        }
-        if (n.amp_low != -1) {
-            glUniform1f(n.amp_low, get_amp_low());
-        }
-        if (n.amp_mid != -1) {
-            glUniform1f(n.amp_mid, get_amp_mid());
-        }
-        if (n.amp_high != -1) {
-            glUniform1f(n.amp_high, get_amp_high());
+        {
+            float sense = get_sense() * 4.0f;
+            if (n.amp_peak != -1) {
+                glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
+            }
+            if (n.amp_rms != -1) {
+                glUniform1f(n.amp_rms, std::sqrt(get_amp_rms()) * sense);
+            }
+            if (n.amp_smooth != -1) {
+                glUniform1f(n.amp_smooth, std::sqrt(get_amp_smooth()) * sense);
+            }
+            if (n.amp_low != -1) {
+                glUniform1f(n.amp_low, std::sqrt(get_amp_low()) * sense);
+            }
+            if (n.amp_mid != -1) {
+                glUniform1f(n.amp_mid, std::sqrt(get_amp_mid()) * sense);
+            }
+            if (n.amp_high != -1) {
+                glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
+            }
         }
 #endif
     }
