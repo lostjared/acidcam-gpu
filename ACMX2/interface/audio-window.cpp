@@ -1,8 +1,7 @@
 #include "audio-window.hpp"
+#include <QProcess>
+#include <QRegularExpression>
 #include <QSettings>
-#ifdef AUDIO_ENABLED
-#include <RtAudio.h>
-#endif
 
 AudioSettings::AudioSettings(QWidget *parent)
     : QDialog(parent) {
@@ -87,10 +86,104 @@ AudioSettings::AudioSettings(QWidget *parent)
 void AudioSettings::populateAudioDevices() {
     inputDeviceComboBox->addItem("Default", -1);
     outputDeviceComboBox->addItem("Default", -1);
-    for (int i = 0; i < 10; i++) {
-        inputDeviceComboBox->addItem(QString::number(i), i);
-        outputDeviceComboBox->addItem(QString::number(i), i);
+
+    QProcess process;
+    process.start("acmx2", QStringList() << "--list-devices");
+    process.waitForFinished(5000);
+
+    QString output = process.readAllStandardOutput();
+    if (output.isEmpty() || process.exitCode() != 0) {
+        return;
     }
+
+    // Parse lines like:
+    //   Device 132: EMEET SmartCam C950 4K [DEFAULT INPUT]
+    //     Input channels: 2
+    //     Output channels: 0
+    QRegularExpression deviceRegex(
+        R"(^\s*Device\s+(\d+):\s*(.+?)\s*$)");
+    QRegularExpression inputChRegex(
+        R"(^\s*Input channels:\s*(\d+))");
+    QRegularExpression outputChRegex(
+        R"(^\s*Output channels:\s*(\d+))");
+
+    QStringList lines = output.split('\n');
+    int currentId = -1;
+    QString currentName;
+    bool isDefaultInput = false;
+    bool isDefaultOutput = false;
+
+    auto flushDevice = [&]() {
+        // called when we hit the next "Device" line or end of output
+        // nothing to flush on the first call
+    };
+
+    int inputCh = 0;
+    int outputCh = 0;
+
+    for (int i = 0; i < lines.size(); ++i) {
+        const QString &line = lines[i];
+        QRegularExpressionMatch devMatch = deviceRegex.match(line);
+
+        if (devMatch.hasMatch()) {
+            // Flush previous device
+            if (currentId >= 0) {
+                if (inputCh > 0) {
+                    QString label = currentName + " (" + QString::number(inputCh) + " ch)";
+                    if (isDefaultInput)
+                        label += " [Default]";
+                    inputDeviceComboBox->addItem(label, currentId);
+                }
+                if (outputCh > 0) {
+                    QString label = currentName + " (" + QString::number(outputCh) + " ch)";
+                    if (isDefaultOutput)
+                        label += " [Default]";
+                    outputDeviceComboBox->addItem(label, currentId);
+                }
+            }
+
+            currentId = devMatch.captured(1).toInt();
+            currentName = devMatch.captured(2).trimmed();
+            isDefaultInput = currentName.contains("[DEFAULT INPUT]");
+            isDefaultOutput = currentName.contains("[DEFAULT OUTPUT]");
+            // Strip the tags from the display name
+            currentName.remove("[DEFAULT INPUT]");
+            currentName.remove("[DEFAULT OUTPUT]");
+            currentName = currentName.trimmed();
+            inputCh = 0;
+            outputCh = 0;
+            continue;
+        }
+
+        QRegularExpressionMatch inMatch = inputChRegex.match(line);
+        if (inMatch.hasMatch()) {
+            inputCh = inMatch.captured(1).toInt();
+            continue;
+        }
+
+        QRegularExpressionMatch outMatch = outputChRegex.match(line);
+        if (outMatch.hasMatch()) {
+            outputCh = outMatch.captured(1).toInt();
+            continue;
+        }
+    }
+
+    // Flush last device
+    if (currentId >= 0) {
+        if (inputCh > 0) {
+            QString label = currentName + " (" + QString::number(inputCh) + " ch)";
+            if (isDefaultInput)
+                label += " [Default]";
+            inputDeviceComboBox->addItem(label, currentId);
+        }
+        if (outputCh > 0) {
+            QString label = currentName + " (" + QString::number(outputCh) + " ch)";
+            if (isDefaultOutput)
+                label += " [Default]";
+            outputDeviceComboBox->addItem(label, currentId);
+        }
+    }
+
     inputDeviceComboBox->setCurrentIndex(0);
     outputDeviceComboBox->setCurrentIndex(0);
 }

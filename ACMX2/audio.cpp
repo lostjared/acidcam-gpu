@@ -116,12 +116,12 @@ void set_output(bool o) {
 }
 
 void list_audio_devices() {
-    unsigned int devices = audio.getDeviceCount();
-    std::cout << "acmx2: Found " << devices << " audio device(s):\n";
+    std::vector<unsigned int> ids = audio.getDeviceIds();
+    std::cout << "acmx2: Found " << ids.size() << " audio device(s):\n";
 
-    for (unsigned int i = 0; i < devices; i++) {
-        RtAudio::DeviceInfo info = audio.getDeviceInfo(i);
-        std::cout << "  Device " << i << ": " << info.name;
+    for (auto id : ids) {
+        RtAudio::DeviceInfo info = audio.getDeviceInfo(id);
+        std::cout << "  Device " << id << ": " << info.name;
         if (info.isDefaultInput)
             std::cout << " [DEFAULT INPUT]";
         if (info.isDefaultOutput)
@@ -143,7 +143,8 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
     input_channels = channels;
     amp_sense = sense;
 
-    if (audio.getDeviceCount() < 1) {
+    std::vector<unsigned int> ids = audio.getDeviceIds();
+    if (ids.empty()) {
         std::cerr << "acmx2: No audio devices found!" << std::endl;
         return 1;
     } else {
@@ -160,7 +161,28 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
         inputDevice = static_cast<unsigned int>(inputDeviceId);
         std::cout << "acmx2: Using specified input device: " << inputDevice << "\n";
     } else {
+        // Use getDefaultInputDevice() which returns a proper device ID in
+        // RtAudio 6.x.  Fall back to scanning if it returns 0 (no default).
         inputDevice = audio.getDefaultInputDevice();
+        if (inputDevice == 0) {
+            for (auto id : ids) {
+                RtAudio::DeviceInfo di = audio.getDeviceInfo(id);
+                if (di.isDefaultInput && di.inputChannels > 0) {
+                    inputDevice = id;
+                    break;
+                }
+            }
+        }
+        if (inputDevice == 0) {
+            // Last resort: pick the first device with input channels
+            for (auto id : ids) {
+                RtAudio::DeviceInfo di = audio.getDeviceInfo(id);
+                if (di.inputChannels > 0) {
+                    inputDevice = id;
+                    break;
+                }
+            }
+        }
         std::cout << "acmx2: Using default input device: " << inputDevice << "\n";
     }
 
@@ -169,6 +191,11 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
         std::cout << "acmx2: Input device has no input channels...\n";
         return 1;
     }
+
+    std::cout << "acmx2: Selected input device " << inputDevice << ": " << inInfo.name << "\n";
+    std::cout << "acmx2:   Input channels: " << inInfo.inputChannels << "\n";
+    if (inInfo.isDefaultInput)
+        std::cout << "acmx2:   [DEFAULT INPUT]\n";
 
     input_channels = std::min(channels, inInfo.inputChannels);
     output_channels = 0;
@@ -192,7 +219,9 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
         audio.openStream(nullptr, &inputParams, RTAUDIO_FLOAT32, sampleRate, &bufferFrames, &audioCallback);
         audio.startStream();
         if (audio.isStreamOpen())
-            std::cout << "acmx2: Audio input stream opened...\n";
+            std::cout << "acmx2: Audio input stream opened (rate=" << sampleRate
+                      << " Hz, channels=" << input_channels
+                      << ", sensitivity=" << amp_sense << ")\n";
     } catch (std::exception &e) {
         std::cerr << "acmx2: Standard exception: " << e.what() << std::endl;
         if (audio.isStreamOpen())
