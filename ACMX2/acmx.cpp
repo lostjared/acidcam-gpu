@@ -1228,7 +1228,7 @@ class ShaderLibrary {
             glUniform1f(n.iamp, get_freq());
         }
         {
-            float sense = get_sense() * 4.0f;
+            float sense = get_sense() * 12.0f;
             if (n.amp_peak != -1) {
                 glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
             }
@@ -1328,7 +1328,7 @@ class ShaderLibrary {
             glUniform1f(n.iamp, get_freq());
         }
         {
-            float sense = get_sense() * 4.0f;
+            float sense = get_sense() * 12.0f;
             if (n.amp_peak != -1) {
                 glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
             }
@@ -1471,6 +1471,31 @@ class ShaderLibrary {
         GLint iSampleRateLoc = names[index()].iSampleRate;
         if (iSampleRateLoc != -1) {
             glUniform1f(iSampleRateLoc, 44100.0f);
+        }
+        if (names[index()].iamp != -1) {
+            glUniform1f(names[index()].iamp, get_freq());
+        }
+        {
+            float sense = get_sense() * 12.0f;
+            auto &n = names[index()];
+            if (n.amp_peak != -1) {
+                glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
+            }
+            if (n.amp_rms != -1) {
+                glUniform1f(n.amp_rms, std::sqrt(get_amp_rms()) * sense);
+            }
+            if (n.amp_smooth != -1) {
+                glUniform1f(n.amp_smooth, std::sqrt(get_amp_smooth()) * sense);
+            }
+            if (n.amp_low != -1) {
+                glUniform1f(n.amp_low, std::sqrt(get_amp_low()) * sense);
+            }
+            if (n.amp_mid != -1) {
+                glUniform1f(n.amp_mid, std::sqrt(get_amp_mid()) * sense);
+            }
+            if (n.amp_high != -1) {
+                glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
+            }
         }
 #endif
     }
