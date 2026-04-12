@@ -8,6 +8,7 @@
 #include <iostream>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 float gAmplitude = 0.0f;
@@ -26,9 +27,17 @@ unsigned int gSampleRate = 44100;
 
 static std::ofstream gRecordFile;
 static std::atomic<bool> gRecording{false};
-static std::mutex gRecordMutex;
 static uint32_t gRecordDataSize = 0;
+static std::atomic<uint32_t> gRecordFadeIn{0};
 static std::atomic<float> gRecordGain{1.0f};
+
+// Lock-free SPSC ring buffer for audio recording
+static constexpr size_t RING_CAPACITY = 1 << 20; // ~1M int16 samples
+static int16_t gRingBuffer[RING_CAPACITY];
+static std::atomic<size_t> gRingHead{0};  // written by callback
+static std::atomic<size_t> gRingTail{0};  // read by disk thread
+static std::thread gDiskThread;
+static std::atomic<bool> gDiskRunning{false};
 
 int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
                   double streamTime, RtAudioStreamStatus status, void *userData) {
@@ -109,17 +118,24 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFra
     if (gRecording.load(std::memory_order_relaxed)) {
         unsigned int totalSamples = nBufferFrames * input_channels;
         float gain = gRecordGain.load(std::memory_order_relaxed);
-        std::vector<int16_t> pcm(totalSamples);
+        uint32_t fadePos = gRecordFadeIn.load(std::memory_order_relaxed);
+        constexpr uint32_t FADE_SAMPLES = 2048;
+        size_t head = gRingHead.load(std::memory_order_relaxed);
+        size_t tail = gRingTail.load(std::memory_order_acquire);
         for (unsigned int i = 0; i < totalSamples; ++i) {
+            // Drop samples if ring buffer is full
+            if (((head + 1) & (RING_CAPACITY - 1)) == (tail & (RING_CAPACITY - 1)))
+                break;
             float sample = std::clamp(in[i] * gain, -1.0f, 1.0f);
-            pcm[i] = static_cast<int16_t>(sample * 32767.0f);
+            if (fadePos < FADE_SAMPLES) {
+                sample *= static_cast<float>(fadePos) / static_cast<float>(FADE_SAMPLES);
+                ++fadePos;
+            }
+            gRingBuffer[head & (RING_CAPACITY - 1)] = static_cast<int16_t>(sample * 32767.0f);
+            ++head;
         }
-        std::lock_guard<std::mutex> lock(gRecordMutex);
-        if (gRecordFile.is_open()) {
-            gRecordFile.write(reinterpret_cast<const char *>(pcm.data()),
-                              totalSamples * sizeof(int16_t));
-            gRecordDataSize += totalSamples * sizeof(int16_t);
-        }
+        gRingHead.store(head, std::memory_order_release);
+        gRecordFadeIn.store(fadePos, std::memory_order_relaxed);
     }
 
     return 0;
@@ -166,8 +182,30 @@ static void writeWavHeader(std::ofstream &file, uint32_t dataSize, uint32_t samp
     file.write(reinterpret_cast<const char *>(&dataSize), 4);
 }
 
+static void diskWriterFunc() {
+    constexpr size_t BATCH = 4096;
+    int16_t buf[BATCH];
+    while (gDiskRunning.load(std::memory_order_relaxed) || gRingTail.load(std::memory_order_relaxed) != gRingHead.load(std::memory_order_acquire)) {
+        size_t tail = gRingTail.load(std::memory_order_relaxed);
+        size_t head = gRingHead.load(std::memory_order_acquire);
+        if (tail == head) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            continue;
+        }
+        size_t avail = head - tail;
+        size_t n = std::min(avail, BATCH);
+        for (size_t i = 0; i < n; ++i) {
+            buf[i] = gRingBuffer[(tail + i) & (RING_CAPACITY - 1)];
+        }
+        gRingTail.store(tail + n, std::memory_order_release);
+        if (gRecordFile.is_open()) {
+            gRecordFile.write(reinterpret_cast<const char *>(buf), n * sizeof(int16_t));
+            gRecordDataSize += static_cast<uint32_t>(n * sizeof(int16_t));
+        }
+    }
+}
+
 bool start_audio_recording(const std::string &filepath) {
-    std::lock_guard<std::mutex> lock(gRecordMutex);
     if (gRecording.load())
         return false;
     gRecordFile.open(filepath, std::ios::binary | std::ios::trunc);
@@ -176,15 +214,23 @@ bool start_audio_recording(const std::string &filepath) {
         return false;
     }
     gRecordDataSize = 0;
+    gRecordFadeIn.store(0, std::memory_order_relaxed);
+    gRingHead.store(0, std::memory_order_relaxed);
+    gRingTail.store(0, std::memory_order_relaxed);
     writeWavHeader(gRecordFile, 0, gSampleRate, static_cast<uint16_t>(input_channels));
+    gDiskRunning.store(true, std::memory_order_relaxed);
     gRecording.store(true, std::memory_order_release);
+    gDiskThread = std::thread(diskWriterFunc);
     std::cout << "acmx2: Audio recording started: " << filepath << "\n";
     return true;
 }
 
 void stop_audio_recording() {
     gRecording.store(false, std::memory_order_release);
-    std::lock_guard<std::mutex> lock(gRecordMutex);
+    gDiskRunning.store(false, std::memory_order_relaxed);
+    if (gDiskThread.joinable()) {
+        gDiskThread.join();
+    }
     if (gRecordFile.is_open()) {
         writeWavHeader(gRecordFile, gRecordDataSize, gSampleRate, static_cast<uint16_t>(input_channels));
         gRecordFile.close();

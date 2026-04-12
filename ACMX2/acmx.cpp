@@ -1681,11 +1681,6 @@ class ACView : public gl::GLObject {
             } else {
                 audio_is_enabled = true;
                 set_record_gain(args.record_gain);
-                if (!args.record_audio_file.empty()) {
-                    if (!start_audio_recording(args.record_audio_file)) {
-                        mx::system_err << "acmx2: Error could not start audio recording\n";
-                    }
-                }
             }
         }
 
@@ -1767,15 +1762,6 @@ class ACView : public gl::GLObject {
         }
         gpu_frame_buffer.reset();
 
-#ifdef AUDIO_ENABLED
-        if (audio_is_enabled) {
-            if (is_audio_recording()) {
-                stop_audio_recording();
-            }
-            close_audio();
-        }
-#endif
-
         stopCaptureThread();
 
         if (pboIds[0] && writer.is_open() && win_w > 0 && win_h > 0) {
@@ -1816,6 +1802,15 @@ class ACView : public gl::GLObject {
         }
 
         stopWriterThread();
+
+#ifdef AUDIO_ENABLED
+        if (audio_is_enabled) {
+            if (is_audio_recording()) {
+                stop_audio_recording();
+            }
+            close_audio();
+        }
+#endif
 
         if (pboIds[0]) {
             glDeleteBuffers(2, pboIds);
@@ -3375,6 +3370,13 @@ class ACView : public gl::GLObject {
                         written_frame_counter++;
                         continue;
                     }
+#ifdef AUDIO_ENABLED
+                    if (writerRunning && audio_is_enabled && !audio_record_file.empty() && !is_audio_recording()) {
+                        if (!start_audio_recording(audio_record_file)) {
+                            mx::system_err << "acmx2: Error could not start audio recording\n";
+                        }
+                    }
+#endif
 
                     if (writer.is_open() && !fd.isSnapshot) {
                         if (!filename.empty() || !graphic.empty()) {
@@ -3421,10 +3423,28 @@ class ACView : public gl::GLObject {
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
 #ifdef AUDIO_ENABLED
-            if (audio_is_enabled && is_audio_recording() && !audio_record_file.empty() && filename.empty()) {
+            if (audio_is_enabled && is_audio_recording()) {
                 stop_audio_recording();
-                transfer_audio(audio_record_file, ofilename);
-                mx::system_out << "acmx2: muxed recorded audio from: " << audio_record_file << " to " << ofilename << "\n";
+            }
+            if (audio_is_enabled && !audio_record_file.empty()) {
+                std::string tmp_out = ofilename + ".tmp.mp4";
+                std::ostringstream cmd;
+                cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_record_file
+                    << "\" -map 0:v:0 -map 1:a:0"
+                    << " -c:v copy -c:a aac -b:a 192k"
+                    << " -shortest -movflags +faststart \""
+                    << tmp_out << "\" 2>&1";
+                mx::system_out << "acmx2: muxing recorded audio into video...\n";
+                fflush(stdout);
+                int ret = std::system(cmd.str().c_str());
+                if (ret == 0) {
+                    std::remove(ofilename.c_str());
+                    std::rename(tmp_out.c_str(), ofilename.c_str());
+                    mx::system_out << "acmx2: muxed recorded audio from: " << audio_record_file << " to " << ofilename << "\n";
+                } else {
+                    mx::system_err << "acmx2: ffmpeg mux failed (exit code " << ret << ")\n";
+                    std::remove(tmp_out.c_str());
+                }
             }
 #endif
             fflush(stdout);

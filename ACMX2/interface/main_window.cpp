@@ -903,9 +903,14 @@ void MainWindow::runSelected() {
         else
             arguments << "--audio-output" << QString::number(audio_output);
 
-        if (record_audio && !output_file.isEmpty()) {
-            QFileInfo fi(output_file);
-            QString wavPath = fi.absolutePath() + "/" + fi.completeBaseName() + ".wav";
+        if (record_audio) {
+            QString wavPath;
+            if (!output_file.isEmpty()) {
+                QFileInfo fi(output_file);
+                wavPath = fi.absolutePath() + "/" + fi.completeBaseName() + ".wav";
+            } else {
+                wavPath = prefix_path + "/recorded_audio.wav";
+            }
             arguments << "--record-audio" << wavPath;
             arguments << "--record-gain" << QString::number(record_volume, 'f', 2);
         }
@@ -1041,9 +1046,14 @@ void MainWindow::runAll() {
         else
             arguments << "--audio-output" << QString::number(audio_output);
 
-        if (record_audio && !output_file.isEmpty()) {
-            QFileInfo fi(output_file);
-            QString wavPath = fi.absolutePath() + "/" + fi.completeBaseName() + ".wav";
+        if (record_audio) {
+            QString wavPath;
+            if (!output_file.isEmpty()) {
+                QFileInfo fi(output_file);
+                wavPath = fi.absolutePath() + "/" + fi.completeBaseName() + ".wav";
+            } else {
+                wavPath = prefix_path + "/recorded_audio.wav";
+            }
             arguments << "--record-audio" << wavPath;
             arguments << "--record-gain" << QString::number(record_volume, 'f', 2);
         }
