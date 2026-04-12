@@ -3083,7 +3083,7 @@ class ACView : public gl::GLObject {
             }
             case SDLK_DELETE: {
                 float s = get_sense() - 0.5f;
-                if (s < 0.5f) s = 0.5f;
+                if (s < 0.1f) s = 0.1f;
                 set_sense(s);
                 mx::system_out << "acmx2: Audio sensitivity decreased to " << s << "\n";
                 fflush(stdout);
