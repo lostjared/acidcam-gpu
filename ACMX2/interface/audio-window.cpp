@@ -9,6 +9,16 @@ AudioSettings::AudioSettings(QWidget *parent)
 
     audioReactivityCheckBox = new QCheckBox("Enable Audio Reactivity", this);
     audioPassThroughCheckBox = new QCheckBox("Enable Audio Pass Through", this);
+    recordAudioCheckBox = new QCheckBox("Record Audio to File", this);
+
+    QLabel *recordVolumeLabel = new QLabel("Recording Volume:", this);
+    recordVolumeSlider = new QSlider(Qt::Horizontal, this);
+    recordVolumeSlider->setRange(0, 200);
+    recordVolumeSlider->setValue(100);
+    QLabel *recordVolumeValueLabel = new QLabel("100%", this);
+    connect(recordVolumeSlider, &QSlider::valueChanged, this, [recordVolumeValueLabel](int value) {
+        recordVolumeValueLabel->setText(QString::number(value) + "%");
+    });
 
     QLabel *channelLabel = new QLabel("Number of Channels:", this);
     channelSpinBox = new QSpinBox(this);
@@ -53,6 +63,13 @@ AudioSettings::AudioSettings(QWidget *parent)
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(audioReactivityCheckBox);
     mainLayout->addWidget(audioPassThroughCheckBox);
+    mainLayout->addWidget(recordAudioCheckBox);
+
+    QHBoxLayout *recordVolumeLayout = new QHBoxLayout();
+    recordVolumeLayout->addWidget(recordVolumeLabel);
+    recordVolumeLayout->addWidget(recordVolumeSlider);
+    recordVolumeLayout->addWidget(recordVolumeValueLabel);
+    mainLayout->addLayout(recordVolumeLayout);
 
     QHBoxLayout *channelLayout = new QHBoxLayout();
     channelLayout->addWidget(channelLabel);
@@ -194,6 +211,14 @@ bool AudioSettings::isAudioReactivityEnabled() const {
 
 bool AudioSettings::isAudioPassThroughEnabled() const {
     return audioPassThroughCheckBox->isChecked();
+}
+
+bool AudioSettings::isRecordAudioEnabled() const {
+    return recordAudioCheckBox->isChecked();
+}
+
+double AudioSettings::getRecordVolume() const {
+    return recordVolumeSlider->value() / 100.0;
 }
 
 int AudioSettings::getNumberOfChannels() const {

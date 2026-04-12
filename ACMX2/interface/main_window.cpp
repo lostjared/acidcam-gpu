@@ -703,6 +703,8 @@ void MainWindow::menuAudioSettings() {
         audio_channels = audio_set.getNumberOfChannels();
         audio_sense = audio_set.getSensitivity();
         audio_passthrough = audio_set.isAudioPassThroughEnabled();
+        record_audio = audio_set.isRecordAudioEnabled();
+        record_volume = audio_set.getRecordVolume();
         audio_input = audio_set.getInputDeviceIndex();
         audio_output = audio_set.getOutputDeviceIndex();
         Log("Audio Settings Saved");
@@ -900,6 +902,13 @@ void MainWindow::runSelected() {
             arguments << "--audio-output" << "default";
         else
             arguments << "--audio-output" << QString::number(audio_output);
+
+        if (record_audio && !output_file.isEmpty()) {
+            QFileInfo fi(output_file);
+            QString wavPath = fi.absolutePath() + "/" + fi.completeBaseName() + ".wav";
+            arguments << "--record-audio" << wavPath;
+            arguments << "--record-gain" << QString::number(record_volume, 'f', 2);
+        }
     }
 
     if (enable_3d) {
@@ -1031,6 +1040,13 @@ void MainWindow::runAll() {
             arguments << "--audio-output" << "default";
         else
             arguments << "--audio-output" << QString::number(audio_output);
+
+        if (record_audio && !output_file.isEmpty()) {
+            QFileInfo fi(output_file);
+            QString wavPath = fi.absolutePath() + "/" + fi.completeBaseName() + ".wav";
+            arguments << "--record-audio" << wavPath;
+            arguments << "--record-gain" << QString::number(record_volume, 'f', 2);
+        }
     }
 
     if (enable_3d) {

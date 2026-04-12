@@ -1,7 +1,12 @@
 #include "audio.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -18,6 +23,12 @@ unsigned int input_channels = 2;
 unsigned int output_channels = 0;
 bool output_buffer = false;
 unsigned int gSampleRate = 44100;
+
+static std::ofstream gRecordFile;
+static std::atomic<bool> gRecording{false};
+static std::mutex gRecordMutex;
+static uint32_t gRecordDataSize = 0;
+static std::atomic<float> gRecordGain{1.0f};
 
 int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
                   double streamTime, RtAudioStreamStatus status, void *userData) {
@@ -95,6 +106,22 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFra
     }
     gFrequency = (static_cast<float>(crossings) * gSampleRate) / (2.0f * nBufferFrames);
 
+    if (gRecording.load(std::memory_order_relaxed)) {
+        unsigned int totalSamples = nBufferFrames * input_channels;
+        float gain = gRecordGain.load(std::memory_order_relaxed);
+        std::vector<int16_t> pcm(totalSamples);
+        for (unsigned int i = 0; i < totalSamples; ++i) {
+            float sample = std::clamp(in[i] * gain, -1.0f, 1.0f);
+            pcm[i] = static_cast<int16_t>(sample * 32767.0f);
+        }
+        std::lock_guard<std::mutex> lock(gRecordMutex);
+        if (gRecordFile.is_open()) {
+            gRecordFile.write(reinterpret_cast<const char *>(pcm.data()),
+                              totalSamples * sizeof(int16_t));
+            gRecordDataSize += totalSamples * sizeof(int16_t);
+        }
+    }
+
     return 0;
 }
 
@@ -113,6 +140,68 @@ RtAudio audio(RtAudio::LINUX_PULSE);
 
 void set_output(bool o) {
     output_buffer = o;
+}
+
+static void writeWavHeader(std::ofstream &file, uint32_t dataSize, uint32_t sampleRate, uint16_t channels) {
+    uint16_t bitsPerSample = 16;
+    uint32_t byteRate = sampleRate * channels * bitsPerSample / 8;
+    uint16_t blockAlign = channels * bitsPerSample / 8;
+    uint32_t chunkSize = 36 + dataSize;
+
+    file.seekp(0);
+    file.write("RIFF", 4);
+    file.write(reinterpret_cast<const char *>(&chunkSize), 4);
+    file.write("WAVE", 4);
+    file.write("fmt ", 4);
+    uint32_t subchunk1Size = 16;
+    file.write(reinterpret_cast<const char *>(&subchunk1Size), 4);
+    uint16_t audioFormat = 1; // PCM
+    file.write(reinterpret_cast<const char *>(&audioFormat), 2);
+    file.write(reinterpret_cast<const char *>(&channels), 2);
+    file.write(reinterpret_cast<const char *>(&sampleRate), 4);
+    file.write(reinterpret_cast<const char *>(&byteRate), 4);
+    file.write(reinterpret_cast<const char *>(&blockAlign), 2);
+    file.write(reinterpret_cast<const char *>(&bitsPerSample), 2);
+    file.write("data", 4);
+    file.write(reinterpret_cast<const char *>(&dataSize), 4);
+}
+
+bool start_audio_recording(const std::string &filepath) {
+    std::lock_guard<std::mutex> lock(gRecordMutex);
+    if (gRecording.load())
+        return false;
+    gRecordFile.open(filepath, std::ios::binary | std::ios::trunc);
+    if (!gRecordFile.is_open()) {
+        std::cerr << "acmx2: Failed to open audio recording file: " << filepath << "\n";
+        return false;
+    }
+    gRecordDataSize = 0;
+    writeWavHeader(gRecordFile, 0, gSampleRate, static_cast<uint16_t>(input_channels));
+    gRecording.store(true, std::memory_order_release);
+    std::cout << "acmx2: Audio recording started: " << filepath << "\n";
+    return true;
+}
+
+void stop_audio_recording() {
+    gRecording.store(false, std::memory_order_release);
+    std::lock_guard<std::mutex> lock(gRecordMutex);
+    if (gRecordFile.is_open()) {
+        writeWavHeader(gRecordFile, gRecordDataSize, gSampleRate, static_cast<uint16_t>(input_channels));
+        gRecordFile.close();
+        std::cout << "acmx2: Audio recording stopped (" << gRecordDataSize << " bytes written)\n";
+    }
+}
+
+bool is_audio_recording() {
+    return gRecording.load(std::memory_order_relaxed);
+}
+
+void set_record_gain(float gain) {
+    gRecordGain.store(std::clamp(gain, 0.0f, 2.0f), std::memory_order_relaxed);
+}
+
+float get_record_gain() {
+    return gRecordGain.load(std::memory_order_relaxed);
 }
 
 void list_audio_devices() {

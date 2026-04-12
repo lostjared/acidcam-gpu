@@ -1611,6 +1611,8 @@ struct MXArguments {
     bool audio_enabled = false;
     unsigned int audio_channels = 2;
     float audio_sensitivty = 0.25f;
+    std::string record_audio_file;
+    float record_gain = 1.0f;
 #endif
     bool silent = false;
     bool gpu_filter_enabled = false;
@@ -1638,6 +1640,7 @@ class ACView : public gl::GLObject {
     bool audio_is_enabled = false;
     int audio_input_device;
     int audio_output_device;
+    std::string audio_record_file;
 #endif
     bool isPaused = false;
     bool isFrozen = false;
@@ -1671,11 +1674,18 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
+        audio_record_file = args.record_audio_file;
         if (args.audio_enabled) {
             if (init_audio(args.audio_channels, args.audio_sensitivty, audio_input_device, audio_output_device) != 0) {
                 mx::system_err << "acmx2: Error could not initalize audio\n";
             } else {
                 audio_is_enabled = true;
+                set_record_gain(args.record_gain);
+                if (!args.record_audio_file.empty()) {
+                    if (!start_audio_recording(args.record_audio_file)) {
+                        mx::system_err << "acmx2: Error could not start audio recording\n";
+                    }
+                }
             }
         }
 
@@ -1759,6 +1769,9 @@ class ACView : public gl::GLObject {
 
 #ifdef AUDIO_ENABLED
         if (audio_is_enabled) {
+            if (is_audio_recording()) {
+                stop_audio_recording();
+            }
             close_audio();
         }
 #endif
@@ -3407,6 +3420,13 @@ class ACView : public gl::GLObject {
                 transfer_audio(filename, ofilename);
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
+#ifdef AUDIO_ENABLED
+            if (audio_is_enabled && is_audio_recording() && !audio_record_file.empty() && filename.empty()) {
+                stop_audio_recording();
+                transfer_audio(audio_record_file, ofilename);
+                mx::system_out << "acmx2: muxed recorded audio from: " << audio_record_file << " to " << ofilename << "\n";
+            }
+#endif
             fflush(stdout);
             fflush(stderr);
         }
@@ -3582,6 +3602,8 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(300, "audio-input", "Audio input device")
         .addOptionDoubleValue(301, "audio-output", "Audio output device")
         .addOptionDouble(302, "list-devices", "list audio devices")
+        .addOptionDoubleValue(303, "record-audio", "Record captured audio to WAV file")
+        .addOptionDoubleValue(304, "record-gain", "Recording volume gain 0.0-2.0 (default: 1.0)")
 #endif
         .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
         .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
@@ -3790,6 +3812,12 @@ int main(int argc, char **argv) {
             case 302:
                 list_audio_devices();
                 exit(EXIT_SUCCESS);
+                break;
+            case 303:
+                args.record_audio_file = arg.arg_value;
+                break;
+            case 304:
+                args.record_gain = static_cast<float>(atof(arg.arg_value.c_str()));
                 break;
 #endif
             case 405:

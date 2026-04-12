@@ -1,5 +1,5 @@
-ACMX2: v1.4.1
-(C) 2025 LostSideDead
+ACMX2: v2.6.0
+(C) 2026 LostSideDead
 https://lostsidedead.biz
 Command Line Arguments:
 -a        	Repeat    
@@ -12,6 +12,7 @@ Command Line Arguments:
 -h        	Shader Index
 -i        	Input file
 -l        	Audio channels
+-m        	CUDA device index
 -n        	fullscreen
 -o        	output file
 -p        	assets path
@@ -32,6 +33,7 @@ Command Line Arguments:
 --shader    	Shader Index
 --input     	Input file
 --channels  	Audio channels
+--cuda-device	CUDA device index
 --fullscreen	Fullscreen Window (Escape to quit)
 --output    	output file
 --path      	assets path
@@ -40,7 +42,7 @@ Command Line Arguments:
 --shaders   	Shader Library Index File
 --fps       	Frames per second
 --enable-audio	enabled audio reacitivty
---pass-through	Enable audio pass thorugh
+--pass-through	Enable audio pass through
 --texture-cache	Enable texture cache
 --cache-delay	Cache delay in frames
 --copy-audio	Copy audio track
@@ -50,20 +52,48 @@ Command Line Arguments:
 --audio-input	Audio input device
 --audio-output	Audio output device
 --list-devices	list audio devices
+--record-audio	Record captured audio to WAV file
+--record-gain	Recording volume gain 0.0-2.0 (default: 1.0)
+--gpu-filter	GPU filter indices (comma-separated)
+--gpu-buffer	GPU frame buffer size (4-32)
+--list-filters	List available GPU filters
+--disable-counter	Disable timer and FPS counter overlay
+--list-cuda-devices	List available CUDA devices
+--silent    	Silent mode - process video without window, (video files only)
+--shader-pass	Shader pass indices (comma-separated, e.g. 0,1,2)
+--build     	Build shader cache for specified library path (compiles shaders and exits)
+--no-cache  	Disable shader caching (always recompile shaders)
+--time-speed	Constant time_f speed multiplier (default: 1.0)
 
 -[ Keyboard controls ]- {
     Up arrow - Previous shader
     Down arrow - Next shader
-    Space -  Enable/Disable Processing
+    Left - Previous GPU filter (if enabled)
+    Right - Next GPU filter (if enabled)
+    Space - Enable/Disable Processing
     L - Enable/Disable video freeze (Video/Image Modes)
     P - Enable/Disable pause video (Video/Image Modes)
     T - enable/disable time
-    I/O - step time if not disabled
+    U/I - step time if not disabled
+    Page Up/Page Down - increase/decrease time speed
     Z - take snapshot
+    3 - toggle 2D/3D mode
+    M - toggle multi-pass
     F - toggle fullscreen
     Q - toggle reactive time (if AUDIO_ENABLED)
-    3D mode:
+    Insert - increase audio sensitivity
+    Delete - decrease audio sensitivity
+    Home - toggle audio delta time scaling on/off
+    M - toggle multi-shader pass (if --shader-pass set)
+    3 - toggle 2D/3D mode (switches between 2D and 3D rendering)
+    3D mode controls:
     W,A,S,D - Look around 
+    V - Toggle view rotation
     O - Oscillation Toggle
-    +, - increase / decrease model scale
+    X - Reset camera distance
+    ( +, - ) - increase / decrease camera distance
+    B - increase movement speed
+    N - decrease movement speed
+    C - Toggle Object Wave
+    E - Enable/Disable Watermark
 }

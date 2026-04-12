@@ -118,6 +118,8 @@ class MainWindow : public QMainWindow {
     unsigned int audio_channels = 2;
     float audio_sense = 0.25f;
     bool audio_passthrough = false;
+    bool record_audio = false;
+    double record_volume = 1.0;
     bool cache_enabled = false;
     int cache_delay = 1;
     bool full_screen_value = false;

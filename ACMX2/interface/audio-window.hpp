@@ -19,6 +19,8 @@ class AudioSettings : public QDialog {
 
     bool isAudioReactivityEnabled() const;
     bool isAudioPassThroughEnabled() const;
+    bool isRecordAudioEnabled() const;
+    double getRecordVolume() const;
     int getNumberOfChannels() const;
     double getSensitivity() const;
     int getInputDeviceIndex() const;
@@ -29,6 +31,8 @@ class AudioSettings : public QDialog {
 
     QCheckBox *audioReactivityCheckBox;
     QCheckBox *audioPassThroughCheckBox;
+    QCheckBox *recordAudioCheckBox;
+    QSlider *recordVolumeSlider;
     QSpinBox *channelSpinBox;
     QSlider *sensitivitySlider;
     QComboBox *inputDeviceComboBox;
