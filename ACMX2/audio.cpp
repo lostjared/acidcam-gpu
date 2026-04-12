@@ -60,7 +60,12 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFra
         if (out && output_channels > 0) {
             for (unsigned int ch = 0; ch < output_channels; ++ch) {
                 unsigned int outIndex = i * output_channels + ch;
-                out[outIndex] = 0.0f;
+                if (output_buffer) {
+                    unsigned int inCh = ch < input_channels ? ch : 0;
+                    out[outIndex] = in[i * input_channels + inCh];
+                } else {
+                    out[outIndex] = 0.0f;
+                }
             }
         }
     }
@@ -273,8 +278,6 @@ void list_audio_devices() {
 }
 
 int init_audio(unsigned int channels, float sense, int inputDeviceId, int outputDeviceId) {
-    (void)outputDeviceId;
-
     input_channels = channels;
     amp_sense = sense;
 
@@ -333,11 +336,42 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
         std::cout << "acmx2:   [DEFAULT INPUT]\n";
 
     input_channels = std::min(channels, inInfo.inputChannels);
-    output_channels = 0;
 
     inputParams.deviceId = inputDevice;
     inputParams.nChannels = input_channels;
     inputParams.firstChannel = 0;
+
+    // Set up output stream for pass-through if enabled
+    RtAudio::StreamParameters outputParams;
+    RtAudio::StreamParameters *outParamsPtr = nullptr;
+
+    if (output_buffer) {
+        unsigned int outputDevice;
+        if (outputDeviceId >= 0) {
+            outputDevice = static_cast<unsigned int>(outputDeviceId);
+            std::cout << "acmx2: Using specified output device: " << outputDevice << "\n";
+        } else {
+            outputDevice = audio.getDefaultOutputDevice();
+            std::cout << "acmx2: Using default output device: " << outputDevice << "\n";
+        }
+
+        RtAudio::DeviceInfo outInfo = audio.getDeviceInfo(outputDevice);
+        if (outInfo.outputChannels > 0) {
+            output_channels = std::min(static_cast<unsigned int>(2), outInfo.outputChannels);
+            outputParams.deviceId = outputDevice;
+            outputParams.nChannels = output_channels;
+            outputParams.firstChannel = 0;
+            outParamsPtr = &outputParams;
+            std::cout << "acmx2: Audio pass-through enabled on device " << outputDevice
+                      << ": " << outInfo.name << " (" << output_channels << " ch)\n";
+        } else {
+            std::cerr << "acmx2: Output device has no output channels, pass-through disabled.\n";
+            output_buffer = false;
+            output_channels = 0;
+        }
+    } else {
+        output_channels = 0;
+    }
 
     std::vector<unsigned int> sampleRates = inInfo.sampleRates;
     if (!sampleRates.empty()) {
@@ -351,7 +385,7 @@ int init_audio(unsigned int channels, float sense, int inputDeviceId, int output
 
     try {
         gSampleRate = sampleRate;
-        audio.openStream(nullptr, &inputParams, RTAUDIO_FLOAT32, sampleRate, &bufferFrames, &audioCallback);
+        audio.openStream(outParamsPtr, &inputParams, RTAUDIO_FLOAT32, sampleRate, &bufferFrames, &audioCallback);
         audio.startStream();
         if (audio.isStreamOpen())
             std::cout << "acmx2: Audio input stream opened (rate=" << sampleRate

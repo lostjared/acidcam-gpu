@@ -24,6 +24,7 @@ without having to restort to the command line or buliding the same basic boilerp
 ## Table of Contents
 - [Overview](#overview)
 - [Features](#features)
+- [Audio Reactivity & Recording](#audio-reactivity--recording)
 - [Technologies Used](#technologies-used)
 - [Building and Running](#building-and-running)
 - [Command-Line Arguments](#command-line-arguments)
@@ -76,6 +77,51 @@ without having to restort to the command line or buliding the same basic boilerp
 
 ---
 
+## Audio Reactivity & Recording
+
+ACMX2 supports real-time audio input for audio-reactive shader effects and optional audio recording. Audio features require building with `AUDIO=ON` and depend on **RtAudio** with a **PulseAudio** backend on Linux.
+
+### Enabling Audio
+
+Pass `-w` / `--enable-audio` on the command line (or enable it in the GUI's Audio Settings panel) to activate audio capture. You can select an input device with `--audio-input <id>` and list available devices with `--list-devices`.
+
+### Audio-Reactive Shaders
+
+When audio is enabled, the following GLSL uniforms are available to fragment shaders:
+
+| Uniform | Description |
+|---------|-------------|
+| `amp` | Processed amplitude scaled by sensitivity |
+| `uamp` | Raw untouched amplitude |
+| `amp_peak` | Highest sample value in the buffer |
+| `amp_rms` | Root mean square energy |
+| `amp_smooth` | Exponentially smoothed amplitude for gradual transitions |
+| `amp_low` | Low-frequency energy (<300 Hz / bass) |
+| `amp_mid` | Mid-frequency energy (300–3000 Hz) |
+| `amp_high` | High-frequency energy (>3000 Hz / treble) |
+| `iamp` | Estimated dominant frequency (Hz) via zero-crossing rate |
+| `iSampleRate` | Audio sample rate (44100 Hz) |
+
+Sensitivity can be adjusted at runtime with the **Insert** / **Delete** keys or via `--sense <value>` (default `0.25`). Use `-y` / `--pass-through` to enable audio pass-through (monitor playback).
+
+### Audio Recording
+
+When recording video with `-o`, you can simultaneously capture audio to a WAV file with `--record-audio <file.wav>`. Recording gain is adjustable with `--record-gain <0.0–2.0>` (default `1.0`). After recording completes, the audio track is automatically muxed into the output video using FFmpeg.
+
+### Creating a Virtual Audio Device (PipeWire / PulseAudio)
+
+If you want to route system audio or application output into ACMX2 as a reactive input, you can create a virtual audio sink with PipeWire's PulseAudio compatibility layer:
+
+```bash
+pactl load-module module-null-sink sink_name=VirtualAudio sink_properties=device.description="Virtual_Audio"
+```
+
+This creates a virtual sink called **Virtual_Audio**. You can then:
+1. Set an application's audio output to **Virtual_Audio** (via `pavucontrol` or your desktop sound settings).
+2. Select the **Virtual_Audio.monitor** as the input device in ACMX2 (`--audio-input` or via the GUI) so shaders react to that application's audio.
+
+---
+
 ## Technologies Used
 
 - **C++20** for core logic.
@@ -83,6 +129,7 @@ without having to restort to the command line or buliding the same basic boilerp
 - **SDL2** for creating the window, handling events, and managing the OpenGL context.
 - **OpenCV** for camera/video capture (and some basic image manipulation).
 - **FFmpeg (through a custom `MXWrite` wrapper (included))** for encoding/writing output video files.
+- **RtAudio** for real-time audio capture and playback (PulseAudio backend on Linux).
 - **Argz** library for command-line argument parsing.
 - **C++ STL** for concurrency, file system operations, etc.
 - **Qt6** for the GUI.
@@ -124,6 +171,11 @@ without having to restort to the command line or buliding the same basic boilerp
 | `-l <channels>`    | `--channels <channels>`         | Audio channels                          |
 | `-q <sensitivity>` | `--sense <sensitivity>`         | Audio Sensitivity                       |
 | `-y`               | `--pass-through`                | Enable Audio Pass-through               |
+|                    | `--audio-input <id>`            | Audio input device ID                   |
+|                    | `--audio-output <id>`           | Audio output device ID                  |
+|                    | `--list-devices`                | List available audio devices            |
+|                    | `--record-audio <file>`         | Record audio to WAV file                |
+|                    | `--record-gain <0-2.0>`         | Recording gain/volume (default 1.0)     |
 |                    | `--enable-3d`                   | Enable 3D mode                          |
 |                    | `--model model.mxmod`           | MXMOD file for 3D mode                  |
 
@@ -194,6 +246,9 @@ During runtime, the following keyboard controls are supported:
 | **O**          | Step backward in time (when time-based animation is disabled). |
 | **F**          | Toggle fullscreen mode.                              |
 | **Q**          | Toggle Reactive Time (if audio is enabled).          |
+| **Insert**     | Increase audio sensitivity.                          |
+| **Delete**     | Decrease audio sensitivity.                          |
+| **Home**       | Toggle audio delta time scaling.                     |
 | **ESC**        | Quit the application or close the window.             |
 
 
