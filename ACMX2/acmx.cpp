@@ -1801,7 +1801,16 @@ class ACView : public gl::GLObject {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
-        stopWriterThread();
+        if (!isMuxing.load()) {
+            bool shouldMux = needsMux() && writer.is_open();
+            stopWriterThread();
+            if (shouldMux) {
+                runMuxSync();
+            }
+        }
+        if (muxThread.joinable()) {
+            muxThread.join();
+        }
 
 #ifdef AUDIO_ENABLED
         if (audio_is_enabled) {
@@ -2184,7 +2193,30 @@ class ACView : public gl::GLObject {
             lastFrameTime += frame_duration;
         }
 
+        if (isMuxing.load()) {
+            if (muxComplete.load()) {
+                if (muxThread.joinable())
+                    muxThread.join();
+                isMuxing = false;
+                win->quit();
+                return;
+            }
+            glViewport(0, 0, win->w, win->h);
+            if (overlayFont.handle().has_value()) {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                win->text.setColor({255, 255, 255, 255});
+                win->text.printText_Blended(overlayFont, 10, 10, "Muxing audio...");
+                glDisable(GL_BLEND);
+            }
+            return;
+        }
+
         if (!running) {
+            if (needsMux()) {
+                beginMuxing(win);
+                return;
+            }
             win->quit();
             return;
         }
@@ -2213,7 +2245,6 @@ class ACView : public gl::GLObject {
                         }
                         running = false;
                         finished = true;
-                        win->quit();
                         return;
                     }
                 }
@@ -3109,6 +3140,9 @@ class ACView : public gl::GLObject {
     int cache_delay = 1;
     std::atomic<bool> finished{false};
     std::atomic<bool> copy_audio{false};
+    std::atomic<bool> isMuxing{false};
+    std::atomic<bool> muxComplete{false};
+    std::thread muxThread;
     float cameraYaw = 270.0f;
     float cameraPitch = 0.0f;
     const float cameraRotationSpeed = 5.0f;
@@ -3397,6 +3431,71 @@ class ACView : public gl::GLObject {
         });
     }
 
+    bool needsMux() {
+#ifdef AUDIO_ENABLED
+        return audio_is_enabled && !audio_record_file.empty() && !ofilename.empty();
+#else
+        return false;
+#endif
+    }
+
+    void runMuxSync() {
+#ifdef AUDIO_ENABLED
+        if (!audio_is_enabled || audio_record_file.empty() || ofilename.empty())
+            return;
+        if (is_audio_recording()) {
+            stop_audio_recording();
+        }
+        std::string tmp_out = ofilename + ".tmp.mp4";
+        std::ostringstream cmd;
+        cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_record_file
+            << "\" -map 0:v:0 -map 1:a:0"
+            << " -c:v copy -c:a aac -b:a 192k"
+            << " -shortest -movflags +faststart \""
+            << tmp_out << "\" 2>&1";
+        mx::system_out << "acmx2: muxing recorded audio into video...\n";
+        fflush(stdout);
+        int ret = std::system(cmd.str().c_str());
+        if (ret == 0) {
+            std::remove(ofilename.c_str());
+            std::rename(tmp_out.c_str(), ofilename.c_str());
+            mx::system_out << "acmx2: muxed recorded audio from: " << audio_record_file << " to " << ofilename << "\n";
+        } else {
+            mx::system_err << "acmx2: ffmpeg mux failed (exit code " << ret << ")\n";
+            std::remove(tmp_out.c_str());
+        }
+        fflush(stdout);
+        fflush(stderr);
+#endif
+    }
+
+    void beginMuxing(gl::GLWindow *win) {
+        captureRunning = false;
+        writerRunning = false;
+        queueCondVar.notify_all();
+        captureQueueCondVar.notify_all();
+        isMuxing = true;
+        muxComplete = false;
+        muxThread = std::thread([this]() {
+            if (captureThread.joinable())
+                captureThread.join();
+            if (writerThread.joinable())
+                writerThread.join();
+            if (writer.is_open()) {
+                writer.close();
+                int64_t fc = writer.get_frame_count();
+                double ts = (fps > 0.0) ? static_cast<double>(fc) / fps : 0.0;
+                mx::system_out << "acmx2: wrote " << fc << " frames ("
+                               << static_cast<int>(ts / 3600) << ":"
+                               << static_cast<int>(ts / 60) % 60 << ":"
+                               << static_cast<int>(ts) % 60 << ") to file: " << ofilename << "\n";
+                fflush(stdout);
+            }
+            runMuxSync();
+            muxComplete = true;
+        });
+    }
+
     void stopWriterThread() {
         bool recording = writer.is_open();
         writerRunning = false;
@@ -3425,26 +3524,6 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
             if (audio_is_enabled && is_audio_recording()) {
                 stop_audio_recording();
-            }
-            if (audio_is_enabled && !audio_record_file.empty()) {
-                std::string tmp_out = ofilename + ".tmp.mp4";
-                std::ostringstream cmd;
-                cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_record_file
-                    << "\" -map 0:v:0 -map 1:a:0"
-                    << " -c:v copy -c:a aac -b:a 192k"
-                    << " -shortest -movflags +faststart \""
-                    << tmp_out << "\" 2>&1";
-                mx::system_out << "acmx2: muxing recorded audio into video...\n";
-                fflush(stdout);
-                int ret = std::system(cmd.str().c_str());
-                if (ret == 0) {
-                    std::remove(ofilename.c_str());
-                    std::rename(tmp_out.c_str(), ofilename.c_str());
-                    mx::system_out << "acmx2: muxed recorded audio from: " << audio_record_file << " to " << ofilename << "\n";
-                } else {
-                    mx::system_err << "acmx2: ffmpeg mux failed (exit code " << ret << ")\n";
-                    std::remove(tmp_out.c_str());
-                }
             }
 #endif
             fflush(stdout);
