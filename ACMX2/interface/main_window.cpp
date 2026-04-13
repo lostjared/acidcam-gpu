@@ -1015,22 +1015,6 @@ void MainWindow::runSelected() {
             arguments << "--midi-device" << QString::number(midi_device);
     }
 
-    if (playlist_enabled && !playlist_names.isEmpty()) {
-        QString plFile = playlist_file_path;
-        if (plFile.isEmpty()) {
-            plFile = prefix_path + "/playlist.txt";
-        }
-        QFile f(plFile);
-        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream out(&f);
-            for (const QString &name : playlist_names)
-                out << name << "\n";
-            f.close();
-            playlist_file_path = plFile;
-        }
-        arguments << "--playlist" << plFile;
-    }
-
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
