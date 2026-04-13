@@ -3605,7 +3605,7 @@ class ACView : public gl::GLObject {
     std::thread muxThread;
     float cameraYaw = 270.0f;
     float cameraPitch = 0.0f;
-    float cameraRotationSpeed = 0.5f;
+    float cameraRotationSpeed = 5.0f;
     bool viewRotationActive = false;
     bool oscillateScale = false;
     bool waveActive = false;
