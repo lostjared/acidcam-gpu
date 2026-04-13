@@ -27,6 +27,9 @@
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
 #endif
+#ifdef MIDI_ENABLED
+#include <rtmidi/RtMidi.h>
+#endif
 #include "program.hpp"
 #include <ac-gpu/ac-gpu.hpp>
 #include <cuda_gl_interop.h>
@@ -1615,6 +1618,10 @@ struct MXArguments {
     float record_gain = 1.0f;
 #endif
     bool silent = false;
+#ifdef MIDI_ENABLED
+    std::string midi_map_file;
+    int midi_device = -1;
+#endif
     bool gpu_filter_enabled = false;
     std::vector<int> gpu_filter_indices;
     int gpu_frame_buffer_size = 8;
@@ -1641,6 +1648,130 @@ class ACView : public gl::GLObject {
     int audio_input_device;
     int audio_output_device;
     std::string audio_record_file;
+#endif
+#ifdef MIDI_ENABLED
+    RtMidiIn *midiIn = nullptr;
+    bool midiOpen = false;
+    struct MidiCode {
+        int key1;
+        int key2;
+        unsigned char b0, b1, b2;
+    };
+    std::vector<MidiCode> midiCodes;
+
+    void initMidi(const std::string &mapFile, int deviceIndex) {
+        try {
+            midiIn = new RtMidiIn();
+            midiIn->ignoreTypes(false, false, false);
+            unsigned int ports = midiIn->getPortCount();
+            if (ports == 0) {
+                mx::system_out << "acmx2: No MIDI input devices found\n";
+                delete midiIn;
+                midiIn = nullptr;
+                return;
+            }
+            unsigned int port = (deviceIndex >= 0 && deviceIndex < static_cast<int>(ports))
+                                    ? static_cast<unsigned int>(deviceIndex) : 0;
+            mx::system_out << "acmx2: Opening MIDI port " << port << ": " << midiIn->getPortName(port) << "\n";
+            midiIn->openPort(port);
+            midiOpen = true;
+
+            std::ifstream file(mapFile);
+            if (!file.is_open()) {
+                mx::system_err << "acmx2: Could not open MIDI map file: " << mapFile << "\n";
+                return;
+            }
+            std::string line;
+            while (std::getline(file, line)) {
+                std::istringstream iss(line);
+                std::string keyPair;
+                if (!(iss >> keyPair)) continue;
+                auto colonPos = keyPair.find(':');
+                if (colonPos == std::string::npos) continue;
+                int k1 = std::stoi(keyPair.substr(0, colonPos));
+                int k2 = std::stoi(keyPair.substr(colonPos + 1));
+                char brace;
+                if (!(iss >> brace) || brace != '{') continue;
+                int b0, b1, b2;
+                if (!(iss >> b0 >> b1 >> b2)) continue;
+                midiCodes.push_back({k1, k2,
+                    static_cast<unsigned char>(b0),
+                    static_cast<unsigned char>(b1),
+                    static_cast<unsigned char>(b2)});
+            }
+            mx::system_out << "acmx2: Loaded " << midiCodes.size() << " MIDI mapping(s)\n";
+            fflush(stdout);
+        } catch (RtMidiError &e) {
+            mx::system_err << "acmx2: MIDI error: " << e.getMessage() << "\n";
+            if (midiIn) { delete midiIn; midiIn = nullptr; }
+        }
+    }
+
+    SDL_Keycode midiKeyToSDL(int code) {
+        switch (code) {
+        case 262: return SDLK_RIGHT;
+        case 263: return SDLK_LEFT;
+        case 264: return SDLK_DOWN;
+        case 265: return SDLK_UP;
+        case 266: return SDLK_PAGEUP;
+        case 267: return SDLK_PAGEDOWN;
+        case 32:  return SDLK_SPACE;
+        case 44:  return SDLK_COMMA;
+        case 45:  return SDLK_MINUS;
+        case 46:  return SDLK_PERIOD;
+        case 47:  return SDLK_SLASH;
+        case 61:  return SDLK_EQUALS;
+        case 65:  return SDLK_a;
+        case 66:  return SDLK_b;
+        case 68:  return SDLK_d;
+        case 72:  return SDLK_h;
+        case 76:  return SDLK_l;
+        case 78:  return SDLK_n;
+        case 80:  return SDLK_p;
+        case 83:  return SDLK_s;
+        case 87:  return SDLK_w;
+        default:  return SDLK_UNKNOWN;
+        }
+    }
+
+    void injectKey(SDL_Keycode key, gl::GLWindow *win) {
+        SDL_Event ev{};
+        ev.type = SDL_KEYUP;
+        ev.key.keysym.sym = key;
+        ev.key.state = SDL_RELEASED;
+        event(win, ev);
+    }
+
+    void pollMidi(gl::GLWindow *win) {
+        if (!midiIn || !midiOpen) return;
+        std::vector<unsigned char> msg;
+        while (true) {
+            midiIn->getMessage(&msg);
+            if (msg.size() < 3) break;
+            for (const auto &mc : midiCodes) {
+                if (msg[0] == mc.b0 && msg[1] == mc.b1) {
+                    if (mc.key2 != 0) {
+                        SDL_Keycode k = (msg[2] > 64)
+                            ? midiKeyToSDL(mc.key1)
+                            : midiKeyToSDL(mc.key2);
+                        if (k != SDLK_UNKNOWN) injectKey(k, win);
+                    } else if (msg[2] == mc.b2) {
+                        SDL_Keycode k = midiKeyToSDL(mc.key1);
+                        if (k != SDLK_UNKNOWN) injectKey(k, win);
+                    }
+                }
+            }
+        }
+    }
+
+    void cleanupMidi() {
+        if (midiIn) {
+            if (midiOpen) midiIn->closePort();
+            delete midiIn;
+            midiIn = nullptr;
+            midiOpen = false;
+        }
+    }
 #endif
     bool isPaused = false;
     bool isFrozen = false;
@@ -1714,6 +1845,11 @@ class ACView : public gl::GLObject {
             }
             fflush(stdout);
         }
+#ifdef MIDI_ENABLED
+        if (!args.midi_map_file.empty()) {
+            initMidi(args.midi_map_file, args.midi_device);
+        }
+#endif
     }
 
     bool is3d_enabled = false;
@@ -1751,6 +1887,9 @@ class ACView : public gl::GLObject {
     bool counter_disabled = false;
 
     ~ACView() override {
+#ifdef MIDI_ENABLED
+        cleanupMidi();
+#endif
         tex_uploader.cleanup();
         if (d_ptrList) {
             cudaFree(d_ptrList);
@@ -2192,6 +2331,10 @@ class ACView : public gl::GLObject {
             }
             lastFrameTime += frame_duration;
         }
+
+#ifdef MIDI_ENABLED
+        pollMidi(win);
+#endif
 
         if (isMuxing.load()) {
             if (muxComplete.load()) {
@@ -3714,7 +3857,13 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)")
         .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
         .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)")
-        .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)");
+        .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
+#ifdef MIDI_ENABLED
+        .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
+        .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
+        .addOptionDouble(502, "list-midi", "List available MIDI input devices")
+#endif
+    ;
 
     if (argc == 1) {
         printAbout(parser);
@@ -3967,6 +4116,35 @@ int main(int argc, char **argv) {
                 args.time_speed = static_cast<float>(atof(arg.arg_value.c_str()));
                 mx::system_out << "acmx2: Time speed set to: " << args.time_speed << "\n";
                 break;
+#ifdef MIDI_ENABLED
+            case 500:
+                args.midi_map_file = arg.arg_value;
+                mx::system_out << "acmx2: MIDI map file: " << args.midi_map_file << "\n";
+                break;
+            case 501:
+                args.midi_device = atoi(arg.arg_value.c_str());
+                mx::system_out << "acmx2: MIDI device index: " << args.midi_device << "\n";
+                break;
+            case 502: {
+                try {
+                    RtMidiIn midi;
+                    unsigned int ports = midi.getPortCount();
+                    if (ports == 0) {
+                        mx::system_out << "No MIDI input devices found.\n";
+                    } else {
+                        mx::system_out << "MIDI Input Devices (" << ports << "):\n";
+                        for (unsigned int i = 0; i < ports; ++i) {
+                            mx::system_out << "  " << i << ": " << midi.getPortName(i) << "\n";
+                        }
+                    }
+                } catch (RtMidiError &e) {
+                    mx::system_err << "MIDI error: " << e.getMessage() << "\n";
+                }
+                fflush(stdout);
+                exit(EXIT_SUCCESS);
+                break;
+            }
+#endif
             }
         }
     } catch (const ArgException<std::string> &e) {

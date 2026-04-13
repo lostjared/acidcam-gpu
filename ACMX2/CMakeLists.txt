@@ -126,6 +126,26 @@ else()
     set(AUDIO_SRC "")
     message(STATUS "AUDIO DISABLED")
 endif()
+option(MIDI "MIDI Support" OFF)
+if(MIDI)
+    find_library(RTMIDI_LIBRARY NAMES rtmidi REQUIRED)
+    find_path(RTMIDI_INCLUDE_DIR NAMES rtmidi/RtMidi.h PATHS /usr/include /usr/local/include)
+    if(NOT RTMIDI_LIBRARY)
+        message(FATAL_ERROR "RtMidi library not found. Please install rtmidi or disable MIDI option.")
+    endif()
+    if(NOT RTMIDI_INCLUDE_DIR)
+        message(FATAL_ERROR "RtMidi headers not found. Please install rtmidi development files or disable MIDI option.")
+    endif()
+    set(MIDI_INCLUDE ${RTMIDI_INCLUDE_DIR})
+    set(MIDI_LIBS ${RTMIDI_LIBRARY})
+    message(STATUS "MIDI ENABLED")
+    message(STATUS "MIDI LIBRARY: ${RTMIDI_LIBRARY}")
+    message(STATUS "MIDI INCLUDE: ${RTMIDI_INCLUDE_DIR}")
+else()
+    set(MIDI_INCLUDE "")
+    set(MIDI_LIBS "")
+    message(STATUS "MIDI DISABLED")
+endif()
 set(CMAKE_REQUIRED_FLAGS "-std=c++20")
 check_cxx_source_compiles("
     #include <concepts>
@@ -186,6 +206,9 @@ target_compile_definitions(acmx2 PRIVATE WITH_GL)
 if(AUDIO)
     target_compile_definitions(acmx2 PRIVATE AUDIO_ENABLED)
 endif()
+if(MIDI)
+    target_compile_definitions(acmx2 PRIVATE MIDI_ENABLED)
+endif()
 target_compile_options(acmx2 PRIVATE -O3 -Wall -pedantic)
 target_include_directories(acmx2 PRIVATE 
     ${libmx2_INCLUDE_DIRS}
@@ -193,6 +216,7 @@ target_include_directories(acmx2 PRIVATE
     ${SDL2_TTF_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
     ${AUDIO_INCLUDE}/rtaudio
+    ${MIDI_INCLUDE}
     ${CMAKE_INSTALL_PREFIX}/include
     ${CMAKE_PREFIX_PATH}/include
     ${MXWrite_INCLUDE_DIRS}
@@ -207,6 +231,7 @@ target_link_libraries(acmx2 PRIVATE
     mxgl
     ${OpenCV_LIBRARIES} 
     ${AUDIO_LIBS}
+    ${MIDI_LIBS}
     MXWrite::mxwrite
     acidcam-gpu::acidcam-gpu
     CUDA::cudart

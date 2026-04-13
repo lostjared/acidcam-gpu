@@ -139,6 +139,11 @@ void MainWindow::initControls() {
     });
     playbackMenu->addAction(runFromCacheAction);
 
+    playbackMenu->addSeparator();
+    midiSettingsAction = new QAction(tr("MIDI Settings..."), this);
+    connect(midiSettingsAction, &QAction::triggered, this, &MainWindow::menuMidiSettings);
+    playbackMenu->addAction(midiSettingsAction);
+
     // recompileShadersAction = new QAction(tr("Recompile All Shaders"), this);
     // connect(recompileShadersAction, &QAction::triggered, this, &MainWindow::menuRecompileShaders);
     // playbackMenu->addAction(recompileShadersAction);
@@ -226,6 +231,9 @@ void MainWindow::initControls() {
     prefix_path = appSettings.value("prefix_path", ".").toString();
     bool useCustomStyle = appSettings.value("useCustomStyle", false).toBool();
     styleSheetAction->setChecked(useCustomStyle);
+    midi_enabled = appSettings.value("midiEnabled", false).toBool();
+    midi_config_file = appSettings.value("midiConfigFile", "").toString();
+    midi_device = appSettings.value("midiDevice", -1).toInt();
     if (!path.isEmpty()) {
         QFileInfo pathInfo(path);
         QFileInfo indexInfo(path + "/index.txt");
@@ -725,6 +733,24 @@ void MainWindow::menuGPUFilterSettings() {
     }
 }
 
+void MainWindow::menuMidiSettings() {
+    MidiSettings midiDialog(executable_path, this);
+    if (midiDialog.exec() == QDialog::Accepted) {
+        midi_enabled = midiDialog.isMidiEnabled();
+        midi_config_file = midiDialog.getMidiConfigFile();
+        midi_device = midiDialog.getMidiDeviceIndex();
+        QSettings appSettings("LostSideDead");
+        appSettings.setValue("midiEnabled", midi_enabled);
+        appSettings.setValue("midiConfigFile", midi_config_file);
+        appSettings.setValue("midiDevice", midi_device);
+        if (midi_enabled) {
+            Log("MIDI Settings Saved: Config=" + midi_config_file + ", Device=" + QString::number(midi_device));
+        } else {
+            Log("MIDI Disabled");
+        }
+    }
+}
+
 void MainWindow::menuShaderPassSettings() {
     if (shader_path.isEmpty()) {
         QMessageBox::information(this, "Load Shaders First",
@@ -940,6 +966,12 @@ void MainWindow::runSelected() {
         arguments << "--no-cache";
     }
 
+    if (midi_enabled && !midi_config_file.isEmpty()) {
+        arguments << "--midi-map" << midi_config_file;
+        if (midi_device >= 0)
+            arguments << "--midi-device" << QString::number(midi_device);
+    }
+
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
@@ -1092,6 +1124,12 @@ void MainWindow::runAll() {
 
     if (!use_shader_cache) {
         arguments << "--no-cache";
+    }
+
+    if (midi_enabled && !midi_config_file.isEmpty()) {
+        arguments << "--midi-map" << midi_config_file;
+        if (midi_device >= 0)
+            arguments << "--midi-device" << QString::number(midi_device);
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");

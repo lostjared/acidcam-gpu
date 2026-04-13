@@ -5,6 +5,7 @@
 #define __APP_WINDOW_H_
 #include "editor.hpp"
 #include "gpufilter.hpp"
+#include "midi-settings.hpp"
 #include "prop.hpp"
 #include "shader.hpp"
 #include "shaderlibrary.hpp"
@@ -63,6 +64,7 @@ class MainWindow : public QMainWindow {
     void menuBuildShaderCache();
     void menuRunFromCache();
     void menuRecompileShaders();
+    void menuMidiSettings();
 
   protected:
     bool addShaderToList(const QString &shaderName);
@@ -145,6 +147,10 @@ class MainWindow : public QMainWindow {
     int cuda_device = 0;
     float time_speed = 1.0f;
     bool use_shader_cache = true;
+    bool midi_enabled = false;
+    QString midi_config_file;
+    int midi_device = -1;
+    QAction *midiSettingsAction;
     QString stderrBuffer;
 };
 
