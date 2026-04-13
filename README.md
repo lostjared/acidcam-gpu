@@ -101,6 +101,136 @@ sudo bash build-script/install-deps-arch.sh
 
 ---
 
+## Command-Line Arguments
+
+### General
+
+| Short | Long | Value | Description |
+|-------|------|-------|-------------|
+| `-v` | `--help` | | Display help message and exit |
+| `-p` | `--path` | `<dir>` | Assets path |
+| `-r` | `--resolution` | `WxH` | Window resolution (e.g. `1920x1080`) |
+| `-d` | `--device` | `<index>` | Camera device index |
+| `-c` | `--camera-res` | `WxH` | Camera capture resolution |
+| `-i` | `--input` | `<file>` | Input video file |
+| `-g` | `--graphic` | `<file>` | Input image file |
+| `-o` | `--output` | `<file>` | Output video file |
+| `-b` | `--bitrate` | `<crf>` | Output bitrate in CRF |
+| `-u` | `--fps` | `<fps>` | Frames per second |
+| `-e` | `--prefix` | `<path>` | Snapshot save prefix |
+| `-a` | `--repeat` | | Loop/repeat video playback |
+| `-n` / `-N` | `--fullscreen` | | Fullscreen window (Escape to quit) |
+| `-m` | `--cuda-device` | `<index>` | CUDA device index |
+
+### Shader Options
+
+| Short | Long | Value | Description |
+|-------|------|-------|-------------|
+| `-s` | `--shaders` | `<file>` | Shader library index file |
+| `-f` | `--fragment` | `<file>` | Single fragment shader file |
+| `-h` | `--shader` | `<index>` | Initial shader index in library |
+| | `--shader-pass` | `<indices>` | Shader pass indices (comma-separated, e.g. `0,1,2`) |
+| | `--playlist` | `<file>` | Shader playlist text file (one shader name per line) |
+| | `--build` | `<path>` | Build shader cache for specified library path and exit |
+| | `--no-cache` | | Disable shader caching (always recompile shaders) |
+| | `--time-speed` | `<float>` | Constant `time_f` speed multiplier (default: `1.0`) |
+
+### GPU Filter Options
+
+| Long | Value | Description |
+|------|-------|-------------|
+| `--gpu-filter` | `<indices>` | GPU filter indices (comma-separated) |
+| `--gpu-buffer` | `<size>` | GPU frame buffer size (`4`–`32`) |
+| `--list-filters` | | List available GPU filters and exit |
+| `--list-cuda-devices` | | List available CUDA devices and exit |
+| `--disable-counter` | | Disable timer and FPS counter overlay |
+| `--silent` | | Process video without window (video files only, requires `-o`) |
+
+### 3D / Model Options
+
+| Long | Value | Description |
+|------|-------|-------------|
+| `--texture-cache` | | Enable texture cache |
+| `--cache-delay` | `<frames>` | Texture cache delay in frames |
+| `--copy-audio` | | Copy audio track from input to output |
+| `--enable-3d` | | Enable 3D cube rendering |
+| `--model` | `<file>` | 3D model file (`.mxmod`) |
+
+### Audio Options (requires `AUDIO_ENABLED` build)
+
+| Short | Long | Value | Description |
+|-------|------|-------|-------------|
+| `-w` | `--enable-audio` | | Enable audio reactivity |
+| `-l` | `--channels` | `<num>` | Audio channels |
+| `-q` | `--sense` | `<float>` | Audio sensitivity |
+| `-y` | `--pass-through` | | Enable audio pass-through |
+| | `--audio-input` | `<index>` | Audio input device (`default` or index) |
+| | `--audio-output` | `<index>` | Audio output device (`default` or index) |
+| | `--list-devices` | | List audio devices and exit |
+| | `--record-audio` | `<file>` | Record captured audio to WAV file |
+| | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
+
+### MIDI Options (requires `MIDI_ENABLED` build)
+
+| Long | Value | Description |
+|------|-------|-------------|
+| `--midi-map` | `<file>` | MIDI config file (`.midi_cfg`) |
+| `--midi-device` | `<index>` | MIDI input device index |
+| `--list-midi` | | List available MIDI input devices and exit |
+
+---
+
+## Keyboard Controls
+
+### General Controls
+
+| Key | Action |
+|-----|--------|
+| `Up` | Previous shader (or previous playlist shader if playlist enabled) |
+| `Down` | Next shader (or next playlist shader if playlist enabled) |
+| `Left` | Previous GPU filter (if GPU filters enabled) |
+| `Right` | Next GPU filter (if GPU filters enabled) |
+| `Space` | Toggle shader processing bypass |
+| `P` | Toggle playlist mode / Pause video (Video/Image modes) |
+| `L` | Toggle video freeze (Video/Image modes) |
+| `Z` | Take snapshot |
+| `M` | Toggle multi-shader pass (if `--shader-pass` set) |
+| `3` | Toggle 2D/3D mode (if `--enable-3d` active) |
+| `E` | Toggle watermark |
+| `F9` | Toggle overlay (timer/FPS counter) visibility |
+
+### Time Controls
+
+| Key | Action |
+|-----|--------|
+| `U` (hold) | Increase time step |
+| `I` (hold) | Decrease time step |
+| `T` | Toggle time on/off (Audio build) |
+| `Q` | Toggle audio-reactive time (Audio build) |
+| `Home` | Toggle audio delta time scaling (Audio build) |
+
+### Audio Controls (Audio build)
+
+| Key | Action |
+|-----|--------|
+| `Insert` | Increase audio sensitivity |
+| `Delete` | Decrease audio sensitivity |
+
+### 3D Mode Controls (when 3D enabled)
+
+| Key | Action |
+|-----|--------|
+| `W` / `A` / `S` / `D` | Look around |
+| `V` | Toggle view rotation |
+| `O` | Toggle scale oscillation |
+| `X` | Reset camera distance |
+| `+` / `-` | Increase / decrease camera distance |
+| `B` | Increase movement speed |
+| `N` | Decrease movement speed |
+| `C` | Toggle wave effect |
+
+---
+
 ## Recent Updates
 
 ### MIDI Controller Support
