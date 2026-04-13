@@ -133,6 +133,9 @@ void MidiMapWindow::applyStyleSheet() {
         "QScrollBar:vertical { background: #0d0d0d; width: 12px; border: 1px solid #333333; }"
         "QScrollBar::handle:vertical { background: #555555; min-height: 20px; border-radius: 3px; }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        "QMessageBox { background-color: #1a1a1a; color: white; }"
+        "QMessageBox QLabel { color: white; }"
+        "QMessageBox QPushButton { min-width: 70px; }"
     );
 }
 
@@ -263,7 +266,11 @@ void MidiMapWindow::captureMapping() {
 
 void MidiMapWindow::clearMapping() {
     int row = table->currentRow();
-    if (row < 0 || row >= static_cast<int>(mappings.size())) return;
+    if (row < 0 || row >= static_cast<int>(mappings.size())) {
+        QMessageBox::information(this, "Select Action",
+            "Select a row in the table to clear its mapping.");
+        return;
+    }
 
     mappings[row].captured = false;
     mappings[row].byte0 = 0;
