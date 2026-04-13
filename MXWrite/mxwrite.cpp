@@ -187,9 +187,24 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
         av_packet_unref(&packet);
     }
 
+    int64_t video_duration_ts = 0;
+    {
+        AVStream *vid_stream = dest_ctx->streams[0];
+        if (vid_stream->duration > 0) {
+            video_duration_ts = av_rescale_q(vid_stream->duration, vid_stream->time_base, source_ctx->streams[source_audio_idx]->time_base);
+        } else if (dest_ctx->duration > 0) {
+            AVRational av_tb = {1, AV_TIME_BASE};
+            video_duration_ts = av_rescale_q(dest_ctx->duration, av_tb, source_ctx->streams[source_audio_idx]->time_base);
+        }
+    }
+
     av_seek_frame(source_ctx, source_audio_idx, 0, AVSEEK_FLAG_BACKWARD);
     while (av_read_frame(source_ctx, &packet) >= 0) {
         if (packet.stream_index == source_audio_idx) {
+            if (video_duration_ts > 0 && packet.pts != AV_NOPTS_VALUE && packet.pts > video_duration_ts) {
+                av_packet_unref(&packet);
+                break;
+            }
             AVStream *in_stream = source_ctx->streams[packet.stream_index];
             AVStream *out_stream = output_ctx->streams[dest_audio_idx];
             av_packet_rescale_ts(&packet, in_stream->time_base, out_stream->time_base);

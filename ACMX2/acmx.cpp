@@ -3397,7 +3397,7 @@ class ACView : public gl::GLObject {
                         });
                     }
 
-                    if (writer.is_open() && !filename.empty() && written_frame_counter == 0) {
+                    if (writer.is_open() && (!filename.empty() || !graphic.empty()) && written_frame_counter == 0) {
                         written_frame_counter++;
                         continue;
                     } else if (writer.is_open() && written_frame_counter <= 30 && filename.empty() && graphic.empty()) {
@@ -3447,11 +3447,16 @@ class ACView : public gl::GLObject {
             stop_audio_recording();
         }
         std::string tmp_out = ofilename + ".tmp.mp4";
+        int64_t fc = writer.get_frame_count();
+        double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
         std::ostringstream cmd;
         cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_record_file
             << "\" -map 0:v:0 -map 1:a:0"
-            << " -c:v copy -c:a aac -b:a 192k"
-            << " -shortest -movflags +faststart \""
+            << " -c:v copy -c:a aac -b:a 192k";
+        if (video_duration > 0.0) {
+            cmd << " -t " << std::fixed << std::setprecision(3) << video_duration;
+        }
+        cmd << " -movflags +faststart \""
             << tmp_out << "\" 2>&1";
         mx::system_out << "acmx2: muxing recorded audio into video...\n";
         fflush(stdout);
@@ -3517,7 +3522,7 @@ class ACView : public gl::GLObject {
                      << std::setfill('0') << std::setw(2) << seconds;
 
             mx::system_out << "acmx2: " << " wrote " << timerStr.str() << " (" << final_frame_count << " frames) to file: " << ofilename << "\n";
-            if (!filename.empty() && repeat == false && copy_audio && finished) {
+            if (!filename.empty() && repeat == false && copy_audio) {
                 transfer_audio(filename, ofilename);
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }

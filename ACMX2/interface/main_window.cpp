@@ -903,7 +903,11 @@ void MainWindow::runSelected() {
         else
             arguments << "--audio-output" << QString::number(audio_output);
 
-        if (record_audio) {
+        bool should_record = record_audio;
+        if (!should_record && !output_file.isEmpty() && (!graphics_file.isEmpty() || video_file.isEmpty())) {
+            should_record = true;
+        }
+        if (should_record) {
             QString wavPath;
             if (!output_file.isEmpty()) {
                 QFileInfo fi(output_file);
@@ -1046,7 +1050,11 @@ void MainWindow::runAll() {
         else
             arguments << "--audio-output" << QString::number(audio_output);
 
-        if (record_audio) {
+        bool should_record = record_audio;
+        if (!should_record && !output_file.isEmpty() && (!graphics_file.isEmpty() || video_file.isEmpty())) {
+            should_record = true;
+        }
+        if (should_record) {
             QString wavPath;
             if (!output_file.isEmpty()) {
                 QFileInfo fi(output_file);
