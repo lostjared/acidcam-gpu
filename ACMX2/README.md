@@ -3,11 +3,6 @@
 
 The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU filters to live camera feeds, video files, or static images in real time. Supports 3D model rendering, audio reactivity, MIDI control, shader playlists, and multipass shader chains.
 
-Built on [libmx2](https://github.com/lostjared/libmx2) and requires an NVIDIA GPU with CUDA support.
-
-![image](https://github.com/user-attachments/assets/7cdf6c57-0938-49ea-906d-594b48149acb)
-<img width="2048" height="1152" alt="image" src="https://github.com/user-attachments/assets/8aaba334-3e80-46e9-951f-4da2d75ec527" />
-
 ---
 
 ## Features
@@ -46,7 +41,6 @@ mkdir build && cd build
 cmake .. && make -j$(nproc)
 cp -rf ../data/ .
 ```
-
 ---
 
 ## Usage Examples
@@ -83,22 +77,66 @@ cp -rf ../data/ .
 
 ---
 
-## Audio-Reactive Shader Uniforms
+## Supported Shader Uniforms
 
-When built with `AUDIO=ON` and launched with `-w`, the following GLSL uniforms are available:
+All fragment shaders receive the following uniforms automatically. Uniforms that are not declared in your shader are silently ignored.
 
-| Uniform | Description |
-|---------|-------------|
-| `amp` | Amplitude scaled by sensitivity |
-| `uamp` | Raw untouched amplitude |
-| `amp_peak` | Highest sample value in the buffer |
-| `amp_rms` | Root mean square energy |
-| `amp_smooth` | Exponentially smoothed amplitude |
-| `amp_low` | Low-frequency energy (<300 Hz) |
-| `amp_mid` | Mid-frequency energy (300–3000 Hz) |
-| `amp_high` | High-frequency energy (>3000 Hz) |
-| `iamp` | Estimated dominant frequency (Hz) |
-| `iSampleRate` | Audio sample rate (44100 Hz) |
+### Core Uniforms
+
+| Uniform | Type | Description |
+|---------|------|-------------|
+| `samp` | `sampler2D` | Main video/camera texture |
+| `alpha` | `float` | Alpha value (oscillates `0.0`–`1.0`) |
+| `iTime` | `float` | Elapsed time in seconds since start |
+| `time_f` | `float` | Time multiplier (adjustable with `U`/`I` keys and `--time-speed`) |
+| `iFrame` | `int` | Frame counter |
+| `iTimeDelta` | `float` | Time since last frame (seconds) |
+| `iResolution` | `vec2` | Window resolution `(width, height)` |
+| `iMouse` | `vec4` | Mouse position `(x, y, clickStartX, clickStartY)` |
+| `iMouseClick` | `vec2` | Last mouse click position |
+| `iDate` | `vec4` | Current date/time `(year, month, day, secondsOfDay)` |
+| `iFrameRate` | `float` | Frame rate |
+| `iChannelTime[0..3]` | `float` | Per-channel time |
+| `iChannelResolution[0..3]` | `vec3` | Per-channel resolution |
+
+### Texture Cache Uniforms (shaders with "cache" in the filename)
+
+| Uniform | Type | Description |
+|---------|------|-------------|
+| `samp1`–`samp8` | `sampler2D` | Cached frame textures from the texture cache ring buffer |
+
+### acidcamGL-Compatible Uniforms
+
+| Uniform | Type | Description |
+|---------|------|-------------|
+| `value_alpha_r` | `float` | Oscillating red color alpha |
+| `value_alpha_g` | `float` | Oscillating green color alpha |
+| `value_alpha_b` | `float` | Oscillating blue color alpha |
+| `alpha_r` | `float` | Red color alpha (same as `value_alpha_r`) |
+| `alpha_g` | `float` | Green color alpha (same as `value_alpha_g`) |
+| `alpha_b` | `float` | Blue color alpha (same as `value_alpha_b`) |
+| `alpha_value` | `float` | Current alpha value |
+| `index_value` | `float` | Current shader index in the library |
+| `optx` | `vec4` | Option vector `(0.5, 0.5, 0.5, 0.5)` |
+| `random_var` | `vec4` | Random variable vector |
+| `restore_black` | `float` | Restore black flag (`0.0` or `1.0`) |
+| `inc_value` | `vec4` | Incrementing value vector |
+| `inc_valuex` | `vec4` | Secondary incrementing value vector |
+
+### Audio-Reactive Uniforms (requires `AUDIO=ON` build + `-w` flag)
+
+| Uniform | Type | Description |
+|---------|------|-------------|
+| `amp` | `float` | Amplitude scaled by sensitivity |
+| `uamp` | `float` | Raw untouched amplitude |
+| `iamp` | `float` | Estimated dominant frequency (Hz) |
+| `amp_peak` | `float` | Highest sample value in the buffer |
+| `amp_rms` | `float` | Root mean square energy |
+| `amp_smooth` | `float` | Exponentially smoothed amplitude |
+| `amp_low` | `float` | Low-frequency energy (<300 Hz) |
+| `amp_mid` | `float` | Mid-frequency energy (300–3000 Hz) |
+| `amp_high` | `float` | High-frequency energy (>3000 Hz) |
+| `iSampleRate` | `float` | Audio sample rate (`44100.0`) |
 
 ### Virtual Audio Device (PipeWire / PulseAudio)
 
@@ -117,11 +155,6 @@ Then select **Virtual_Audio.monitor** as the audio input device.
 See the full tables in the [main acidcam-gpu README](../README.md#command-line-arguments).
 
 ---
-
-## Screenshots
-
-<img width="2048" height="1152" alt="Main Window" src="https://github.com/user-attachments/assets/1720bf11-9270-431a-8dba-96172482f483" />
-<img width="936" height="540" alt="Main Window" src="https://github.com/user-attachments/assets/a3ea7c6c-a761-4aa9-9843-4502e9fcb8da" />
 
 
 
