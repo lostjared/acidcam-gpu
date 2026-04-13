@@ -2374,7 +2374,8 @@ class ACView : public gl::GLObject {
                 std::string line;
                 while (std::getline(pfile, line)) {
                     if (line.empty()) continue;
-                    int idx = library.findShaderByName(line);
+                    std::string name = std::filesystem::path(line).stem().string();
+                    int idx = library.findShaderByName(name);
                     if (idx >= 0) {
                         playlist_indices.push_back(idx);
                     } else {
