@@ -95,7 +95,7 @@ void MainWindow::initControls() {
     cameraMenu->addSeparator();
     styleSheetAction = new QAction(tr("Use Custom Style"), this);
     styleSheetAction->setCheckable(true);
-    styleSheetAction->setChecked(true);
+    styleSheetAction->setChecked(false);
     connect(styleSheetAction, &QAction::toggled, this, &MainWindow::applyCustomStyleSheet);
     cameraMenu->addAction(styleSheetAction);
     runMenu_select = new QAction(tr("Run Selected"), this);
@@ -224,7 +224,7 @@ void MainWindow::initControls() {
     executable_path = appSettings.value("exePath", "acmx2").toString();
 #endif
     prefix_path = appSettings.value("prefix_path", ".").toString();
-    bool useCustomStyle = appSettings.value("useCustomStyle", true).toBool();
+    bool useCustomStyle = appSettings.value("useCustomStyle", false).toBool();
     styleSheetAction->setChecked(useCustomStyle);
     if (!path.isEmpty()) {
         QFileInfo pathInfo(path);

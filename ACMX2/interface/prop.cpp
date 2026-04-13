@@ -104,7 +104,7 @@ void PropWindow::init() {
                     "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
 
-    if (appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", false).toBool()) {
         setStyleSheet(style);
     }
 }

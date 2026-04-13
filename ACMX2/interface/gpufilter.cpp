@@ -124,7 +124,7 @@ void GPUFilterDialog::setupUI() {
                     "QPushButton { border: 1px solid red; background-color: #110000; color: red; padding: 5px; }"
                     "QPushButton:hover { background-color: red; color: black; }";
     QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", false).toBool()) {
         setStyleSheet(style);
     }
 }

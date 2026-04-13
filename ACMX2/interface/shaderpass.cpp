@@ -121,7 +121,7 @@ void ShaderPassDialog::setupUI() {
                     "QPushButton { border: 1px solid cyan; background-color: #001111; color: cyan; padding: 5px; }"
                     "QPushButton:hover { background-color: cyan; color: black; }";
     QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", false).toBool()) {
         setStyleSheet(style);
     }
 }

@@ -46,7 +46,7 @@ void LibraryWindow::init() {
                     "QPushButton:hover { background-color: red; color: black; }";
 
     QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", true).toBool()) {
+    if (appSettings.value("useCustomStyle", false).toBool()) {
         setStyleSheet(style);
     }
 }
