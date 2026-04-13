@@ -1,0 +1,315 @@
+/*
+ * Delphi / Borland IDE–inspired Doxygen stylesheet
+ *
+ * Palette reference (classic Borland Delphi 7 code editor):
+ *   Background   : #FFFFFF (white editor pane)
+ *   Nav / header  : #000080 (Borland navy blue)
+ *   Keywords      : #000080 (bold navy)
+ *   Strings       : #0000FF (blue)
+ *   Comments      : #008000 (green, italic)
+ *   Numbers       : #FF0000 (red)
+ *   Identifiers   : #000000 (black)
+ *   Preprocessor  : #808000 (olive / dark yellow)
+ *   Link / accent : #0000FF
+ *   Light accent  : #C0DCC0 (Borland pale green toolbar)
+ *   Panel bg      : #F0F0F0
+ */
+
+/* ---------- General body ---------- */
+body, table, div, p, dl {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 14px;
+    color: #000000;
+    background-color: #FFFFFF;
+}
+
+/* ---------- Header / title bar ---------- */
+#titlearea, .header, .headertitle {
+    background: linear-gradient(180deg, #000080 0%, #0000A0 100%);
+    color: #FFFFFF;
+    border-bottom: 3px solid #C0DCC0;
+    padding: 8px 16px;
+}
+
+#titlearea td {
+    color: #FFFFFF;
+}
+
+.title {
+    font-size: 28px;
+    font-weight: bold;
+    color: #FFFFFF;
+}
+
+.ingroups {
+    color: #C0DCC0;
+}
+
+/* ---------- Navigation tabs ---------- */
+.tabs, .tabs2, .tabs3 {
+    background: #000080;
+    border-bottom: 2px solid #C0DCC0;
+}
+
+.tabs ul, .tabs2 ul, .tabs3 ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tablist li {
+    display: inline-block;
+}
+
+.tablist a {
+    color: #C0DCC0 !important;
+    background: #000080;
+    padding: 6px 14px;
+    text-decoration: none;
+    font-weight: bold;
+    border-right: 1px solid #0000A0;
+}
+
+.tablist a:hover,
+.tablist li.current a {
+    background: #0000C0;
+    color: #FFFFFF !important;
+}
+
+/* ---------- Side navigation ---------- */
+#side-nav, #nav-tree {
+    background-color: #F0F0F0;
+    border-right: 2px solid #000080;
+}
+
+#nav-tree .label a {
+    color: #000080;
+}
+
+#nav-tree .selected {
+    background-color: #C0DCC0;
+}
+
+.ui-resizable-e {
+    background-color: #000080;
+}
+
+/* ---------- Content area ---------- */
+div.contents {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 12px 20px;
+}
+
+/* ---------- Headings ---------- */
+h1, h2, h3, h4, h5, h6 {
+    color: #000080;
+    border-bottom: 1px solid #C0DCC0;
+    padding-bottom: 4px;
+}
+
+h1 { font-size: 24px; }
+h2 { font-size: 20px; }
+h3 { font-size: 17px; }
+
+/* ---------- Links ---------- */
+a, a:visited {
+    color: #0000FF;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #000080;
+    text-decoration: underline;
+}
+
+/* ---------- Code / pre ---------- */
+code, .code, pre, div.fragment {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 13px;
+    background-color: #F8F8F0;
+    border: 1px solid #C0DCC0;
+    border-radius: 3px;
+}
+
+pre, div.fragment {
+    padding: 10px;
+    overflow-x: auto;
+}
+
+/* Delphi-style syntax colours inside code blocks */
+.keyword       { color: #000080; font-weight: bold; }   /* Keywords  – navy bold */
+.keywordtype   { color: #000080; font-weight: bold; }
+.keywordflow   { color: #000080; font-weight: bold; }
+.comment       { color: #008000; font-style: italic; }  /* Comments  – green italic */
+.preprocessor  { color: #808000; }                       /* Preprocessor – olive */
+.stringliteral { color: #0000FF; }                       /* Strings   – blue */
+.charliteral   { color: #0000FF; }
+.vhdldigit     { color: #FF0000; }                       /* Numbers   – red */
+
+/* ---------- Tables ---------- */
+table.memberdecls,
+table.fieldtable,
+table.doxtable {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+table.doxtable th {
+    background-color: #000080;
+    color: #FFFFFF;
+    padding: 6px 10px;
+    text-align: left;
+    font-weight: bold;
+}
+
+table.doxtable td {
+    border: 1px solid #C0DCC0;
+    padding: 5px 10px;
+}
+
+table.doxtable tr:nth-child(even) {
+    background-color: #F0F8F0;
+}
+
+/* ---------- Member declarations ---------- */
+.memtitle {
+    background-color: #000080;
+    color: #FFFFFF;
+    padding: 4px 8px;
+    font-weight: bold;
+    border-radius: 4px 4px 0 0;
+}
+
+.memitem {
+    border: 1px solid #C0DCC0;
+    border-radius: 0 0 4px 4px;
+    margin-bottom: 12px;
+    background-color: #F8F8F0;
+}
+
+.memdoc {
+    padding: 8px 12px;
+    background-color: #FFFFFF;
+}
+
+.memname {
+    color: #000080;
+    font-weight: bold;
+}
+
+.memproto {
+    background-color: #F0F0F0;
+    padding: 6px 10px;
+    border-bottom: 1px solid #C0DCC0;
+}
+
+/* ---------- Parameter / return descriptions ---------- */
+dl.params dt, dl.retval dt, dl.exception dt {
+    color: #000080;
+    font-weight: bold;
+}
+
+dl.section dd {
+    margin-left: 20px;
+}
+
+/* ---------- Fieldtable (struct docs) ---------- */
+.fieldtable th {
+    background-color: #000080;
+    color: #FFFFFF;
+}
+
+.fieldtable td {
+    border-bottom: 1px solid #C0DCC0;
+    padding: 4px 8px;
+}
+
+/* ---------- Note / warning / deprecated boxes ---------- */
+dl.note, dl.warning, dl.deprecated, dl.todo, dl.bug {
+    padding: 8px 12px;
+    border-left: 4px solid;
+    margin: 10px 0;
+    border-radius: 3px;
+}
+
+dl.note {
+    background-color: #E8F0FE;
+    border-color: #0000FF;
+}
+
+dl.warning {
+    background-color: #FFF8E1;
+    border-color: #FF0000;
+}
+
+dl.deprecated {
+    background-color: #F0F0F0;
+    border-color: #808000;
+}
+
+dl.todo {
+    background-color: #F0FFF0;
+    border-color: #008000;
+}
+
+/* ---------- Search box ---------- */
+#MSearchBox {
+    border: 1px solid #000080;
+    border-radius: 3px;
+}
+
+#MSearchSelectWindow {
+    background-color: #F0F0F0;
+    border: 1px solid #000080;
+}
+
+/* ---------- Footer ---------- */
+.footer, address {
+    background-color: #000080;
+    color: #C0DCC0;
+    text-align: center;
+    padding: 6px;
+    font-size: 12px;
+    border-top: 3px solid #C0DCC0;
+}
+
+.footer a {
+    color: #FFFFFF;
+}
+
+/* ---------- Tree view adjustments ---------- */
+#nav-tree .arrow {
+    color: #000080;
+}
+
+/* ---------- Summary link strip ---------- */
+.summary a {
+    color: #0000FF;
+}
+
+/* ---------- Directory listing ---------- */
+.directory td.entry {
+    padding: 2px 6px;
+}
+
+.directory tr.even {
+    background-color: #F0F8F0;
+}
+
+/* ---------- Graph / diagram borders ---------- */
+.dotgraph, .mscgraph {
+    border: 1px solid #C0DCC0;
+    background-color: #FFFFFF;
+    padding: 4px;
+}
+
+/* ---------- Responsive tweaks ---------- */
+@media (max-width: 768px) {
+    div.contents {
+        padding: 8px 10px;
+    }
+    .title {
+        font-size: 20px;
+    }
+}

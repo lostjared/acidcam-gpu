@@ -3,6 +3,8 @@
 
 <img width="2560" height="1440" alt="Screenshot From 2026-04-13 07-41-08" src="https://github.com/user-attachments/assets/0e0cd74f-ce6b-47e5-abfa-bc268cd74d4b" />
 
+[Full Documentation](https://lostsidedead.biz/acmx2/docs/)
+
 The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU filters to live camera feeds, video files, or static images in real time. Supports 3D model rendering, audio reactivity, MIDI control, shader playlists, and multipass shader chains.
 
 ---

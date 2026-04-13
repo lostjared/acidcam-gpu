@@ -1,0 +1,991 @@
+/**
+@mainpage ACMX2 — Real-Time GPU-Accelerated Video Glitch Engine
+
+@htmlonly
+<img src="https://lostsidedead.biz/acmx2.jpg" alt="Sreenshot1" style="max-width:80%; height:auto;" />
+@endhtmlonly
+
+@section intro Introduction
+
+<b>acidcam-gpu / ACMX2</b> is a high-performance, real-time video manipulation engine
+designed to push the boundaries of psychedelic glitch art. Part of the <b>ACMX2</b> and
+<b>libmx2</b> ecosystem, it offloads complex glitch filters to <b>NVIDIA GPUs</b>, enabling
+fluid, high-resolution visual transformations at 60+ FPS. Requires OpenCV 4 compiled
+with CUDA support.
+
+@section purpose Purpose & Vision
+
+The original project brought a massive library of "glitch" filters to digital artists.
+However, as resolutions climbed to 4K and filter stacks became more complex, CPU-based
+processing hit a bottleneck.
+
+<b>acidcam-gpu</b> solves this by:
+- <b>Parallelizing the Chaos:</b> Using custom CUDA kernels to process millions of pixels simultaneously.
+
+@section techstack Tech Stack
+
+- <b>Language:</b> C++20
+- <b>Parallel Computing:</b> NVIDIA CUDA (Optimized for RTX 2070)
+- <b>Graphics API:</b> OpenGL / SDL (Hardware-accelerated rendering)
+- <b>Format Support:</b> Native MX2 MXMOD 3D model parsing for real-time geometry glitching.
+
+@section why_nvidia Why NVIDIA & CUDA?
+
+This project is built specifically for the NVIDIA ecosystem to leverage:
+- <b>Shared Memory:</b> Fast on-chip memory to speed up neighborhood-based filters.
+- <b>Massive Throughput:</b> Harnessing thousands of CUDA cores to apply multiple glitch layers in a single pass.
+
+@section goals Project Goals
+
+- <b>Zero-Copy Interop:</b> High-speed texture sharing between CUDA and OpenGL.
+- <b>Visual User Interface:</b> Simple to use User interface.
+- <b>Command line tool:</b> Command line tool.
+
+@section features Features
+
+- <b>Camera, video, or image input</b> with configurable resolution
+- <b>Shader library</b> — load a single fragment shader or a full library via `index.txt`
+- <b>CUDA GPU filters</b> — apply GPU-accelerated pixel filters in addition to shaders
+- <b>3D mode</b> — render shaders onto a 3D model (`.mxmod`)
+- <b>Multipass shaders</b> — chain multiple shader passes in a single frame
+- <b>Shader playlists</b> — cycle through an ordered list of shaders
+- <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
+- <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
+- <b>Video recording</b> with optional audio muxing via FFmpeg
+- <b>Silent mode</b> — headless video processing without a window
+- <b>Shader cache</b> — precompile shader binaries for fast startup
+- <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
+
+@section install Installation & Prerequisites
+
+This project is developed and tested on <b>Bazzite Linux</b> using <b>Arch Linux</b> containers
+via <b>Distrobox</b>.
+
+- <b>NVIDIA GPU:</b> RTX 20-series or newer.
+- <b>Drivers:</b> NVIDIA Proprietary Drivers (v535+).
+- <b>Environment:</b> Arch Linux (or compatible).
+
+Install all dependencies via `pacman`:
+
+@code{.sh}
+# Build Tools
+sudo pacman -S --needed base-devel git cmake ninja pkg-config curl unzip
+
+# NVIDIA & CUDA
+sudo pacman -S --needed nvidia-utils cuda
+
+# OpenCV (with CUDA support)
+sudo pacman -S --needed opencv-cuda hdf5 vtk fmt glew
+
+# SDL2 & Qt6
+sudo pacman -S --needed sdl2 sdl2_ttf sdl2_mixer sdl2_image qt6-base qt6-tools qt6-multimedia
+
+# Graphics, Audio & Media Libraries
+sudo pacman -S --needed glm mesa libglvnd ffmpeg rtaudio pulseaudio libpulse libjpeg-turbo libpng
+
+# Fonts
+sudo pacman -S --needed ttf-dejavu ttf-liberation noto-fonts
+@endcode
+
+Or install everything at once:
+@code{.sh}
+sudo bash build-script/install-deps-arch.sh
+@endcode
+
+@section building Building
+
+@subsection build_libmx2 libmx2 (built from source)
+@code{.sh}
+git clone https://github.com/lostjared/libmx2.git
+cd libmx2/libmx
+mkdir build && cd build
+cmake .. -DEXAMPLES=OFF -DOPENGL=ON
+make -j$(nproc)
+sudo make install
+@endcode
+
+@subsection build_acmx2 ACMX2
+@code{.sh}
+cd ACMX2
+mkdir build && cd build
+cmake .. -DAUDIO=ON
+make -j$(nproc) && sudo make install
+@endcode
+
+@subsection build_qt6 Qt6 GUI
+@code{.sh}
+cd ACMX2/interface
+mkdir build && cd build
+cmake .. && make -j$(nproc)
+cp -rf ../data/ .
+@endcode
+
+@section usage Usage Examples
+
+<b>Camera with a shader library:</b>
+@code{.sh}
+./acmx2 -p ./data -s ./shaders -d 0 -r 1920x1080
+@endcode
+
+<b>Process a video file with GPU filters and record output:</b>
+@code{.sh}
+./acmx2 -i input.mp4 -s ./shaders --gpu-filter 0,5,12 -o output.mp4 --copy-audio
+@endcode
+
+<b>Single shader, fullscreen, with audio reactivity:</b>
+@code{.sh}
+./acmx2 -f effect.glsl -d 0 -n -w --audio-input 3
+@endcode
+
+<b>3D mode with a model:</b>
+@code{.sh}
+./acmx2 -s ./shaders --enable-3d --model cube.mxmod -d 0
+@endcode
+
+<b>Silent (headless) batch processing:</b>
+@code{.sh}
+./acmx2 -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
+@endcode
+
+<b>Build shader cache:</b>
+@code{.sh}
+./acmx2 -p ./data --build ./shaders --enable-3d
+@endcode
+
+@section cli_args Command-Line Arguments
+
+@subsection cli_general General
+| Short | Long           | Value       | Description |
+|-------|----------------|-------------|-------------|
+| `-v`  | `--help`       |             | Display help message and exit |
+| `-p`  | `--path`       | `<dir>`     | Assets path |
+| `-r`  | `--resolution` | `WxH`       | Window resolution (e.g. `1920x1080`) |
+| `-d`  | `--device`     | `<index>`   | Camera device index |
+| `-c`  | `--camera-res` | `WxH`       | Camera capture resolution |
+| `-i`  | `--input`      | `<file>`    | Input video file |
+| `-g`  | `--graphic`    | `<file>`    | Input image file |
+| `-o`  | `--output`     | `<file>`    | Output video file |
+| `-b`  | `--bitrate`    | `<crf>`     | Output bitrate in CRF |
+| `-u`  | `--fps`        | `<fps>`     | Frames per second |
+| `-e`  | `--prefix`     | `<path>`    | Snapshot save prefix |
+| `-a`  | `--repeat`     |             | Loop/repeat video playback |
+| `-n`  | `--fullscreen` |             | Fullscreen window (Escape to quit) |
+| `-m`  | `--cuda-device`| `<index>`   | CUDA device index |
+|       | `--duration`   | `<seconds>` | Recording duration limit (float) |
+
+@subsection cli_shader Shader Options
+| Short | Long             | Value       | Description |
+|-------|------------------|-------------|-------------|
+| `-s`  | `--shaders`      | `<file>`    | Shader library index file |
+| `-f`  | `--fragment`     | `<file>`    | Single fragment shader file |
+| `-h`  | `--shader`       | `<index>`   | Initial shader index in library |
+|       | `--shader-pass`  | `<indices>` | Shader pass indices (comma-separated) |
+|       | `--playlist`     | `<file>`    | Shader playlist text file |
+|       | `--build`        | `<path>`    | Build shader cache and exit |
+|       | `--no-cache`     |             | Disable shader caching |
+|       | `--time-speed`   | `<float>`   | time_f speed multiplier (default: 1.0) |
+
+@subsection cli_gpu GPU Filter Options
+| Long              | Value       | Description |
+|-------------------|-------------|-------------|
+| `--gpu-filter`    | `<indices>` | GPU filter indices (comma-separated) |
+| `--gpu-buffer`    | `<size>`    | GPU frame buffer size (4–32) |
+| `--list-filters`  |             | List available GPU filters and exit |
+| `--list-cuda-devices` |         | List available CUDA devices and exit |
+| `--disable-counter` |           | Disable timer and FPS counter overlay |
+| `--silent`        |             | Process video without window |
+
+@subsection cli_3d 3D / Model Options
+| Long              | Value       | Description |
+|-------------------|-------------|-------------|
+| `--texture-cache` |             | Enable texture cache |
+| `--cache-delay`   | `<frames>`  | Texture cache delay in frames |
+| `--copy-audio`    |             | Copy audio track from input to output |
+| `--enable-3d`     |             | Enable 3D cube rendering |
+| `--model`         | `<file>`    | 3D model file (`.mxmod`) |
+
+@subsection cli_audio Audio Options (requires AUDIO_ENABLED build)
+| Short | Long             | Value       | Description |
+|-------|------------------|-------------|-------------|
+| `-w`  | `--enable-audio` |             | Enable audio reactivity |
+| `-l`  | `--channels`     | `<num>`     | Audio channels |
+| `-q`  | `--sense`        | `<float>`   | Audio sensitivity |
+| `-y`  | `--pass-through` |             | Enable audio pass-through |
+|       | `--audio-input`  | `<index>`   | Audio input device |
+|       | `--audio-output` | `<index>`   | Audio output device |
+|       | `--list-devices` |             | List audio devices and exit |
+|       | `--record-audio` | `<file>`    | Record captured audio to WAV |
+|       | `--record-gain`  | `<float>`   | Recording volume gain (0.0–2.0) |
+
+@subsection cli_midi MIDI Options (requires MIDI_ENABLED build)
+| Long            | Value       | Description |
+|-----------------|-------------|-------------|
+| `--midi-map`    | `<file>`    | MIDI config file (`.midi_cfg`) |
+| `--midi-device` | `<index>`   | MIDI input device index |
+| `--list-midi`   |             | List available MIDI input devices |
+
+@section uniforms Supported Shader Uniforms
+
+All fragment shaders receive the following uniforms automatically.
+
+@subsection uniforms_core Core Uniforms
+| Uniform        | Type        | Description |
+|----------------|-------------|-------------|
+| `samp`         | `sampler2D` | Main video/camera texture |
+| `alpha`        | `float`     | Alpha value (oscillates 0.0–1.0) |
+| `iTime`        | `float`     | Elapsed time in seconds |
+| `time_f`       | `float`     | Time multiplier (adjustable) |
+| `iFrame`       | `int`       | Frame counter |
+| `iTimeDelta`   | `float`     | Time since last frame |
+| `iResolution`  | `vec2`      | Window resolution |
+| `iMouse`       | `vec4`      | Mouse position |
+| `iDate`        | `vec4`      | Current date/time |
+
+@subsection uniforms_audio Audio-Reactive Uniforms (AUDIO=ON + -w flag)
+| Uniform       | Type    | Description |
+|---------------|---------|-------------|
+| `amp`         | `float` | Amplitude scaled by sensitivity |
+| `uamp`        | `float` | Raw untouched amplitude |
+| `iamp`        | `float` | Estimated dominant frequency (Hz) |
+| `amp_peak`    | `float` | Highest sample value in the buffer |
+| `amp_rms`     | `float` | Root mean square energy |
+| `amp_smooth`  | `float` | Exponentially smoothed amplitude |
+| `amp_low`     | `float` | Low-frequency energy (<300 Hz) |
+| `amp_mid`     | `float` | Mid-frequency energy (300–3000 Hz) |
+| `amp_high`    | `float` | High-frequency energy (>3000 Hz) |
+
+@section keyboard Keyboard Controls
+
+| Key           | Action |
+|---------------|--------|
+| Up/Down       | Previous/Next shader (or playlist shader) |
+| Left/Right    | Previous/Next GPU filter |
+| Space         | Toggle shader processing bypass |
+| P             | Toggle playlist mode / Pause video |
+| L             | Toggle video freeze |
+| Z             | Take snapshot |
+| M             | Toggle multi-shader pass |
+| 3             | Toggle 2D/3D mode |
+| E             | Toggle watermark |
+| F9            | Toggle overlay visibility |
+| U/I           | Increase/Decrease time step |
+| T             | Toggle time on/off (Audio build) |
+| Q             | Toggle audio-reactive time (Audio build) |
+| W/A/S/D       | Look around (3D mode) |
+| V             | Toggle view rotation (3D mode) |
+| O             | Toggle scale oscillation (3D mode) |
+| +/-           | Increase/Decrease camera distance (3D mode) |
+| C             | Toggle wave effect (3D mode) |
+
+@section sysreq System Requirements
+
+- Linux (x86_64)
+- NVIDIA GPU (RTX 20-series or newer)
+- NVIDIA proprietary drivers
+- X11 or XWayland
+
+@warning This build uses NVIDIA CUDA. It will <b>not</b> run on AMD or Intel GPUs.
+
+@section docs External Documentation
+
+- [Project Documentation](https://lostsidedead.biz/acmx2-explained.html)
+- [GPU Filters Explained](https://lostsidedead.biz/acmx2/filter_browser.html)
+- [Example Shaders](https://lostsidedead.biz/acmx2/shader_browser.html)
+- [Latest Shader Pack](https://lostsidedead.biz/packs)
+- [Latest 3D Geometry](https://lostsidedead.biz/packs)
+
+
+@section explained_acidcam_gpu_acmx2_complete_technical_reference acidcam-gpu + ACMX2 — Complete Technical Reference
+
+
+<b>acidcam-gpu</b> is a CUDA-accelerated real-time video effects engine. It contains a library of <b>905 GPU filter kernels</b> that run entirely on the NVIDIA GPU, a <b>unified dispatch kernel</b> that chains any ordered subset of those filters per frame, a rotating device-side frame history buffer for temporal effects, and a CLI application that drives the full pipeline from camera or file input through to live display and optional MXWrite output encoding.
+
+<b>ACMX2</b> is the Qt-based orchestration layer — it wraps the same library and CLI with a visual interface, shader pass ordering, session persistence, and process monitoring. Together they form a layered creative tool: CUDA for pixel-level power, OpenGL for display, Qt for control, and Podman containers for distribution.
+
+The system operates as a <b>two-stage GPU pipeline</b>: first, CUDA kernels process every pixel in parallel on the GPU's streaming multiprocessors (one thread per pixel), applying a user-defined chain of filters entirely in device memory. Then, the CUDA output is transferred to OpenGL via a Pixel Buffer Object (PBO) — a zero-copy GPU-to-GPU transfer — where it becomes a texture. GLSL fragment shaders then apply additional full-frame visual effects in one or more stacked passes using ping-pong framebuffers. Both the CUDA filter chain and the GLSL shader pass stack are independently configurable and orderable, producing a combinatorial explosion of possible visual outcomes.
+
+<em>Stack: C++20 / CUDA 12.x / OpenCV CUDA / OpenGL / Qt6 / MXWrite</em>
+
+
+
+@subsection explained_program_screenshot Program Screenshot
+
+
+This is the current desktop ACMX2/acidcam-gpu interface in action.
+
+@htmlonly
+<img src="https://lostsidedead.biz/screen.png" alt="ACMX2 and acidcam-gpu running on desktop" style="max-width:80%; height:auto;" />
+@endhtmlonly
+
+
+
+@subsection explained_project_origin_and_purpose Project Origin and Purpose
+
+
+The Acid Cam project originated as a CPU-based filter library (<b>libacidcam</b>) that applied artistic glitch effects to camera and video frames. As resolutions grew and filter stacks became more complex, CPU-based pixel processing became a bottleneck — applying dozens of per-pixel transforms on high-resolution video ate into frame budget quickly.
+
+<b>acidcam-gpu</b> was created to solve this. The solution was to port the entire filter library to NVIDIA CUDA, so all pixel work runs massively in parallel on the GPU. A unified dispatch kernel allows any ordered combination of the 905 available filters to run in a single GPU pass per frame, without recompiling. The result is a system capable of applying complex multi-layer visual transforms at full framerate on modern NVIDIA hardware.
+
+@subsubsection explained_why_cuda_kernels_and_glsl_shaders Why CUDA Kernels and GLSL Shaders?
+
+
+Both CUDA kernels and GLSL shaders execute on the <b>same physical hardware</b> — the GPU's streaming multiprocessors (often marketed as "CUDA cores"). The difference is the <b>programming model</b>, not the silicon. CUDA is NVIDIA's general-purpose compute API: kernels can freely read from arbitrary device memory, perform complex conditional logic, access a ring buffer of historical frames, and do per-pixel computation without any graphics pipeline constraints. GLSL runs through the OpenGL graphics pipeline as fragment shader programs, which excel at texture sampling, interpolation, and full-frame image processing with Shadertoy-compatible uniforms like time, resolution, and mouse position. By using both programming models on the same GPU hardware, the system gets the best of each approach.
+
+@subsubsection explained_how_each_technology_is_used How Each Technology Is Used
+
+
+- <b>CUDA (pixel-level compute):</b> The 905 filter kernels run as CUDA threads — one thread per pixel — across the GPU's streaming multiprocessors simultaneously. A 1920×1080 frame launches over 2 million threads in parallel. The unified kernel loops through the user's selected filter chain, applying each filter sequentially to the pixel data in-place. Filters can read from a ring buffer of prior frames stored entirely in GPU memory, enabling temporal effects like <tt>MedianBlend</tt> (averaging across all history frames), <tt>AuraTrails</tt> (blending against frames at indices 1, 4, and 7), and <tt>MatrixOutline</tt> (comparing against a frame from 4 steps back). This kind of arbitrary multi-frame memory access is natural in the CUDA compute model but difficult or impossible within the GLSL fragment shader pipeline, which is designed around single-texture-per-pass processing.
+- <b>GLSL (full-frame shader effects):</b> After CUDA processing, the result is transferred to an OpenGL texture via PBO interop (no CPU round-trip). GLSL fragment shaders — running on the same GPU hardware via the OpenGL graphics pipeline — then process the entire frame as a texture, applying effects like color grading, distortion, glow, CRT simulation, and other post-processing transforms. The shader library supports Shadertoy-compatible uniforms (<tt>iTime</tt>, <tt>iResolution</tt>, <tt>iMouse</tt>, <tt>iFrame</tt>, etc.) and can render onto 2D quads or 3D model geometry via MXMOD meshes.
+- <b>Composition:</b> CUDA filters and GLSL shaders compose at the frame level. CUDA runs first on the raw pixel data, then GLSL operates on the CUDA-filtered result. Both stages support stacking — multiple CUDA filters chain inside a single kernel launch, and multiple GLSL shaders chain via ping-pong framebuffer passes. The full pipeline is: Camera → CUDA filter chain → PBO transfer → GLSL shader pass 1 → GLSL shader pass 2 → … → Screen.
+
+
+
+@subsection explained_acmx2_qt_application_orchestration_layer ACMX2 Qt Application — Orchestration Layer
+
+
+<b>ACMX2</b> is the Qt6 application that wraps the acidcam-gpu CLI and library into a controllable desktop session. It handles shader pass management, GPU filter ordering, session persistence, and process lifecycle — it does not re-implement any pixel processing itself.
+
+- <b>Main window:</b> <tt>ACMX2/interface/main_window.cpp</tt> — QProcess supervision, log rendering, session menu
+- <b>GPU filter dialog:</b> <tt>ACMX2/interface/gpufilter.cpp</tt> — calls <tt>--list-filters</tt>, parses output, stores ordered selection
+- <b>Shader pass ordering:</b> <tt>ACMX2/interface/shaderpass.cpp</tt> — explicit multi-pass chain, output of pass N feeds into pass N+1
+- <b>Audio integration:</b> <tt>ACMX2/audio.cpp/.hpp</tt> — RtAudio amplitude extraction, reactive parameter modulation
+- <b>Shader cache:</b> <tt>ACMX2/program.cpp/.hpp</tt> — binary cache with source+driver fingerprinting to skip recompile
+- <b>3D geometry:</b> <tt>ACMX2/models/*.mxmod</tt> — MXMOD-format geometry used in scene-influenced render stages
+- <b>Build:</b> <tt>ACMX2/CMakeLists.txt</tt> and <tt>ACMX2/interface/CMakeLists.txt</tt> — validates CUDA, OpenCV CUDA headers, FFmpeg, MXWrite, Qt6, RtAudio at configure time
+
+@subsubsection explained_how_the_qt_interface_works How the Qt Interface Works
+
+
+-# <b>Filter discovery:</b> <tt>gpufilter.cpp</tt> spawns the <tt>acmx2</tt> binary with <tt>--list-filters</tt>, reads <tt>index:name</tt> lines from stdout, sorts the list alphabetically, and populates a selection dialog. The user picks from the full 905-filter catalog and reorders them via drag or list controls.
+-# <b>Chain persistence:</b> selected filter order is stored as an ordered index list and passed back to <tt>acmx2</tt> as arguments at run time. Changing the order produces a completely different visual output without touching any code.
+-# <b>Process supervision:</b> <tt>main_window.cpp</tt> binds a <tt>QProcess</tt> to the <tt>acmx2</tt> executable (built from <tt>ACMX2/acmx.cpp</tt>). stdout/stderr streams are captured and shown in the UI log panel so runtime errors (bad camera index, missing CUDA device, encoder failure) are immediately visible.
+-# <b>Session settings:</b> <tt>QSettings</tt> persists executable path, shader directory, preferred styles, and last-used filter chain so sessions can be resumed exactly.
+-# <b>Shader pass layer:</b> <tt>shaderpass.cpp</tt> manages an ordered list of GLSL pass configs. Each pass uses the previous pass output as input, compositing GLSL effects on top of the CUDA-processed frame.
+-# <b>Audio-reactive path:</b> when RtAudio is enabled at compile time, an audio callback computes per-buffer amplitude average. This value can modulate alpha or other per-frame parameters, making output visually reactive to microphone or line input.
+
+
+
+@subsection explained_standalone_cli_acidcam_gpu_app_main_cv_cu Standalone CLI — acidcam-gpu/app/main_cv.cu
+
+
+The standalone CLI app (<tt>app/main_cv.cu</tt>) is an independent tool that drives the CUDA filter pipeline directly from the command line without ACMX2. It handles input device management, argument parsing, frame loop control, animation state evolution, and output encoding. It is written in CUDA C++ (compiled by nvcc) and targets C++20. Note: the ACMX2 Qt interface does <b>not</b> supervise this file — instead, <tt>QProcess</tt> launches and monitors the <tt>acmx2</tt> executable (built from <tt>ACMX2/acmx.cpp</tt>), which contains its own runtime loop and GL/CUDA pipeline.
+
+@subsubsection explained_startup_device_and_camera_discovery Startup: Device and Camera Discovery
+
+
+- <b><tt>checkDevices()</tt>:</b> calls <tt>cudaGetDeviceCount()</tt>. If the count is zero or the call errors, it prints a detailed message (driver not installed, GPU not seated) and exits immediately. On success, prints the CUDA device short info via OpenCV's <tt>cv::cuda::printShortCudaDeviceInfo()</tt>.
+- <b><tt>listGraphicsCards()</tt>:</b> enumerates all CUDA devices using <tt>cv::cuda::DeviceInfo</tt>, prints each device's name and total VRAM in MB.
+- <b><tt>listCameras()</tt>:</b> probes <tt>/dev/video0</tt> through <tt>/dev/video9</tt> with <tt>cv::VideoCapture</tt>. During probing, stderr is redirected to <tt>/dev/null</tt> to suppress OpenCV's verbose device error messages. For each working device, reads its human-readable name from <tt>/sys/class/video4linux/videoN/name</tt>.
+- <b>Signal handling:</b> a custom <tt>Interrupt</tt> exception class and a <tt>signalHandler</tt> that throws it allows SIGINT/SIGTERM to cleanly unwind the frame loop without leaving the CUDA device in a dirty state.
+
+@subsubsection explained_animationstate_the_per_frame_parameter_evolution_engine AnimationState  The Per-Frame Parameter Evolution Engine
+
+
+The <tt>AnimationState</tt> struct (global <tt>gState</tt>) drives the continuous evolution of visual parameters each frame. This is what makes the visuals non-static  the same filter chain produces different pixel values every frame because the parameters feeding it change continuously:
+
+- <b>alpha oscillation:</b> <tt>alpha</tt> starts at 1.0 and increments by <tt>0.01f</tt> per frame until it reaches <tt>3.0f</tt>, then decrements back to <tt>1.0f</tt>. This creates a smooth breathing rhythm in blend-intensity across all alpha-parameterized filters. The full cycle takes 400 frames at 60fps  6.7 seconds.
+- <b>frame index oscillation:</b> <tt>current_frame_index</tt> bounces between <tt>0</tt> and <tt>arraySize - 1</tt>, incrementing or decrementing by 1 each frame based on <tt>index_dir</tt>. This continuously sweeps which historical frame is selected by the <tt>start_index</tt> parameter  effects that read from frame history change which past frame they reference every tick.
+- <b>square_size oscillation:</b> <tt>square_size</tt> oscillates between <tt>2</tt> and <tt>64</tt> pixels, changing by <tt>2</tt> per frame. This controls block and tile dimensions for square-based effects. The oscillation causes visible growth and shrinkage in any block-decomposition filter.
+
+@subsubsection explained_updateanddraw_the_frame_processing_function updateAndDraw()  The Frame Processing Function
+
+
+Called every frame of the main loop, this function performs the full GPU pipeline:
+
+-# Updates all three AnimationState values (alpha, frame_index, square_size) based on their current direction and bounds.
+-# Copies device frame pointers from the <tt>DynamicFrameBuffer</tt>'s <tt>rawPointers</tt> vector into the device-side pointer array (<tt>d_ptrList</tt>) via <tt>cudaMemcpy(HostToDevice)</tt>.
+-# Copies the most recently uploaded frame from the buffer into the working GPU buffer using <tt>cudaMemcpy2D(DeviceToDevice)</tt>  this is a pure device-to-device copy, no round-trip through CPU RAM.
+-# Calls <tt>launch_filter()</tt> with the current animation state, the working buffer, and the active filter list. The CUDA kernel runs and transforms the working buffer in-place.
+-# The processed frame in the GPU working buffer is then downloaded or blitted for display/encoding.
+
+@subsubsection explained_output_encoding_via_mxwrite Output Encoding via MXWrite
+
+
+When recording is enabled, processed frames are passed to the <b>MXWrite</b> library which wraps FFmpeg encoding. MXWrite accepts raw frame data and handles container muxing, codec selection, and file writing. This keeps encoding off the critical path  the CUDA filter loop is not blocked by disk I/O.
+
+@subsection explained_the_public_api_ac_gpu_hpp The Public API  ac-gpu.hpp
+
+
+The header <tt>acidcam-gpu/include/ac-gpu/ac-gpu.hpp</tt> defines the complete ABI contract between the host application and the CUDA engine. Everything the caller needs to know lives here.
+
+@subsubsection explained_key_types_and_definitions Key Types and Definitions
+
+
+- <b><tt>AC_FILTER_MAX = 905</tt></b>  the total number of available filters. Filter indices run from 0 to 735 inclusive. This constant lets callers validate index bounds before dispatch.
+- <b><tt>struct GPUFilter { int index; }</tt></b>  the lightweight device-side representation of a filter. Only the integer index crosses to the GPU; names and metadata stay on the host.
+- <b><tt>struct Filter { int index; std::string name; GPUFilter toGPU() const; }</tt></b>  the host-side filter descriptor. <tt>toGPU()</tt> produces the compact <tt>GPUFilter</tt> for device transfer.
+- <b><tt>class ACException</tt></b>  thin exception type for runtime errors (bad resolution strings, missing devices). Carries a message string via <tt>why()</tt>.
+- <b><tt>CHECK_CUDA(call)</tt></b>  macro that wraps any CUDA runtime call, checks the error code, prints file/line/message, and exits on failure. Used throughout both the library and the CLI app for consistent error handling.
+- <b><tt>extern Filter filters[]</tt></b>  the master filter table defined in <tt>filters.cu</tt>, exposed for host-side iteration. Callers can walk this array to build filter lists, populate UI controls, or serialize chain configs.
+
+@subsubsection explained_the_dynamicframebuffer_class The DynamicFrameBuffer Class
+
+
+<tt>DynamicFrameBuffer</tt> manages a ring of historical frames entirely in device memory (<tt>cv::cuda::GpuMat</tt>). This is the mechanism that makes temporal effects possible  filters can read from any prior frame in the ring without downloading anything to host memory.
+
+- <b>Construction:</b> takes an <tt>arraySize</tt> parameter (e.g., 8) that sets ring depth. Internally creates a <tt>std::vector<cv::cuda::GpuMat></tt> and a parallel <tt>std::vector<unsigned char*></tt> of raw device pointers.
+- <b><tt>update(const cv::Mat& inputFrame)</tt>:</b>
+        -# Uploads the CPU frame into <tt>d_uploadBuffer</tt> (a staging <tt>GpuMat</tt>) via <tt>d_uploadBuffer.upload(inputFrame)</tt>.
+        -# On resolution change, reallocates all ring slots as <tt>CV_8UC4</tt> (8-bit per channel, 4 channels RGBA) at the new dimensions and resets <tt>completedFrames = 0</tt>.
+        -# Calls <tt>std::rotate(deviceFrames.begin(), deviceFrames.begin()+1, deviceFrames.end())</tt>  this shifts the oldest frame to position <tt>back()</tt> without copying pixel data, just rotating smart handles.
+        -# Converts and copies the new frame into the back slot: if the upload buffer is 3-channel BGR (standard OpenCV camera output), <tt>cv::cuda::cvtColor(d_uploadBuffer, deviceFrames.back(), cv::COLOR_BGR2RGBA)</tt> converts to 4-channel RGBA on the GPU. If already 4-channel, a direct <tt>copyTo</tt> is used.
+        -# Syncs <tt>rawPointers[i] = deviceFrames[i].data</tt> for all slots, giving the kernel a plain raw pointer into each frame's device memory.
+        -# Increments <tt>completedFrames</tt> up to <tt>arraySize</tt>, tracking how many valid (non-zero) history entries exist before the ring fills.
+
+- <b><tt>getDeviceFramePointers()</tt>:</b> returns the <tt>rawPointers.data()</tt>  a host-side array of device pointers. This is copied to a device-side pointer array before kernel launch so the kernel can dereference historical frame data.
+- <b>Memory layout:</b> each <tt>cv::cuda::GpuMat</tt> is a pitched allocation. The <tt>framePitch</tt> value (row stride in bytes) is stored on first allocation and passed to kernel as <tt>step</tt>. Pitched memory improves coalescing for row-based access patterns.
+
+@subsubsection explained_the_launch_filter_function The launch_filter() Function
+
+
+This is the C-linkage function that the host calls every frame to execute the filter chain. It handles lazy filter list management and kernel dispatch:
+
+-# <b>Guard:</b> returns immediately if <tt>c == 0</tt> (no filters), dimensions are zero, or <tt>numFrames</tt> is zero.
+-# <b>Lazy filter list rebuild:</b> if <tt>changed == true</tt> or the device filter list pointer is null, it synchronizes the device (<tt>cudaDeviceSynchronize</tt>), frees any existing device list, converts host <tt>Filter[]</tt>  <tt>GPUFilter[]</tt> using <tt>toGPU()</tt>, allocates a new device array with <tt>cudaMalloc</tt>, and copies with <tt>cudaMemcpy(HostToDevice)</tt>. Sets <tt>changed = false</tt> after update. This means re-ordering the filter chain is essentially free at runtime  the rebuild only happens when the chain actually changes.
+-# <b>Grid/block computation:</b> <tt>dim3 blockSize(16, 16)</tt>  256 threads per block arranged in a 2D tile. <tt>dim3 gridSize((width+15)/16, (height+15)/16)</tt>  enough tiles to cover the full frame, rounded up so edge pixels are handled correctly.
+-# <b>Per-frame parameter assembly:</b> a fresh <tt>FilterParams</tt> struct is built each frame using the current animation state and fresh random values from <tt>rand()</tt>. This per-frame randomness is what makes the visuals continuously evolve without any explicit animation scripting.
+-# <b>Kernel dispatch:</b> <tt>unifiedFilterKernel<<<gridSize, blockSize>>>(d_list, c, data, allFrames, w, h, step, params)</tt>.
+-# <b>Synchronization:</b> <tt>cudaDeviceSynchronize()</tt> is called after the kernel launch to ensure the frame is fully processed before the result is read or displayed.
+
+@subsection explained_filterparams_the_per_frame_parameter_bundle FilterParams  The Per-Frame Parameter Bundle
+
+
+The <tt>FilterParams</tt> struct is defined inside the <tt>ac_gpu</tt> namespace in <tt>filters.cu</tt> and is passed by value into the kernel. Every filter case inside the kernel reads from this shared param bundle rather than maintaining its own state, which is what enables stateless per-pixel execution. The parameters are populated freshly each frame by <tt>launch_filter</tt>:
+
+- <b><tt>float alpha</tt></b>  blend intensity multiplier. In the CLI, this oscillates between 1.0 and 3.0 (0.01/frame). Used by blending and alpha-scaling filters to modulate mix ratios. At 1.0, blends are subtle; at 3.0, blends are oversaturated and aggressive.
+- <b><tt>bool isNegative</tt></b>  when true, the <tt>setAlpha</tt> device function inverts all three color channels (255 - value) after each pixel's filter chain completes. This globally toggles a photographic negative effect that stacks on top of any filter output.
+- <b><tt>int numFrames</tt></b>  number of valid entries in the history ring (up to <tt>arraySize</tt>). Filters that index into <tt>allFrames[]</tt> use this to avoid reading uninitialized slots before the buffer is full.
+- <b><tt>int square_size</tt></b>  block tile dimension in pixels, oscillates between 2 and 64. Controls the tile/block granularity for effects like <tt>SquareBlockResize</tt>, <tt>DiagPixelated</tt>, <tt>pixelScale</tt>, and others that work in rectangular pixel regions.
+- <b><tt>int start_index</tt></b>  the current bouncing frame selection index (0 to arraySize-1). Passed directly to effects that use it as a frame history lookup index, creating smooth temporal sweeping.
+- <b><tt>int start_dir</tt></b>  the direction of the frame index bounce (1 = forward, 0 = reverse). Some effects use this to modulate the direction of their temporal lookup.
+- <b><tt>int int_param1</tt></b>  <tt>rand() % height</tt>. Used as a random vertical offset for pixel shift effects (<tt>PictureShiftDown</tt>, <tt>DistortedLinesY</tt>, etc.). Changes every frame so shifts appear random and non-repeating.
+- <b><tt>int int_param2</tt></b>  <tt>rand() % width</tt>. Same concept as int_param1 but horizontal. Used for horizontal shift and distortion effects.
+- <b><tt>float float_param1</tt></b>  <tt>(float)(rand() % 255)</tt>. A random brightness or gradient value. Used in effects like <tt>GradientFlashColor</tt> where a random scalar modulates the gradient output per frame.
+- <b><tt>int seed</tt></b>  <tt>rand()</tt>. Per-frame random seed passed to <tt>gpu_rand(x, y, seed)</tt> inside device functions. Since <tt>gpu_rand</tt> is deterministic given the same (x, y, seed), all threads with the same seed get the same noise map  but the map changes every frame because the seed is regenerated.
+- <b><tt>int frame_count</tt></b>  monotonically increasing counter (<tt>frame_counter++</tt>). Used for time-based oscillations inside device functions (e.g., <tt>processTripHSV</tt> uses it to advance HSV hue over time, <tt>get_osc_offset</tt> uses it for sinusoidal offsets). This is the primary time variable for all internally animated kernels.
+- <b><tt>int sumR, sumG, sumB</tt></b>  each set to <tt>rand() % 255</tt> per frame. Used in bitwise XOR effects like <tt>XorSumStrobe</tt> where the pixel's channels are XOR'd against a random color triplet, creating a color-shifting strobe.
+- <b><tt>int threshold</tt></b>  fixed at 15. Used by <tt>colorBounds()</tt> in effects that do color comparison (e.g., <tt>StrangeGlitch</tt> switches to a historical frame pixel when the current and historical color differ by more than the threshold). Tuned to ignore slight color noise while catching meaningful motion.
+- <b><tt>int sw, sh</tt></b>  dynamic block dimensions: <tt>16 + (frame_counter % 48)</tt>. Creates a slowly growing/shrinking block size for diagonal pixelated effects like <tt>DiagPixelatedResize</tt>. The range is 16 to 63 pixels wide/tall, cycling over 48 frames.
+
+@subsection explained_the_unified_kernel_unifiedfilterkernel The Unified Kernel  unifiedFilterKernel
+
+
+The <tt><b>global</b> void unifiedFilterKernel</tt> is the single CUDA kernel that executes the entire filter chain per frame. It is the pixel-level engine of the whole project. Understanding how it works explains why the system can run any combination of 905 effects in real-time.
+
+@subsubsection explained_thread_layout_and_pixel_assignment Thread Layout and Pixel Assignment
+
+
+Each CUDA thread is assigned one pixel:
+
+- <tt>int x = blockIdx.x * blockDim.x + threadIdx.x</tt>
+- <tt>int y = blockIdx.y * blockDim.y + threadIdx.y</tt>
+
+With <tt>blockDim = (16, 16)</tt>, each block contains 256 threads arranged as a 1616 tile of pixels. A 19201080 frame requires <tt>ceil(1920/16)  ceil(1080/16) = 120  68 = 8160</tt> blocks. At 256 threads per block, that is 2,088,960 threads  one per pixel  all executing simultaneously on the GPU.
+
+A bounds check (<tt>if (x >= width || y >= height) return</tt>) handles edge tiles where the grid doesn't align perfectly with frame dimensions.
+
+@subsubsection explained_the_filter_chain_loop The Filter Chain Loop
+
+
+Inside each thread's pixel scope, the kernel loops over the filter list:
+
+@code
+for (int i = 0; i < count; ++i) {
+    switch (filters[i].index) {
+        case 0: processSelfAlphaBlend(x, y, data, step, params); break;
+        case 1: processMedianBlend(x, y, data, allFrames, step, params); break;
+        // ... 902 more cases ...
+        case 904:
+                acgl_glitch_NewVarBlendLines(x, y, data, allFrames, width, height, step, params);
+                break;
+
+    }
+}
+@endcode
+
+Each <tt>process*()</tt> call is a <tt>__device__</tt> function that reads and writes the pixel at <tt>data[y * step + x * 4]</tt> in RGBA byte order. Because all threads within a warp execute the same filter index at the same time, the switch dispatch is warp-coherent when all threads in the warp are processing the same filter  which they always are, since the filter list is shared params, not per-pixel data.
+
+After the loop completes, <tt>setAlpha(data, y * step + x * 4, params.isNegative)</tt> is called once to finalize the alpha channel and optionally negate the color.
+
+@subsubsection explained_device_helper_functions Device Helper Functions
+
+
+- <b><tt>__device__ float gpu_rand(int x, int y, int seed)</tt></b>  a deterministic per-pixel hash function. Uses three multiply-and-XOR operations seeded by x, y, and the per-frame seed, followed by XOR-shift scrambling, returning a float in [0, 1). Used by noise effects (<tt>VisualSnow</tt>, <tt>StaticGlitch</tt>, <tt>RandomPixels</tt>, <tt>DistortedLines</tt>) to generate pixel-level noise without any global shared state, which is important since CUDA threads cannot safely share mutable state.
+- <b><tt>__device__ void setAlpha(unsigned char* data, int idx, bool isNegative)</tt></b>  if <tt>isNegative</tt>, inverts R, G, B (three bytes at idx, idx+1, idx+2). Always writes <tt>255</tt> to the alpha byte (idx+3), ensuring fully opaque output regardless of what filters wrote to that byte.
+- <b><tt>__device__ bool colorBounds(r1,g1,b1, r2,g2,b2, ir,ig,ib)</tt></b>  returns true if the absolute difference of each channel pair is within the given threshold. Used by motion-detection effects: <tt>StrangeGlitch</tt> uses it to detect when a pixel has changed significantly between frames and swap in the historical pixel value; <tt>MatrixOutline</tt> uses it to zero out pixels that match a reference frame (creating a motion-outline effect).
+
+@subsection explained_the_filter_catalog_905_effects_across_all_categories The Filter Catalog  905 Effects Across All Categories
+
+
+The filter table is defined at the top of <tt>filters.cu</tt> as a static array of <tt>Filter</tt> structs. Index 0 through 735 are defined. Each filter has its own <tt>__device__</tt> implementation function but all are dispatched through the single unified kernel switch. Here is a breakdown of the major effect families that make up the library:
+
+@subsubsection explained_temporal_trail_effects Temporal / Trail Effects
+
+
+Read from historical frames in the <tt>DynamicFrameBuffer</tt> ring to create motion persistence, ghosting, and smear effects.
+
+- <tt>MedianBlend</tt>  averages current pixel against all history frames + XOR + contrast boost
+- <tt>AuraTrails</tt>  blends against frames at history indices 1, 4, and 7
+- <tt>MotionGhostTrails</tt>  linear blend between current and oldest frame via alpha
+- <tt>WaveTrails</tt>  wave-modulated temporal blend
+- <tt>RGBLineTrails / RGBWideTrails / RGBLongTrails</tt>  per-channel trail variations with different decay widths
+- <tt>ProperTrails / ShortTrail</tt>  clean blend-from-history patterns
+- <tt>AcidTrailsBlend / GhostTrailsBlend</tt>  higher-level composites of trail motion
+- <tt>EchoBlend / EchoShift / TrailEcho</tt>  echo-delay style history reads
+- <tt>FrameBlendMulti / FrameBlendMultiX</tt>  blending across multiple history slots simultaneously
+
+@subsubsection explained_geometric_distortion Geometric Distortion
+
+
+Remap pixel coordinates  shift, stretch, warp, flip, tear, and distort spatial layout.
+
+- <tt>PictureShiftDown / PictureShiftRight / PictureShiftVariable</tt>  whole-frame translate by random pixel offset
+- <tt>StretchR/G/B_Right / StretchR/G/B_Down</tt>  per-channel horizontal or vertical stretch
+- <tt>TearRight / TearDown</tt>  VHS-style tape tear distortions
+- <tt>DistortionByRow / DistortionByCol</tt>  row/column-level random displacement
+- <tt>RippleEffect / ShockWave / TwistEffect</tt>  radial math-based spatial warps
+- <tt>FishEye / TunnelEffect / VortexEffect / Kaleidoscope</tt>  polar coordinate remap effects
+- <tt>SpiralWave / SpiralTrail</tt>  spiral coordinate mapping
+- <tt>ZoomBlur / RadialBlur / RotateBlend</tt>  zoom and rotational blur patterns
+- <tt>ExpandContract / ExpandLeftRight / DiagInward</tt>  pixel expansion/contraction patterns
+- <tt>MirrorWave / MirrorWaveX / MirrorWaveY</tt>  wave-modulated mirror remap
+
+@subsubsection explained_color_manipulation Color Manipulation
+
+
+Alter pixel color values mathematically without spatial remapping.
+
+- <tt>SelfAlphaBlend</tt>  multiplies each channel by (1 + alpha)
+- <tt>SelfScaleRefined / SelfScaleByFrame</tt>  channel scaling with clamping
+- <tt>TripHSV</tt>  converts to HSV, cycles hue by frame_count, converts back
+- <tt>GradientRainbow / GradientSelf / GradientDown / GraidentHorizontal</tt>  positional gradient overlays
+- <tt>FadeRtoGtoB / FadeRGB_Speed / FadeRandomChannel</tt>  sequential channel fade patterns
+- <tt>ColorAccumulate1/2/3 / colorAccumulate</tt>  accumulation blend series
+- <tt>HueRotate / ChromaticAberration / RGBShift</tt>  color space shift effects
+- <tt>Posterize / Solarize / GammaBright / GammaDark / ContrastBoost / ContrastReduce</tt>  tone-mapping operations
+- <tt>TruncateColor / TruncateVariable / TruncateVariableScale</tt>  color depth reduction patterns
+- <tt>ColorDrift / ColorPulse / ColorPulseRGB / ColorFadeFilter</tt>  time-animated color drift series
+
+@subsubsection explained_bitwise_xor_operations Bitwise / XOR Operations
+
+
+Apply bitwise logic (XOR, AND, OR) between pixel channels, historical frames, or random values.
+
+- <tt>Bitwise_XOR / Bitwise_AND / Bitwise_OR</tt>  current frame XOR/AND/OR with history frame
+- <tt>XorSumStrobe</tt>  XORs each channel against a random sumR/G/B value
+- <tt>XorAlpha / XorFade / XorSine / XorLag / XorScale</tt>  XOR variant series
+- <tt>SelfXorBlend / SelfXorDoubleFlash / SelfOrDoubleFlash</tt>  self-XOR patterns
+- <tt>BitwiseXorStrobe / BitwiseRotateBlend / BitwiseXorScaleBlend</tt>  scaled and rotated XOR blends
+- <tt>AndStrobe / AndStrobeScale / AndOrXorStrobe / AndOrXorStrobeScale</tt>  AND-based strobe family
+- <tt>MedianBlendXor / CollectionAlphaXor</tt>  XOR composited with median blend
+
+@subsubsection explained_glitch_and_noise Glitch and Noise
+
+
+Simulate digital corruption, static, tracking errors, and signal noise.
+
+- <tt>StrangeGlitch</tt>  color-bounds detection, swaps pixel with history when change detected
+- <tt>HorizontalGlitch / VerticalGlitch</tt>  glitch lines by row or column history sampling
+- <tt>PixelGlitch / StaticGlitch / LineGlitch / BoxGlitch</tt>  progressive glitch types
+- <tt>GlitchBlock / GlitchBlockXor / GlitchLine / GlitchLineX</tt>  block and line glitch family
+- <tt>VisualSnow / VisualSnowX2</tt>  gpu_rand-based noise overlay
+- <tt>NoiseBlend / NoiseBlendX2 / NoiseXor / NoiseBlendX</tt>  noise blend family
+- <tt>VHSTracking</tt>  emulates VHS head-tracking horizontal tear artifact
+- <tt>DataCorrupt / DigitalArtifact / TapeGlitch / ColorGlitch</tt>  digital corruption effects
+- <tt>SliceGlitch / GlitchSort / GlitchMosaic</tt>  sorted and mosaic-style glitch
+
+@subsubsection explained_scan_line_effects Scan / Line Effects
+
+
+Work on scanline-level patterns, interlacing, and whole-row/column operations.
+
+- <tt>InvertedScanlines / ScanSwitch / ScanAlphaSwitch</tt>  scanline inversion and toggle
+- <tt>HorizontalLines / DiagonalLines / BlackLines / LongLines</tt>  line overlay patterns
+- <tt>LineInLineOut</tt> series (3947, 262264)  complex oscillating line-in/line-out passes
+- <tt>YLineDown / YLineDownBlend</tt>  vertical line drift effects
+- <tt>LineGlitch / LineGlitchX / LineAcrossX / LinesAcrossX</tt>  line-based glitch patterns
+- <tt>BlendedScanLines / InterlaceBlend</tt>  interlace-style line blending
+- <tt>ShiftLinesDown</tt>  whole-scanline vertical displacement
+
+@subsubsection explained_block_square_effects Block / Square Effects
+
+
+Operate on rectangular pixel regions  pixelation, block swapping, tile-based transforms.
+
+- <tt>SquareBlockResize</tt>  divides frame into horizontal bands, each blended against a different history frame
+- <tt>SquareShrink</tt>  clamps inner region against history frame based on oscillating offset
+- <tt>SquareByRow / SquareByRowRev / SquareByRow2 / SquareByRow2Plus</tt>  row-ordered block history sampling
+- <tt>DiagPixelated / DiagPixelatedResize</tt>  diagonal block averaging with fixed or variable tile size
+- <tt>PixelateBlend / PixelateRect / PixelateWave / MosaicBlend</tt>  pixelation and mosaic blends
+- <tt>BlockPixels / BlockScale / BlockXor / BlockStrobe</tt>  block-level transform series
+- <tt>BlockyTrails16 / BlockyTrails32</tt>  block-sized history trails
+- <tt>BlockSwap</tt>  swaps pixel blocks between current and history
+
+@subsubsection explained_wave_oscillation_effects Wave / Oscillation Effects
+
+
+Use sine, cosine, square, triangle, sawtooth, and pulse waveforms to drive pixel displacement or color modulation.
+
+- <tt>SineWaveDistort / CosineWaveDistort</tt>  horizontal/vertical sinusoidal pixel shifting
+- <tt>SineWaveBlend / CosineWaveBlend / SinCosBlend</tt>  wave-modulated blends
+- <tt>SquareWave / SquareWaveX / SquareWaveBlend</tt>  square wave color/blend modulation
+- <tt>TriangleWave / TriangleWaveBlend</tt>  triangle wave modulation
+- <tt>SawtoothWave / SawtoothWaveBlend</tt>  sawtooth wave modulation
+- <tt>PulseWave / PulseWaveBlend / PulseRadial / Pulse</tt>  pulse-shape modulation
+- <tt>StepWave / StepWaveBlend</tt>  step-function wave modulation
+- <tt>WaveBlend / WaveBlendX2 / WavePattern / WavePatternXor</tt>  generic wave blend series
+- <tt>MirrorWave / SpiralWave / VortexEffect / TwistEffect</tt>  complex wave-geometry hybrids
+
+@subsubsection explained_mirror_reflection Mirror / Reflection
+
+
+Symmetric transforms that fold, flip, or reflect pixel coordinates.
+
+- <tt>MirrorReverseColor</tt>  four-point mirror average (top-left, bottom-left, bottom-right, current) with channel reversal
+- <tt>AlphaBlendMirror / MirrorXorAlpha</tt>  mirror with alpha and XOR compositing
+- <tt>IntertwinedMirror</tt>  interleaved mirror blend
+- <tt>MirrorReverseColorBlend</tt>  blended version of MirrorReverseColor
+- <tt>FlipAlphaBlend / RandomFlipFilter / FlipPictureShift / FlipMirror</tt>  flip transform series
+- <tt>DiagMirror / ShadowMirror / GhostMirror / FacetMirror</tt>  diagonal and ghost mirror types
+- <tt>Kaleidoscope / KaleidoscopeBlend / KaleidoBlend / KaleidoScope4 / MirrorKaleid</tt>  kaleidoscope family
+- <tt>SplitMirror / TripleSplit / PrismSplit</tt>  split-panel mirror effects
+
+@subsubsection explained_pixel_read_strobe_blend_collections Pixel Read / Strobe / Blend Collections
+
+
+Effects that do frame-history collection reads, random collection sampling, or strobe-pattern switching.
+
+- <tt>StretchColMatrix8/16/32</tt>  samples history at (x / sw) % numFrames column stride
+- <tt>ColorCollectionSubtleStrobe / CollectionRandom / CollectionAlphaXor</tt>  collection random/strobe series
+- <tt>ColorCollection64X / ColorCollectionSwitch / ColorCollectionRGB_Index</tt>  indexed collection blends
+- <tt>ColorCollectionGhostTrails / ColorCollectionScale / ColorCollectionReverseStrobe</tt>  ghost and scale variants
+- <tt>BlendWithSource25/50/75/100</tt>  fixed-ratio blends with history source
+- <tt>BlendFor360 / BlendForward16 / BlendForward32 / BlendFromXtoY</tt>  direction-controlled blend series
+- <tt>FadeInAndOut / FadeBlendXor / FadeBars</tt>  fade pattern series
+- <tt>MildStrobe / BrightStrobe / DarkStrobe / StrobeEffect / StrobeXor</tt>  strobe type family
+
+@subsubsection explained_advanced_cinematic_effects Advanced / Cinematic Effects
+
+
+Higher-complexity effects that combine multiple techniques or simulate specific visual phenomena.
+
+- <tt>CRTCurvature</tt>  simulates CRT screen barrel distortion
+- <tt>FilmGrain</tt>  per-pixel noise scaled by luma to simulate analog grain
+- <tt>ChromaticAberration / ChromaticAberrationX</tt>  RGB channel lateral displacement simulating lens chromatic error
+- <tt>LensFlare / LightLeak / GlowTrails / NeonGlow / GlowEdge / GlowPulse</tt>  optical glow/flare family
+- <tt>NightVision / InfraredView / ThermalBlend</tt>  synthetic imaging modalities
+- <tt>MatrixCode / DigitalRain</tt>  column-drip pattern simulating cascading character streams
+- <tt>WaterColor / OilSlick / LiquidMetal / LavaLamp</tt>  fluid/material simulation-inspired effects
+- <tt>HeatDistort / HeatRipple / HeatWave</tt>  heat shimmer displacement series
+- <tt>SobelNorm / DetectEdges / SketchOutline / SobelGlow / ElectricEdge</tt>  edge detection and outline family
+- <tt>GalaxySpiral / CosmicDust / StarBurst / Fireworks</tt>  space/particle aesthetic effects
+
+@subsection explained_the_two_stage_gpu_pipeline_cuda_compute_glsl_shaders The Two-Stage GPU Pipeline  CUDA Compute + GLSL Shaders
+
+
+The systems visual power comes from combining two distinct GPU programming models into a single per-frame pipeline. Understanding how each stage works  and how they connect  explains why the project can produce such a large array of effects.
+
+@subsubsection explained_stage_1_cuda_compute_kernels_massively_parallel_pixel_processing Stage 1: CUDA Compute Kernels  Massively Parallel Pixel Processing
+
+
+NVIDIA GPUs contain thousands of streaming multiprocessors (SMs), each capable of running many threads in parallel. Both CUDA kernels and GLSL shaders execute on this same hardware  the difference is the programming model. acidcam-gpu uses the <b>CUDA compute model</b> to assign <b>one thread to each pixel</b> of the video frame. For a 19201080 frame, the system launches <b>2,088,960 threads simultaneously</b>, organized into 1616 blocks of 256 threads each (8,160 blocks total). Every pixel in the frame is processed in parallel  there is no sequential per-pixel loop on the CPU.
+
+Each thread runs the <b>unified dispatch kernel</b> (<tt>unifiedFilterKernel</tt>), which loops through the users selected filter list and applies each filter to that threads pixel in order. The kernel contains a 905-case <tt>switch</tt> statement  each case calls a <tt>__device__</tt> function that reads and writes the pixels RGBA values at <tt>data[y * step + x * 4]</tt>. Because every thread in a warp processes the same filter index at the same time (the filter list is shared, not per-pixel), the dispatch is <b>warp-coherent</b> and runs at full GPU throughput.
+
+Crucially, the CUDA filters have access to a <b>ring buffer of historical frames</b> stored entirely in GPU device memory (<tt>DynamicFrameBuffer</tt>). This means filters like <tt>MedianBlend</tt> can average across all prior frames, <tt>AuraTrails</tt> can blend against frames at specific history indices, and <tt>MatrixOutline</tt> can compare against a frame from several steps back  all without any data leaving the GPU. This kind of arbitrary random-access memory read across multiple frame buffers is what makes the CUDA compute model essential  GLSL fragment shaders run on the same GPU cores but operate within the graphics pipeline, which doesnt support this kind of free-form device memory access.
+
+@subsubsection explained_stage_2_glsl_shaders_full_frame_post_processing Stage 2: GLSL Shaders  Full-Frame Post-Processing
+
+
+After CUDA finishes processing every pixel, the result must be displayed. Rather than downloading the frame to the CPU and re-uploading it, the system uses <b>CUDA/OpenGL interop via a Pixel Buffer Object (PBO)</b>:
+
+-# The PBO is registered with CUDA using <tt>cudaGraphicsGLRegisterBuffer</tt>
+-# CUDA maps the PBO into its address space and performs a <tt>cudaMemcpy2D</tt> (device-to-device) from the working buffer into the PBO  <b>the frame never touches CPU RAM</b>
+-# OpenGL binds the PBO as a pixel unpack buffer and calls <tt>glTexSubImage2D</tt> to populate a texture  another zero-copy GPU operation
+
+The CUDA-filtered frame is now an OpenGL texture. At this point, <b>GLSL fragment shaders</b> take over. These are standard OpenGL shader programs (GLSL 330 core) that process the entire frame as a texture. The shader library provides Shadertoy-compatible uniforms  <tt>iTime</tt>, <tt>iResolution</tt>, <tt>iMouse</tt>, <tt>iFrame</tt>, <tt>iTimeDelta</tt>, <tt>iDate</tt>, <tt>iFrameRate</tt>, <tt>iSampleRate</tt>, plus audio-reactive uniforms <tt>amp</tt>/<tt>uamp</tt>  enabling a wide range of full-frame effects like color grading, distortion warps, glow effects, CRT simulation, and procedural pattern overlays.
+
+Shaders can render the texture onto a <b>fullscreen 2D quad</b> (standard image processing) or onto <b>3D model geometry</b> loaded from MXMOD files, projecting the filtered video onto a rotating or animated mesh.
+
+@subsubsection explained_the_transfer_zero_copy_gpu_interop The Transfer: Zero-Copy GPU Interop
+
+
+The bridge between CUDA and OpenGL is critical to performance. The <tt>TextureUploader</tt> class handles this via PBO interop  the CUDA working buffer is copied directly into an OpenGL PBO in device memory, then uploaded to a GL texture, all without a CPU round-trip. This means the entire pipeline  from raw camera frame to final displayed output  can stay on the GPU throughout both the CUDA and GLSL stages.
+
+@subsection explained_filter_and_shader_stacking_two_independent_composable_chains Filter and Shader Stacking  Two Independent Composable Chains
+
+
+The system provides <b>two independent stacking mechanisms</b> that compose together: a CUDA filter chain and a GLSL shader pass stack. Users can configure both, and every combination produces a different visual result.
+
+@subsubsection explained_cuda_filter_chain_stacking_inside_the_kernel CUDA Filter Chain (Stacking Inside the Kernel)
+
+
+Users select any subset of the 905 available CUDA filters and arrange them in a specific order. This ordered list is uploaded to GPU memory as an array of <tt>GPUFilter</tt> structs. Inside the kernel, every pixel thread loops through this array:
+
+@code
+for (int i = 0; i < count; ++i) {
+    switch (filters[i].index) {
+        case 0: processSelfAlphaBlend(x, y, data, step, params); break;
+        case 1: processMedianBlend(x, y, data, allFrames, step, params); break;
+        // ... 902 more cases ...
+    }
+}
+@endcode
+
+Each filter modifies the pixel buffer <b>in-place</b>. Filter N reads the output that filter N-1 wrote. This means the filters chain naturally  the output of one becomes the input of the next, all within a single kernel launch. There are no intermediate buffer copies between filters; the stacking is purely sequential modification of the same pixel data.
+
+Rebuilding the filter list is <b>lazy and zero-cost at steady state</b>: the device-side filter array is only reallocated when the chain actually changes (tracked by a <tt>changed</tt> flag). Re-ordering filters at runtime is essentially free.
+
+@subsubsection explained_glsl_shader_pass_stack_ping_pong_framebuffer_passes GLSL Shader Pass Stack (Ping-Pong Framebuffer Passes)
+
+
+After CUDA processing, GLSL shaders can be stacked using a <b>multi-pass ping-pong framebuffer</b> technique. The user selects and orders GLSL shader passes through the <tt>ShaderPassDialog</tt> interface. Each pass works as follows:
+
+-# The system maintains two offscreen framebuffers (<tt>passFBO[0]</tt> and <tt>passFBO[1]</tt>) with corresponding textures (<tt>passTexture[0]</tt> and <tt>passTexture[1]</tt>)
+-# The input starts as the camera texture (which already contains the CUDA-filtered output)
+-# For each shader in the pass list:
+        - Bind <tt>passFBO[pingpong]</tt> as the render target
+        - Activate the pass shader program and set its uniforms (time, resolution, etc.)
+        - Draw a fullscreen quad sampling from <tt>inputTex</tt>
+        - Set <tt>inputTex = passTexture[pingpong]</tt> (the output becomes the next passs input)
+        - Flip <tt>pingpong = 1 - pingpong</tt>
+
+-# The final texture becomes the input for the main render (2D sprite or 3D mesh)
+
+This allows stacking any number of GLSL shader effects  each one processes the output of the previous, building up complexity layer by layer.
+
+@subsubsection explained_combined_stacking_the_full_pipeline Combined Stacking: The Full Pipeline
+
+
+Both chains compose into a single per-frame pipeline:
+
+@code
+Camera Frame
+   [CUDA Filter 1]  [CUDA Filter 2]  ...  [CUDA Filter N]   (in-kernel chain)
+   PBO interop (zero-copy GPU transfer)
+   [GLSL Shader Pass 1]  [GLSL Shader Pass 2]  ...  [GLSL Pass M]   (ping-pong FBOs)
+   Final composite (2D quad or 3D mesh)
+   Screen / Recording
+@endcode
+
+The user independently controls both the CUDA filter list and the GLSL shader pass list. Changing either one  or just reordering elements  produces a completely different visual result.
+
+@subsection explained_why_stacking_produces_infinite_visuals Why Stacking Produces Infinite Visuals
+
+
+Each filter and shader is a transformation function. Ordering is not commutative in general, so:
+
+<tt>F3(F2(F1(frame))) != F1(F2(F3(frame)))</tt>
+
+If you choose <b>n</b> distinct filters and order them, permutations are <b>n!</b>. Even before parameter changes, feedback buffers, and time-varying uniforms, this grows explosively.
+
+- 5 filters  120 orderings
+- 8 filters  40,320 orderings
+- 10 filters  3,628,800 orderings
+
+With 905 CUDA filters to choose from, plus an independent library of GLSL shaders that also stack and reorder, the combinatorial space multiplies further. Add in the continuously evolving per-frame parameters (alpha oscillation, frame history index, square size, random seeds, frame count) and the visual output becomes effectively unbounded  the same filter chain produces different results every frame because the parameters driving it are always changing.
+
+@subsubsection explained_in_depth_why_order_dominates_output In-Depth: Why Order Dominates Output
+
+
+In <tt>unifiedFilterKernel</tt>, each thread applies filter case statements in strict list order. Many cases are stateful across time because they read <tt>allFrames</tt> (historical frame pointers) and per-frame randomized params generated in <tt>launch_filter</tt>.
+
+- <b>Non-commutative transforms:</b> geometric shift then color XOR yields different values than color XOR then geometric shift, because pixel neighborhoods sampled differ.
+- <b>Temporal dependency:</b> trail/motion filters sample prior frames; changing order changes which transformed history is fed forward.
+- <b>Parameter evolution:</b> alpha, square size, random seed, and thresholds evolve frame-to-frame, so visual output is a time series, not a static map.
+- <b>Resolution coupling:</b> many filters compute indices with width/height and step; same chain on different resolutions creates different artifact structure.
+- <b>Cross-domain stacking:</b> CUDA filter chains and GLSL shader pass stacks compose independently, so the total combinatorial growth is the product of both  far larger than either alone. A 5-filter CUDA chain  a 3-shader GLSL stack already produces 120  6 = 720 distinct orderings before any parameter variation.
+
+@subsection explained_build_system_dependencies_and_distribution Build System, Dependencies, and Distribution
+
+
+The project requires a very specific dependency stack  not all of it is available pre-built from most package managers. OpenCV must be compiled from source with CUDA support enabled, which is the most significant build-time requirement.
+
+@subsubsection explained_required_dependencies Required Dependencies
+
+
+- <b>NVIDIA GPU:</b> RTX 20-series or newer. The project is developed and optimized on an RTX 2070. Older hardware may work but is not guaranteed.
+- <b>NVIDIA Proprietary Drivers:</b> v535 or newer. The CUDA runtime links against driver libraries at version-specific interfaces.
+- <b>CUDA Toolkit 12.x:</b> provides <tt>nvcc</tt>, <tt>cuda_runtime.h</tt>, <tt>cudaMalloc/cudaMemcpy/cudaDeviceSynchronize</tt>, and device code compilation.
+- <b>OpenCV with CUDA support:</b> must be compiled from source with <tt>WITH_CUDA=ON</tt> and matching CUDA architecture flags. Provides <tt>cv::cuda::GpuMat</tt>, <tt>cv::cuda::cvtColor</tt>, <tt>cv::cuda::printShortCudaDeviceInfo</tt>, and the <tt>cv::VideoCapture</tt> backend used in the CLI.
+- <b>libmx2 / MXWrite:</b> the MX2 ecosystem library provides MXMOD 3D model parsing and the MXWrite encoder wrapper around FFmpeg. Must be built and installed before building acidcam-gpu.
+- <b>Qt6:</b> required only for the ACMX2 Qt interface, not for the library or CLI.
+- <b>C++20 compiler:</b> the project uses <tt>std::format</tt>, <tt>std::filesystem</tt>, and other C++20 features throughout <tt>main_cv.cu</tt>.
+
+@subsubsection explained_build_order Build Order
+
+
+-# Build and install <tt>libmx2/libmx</tt> (with OpenGL support): <tt>cmake .. -DEXAMPLES=OFF -DOPENGL=ON && make -j$(nproc) && sudo make install</tt>
+-# Build and install <tt>acidcam-gpu/MXWrite</tt>: <tt>cmake .. && make -j$(nproc) && sudo make install</tt>
+-# Build and install the <tt>acidcam-gpu</tt> library and CLI: <tt>cmake .. && make -j$(nproc) && sudo make install</tt>. This installs the shared library, headers, and CMake package config so downstream projects can use <tt>find_package(acidcam-gpu)</tt>.
+-# Optionally build and install the Qt ACMX2 interface.
+
+@subsubsection explained_container_distribution_podman Container Distribution (Podman)
+
+
+The primary distribution mechanism for end users is a Podman container image: @htmlonly <a href="https://github.com/lostjared/acidcam-gpu/tree/main/podman">Podman Container file</a> @endhtmlonly. This automates the build process. To run it:
+
+- Host must have NVIDIA drivers and NVIDIA Container Toolkit for Podman installed.
+- <tt>podman build -t acmx2-arch:latest -f Containerfile.arch</tt>
+- The run script (<tt>podman/run-acmx2-arch.sh</tt>) passes GPU access, camera device (<tt>/dev/video0</tt>), audio device, and X11 display socket into the container so the app appears on the host desktop with full hardware access.
+- This approach means users on Bazzite, Arch, or other NVIDIA-equipped Linux systems can run a fully GPU-accelerated visual effects tool without any build steps.
+
+@subsubsection explained_development_environment Development Environment
+
+
+The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers via Distrobox</b>. This means the host OS is an immutable Fedora-based image, and all development tooling (CUDA, OpenCV from AUR, Qt6, gcc) is installed inside an Arch container mounted into the same home directory. This pattern keeps the base OS clean while maintaining full package manager access for development dependencies.
+
+@subsection explained_source_code_map_by_project_part Source Code Map by Project Part
+
+
+@subsubsection explained_acmx2_core ACMX2 Core
+
+
+- <tt>ACMX2/CMakeLists.txt</tt>  dependency checks + executable wiring
+- <tt>ACMX2/acmx.cpp</tt>  capture, render, controls, runtime loop
+- <tt>ACMX2/program.cpp/.hpp</tt>  shader program loading + binary cache
+- <tt>ACMX2/data/*.glsl</tt>  base passthrough/framebuffer shaders
+
+@subsubsection explained_acmx2_media_audio_3d ACMX2 Media + Audio + 3D
+
+
+- <tt>ACMX2/audio.cpp/.hpp</tt>  RtAudio amplitude/reactive hooks
+- <tt>ACMX2/audio_transfer.cpp</tt>  audio transfer helper
+- <tt>ACMX2/models/*.mxmod</tt>  MXMOD geometry library
+- <tt>ACMX2/examples/*.glsl</tt>  sample shader library/index
+
+@subsubsection explained_acmx2_interface_tools ACMX2 Interface + Tools
+
+
+- <tt>ACMX2/interface/*</tt>  Qt launcher/editor/dialog workflow
+- <tt>ACMX2/shader_generator/*</tt>  AI-assisted shader generation utility
+- <tt>ACMX2/shader.packs/</tt>  shader pack metadata
+- <tt>ACMX2/macos/</tt>  platform-specific notes
+
+@subsubsection explained_acidcam_gpu_library acidcam-gpu Library
+
+
+- <tt>acidcam-gpu/CMakeLists.txt</tt>  CUDA/OpenCV/MXWrite package build
+- <tt>acidcam-gpu/include/ac-gpu/ac-gpu.hpp</tt>  API structs + launch contract
+- <tt>acidcam-gpu/src/filters.cu</tt>  filter table + unifiedFilterKernel dispatch
+- <tt>acidcam-gpu/app/main_cv.cu</tt>  CLI runtime/argument pipeline
+
+@subsubsection explained_ops_deployment Ops + Deployment
+
+
+- <tt>podman/Containerfile.arch</tt>  Build containerized runtime image
+- <tt>podman/run-acmx2-arch.sh</tt>  GPU/camera/audio passthrough run script
+- <tt>acidcam-gpu/scripts/*</tt>  OpenCV CUDA and environment helper scripts
+
+@subsubsection explained_expanded_meaning_of_each_code_map_item Expanded Meaning of Each Code Map Item
+
+
+- <b><tt>ACMX2/CMakeLists.txt</tt>:</b> hard-gates feature availability at configure time; this file decides whether your build can legally run all advertised runtime paths.
+- <b><tt>ACMX2/acmx.cpp</tt>:</b> the largest operational core; input parsing, frame lifecycle, cache management, GL/CUDA interop, and output/control behavior converge here.
+- <b><tt>ACMX2/program.cpp/.hpp</tt>:</b> shader binary cache layer uses source+driver fingerprinting to skip repeated compile/link cycles and reduce startup latency.
+- <b><tt>ACMX2/data/*.glsl</tt>:</b> baseline vertex/fragment units that form base render stages and buffer transfer steps.
+- <b><tt>ACMX2/audio.cpp/.hpp</tt>:</b> real-time amplitude extraction from audio input; callback computes average magnitude used for reactive controls.
+- <b><tt>ACMX2/audio_transfer.cpp</tt>:</b> utility path for audio transfer/record style workflows and supporting media synchronization tasks.
+- <b><tt>ACMX2/models/*.mxmod</tt>:</b> model assets for 3D or scene-influenced visuals integrated with runtime rendering.
+- <b><tt>ACMX2/examples/*.glsl</tt>:</b> curated shader samples used as practical templates and quick-start visual blocks.
+- <b><tt>ACMX2/interface/*</tt>:</b> user-facing orchestration UI for session setup, process launch, list reordering, and settings persistence.
+- <b><tt>ACMX2/shader_generator/*</tt>:</b> assistant tooling that helps generate shader ideas/workflows while maintaining runtime-compatible output.
+- <b><tt>ACMX2/shader.packs/</tt>:</b> pack metadata and organization layer for large shader collections.
+- <b><tt>acidcam-gpu/include/ac-gpu/ac-gpu.hpp</tt>:</b> ABI/API boundary between host app and CUDA engine.
+- <b><tt>acidcam-gpu/src/filters.cu</tt>:</b> massive effect implementation + dispatch switch; this file is the core visual transformation engine.
+- <b><tt>acidcam-gpu/app/main_cv.cu</tt>:</b> standalone CLI proving the CUDA pipeline without the full ACMX2 UI stack.
+- <b><tt>podman/Containerfile</tt> and scripts:</b> reproducible deployment path for camera/GPU-enabled container runs.
+
+@subsection explained_end_to_end_runtime_flow End-to-End Runtime Flow
+
+
+-# Launch ACMX2 or the Qt interface.
+-# Load camera/video + shader set + optional GPU filter list.
+-# Frames enter OpenCV/CUDA buffers.
+-# Ordered filter list is sent into CUDA dispatch.
+-# GPU writes transformed pixels back for GL presentation.
+-# Optional recording/snapshot/audio-reactive controls are applied.
+
+The key design principle is: <b>order is the language</b>. Re-ordering the same operators creates a different visual grammar every time.
+
+@subsubsection explained_detailed_runtime_inner_workings Detailed Runtime Inner Workings
+
+
+-# <b>Configuration phase:</b> CLI args or Qt controls define input source, CUDA filters, shader pass order, buffer depth, fps/recording, and optional audio mode.
+-# <b>Device/stream validation:</b> runtime checks CUDA device count, camera/video availability, and opens required streams; invalid resources fail early with explicit messages.
+-# <b>Frame ingress:</b> each frame enters as OpenCV matrix data; format conversions normalize channel layout for downstream CUDA/OpenGL pipelines.
+-# <b>History update:</b> dynamic or fixed frame buffers rotate so current + historical frames are available in device memory simultaneously.
+-# <b>Parameter evolution:</b> animated values (alpha ramps, square size oscillation, frame index direction) are updated once per frame tick.
+-# <b>Filter dispatch packaging:</b> selected filter IDs are transformed into GPU list structs; if chain changed, device filter list is rebuilt.
+-# <b>CUDA execution:</b> unified kernel runs one thread per pixel, then loops each selected filter in order, modifying pixel values cumulatively.
+-# <b>Interop transfer:</b> resulting CUDA buffer is copied into GL-bound PBO memory and uploaded to texture for immediate rendering without host bounce.
+-# <b>Output fan-out:</b> displayed frame may also be written to file and/or used by snapshot threads; optional audio state can modulate rendering behavior.
+-# <b>Loop continuation:</b> next frame repeats with updated temporal state, producing evolving visuals that are path-dependent over time.
+
+@subsection explained_project_architecture_goals_and_design_tradeoffs Project Architecture Goals and Design Tradeoffs
+
+
+The project balances three competing goals: maximal visual complexity, real-time responsiveness, and a workflow that remains controllable by artists/operators. The architecture is intentionally modular so each subsystem can evolve without collapsing the full stack.
+
+@subsubsection explained_1_composability_first 1) Composability First
+
+
+Shaders, CUDA filters, and temporal buffers are treated as composable operators. This favors creative exploration and makes the system useful for live experimentation, not just fixed presets.
+
+@subsubsection explained_2_deterministic_runtime_paths 2) Deterministic Runtime Paths
+
+
+The same ordered chain and parameter set produce reproducible behavior at a given resolution/device configuration, which matters for iterative artistic workflows and debugging.
+
+@subsubsection explained_3_throughput_oriented_execution 3) Throughput-Oriented Execution
+
+
+CUDA/OpenGL interop and device-side frame history reduce host-device copies. The core design prefers sustained frame throughput over heavyweight per-frame orchestration.
+
+@subsubsection explained_4_operator_visibility 4) Operator Visibility
+
+
+The Qt layer exposes logs, ordered lists, and persistent settings. This turns complex GPU behavior into a controlled session system that can be repeated and tuned.
+
+@subsubsection explained_engineering_implications Engineering Implications
+
+
+- <b>Memory vs flexibility:</b> temporal filters require multiple historical frames in VRAM; this increases memory usage but enables richer motion feedback effects.
+- <b>Unified kernel benefits:</b> one dispatch model simplifies orchestration and lets filter chains be data-driven rather than compile-time fixed.
+- <b>Cross-platform pressure:</b> CMake + container scripts improve portability, but GPU/audio/camera stacks still vary by OS and driver quality.
+- <b>UI/runtime separation:</b> Qt remains a control plane while CLI/CUDA remains an execution plane; this separation keeps debugging cleaner.
+- <b>Creative-state persistence:</b> cached settings and ordered chains make sessions restorable, which is important for long-form visual composition.
+
+@subsection explained_build_deployment_and_operational_model Build, Deployment, and Operational Model
+
+
+Beyond visuals, the project includes practical operational pathways for repeatable builds and runtime deployment across development workstations and containerized environments.
+
+@subsubsection explained_build_surface Build Surface
+
+
+- <b>Dependency validation:</b> CMake scripts act as a gatekeeper so unsupported environments fail during configure/build, not deep in runtime.
+- <b>Library/executable layering:</b> the CUDA library can be tested through its own CLI path, while ACMX2 and Qt consume it as a higher-level orchestration stack.
+- <b>Shader and model assets:</b> runtime behavior depends not only on binaries but also on curated GLSL and MXMOD assets shipped with the project.
+
+@subsubsection explained_operational_surface Operational Surface
+
+
+- <b>Container workflows:</b> Podman files and scripts define a reproducible execution recipe including GPU/camera/audio passthrough where supported.
+- <b>Session-driven usage:</b> operators can treat configurations as sessions, allowing repeatable live setups for streaming, VJ work, or iterative rendering passes.
+- <b>Failure visibility:</b> logs from runtime and UI layers help pinpoint whether issues are input-device, shader compile, CUDA dispatch, or encoder related.
+
+@subsection explained_project_summary Project Summary
+
+
+acidcam-gpu + ACMX2 is a layered real-time visual computing system built entirely around NVIDIA CUDA. At the bottom: a 13,891-line CUDA file (<tt>filters.cu</tt>) implementing 905 per-pixel GPU effects dispatched through a single unified kernel. In the middle: a rotating device-side frame history buffer (<tt>DynamicFrameBuffer</tt>), a per-frame evolving parameter bundle (<tt>FilterParams</tt>), and a lazy-rebuild filter list mechanism that makes chain reconfiguration zero-cost. At the top: a CLI application with an oscillating <tt>AnimationState</tt> that continuously evolves alpha, block size, and temporal frame selection, plus a Qt6 orchestration interface with session persistence, process supervision, and multi-pass shader support. Distribution via Podman containers removes the painful dependency build requirement for end users.
+
+The core creative insight is that <b>filter order is the language</b>. The same 905 effects, ordered differently, with different animated parameters, on different input material, produce an effectively unbounded space of visual outcomes — all running at real-time framerates on a single consumer NVIDIA GPU.
+
+@section license License
+
+BSD 2-Clause License. (C) 2026 LostSideDead Software.
+
+https://lostsidedead.biz
+
+*/

@@ -1,3 +1,24 @@
+/**
+ * @file acmx.cpp
+ * @brief ACMX2 — Real-time GPU-accelerated video glitch engine.
+ *
+ * This file implements the complete ACMX2 command-line application, the core
+ * engine of the acidcam-gpu project. It combines CUDA GPU filters, GLSL shader
+ * processing, OpenGL rendering, optional 3D model support, audio reactivity,
+ * MIDI controller input, and video recording into a single real-time pipeline.
+ *
+ * @section arch Architecture Overview
+ * - **TextureUploader** — Zero-copy CUDA↔OpenGL PBO interop for GPU frames.
+ * - **ShaderCache / ShaderLibrary** — Compile, cache, and manage GLSL shader programs.
+ * - **FrameCache** — Ring-buffer of recent frames for temporal ("cache") shaders.
+ * - **SnapshotThreadPool** — Async PNG snapshot writer.
+ * - **ACView** — Main GL object: capture → filter → shade → record pipeline.
+ * - **MainWindow** — SDL2/OpenGL window host.
+ *
+ * @copyright (C) 2026 LostSideDead Software — BSD 2-Clause License
+ * @see https://lostsidedead.biz
+ */
+
 #include "version_info.hpp"
 #include <algorithm>
 #include <argz.hpp>
@@ -43,10 +64,28 @@
 #include <opencv2/opencv.hpp>
 #include <string_view>
 
+/// @brief Copy the audio track from one media file to another via FFmpeg.
 void transfer_audio(std::string_view, std::string_view);
 
+/**
+ * @class SnapshotThreadPool
+ * @brief A fixed-size thread pool used for writing PNG snapshots asynchronously.
+ *
+ * Tasks (snapshot encode + write) are enqueued and executed by worker threads
+ * so the render loop is never blocked by disk I/O.
+ */
 class SnapshotThreadPool {
   public:
+    /**
+     * @brief Construct a pool with a fixed number of worker threads.
+     *
+     * Each worker runs a loop that waits on the shared condition variable.
+     * When a task is pushed into the queue the condition is signalled and
+     * exactly one sleeping worker wakes to execute it.  Workers remain
+     * alive until the destructor sets the @c stop flag and joins them.
+     *
+     * @param threads Number of OS threads to spawn (typically 2).
+     */
     SnapshotThreadPool(size_t threads) : stop(false) {
         for (size_t i = 0; i < threads; ++i)
             workers.emplace_back([this] {
@@ -69,6 +108,17 @@ class SnapshotThreadPool {
             });
     }
 
+    /**
+     * @brief Submit a callable for asynchronous execution.
+     *
+     * The callable is wrapped in a `std::function<void()>` and pushed
+     * onto the shared task queue.  One waiting worker is then notified.
+     * Throws `std::runtime_error` if the pool has already been stopped.
+     *
+     * @tparam F Any callable matching `void()` (typically a lambda
+     *           that captures a FrameData by value for PNG writing).
+     * @param f  The task to execute on a worker thread.
+     */
     template <class F>
     void enqueue(F &&f) {
         {
@@ -80,6 +130,14 @@ class SnapshotThreadPool {
         condition.notify_one();
     }
 
+    /**
+     * @brief Drain remaining tasks and join all worker threads.
+     *
+     * Sets the @c stop flag under the lock, then broadcasts the
+     * condition variable so every sleeping worker wakes and exits.
+     * Each thread is joined before the destructor returns, guaranteeing
+     * that no background I/O is still in flight.
+     */
     ~SnapshotThreadPool() {
         {
             std::unique_lock<std::mutex> lock(queue_mutex);
@@ -91,19 +149,39 @@ class SnapshotThreadPool {
     }
 
   private:
-    std::vector<std::thread> workers;
-    std::queue<std::function<void()>> tasks;
-    std::mutex queue_mutex;
-    std::condition_variable condition;
-    bool stop = false;
+    std::vector<std::thread> workers;              ///< Persistent worker threads.
+    std::queue<std::function<void()>> tasks;        ///< FIFO of pending PNG-write tasks.
+    std::mutex queue_mutex;                         ///< Protects @c tasks and @c stop.
+    std::condition_variable condition;              ///< Signalled when a task is enqueued or pool stops.
+    bool stop = false;                             ///< When true, workers exit after draining the queue.
 };
 
+/**
+ * @class FrameCache
+ * @brief Fixed-capacity ring buffer of cv::Mat frames for temporal shaders.
+ *
+ * Shaders whose filename contains "cache" receive up to 8 previous frames
+ * as additional sampler2D uniforms (samp1–samp8). This class stores those
+ * frames in a std::deque, evicting the oldest when full.
+ */
 class FrameCache {
   public:
+    /// @param num Maximum number of frames to retain.
     explicit FrameCache(std::size_t num)
         : num_frames(num) {
     }
     ~FrameCache() = default;
+
+    /**
+     * @brief Push a frame into the ring buffer.
+     *
+     * If the buffer has not yet reached capacity the frame is appended.
+     * Once full, the oldest frame (front of the deque) is evicted before
+     * the new frame is added at the back.  The frame is moved rather than
+     * copied to avoid expensive pixel-buffer duplication.
+     *
+     * @param frame An rvalue reference to the cv::Mat to store.
+     */
     void push(cv::Mat &&frame) {
         if (frames.size() < num_frames) {
             frames.emplace_back(std::move(frame));
@@ -112,25 +190,54 @@ class FrameCache {
             frames.emplace_back(std::move(frame));
         }
     }
+    /**
+     * @brief Bounds-checked element access.
+     * @param index Zero-based frame index (0 = oldest retained frame).
+     * @return Reference to the cv::Mat at @p index.
+     * @throws std::out_of_range if @p index is out of bounds.
+     */
     cv::Mat &at(std::size_t index) {
         return frames.at(index);
     }
+    /**
+     * @brief Subscript access with an explicit out-of-range check.
+     * @param index Zero-based frame index.
+     * @return Reference to the cv::Mat at @p index.
+     * @throws std::out_of_range if @p index >= size().
+     */
     cv::Mat &operator[](std::size_t index) {
         if (index >= frames.size()) {
             throw std::out_of_range("FrameCache index out of range");
         }
         return frames[index];
     }
+    /**
+     * @brief Return the number of frames currently stored.
+     * @return Frame count (0 ≤ n ≤ capacity).
+     */
     std::size_t size() const {
         return frames.size();
     }
 
+    /**
+     * @brief Check whether the buffer has reached its maximum capacity.
+     * @return True when exactly @c num_frames frames are stored.
+     */
     bool isFull() {
         if (size() == num_frames)
             return true;
         return false;
     }
 
+    /**
+     * @brief Pre-fill the buffer with copies of a single frame.
+     *
+     * Used during initialisation to seed the cache with blank (black)
+     * textures so that "cache" shaders have valid sampler data from
+     * frame zero.
+     *
+     * @param frame The cv::Mat to replicate into every slot.
+     */
     void fill(cv::Mat &frame) {
         for (size_t i = 0; i < num_frames; ++i) {
             if (frames.size() < num_frames)
@@ -143,14 +250,37 @@ class FrameCache {
     std::deque<cv::Mat> frames;
 };
 
+/**
+ * @class TextureUploader
+ * @brief Zero-copy CUDA-to-OpenGL texture transfer via Pixel Buffer Object (PBO).
+ *
+ * Registers an OpenGL PBO with CUDA so that a cv::cuda::GpuMat can be copied
+ * directly into an OpenGL texture without passing through host memory.
+ * This is the fastest path for getting GPU-filtered frames onto the screen.
+ */
 class TextureUploader {
   public:
-    GLuint textureID = 0;
-    GLuint pboID = 0;
-    cudaGraphicsResource *cudaPboResource = nullptr;
-    int width = 0;
-    int height = 0;
+    GLuint textureID = 0;           ///< OpenGL texture receiving the frame data.
+    GLuint pboID = 0;               ///< PBO shared between CUDA and OpenGL.
+    cudaGraphicsResource *cudaPboResource = nullptr; ///< CUDA handle to the mapped PBO.
+    int width = 0;                  ///< Current texture width in pixels.
+    int height = 0;                 ///< Current texture height in pixels.
 
+    /**
+     * @brief Create (or recreate) the GL texture, PBO, and CUDA registration.
+     *
+     * Allocates an RGBA OpenGL texture of the requested dimensions, creates a
+     * matching Pixel Buffer Object sized to `w * h * 4` bytes, and registers
+     * the PBO with the CUDA runtime via cudaGraphicsGLRegisterBuffer so that
+     * subsequent update() calls can write GPU memory directly into the PBO
+     * without a device-to-host round-trip.
+     *
+     * If the uploader was previously initialised, cleanup() is called first
+     * so that old resources are released before new ones are created.
+     *
+     * @param w Texture / PBO width in pixels.
+     * @param h Texture / PBO height in pixels.
+     */
     void init(int w, int h) {
         if (textureID != 0)
             cleanup();
@@ -170,6 +300,22 @@ class TextureUploader {
         CHECK_CUDA(cudaGraphicsGLRegisterBuffer(&cudaPboResource, pboID, cudaGraphicsMapFlagsWriteDiscard));
     }
 
+    /**
+     * @brief Upload a CUDA GpuMat into the OpenGL texture via the shared PBO.
+     *
+     * The transfer is performed entirely on the GPU:
+     *  1. Map the PBO into CUDA address space (cudaGraphicsMapResources).
+     *  2. Copy the GpuMat rows into the mapped pointer with cudaMemcpy2D
+     *     (device-to-device, respecting the GpuMat stride).
+     *  3. Unmap the resource so OpenGL can read it.
+     *  4. Bind the PBO as GL_PIXEL_UNPACK_BUFFER and call glTexSubImage2D
+     *     with a NULL pointer offset to DMA the data into the texture.
+     *
+     * If the incoming frame dimensions differ from the current texture,
+     * init() is called automatically to reallocate.
+     *
+     * @param gpuFrame The CUDA GpuMat (CV_8UC4 / RGBA) to upload.
+     */
     void update(const cv::cuda::GpuMat &gpuFrame) {
         if (gpuFrame.cols != width || gpuFrame.rows != height) {
             init(gpuFrame.cols, gpuFrame.rows);
@@ -187,6 +333,14 @@ class TextureUploader {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
+    /**
+     * @brief Release all GPU resources (CUDA registration, PBO, texture).
+     *
+     * Unregisters the PBO from CUDA, deletes the OpenGL buffer, and
+     * deletes the OpenGL texture.  Safe to call multiple times—each
+     * resource handle is tested for non-zero before deletion and
+     * reset to zero / nullptr afterwards.
+     */
     void cleanup() {
         if (cudaPboResource) {
             CHECK_CUDA(cudaGraphicsUnregisterResource(cudaPboResource));
@@ -203,23 +357,61 @@ class TextureUploader {
     }
 };
 
+/**
+ * @struct ShaderCacheEntry
+ * @brief One shader's precompiled binary data for the on-disk cache.
+ *
+ * Stores the GL program binary for both 2D and 3D vertex shaders, plus an
+ * FNV-1a hash of the source file so stale entries are detected on load.
+ */
 struct ShaderCacheEntry {
-    std::string shader_name;
-    std::vector<char> binary_2d;
-    GLenum format_2d;
-    std::vector<char> binary_3d;
-    GLenum format_3d;
-    uint64_t source_hash;
+    std::string shader_name;       ///< Stem of the .glsl filename.
+    std::vector<char> binary_2d;   ///< GL program binary (2D vertex shader).
+    GLenum format_2d;              ///< GL binary format token for 2D.
+    std::vector<char> binary_3d;   ///< GL program binary (3D vertex shader).
+    GLenum format_3d;              ///< GL binary format token for 3D.
+    uint64_t source_hash;          ///< FNV-1a-64 hash of the fragment source.
 };
 
+/**
+ * @struct ShaderCache
+ * @brief Container for the full on-disk shader cache file.
+ *
+ * The binary file format is:
+ * `[MAGIC][VERSION][gl_renderer][gl_version][dual_mode][count][entries...]`
+ *
+ * If the GL renderer or driver version changes, the cache is invalidated.
+ */
 struct ShaderCache {
-    static constexpr uint32_t CACHE_MAGIC = 0x53484452;
-    static constexpr uint32_t CACHE_VERSION = 2;
+    static constexpr uint32_t CACHE_MAGIC = 0x53484452;   ///< File magic: "SHDR".
+    static constexpr uint32_t CACHE_VERSION = 2;           ///< Current format version.
     std::string gl_renderer;
     std::string gl_version;
     bool dual_mode = false;
     std::vector<ShaderCacheEntry> entries;
 
+    /**
+     * @brief Serialise the entire shader cache to a binary file.
+     *
+     * File layout (all values little-endian, no padding):
+     * | Offset | Field                |
+     * |--------|----------------------|
+     * | 0      | uint32 CACHE_MAGIC   |
+     * | 4      | uint32 CACHE_VERSION |
+     * | 8      | string gl_renderer   |
+     * |        | string gl_version    |
+     * |        | bool   dual_mode     |
+     * |        | uint32 entry_count   |
+     * |        | entries…             |
+     *
+     * Each string is written as a `uint32` length followed by raw bytes.
+     * Each entry contains: shader_name (string), source_hash (uint64),
+     * format_2d (GLenum), binary_2d (uint32 size + raw bytes),
+     * format_3d (GLenum), binary_3d (uint32 size + raw bytes).
+     *
+     * @param path Filesystem path for the output file (e.g. `library/.shader_cache`).
+     * @return True if the file was written without stream errors.
+     */
     bool save(const std::string &path) const {
         std::ofstream file(path, std::ios::binary);
         if (!file.is_open())
@@ -257,6 +449,21 @@ struct ShaderCache {
         return file.good();
     }
 
+    /**
+     * @brief Deserialise the shader cache from a binary file.
+     *
+     * Validates the magic number and version before reading.  If either
+     * does not match (e.g. cache was written by an older version or a
+     * different application) the method returns false and leaves the
+     * object in an indeterminate state—callers should discard it.
+     *
+     * The layout mirrors save(): magic, version, renderer string,
+     * GL version string, dual_mode flag, entry count, then each entry.
+     *
+     * @param path Filesystem path of the cache file to read.
+     * @return True on success; false if the file is missing, corrupt,
+     *         or has a version / magic mismatch.
+     */
     bool load(const std::string &path) {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open())
@@ -304,6 +511,11 @@ struct ShaderCache {
     }
 };
 
+/**
+ * @brief Compute an FNV-1a 64-bit hash of a file's contents.
+ * @param filepath Path to the file to hash.
+ * @return 64-bit hash, or 0 if the file cannot be opened.
+ */
 static uint64_t fnv1a64_file(const std::string &filepath) {
     std::ifstream f(filepath, std::ios::binary);
     if (!f.is_open())
@@ -322,6 +534,7 @@ static uint64_t fnv1a64_file(const std::string &filepath) {
     return h;
 }
 
+/// @brief Convenience wrapper—hashes a shader source file for cache validation.
 uint64_t hashFileContents(const std::string &filepath) {
     return fnv1a64_file(filepath);
 }
@@ -332,6 +545,7 @@ typedef void(APIENTRYP PFNGLPROGRAMBINARYPROC_LOCAL)(GLuint program, GLenum bina
 static PFNGLGETPROGRAMBINARYPROC_LOCAL glGetProgramBinaryFunc = nullptr;
 static PFNGLPROGRAMBINARYPROC_LOCAL glProgramBinaryFunc = nullptr;
 
+/// @brief Dynamically load glGetProgramBinary / glProgramBinary via SDL.
 bool loadProgramBinaryFunctions() {
     if (glGetProgramBinaryFunc != nullptr)
         return true;
@@ -345,6 +559,20 @@ bool loadProgramBinaryFunctions() {
     return true;
 }
 
+/**
+ * @class ShaderLibrary
+ * @brief Manages the complete collection of compiled GLSL shader programs.
+ *
+ * Responsibilities:
+ * - Load a single shader or a full library from an index.txt manifest.
+ * - Optionally build and restore a binary shader cache for fast startup.
+ * - Track and upload all shader uniforms each frame (time, mouse, audio, etc.).
+ * - Support dual-mode (2D + 3D vertex shader) compilation.
+ * - Provide navigation (inc/dec/setIndex) and bypass controls.
+ *
+ * acidcamGL-compatible uniforms (value_alpha_r/g/b, optx, random_var, etc.)
+ * are maintained here so legacy shaders work unmodified.
+ */
 class ShaderLibrary {
     float alpha = 0.1f;
     bool time_active = true;
@@ -364,6 +592,13 @@ class ShaderLibrary {
     glm::vec4 inc_valuex = glm::vec4(0.0f);
     bool restore_black = false;
 
+    /**
+     * @struct ProgramData
+     * @brief Cached uniform locations for a single compiled shader program.
+     *
+     * Querying glGetUniformLocation every frame is expensive; this struct
+     * stores all locations once at compile time.
+     */
     struct ProgramData {
         std::string name;
         GLint loc = -1, iTime = -1, iMouse = -1, time_f = -1, iResolution = -1;
@@ -419,8 +654,25 @@ class ShaderLibrary {
     ShaderLibrary() = default;
     ~ShaderLibrary() {}
 
+    /**
+     * @brief Enable or disable use of the ac::ShaderProgram binary-cache wrapper.
+     *
+     * When enabled, makeProgram() returns an ac::ShaderProgram instead of
+     * the base gl::ShaderProgram, allowing shader binaries to be loaded
+     * from the on-disk cache rather than recompiled from source.
+     *
+     * @param enable True to use the caching wrapper.
+     */
     void enableCache(bool enable) { use_cache = enable; }
 
+    /**
+     * @brief Remove all compiled shader programs and reset the library index.
+     *
+     * Releases every unique_ptr in both the 2D and 3D program vectors,
+     * clears the associated uniform-location maps, and resets the
+     * current library_index to zero.  Called before rebuilding the
+     * shader cache when a count or hash mismatch is detected.
+     */
     void clear() {
         programs_2d.clear();
         programs_3d.clear();
@@ -429,6 +681,17 @@ class ShaderLibrary {
         library_index = 0;
     }
 
+    /**
+     * @brief Compile a single fragment shader with the 2D (and optionally 3D) vertex shader.
+     *
+     * Loads `data/vert.glsl` (2D) and optionally `data/vertex.glsl` (3D)
+     * paired with the supplied fragment shader path.  After compilation
+     * the shader's uniform locations are cached via setupProgramUniforms().
+     *
+     * @param win  Pointer to the GL window (provides asset path resolution).
+     * @param text Full path to the fragment shader source file.
+     * @throws mx::Exception if either compile/link stage fails.
+     */
     void loadProgram(gl::GLWindow *win, const std::string text) {
         programs_2d.push_back(makeProgram());
         if (!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text)) {
@@ -447,6 +710,29 @@ class ShaderLibrary {
         }
     }
 
+    /**
+     * @brief Query and store all uniform locations for a compiled shader program.
+     *
+     * Called immediately after a program is compiled (or restored from
+     * cache).  Activates the program with `useProgram()`, then queries
+     * locations for every known uniform—Shadertoy-compatible (iTime,
+     * iResolution, iMouse, iFrame, iDate, iTimeDelta, iChannelTime,
+     * iChannelResolution, iSampleRate, iFrameRate), audio reactivity
+     * (amp, uamp, iamp, amp_peak, amp_rms, amp_smooth, amp_low/mid/high),
+     * and acidcamGL legacy (value_alpha_r/g/b, alpha_r/g/b, alpha_value,
+     * index_value, optx, random_var, restore_black, inc_value, inc_valuex).
+     *
+     * Results are stored in the ProgramData struct keyed by program
+     * index in the provided map, avoiding per-frame glGetUniformLocation
+     * calls.
+     *
+     * @param win   GL window (used for error reporting).
+     * @param prog  The compiled shader program to query.
+     * @param names Map to store the resulting ProgramData into.
+     * @param pos   Index key under which the data is stored.
+     * @param text  Fragment shader file path (stem becomes the display name).
+     * @throws mx::Exception on any GL error after useProgram or setUniform.
+     */
     void setupProgramUniforms(gl::GLWindow *win, gl::ShaderProgram *prog,
                               std::unordered_map<int, ProgramData> &names, size_t pos,
                               const std::string &text) {
@@ -519,6 +805,10 @@ class ShaderLibrary {
         }
     }
 
+    /**
+     * @brief Upload the current frame-rate to the active shader's iFrameRate uniform.
+     * @param fps_value Frames per second to send to the GPU.
+     */
     void setFPS(float fps_value) {
         auto &names = is3d ? program_names_3d : program_names_2d;
         auto it = names.find(index());
@@ -529,6 +819,16 @@ class ShaderLibrary {
             glUniform1f(loc, fps_value);
     }
 
+    /**
+     * @brief Bind a cache sampler slot for texture-cache shaders.
+     *
+     * Sets the sampler uniform `samp1`–`samp8` at the given slot to point
+     * at texture unit `value + 1`.  Only meaningful for shaders whose
+     * filename contains "cache".
+     *
+     * @param name  Uniform name (unused — the slot index is used directly).
+     * @param value Zero-based cache texture slot (0–7).
+     */
     void setUniform(const std::string &name, int value) {
         if (value < 0 || value >= 8) {
             return;
@@ -540,20 +840,37 @@ class ShaderLibrary {
         glUniform1i(names[index()].texture_cache_loc[value], value + 1);
     }
 
+    /**
+     * @brief Switch between the 2D and 3D program vectors.
+     * @param is3d True selects the 3D shader set; false selects 2D.
+     */
     void is3D(bool is3d) {
         this->is3d = is3d;
     }
 
+    /// @brief Set the absolute time_f advancement speed multiplier.
     void setTimeSpeed(float speed) {
         time_speed = speed;
     }
 
+    /**
+     * @brief Increase the time_f speed multiplier by @p step.
+     *
+     * Holding Page Up in the render loop calls this every frame,
+     * giving the user continuous acceleration control.
+     *
+     * @param step Amount to add to the speed (e.g. 0.1).
+     */
     void incTimeSpeed(float step) {
         time_speed += step;
         mx::system_out << "acmx2: Time speed: " << time_speed << "\n";
         fflush(stdout);
     }
 
+    /**
+     * @brief Decrease the time_f speed multiplier by @p step, clamped to zero.
+     * @param step Amount to subtract (e.g. 0.1).
+     */
     void decTimeSpeed(float step) {
         if (time_speed - step > 0.0f) {
             time_speed -= step;
@@ -564,14 +881,33 @@ class ShaderLibrary {
         fflush(stdout);
     }
 
+    /**
+     * @brief Enable or disable dual-mode compilation (2D + 3D vertex shaders).
+     *
+     * When dual mode is on, every shader source is compiled twice: once with
+     * `data/vert.glsl` (flat quad) and once with `data/vertex.glsl` (3D
+     * model).  This doubles compilation time but allows runtime switching
+     * between 2D and 3D rendering with a single key press.
+     *
+     * @param enable True to compile both shader variants.
+     */
     void enableDualMode(bool enable) {
         dual_mode = enable;
     }
 
+    /// @brief Return whether dual mode (2D + 3D) is active.
     bool isDualMode() const {
         return dual_mode;
     }
 
+    /**
+     * @brief Toggle between 2D and 3D rendering modes.
+     *
+     * Only effective when dual_mode is enabled; otherwise prints a
+     * diagnostic and returns.  Flips the internal is3d flag so that
+     * subsequent calls to shader(), useProgram(), size(), etc. use the
+     * alternate program vector.
+     */
     void toggle3D() {
         if (!dual_mode) {
             mx::system_out << "acmx2: Cannot switch to 3D - dual mode not enabled\n";
@@ -583,8 +919,16 @@ class ShaderLibrary {
         fflush(stdout);
     }
 
+    /// @brief Return true if currently in 3D mode.
     bool get3D() const { return is3d; }
 
+    /**
+     * @brief Toggle the shader bypass flag.
+     *
+     * When bypassed, ACView::draw() uses the plain framebuffer pass-through
+     * shader instead of the current library shader, showing the raw
+     * camera/video feed.  Press Space at runtime to toggle.
+     */
     void toggleBypass() {
         shader_bypass = !shader_bypass;
         std::string state = shader_bypass ? "disabled" : "enabled";
@@ -592,10 +936,12 @@ class ShaderLibrary {
         fflush(stdout);
     }
 
+    /// @brief Return true if shader processing is currently bypassed.
     bool isBypassed() const {
         return shader_bypass;
     }
 
+    /// @brief Compile every shader listed in index.txt, showing a progress overlay.
     void loadPrograms(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
         std::fstream file;
         file.open(text + "/index.txt", std::ios::in);
@@ -676,6 +1022,14 @@ class ShaderLibrary {
         fflush(stdout);
     }
 
+    /**
+     * @brief Build the on-disk shader binary cache for all shaders in a library.
+     * @param win    GL window (provides vertex shader paths).
+     * @param library_path  Directory containing index.txt and .glsl files.
+     * @param vert_2d  Path to the 2D vertex shader.
+     * @param vert_3d  Path to the 3D vertex shader.
+     * @return true on success.
+     */
     bool buildShaderCache(gl::GLWindow *win, const std::string &library_path, const std::string &vert_2d, const std::string &vert_3d) {
         GLint numFormats = 0;
         glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &numFormats);
@@ -877,6 +1231,14 @@ class ShaderLibrary {
         }
     }
 
+    /**
+     * @brief Get a display string for the currently active shader.
+     *
+     * Returns a string of the form `"42: bloom"` (index + stem name).
+     * Used for the on-screen overlay and window title.
+     *
+     * @return Formatted shader name, or empty string if index is invalid.
+     */
     std::string getFullShaderName() {
         std::string name;
         auto &names = is3d ? program_names_3d : program_names_2d;
@@ -886,6 +1248,11 @@ class ShaderLibrary {
         return name;
     }
 
+    /**
+     * @brief Get the stem name of a shader by its numeric index.
+     * @param idx Zero-based shader program index.
+     * @return Shader name, or empty string if @p idx is out of range.
+     */
     std::string getShaderNameByIndex(size_t idx) {
         auto &names = is3d ? program_names_3d : program_names_2d;
         if (names.find(idx) != names.end()) {
@@ -894,6 +1261,14 @@ class ShaderLibrary {
         return "";
     }
 
+    /**
+     * @brief Get a display string including the active shader and the pass list.
+     *
+     * Format: `"42: bloom [edge, blur, vhs]"` when multi-pass is active.
+     *
+     * @param pass_list Vector of additional shader indices applied as post-passes.
+     * @return Formatted composite name.
+     */
     std::string getFullShaderName(const std::vector<int> &pass_list) {
         std::string name;
         auto &names = is3d ? program_names_3d : program_names_2d;
@@ -918,6 +1293,7 @@ class ShaderLibrary {
         return name;
     }
 
+    /// @brief Attempt to load all shader programs from the binary cache file.
     bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont,
                        const std::string &vert_2d = "", const std::string &vert_3d = "") {
         std::string cache_file = library_path + "/.shader_cache";
@@ -1088,6 +1464,16 @@ class ShaderLibrary {
         return true;
     }
 
+    /**
+     * @brief Try loading a full shader library from the binary cache, with fallback.
+     *
+     * Calls loadFromCache() first; if the cache is missing, stale, or
+     * incompatible, falls back to loadPrograms() (compile from source).
+     *
+     * @param win          GL window for asset resolution.
+     * @param text         Shader library directory (containing index.txt).
+     * @param loadingFont  Font used for the on-screen progress overlay.
+     */
     void loadProgramsWithCache(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
         std::string vert_2d = win->util.getFilePath("data/vert.glsl");
         std::string vert_3d = win->util.getFilePath("data/vertex.glsl");
@@ -1097,6 +1483,14 @@ class ShaderLibrary {
         loadPrograms(win, text, loadingFont);
     }
 
+    /**
+     * @brief Check whether the currently active shader is a texture-cache shader.
+     *
+     * Returns true when the shader name contains the substring "cache",
+     * which signals ACView::draw() to bind the 8 historical textures.
+     *
+     * @return True if the current shader is a cache shader.
+     */
     bool isCache() {
         auto &names = is3d ? program_names_3d : program_names_2d;
         if (library_index < names.size() && names[library_index].name.find("cache") != std::string::npos)
@@ -1104,6 +1498,14 @@ class ShaderLibrary {
         return false;
     }
 
+    /**
+     * @brief Set the active shader by index.
+     *
+     * Bounds-checked against the current program vector (2D or 3D).
+     * Logs the shader name to stdout.
+     *
+     * @param i Zero-based shader index in the active program vector.
+     */
     void setIndex(size_t i) {
         auto &progs = is3d ? programs_3d : programs_2d;
         auto &names = is3d ? program_names_3d : program_names_2d;
@@ -1113,17 +1515,25 @@ class ShaderLibrary {
             fflush(stdout);
         }
     }
+    /// @brief Advance to the next shader in the library (clamped at the end).
     void inc() {
         auto &progs = is3d ? programs_3d : programs_2d;
         if (library_index + 1 < progs.size())
             setIndex(library_index + 1);
     }
+    /// @brief Move to the previous shader in the library (clamped at zero).
     void dec() {
         if (library_index > 0)
             setIndex(library_index - 1);
     }
+    /// @brief Return the current shader index.
     size_t index() { return library_index; }
 
+    /**
+     * @brief Look up a shader index by its stem name.
+     * @param name Stem name to search for (case-sensitive).
+     * @return Zero-based index, or -1 if not found.
+     */
     int findShaderByName(const std::string &name) {
         auto &names = is3d ? program_names_3d : program_names_2d;
         for (auto &[idx, data] : names) {
@@ -1133,19 +1543,29 @@ class ShaderLibrary {
         return -1;
     }
 
+    /// @brief Number of programs in the currently active set (2D or 3D).
     size_t size() { return is3d ? programs_3d.size() : programs_2d.size(); }
+    /// @brief Number of 2D programs.
     size_t size2d() { return programs_2d.size(); }
+    /// @brief Number of 3D programs.
     size_t size3d() { return programs_3d.size(); }
 
+    /// @brief Activate the current shader program on the GPU (glUseProgram).
     void useProgram() {
         auto &progs = is3d ? programs_3d : programs_2d;
         progs[index()]->useProgram();
     }
+    /// @brief Return a raw pointer to the currently active ShaderProgram.
     gl::ShaderProgram *shader() {
         auto &progs = is3d ? programs_3d : programs_2d;
         return progs[index()].get();
     }
 
+    /**
+     * @brief Get a shader by index from the active set (2D or 3D).
+     * @param idx Zero-based program index.
+     * @return Pointer to the program, or nullptr if out of range.
+     */
     gl::ShaderProgram *getShader(size_t idx) {
         auto &progs = is3d ? programs_3d : programs_2d;
         if (idx < progs.size())
@@ -1153,18 +1573,39 @@ class ShaderLibrary {
         return nullptr;
     }
 
+    /**
+     * @brief Get a 2D shader by index (regardless of current 2D/3D mode).
+     * @param idx Zero-based program index in the 2D vector.
+     * @return Pointer, or nullptr if out of range.
+     */
     gl::ShaderProgram *getShader2D(size_t idx) {
         if (idx < programs_2d.size())
             return programs_2d[idx].get();
         return nullptr;
     }
 
+    /**
+     * @brief Get a 3D shader by index (regardless of current 2D/3D mode).
+     * @param idx Zero-based program index in the 3D vector.
+     * @return Pointer, or nullptr if out of range.
+     */
     gl::ShaderProgram *getShader3D(size_t idx) {
         if (idx < programs_3d.size())
             return programs_3d[idx].get();
         return nullptr;
     }
 
+    /**
+     * @brief Upload all uniforms for an arbitrary shader in the active set.
+     *
+     * Used by the multi-pass pipeline when each pass may target a
+     * different shader index.  Computes elapsed time, delta time,
+     * frame count, date, mouse state, and all audio metrics, then
+     * uploads them to the program at @p idx.
+     *
+     * @param win GL window (provides resolution and mouse coordinates).
+     * @param idx Index of the shader whose uniforms to upload.
+     */
     void updateShaderUniforms(gl::GLWindow *win, size_t idx) {
         auto &progs = is3d ? programs_3d : programs_2d;
         auto &names = is3d ? program_names_3d : program_names_2d;
@@ -1267,6 +1708,18 @@ class ShaderLibrary {
 #endif
     }
 
+    /**
+     * @brief Upload all uniforms for a shader in the **2D** set specifically.
+     *
+     * Identical to updateShaderUniforms() but explicitly indexes into
+     * `programs_2d` / `program_names_2d`, bypassing the 2D/3D mode
+     * switch.  This is used during 3D-mode multi-pass rendering,
+     * where the post-processing passes always run in 2D but the
+     * final composite runs in 3D.
+     *
+     * @param win GL window.
+     * @param idx Index in the 2D program vector.
+     */
     void updateShaderUniforms2D(gl::GLWindow *win, size_t idx) {
         if (idx >= programs_2d.size())
             return;
@@ -1367,6 +1820,21 @@ class ShaderLibrary {
 #endif
     }
 
+    /**
+     * @brief Per-frame update: advance time_f, upload all uniforms to the active shader.
+     *
+     * Called once per frame from ACView::draw().  This method:
+     * 1. Computes delta time from SDL performance counters.
+     * 2. Advances `time_f` either by wall-clock delta (scaled by time_speed)
+     *    or by audio amplitude (when audio-reactive time is enabled).
+     * 3. Uploads time_f, iTime, iFrame, iTimeDelta, iDate, iFrameRate,
+     *    iMouse (with Shadertoy click semantics), and iResolution.
+     * 4. Steps and uploads the acidcamGL-compatible oscillator uniforms.
+     * 5. Uploads all audio amplitude and frequency-band uniforms (when
+     *    AUDIO_ENABLED is defined and time_audio is true).
+     *
+     * @param win GL window providing resolution and drawable size.
+     */
     void update(gl::GLWindow *win) {
         auto &names = is3d ? program_names_3d : program_names_2d;
         if (names.find(index()) == names.end()) {
@@ -1516,6 +1984,15 @@ class ShaderLibrary {
 #endif
     }
 
+    /**
+     * @brief Advance acidcamGL-compatible colour-alpha oscillators and random values.
+     *
+     * Each colour channel (R, G, B) is incremented by a random 0–0.99
+     * and reset to 0.1 when exceeding 1.5.  The `alpha` value
+     * oscillates between 1.0 and 6.0.  `random_var` receives four
+     * new random bytes.  These values are consumed by legacy acidcamGL
+     * shaders that expect per-frame animation in these uniforms.
+     */
     void stepAcidCamUniforms() {
         color_alpha_r += (rand() % 100) * 0.01f;
         color_alpha_g += (rand() % 100) * 0.01f;
@@ -1535,6 +2012,17 @@ class ShaderLibrary {
         random_var = glm::vec4(rand() % 255, rand() % 255, rand() % 255, rand() % 255);
     }
 
+    /**
+     * @brief Upload all acidcamGL-compatible uniforms to the GPU for the given program.
+     *
+     * Sends value_alpha_r/g/b, alpha_r/g/b, alpha_value, index_value,
+     * optx, random_var, restore_black, inc_value, and inc_valuex to
+     * the uniform locations cached in @p n.  Each upload is skipped
+     * if the location is -1 (uniform not declared in that shader).
+     *
+     * @param n   ProgramData containing cached uniform locations.
+     * @param idx Shader index (passed to index_value uniform).
+     */
     void uploadAcidCamUniforms(const ProgramData &n, size_t idx) {
         if (n.value_alpha_r != -1) glUniform1f(n.value_alpha_r, color_alpha_r);
         if (n.value_alpha_g != -1) glUniform1f(n.value_alpha_g, color_alpha_g);
@@ -1551,6 +2039,10 @@ class ShaderLibrary {
         if (n.inc_valuex_loc != -1) glUniform4fv(n.inc_valuex_loc, 1, glm::value_ptr(inc_valuex));
     }
 
+    /**
+     * @brief Step time_f forward manually (when auto-time is paused).
+     * @param value Amount to add to time_f.
+     */
     void incTime(float value) {
         if (!time_active) {
             time_f += value;
@@ -1559,6 +2051,13 @@ class ShaderLibrary {
         }
     }
 
+    /**
+     * @brief Step time_f backward manually (when auto-time is paused).
+     *
+     * Clamps at 1.0 to avoid negative or zero time values.
+     *
+     * @param value Amount to subtract from time_f.
+     */
     void decTime(float value) {
         if (!time_active) {
             if (time_f - value > 1.0) {
@@ -1572,6 +2071,15 @@ class ShaderLibrary {
         }
     }
 
+    /**
+     * @brief Enable or disable automatic wall-clock time advancement.
+     *
+     * When disabled, time_f only changes via manual incTime/decTime
+     * or audio-reactive mode, allowing the user to freeze and scrub
+     * the shader's temporal state.
+     *
+     * @param t True to enable, false to pause.
+     */
     void activeTime(bool t) {
         time_active = t;
         std::string enabled = ((t == true) ? "on" : "off");
@@ -1579,12 +2087,28 @@ class ShaderLibrary {
         fflush(stdout);
     }
 
+    /**
+     * @brief Enable or disable audio-reactive time advancement.
+     *
+     * When enabled, time_f is driven by `get_amp() * get_sense()`
+     * instead of wall-clock delta, making the shader evolve in
+     * sync with the audio input.
+     *
+     * @param t True to enable audio-reactive time.
+     */
     void audioTime(bool t) {
         time_audio = t;
         std::string enabled = ((t == true) ? "on" : "off");
         mx::system_out << "acmx2: audio time: " << enabled << "\n";
         fflush(stdout);
     }
+    /**
+     * @brief Toggle delta-time scaling for audio-reactive mode.
+     *
+     * When on, the audio amplitude contribution to time_f is
+     * multiplied by the frame delta time, smoothing the advance
+     * rate.  When off, each frame advances by the raw amplitude.
+     */
     void toggleAudioDelta() {
         audio_delta = !audio_delta;
         mx::system_out << "acmx2: audio delta time: " << (audio_delta ? "on" : "off") << "\n";
@@ -1597,9 +2121,16 @@ class ShaderLibrary {
     float getAmp() const { return get_amp(); }
     float getAmpUntouched() const { return get_sense(); }
 #endif
+    /// @brief Reserved for future SDL event handling inside the library.
     void event(SDL_Event &e) {}
 };
 
+/**
+ * @struct MXArguments
+ * @brief Parsed command-line arguments for the ACMX2 application.
+ *
+ * Populated by the Argz parser in main() and forwarded to ACView.
+ */
 struct MXArguments {
     std::string path, filename, ofilename;
     std::string graphic_file;
@@ -1650,13 +2181,122 @@ struct MXArguments {
     double duration = 0.0;
 };
 
+/**
+ * @struct FrameData
+ * @brief A captured RGBA pixel buffer queued for the writer thread.
+ *
+ * Holds a vertically-flipped copy of the framebuffer contents
+ * plus metadata for the async writer (dimensions, snapshot flag).
+ */
 struct FrameData {
-    std::vector<unsigned char> pixels;
-    int width = 0;
-    int height = 0;
-    bool isSnapshot = false;
+    std::vector<unsigned char> pixels; ///< RGBA pixel data.
+    int width = 0;                     ///< Frame width in pixels.
+    int height = 0;                    ///< Frame height in pixels.
+    bool isSnapshot = false;           ///< True if this frame should be saved as a PNG snapshot.
 };
 
+/**
+ * @class ACView
+ * @brief Core rendering object—drives the capture → filter → shade → record pipeline.
+ *
+ * Inherits gl::GLObject (libmx2) so it can be hosted inside a GLWindow.
+ * Manages:
+ * - Video/camera/image capture (OpenCV, with a dedicated capture thread).
+ * - GPU filtering via CUDA kernels (ac_gpu).
+ * - GLSL shader application (ShaderLibrary), including multipass chains.
+ * - 3D model rendering with camera controls (GLM).
+ * - PBO-based async frame readback for recording and snapshots.
+ * - Audio reactivity (RtAudio) and MIDI controller input (RtMidi).
+ * - On-screen overlay (FPS, timer, shader name, MIDI status).
+ *
+ * @section threading Threading Model
+ *
+ * ACMX2 uses four concurrency domains.  The diagram below shows data flow
+ * and the synchronisation primitives that connect them.
+ *
+ * @verbatim
+ *
+ *  ┌─────────────────────┐
+ *  │   Capture Thread    │  (camera mode only)
+ *  │  cap.read(frame)    │
+ *  │  cv::flip → push    │
+ *  │                     │
+ *  │  captureQueue       │  std::queue<cv::Mat>, max 4 entries
+ *  │  captureQueueMutex  │  protects the queue
+ *  │  captureQueueCondVar│  signals new frame available
+ *  │  captureRunning     │  std::atomic<bool> for shutdown
+ *  └────────┬────────────┘
+ *           │
+ *           │  (main thread pops from captureQueue)
+ *           ▼
+ *  ┌─────────────────────────────────────────────────────────────┐
+ *  │                    Main / GL Thread                         │
+ *  │                                                             │
+ *  │  draw()  ──── 1. Read frame from captureQueue (camera) or  │
+ *  │          │       cap.read() (video file) or clone (image)   │
+ *  │          │    2. GPU-filter (CUDA kernels, TextureUploader) │
+ *  │          │    3. Upload to GL texture                       │
+ *  │          │    4. Render through ShaderLibrary (FBO)          │
+ *  │          │    5. 3D model compositing (if enabled)           │
+ *  │          │    6. PBO async readback (double-buffered)        │
+ *  │          │    7. Push FrameData into frameQueue              │
+ *  │          └──── 8. Draw overlay (FPS, timer, shader name)     │
+ *  │                                                             │
+ *  │  frameQueue       std::queue<FrameData>                     │
+ *  │  queueMutex       protects the queue                        │
+ *  │  queueCondVar     signals new frame / backpressure wait     │
+ *  │                   • camera mode: drops oldest if >30 frames  │
+ *  │                   • file mode: waits until queue <30 frames  │
+ *  └──────────────┬──────────────────────────────────────────────┘
+ *                 │
+ *                 │  (writer thread pops from frameQueue)
+ *                 ▼
+ *  ┌─────────────────────────────────┐
+ *  │        Writer Thread            │
+ *  │  Dequeue FrameData              │
+ *  │   • If isSnapshot: dispatch to  │
+ *  │     SnapshotThreadPool (async   │
+ *  │     PNG write via enqueue())    │
+ *  │   • Else: writer.write() /      │
+ *  │     writer.write_ts()           │
+ *  │                                 │
+ *  │  writerRunning  atomic<bool>    │
+ *  │  written_frame_counter          │
+ *  │  (skips first N warmup frames)  │
+ *  └────────┬────────────────────────┘
+ *           │
+ *           │  (on shutdown, if audio was recorded)
+ *           ▼
+ *  ┌─────────────────────────────────┐
+ *  │         Mux Thread              │
+ *  │  beginMuxing() launches this    │
+ *  │   1. Join capture + writer      │
+ *  │   2. Close the Writer           │
+ *  │   3. runMuxSync(): ffmpeg mux   │
+ *  │      audio WAV + video MP4      │
+ *  │   4. Set muxComplete = true     │
+ *  │                                 │
+ *  │  isMuxing    atomic<bool>       │
+ *  │  muxComplete atomic<bool>       │
+ *  └─────────────────────────────────┘
+ *
+ * **Synchronisation summary:**
+ * - `captureQueueMutex` + `captureQueueCondVar` guard the camera queue.
+ *   Max size = 4; oldest frame is dropped when full (non-blocking producer).
+ * - `queueMutex` + `queueCondVar` guard the writer queue.
+ *   In file mode the main thread *waits* if the queue exceeds 30 frames
+ *   (back-pressure).  In camera mode it drops the oldest frame instead.
+ * - `running`, `captureRunning`, `writerRunning` are `std::atomic<bool>`
+ *   flags tested every iteration to coordinate graceful shutdown.
+ * - `isMuxing` and `muxComplete` coordinate the post-recording audio
+ *   mux step; the main draw loop shows a "Muxing audio…" overlay while
+ *   the mux thread runs ffmpeg.
+ * - The SnapshotThreadPool is orthogonal—its own internal mutex/condvar
+ *   manage the PNG-writing worker threads.  Tasks are fire-and-forget
+ *   from the writer thread's perspective.
+ *
+ * @endverbatim
+ */
 class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
     bool audio_is_enabled = false;
@@ -1683,6 +2323,16 @@ class ACView : public gl::GLObject {
     std::string lastMidiButton;
     std::chrono::steady_clock::time_point lastMidiButtonTime;
 
+    /**
+     * @brief Map a virtual key code to a human-readable short name.
+     *
+     * Virtual codes 262–267 are arrow/page keys, 32–87 are ASCII,
+     * and 500–513 are ACMX2 virtual codes for time/speed/rotation
+     * knob actions.
+     *
+     * @param code Virtual key code from the MIDI map file.
+     * @return Short label string (e.g. "Right", "SpdUp", "PitchDn").
+     */
     static const char* midiKeyName(int code) {
         switch (code) {
         case 262: return "Right";
@@ -1724,6 +2374,18 @@ class ACView : public gl::GLObject {
         }
     }
 
+    /**
+     * @brief Open a MIDI input port and load the key→action mapping file.
+     *
+     * Creates an RtMidiIn instance, opens the given device port (or
+     * port 0 as fallback), then parses the mapping file line by line.
+     * Each line maps a `key1:key2` pair to a MIDI triplet `{b0 b1 b2}`,
+     * where key2 != 0 denotes a continuous knob (key1 = CW direction,
+     * key2 = CCW direction).
+     *
+     * @param mapFile    Path to the `.midi_cfg` mapping file.
+     * @param deviceIndex MIDI input port index (-1 for default / port 0).
+     */
     void initMidi(const std::string &mapFile, int deviceIndex) {
         try {
             midiIn = new RtMidiIn();
@@ -1772,6 +2434,16 @@ class ACView : public gl::GLObject {
         }
     }
 
+    /**
+     * @brief Convert an ACMX2 virtual key code to an SDL_Keycode.
+     *
+     * Direct keyboard codes (e.g. 262 → SDLK_RIGHT) are mapped;
+     * virtual knob codes 504–513 return SDLK_UNKNOWN because they
+     * are handled directly in pollMidi().
+     *
+     * @param code Virtual key code from the MIDI map.
+     * @return Corresponding SDL_Keycode, or SDLK_UNKNOWN.
+     */
     SDL_Keycode midiKeyToSDL(int code) {
         switch (code) {
         case 262: return SDLK_RIGHT;
@@ -1803,6 +2475,11 @@ class ACView : public gl::GLObject {
         }
     }
 
+    /**
+     * @brief Synthesise an SDL_KEYUP event and dispatch it through event().
+     * @param key  The SDL_Keycode to inject.
+     * @param win  The GL window that receives the event.
+     */
     void injectKey(SDL_Keycode key, gl::GLWindow *win) {
         SDL_Event ev{};
         ev.type = SDL_KEYUP;
@@ -1811,6 +2488,18 @@ class ACView : public gl::GLObject {
         event(win, ev);
     }
 
+    /**
+     * @brief Drain all pending MIDI messages and dispatch mapped actions.
+     *
+     * Called at the top of every draw() frame.  Button presses fire
+     * immediately via injectKey(); continuous knobs update `knobState`
+     * and are rate-limited by a velocity-sensitive frame-skip counter.
+     * Knob distance from centre (64) controls speed: far = every frame,
+     * near-centre = every ~16 frames.  Pitch/Yaw/Roll knobs use delta
+     * from the previous value to determine direction.
+     *
+     * @param win GL window for injecting key events.
+     */
     void pollMidi(gl::GLWindow *win) {
         if (!midiIn || !midiOpen) return;
         // Drain all pending MIDI messages and update knob state
@@ -1925,6 +2614,7 @@ class ACView : public gl::GLObject {
         }
     }
 
+    /// @brief Close the MIDI input port and free the RtMidiIn instance.
     void cleanupMidi() {
         if (midiIn) {
             if (midiOpen) midiIn->closePort();
@@ -1934,6 +2624,17 @@ class ACView : public gl::GLObject {
         }
     }
 
+    /**
+     * @brief Draw the MIDI status overlay (active indicator, knob bars, last button).
+     *
+     * Shows a green "MIDI Active" header, a bar graph for each mapped
+     * knob with its current value and direction label, and the last
+     * pressed button name with a 2-second fade-out.
+     *
+     * @param win    GL window (text rendering context).
+     * @param font   Font for overlay text.
+     * @param startY Y-coordinate to begin drawing.
+     */
     void drawMidiOverlay(gl::GLWindow *win, mx::Font &font, int startY) {
         if (!midiOpen || midiCodes.empty()) return;
         int y = startY;
@@ -1987,6 +2688,17 @@ class ACView : public gl::GLObject {
     TextureUploader tex_uploader;
 
   public:
+    /**
+     * @brief Construct the rendering object from parsed CLI arguments.
+     *
+     * Copies capture parameters, opens the audio subsystem (optional),
+     * initialises GPU filter state (CUDA malloc for pointer/filter lists),
+     * sets up the shader pass list, loads the MIDI map file, and applies
+     * the playlist / duration settings.  No OpenGL calls are made here
+     * because the GL context is not yet current—those are deferred to load().
+     *
+     * @param args Parsed command-line arguments.
+     */
     ACView(const MXArguments &args)
         : crf{args.crf},
           prefix_path{args.prefix_path},
@@ -2085,6 +2797,12 @@ class ACView : public gl::GLObject {
     std::string playlist_file;
     double duration_limit = 0.0;
 
+    /**
+     * @brief Refresh the cached shader name string for the HUD overlay.
+     *
+     * Called whenever the active shader or pass list changes so that
+     * the overlay does not need to rebuild the string every frame.
+     */
     void updateShaderNameCache() {
         cached_shader_name = shader_pass_enabled
                                  ? library.getFullShaderName(shader_pass_list)
@@ -2099,6 +2817,22 @@ class ACView : public gl::GLObject {
     std::chrono::steady_clock::time_point fpsLastTime;
     bool counter_disabled = false;
 
+    /**
+     * @brief Destroy the rendering object: stop threads, release GPU resources.
+     *
+     * Destruction order:
+     * 1. Clean up MIDI (if enabled).
+     * 2. Release TextureUploader (CUDA↔OpenGL PBO).
+     * 3. Free CUDA filter arrays.
+     * 4. Stop the capture thread (join).
+     * 5. Flush any remaining PBO frames into the writer queue.
+     * 6. Stop the writer thread (join), close the Writer, mux audio
+     *    if applicable.
+     * 7. Join the mux thread if it was started.
+     * 8. Close the audio subsystem.
+     * 9. Delete PBOs, FBOs, textures, depth buffer.
+     * 10.Release the VideoCapture.
+     */
     ~ACView() override {
 #ifdef MIDI_ENABLED
         cleanupMidi();
@@ -2220,6 +2954,24 @@ class ACView : public gl::GLObject {
     gl::ShaderProgram fshader, fshader3d;
     std::string m_file;
 
+    /**
+     * @brief Called once by the GLWindow to initialise capture, shaders, FBOs, and recording.
+     *
+     * Performs the full OpenGL-dependent setup:
+     * 1. Set the CUDA device.
+     * 2. Load fonts.
+     * 3. Open the input source (image file, camera, or video file);
+     *    set resolution, FPS, and window size.
+     * 4. Open the output Writer (FFmpeg pipe) if `-o` was specified.
+     * 5. Load and compile the shader library (from cache if available).
+     * 6. Load the 3D model (if --enable-3d).
+     * 7. Initialise framebuffer shader, texture cache, sprites.
+     * 8. Set up the capture FBO and double-buffered PBOs.
+     * 9. Start the writer thread (always) and the capture thread
+     *    (camera mode only).
+     *
+     * @param win Pointer to the hosting GLWindow.
+     */
     virtual void load(gl::GLWindow *win) override {
         cudaError_t cuda_err = cudaSetDevice(gpu_cuda_device);
         if (cuda_err != cudaSuccess) {
@@ -2551,6 +3303,28 @@ class ACView : public gl::GLObject {
     cv::Mat newFrame;
     float movementSpeed = 0.1f;
 
+    /**
+     * @brief Called every frame: capture, GPU-filter, shade, composite, record, display overlay.
+     *
+     * This is the main rendering loop body.  On each invocation:
+     * 1. Rate-limit to the configured FPS.
+     * 2. Poll MIDI (if enabled).
+     * 3. If muxing, draw the overlay and return early.
+     * 4. Check the duration limit.
+     * 5. Read a new frame: from capture queue (camera), cap.read()
+     *    (video), or clone (image).
+     * 6. Apply GPU CUDA filters (if enabled) via TextureUploader /
+     *    launch_filter(), otherwise upload via glTexSubImage2D.
+     * 7. Bind the capture FBO, activate the shader, upload uniforms.
+     * 8. Render in 2D (sprite quad) or 3D (model with camera/wave),
+     *    including multi-pass chains through ping-pong FBOs.
+     * 9. Blit the FBO result to the default framebuffer.
+     * 10. PBO double-buffered readback into FrameData, push to writer queue.
+     * 11. Draw the HUD overlay (shader name, FPS, timer).
+     * 12. Update the window title with progress info.
+     *
+     * @param win Pointer to the hosting GLWindow.
+     */
     virtual void draw(gl::GLWindow *win) override {
         if (fps > 0.0) {
             auto now = std::chrono::steady_clock::now();
@@ -3317,6 +4091,15 @@ class ACView : public gl::GLObject {
         frame_counter++;
     }
 
+    /**
+     * @brief Format the current session time as `HH:MM:SS`.
+     *
+     * When a writer is open the time is based on the number of
+     * frames actually written (at the configured FPS).  For video
+     * file input, a percentage prefix is prepended.
+     *
+     * @return Formatted time string for display.
+     */
     std::string getTimeString() {
         int64_t frameCount = 0;
         double timeSeconds = 0.0;
@@ -3346,6 +4129,10 @@ class ACView : public gl::GLObject {
         return timerStr.str();
     }
 
+    /**
+     * @brief Return the current frame count (writer count or display count).
+     * @return Number of frames written if recording, else the display counter.
+     */
     int64_t getFrameCount() {
         if (writer.is_open()) {
             return writer.get_frame_count();
@@ -3353,6 +4140,29 @@ class ACView : public gl::GLObject {
         return static_cast<int64_t>(frame_counter);
     }
 
+    /**
+     * @brief Handle SDL keyboard events (shader navigation, mode toggles, etc.).
+     *
+     * Key bindings (SDL_KEYUP):
+     * - Up/Down: Previous/next shader (or playlist entry if playlist enabled).
+     * - Left/Right: Previous/next GPU CUDA filter.
+     * - Space: Toggle shader bypass.
+     * - P: Toggle playlist mode or pause video.
+     * - L: Freeze frame (stop updating texture but keep time advancing).
+     * - Z: Take a PNG snapshot.
+     * - T: Toggle active time.  Q: Toggle audio time.  Home: Toggle audio delta.
+     * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.  X: Reset camera.
+     * - 3: Toggle 2D/3D mode.  M: Toggle multi-pass.  E: Watermark.
+     * - F9: Toggle HUD overlay visibility.
+     *
+     * Key bindings (SDL_KEYDOWN):
+     * - U/I: Manual time step forward/backward.
+     * - Insert/Delete: Audio sensitivity +/-.
+     * - Page Up/Down: Time speed (handled in draw() via key-state polling).
+     *
+     * @param win Hosting GLWindow.
+     * @param e   The SDL event to process.
+     */
     virtual void event(gl::GLWindow *win, SDL_Event &e) override {
         switch (e.type) {
         case SDL_KEYUP:
@@ -3628,6 +4438,16 @@ class ACView : public gl::GLObject {
     int win_w = 0;
     int win_h = 0;
 
+    /**
+     * @brief Read any remaining pixels from both PBOs and enqueue them.
+     *
+     * Called during destruction to ensure the last two frames that
+     * were in-flight via double-buffered PBO readback are not lost.
+     * Each PBO is mapped, its contents copied and vertically flipped,
+     * then pushed into the writer queue.
+     *
+     * @param win GL window (provides width/height).
+     */
     void flushPBOs(gl::GLWindow *win) {
         if (!pboIds[0])
             return;
@@ -3665,6 +4485,19 @@ class ACView : public gl::GLObject {
         }
     }
 
+    /**
+     * @brief Create the off-screen FBO used for capture/recording.
+     *
+     * Allocates a GL_RGBA colour texture and a depth renderbuffer,
+     * both sized to the requested dimensions, and attaches them to
+     * a new framebuffer.  The capture FBO is the target of all
+     * shader rendering; its colour attachment (fboTexture) is then
+     * blitted to the default framebuffer and read back via PBOs.
+     *
+     * @param width  FBO width in pixels.
+     * @param height FBO height in pixels.
+     * @throws mx::Exception if the FBO completeness check fails.
+     */
     void setupCaptureFBO(int width, int height) {
         win_w = width;
         win_h = height;
@@ -3703,6 +4536,17 @@ class ACView : public gl::GLObject {
         }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
+    /**
+     * @brief Create a new GL texture from a cv::Mat (BGR → RGBA upload).
+     *
+     * Generates a texture, converts the frame from BGR to RGBA, and
+     * uploads via glTexImage2D.  Used to initialise the 8 cache
+     * textures with blank frames at startup.
+     *
+     * @param frame Input cv::Mat (BGR, 8-bit).
+     * @return Newly created GL texture ID.
+     * @throws mx::Exception on any GL error.
+     */
     GLuint loadTexture(cv::Mat &frame) {
         GLuint texture = 0;
         glGenTextures(1, &texture);
@@ -3730,6 +4574,16 @@ class ACView : public gl::GLObject {
         return texture;
     }
 
+    /**
+     * @brief Update an existing GL texture with new cv::Mat data (BGR → RGBA).
+     *
+     * Uses glTexSubImage2D when dimensions match (fast path) or
+     * falls back to glTexImage2D when the frame size has changed
+     * (reallocates the texture storage).
+     *
+     * @param texture GL texture ID to update.
+     * @param frame   New frame (BGR, 8-bit).
+     */
     void updateTexture(GLuint texture, cv::Mat &frame) {
         glBindTexture(GL_TEXTURE_2D, texture);
         cv::Mat temp;
@@ -3751,6 +4605,15 @@ class ACView : public gl::GLObject {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
+    /**
+     * @brief Update a GL texture with pre-converted RGBA data (no colour conversion).
+     *
+     * Faster than updateTexture() when the frame is already RGBA.
+     * Does not handle size changes—caller must ensure dimensions match.
+     *
+     * @param texture GL texture ID.
+     * @param frame   cv::Mat in RGBA format.
+     */
     void updateTextureRGBA(GLuint texture, cv::Mat &frame) {
         glBindTexture(GL_TEXTURE_2D, texture);
         glTexSubImage2D(GL_TEXTURE_2D,
@@ -3762,6 +4625,20 @@ class ACView : public gl::GLObject {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
+    /**
+     * @brief Start the background camera capture thread (camera mode only).
+     *
+     * Spawns a `std::thread` that continuously calls `cap.read()` and
+     * pushes the flipped frame into `captureQueue`.  The queue is
+     * capped at 4 entries; when full the oldest frame is dropped
+     * so the capture thread never blocks.  The main thread pops
+     * from this queue inside draw() under `captureQueueMutex`.
+     *
+     * The thread exits when `captureRunning` is set to false or
+     * a read failure occurs.
+     *
+     * @see stopCaptureThread()
+     */
     void startCaptureThread() {
         if (captureThread.joinable()) {
             return;
@@ -3799,6 +4676,12 @@ class ACView : public gl::GLObject {
         });
     }
 
+    /**
+     * @brief Signal the capture thread to stop and wait for it to join.
+     *
+     * Sets `captureRunning = false`, wakes the condition variable
+     * (in case the thread is waiting), and joins the thread.
+     */
     void stopCaptureThread() {
         captureRunning = false;
         captureQueueCondVar.notify_all();
@@ -3807,6 +4690,28 @@ class ACView : public gl::GLObject {
         }
     }
 
+    /**
+     * @brief Start the background writer thread (video recording + snapshots).
+     *
+     * Spawns a `std::thread` that dequeues FrameData from `frameQueue`
+     * and either:
+     * - Dispatches snapshot frames to the SnapshotThreadPool for async
+     *   PNG writing.
+     * - Passes video frames to `writer.write()` (file/image mode) or
+     *   `writer.write_ts()` (camera mode) for H.264 encoding via FFmpeg.
+     *
+     * The first 1 frame (file mode) or 30 frames (camera mode) are
+     * discarded as warmup to avoid capturing startup artefacts.
+     *
+     * The thread blocks on `queueCondVar` when the queue is empty.
+     * It exits when `writerRunning` is set to false and the queue is
+     * drained.
+     *
+     * Audio recording (if enabled) is started on the first frame
+     * after warmup, keeping audio and video synchronised.
+     *
+     * @see stopWriterThread()
+     */
     void startWriterThread() {
         if (writerThread.joinable())
             return;
@@ -3894,6 +4799,15 @@ class ACView : public gl::GLObject {
         });
     }
 
+    /**
+     * @brief Check whether post-recording audio muxing is required.
+     *
+     * Returns true only when audio is enabled, a recording file
+     * was specified, AND an output video file exists.  Used to
+     * decide whether to launch the mux thread on shutdown.
+     *
+     * @return True if ffmpeg audio muxing should run.
+     */
     bool needsMux() {
 #ifdef AUDIO_ENABLED
         return audio_is_enabled && !audio_record_file.empty() && !ofilename.empty();
@@ -3902,6 +4816,17 @@ class ACView : public gl::GLObject {
 #endif
     }
 
+    /**
+     * @brief Run ffmpeg synchronously to mux the recorded audio WAV into the video MP4.
+     *
+     * Builds an ffmpeg command line that copies the video stream,
+     * encodes the audio as AAC 192 kbps, and trims to the video
+     * duration.  The output is written to a temporary file which
+     * replaces the original on success.
+     *
+     * Called either from the mux thread (beginMuxing) or directly
+     * from the destructor when no mux thread was launched.
+     */
     void runMuxSync() {
 #ifdef AUDIO_ENABLED
         if (!audio_is_enabled || audio_record_file.empty() || ofilename.empty())
@@ -3937,6 +4862,22 @@ class ACView : public gl::GLObject {
 #endif
     }
 
+    /**
+     * @brief Launch the asynchronous audio-mux thread and show a progress overlay.
+     *
+     * Signals both capture and writer threads to stop, then spawns
+     * a new `muxThread` that:
+     * 1. Joins the capture and writer threads.
+     * 2. Closes the Writer (flushes the MP4 trailer).
+     * 3. Calls runMuxSync() to invoke ffmpeg.
+     * 4. Sets `muxComplete = true`.
+     *
+     * While `isMuxing` is true, draw() renders a "Muxing audio…"
+     * overlay and skips normal frame processing.  When muxComplete
+     * becomes true, draw() joins the mux thread and quits the window.
+     *
+     * @param win GL window for the overlay display.
+     */
     void beginMuxing(gl::GLWindow *win) {
         captureRunning = false;
         writerRunning = false;
@@ -3964,6 +4905,16 @@ class ACView : public gl::GLObject {
         });
     }
 
+    /**
+     * @brief Stop the writer thread, close the Writer, and handle audio transfer.
+     *
+     * Sets `writerRunning = false`, wakes the condition variable,
+     * joins the writer thread, then closes the Writer (which flushes
+     * the MP4 container trailer).  Logs the total duration and frame
+     * count.  If `copy_audio` is set and a video file was the input,
+     * the audio track is copied from the input to the output via
+     * `transfer_audio()`.  Any active audio recording is stopped.
+     */
     void stopWriterThread() {
         bool recording = writer.is_open();
         writerRunning = false;
@@ -4000,9 +4951,25 @@ class ACView : public gl::GLObject {
     }
 };
 
+/**
+ * @class MainWindow
+ * @brief Top-level SDL2/OpenGL window that hosts the ACView rendering object.
+ *
+ * Supports both visible and headless (silent) modes. In silent mode an
+ * off-screen GL context is used for batch video processing without a window.
+ */
 class MainWindow : public gl::GLWindow {
     bool silent_mode = false;
 
+    /**
+     * @brief Shared initialisation logic for both visible and headless windows.
+     *
+     * Sets the asset search path, loads the window icon (visible mode only),
+     * creates the ACView rendering object and calls its load() method to
+     * initialise OpenGL state, shaders, capture, and recording.
+     *
+     * @param args Parsed command-line arguments forwarded to ACView.
+     */
     void initCommon(const MXArguments &args) {
         util.path = args.path;
 
@@ -4022,16 +4989,41 @@ class MainWindow : public gl::GLWindow {
     }
 
   public:
+    /**
+     * @brief Construct a visible (windowed) MainWindow.
+     *
+     * Creates an SDL2/OpenGL window of the requested size, then
+     * calls initCommon() to set up the rendering pipeline.
+     *
+     * @param args Parsed CLI arguments (resolution, asset path, etc.).
+     */
     MainWindow(const MXArguments &args) : gl::GLWindow("ACMX2", args.tw, args.th, false), silent_mode(args.silent) {
         initCommon(args);
     }
 
+    /**
+     * @brief Construct a headless (off-screen) MainWindow for silent batch processing.
+     *
+     * Uses gl::GLMode::DESKTOP to create an OpenGL context without a
+     * visible window.  Intended for `--silent` mode where video is
+     * processed and recorded without any display.
+     *
+     * @param args     Parsed CLI arguments.
+     * @param headless Unused disambiguator parameter.
+     */
     MainWindow(const MXArguments &args, bool headless) : gl::GLWindow(args.tw, args.th, gl::GLMode::DESKTOP), silent_mode(true) {
         initCommon(args);
     }
 
     ~MainWindow() override {}
 
+    /**
+     * @brief Per-frame callback: clear, draw ACView, swap buffers.
+     *
+     * Called by the GLWindow event loop.  Clears the default framebuffer,
+     * asks the ACView object to render one frame, then swaps and delays
+     * to maintain the target frame rate.
+     */
     void draw() override {
         glClearColor(0.f, 0.f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -4041,6 +5033,7 @@ class MainWindow : public gl::GLWindow {
         delay();
     }
 
+    /// @brief Placeholder—SDL events are forwarded to ACView::event() by libmx2.
     void event(SDL_Event &e) override {
     }
 };
@@ -4080,6 +5073,7 @@ const char *message = R"(
 }
 )";
 
+/// @brief Verify CUDA device availability and print GPU info.
 void checkDevices(bool list_only = false) {
     int device_count = 0;
     cudaError_t error = cudaGetDeviceCount(&device_count);
@@ -4101,6 +5095,7 @@ void checkDevices(bool list_only = false) {
     }
 }
 
+/// @brief Print program version, author, arguments, and keyboard controls.
 template <typename T>
 void printAbout(Argz<T> &parser) {
     mx::system_out << PROGRAM_NAME << ": " << VERSION_INFO << "\n";
@@ -4111,6 +5106,16 @@ void printAbout(Argz<T> &parser) {
     mx::system_out << message;
 }
 
+/**
+ * @brief Application entry point.
+ *
+ * Parses command-line arguments with Argz, validates inputs, then either
+ * builds a shader cache and exits or launches the main render loop.
+ *
+ * @param argc Argument count.
+ * @param argv Argument vector.
+ * @return EXIT_SUCCESS on clean exit, EXIT_FAILURE on error.
+ */
 int main(int argc, char **argv) {
     fflush(stdout);
     Argz<std::string> parser(argc, argv);
@@ -4505,16 +5510,34 @@ int main(int argc, char **argv) {
             mx::system_out << "acmx2: Creating build window...\n";
             fflush(stdout);
 
+            /**
+             * @brief Headless-style GLWindow used exclusively by the `--build` CLI flag.
+             *
+             * Creates a minimal 640×480 hidden window just long enough to
+             * establish an OpenGL context, compile every shader in the
+             * library, serialise the resulting GPU program binaries to
+             * disk via ShaderLibrary::buildShaderCache(), then exit.
+             *
+             * The window's draw() fires exactly once (guarded by
+             * `build_done`), performs the full cache build, and then
+             * sets `active = false` so buildLoop() terminates.
+             */
             class BuildWindow : public gl::GLWindow {
               public:
-                ShaderLibrary library;
-                std::string lib_path;
-                bool enable_3d;
-                std::string assets_path;
-                bool success = false;
-                bool build_done = false;
-                bool active = true;
+                ShaderLibrary library;   ///< Temporary shader library for compilation.
+                std::string lib_path;    ///< Path to the shader source directory.
+                bool enable_3d;          ///< Whether to include 3-D vertex shaders.
+                std::string assets_path; ///< Base asset path (for locating vert.glsl).
+                bool success = false;    ///< True if buildShaderCache() succeeded.
+                bool build_done = false; ///< Guard: ensures draw() builds only once.
+                bool active = true;      ///< Controls the buildLoop() pump.
 
+                /**
+                 * @brief Construct a build window and configure the shader library.
+                 * @param path   Path to the shader source directory.
+                 * @param is3d   Include 3-D shaders in the cache.
+                 * @param assets Base asset path for vertex shader lookup.
+                 */
                 BuildWindow(const std::string &path, bool is3d, const std::string &assets)
                     : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false),
                       lib_path(path), enable_3d(is3d), assets_path(assets) {
@@ -4524,6 +5547,13 @@ int main(int argc, char **argv) {
                     library.enableDualMode(enable_3d);
                 }
 
+                /**
+                 * @brief Single-shot draw: compile all shaders, write cache, then signal exit.
+                 *
+                 * On the first (and only) call, resolves vertex shader paths,
+                 * invokes ShaderLibrary::buildShaderCache(), clears GPU
+                 * resources, and sets `active = false` to break the pump.
+                 */
                 void draw() override {
                     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                     glClear(GL_COLOR_BUFFER_BIT);
@@ -4547,7 +5577,14 @@ int main(int argc, char **argv) {
                     swap();
                 }
 
+                /// @brief No-op; build mode ignores all user input.
                 void event(SDL_Event &e) override {}
+                /**
+                 * @brief Minimal SDL event pump that drives draw() until `active` is cleared.
+                 *
+                 * Polls SDL events (honouring SDL_QUIT), calls draw() once per
+                 * iteration, and exits when the build is complete.
+                 */
                 void buildLoop() {
                     SDL_Event ev;
                     while (active) {
