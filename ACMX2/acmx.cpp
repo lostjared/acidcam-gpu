@@ -1645,6 +1645,7 @@ struct MXArguments {
     bool use_shader_cache = true;
     float time_speed = 1.0f;
     std::string playlist_file;
+    double duration = 0.0;
 };
 
 struct FrameData {
@@ -1997,6 +1998,7 @@ class ACView : public gl::GLObject {
             fflush(stdout);
         }
         playlist_file = args.playlist_file;
+        duration_limit = args.duration;
 #ifdef MIDI_ENABLED
         if (!args.midi_map_file.empty()) {
             initMidi(args.midi_map_file, args.midi_device);
@@ -2028,6 +2030,7 @@ class ACView : public gl::GLObject {
     int playlist_index = 0;
     bool playlist_enabled = false;
     std::string playlist_file;
+    double duration_limit = 0.0;
 
     void updateShaderNameCache() {
         cached_shader_name = shader_pass_enabled
@@ -2530,6 +2533,15 @@ class ACView : public gl::GLObject {
                 glDisable(GL_BLEND);
             }
             return;
+        }
+
+        if (duration_limit > 0.0 && writer.is_open() && writerRunning) {
+            auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - captureStartTime).count();
+            if (elapsed >= duration_limit) {
+                mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
+                fflush(stdout);
+                running = false;
+            }
         }
 
         if (!running) {
@@ -4088,6 +4100,7 @@ int main(int argc, char **argv) {
         .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)")
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
+        .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -4349,6 +4362,12 @@ int main(int argc, char **argv) {
             case 410:
                 args.playlist_file = arg.arg_value;
                 mx::system_out << "acmx2: Playlist file: " << args.playlist_file << "\n";
+                break;
+            case 411:
+                args.duration = atof(arg.arg_value.c_str());
+                if (args.duration > 0.0) {
+                    mx::system_out << "acmx2: Duration set to: " << args.duration << " seconds\n";
+                }
                 break;
 #ifdef MIDI_ENABLED
             case 500:
