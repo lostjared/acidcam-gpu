@@ -1121,6 +1121,16 @@ class ShaderLibrary {
             setIndex(library_index - 1);
     }
     size_t index() { return library_index; }
+
+    int findShaderByName(const std::string &name) {
+        auto &names = is3d ? program_names_3d : program_names_2d;
+        for (auto &[idx, data] : names) {
+            if (data.name == name)
+                return static_cast<int>(idx);
+        }
+        return -1;
+    }
+
     size_t size() { return is3d ? programs_3d.size() : programs_2d.size(); }
     size_t size2d() { return programs_2d.size(); }
     size_t size3d() { return programs_3d.size(); }
@@ -1634,6 +1644,7 @@ struct MXArguments {
     std::string build_library_path;
     bool use_shader_cache = true;
     float time_speed = 1.0f;
+    std::string playlist_file;
 };
 
 struct FrameData {
@@ -1985,6 +1996,7 @@ class ACView : public gl::GLObject {
             }
             fflush(stdout);
         }
+        playlist_file = args.playlist_file;
 #ifdef MIDI_ENABLED
         if (!args.midi_map_file.empty()) {
             initMidi(args.midi_map_file, args.midi_device);
@@ -2011,6 +2023,11 @@ class ACView : public gl::GLObject {
     std::vector<int> shader_pass_list;
     bool shader_pass_enabled = false;
     std::string cached_shader_name;
+
+    std::vector<int> playlist_indices;
+    int playlist_index = 0;
+    bool playlist_enabled = false;
+    std::string playlist_file;
 
     void updateShaderNameCache() {
         cached_shader_name = shader_pass_enabled
@@ -2349,6 +2366,25 @@ class ACView : public gl::GLObject {
             library.loadProgram(win, std::get<1>(flib));
         }
         library.setIndex(std::get<2>(flib));
+        if (!playlist_file.empty()) {
+            std::ifstream pfile(playlist_file);
+            if (!pfile.is_open()) {
+                mx::system_err << "acmx2: Error could not open playlist: " << playlist_file << "\n";
+            } else {
+                std::string line;
+                while (std::getline(pfile, line)) {
+                    if (line.empty()) continue;
+                    int idx = library.findShaderByName(line);
+                    if (idx >= 0) {
+                        playlist_indices.push_back(idx);
+                    } else {
+                        mx::system_err << "acmx2: Playlist shader not found: " << line << "\n";
+                    }
+                }
+                mx::system_out << "acmx2: Playlist loaded [" << playlist_indices.size() << "] shaders from: " << playlist_file << "\n";
+                fflush(stdout);
+            }
+        }
         updateShaderNameCache();
 
         std::string m_file_path;
@@ -3222,14 +3258,30 @@ class ACView : public gl::GLObject {
         case SDL_KEYUP:
             switch (e.key.keysym.sym) {
             case SDLK_UP:
-                library.dec();
+                if (playlist_enabled && !playlist_indices.empty()) {
+                    if (playlist_index > 0)
+                        --playlist_index;
+                    library.setIndex(playlist_indices[playlist_index]);
+                    mx::system_out << "acmx2: Playlist [" << playlist_index << "/" << playlist_indices.size() << "]\n";
+                    fflush(stdout);
+                } else {
+                    library.dec();
+                }
                 if (is3d_enabled)
                     cube.setShaderProgram(library.shader());
                 sprite.setShader(library.shader());
                 updateShaderNameCache();
                 break;
             case SDLK_DOWN:
-                library.inc();
+                if (playlist_enabled && !playlist_indices.empty()) {
+                    if (playlist_index + 1 < static_cast<int>(playlist_indices.size()))
+                        ++playlist_index;
+                    library.setIndex(playlist_indices[playlist_index]);
+                    mx::system_out << "acmx2: Playlist [" << playlist_index << "/" << playlist_indices.size() << "]\n";
+                    fflush(stdout);
+                } else {
+                    library.inc();
+                }
                 if (is3d_enabled)
                     cube.setShaderProgram(library.shader());
                 sprite.setShader(library.shader());
@@ -3264,7 +3316,22 @@ class ACView : public gl::GLObject {
                 updateShaderNameCache();
                 break;
             case SDLK_p:
-                if (!filename.empty() || !graphic.empty()) {
+                if (!playlist_indices.empty()) {
+                    playlist_enabled = !playlist_enabled;
+                    if (playlist_enabled) {
+                        if (playlist_index >= 0 && playlist_index < static_cast<int>(playlist_indices.size())) {
+                            library.setIndex(playlist_indices[playlist_index]);
+                            if (is3d_enabled)
+                                cube.setShaderProgram(library.shader());
+                            sprite.setShader(library.shader());
+                            updateShaderNameCache();
+                        }
+                        mx::system_out << "acmx2: Playlist mode enabled [" << playlist_indices.size() << " shaders]\n";
+                    } else {
+                        mx::system_out << "acmx2: Playlist mode disabled\n";
+                    }
+                    fflush(stdout);
+                } else if (!filename.empty() || !graphic.empty()) {
                     isPaused = !isPaused;
                     mx::system_out << "acmx2: paused: " << ((isPaused == true) ? "enabled" : "disabled") << "\n";
                     fflush(stdout);
@@ -4008,6 +4075,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
         .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)")
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
+        .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -4265,6 +4333,10 @@ int main(int argc, char **argv) {
             case 409:
                 args.time_speed = static_cast<float>(atof(arg.arg_value.c_str()));
                 mx::system_out << "acmx2: Time speed set to: " << args.time_speed << "\n";
+                break;
+            case 410:
+                args.playlist_file = arg.arg_value;
+                mx::system_out << "acmx2: Playlist file: " << args.playlist_file << "\n";
                 break;
 #ifdef MIDI_ENABLED
             case 500:
