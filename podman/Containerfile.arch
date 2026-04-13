@@ -101,6 +101,14 @@ RUN cmake -S . -B build -G Ninja \
     && cmake --build build -j${BUILDJOBS} \
     && cp -rf data/ build/
 
+# ---- Build ACMX2 MIDI Map tool ----
+WORKDIR /opt/src/acidcam-gpu/ACMX2/interface/midi-map
+RUN cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build build -j${BUILDJOBS} \
+    && cp build/midi-map /usr/bin/
+
 # ---- Download shader packs & models ----
 WORKDIR /opt/src
 RUN mkdir -p files/shaders \
