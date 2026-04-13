@@ -38,6 +38,8 @@ class ShaderPassDialog : public QDialog {
     void moveDown();
     void clearAll();
     void filterSearchChanged(const QString &text);
+    void saveShaderPass();
+    void loadShaderPass();
 
   private:
     void setupUI();
@@ -52,6 +54,8 @@ class ShaderPassDialog : public QDialog {
     QPushButton *upButton;
     QPushButton *downButton;
     QPushButton *clearButton;
+    QPushButton *saveButton;
+    QPushButton *loadButton;
     QPushButton *okButton;
     QPushButton *cancelButton;
 

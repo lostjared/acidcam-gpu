@@ -1,6 +1,9 @@
 #include "shaderpass.hpp"
+#include <QFile>
+#include <QFileDialog>
 #include <QMessageBox>
 #include <QSettings>
+#include <QTextStream>
 #include <algorithm>
 
 ShaderPassDialog::ShaderPassDialog(const QStringList &shaderNames, QWidget *parent)
@@ -70,6 +73,14 @@ void ShaderPassDialog::setupUI() {
     selectedShadersList->setMinimumHeight(200);
     shaderMainLayout->addWidget(selectedShadersList);
 
+    QHBoxLayout *fileButtonLayout = new QHBoxLayout();
+    saveButton = new QPushButton("Save List...", this);
+    loadButton = new QPushButton("Load List...", this);
+    fileButtonLayout->addWidget(saveButton);
+    fileButtonLayout->addWidget(loadButton);
+    fileButtonLayout->addStretch();
+    shaderMainLayout->addLayout(fileButtonLayout);
+
     mainLayout->addWidget(shaderGroup);
 
     QHBoxLayout *dialogButtonLayout = new QHBoxLayout();
@@ -85,6 +96,8 @@ void ShaderPassDialog::setupUI() {
     connect(upButton, &QPushButton::clicked, this, &ShaderPassDialog::moveUp);
     connect(downButton, &QPushButton::clicked, this, &ShaderPassDialog::moveDown);
     connect(clearButton, &QPushButton::clicked, this, &ShaderPassDialog::clearAll);
+    connect(saveButton, &QPushButton::clicked, this, &ShaderPassDialog::saveShaderPass);
+    connect(loadButton, &QPushButton::clicked, this, &ShaderPassDialog::loadShaderPass);
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(searchLineEdit, &QLineEdit::textChanged, this, &ShaderPassDialog::filterSearchChanged);
@@ -98,6 +111,8 @@ void ShaderPassDialog::setupUI() {
         upButton->setEnabled(checked);
         downButton->setEnabled(checked);
         clearButton->setEnabled(checked);
+        saveButton->setEnabled(checked);
+        loadButton->setEnabled(checked);
     });
 
     enableCheckBox->setChecked(false);
@@ -109,6 +124,8 @@ void ShaderPassDialog::setupUI() {
     upButton->setEnabled(false);
     downButton->setEnabled(false);
     clearButton->setEnabled(false);
+    saveButton->setEnabled(false);
+    loadButton->setEnabled(false);
 
     QString style = "QDialog { background-color: black; }"
                     "QGroupBox { color: cyan; border: 1px solid cyan; margin-top: 10px; padding-top: 10px; }"
@@ -261,4 +278,64 @@ void ShaderPassDialog::setSelectedShaderNames(const QStringList &names) {
 
 void ShaderPassDialog::updateShaderList(const QStringList &shaderNames) {
     loadShaders(shaderNames);
+}
+
+void ShaderPassDialog::saveShaderPass() {
+    if (selectedShadersList->count() == 0) {
+        QMessageBox::information(this, "Empty List", "Add shaders to the pass list before saving.");
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(this, "Save Shader Pass List", QString(), "Text Files (*.txt);;All Files (*)");
+    if (filePath.isEmpty())
+        return;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Could not save file: " + filePath);
+        return;
+    }
+
+    QTextStream out(&file);
+    for (int i = 0; i < selectedShadersList->count(); ++i) {
+        out << selectedShadersList->item(i)->text() << "\n";
+    }
+    file.close();
+    QMessageBox::information(this, "Saved", "Shader pass list saved to: " + filePath);
+}
+
+void ShaderPassDialog::loadShaderPass() {
+    QString filePath = QFileDialog::getOpenFileName(this, "Load Shader Pass List", QString(), "Text Files (*.txt);;All Files (*)");
+    if (filePath.isEmpty())
+        return;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Could not open file: " + filePath);
+        return;
+    }
+
+    selectedShadersList->clear();
+    QTextStream in(&file);
+    int loadedCount = 0;
+    int skippedCount = 0;
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (line.isEmpty())
+            continue;
+        if (shaderNameToIndex.contains(line)) {
+            QListWidgetItem *item = new QListWidgetItem(line);
+            item->setData(Qt::UserRole, shaderNameToIndex[line]);
+            selectedShadersList->addItem(item);
+            ++loadedCount;
+        } else {
+            ++skippedCount;
+        }
+    }
+    file.close();
+
+    QString msg = "Loaded " + QString::number(loadedCount) + " shader(s).";
+    if (skippedCount > 0)
+        msg += "\n" + QString::number(skippedCount) + " shader(s) not found and skipped.";
+    QMessageBox::information(this, "Shader Pass List Loaded", msg);
 }
