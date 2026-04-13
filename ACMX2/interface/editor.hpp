@@ -6,18 +6,62 @@
 #include <QDialog>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QPaintEvent>
 #include <QPlainTextEdit>
 #include <QStatusBar>
 #include <QSyntaxHighlighter>
 #include <QVector>
+#include <QWidget>
+
+class LineNumberArea;
 
 class CustomTextEdit : public QPlainTextEdit {
     Q_OBJECT
   public:
-    using QPlainTextEdit::QPlainTextEdit;
+    explicit CustomTextEdit(QWidget *parent = nullptr);
+
+    void lineNumberAreaPaintEvent(QPaintEvent *event);
+    int lineNumberAreaWidth();
+    void updateLineNumberAreaWidth(int newBlockCount);
 
   protected:
     void keyPressEvent(QKeyEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+
+  private slots:
+    void updateLineNumberArea(const QRect &rect, int dy);
+    void highlightCurrentLine();
+    void matchBrackets();
+
+  private:
+    void autoIndentNewLine();
+    void duplicateLine();
+    void moveLineUp();
+    void moveLineDown();
+    void toggleComment();
+    void smartHome(bool shift);
+    void indentSelection();
+    void unindentSelection();
+    bool hasMultiLineSelection();
+
+    LineNumberArea *m_lineNumberArea = nullptr;
+};
+
+class LineNumberArea : public QWidget {
+  public:
+    explicit LineNumberArea(CustomTextEdit *editor) : QWidget(editor), m_editor(editor) {}
+
+    QSize sizeHint() const override {
+        return QSize(m_editor->lineNumberAreaWidth(), 0);
+    }
+
+  protected:
+    void paintEvent(QPaintEvent *event) override {
+        m_editor->lineNumberAreaPaintEvent(event);
+    }
+
+  private:
+    CustomTextEdit *m_editor;
 };
 
 class TextEditor : public QDialog {
@@ -37,6 +81,7 @@ class TextEditor : public QDialog {
     void saveAs();
     void findText();
     void findNext();
+    void findPrevious();
     void replaceText();
     void gotoLine();
     void increaseFontSize();

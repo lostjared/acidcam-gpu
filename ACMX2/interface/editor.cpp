@@ -1,58 +1,558 @@
 #include "editor.hpp"
 #include <QAction>
 #include <QApplication>
-#include <QKeyEvent>
 #include <QClipboard>
 #include <QColor>
-#include <QFile>
 #include <QFile>
 #include <QFileDialog>
 #include <QFont>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QStatusBar>
 #include <QSyntaxHighlighter>
+#include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
 #include <QTextStream>
 #include <QVBoxLayout>
 
-TextEditor::TextEditor(QWidget *parent)
-    : QDialog(parent), m_modified(false), m_textEdit(nullptr), m_highlighter(nullptr),
-      m_statusBar(nullptr), m_lineColLabel(nullptr), m_fontSize(24) {
-    init();
+// --- CustomTextEdit ---
+
+CustomTextEdit::CustomTextEdit(QWidget *parent) : QPlainTextEdit(parent) {
+    m_lineNumberArea = new LineNumberArea(this);
+
+    connect(this, &QPlainTextEdit::blockCountChanged, this, &CustomTextEdit::updateLineNumberAreaWidth);
+    connect(this, &QPlainTextEdit::updateRequest, this, &CustomTextEdit::updateLineNumberArea);
+    connect(this, &QPlainTextEdit::cursorPositionChanged, this, &CustomTextEdit::highlightCurrentLine);
+    connect(this, &QPlainTextEdit::cursorPositionChanged, this, &CustomTextEdit::matchBrackets);
+
+    updateLineNumberAreaWidth(0);
+    highlightCurrentLine();
 }
 
-void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
-    if (event->key() == Qt::Key_Tab) {
-        QTextCursor cursor = textCursor();
-        cursor.insertText("    ");
-        return;
+int CustomTextEdit::lineNumberAreaWidth() {
+    int digits = 1;
+    int max = qMax(1, blockCount());
+    while (max >= 10) {
+        max /= 10;
+        ++digits;
     }
-    if (event->key() == Qt::Key_Backtab) {
-        QTextCursor cursor = textCursor();
-        cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor);
-        QString blockText = cursor.block().text();
+    digits = qMax(digits, 3);
+    return 10 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+}
+
+void CustomTextEdit::updateLineNumberAreaWidth(int /*newBlockCount*/) {
+    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+}
+
+void CustomTextEdit::updateLineNumberArea(const QRect &rect, int dy) {
+    if (dy)
+        m_lineNumberArea->scroll(0, dy);
+    else
+        m_lineNumberArea->update(0, rect.y(), m_lineNumberArea->width(), rect.height());
+
+    if (rect.contains(viewport()->rect()))
+        updateLineNumberAreaWidth(0);
+}
+
+void CustomTextEdit::resizeEvent(QResizeEvent *event) {
+    QPlainTextEdit::resizeEvent(event);
+    QRect cr = contentsRect();
+    m_lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
+}
+
+void CustomTextEdit::lineNumberAreaPaintEvent(QPaintEvent *event) {
+    QPainter painter(m_lineNumberArea);
+    painter.fillRect(event->rect(), QColor(30, 30, 30));
+
+    QTextBlock block = firstVisibleBlock();
+    int blockNumber = block.blockNumber();
+    int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+    int bottom = top + qRound(blockBoundingRect(block).height());
+
+    while (block.isValid() && top <= event->rect().bottom()) {
+        if (block.isVisible() && bottom >= event->rect().top()) {
+            QString number = QString::number(blockNumber + 1);
+            painter.setPen(QColor(120, 120, 120));
+            if (blockNumber == textCursor().blockNumber())
+                painter.setPen(QColor(220, 220, 220));
+            painter.drawText(0, top, m_lineNumberArea->width() - 5, fontMetrics().height(),
+                             Qt::AlignRight, number);
+        }
+        block = block.next();
+        top = bottom;
+        bottom = top + qRound(blockBoundingRect(block).height());
+        ++blockNumber;
+    }
+}
+
+void CustomTextEdit::highlightCurrentLine() {
+    QList<QTextEdit::ExtraSelection> extraSelections;
+
+    QTextEdit::ExtraSelection selection;
+    selection.format.setBackground(QColor(40, 40, 50));
+    selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+    selection.cursor = textCursor();
+    selection.cursor.clearSelection();
+    extraSelections.append(selection);
+
+    setExtraSelections(extraSelections);
+}
+
+static QChar matchingBracket(QChar ch) {
+    if (ch == '(') return ')';
+    if (ch == ')') return '(';
+    if (ch == '{') return '}';
+    if (ch == '}') return '{';
+    if (ch == '[') return ']';
+    if (ch == ']') return '[';
+    return QChar();
+}
+
+static bool isOpenBracket(QChar ch) {
+    return ch == '(' || ch == '{' || ch == '[';
+}
+
+void CustomTextEdit::matchBrackets() {
+    QList<QTextEdit::ExtraSelection> selections;
+
+    // Keep current line highlight
+    QTextEdit::ExtraSelection lineSelection;
+    lineSelection.format.setBackground(QColor(40, 40, 50));
+    lineSelection.format.setProperty(QTextFormat::FullWidthSelection, true);
+    lineSelection.cursor = textCursor();
+    lineSelection.cursor.clearSelection();
+    selections.append(lineSelection);
+
+    QTextCursor cursor = textCursor();
+    QTextDocument *doc = document();
+    int pos = cursor.position();
+
+    auto tryMatch = [&](int checkPos) -> bool {
+        if (checkPos < 0 || checkPos >= doc->characterCount())
+            return false;
+
+        QChar ch = doc->characterAt(checkPos);
+        QChar match = matchingBracket(ch);
+        if (match.isNull())
+            return false;
+
+        bool forward = isOpenBracket(ch);
+        int depth = 1;
+        int i = checkPos + (forward ? 1 : -1);
+
+        while (i >= 0 && i < doc->characterCount() && depth > 0) {
+            QChar c = doc->characterAt(i);
+            if (c == ch)
+                ++depth;
+            else if (c == match)
+                --depth;
+            if (forward) ++i;
+            else --i;
+        }
+
+        if (depth == 0) {
+            int matchPos = forward ? i - 1 : i + 1;
+
+            QTextEdit::ExtraSelection sel1;
+            sel1.format.setBackground(QColor(80, 80, 120));
+            sel1.cursor = QTextCursor(doc);
+            sel1.cursor.setPosition(checkPos);
+            sel1.cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
+            selections.append(sel1);
+
+            QTextEdit::ExtraSelection sel2;
+            sel2.format.setBackground(QColor(80, 80, 120));
+            sel2.cursor = QTextCursor(doc);
+            sel2.cursor.setPosition(matchPos);
+            sel2.cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
+            selections.append(sel2);
+            return true;
+        }
+        return false;
+    };
+
+    if (!tryMatch(pos))
+        tryMatch(pos - 1);
+
+    setExtraSelections(selections);
+}
+
+bool CustomTextEdit::hasMultiLineSelection() {
+    QTextCursor cursor = textCursor();
+    if (!cursor.hasSelection())
+        return false;
+    int startBlock = document()->findBlock(cursor.selectionStart()).blockNumber();
+    int endBlock = document()->findBlock(cursor.selectionEnd()).blockNumber();
+    return startBlock != endBlock;
+}
+
+void CustomTextEdit::indentSelection() {
+    QTextCursor cursor = textCursor();
+    int start = cursor.selectionStart();
+    int end = cursor.selectionEnd();
+
+    QTextBlock startBlock = document()->findBlock(start);
+    QTextBlock endBlock = document()->findBlock(end);
+    if (end > start && endBlock.position() == end)
+        endBlock = endBlock.previous();
+
+    cursor.beginEditBlock();
+    QTextBlock block = startBlock;
+    while (block.isValid() && block.blockNumber() <= endBlock.blockNumber()) {
+        QTextCursor blockCursor(block);
+        blockCursor.movePosition(QTextCursor::StartOfBlock);
+        blockCursor.insertText("    ");
+        block = block.next();
+    }
+    cursor.endEditBlock();
+}
+
+void CustomTextEdit::unindentSelection() {
+    QTextCursor cursor = textCursor();
+    int start = cursor.selectionStart();
+    int end = cursor.selectionEnd();
+
+    QTextBlock startBlock = document()->findBlock(start);
+    QTextBlock endBlock = document()->findBlock(end);
+    if (end > start && endBlock.position() == end)
+        endBlock = endBlock.previous();
+
+    cursor.beginEditBlock();
+    QTextBlock block = startBlock;
+    while (block.isValid() && block.blockNumber() <= endBlock.blockNumber()) {
+        QString text = block.text();
         int spaces = 0;
-        for (auto ch : blockText) {
+        for (auto ch : text) {
             if (ch == ' ' && spaces < 4)
                 ++spaces;
             else
                 break;
         }
         if (spaces > 0) {
-            cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, spaces);
-            cursor.removeSelectedText();
-            setTextCursor(cursor);
+            QTextCursor blockCursor(block);
+            blockCursor.movePosition(QTextCursor::StartOfBlock);
+            blockCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, spaces);
+            blockCursor.removeSelectedText();
+        }
+        block = block.next();
+    }
+    cursor.endEditBlock();
+}
+
+void CustomTextEdit::autoIndentNewLine() {
+    QTextCursor cursor = textCursor();
+    QString blockText = cursor.block().text();
+    int col = cursor.positionInBlock();
+
+    QString beforeCursor = blockText.left(col);
+
+    // Compute leading whitespace
+    QString indent;
+    for (auto ch : beforeCursor) {
+        if (ch == ' ' || ch == '\t')
+            indent += ch;
+        else
+            break;
+    }
+
+    QString trimmed = beforeCursor.trimmed();
+    bool afterOpenBrace = trimmed.endsWith('{');
+
+    QString afterCursor = blockText.mid(col);
+    bool beforeCloseBrace = afterCursor.trimmed().startsWith('}');
+
+    cursor.beginEditBlock();
+    cursor.insertText("\n");
+
+    if (afterOpenBrace && beforeCloseBrace) {
+        // Between {} — create indented block
+        cursor.insertText(indent + "    ");
+        int cursorPos = cursor.position();
+        cursor.insertText("\n" + indent);
+        cursor.setPosition(cursorPos);
+        setTextCursor(cursor);
+    } else if (afterOpenBrace) {
+        cursor.insertText(indent + "    ");
+    } else {
+        cursor.insertText(indent);
+    }
+    cursor.endEditBlock();
+
+    if (!(afterOpenBrace && beforeCloseBrace))
+        setTextCursor(cursor);
+
+    ensureCursorVisible();
+}
+
+void CustomTextEdit::duplicateLine() {
+    QTextCursor cursor = textCursor();
+    cursor.beginEditBlock();
+    cursor.movePosition(QTextCursor::StartOfBlock);
+    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    QString lineText = cursor.selectedText();
+    cursor.movePosition(QTextCursor::EndOfBlock);
+    cursor.insertText("\n" + lineText);
+    cursor.endEditBlock();
+    setTextCursor(cursor);
+}
+
+void CustomTextEdit::moveLineUp() {
+    QTextCursor cursor = textCursor();
+    if (cursor.blockNumber() == 0)
+        return;
+
+    cursor.beginEditBlock();
+    cursor.movePosition(QTextCursor::StartOfBlock);
+    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    QString currentLine = cursor.selectedText();
+
+    // Select the preceding newline + entire current line
+    cursor.movePosition(QTextCursor::StartOfBlock);
+    cursor.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor);
+    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    cursor.removeSelectedText();
+
+    // Insert above
+    cursor.movePosition(QTextCursor::StartOfBlock);
+    cursor.insertText(currentLine + "\n");
+    cursor.movePosition(QTextCursor::Up);
+    cursor.endEditBlock();
+    setTextCursor(cursor);
+}
+
+void CustomTextEdit::moveLineDown() {
+    QTextCursor cursor = textCursor();
+    if (cursor.blockNumber() >= document()->blockCount() - 1)
+        return;
+
+    cursor.beginEditBlock();
+    cursor.movePosition(QTextCursor::StartOfBlock);
+    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    QString currentLine = cursor.selectedText();
+
+    // Select current line + trailing newline
+    cursor.movePosition(QTextCursor::StartOfBlock);
+    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
+    cursor.removeSelectedText();
+
+    // Insert below current position
+    cursor.movePosition(QTextCursor::EndOfBlock);
+    cursor.insertText("\n" + currentLine);
+    cursor.endEditBlock();
+    setTextCursor(cursor);
+}
+
+void CustomTextEdit::toggleComment() {
+    QTextCursor cursor = textCursor();
+    int start = cursor.selectionStart();
+    int end = cursor.selectionEnd();
+
+    QTextBlock startBlock = document()->findBlock(start);
+    QTextBlock endBlock = document()->findBlock(end);
+    if (!cursor.hasSelection())
+        endBlock = startBlock;
+    else if (endBlock.position() == end && end > start)
+        endBlock = endBlock.previous();
+
+    // Check if all selected lines are already commented
+    bool allCommented = true;
+    QTextBlock block = startBlock;
+    while (block.isValid() && block.blockNumber() <= endBlock.blockNumber()) {
+        QString trimmed = block.text().trimmed();
+        if (!trimmed.isEmpty() && !trimmed.startsWith("//")) {
+            allCommented = false;
+            break;
+        }
+        block = block.next();
+    }
+
+    cursor.beginEditBlock();
+    block = startBlock;
+    while (block.isValid() && block.blockNumber() <= endBlock.blockNumber()) {
+        QTextCursor blockCursor(block);
+        if (allCommented) {
+            QString text = block.text();
+            int idx = text.indexOf("//");
+            if (idx >= 0) {
+                blockCursor.movePosition(QTextCursor::StartOfBlock);
+                blockCursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, idx);
+                int removeLen = 2;
+                if (idx + 2 < text.length() && text[idx + 2] == ' ')
+                    removeLen = 3;
+                blockCursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, removeLen);
+                blockCursor.removeSelectedText();
+            }
+        } else {
+            blockCursor.movePosition(QTextCursor::StartOfBlock);
+            blockCursor.insertText("// ");
+        }
+        block = block.next();
+    }
+    cursor.endEditBlock();
+}
+
+void CustomTextEdit::smartHome(bool shift) {
+    QTextCursor cursor = textCursor();
+    QString text = cursor.block().text();
+
+    int firstNonSpace = 0;
+    for (auto ch : text) {
+        if (ch == ' ' || ch == '\t')
+            ++firstNonSpace;
+        else
+            break;
+    }
+
+    int col = cursor.positionInBlock();
+    auto mode = shift ? QTextCursor::KeepAnchor : QTextCursor::MoveAnchor;
+
+    if (col == firstNonSpace || firstNonSpace >= text.length()) {
+        cursor.movePosition(QTextCursor::StartOfBlock, mode);
+    } else {
+        cursor.movePosition(QTextCursor::StartOfBlock, mode);
+        cursor.movePosition(QTextCursor::Right, mode, firstNonSpace);
+    }
+    setTextCursor(cursor);
+}
+
+void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
+    // Ctrl+D: duplicate line
+    if (event->key() == Qt::Key_D && (event->modifiers() & Qt::ControlModifier)) {
+        duplicateLine();
+        return;
+    }
+
+    // Alt+Up: move line up
+    if (event->key() == Qt::Key_Up && (event->modifiers() & Qt::AltModifier)) {
+        moveLineUp();
+        return;
+    }
+
+    // Alt+Down: move line down
+    if (event->key() == Qt::Key_Down && (event->modifiers() & Qt::AltModifier)) {
+        moveLineDown();
+        return;
+    }
+
+    // Ctrl+/: toggle comment
+    if (event->key() == Qt::Key_Slash && (event->modifiers() & Qt::ControlModifier)) {
+        toggleComment();
+        return;
+    }
+
+    // Home: smart home (first non-whitespace or column 0)
+    if (event->key() == Qt::Key_Home && !(event->modifiers() & Qt::ControlModifier)) {
+        smartHome(event->modifiers() & Qt::ShiftModifier);
+        return;
+    }
+
+    // Tab: indent selection or insert spaces
+    if (event->key() == Qt::Key_Tab) {
+        if (hasMultiLineSelection()) {
+            indentSelection();
+        } else {
+            QTextCursor cursor = textCursor();
+            cursor.insertText("    ");
         }
         return;
     }
+
+    // Shift+Tab: unindent
+    if (event->key() == Qt::Key_Backtab) {
+        if (hasMultiLineSelection()) {
+            unindentSelection();
+        } else {
+            QTextCursor cursor = textCursor();
+            cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor);
+            QString blockText = cursor.block().text();
+            int spaces = 0;
+            for (auto ch : blockText) {
+                if (ch == ' ' && spaces < 4)
+                    ++spaces;
+                else
+                    break;
+            }
+            if (spaces > 0) {
+                cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, spaces);
+                cursor.removeSelectedText();
+                setTextCursor(cursor);
+            }
+        }
+        return;
+    }
+
+    // Enter: auto-indent
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        autoIndentNewLine();
+        return;
+    }
+
+    // Auto-close brackets
+    if (event->text() == "{") {
+        QTextCursor cursor = textCursor();
+        cursor.insertText("{}");
+        cursor.movePosition(QTextCursor::Left);
+        setTextCursor(cursor);
+        return;
+    }
+    if (event->text() == "(") {
+        QTextCursor cursor = textCursor();
+        cursor.insertText("()");
+        cursor.movePosition(QTextCursor::Left);
+        setTextCursor(cursor);
+        return;
+    }
+    if (event->text() == "[") {
+        QTextCursor cursor = textCursor();
+        cursor.insertText("[]");
+        cursor.movePosition(QTextCursor::Left);
+        setTextCursor(cursor);
+        return;
+    }
+
+    // Skip-over closing brackets if the next char matches
+    if (event->text() == "}" || event->text() == ")" || event->text() == "]") {
+        QTextCursor cursor = textCursor();
+        QChar nextChar = document()->characterAt(cursor.position());
+        if (nextChar == event->text().at(0)) {
+            cursor.movePosition(QTextCursor::Right);
+            setTextCursor(cursor);
+            return;
+        }
+    }
+
+    // Auto-close/skip-over quotes
+    if (event->text() == "\"" || event->text() == "'") {
+        QTextCursor cursor = textCursor();
+        QChar quote = event->text().at(0);
+        QChar nextChar = document()->characterAt(cursor.position());
+        if (nextChar == quote) {
+            cursor.movePosition(QTextCursor::Right);
+            setTextCursor(cursor);
+            return;
+        }
+        cursor.insertText(QString(quote) + QString(quote));
+        cursor.movePosition(QTextCursor::Left);
+        setTextCursor(cursor);
+        return;
+    }
+
     QPlainTextEdit::keyPressEvent(event);
+}
+
+TextEditor::TextEditor(QWidget *parent)
+    : QDialog(parent), m_modified(false), m_textEdit(nullptr), m_highlighter(nullptr),
+      m_statusBar(nullptr), m_lineColLabel(nullptr), m_fontSize(24) {
+    init();
 }
 
 void TextEditor::setText(const QString &text) {
@@ -129,6 +629,9 @@ void TextEditor::init() {
     QAction *findNextAction = editMenu->addAction("Find &Next");
     findNextAction->setShortcut(QKeySequence::FindNext);
 
+    QAction *findPrevAction = editMenu->addAction("Find Pre&vious");
+    findPrevAction->setShortcut(QKeySequence::FindPrevious);
+
     QAction *replaceAction = editMenu->addAction("&Replace...");
     replaceAction->setShortcut(QKeySequence::Replace);
 
@@ -136,6 +639,20 @@ void TextEditor::init() {
 
     QAction *gotoLineAction = editMenu->addAction("&Go to Line...");
     gotoLineAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
+
+    editMenu->addSeparator();
+
+    QAction *duplicateAction = editMenu->addAction("&Duplicate Line");
+    duplicateAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+
+    QAction *toggleCommentAction = editMenu->addAction("Toggle Co&mment");
+    toggleCommentAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Slash));
+
+    QAction *moveUpAction = editMenu->addAction("Move Line &Up");
+    moveUpAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_Up));
+
+    QAction *moveDownAction = editMenu->addAction("Move Line Dow&n");
+    moveDownAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_Down));
 
     QMenu *viewMenu = menuBar->addMenu("&View");
 
@@ -185,6 +702,7 @@ void TextEditor::init() {
 
     connect(findAction, &QAction::triggered, this, &TextEditor::findText);
     connect(findNextAction, &QAction::triggered, this, &TextEditor::findNext);
+    connect(findPrevAction, &QAction::triggered, this, &TextEditor::findPrevious);
     connect(replaceAction, &QAction::triggered, this, &TextEditor::replaceText);
     connect(gotoLineAction, &QAction::triggered, this, &TextEditor::gotoLine);
 
@@ -276,6 +794,31 @@ void TextEditor::findNext() {
     m_statusBar->showMessage("Found: " + m_lastSearchText, 2000);
 }
 
+void TextEditor::findPrevious() {
+    if (m_lastSearchText.isEmpty()) {
+        findText();
+        return;
+    }
+
+    QTextCursor cursor = m_textEdit->textCursor();
+    QTextDocument::FindFlags flags = QTextDocument::FindBackward;
+
+    QTextCursor found = m_textEdit->document()->find(m_lastSearchText, cursor, flags);
+
+    if (found.isNull()) {
+        cursor.movePosition(QTextCursor::End);
+        found = m_textEdit->document()->find(m_lastSearchText, cursor, flags);
+
+        if (found.isNull()) {
+            m_statusBar->showMessage("Text not found: " + m_lastSearchText, 3000);
+            return;
+        }
+    }
+
+    m_textEdit->setTextCursor(found);
+    m_statusBar->showMessage("Found: " + m_lastSearchText, 2000);
+}
+
 void TextEditor::replaceText() {
     bool ok;
     QString searchText = QInputDialog::getText(this, "Replace", "Find:",
@@ -344,6 +887,7 @@ void TextEditor::updateFontSize() {
 
     m_textEdit->setStyleSheet(styleSheet);
     m_textEdit->setTabStopDistance(4 * m_textEdit->fontMetrics().horizontalAdvance(' '));
+    m_textEdit->updateLineNumberAreaWidth(0);
 }
 
 void TextEditor::updateCursorPosition() {
