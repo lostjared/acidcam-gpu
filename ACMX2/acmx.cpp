@@ -23,6 +23,7 @@
 #include <thread>
 #include <tuple>
 #include <unordered_map>
+#include <map>
 #include <vector>
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
@@ -1658,6 +1659,10 @@ class ACView : public gl::GLObject {
         unsigned char b0, b1, b2;
     };
     std::vector<MidiCode> midiCodes;
+    // Track last knob CC values for continuous firing
+    std::map<std::pair<unsigned char, unsigned char>, unsigned char> knobState;
+    // Frame counter for velocity-sensitive knob rate
+    std::map<std::pair<unsigned char, unsigned char>, int> knobFrameCount;
 
     void initMidi(const std::string &mapFile, int deviceIndex) {
         try {
@@ -1744,6 +1749,7 @@ class ACView : public gl::GLObject {
 
     void pollMidi(gl::GLWindow *win) {
         if (!midiIn || !midiOpen) return;
+        // Drain all pending MIDI messages and update knob state
         std::vector<unsigned char> msg;
         while (true) {
             midiIn->getMessage(&msg);
@@ -1751,15 +1757,38 @@ class ACView : public gl::GLObject {
             for (const auto &mc : midiCodes) {
                 if (msg[0] == mc.b0 && msg[1] == mc.b1) {
                     if (mc.key2 != 0) {
-                        SDL_Keycode k = (msg[2] > 64)
-                            ? midiKeyToSDL(mc.key1)
-                            : midiKeyToSDL(mc.key2);
-                        if (k != SDLK_UNKNOWN) injectKey(k, win);
+                        // Knob: store latest value, handled below
+                        knobState[{mc.b0, mc.b1}] = msg[2];
                     } else if (msg[2] == mc.b2) {
+                        // Button: fire immediately on exact match
                         SDL_Keycode k = midiKeyToSDL(mc.key1);
                         if (k != SDLK_UNKNOWN) injectKey(k, win);
                     }
                 }
+            }
+        }
+        // Fire keys for knobs with velocity-sensitive rate.
+        // Distance from center (64) controls speed:
+        //   dist 1-5  -> fire every 16 frames (slowest)
+        //   dist 63   -> fire every frame (fastest)
+        for (const auto &mc : midiCodes) {
+            if (mc.key2 == 0) continue;
+            auto key = std::make_pair(mc.b0, mc.b1);
+            auto it = knobState.find(key);
+            if (it == knobState.end()) continue;
+            unsigned char val = it->second;
+            if (val == 64) continue; // dead zone at center
+            int dist = (val > 64) ? (val - 64) : (64 - val); // 1..64
+            // Map distance to frame skip: max dist (63-64) = 1 (every frame),
+            // min dist (1) = 16 (every 16th frame)
+            int skipFrames = std::max(1, 17 - (dist * 16 / 63));
+            int &counter = knobFrameCount[key];
+            if (++counter >= skipFrames) {
+                counter = 0;
+                SDL_Keycode k = (val > 64)
+                    ? midiKeyToSDL(mc.key1)
+                    : midiKeyToSDL(mc.key2);
+                if (k != SDLK_UNKNOWN) injectKey(k, win);
             }
         }
     }

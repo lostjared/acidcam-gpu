@@ -186,11 +186,20 @@ void MidiMapWindow::updateTable() {
         table->setItem(i, 2, new QTableWidgetItem(keys));
 
         if (m.captured) {
-            table->setItem(i, 3, new QTableWidgetItem(
-                QString("%1 %2 %3").arg(m.byte0).arg(m.byte1).arg(m.byte2)));
-            auto *statusItem = new QTableWidgetItem("Mapped");
-            statusItem->setForeground(QBrush(QColor("#00ff00")));
-            table->setItem(i, 4, statusItem);
+            if (m.key2 != 0) {
+                // Knob: only byte0:byte1 matter for matching
+                table->setItem(i, 3, new QTableWidgetItem(
+                    QString("CC %1 %2 (knob)").arg(m.byte0).arg(m.byte1)));
+                auto *statusItem = new QTableWidgetItem("Knob mapped");
+                statusItem->setForeground(QBrush(QColor("#00ff00")));
+                table->setItem(i, 4, statusItem);
+            } else {
+                table->setItem(i, 3, new QTableWidgetItem(
+                    QString("%1 %2 %3").arg(m.byte0).arg(m.byte1).arg(m.byte2)));
+                auto *statusItem = new QTableWidgetItem("Mapped");
+                statusItem->setForeground(QBrush(QColor("#00ff00")));
+                table->setItem(i, 4, statusItem);
+            }
         } else {
             table->setItem(i, 3, new QTableWidgetItem("—"));
             auto *statusItem = new QTableWidgetItem("Not mapped");
@@ -296,15 +305,28 @@ void MidiMapWindow::pollMidi() {
     if (capturing && captureRow >= 0 && captureRow < static_cast<int>(mappings.size())) {
         mappings[captureRow].byte0 = message[0];
         mappings[captureRow].byte1 = message[1];
-        mappings[captureRow].byte2 = message[2];
+        // For knob actions (key2 != 0), byte2 is ignored at runtime —
+        // acmx2 uses the live value to determine direction (>64 = key1, <=64 = key2).
+        // Store 0 to make it clear only byte0:byte1 matter for matching.
+        mappings[captureRow].byte2 = (mappings[captureRow].key2 != 0) ? 0 : message[2];
         mappings[captureRow].captured = true;
 
         updateTable();
         table->selectRow(captureRow);
 
-        setStatus(QString("Captured [%1 %2 %3] for: %4")
-            .arg(message[0]).arg(message[1]).arg(message[2])
-            .arg(QString::fromStdString(mappings[captureRow].actionName)));
+        QString statusMsg;
+        if (mappings[captureRow].key2 != 0) {
+            statusMsg = QString("Captured knob CC [%1 %2] for: %3 — value >64 = %4, <=64 = %5")
+                .arg(message[0]).arg(message[1])
+                .arg(QString::fromStdString(mappings[captureRow].actionName))
+                .arg(QString::fromStdString(mappings[captureRow].actionName).split('/').first().trimmed())
+                .arg(QString::fromStdString(mappings[captureRow].actionName).split('/').last().trimmed());
+        } else {
+            statusMsg = QString("Captured [%1 %2 %3] for: %4")
+                .arg(message[0]).arg(message[1]).arg(message[2])
+                .arg(QString::fromStdString(mappings[captureRow].actionName));
+        }
+        setStatus(statusMsg);
 
         capturing = false;
         captureRow = -1;
