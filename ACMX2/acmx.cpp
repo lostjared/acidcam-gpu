@@ -1714,6 +1714,8 @@ class ACView : public gl::GLObject {
         case 507: return "PitchDn";
         case 508: return "YawR";
         case 509: return "YawL";
+        case 510: return "RotSpdUp";
+        case 511: return "RotSpdDn";
         default:  return "?";
         }
     }
@@ -1789,8 +1791,9 @@ class ACView : public gl::GLObject {
         case 80:  return SDLK_p;
         case 83:  return SDLK_s;
         case 87:  return SDLK_w;
-        // Virtual codes 504-509 handled directly in pollMidi
+        // Virtual codes 504-511 handled directly in pollMidi
         case 504: case 505: case 506: case 507: case 508: case 509:
+        case 510: case 511:
             return SDLK_UNKNOWN;
         default:  return SDLK_UNKNOWN;
         }
@@ -1864,6 +1867,16 @@ class ACView : public gl::GLObject {
                 } else if (activeKey == 509) {
                     cameraYaw -= cameraRotationSpeed * 0.3f;
                     cameraYaw = fmod(cameraYaw + 360.0f, 360.0f);
+                } else if (activeKey == 510) {
+                    cameraRotationSpeed += 0.5f;
+                    if (cameraRotationSpeed > 50.0f) cameraRotationSpeed = 50.0f;
+                    mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                    fflush(stdout);
+                } else if (activeKey == 511) {
+                    cameraRotationSpeed -= 0.5f;
+                    if (cameraRotationSpeed < 0.5f) cameraRotationSpeed = 0.5f;
+                    mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                    fflush(stdout);
                 } else {
                     SDL_Keycode k = (val > 64)
                         ? midiKeyToSDL(mc.key1)
@@ -3531,7 +3544,7 @@ class ACView : public gl::GLObject {
     std::thread muxThread;
     float cameraYaw = 270.0f;
     float cameraPitch = 0.0f;
-    const float cameraRotationSpeed = 5.0f;
+    float cameraRotationSpeed = 5.0f;
     bool viewRotationActive = false;
     bool oscillateScale = false;
     bool waveActive = false;

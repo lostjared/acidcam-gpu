@@ -147,6 +147,7 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"TimeSpeed Knob", "Time speed increase/decrease", 504, 505, false, 0, 0, 0});
     mappings.push_back({"Pitch W/S Knob", "Camera pitch up/down", 506, 507, false, 0, 0, 0});
     mappings.push_back({"Yaw A/D Knob", "Camera yaw right/left", 508, 509, false, 0, 0, 0});
+    mappings.push_back({"RotSpeed Knob", "Camera rotation speed up/down", 510, 511, false, 0, 0, 0});
 
     // Key mappings (single key, key2 = 0)
     mappings.push_back({"Left", "Filter index left", 263, 0, false, 0, 0, 0});
