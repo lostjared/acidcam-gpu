@@ -37,6 +37,8 @@ class SettingsWindow : public QDialog {
     QString getModelFile() const;
     int getSelectedCudaDevice() const;
     float getTimeSpeed() const;
+    bool isDurationLimitEnabled() const;
+    double getDurationLimit() const;
     QString getCameraName(int device_index);
   private slots:
     void acceptSettings();
@@ -77,6 +79,8 @@ class SettingsWindow : public QDialog {
     QPushButton *browseModelButton;
     QComboBox *cudaDeviceComboBox;
     QDoubleSpinBox *timeSpeedSpinBox;
+    QCheckBox *durationLimitCheckBox;
+    QDoubleSpinBox *durationLimitSpinBox;
 
     int selectedCameraIndex;
     QSize selectedCameraResolution;
@@ -92,6 +96,7 @@ class SettingsWindow : public QDialog {
     int graphicsDuration;
     QString modelFile;
     int selectedCudaDevice;
+    double maxDuration;
 };
 
 #endif

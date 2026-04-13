@@ -874,6 +874,8 @@ void MainWindow::cameraSettings() {
     model_file = settingsWindow.getModelFile();
     cuda_device = settingsWindow.getSelectedCudaDevice();
     time_speed = settingsWindow.getTimeSpeed();
+    duration_limit_enabled = settingsWindow.isDurationLimitEnabled();
+    max_duration = settingsWindow.getDurationLimit();
 }
 
 void MainWindow::runSelected() {
@@ -1013,6 +1015,10 @@ void MainWindow::runSelected() {
         arguments << "--midi-map" << midi_config_file;
         if (midi_device >= 0)
             arguments << "--midi-device" << QString::number(midi_device);
+    }
+
+    if (duration_limit_enabled && max_duration > 0.0) {
+        arguments << "--duration" << QString::number(max_duration, 'f', 1);
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
@@ -1189,6 +1195,10 @@ void MainWindow::runAll() {
             playlist_file_path = plFile;
         }
         arguments << "--playlist" << plFile;
+    }
+
+    if (duration_limit_enabled && max_duration > 0.0) {
+        arguments << "--duration" << QString::number(max_duration, 'f', 1);
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");

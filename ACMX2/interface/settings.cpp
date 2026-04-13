@@ -25,7 +25,8 @@ SettingsWindow::SettingsWindow(QWidget *parent)
       graphicsFile(""),
       graphicsDuration(10),
       modelFile("data/cube.mxmod.z"),
-      selectedCudaDevice(0) {
+      selectedCudaDevice(0),
+      maxDuration(0.0) {
     init();
 }
 
@@ -345,6 +346,19 @@ void SettingsWindow::init() {
     timeSpeedLayout->addWidget(timeSpeedSpinBox);
     mainLayout->addLayout(timeSpeedLayout);
 
+    QHBoxLayout *durationLayout = new QHBoxLayout;
+    durationLimitCheckBox = new QCheckBox("Max Duration (seconds):", this);
+    durationLimitSpinBox = new QDoubleSpinBox(this);
+    durationLimitSpinBox->setRange(0.1, 86400.0);
+    durationLimitSpinBox->setSingleStep(1.0);
+    durationLimitSpinBox->setDecimals(1);
+    durationLimitSpinBox->setValue(60.0);
+    durationLimitSpinBox->setEnabled(false);
+    connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
+    durationLayout->addWidget(durationLimitCheckBox);
+    durationLayout->addWidget(durationLimitSpinBox);
+    mainLayout->addLayout(durationLayout);
+
     mainLayout->addLayout(buttonLayout);
 
     setLayout(mainLayout);
@@ -440,6 +454,14 @@ int SettingsWindow::getSelectedCudaDevice() const {
 
 float SettingsWindow::getTimeSpeed() const {
     return static_cast<float>(timeSpeedSpinBox->value());
+}
+
+bool SettingsWindow::isDurationLimitEnabled() const {
+    return durationLimitCheckBox->isChecked();
+}
+
+double SettingsWindow::getDurationLimit() const {
+    return durationLimitSpinBox->value();
 }
 
 QString SettingsWindow::getCameraName(int device_index) {
