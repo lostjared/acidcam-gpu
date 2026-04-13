@@ -145,9 +145,11 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"Up/Down Knob", "Shader index down/up", 264, 265, false, 0, 0, 0});
     mappings.push_back({"Time Fwd/Back Knob", "Time forward/backward", 500, 501, false, 0, 0, 0});
     mappings.push_back({"TimeSpeed Knob", "Time speed increase/decrease", 504, 505, false, 0, 0, 0});
-    mappings.push_back({"Pitch W/S Knob", "Camera pitch up/down", 506, 507, false, 0, 0, 0});
-    mappings.push_back({"Yaw A/D Knob", "Camera yaw right/left", 508, 509, false, 0, 0, 0});
-    mappings.push_back({"RotSpeed Knob", "Camera rotation speed up/down", 510, 511, false, 0, 0, 0});
+    mappings.push_back({"Rotate X Axis W/S Knob", "Model rotate up/down", 506, 507, false, 0, 0, 0});
+    mappings.push_back({"Rotate Y Axis A/D Knob", "Model rotate right/left", 508, 509, false, 0, 0, 0});
+    mappings.push_back({"Rotata Z Axis", "Model roll right/left (Z axis)", 512, 513, false, 0, 0, 0});
+    mappings.push_back({"RotSpeed Up", "Camera rotation speed increase", 510, 0, false, 0, 0, 0});
+    mappings.push_back({"RotSpeed Down", "Camera rotation speed decrease", 511, 0, false, 0, 0, 0});
 
     // Key mappings (single key, key2 = 0)
     mappings.push_back({"Left", "Filter index left", 263, 0, false, 0, 0, 0});

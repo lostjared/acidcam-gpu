@@ -1675,6 +1675,8 @@ class ACView : public gl::GLObject {
     std::vector<MidiCode> midiCodes;
     // Track last knob CC values for continuous firing
     std::map<std::pair<unsigned char, unsigned char>, unsigned char> knobState;
+    // Track previous knob values for delta-based direction (Pitch/Yaw)
+    std::map<std::pair<unsigned char, unsigned char>, unsigned char> knobPrevValue;
     // Frame counter for velocity-sensitive knob rate
     std::map<std::pair<unsigned char, unsigned char>, int> knobFrameCount;
     // Last button action string for overlay display
@@ -1716,6 +1718,8 @@ class ACView : public gl::GLObject {
         case 509: return "YawL";
         case 510: return "RotSpdUp";
         case 511: return "RotSpdDn";
+        case 512: return "RollR";
+        case 513: return "RollL";
         default:  return "?";
         }
     }
@@ -1791,9 +1795,9 @@ class ACView : public gl::GLObject {
         case 80:  return SDLK_p;
         case 83:  return SDLK_s;
         case 87:  return SDLK_w;
-        // Virtual codes 504-511 handled directly in pollMidi
+        // Virtual codes 504-513 handled directly in pollMidi
         case 504: case 505: case 506: case 507: case 508: case 509:
-        case 510: case 511:
+        case 510: case 511: case 512: case 513:
             return SDLK_UNKNOWN;
         default:  return SDLK_UNKNOWN;
         }
@@ -1826,6 +1830,20 @@ class ACView : public gl::GLObject {
                             injectKey(k, win);
                             lastMidiButton = midiKeyName(mc.key1);
                             lastMidiButtonTime = std::chrono::steady_clock::now();
+                        } else if (mc.key1 == 510) {
+                            cameraRotationSpeed += 0.5f;
+                            if (cameraRotationSpeed > 50.0f) cameraRotationSpeed = 50.0f;
+                            mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                            fflush(stdout);
+                            lastMidiButton = "RotSpdUp";
+                            lastMidiButtonTime = std::chrono::steady_clock::now();
+                        } else if (mc.key1 == 511) {
+                            cameraRotationSpeed -= 0.5f;
+                            if (cameraRotationSpeed < 0.5f) cameraRotationSpeed = 0.5f;
+                            mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                            fflush(stdout);
+                            lastMidiButton = "RotSpdDn";
+                            lastMidiButtonTime = std::chrono::steady_clock::now();
                         }
                     }
                 }
@@ -1849,33 +1867,53 @@ class ACView : public gl::GLObject {
             int &counter = knobFrameCount[key];
             if (++counter >= skipFrames) {
                 counter = 0;
-                int activeKey = (val > 64) ? mc.key1 : mc.key2;
+                // For Pitch/Yaw knobs, use delta from previous value
+                // so turning the physical knob one direction always
+                // rotates the same way (no ping-pong at end-stops).
+                bool useDelta = (mc.key1 == 506 || mc.key1 == 508 || mc.key1 == 512);
+                int activeKey;
+                if (useDelta) {
+                    auto prevIt = knobPrevValue.find(key);
+                    unsigned char prev = (prevIt != knobPrevValue.end()) ? prevIt->second : 64;
+                    activeKey = (val >= prev) ? mc.key1 : mc.key2;
+                    knobPrevValue[key] = val;
+                } else {
+                    activeKey = (val > 64) ? mc.key1 : mc.key2;
+                }
                 // Handle direct-action virtual codes
                 if (activeKey == 504) {
                     library.incTimeSpeed(0.1f);
                 } else if (activeKey == 505) {
                     library.decTimeSpeed(0.1f);
                 } else if (activeKey == 506) {
-                    cameraPitch += cameraRotationSpeed * 0.3f;
-                    if (cameraPitch > 89.0f) cameraPitch = 89.0f;
-                } else if (activeKey == 507) {
-                    cameraPitch -= cameraRotationSpeed * 0.33f;
-                    if (cameraPitch < -89.0f) cameraPitch = -89.0f;
-                } else if (activeKey == 508) {
-                    cameraYaw += cameraRotationSpeed * 0.3f;
-                    cameraYaw = fmod(cameraYaw, 360.0f);
-                } else if (activeKey == 509) {
-                    cameraYaw -= cameraRotationSpeed * 0.3f;
-                    cameraYaw = fmod(cameraYaw + 360.0f, 360.0f);
-                } else if (activeKey == 510) {
-                    cameraRotationSpeed += 0.5f;
-                    if (cameraRotationSpeed > 50.0f) cameraRotationSpeed = 50.0f;
-                    mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                    modelRotX += cameraRotationSpeed * 0.3f;
+                    modelRotX = fmod(modelRotX, 360.0f);
+                    mx::system_out << "acmx2: Model RotX: " << modelRotX << "\n";
                     fflush(stdout);
-                } else if (activeKey == 511) {
-                    cameraRotationSpeed -= 0.5f;
-                    if (cameraRotationSpeed < 0.5f) cameraRotationSpeed = 0.5f;
-                    mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                } else if (activeKey == 507) {
+                    modelRotX -= cameraRotationSpeed * 0.33f;
+                    modelRotX = fmod(modelRotX + 360.0f, 360.0f);
+                    mx::system_out << "acmx2: Model RotX: " << modelRotX << "\n";
+                    fflush(stdout);
+                } else if (activeKey == 508) {
+                    modelRotY += cameraRotationSpeed * 0.3f;
+                    modelRotY = fmod(modelRotY, 360.0f);
+                    mx::system_out << "acmx2: Model RotY: " << modelRotY << "\n";
+                    fflush(stdout);
+                } else if (activeKey == 509) {
+                    modelRotY -= cameraRotationSpeed * 0.3f;
+                    modelRotY = fmod(modelRotY + 360.0f, 360.0f);
+                    mx::system_out << "acmx2: Model RotY: " << modelRotY << "\n";
+                    fflush(stdout);
+                } else if (activeKey == 512) {
+                    modelRotZ += cameraRotationSpeed * 0.3f;
+                    modelRotZ = fmod(modelRotZ, 360.0f);
+                    mx::system_out << "acmx2: Model RotZ: " << modelRotZ << "\n";
+                    fflush(stdout);
+                } else if (activeKey == 513) {
+                    modelRotZ -= cameraRotationSpeed * 0.3f;
+                    modelRotZ = fmod(modelRotZ + 360.0f, 360.0f);
+                    mx::system_out << "acmx2: Model RotZ: " << modelRotZ << "\n";
                     fflush(stdout);
                 } else {
                     SDL_Keycode k = (val > 64)
@@ -2708,6 +2746,20 @@ class ACView : public gl::GLObject {
                 library.decTimeSpeed(0.1f);
                 fflush(stdout);
             }
+
+            if(keystate[SDL_SCANCODE_J]) {
+                cameraRotationSpeed += 0.5f;
+                if (cameraRotationSpeed > 50.0f) cameraRotationSpeed = 50.0f;
+                    mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                    fflush(stdout);
+            }
+            if(keystate[SDL_SCANCODE_K]) {
+                cameraRotationSpeed -= 0.5f;
+                if (cameraRotationSpeed < 0.5f) cameraRotationSpeed = 0.5f;
+                    mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                fflush(stdout);
+            }
+
         }
 
         if (is3d_enabled) {
@@ -2801,6 +2853,9 @@ class ACView : public gl::GLObject {
 
             glm::mat4 modelMatrix = glm::mat4(1.0f);
             modelMatrix = glm::scale(modelMatrix, glm::vec3(modelRenderScale));
+            modelMatrix = glm::rotate(modelMatrix, glm::radians(modelRotX), glm::vec3(1.0f, 0.0f, 0.0f));
+            modelMatrix = glm::rotate(modelMatrix, glm::radians(modelRotY), glm::vec3(0.0f, 1.0f, 0.0f));
+            modelMatrix = glm::rotate(modelMatrix, glm::radians(modelRotZ), glm::vec3(0.0f, 0.0f, 1.0f));
             modelMatrix = glm::translate(modelMatrix, modelCenterOffset);
 
             glm::mat4 mvMatrix = viewMatrix * modelMatrix;
@@ -3544,7 +3599,7 @@ class ACView : public gl::GLObject {
     std::thread muxThread;
     float cameraYaw = 270.0f;
     float cameraPitch = 0.0f;
-    float cameraRotationSpeed = 5.0f;
+    float cameraRotationSpeed = 3.0f;
     bool viewRotationActive = false;
     bool oscillateScale = false;
     bool waveActive = false;
@@ -3552,6 +3607,9 @@ class ACView : public gl::GLObject {
     float modelSize = 1.0f;
     float modelRenderScale = 1.0f;
     glm::vec3 modelCenterOffset = glm::vec3(0.0f);
+    float modelRotX = 0.0f;
+    float modelRotY = 0.0f;
+    float modelRotZ = 0.0f;
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
     bool silent_mode = false;
