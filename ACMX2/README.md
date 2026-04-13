@@ -1,290 +1,127 @@
 
 # ACMX2
 
-Live Webcam Effects Powered by OpenGL Shaders and Real-time Audio
+The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU filters to live camera feeds, video files, or static images in real time. Supports 3D model rendering, audio reactivity, MIDI control, shader playlists, and multipass shader chains.
+
+Built on [libmx2](https://github.com/lostjared/libmx2) and requires an NVIDIA GPU with CUDA support.
 
 ![image](https://github.com/user-attachments/assets/7cdf6c57-0938-49ea-906d-594b48149acb)
-![image](https://github.com/user-attachments/assets/ee30f7b4-3255-44a2-b9f7-3efadc0650e8)
-![image](https://github.com/user-attachments/assets/c5eec97b-4d3b-4da2-bf23-c0689e9bfe7a)
-![image](https://github.com/user-attachments/assets/4fb33aa5-31a2-4240-ba33-58338c98c0ed)
 <img width="2048" height="1152" alt="image" src="https://github.com/user-attachments/assets/8aaba334-3e80-46e9-951f-4da2d75ec527" />
-
-
-## Basic Information
-
-A C++ application that applies real-time shaders to video from either a camera device or a video file. It can also optionally record the processed video frames to an output file and save snapshots on demand.
-The code is based on the libmx2 (MX2 Engine) available on GitHub here: https://github.com/lostjared/libmx2
-
-## Motives
-I wanted a simple and easy way to apply new shaders to camera and video files. To be able to edit them and build libraries of shaders
-without having to restort to the command line or buliding the same basic boilerplate code each time.
-
----
-
-## Table of Contents
-- [Overview](#overview)
-- [Features](#features)
-- [Audio Reactivity & Recording](#audio-reactivity--recording)
-- [Technologies Used](#technologies-used)
-- [Building and Running](#building-and-running)
-- [Command-Line Arguments](#command-line-arguments)
-- [Usage Examples](#usage-examples)
-- [Keyboard Controls](#keyboard-controls)
-- [Credits](#credits)
-
----
-
-## Overview
-
-**ACMX2** is a GPU-accelerated video processing tool that leverages OpenGL shader programs to apply custom effects to your camera feed or an input video file. It supports:
-- Shader switching on-the-fly.
-- Time-based animations (via uniform updates).
-- Output recording to a file.
-- Taking snapshots (saved as PNG).
-- Toggling fullscreen.
-- Automatic looping of input video.
 
 ---
 
 ## Features
 
-1. **Camera or Video File Input**  
-   Capture and process live camera feed or load a video file.
-
-2. **Shader Effects**  
-   Easily load either:
-   - A single fragment shader.
-   - A library of fragment shaders listed in an `index.txt` file.
-
-3. **Real-time Rendering**  
-   Updates and renders frames in real-time with OpenGL and SDL2.
-
-4. **Recording & Snapshots**  
-   - Write processed frames to a video file.
-   - Save snapshots on demand.
-
-5. **Configurable Resolution & FPS**  
-   Change output resolution and frames-per-second, and optionally stretch the input frames to match.
-
-6. **Keyboard Controls**  
-   - Switch shaders up/down.
-   - Enable/disable time-based animations.
-   - Toggle fullscreen mode.
-   - Save snapshots at any time.
-7. **Graphical User Interface**
-    - Graphical User Interface written  using Qt6
-    - Easy to use with Code Editor
+- **Camera, video, or image input** with configurable resolution
+- **Shader library** — load a single fragment shader or a full library via `index.txt`
+- **CUDA GPU filters** — apply GPU-accelerated pixel filters in addition to shaders
+- **3D mode** — render shaders onto a 3D model (`.mxmod`)
+- **Multipass shaders** — chain multiple shader passes in a single frame
+- **Shader playlists** — cycle through an ordered list of shaders
+- **Audio reactivity** — shaders respond to real-time audio input (RtAudio/PulseAudio)
+- **MIDI control** — map hardware knobs and buttons to shader parameters
+- **Video recording** with optional audio muxing via FFmpeg
+- **Silent mode** — headless video processing without a window
+- **Shader cache** — precompile shader binaries for fast startup
+- **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
 
 ---
 
-## Audio Reactivity & Recording
+## Building
 
-ACMX2 supports real-time audio input for audio-reactive shader effects and optional audio recording. Audio features require building with `AUDIO=ON` and depend on **RtAudio** with a **PulseAudio** backend on Linux.
+ACMX2 is part of the acidcam-gpu project. See the [main README](../README.md) for full build instructions.
 
-### Enabling Audio
+```bash
+cd ACMX2
+mkdir build && cd build
+cmake .. -DAUDIO=ON
+make -j$(nproc) && sudo make install
+```
 
-Pass `-w` / `--enable-audio` on the command line (or enable it in the GUI's Audio Settings panel) to activate audio capture. You can select an input device with `--audio-input <id>` and list available devices with `--list-devices`.
+The Qt6 GUI is built separately:
 
-### Audio-Reactive Shaders
+```bash
+cd ACMX2/interface
+mkdir build && cd build
+cmake .. && make -j$(nproc)
+cp -rf ../data/ .
+```
 
-When audio is enabled, the following GLSL uniforms are available to fragment shaders:
+---
+
+## Usage Examples
+
+**Camera with a shader library:**
+```bash
+./acmx2 -p ./data -s ./shaders -d 0 -r 1920x1080
+```
+
+**Process a video file with GPU filters and record output:**
+```bash
+./acmx2 -i input.mp4 -s ./shaders --gpu-filter 0,5,12 -o output.mp4 --copy-audio
+```
+
+**Single shader, fullscreen, with audio reactivity:**
+```bash
+./acmx2 -f effect.glsl -d 0 -n -w --audio-input 3
+```
+
+**3D mode with a model:**
+```bash
+./acmx2 -s ./shaders --enable-3d --model cube.mxmod -d 0
+```
+
+**Silent (headless) batch processing:**
+```bash
+./acmx2 -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
+```
+
+**Build shader cache:**
+```bash
+./acmx2 -p ./data --build ./shaders --enable-3d
+```
+
+---
+
+## Audio-Reactive Shader Uniforms
+
+When built with `AUDIO=ON` and launched with `-w`, the following GLSL uniforms are available:
 
 | Uniform | Description |
 |---------|-------------|
-| `amp` | Processed amplitude scaled by sensitivity |
+| `amp` | Amplitude scaled by sensitivity |
 | `uamp` | Raw untouched amplitude |
 | `amp_peak` | Highest sample value in the buffer |
 | `amp_rms` | Root mean square energy |
-| `amp_smooth` | Exponentially smoothed amplitude for gradual transitions |
-| `amp_low` | Low-frequency energy (<300 Hz / bass) |
+| `amp_smooth` | Exponentially smoothed amplitude |
+| `amp_low` | Low-frequency energy (<300 Hz) |
 | `amp_mid` | Mid-frequency energy (300–3000 Hz) |
-| `amp_high` | High-frequency energy (>3000 Hz / treble) |
-| `iamp` | Estimated dominant frequency (Hz) via zero-crossing rate |
+| `amp_high` | High-frequency energy (>3000 Hz) |
+| `iamp` | Estimated dominant frequency (Hz) |
 | `iSampleRate` | Audio sample rate (44100 Hz) |
 
-Sensitivity can be adjusted at runtime with the **Insert** / **Delete** keys or via `--sense <value>` (default `0.25`). Use `-y` / `--pass-through` to enable audio pass-through (monitor playback).
+### Virtual Audio Device (PipeWire / PulseAudio)
 
-### Audio Recording
-
-When recording video with `-o`, you can simultaneously capture audio to a WAV file with `--record-audio <file.wav>`. Recording gain is adjustable with `--record-gain <0.0–2.0>` (default `1.0`). After recording completes, the audio track is automatically muxed into the output video using FFmpeg.
-
-### Creating a Virtual Audio Device (PipeWire / PulseAudio)
-
-If you want to route system audio or application output into ACMX2 as a reactive input, you can create a virtual audio sink with PipeWire's PulseAudio compatibility layer:
+Route application audio into ACMX2 for reactive effects:
 
 ```bash
 pactl load-module module-null-sink sink_name=VirtualAudio sink_properties=device.description="Virtual_Audio"
 ```
 
-This creates a virtual sink called **Virtual_Audio**. You can then:
-1. Set an application's audio output to **Virtual_Audio** (via `pavucontrol` or your desktop sound settings).
-2. Select the **Virtual_Audio.monitor** as the input device in ACMX2 (`--audio-input` or via the GUI) so shaders react to that application's audio.
+Then select **Virtual_Audio.monitor** as the audio input device.
 
 ---
 
-## Technologies Used
+## Command-Line Arguments & Keyboard Controls
 
-- **C++20** for core logic.
-- **OpenGL** for GPU-accelerated rendering.
-- **SDL2** for creating the window, handling events, and managing the OpenGL context.
-- **OpenCV** for camera/video capture (and some basic image manipulation).
-- **FFmpeg (through a custom `MXWrite` wrapper (included))** for encoding/writing output video files.
-- **RtAudio** for real-time audio capture and playback (PulseAudio backend on Linux).
-- **Argz** library for command-line argument parsing.
-- **C++ STL** for concurrency, file system operations, etc.
-- **Qt6** for the GUI.
+See the full tables in the [main acidcam-gpu README](../README.md#command-line-arguments).
 
 ---
 
-## Building and Running
+## Screenshots
 
-1. **Dependencies** (high-level):
-   - SDL2
-   - OpenGL & GLAD 
-   - OpenCV
-   - FFmpeg development libraries
-   - MXWrite - Wrapper around FFmpeg
-   - C++20 or later compiler
-   - Argz library for command-line parsing (if not bundled with the code)
-   - libmx2 - MX2 Engine
-
-## Command-Line Arguments
-
-| Short Form         | Long Form                       | Description                             |
-|--------------------|---------------------------------|-----------------------------------------|
-| `-v`               |                                 | Display help message                    |
-| `-p <value>`       | `--path <value>`                | Assets path                             |
-| `-r <WidthxHeight>`| `--resolution <WidthxHeight>`   | Resolution WidthxHeight                 |
-| `-d <value>`       | `--device <value>`              | Device Index                            |
-| `-c <value>`       | `--camera-res <value>`          | Camera Resolution                       |
-| `-i <file>`        | `--input <file>`                | Input file                              |
-| `-s <file>`        | `--shaders <file>`              | Shader Library Index File               |
-| `-f <shader>`      | `--fragment <shader>`           | Fragment Shader                         |
-| `-h <index>`       | `--shader <index>`              | Shader Index                            |
-| `-e <prefix>`      | `--prefix <prefix>`             | Save Prefix                             |
-| `-o <file>`        | `--output <file>`               | Output file                             |
-| `-b <kbps>`        | `--bitrate <kbps>`              | Bitrate in Kbps                         |
-| `-u <fps>`         | `--fps <fps>`                   | Frames per second                       |
-| `-a`               | `--repeat`                      | Video repeat                            |
-| `-n`               | `--fullscreen`                  | Fullscreen Window (Escape to quit)      |
-| `-w`               | `--enable-audio`                | Enable Audio Reactivity                 |
-| `-l <channels>`    | `--channels <channels>`         | Audio channels                          |
-| `-q <sensitivity>` | `--sense <sensitivity>`         | Audio Sensitivity                       |
-| `-y`               | `--pass-through`                | Enable Audio Pass-through               |
-|                    | `--audio-input <id>`            | Audio input device ID                   |
-|                    | `--audio-output <id>`           | Audio output device ID                  |
-|                    | `--list-devices`                | List available audio devices            |
-|                    | `--record-audio <file>`         | Record audio to WAV file                |
-|                    | `--record-gain <0-2.0>`         | Recording gain/volume (default 1.0)     |
-|                    | `--enable-3d`                   | Enable 3D mode                          |
-|                    | `--model model.mxmod`           | MXMOD file for 3D mode                  |
-
-
-### Notes:
-- **Resolution Arguments**:
-  - *WidthxHeight* (e.g., `1280x720`).
-  - For the camera or output resolution, ensure valid dimensions are passed.
-- **Input & Camera**:
-  - If `--input` is omitted, the program defaults to the camera device index specified by `--device` (default is 0).
-- **Shader Selection**:
-  - Use either `--shaders` for a library or `--fragment` for a single shader.
-  - If both are provided, the last-specified option is used.
-- **Defaults**:
-  - If no arguments are supplied, a help message is displayed.
----
-
-## Usage Examples
-
-1. **Use Camera with Default Resolution**  
-   ```bash
-   ./acmx2
-   ```
-   - Opens camera device **0** at the default resolution, no output file recorded.
-
-2. **Use Camera, Set Capture Resolution, and Record**  
-   ```bash
-   ./acmx2 -c 640x480 -o camera_output.mp4
-   ```
-   - Opens camera at 640x480.
-   - Records processed output to `camera_output.mp4`.
-
-3. **Use a Single Fragment Shader with Input Video**  
-   ```bash
-   ./acmx2 -i myvideo.mp4 -f ./shaders/frag_effect.glsl -r 1280x720 -o processed_output.mp4
-   ```
-   - Loads and applies `frag_effect.glsl`.
-   - Stretches frames to 1280x720, then writes final output to `processed_output.mp4`.
-
-4. **Use a Shader Library and Loop the Video**  
-   ```bash
-   ./acmx2 -i input.mp4 -s ./filters -h 1 -a
-   ```
-   - Uses `./filters/index.txt` to load a library of fragment shaders.
-   - Starts at shader **index 1** in that library.
-   - Loops `input.mp4` when it ends.
-
-5. **Fullscreen Mode**  
-   ```bash
-   ./acmx2 -i input.mp4 -n
-   ```
-   - Starts in fullscreen, playing and processing `input.mp4`.
-
----
-
-## Keyboard Controls
-
-During runtime, the following keyboard controls are supported:
-
-| **Key**        | **Action**                                           |
-|----------------|------------------------------------------------------|
-| **Up Arrow**   | Switch to the previous shader in the library.        |
-| **Down Arrow** | Switch to the next shader in the library.            |
-| W, A, S, D     | Look around in 3D mode                               |
-| **Z**          | Save a snapshot (PNG) of the current frame.          |
-| **T**          | Toggle time-based animation (enables/disables time uniform). |
-| **I**          | Step forward in time (when time-based animation is disabled). |
-| **O**          | Step backward in time (when time-based animation is disabled). |
-| **F**          | Toggle fullscreen mode.                              |
-| **Q**          | Toggle Reactive Time (if audio is enabled).          |
-| **Insert**     | Increase audio sensitivity.                          |
-| **Delete**     | Decrease audio sensitivity.                          |
-| **Home**       | Toggle audio delta time scaling.                     |
-| **ESC**        | Quit the application or close the window.             |
-
-
-**Note:** Press **ESC** or close the window to quit the application.
-
-## Credits
-- Special thanks to all libraries used:
-  - **SDL2**, **OpenGL**, **OpenCV**, **FFmpeg**, **RtAudio** and standard C++.
-
-Feel free to report issues or contribute via pull requests on GitHub. Thank you for using **ACMX2**!
-
-Screenshots:
-
-Properties
-
-![image](https://github.com/user-attachments/assets/ddbc690b-82ea-456b-a9c0-5a34c408999a)
-
-
-Session Properties
-
-![image](https://github.com/user-attachments/assets/50f7b5f4-22a5-4fc9-b355-49f9d2d10cb1)
-
-
-Real-time Audio Settings
-
-![image](https://github.com/user-attachments/assets/e45c8319-5327-4cb1-a153-6839cc8c35d1)
-
-
-About This Application
-
-![image](https://github.com/user-attachments/assets/ad493ea8-3e51-4e0f-a05e-6f9df3a27b0d)
-
-Main Window
-
-<img width="2048" height="1152" alt="image" src="https://github.com/user-attachments/assets/1720bf11-9270-431a-8dba-96172482f483" />
-<img width="936" height="540" alt="image" src="https://github.com/user-attachments/assets/a3ea7c6c-a761-4aa9-9843-4502e9fcb8da" />
+<img width="2048" height="1152" alt="Main Window" src="https://github.com/user-attachments/assets/1720bf11-9270-431a-8dba-96172482f483" />
+<img width="936" height="540" alt="Main Window" src="https://github.com/user-attachments/assets/a3ea7c6c-a761-4aa9-9843-4502e9fcb8da" />
 
 
 
