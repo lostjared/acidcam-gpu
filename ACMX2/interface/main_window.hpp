@@ -6,6 +6,7 @@
 #include "editor.hpp"
 #include "gpufilter.hpp"
 #include "midi-settings.hpp"
+#include "playlist.hpp"
 #include "prop.hpp"
 #include "shader.hpp"
 #include "shaderlibrary.hpp"
@@ -61,6 +62,7 @@ class MainWindow : public QMainWindow {
     void menuFindNext();
     void menuGPUFilterSettings();
     void menuShaderPassSettings();
+    void menuPlaylistSettings();
     void menuBuildShaderCache();
     void menuRunFromCache();
     void menuRecompileShaders();
@@ -151,6 +153,10 @@ class MainWindow : public QMainWindow {
     QString midi_config_file;
     int midi_device = -1;
     QAction *midiSettingsAction;
+    bool playlist_enabled = false;
+    QStringList playlist_names;
+    QString playlist_file_path;
+    QAction *playlistAction;
     QString stderrBuffer;
 };
 

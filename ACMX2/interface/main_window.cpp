@@ -122,6 +122,10 @@ void MainWindow::initControls() {
     connect(shaderPassAction, &QAction::triggered, this, &MainWindow::menuShaderPassSettings);
     playbackMenu->addAction(shaderPassAction);
     playbackMenu->addSeparator();
+    playlistAction = new QAction(tr("Shader Playlist Settings..."), this);
+    connect(playlistAction, &QAction::triggered, this, &MainWindow::menuPlaylistSettings);
+    playbackMenu->addAction(playlistAction);
+    playbackMenu->addSeparator();
     buildCacheAction = new QAction(tr("Rebuild Shader Cache"), this);
     connect(buildCacheAction, &QAction::triggered, this, &MainWindow::menuBuildShaderCache);
     playbackMenu->addAction(buildCacheAction);
@@ -783,6 +787,45 @@ void MainWindow::menuShaderPassSettings() {
     }
 }
 
+void MainWindow::menuPlaylistSettings() {
+    if (shader_path.isEmpty()) {
+        QMessageBox::information(this, "Load Shaders First",
+                                 "Please load a shader library before configuring playlist.");
+        return;
+    }
+
+    loadShaders(shader_path, true);
+
+    if (items.isEmpty()) {
+        QMessageBox::information(this, "Load Shaders First",
+                                 "Please load a shader library before configuring playlist.");
+        return;
+    }
+
+    PlaylistDialog playlistDialog(items, this);
+    playlistDialog.setEnabled(playlist_enabled);
+    if (!playlist_names.isEmpty()) {
+        playlistDialog.setSelectedShaderNames(playlist_names);
+    }
+    if (!playlist_file_path.isEmpty()) {
+        playlistDialog.setPlaylistFile(playlist_file_path);
+    }
+
+    if (playlistDialog.exec() == QDialog::Accepted) {
+        playlist_enabled = playlistDialog.isPlaylistEnabled();
+        playlist_names = playlistDialog.getSelectedShaderNames();
+        playlist_file_path = playlistDialog.getPlaylistFile();
+        if (playlist_enabled) {
+            Log("Playlist Settings Saved: " + QString::number(playlist_names.size()) + " shaders");
+            if (!playlist_file_path.isEmpty()) {
+                Log("Playlist file: " + playlist_file_path);
+            }
+        } else {
+            Log("Playlist Disabled");
+        }
+    }
+}
+
 void MainWindow::cameraSettings() {
     SettingsWindow settingsWindow(this);
     if (settingsWindow.exec() == QDialog::Accepted) {
@@ -972,6 +1015,22 @@ void MainWindow::runSelected() {
             arguments << "--midi-device" << QString::number(midi_device);
     }
 
+    if (playlist_enabled && !playlist_names.isEmpty()) {
+        QString plFile = playlist_file_path;
+        if (plFile.isEmpty()) {
+            plFile = prefix_path + "/playlist.txt";
+        }
+        QFile f(plFile);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&f);
+            for (const QString &name : playlist_names)
+                out << name << "\n";
+            f.close();
+            playlist_file_path = plFile;
+        }
+        arguments << "--playlist" << plFile;
+    }
+
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
@@ -1130,6 +1189,22 @@ void MainWindow::runAll() {
         arguments << "--midi-map" << midi_config_file;
         if (midi_device >= 0)
             arguments << "--midi-device" << QString::number(midi_device);
+    }
+
+    if (playlist_enabled && !playlist_names.isEmpty()) {
+        QString plFile = playlist_file_path;
+        if (plFile.isEmpty()) {
+            plFile = prefix_path + "/playlist.txt";
+        }
+        QFile f(plFile);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&f);
+            for (const QString &name : playlist_names)
+                out << name << "\n";
+            f.close();
+            playlist_file_path = plFile;
+        }
+        arguments << "--playlist" << plFile;
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");

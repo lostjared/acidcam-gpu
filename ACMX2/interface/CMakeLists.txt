@@ -76,6 +76,7 @@ set(LAUNCHER_GUI_HEADERS
     gpufilter.hpp
     main_window.hpp
     midi-settings.hpp
+    playlist.hpp
     prop.hpp
     settings.hpp
     shader.hpp
@@ -92,6 +93,7 @@ set(LAUNCHER_GUI_SOURCES
     main.cpp
     main_window.cpp
     midi-settings.cpp
+    playlist.cpp
     prop.cpp
     settings.cpp
     shader.cpp
