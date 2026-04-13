@@ -25,7 +25,7 @@ pacman -S --noconfirm --needed \
 # ---- Step 5: Remaining libs ----
 pacman -S --noconfirm --needed \
     glm mesa libglvnd ffmpeg \
-    rtaudio pulseaudio libpulse  2>/dev/null \
+    rtaudio rtmidi pulseaudio libpulse  2>/dev/null \
     && rm -rf /var/cache/pacman/pkg/*
 
 # ---- Step 6: Fonts ----

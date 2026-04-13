@@ -30,7 +30,7 @@ RUN pacman -S --noconfirm --needed \
 # ---- Step 5: Remaining libs ----
 RUN pacman -S --noconfirm --needed \
     glm mesa libglvnd ffmpeg \
-    rtaudio pulseaudio libpulse \
+    rtaudio rtmidi pulseaudio libpulse \
     && rm -rf /var/cache/pacman/pkg/*
 
 # ---- Step 6: Fonts ----
@@ -86,6 +86,7 @@ RUN cmake -S . -B build -G Ninja \
 WORKDIR /opt/src/acidcam-gpu/ACMX2
 RUN cmake -S . -B build -G Ninja \
       -DAUDIO=ON \
+      -DMIDI=ON \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/usr \
     && cmake --build build -j${BUILDJOBS} \
