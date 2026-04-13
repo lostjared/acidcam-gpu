@@ -4,6 +4,7 @@
 #include "syntax.hpp"
 #include <QCloseEvent>
 #include <QDialog>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QStatusBar>
@@ -14,6 +15,9 @@ class CustomTextEdit : public QPlainTextEdit {
     Q_OBJECT
   public:
     using QPlainTextEdit::QPlainTextEdit;
+
+  protected:
+    void keyPressEvent(QKeyEvent *event) override;
 };
 
 class TextEditor : public QDialog {

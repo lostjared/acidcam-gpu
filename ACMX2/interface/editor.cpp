@@ -1,6 +1,7 @@
 #include "editor.hpp"
 #include <QAction>
 #include <QApplication>
+#include <QKeyEvent>
 #include <QClipboard>
 #include <QColor>
 #include <QFile>
@@ -25,6 +26,33 @@ TextEditor::TextEditor(QWidget *parent)
     : QDialog(parent), m_modified(false), m_textEdit(nullptr), m_highlighter(nullptr),
       m_statusBar(nullptr), m_lineColLabel(nullptr), m_fontSize(24) {
     init();
+}
+
+void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Tab) {
+        QTextCursor cursor = textCursor();
+        cursor.insertText("    ");
+        return;
+    }
+    if (event->key() == Qt::Key_Backtab) {
+        QTextCursor cursor = textCursor();
+        cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor);
+        QString blockText = cursor.block().text();
+        int spaces = 0;
+        for (auto ch : blockText) {
+            if (ch == ' ' && spaces < 4)
+                ++spaces;
+            else
+                break;
+        }
+        if (spaces > 0) {
+            cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, spaces);
+            cursor.removeSelectedText();
+            setTextCursor(cursor);
+        }
+        return;
+    }
+    QPlainTextEdit::keyPressEvent(event);
 }
 
 void TextEditor::setText(const QString &text) {
