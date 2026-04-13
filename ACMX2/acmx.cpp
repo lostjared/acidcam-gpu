@@ -2549,7 +2549,7 @@ class ACView : public gl::GLObject {
     }
 
     cv::Mat newFrame;
-    float movementSpeed = 0.01f;
+    float movementSpeed = 0.1f;
 
     virtual void draw(gl::GLWindow *win) override {
         if (fps > 0.0) {
@@ -2768,6 +2768,12 @@ class ACView : public gl::GLObject {
             glDepthMask(GL_TRUE);
             glDisable(GL_CULL_FACE);
 
+            static auto last3DTime = std::chrono::steady_clock::now();
+            auto now3D = std::chrono::steady_clock::now();
+            float dt = std::chrono::duration<float>(now3D - last3DTime).count();
+            if (dt > 0.1f) dt = 0.1f;
+            last3DTime = now3D;
+
             static float rotation = 0.0f;
             rotation = fmod(rotation + 0.5f, 360.0f);
 
@@ -2775,24 +2781,24 @@ class ACView : public gl::GLObject {
             if (!oscillateScale) {
 
                 if (keystate[SDL_SCANCODE_B]) {
-                    movementSpeed += 0.01f;
+                    movementSpeed += 0.1f * dt * 30.0f;
                     mx::system_out << "acmx2: movement increased: " << movementSpeed << "\n";
                     fflush(stdout);
                 }
 
                 if (keystate[SDL_SCANCODE_N]) {
-                    movementSpeed -= 0.01f;
+                    movementSpeed -= 0.1f * dt * 30.0f;
                     mx::system_out << "acmx2: movement decreased: " << movementSpeed << "\n";
                     fflush(stdout);
                 }
 
                 if (keystate[SDL_SCANCODE_EQUALS] || keystate[SDL_SCANCODE_KP_PLUS]) {
-                    cameraDistance += movementSpeed * modelSize * 0.5f;
+                    cameraDistance += movementSpeed * dt;
                     mx::system_out << "acmx2: cameraDistance increased: " << cameraDistance << "\n";
                     fflush(stdout);
                 }
                 if (keystate[SDL_SCANCODE_MINUS] || keystate[SDL_SCANCODE_KP_MINUS]) {
-                    cameraDistance -= movementSpeed * modelSize * 0.5f;
+                    cameraDistance -= movementSpeed * dt;
                     mx::system_out << "acmx2: cameraDistance decreased: " << cameraDistance << "\n";
                     fflush(stdout);
                 }
@@ -2806,21 +2812,21 @@ class ACView : public gl::GLObject {
 
             if (!viewRotationActive) {
                 if (keystate[SDL_SCANCODE_W]) {
-                    cameraPitch += cameraRotationSpeed * 0.3f;
+                    cameraPitch += cameraRotationSpeed * 0.3f * dt * 30.0f;
                     if (cameraPitch > 89.0f)
                         cameraPitch = 89.0f;
                 }
                 if (keystate[SDL_SCANCODE_S]) {
-                    cameraPitch -= cameraRotationSpeed * 0.33f;
+                    cameraPitch -= cameraRotationSpeed * 0.33f * dt * 30.0f;
                     if (cameraPitch < -89.0f)
                         cameraPitch = -89.0f;
                 }
                 if (keystate[SDL_SCANCODE_A]) {
-                    cameraYaw -= cameraRotationSpeed * 0.3f;
+                    cameraYaw -= cameraRotationSpeed * 0.3f * dt * 30.0f;
                     cameraYaw = fmod(cameraYaw + 360.0f, 360.0f);
                 }
                 if (keystate[SDL_SCANCODE_D]) {
-                    cameraYaw += cameraRotationSpeed * 0.3f;
+                    cameraYaw += cameraRotationSpeed * 0.3f * dt * 30.0f;
                     cameraYaw = fmod(cameraYaw, 360.0f);
                 }
             }
@@ -3599,7 +3605,7 @@ class ACView : public gl::GLObject {
     std::thread muxThread;
     float cameraYaw = 270.0f;
     float cameraPitch = 0.0f;
-    float cameraRotationSpeed = 3.0f;
+    float cameraRotationSpeed = 0.5f;
     bool viewRotationActive = false;
     bool oscillateScale = false;
     bool waveActive = false;
