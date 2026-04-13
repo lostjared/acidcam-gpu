@@ -101,6 +101,77 @@ sudo bash build-script/install-deps-arch.sh
 
 ---
 
+## Recent Updates
+
+### MIDI Controller Support
+
+ACMX2 now supports MIDI input devices for real-time control of shaders and parameters via hardware knobs and buttons.
+
+- **Command line options:**
+  - `--midi-map <file.midi_cfg>` — Load a MIDI mapping configuration file
+  - `--midi-device <index>` — Select MIDI input device by index
+  - `--list-midi` — List available MIDI input devices
+- **MIDI Map Tool:** New standalone `midi-map` application for creating MIDI controller mappings:
+  - Live MIDI message monitor
+  - Capture button/knob assignments to ACMX2 actions (shader navigation, time control, pitch, yaw, speed, etc.)
+  - Save/load `.midi_cfg` configuration files
+- **Qt Interface:** New **MIDI Settings** dialog with:
+  - Enable/disable MIDI
+  - Browse for config file or launch the MIDI Map Tool directly
+  - Select MIDI device from detected inputs
+- **Velocity-sensitive knobs:** Knob turn speed controls the rate of action firing
+- **MIDI Overlay:** Real-time on-screen display showing MIDI status, knob states, and button presses with fade animation
+- **F9 key:** Toggle overlay visibility on/off
+
+### Code Editor Improvements
+
+The built-in GLSL shader editor has been significantly enhanced:
+
+- Line number gutter
+- Current line highlighting
+- Bracket matching
+- Auto-indentation on new lines
+- Duplicate line (Ctrl+D)
+- Move line up/down (Alt+Up/Down)
+- Toggle comment (Ctrl+/)
+- Smart Home key behavior
+- Block indent/unindent (Tab/Shift+Tab with selection)
+
+### Version 2.7.0
+
+- Version bump to 2.7.0
+- Updated build scripts and Podman container configuration
+- Audio muxing fix: uses video duration for precise audio/video sync
+- Audio track copy fix for finished recordings
+
+### Shader Playlist Support
+
+ACMX2 now supports shader playlists, allowing you to define an ordered list of shaders and cycle through them during playback.
+
+- **Command line:** Use `--playlist <file.txt>` to load a playlist file (one shader name per line, with or without `.glsl` extension)
+- **Runtime controls:**
+  - **P** — Toggle playlist mode on/off
+  - **Up/Down arrows** — Navigate to the previous/next shader in the playlist
+- **Qt Interface:** New **Shader Playlist Settings** dialog under the Playback menu with:
+  - Enable/disable checkbox
+  - Search, add, remove, and reorder shaders
+  - **Save List... / Load List...** buttons to persist playlists as text files
+
+### Multipass Shader Pass Save/Load
+
+The **Multipass Shader Settings** dialog now includes **Save List...** and **Load List...** buttons, allowing you to save and restore your multipass shader chain as a text file.
+
+### GPU Filter Save/Load
+
+The **GPU Filter Settings** dialog now includes **Save List...** and **Load List...** buttons, allowing you to save and restore your GPU filter chain as a text file.
+
+### Overlay Improvements
+
+- All MIDI overlay text is now rendered in green for better readability
+- When GPU filters are enabled, the overlay now displays the active GPU filter names in a comma-separated list (e.g., `GPU: Filter1, Filter2, Filter3`)
+
+---
+
 ACMX2 is built locally using a **Podman container** via the included `Containerfile.arch`.
 This avoids dependency issues and produces a self-contained image, but it **requires an NVIDIA GPU**.
 
