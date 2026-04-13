@@ -49,6 +49,7 @@ cmake -S . -B build -G Ninja \
 cd /opt/src/acidcam-gpu/ACMX2
 cmake -S . -B build -G Ninja \
       -DAUDIO=ON \
+      -DMIDI=ON \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/usr \
     && cmake --build build -j${BUILDJOBS} \
