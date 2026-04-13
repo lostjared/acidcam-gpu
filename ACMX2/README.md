@@ -99,6 +99,7 @@ cp -rf ../data/ .
 | `-a` | `--repeat` | | Loop/repeat video playback |
 | `-n` / `-N` | `--fullscreen` | | Fullscreen window (Escape to quit) |
 | `-m` | `--cuda-device` | `<index>` | CUDA device index |
+| | `--duration` | `<seconds>` | Recording duration limit in seconds (float); stop recording and exit after elapsed |
 
 ### Shader Options
 
