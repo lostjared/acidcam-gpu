@@ -551,6 +551,7 @@ class ShaderLibrary {
     void incTimeSpeed(float step) {
         time_speed += step;
         mx::system_out << "acmx2: Time speed: " << time_speed << "\n";
+        fflush(stdout);
     }
 
     void decTimeSpeed(float step) {
@@ -560,6 +561,7 @@ class ShaderLibrary {
             time_speed = 0.0f;
         }
         mx::system_out << "acmx2: Time speed: " << time_speed << "\n";
+        fflush(stdout);
     }
 
     void enableDualMode(bool enable) {
