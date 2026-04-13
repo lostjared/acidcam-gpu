@@ -73,6 +73,15 @@ void GPUFilterDialog::setupUI() {
     selectedFiltersList = new QListWidget(this);
     selectedFiltersList->setMinimumHeight(150);
     filterMainLayout->addWidget(selectedFiltersList);
+
+    QHBoxLayout *saveLoadLayout = new QHBoxLayout();
+    saveButton = new QPushButton("Save List...", this);
+    loadButton = new QPushButton("Load List...", this);
+    saveLoadLayout->addWidget(saveButton);
+    saveLoadLayout->addWidget(loadButton);
+    saveLoadLayout->addStretch();
+    filterMainLayout->addLayout(saveLoadLayout);
+
     mainLayout->addWidget(filterGroup);
     QHBoxLayout *dialogButtonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
@@ -86,6 +95,8 @@ void GPUFilterDialog::setupUI() {
     connect(upButton, &QPushButton::clicked, this, &GPUFilterDialog::moveUp);
     connect(downButton, &QPushButton::clicked, this, &GPUFilterDialog::moveDown);
     connect(clearButton, &QPushButton::clicked, this, &GPUFilterDialog::clearAll);
+    connect(saveButton, &QPushButton::clicked, this, &GPUFilterDialog::saveFilterList);
+    connect(loadButton, &QPushButton::clicked, this, &GPUFilterDialog::loadFilterList);
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(searchLineEdit, &QLineEdit::textChanged, this, &GPUFilterDialog::filterSearchChanged);
@@ -99,6 +110,8 @@ void GPUFilterDialog::setupUI() {
         upButton->setEnabled(checked);
         downButton->setEnabled(checked);
         clearButton->setEnabled(checked);
+        saveButton->setEnabled(checked);
+        loadButton->setEnabled(checked);
     });
 
     enableCheckBox->setChecked(false);
@@ -111,6 +124,8 @@ void GPUFilterDialog::setupUI() {
     upButton->setEnabled(false);
     downButton->setEnabled(false);
     clearButton->setEnabled(false);
+    saveButton->setEnabled(false);
+    loadButton->setEnabled(false);
 
     QString style = "QDialog { background-color: black; }"
                     "QGroupBox { color: red; border: 1px solid red; margin-top: 10px; padding-top: 10px; }"
@@ -246,4 +261,62 @@ int GPUFilterDialog::getBufferSize() const {
 QString GPUFilterDialog::getFilterArgument() const {
     QStringList indices = getSelectedFilterIndices();
     return indices.join(",");
+}
+
+void GPUFilterDialog::saveFilterList() {
+    if (selectedFiltersList->count() == 0) {
+        QMessageBox::information(this, "Empty List", "Add filters to the list before saving.");
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(this, "Save GPU Filter List", QString(), "Text Files (*.txt);;All Files (*)");
+    if (filePath.isEmpty())
+        return;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Could not save file: " + filePath);
+        return;
+    }
+
+    QTextStream out(&file);
+    for (int i = 0; i < selectedFiltersList->count(); ++i) {
+        out << selectedFiltersList->item(i)->text() << "\n";
+    }
+    file.close();
+    QMessageBox::information(this, "Saved", "GPU filter list saved to: " + filePath);
+}
+
+void GPUFilterDialog::loadFilterList() {
+    QString filePath = QFileDialog::getOpenFileName(this, "Load GPU Filter List", QString(), "Text Files (*.txt);;All Files (*)");
+    if (filePath.isEmpty())
+        return;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Could not open file: " + filePath);
+        return;
+    }
+
+    selectedFiltersList->clear();
+    QTextStream in(&file);
+    int loadedCount = 0;
+    int skippedCount = 0;
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (line.isEmpty())
+            continue;
+        if (filterNameToIndex.contains(line)) {
+            selectedFiltersList->addItem(line);
+            ++loadedCount;
+        } else {
+            ++skippedCount;
+        }
+    }
+    file.close();
+
+    QString msg = "Loaded " + QString::number(loadedCount) + " filter(s).";
+    if (skippedCount > 0)
+        msg += "\nSkipped " + QString::number(skippedCount) + " unrecognized filter(s).";
+    QMessageBox::information(this, "Loaded", msg);
 }

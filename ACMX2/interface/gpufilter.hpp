@@ -4,6 +4,8 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QFile>
+#include <QFileDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -15,6 +17,7 @@
 #include <QSpinBox>
 #include <QStandardItemModel>
 #include <QStringList>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 class GPUFilterDialog : public QDialog {
@@ -34,6 +37,8 @@ class GPUFilterDialog : public QDialog {
     void moveDown();
     void clearAll();
     void filterSearchChanged(const QString &text);
+    void saveFilterList();
+    void loadFilterList();
 
   private:
     void loadFiltersFromExecutable();
@@ -52,6 +57,8 @@ class GPUFilterDialog : public QDialog {
     QPushButton *clearButton;
     QPushButton *okButton;
     QPushButton *cancelButton;
+    QPushButton *saveButton;
+    QPushButton *loadButton;
 
     QStandardItemModel *filterModel;
     QSortFilterProxyModel *proxyModel;

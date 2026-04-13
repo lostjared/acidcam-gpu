@@ -1894,7 +1894,7 @@ class ACView : public gl::GLObject {
             if (len > maxLabelLen) maxLabelLen = len;
         }
         // Show knob states
-        win->text.setColor({200, 200, 200, 255});
+        win->text.setColor({0, 255, 0, 255});
         for (const auto &mc : midiCodes) {
             if (mc.key2 == 0) continue;
             auto it = knobState.find({mc.b0, mc.b1});
@@ -1918,7 +1918,7 @@ class ACView : public gl::GLObject {
             std::chrono::steady_clock::now() - lastMidiButtonTime).count();
         if (!lastMidiButton.empty() && elapsed < 2000) {
             int alpha = (elapsed < 1500) ? 255 : 255 - static_cast<int>((elapsed - 1500) * 255 / 500);
-            win->text.setColor({255, 255, 0, static_cast<unsigned char>(std::max(0, alpha))});
+            win->text.setColor({0, 255, 0, static_cast<unsigned char>(std::max(0, alpha))});
             win->text.printText_Blended(font, 10, y, "Button: " + lastMidiButton);
             y += 22;
         }
@@ -3129,13 +3129,24 @@ class ACView : public gl::GLObject {
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             win->text.setColor({0, 0, 255, 255});
             win->text.printText_Blended(overlayFont, 10, 10, cached_shader_name);
+            int overlayY = 40;
+            if (gpu_filter_enabled && !gpu_filters.empty()) {
+                win->text.setColor({255, 0, 255, 255});
+                std::string gpuLine = "GPU: ";
+                for (size_t i = 0; i < gpu_filters.size(); ++i) {
+                    if (i > 0) gpuLine += ", ";
+                    gpuLine += gpu_filters[i].name;
+                }
+                win->text.printText_Blended(overlayFont, 10, overlayY, gpuLine);
+                overlayY += 30;
+            }
             win->text.setColor({255, 255, 255, 255});
-            win->text.printText_Blended(overlayFont, 10, 40, timerStr);
-            win->text.printText_Blended(overlayFont, 10, 70, fpsStr.str());
+            win->text.printText_Blended(overlayFont, 10, overlayY, timerStr);
+            win->text.printText_Blended(overlayFont, 10, overlayY + 30, fpsStr.str());
             win->text.setColor({128, 128, 128, 255});
-            win->text.printText_Blended(overlayFont, 10, 95, "F9: Toggle overlay");
+            win->text.printText_Blended(overlayFont, 10, overlayY + 55, "F9: Toggle overlay");
 #ifdef MIDI_ENABLED
-            drawMidiOverlay(win, overlayFont, 120);
+            drawMidiOverlay(win, overlayFont, overlayY + 80);
 #endif
             glDisable(GL_BLEND);
         }
