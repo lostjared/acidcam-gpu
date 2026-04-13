@@ -1663,6 +1663,46 @@ class ACView : public gl::GLObject {
     std::map<std::pair<unsigned char, unsigned char>, unsigned char> knobState;
     // Frame counter for velocity-sensitive knob rate
     std::map<std::pair<unsigned char, unsigned char>, int> knobFrameCount;
+    // Last button action string for overlay display
+    std::string lastMidiButton;
+    std::chrono::steady_clock::time_point lastMidiButtonTime;
+
+    static const char* midiKeyName(int code) {
+        switch (code) {
+        case 262: return "Right";
+        case 263: return "Left";
+        case 264: return "Down";
+        case 265: return "Up";
+        case 266: return "PgUp";
+        case 267: return "PgDn";
+        case 32:  return "Space";
+        case 44:  return "Comma";
+        case 45:  return "Minus";
+        case 46:  return "Period";
+        case 47:  return "Slash";
+        case 61:  return "Plus/Eq";
+        case 65:  return "A";
+        case 66:  return "B";
+        case 68:  return "D";
+        case 72:  return "H";
+        case 76:  return "L";
+        case 78:  return "N";
+        case 80:  return "P";
+        case 83:  return "S";
+        case 87:  return "W";
+        case 500: return "TimeFwd";
+        case 501: return "TimeBack";
+        case 502: return "TimePause";
+        case 503: return "TimeToggle";
+        case 504: return "SpdUp";
+        case 505: return "SpdDn";
+        case 506: return "PitchUp";
+        case 507: return "PitchDn";
+        case 508: return "YawR";
+        case 509: return "YawL";
+        default:  return "?";
+        }
+    }
 
     void initMidi(const std::string &mapFile, int deviceIndex) {
         try {
@@ -1735,6 +1775,9 @@ class ACView : public gl::GLObject {
         case 80:  return SDLK_p;
         case 83:  return SDLK_s;
         case 87:  return SDLK_w;
+        // Virtual codes 504-509 handled directly in pollMidi
+        case 504: case 505: case 506: case 507: case 508: case 509:
+            return SDLK_UNKNOWN;
         default:  return SDLK_UNKNOWN;
         }
     }
@@ -1762,7 +1805,11 @@ class ACView : public gl::GLObject {
                     } else if (msg[2] == mc.b2) {
                         // Button: fire immediately on exact match
                         SDL_Keycode k = midiKeyToSDL(mc.key1);
-                        if (k != SDLK_UNKNOWN) injectKey(k, win);
+                        if (k != SDLK_UNKNOWN) {
+                            injectKey(k, win);
+                            lastMidiButton = midiKeyName(mc.key1);
+                            lastMidiButtonTime = std::chrono::steady_clock::now();
+                        }
                     }
                 }
             }
@@ -1785,10 +1832,30 @@ class ACView : public gl::GLObject {
             int &counter = knobFrameCount[key];
             if (++counter >= skipFrames) {
                 counter = 0;
-                SDL_Keycode k = (val > 64)
-                    ? midiKeyToSDL(mc.key1)
-                    : midiKeyToSDL(mc.key2);
-                if (k != SDLK_UNKNOWN) injectKey(k, win);
+                int activeKey = (val > 64) ? mc.key1 : mc.key2;
+                // Handle direct-action virtual codes
+                if (activeKey == 504) {
+                    library.incTimeSpeed(0.1f);
+                } else if (activeKey == 505) {
+                    library.decTimeSpeed(0.1f);
+                } else if (activeKey == 506) {
+                    cameraPitch += cameraRotationSpeed * 0.3f;
+                    if (cameraPitch > 89.0f) cameraPitch = 89.0f;
+                } else if (activeKey == 507) {
+                    cameraPitch -= cameraRotationSpeed * 0.33f;
+                    if (cameraPitch < -89.0f) cameraPitch = -89.0f;
+                } else if (activeKey == 508) {
+                    cameraYaw += cameraRotationSpeed * 0.3f;
+                    cameraYaw = fmod(cameraYaw, 360.0f);
+                } else if (activeKey == 509) {
+                    cameraYaw -= cameraRotationSpeed * 0.3f;
+                    cameraYaw = fmod(cameraYaw + 360.0f, 360.0f);
+                } else {
+                    SDL_Keycode k = (val > 64)
+                        ? midiKeyToSDL(mc.key1)
+                        : midiKeyToSDL(mc.key2);
+                    if (k != SDLK_UNKNOWN) injectKey(k, win);
+                }
             }
         }
     }
@@ -1799,6 +1866,50 @@ class ACView : public gl::GLObject {
             delete midiIn;
             midiIn = nullptr;
             midiOpen = false;
+        }
+    }
+
+    void drawMidiOverlay(gl::GLWindow *win, mx::Font &font, int startY) {
+        if (!midiOpen || midiCodes.empty()) return;
+        int y = startY;
+        win->text.setColor({0, 255, 0, 255});
+        win->text.printText_Blended(font, 10, y, "MIDI Active");
+        y += 25;
+        // Find max label width for alignment
+        size_t maxLabelLen = 0;
+        for (const auto &mc : midiCodes) {
+            if (mc.key2 == 0) continue;
+            size_t len = std::string(midiKeyName(mc.key1)).size() + 1 + std::string(midiKeyName(mc.key2)).size();
+            if (len > maxLabelLen) maxLabelLen = len;
+        }
+        // Show knob states
+        win->text.setColor({200, 200, 200, 255});
+        for (const auto &mc : midiCodes) {
+            if (mc.key2 == 0) continue;
+            auto it = knobState.find({mc.b0, mc.b1});
+            unsigned char val = (it != knobState.end()) ? it->second : 64;
+            const char *dir = (val == 64) ? "--" : (val > 64) ? midiKeyName(mc.key1) : midiKeyName(mc.key2);
+            int barLen = 20;
+            int pos = (val * barLen) / 127;
+            std::string bar(barLen, '-');
+            bar[barLen / 2] = '|';
+            if (pos < barLen) bar[pos] = '#';
+            std::string label = std::string(midiKeyName(mc.key1)) + "/" + midiKeyName(mc.key2);
+            // Pad label to align bars
+            while (label.size() < maxLabelLen) label += ' ';
+            std::ostringstream oss;
+            oss << label << " [" << bar << "] " << std::setw(3) << static_cast<int>(val) << " " << dir;
+            win->text.printText_Blended(font, 10, y, oss.str());
+            y += 22;
+        }
+        // Show last button press (fade after 2 seconds)
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - lastMidiButtonTime).count();
+        if (!lastMidiButton.empty() && elapsed < 2000) {
+            int alpha = (elapsed < 1500) ? 255 : 255 - static_cast<int>((elapsed - 1500) * 255 / 500);
+            win->text.setColor({255, 255, 0, static_cast<unsigned char>(std::max(0, alpha))});
+            win->text.printText_Blended(font, 10, y, "Button: " + lastMidiButton);
+            y += 22;
         }
     }
 #endif
@@ -2984,6 +3095,11 @@ class ACView : public gl::GLObject {
             win->text.setColor({255, 255, 255, 255});
             win->text.printText_Blended(overlayFont, 10, 40, timerStr);
             win->text.printText_Blended(overlayFont, 10, 70, fpsStr.str());
+            win->text.setColor({128, 128, 128, 255});
+            win->text.printText_Blended(overlayFont, 10, 95, "F9: Toggle overlay");
+#ifdef MIDI_ENABLED
+            drawMidiOverlay(win, overlayFont, 120);
+#endif
             glDisable(GL_BLEND);
         }
 
@@ -3262,6 +3378,11 @@ class ACView : public gl::GLObject {
                 break;
             }
 #endif
+            case SDLK_F9:
+                counter_disabled = !counter_disabled;
+                mx::system_out << "acmx2: Overlay " << (counter_disabled ? "hidden" : "shown") << " (F9)\n";
+                fflush(stdout);
+                break;
             }
             break;
         }
