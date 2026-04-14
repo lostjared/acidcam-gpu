@@ -270,6 +270,7 @@ All fragment shaders receive the following uniforms automatically.
 | Up/Down       | Previous/Next shader; when playlist enabled, navigates tree nodes and loads node shaders into multi-pass pipeline |
 | K             | Toggle shader lock (prevent Up/Down from switching shaders) |
 | Left/Right    | Previous/Next GPU filter |
+| Page Up/Down  | Increase / Decrease Time Speed |
 | Space         | Toggle shader processing bypass |
 | P             | Toggle playlist mode / Pause video |
 | L             | Toggle video freeze |
