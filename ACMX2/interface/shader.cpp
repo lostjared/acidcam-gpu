@@ -78,6 +78,7 @@ const char *defaultShFile = R"(#version 330 core
 in vec2 tc;
 out vec4 color;
 uniform float time_f; // accumulated time value, affected by speed and audio when enabled
+uniform float time_speed; // rate of change to time_f
 uniform sampler2D samp; // input video frame texture
 uniform vec2 iResolution; // viewport resolution in pixels (width, height)
 uniform vec4 iMouse; // mouse position: xy = current, zw = click start (drag)

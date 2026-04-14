@@ -627,6 +627,7 @@ class ShaderLibrary {
         GLint restore_black_loc = -1;
         GLint inc_value_loc = -1;
         GLint inc_valuex_loc = -1;
+        GLint time_speed_loc = -1;
     };
     size_t library_index = 0;
     bool use_cache = false;
@@ -802,6 +803,7 @@ class ShaderLibrary {
             names[pos].restore_black_loc = glGetUniformLocation(prog->id(), "restore_black");
             names[pos].inc_value_loc = glGetUniformLocation(prog->id(), "inc_value");
             names[pos].inc_valuex_loc = glGetUniformLocation(prog->id(), "inc_valuex");
+            names[pos].time_speed_loc = glGetUniformLocation(prog->id(), "time_speed");
         }
     }
 
@@ -1672,6 +1674,9 @@ class ShaderLibrary {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
+        if (n.time_speed_loc != -1) {
+            glUniform1f(n.time_speed_loc, time_speed);
+        }
         uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
         if (time_audio) {
@@ -1784,6 +1789,9 @@ class ShaderLibrary {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
         glUniform2f(n.iResolution, static_cast<float>(win->w), static_cast<float>(win->h));
+        if (n.time_speed_loc != -1) {
+            glUniform1f(n.time_speed_loc, time_speed);
+        }
         uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
         if (time_audio) {
@@ -1935,6 +1943,9 @@ class ShaderLibrary {
 
         GLint iResolution = names[index()].iResolution;
         glUniform2f(iResolution, win->w, win->h);
+        if (names[index()].time_speed_loc != -1) {
+            glUniform1f(names[index()].time_speed_loc, time_speed);
+        }
 
         stepAcidCamUniforms();
         uploadAcidCamUniforms(names[index()], index());
