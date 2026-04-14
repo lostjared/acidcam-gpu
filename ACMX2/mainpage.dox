@@ -2,7 +2,7 @@
 @mainpage ACMX2 — Real-Time GPU-Accelerated Video Glitch Engine
 
 @htmlonly
-<img src="https://lostsidedead.biz/acmx2.jpg" alt="Sreenshot1" style="max-width:80%; height:auto;" />
+<img src="https://lostsidedead.biz/acmx2.jpg" alt="Sreenshot1" style="max-width:800px; width:80%; height:auto;" />
 @endhtmlonly
 
 @section intro Introduction
@@ -324,7 +324,7 @@ The system operates as a <b>two-stage GPU pipeline</b>: first, CUDA kernels proc
 This is the current desktop ACMX2/acidcam-gpu interface in action.
 
 @htmlonly
-<img src="https://lostsidedead.biz/screen.png" alt="ACMX2 and acidcam-gpu running on desktop" style="max-width:80%; height:auto;" />
+<img src="https://lostsidedead.biz/screen.png" alt="ACMX2 and acidcam-gpu running on desktop" style="max-width:800px; width:80%; height:auto;" />
 @endhtmlonly
 
 
