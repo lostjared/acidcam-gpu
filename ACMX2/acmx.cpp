@@ -1682,9 +1682,6 @@ class ShaderLibrary {
         if (time_audio) {
             glUniform1f(n.amp, get_amp());
             glUniform1f(n.amp_untouched, get_sense());
-        } else {
-            glUniform1f(n.amp, 1.0f);
-            glUniform1f(n.amp_untouched, 1.0f);
         }
         if (n.iSampleRate != -1) {
             glUniform1f(n.iSampleRate, 44100.0f);
@@ -1800,9 +1797,6 @@ class ShaderLibrary {
         if (time_audio) {
             glUniform1f(n.amp, get_amp());
             glUniform1f(n.amp_untouched, get_sense());
-        } else {
-            glUniform1f(n.amp, 1.0f);
-            glUniform1f(n.amp_untouched, 1.0f);
         }
         if (n.iSampleRate != -1) {
             glUniform1f(n.iSampleRate, 44100.0f);
@@ -1957,23 +1951,18 @@ class ShaderLibrary {
         uploadAcidCamUniforms(names[index()], index());
 
 #ifdef AUDIO_ENABLED
-        if (time_audio) {
-            GLuint amp_i = names[index()].amp;
-            float amplitude = 1.0f;
-            float dt_scale = audio_delta ? static_cast<float>(delta_time) : 1.0f;
-            float new_amp = (get_amp() * get_sense()) * (time_speed * dt_scale);
-            if (std::isnan(new_amp) || std::isinf(new_amp) || new_amp > 1e6f) {
-                amplitude = 1.0f;
-            } else {
-                amplitude = new_amp;
-            }
-            glUniform1f(amp_i, amplitude);
-            GLuint amp_u = names[index()].amp_untouched;
-            glUniform1f(amp_u, get_amp());
+        GLuint amp_i = names[index()].amp;
+        float amplitude = 1.0f;
+        float dt_scale = audio_delta ? static_cast<float>(delta_time) : 1.0f;
+        float new_amp = (get_amp() * get_sense()) * (time_speed * dt_scale);
+        if (std::isnan(new_amp) || std::isinf(new_amp) || new_amp > 1e6f) {
+            amplitude = 1.0f;
         } else {
-            glUniform1f(names[index()].amp, 1.0f);
-            glUniform1f(names[index()].amp_untouched, 1.0f);
+            amplitude = new_amp;
         }
+        glUniform1f(amp_i, amplitude);
+        GLuint amp_u = names[index()].amp_untouched;
+        glUniform1f(amp_u, get_amp());
         GLint iSampleRateLoc = names[index()].iSampleRate;
         if (iSampleRateLoc != -1) {
             glUniform1f(iSampleRateLoc, 44100.0f);
