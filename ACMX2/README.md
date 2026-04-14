@@ -190,6 +190,7 @@ cp -rf ../data/ .
 | `T` | Toggle time on/off (Audio build) |
 | `Q` | Toggle audio-reactive time (Audio build) |
 | `Home` | Toggle audio delta time scaling (Audio build) |
+|  `Page up/page Down` | Increase / Decrease Time speed |
 
 ### Audio Controls (Audio build)
 
