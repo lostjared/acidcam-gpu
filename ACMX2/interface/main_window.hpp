@@ -157,6 +157,7 @@ class MainWindow : public QMainWindow {
     QAction *midiSettingsAction;
     bool playlist_enabled = false;
     QStringList playlist_names;
+    QList<QPair<QString, QStringList>> playlist_tree_data;
     QString playlist_file_path;
     QAction *playlistAction;
     QString stderrBuffer;

@@ -462,6 +462,19 @@ QStringList PlaylistDialog::getSelectedShaderNames() const {
     return names;
 }
 
+QList<QPair<QString, QStringList>> PlaylistDialog::getPlaylistTree() const {
+    QList<QPair<QString, QStringList>> tree;
+    for (int i = 0; i < playlistTree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem *node = playlistTree->topLevelItem(i);
+        QStringList shaders;
+        for (int j = 0; j < node->childCount(); ++j) {
+            shaders.append(node->child(j)->text(0));
+        }
+        tree.append({node->text(0), shaders});
+    }
+    return tree;
+}
+
 QString PlaylistDialog::getPlaylistFile() const {
     return playlistFilePath;
 }
@@ -485,6 +498,23 @@ void PlaylistDialog::setSelectedShaderNames(const QStringList &names) {
             auto *item = new QTreeWidgetItem(node);
             item->setText(0, name);
             item->setData(0, Qt::UserRole, shaderNameToIndex[name]);
+        }
+    }
+}
+
+void PlaylistDialog::setPlaylistTree(const QList<QPair<QString, QStringList>> &tree) {
+    playlistTree->clear();
+    for (const auto &[nodeName, shaders] : tree) {
+        auto *node = new QTreeWidgetItem(playlistTree);
+        node->setText(0, nodeName);
+        node->setFlags(node->flags() | Qt::ItemIsEditable);
+        node->setExpanded(true);
+        for (const QString &name : shaders) {
+            if (shaderNameToIndex.contains(name)) {
+                auto *item = new QTreeWidgetItem(node);
+                item->setText(0, name);
+                item->setData(0, Qt::UserRole, shaderNameToIndex[name]);
+            }
         }
     }
 }

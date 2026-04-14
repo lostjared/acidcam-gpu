@@ -120,6 +120,13 @@ cmake .. && make -j$(nproc)
 cp -rf ../data/ .
 @endcode
 
+@subsection build_midimap MIDI Map Tool
+@code{.sh}
+cd ACMX2/interface/midi-map
+mkdir build && cd build
+cmake .. && make -j$(nproc)
+@endcode
+
 @section usage Usage Examples
 
 <b>Camera with a shader library:</b>

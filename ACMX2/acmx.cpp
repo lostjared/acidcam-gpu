@@ -2804,10 +2804,17 @@ class ACView : public gl::GLObject {
     bool shader_pass_enabled = false;
     std::string cached_shader_name;
 
+    struct PlaylistNode {
+        std::string name;
+        std::vector<int> shader_indices;
+    };
+    std::vector<PlaylistNode> playlist_tree;
     std::vector<int> playlist_indices;
     int playlist_index = 0;
     bool playlist_enabled = false;
     std::string playlist_file;
+    std::vector<int> saved_pass_list;
+    bool saved_pass_enabled = false;
     double duration_limit = 0.0;
 
     /**
@@ -3193,17 +3200,33 @@ class ACView : public gl::GLObject {
                 mx::system_err << "acmx2: Error could not open playlist: " << playlist_file << "\n";
             } else {
                 std::string line;
+                PlaylistNode *currentNode = nullptr;
                 while (std::getline(pfile, line)) {
                     if (line.empty()) continue;
+                    if (line.front() == '[' && line.back() == ']') {
+                        playlist_tree.push_back({line.substr(1, line.size() - 2), {}});
+                        currentNode = &playlist_tree.back();
+                        continue;
+                    }
                     std::string name = std::filesystem::path(line).stem().string();
                     int idx = library.findShaderByName(name);
                     if (idx >= 0) {
                         playlist_indices.push_back(idx);
+                        if (currentNode) {
+                            currentNode->shader_indices.push_back(idx);
+                        }
                     } else {
                         mx::system_err << "acmx2: Playlist shader not found: " << line << "\n";
                     }
                 }
-                mx::system_out << "acmx2: Playlist loaded [" << playlist_indices.size() << "] shaders from: " << playlist_file << "\n";
+                if (playlist_tree.empty() && !playlist_indices.empty()) {
+                    playlist_tree.push_back({"Default", playlist_indices});
+                }
+                mx::system_out << "acmx2: Playlist loaded [" << playlist_indices.size() << "] shaders in ["
+                               << playlist_tree.size() << "] nodes from: " << playlist_file << "\n";
+                for (const auto &node : playlist_tree) {
+                    mx::system_out << "  Node: " << node.name << " [" << node.shader_indices.size() << " shaders]\n";
+                }
                 fflush(stdout);
             }
         }
@@ -4182,7 +4205,18 @@ class ACView : public gl::GLObject {
             switch (e.key.keysym.sym) {
             case SDLK_UP:
                 if (shaderLocked) break;
-                if (playlist_enabled && !playlist_indices.empty()) {
+                if (playlist_enabled && !playlist_tree.empty()) {
+                    if (playlist_index > 0) {
+                        --playlist_index;
+                        const auto &node = playlist_tree[playlist_index];
+                        shader_pass_list = node.shader_indices;
+                        shader_pass_enabled = !shader_pass_list.empty();
+                        mx::system_out << "acmx2: Playlist Node: " << node.name
+                                       << " [" << node.shader_indices.size() << " shaders] ("
+                                       << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
+                        fflush(stdout);
+                    }
+                } else if (playlist_enabled && !playlist_indices.empty()) {
                     if (playlist_index > 0)
                         --playlist_index;
                     library.setIndex(playlist_indices[playlist_index]);
@@ -4198,7 +4232,18 @@ class ACView : public gl::GLObject {
                 break;
             case SDLK_DOWN:
                 if (shaderLocked) break;
-                if (playlist_enabled && !playlist_indices.empty()) {
+                if (playlist_enabled && !playlist_tree.empty()) {
+                    if (playlist_index + 1 < static_cast<int>(playlist_tree.size())) {
+                        ++playlist_index;
+                        const auto &node = playlist_tree[playlist_index];
+                        shader_pass_list = node.shader_indices;
+                        shader_pass_enabled = !shader_pass_list.empty();
+                        mx::system_out << "acmx2: Playlist Node: " << node.name
+                                       << " [" << node.shader_indices.size() << " shaders] ("
+                                       << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
+                        fflush(stdout);
+                    }
+                } else if (playlist_enabled && !playlist_indices.empty()) {
                     if (playlist_index + 1 < static_cast<int>(playlist_indices.size()))
                         ++playlist_index;
                     library.setIndex(playlist_indices[playlist_index]);
@@ -4241,7 +4286,35 @@ class ACView : public gl::GLObject {
                 updateShaderNameCache();
                 break;
             case SDLK_p:
-                if (!playlist_indices.empty()) {
+                if (!playlist_tree.empty()) {
+                    playlist_enabled = !playlist_enabled;
+                    if (playlist_enabled) {
+                        saved_pass_list = shader_pass_list;
+                        saved_pass_enabled = shader_pass_enabled;
+                        if (playlist_index < 0 || playlist_index >= static_cast<int>(playlist_tree.size()))
+                            playlist_index = 0;
+                        const auto &node = playlist_tree[playlist_index];
+                        shader_pass_list = node.shader_indices;
+                        shader_pass_enabled = !shader_pass_list.empty();
+                        if (is3d_enabled)
+                            cube.setShaderProgram(library.shader());
+                        sprite.setShader(library.shader());
+                        updateShaderNameCache();
+                        mx::system_out << "acmx2: Playlist mode enabled - Node: " << node.name
+                                       << " [" << node.shader_indices.size() << " shaders] ("
+                                       << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
+                    } else {
+                        shader_pass_list = saved_pass_list;
+                        shader_pass_enabled = saved_pass_enabled;
+                        if (is3d_enabled)
+                            cube.setShaderProgram(library.shader());
+                        sprite.setShader(library.shader());
+                        updateShaderNameCache();
+                        mx::system_out << "acmx2: Playlist mode disabled - restored original"
+                                       << (shader_pass_enabled ? " multi-pass" : " single shader") << "\n";
+                    }
+                    fflush(stdout);
+                } else if (!playlist_indices.empty()) {
                     playlist_enabled = !playlist_enabled;
                     if (playlist_enabled) {
                         if (playlist_index >= 0 && playlist_index < static_cast<int>(playlist_indices.size())) {

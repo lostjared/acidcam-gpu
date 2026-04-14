@@ -482,6 +482,7 @@ The project requires a very specific dependency stack  not all of it is availabl
 2. Build and install `acidcam-gpu/MXWrite`: `cmake .. && make -j$(nproc) && sudo make install`
 3. Build and install the `acidcam-gpu` library and CLI: `cmake .. && make -j$(nproc) && sudo make install`. This installs the shared library, headers, and CMake package config so downstream projects can use `find_package(acidcam-gpu)`.
 4. Optionally build and install the Qt ACMX2 interface.
+5. Optionally build the MIDI Map tool: `cd ACMX2/interface/midi-map && mkdir build && cd build && cmake .. && make -j$(nproc)`. This standalone Qt6 application creates MIDI controller mapping files (`.midi_cfg`) for use with ACMX2's `--midi-map` option.
 
 ### Container Distribution (Podman)
 
@@ -515,6 +516,7 @@ The project is developed on **Bazzite Linux** using **Arch Linux containers via 
 ### ACMX2 Interface + Tools
 
 - `ACMX2/interface/*`  Qt launcher/editor/dialog workflow
+- `ACMX2/interface/midi-map/*`  standalone MIDI controller mapping tool
 - `ACMX2/shader_generator/*`  AI-assisted shader generation utility
 - `ACMX2/shader.packs/`  shader pack metadata
 - `ACMX2/macos/`  platform-specific notes

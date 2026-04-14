@@ -447,7 +447,10 @@ mkdir build && cd build
 cmake ..
 make -j $(nproc)
 cp -rf ../data/ .
-cd ../../
+cd ../midi-map
+mkdir build && cd build
+cmake .. && make -j$(nproc)
+cd ../../../
 echo "completed..."
 ```
 

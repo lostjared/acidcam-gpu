@@ -22,10 +22,12 @@ class PlaylistDialog : public QDialog {
 
     bool isPlaylistEnabled() const;
     QStringList getSelectedShaderNames() const;
+    QList<QPair<QString, QStringList>> getPlaylistTree() const;
     QString getPlaylistFile() const;
 
     void setEnabled(bool enabled);
     void setSelectedShaderNames(const QStringList &names);
+    void setPlaylistTree(const QList<QPair<QString, QStringList>> &tree);
     void setPlaylistFile(const QString &path);
     void updateShaderList(const QStringList &shaderNames);
 

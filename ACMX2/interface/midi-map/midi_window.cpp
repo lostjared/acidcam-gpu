@@ -141,42 +141,44 @@ void MidiMapWindow::applyStyleSheet() {
 
 void MidiMapWindow::populateActions() {
     // Knob mappings (paired key codes)
-    mappings.push_back({"Left/Right Knob", "Filter index left/right", 262, 263, false, 0, 0, 0});
-    mappings.push_back({"Up/Down Knob", "Shader index down/up", 264, 265, false, 0, 0, 0});
-    mappings.push_back({"Time Fwd/Back Knob", "Time forward/backward", 500, 501, false, 0, 0, 0});
+    mappings.push_back({"Left/Right Knob", "GPU filter index left/right", 262, 263, false, 0, 0, 0});
+    mappings.push_back({"Up/Down Knob", "Shader index prev/next (or playlist node)", 264, 265, false, 0, 0, 0});
+    mappings.push_back({"Time Fwd/Back Knob", "Time step forward/backward", 500, 501, false, 0, 0, 0});
     mappings.push_back({"TimeSpeed Knob", "Time speed increase/decrease", 504, 505, false, 0, 0, 0});
-    mappings.push_back({"Rotate X Axis W/S Knob", "Model rotate up/down", 506, 507, false, 0, 0, 0});
-    mappings.push_back({"Rotate Y Axis A/D Knob", "Model rotate right/left", 508, 509, false, 0, 0, 0});
-    mappings.push_back({"Rotata Z Axis", "Model roll right/left (Z axis)", 512, 513, false, 0, 0, 0});
+    mappings.push_back({"Rotate X Axis W/S Knob", "Camera pitch up/down (3D)", 506, 507, false, 0, 0, 0});
+    mappings.push_back({"Rotate Y Axis A/D Knob", "Camera yaw right/left (3D)", 508, 509, false, 0, 0, 0});
+    mappings.push_back({"Rotate Z Axis Knob", "Camera roll right/left (3D)", 512, 513, false, 0, 0, 0});
     mappings.push_back({"RotSpeed Up", "Camera rotation speed increase", 510, 0, false, 0, 0, 0});
     mappings.push_back({"RotSpeed Down", "Camera rotation speed decrease", 511, 0, false, 0, 0, 0});
 
     // Key mappings (single key, key2 = 0)
-    mappings.push_back({"Left", "Filter index left", 263, 0, false, 0, 0, 0});
-    mappings.push_back({"Right", "Filter index right", 262, 0, false, 0, 0, 0});
-    mappings.push_back({"Up", "Shader index up", 265, 0, false, 0, 0, 0});
-    mappings.push_back({"Down", "Shader index down", 264, 0, false, 0, 0, 0});
-    mappings.push_back({"Space", "Toggle acid cam filters", 32, 0, false, 0, 0, 0});
-    mappings.push_back({"Time Forward", "Move time forward", 500, 0, false, 0, 0, 0});
-    mappings.push_back({"Time Backward", "Move time backward", 501, 0, false, 0, 0, 0});
-    mappings.push_back({"Time Pause", "Pause time", 502, 0, false, 0, 0, 0});
-    mappings.push_back({"Time On/Off", "Toggle time on/off", 503, 0, false, 0, 0, 0});
-    mappings.push_back({"Plus/Equal", "Increase blend %", 61, 0, false, 0, 0, 0});
-    mappings.push_back({"Minus", "Decrease blend %", 45, 0, false, 0, 0, 0});
-    mappings.push_back({"H", "Shuffle playlist", 72, 0, false, 0, 0, 0});
-    mappings.push_back({"L", "Enable/disable playlist", 76, 0, false, 0, 0, 0});
-    mappings.push_back({"N", "Set index to end", 78, 0, false, 0, 0, 0});
-    mappings.push_back({"P", "Reset index to zero", 80, 0, false, 0, 0, 0});
-    mappings.push_back({"Page Down", "Restore position index", 267, 0, false, 0, 0, 0});
-    mappings.push_back({"Page Up", "Store index position", 266, 0, false, 0, 0, 0});
-    mappings.push_back({"Comma", "Color map decrease", 44, 0, false, 0, 0, 0});
-    mappings.push_back({"Period", "Color map increase", 46, 0, false, 0, 0, 0});
-    mappings.push_back({"Slash", "Random shader toggle", 47, 0, false, 0, 0, 0});
-    mappings.push_back({"W", "Camera pitch up", 87, 0, false, 0, 0, 0});
-    mappings.push_back({"S", "Camera pitch down", 83, 0, false, 0, 0, 0});
-    mappings.push_back({"A", "Camera yaw left", 65, 0, false, 0, 0, 0});
-    mappings.push_back({"D", "Camera yaw right", 68, 0, false, 0, 0, 0});
-    mappings.push_back({"B", "Increase movement speed", 66, 0, false, 0, 0, 0});
+    mappings.push_back({"Left", "GPU filter index left", 263, 0, false, 0, 0, 0});
+    mappings.push_back({"Right", "GPU filter index right", 262, 0, false, 0, 0, 0});
+    mappings.push_back({"Up", "Previous shader (or playlist node)", 265, 0, false, 0, 0, 0});
+    mappings.push_back({"Down", "Next shader (or playlist node)", 264, 0, false, 0, 0, 0});
+    mappings.push_back({"Space", "Toggle shader bypass", 32, 0, false, 0, 0, 0});
+    mappings.push_back({"Time Forward", "Time step forward (U)", 500, 0, false, 0, 0, 0});
+    mappings.push_back({"Time Backward", "Time step backward (I)", 501, 0, false, 0, 0, 0});
+    mappings.push_back({"P", "Toggle playlist enable/disable", 80, 0, false, 0, 0, 0});
+    mappings.push_back({"L", "Freeze frame (video/graphic mode)", 76, 0, false, 0, 0, 0});
+    mappings.push_back({"M", "Toggle multi-pass shader", 77, 0, false, 0, 0, 0});
+    mappings.push_back({"Z", "Take PNG snapshot", 90, 0, false, 0, 0, 0});
+    mappings.push_back({"E", "Toggle watermark", 69, 0, false, 0, 0, 0});
+    mappings.push_back({"V", "Toggle view rotation (3D)", 86, 0, false, 0, 0, 0});
+    mappings.push_back({"O", "Toggle scale oscillation (3D)", 79, 0, false, 0, 0, 0});
+    mappings.push_back({"C", "Toggle wave effect (3D)", 67, 0, false, 0, 0, 0});
+    mappings.push_back({"X", "Reset camera distance (3D)", 88, 0, false, 0, 0, 0});
+    mappings.push_back({"3", "Toggle 2D/3D mode", 51, 0, false, 0, 0, 0});
+    mappings.push_back({"Plus/Equal", "Camera distance increase (3D)", 61, 0, false, 0, 0, 0});
+    mappings.push_back({"Minus", "Camera distance decrease (3D)", 45, 0, false, 0, 0, 0});
+    mappings.push_back({"N", "Decrease movement speed (3D)", 78, 0, false, 0, 0, 0});
+    mappings.push_back({"Page Up", "Time speed increase", 266, 0, false, 0, 0, 0});
+    mappings.push_back({"Page Down", "Time speed decrease", 267, 0, false, 0, 0, 0});
+    mappings.push_back({"W", "Camera pitch up (3D)", 87, 0, false, 0, 0, 0});
+    mappings.push_back({"S", "Camera pitch down (3D)", 83, 0, false, 0, 0, 0});
+    mappings.push_back({"A", "Camera yaw left (3D)", 65, 0, false, 0, 0, 0});
+    mappings.push_back({"D", "Camera yaw right (3D)", 68, 0, false, 0, 0, 0});
+    mappings.push_back({"B", "Increase movement speed (3D)", 66, 0, false, 0, 0, 0});
     mappings.push_back({"K", "Toggle shader lock", 75, 0, false, 0, 0, 0});
 }
 

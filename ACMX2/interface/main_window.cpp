@@ -804,7 +804,9 @@ void MainWindow::menuPlaylistSettings() {
 
     PlaylistDialog playlistDialog(items, this);
     playlistDialog.setEnabled(playlist_enabled);
-    if (!playlist_names.isEmpty()) {
+    if (!playlist_tree_data.isEmpty()) {
+        playlistDialog.setPlaylistTree(playlist_tree_data);
+    } else if (!playlist_names.isEmpty()) {
         playlistDialog.setSelectedShaderNames(playlist_names);
     }
     if (!playlist_file_path.isEmpty()) {
@@ -814,6 +816,7 @@ void MainWindow::menuPlaylistSettings() {
     if (playlistDialog.exec() == QDialog::Accepted) {
         playlist_enabled = playlistDialog.isPlaylistEnabled();
         playlist_names = playlistDialog.getSelectedShaderNames();
+        playlist_tree_data = playlistDialog.getPlaylistTree();
         playlist_file_path = playlistDialog.getPlaylistFile();
         if (playlist_enabled) {
             Log("Playlist Settings Saved: " + QString::number(playlist_names.size()) + " shaders");
@@ -1181,8 +1184,16 @@ void MainWindow::runAll() {
         QFile f(plFile);
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
             QTextStream out(&f);
-            for (const QString &name : playlist_names)
-                out << name << "\n";
+            if (!playlist_tree_data.isEmpty()) {
+                for (const auto &[nodeName, shaders] : playlist_tree_data) {
+                    out << "[" << nodeName << "]\n";
+                    for (const QString &name : shaders)
+                        out << name << "\n";
+                }
+            } else {
+                for (const QString &name : playlist_names)
+                    out << name << "\n";
+            }
             f.close();
             playlist_file_path = plFile;
         }
