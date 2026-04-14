@@ -33,7 +33,7 @@ ACMX2 is part of the acidcam-gpu project. See the [main README](../README.md) fo
 ```bash
 cd ACMX2
 mkdir build && cd build
-cmake .. -DAUDIO=ON
+cmake .. -DAUDIO=ON -DMIDI=ON
 make -j$(nproc) && sudo make install
 ```
 

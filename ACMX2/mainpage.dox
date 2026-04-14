@@ -81,7 +81,7 @@ sudo pacman -S --needed opencv-cuda hdf5 vtk fmt glew
 sudo pacman -S --needed sdl2 sdl2_ttf sdl2_mixer sdl2_image qt6-base qt6-tools qt6-multimedia
 
 # Graphics, Audio & Media Libraries
-sudo pacman -S --needed glm mesa libglvnd ffmpeg rtaudio pulseaudio libpulse libjpeg-turbo libpng
+sudo pacman -S --needed glm mesa libglvnd ffmpeg rtaudio rtmidi pulseaudio libpulse libjpeg-turbo libpng
 
 # Fonts
 sudo pacman -S --needed ttf-dejavu ttf-liberation noto-fonts
@@ -108,7 +108,7 @@ sudo make install
 @code{.sh}
 cd ACMX2
 mkdir build && cd build
-cmake .. -DAUDIO=ON
+cmake .. -DAUDIO=ON -DMIDI=ON
 make -j$(nproc) && sudo make install
 @endcode
 
