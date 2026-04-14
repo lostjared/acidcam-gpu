@@ -2477,6 +2477,7 @@ class ACView : public gl::GLObject {
         case 78:  return SDLK_n;
         case 80:  return SDLK_p;
         case 83:  return SDLK_s;
+        case 75:  return SDLK_k;
         case 87:  return SDLK_w;
         // Virtual codes 504-513 handled directly in pollMidi
         case 504: case 505: case 506: case 507: case 508: case 509:
@@ -2692,6 +2693,7 @@ class ACView : public gl::GLObject {
 #endif
     bool isPaused = false;
     bool isFrozen = false;
+    bool shaderLocked = false;
     GLuint pboIds[2] = {0, 0};
     int pboIndex = 0;
     int pboNextIndex = 1;
@@ -4179,6 +4181,7 @@ class ACView : public gl::GLObject {
         case SDL_KEYUP:
             switch (e.key.keysym.sym) {
             case SDLK_UP:
+                if (shaderLocked) break;
                 if (playlist_enabled && !playlist_indices.empty()) {
                     if (playlist_index > 0)
                         --playlist_index;
@@ -4194,6 +4197,7 @@ class ACView : public gl::GLObject {
                 updateShaderNameCache();
                 break;
             case SDLK_DOWN:
+                if (shaderLocked) break;
                 if (playlist_enabled && !playlist_indices.empty()) {
                     if (playlist_index + 1 < static_cast<int>(playlist_indices.size()))
                         ++playlist_index;
@@ -4266,6 +4270,11 @@ class ACView : public gl::GLObject {
                     fflush(stdout);
                     fflush(stderr);
                 }
+                break;
+            case SDLK_k:
+                shaderLocked = !shaderLocked;
+                mx::system_out << "acmx2: Shader lock: " << (shaderLocked ? "enabled" : "disabled") << "\n";
+                fflush(stdout);
                 break;
             case SDLK_z:
                 if (snapshot_state == 0) {

@@ -177,6 +177,7 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"A", "Camera yaw left", 65, 0, false, 0, 0, 0});
     mappings.push_back({"D", "Camera yaw right", 68, 0, false, 0, 0, 0});
     mappings.push_back({"B", "Increase movement speed", 66, 0, false, 0, 0, 0});
+    mappings.push_back({"K", "Toggle shader lock", 75, 0, false, 0, 0, 0});
 }
 
 void MidiMapWindow::updateTable() {
