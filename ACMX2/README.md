@@ -56,22 +56,22 @@ cp -rf ../data/ .
 
 **Process a video file with GPU filters and record output:**
 ```bash
-./acmx2 -i input.mp4 -s ./shaders --gpu-filter 0,5,12 -o output.mp4 --copy-audio
+./acmx2 -p ./data -i input.mp4 -s ./shaders --gpu-filter 0,5,12 -o output.mp4 --copy-audio
 ```
 
 **Single shader, fullscreen, with audio reactivity:**
 ```bash
-./acmx2 -f effect.glsl -d 0 -n -w --audio-input 3
+./acmx2 -p ./data -f effect.glsl -d 0 -n -w --audio-input 3
 ```
 
 **3D mode with a model:**
 ```bash
-./acmx2 -s ./shaders --enable-3d --model cube.mxmod -d 0
+./acmx2 -p ./data -s ./shaders --enable-3d --model cube.mxmod -d 0
 ```
 
 **Silent (headless) batch processing:**
 ```bash
-./acmx2 -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
+./acmx2 -p ./data -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
 ```
 
 **Build shader cache:**
@@ -169,6 +169,7 @@ cp -rf ../data/ .
 |-----|--------|
 | `Up` | Previous shader (or previous playlist shader if playlist enabled) |
 | `Down` | Next shader (or next playlist shader if playlist enabled) |
+| `K` | Toggle shader lock (prevent Up/Down from switching shaders) |
 | `Left` | Previous GPU filter (if GPU filters enabled) |
 | `Right` | Next GPU filter (if GPU filters enabled) |
 | `Space` | Toggle shader processing bypass |

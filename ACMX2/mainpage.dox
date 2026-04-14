@@ -129,22 +129,22 @@ cp -rf ../data/ .
 
 <b>Process a video file with GPU filters and record output:</b>
 @code{.sh}
-./acmx2 -i input.mp4 -s ./shaders --gpu-filter 0,5,12 -o output.mp4 --copy-audio
+./acmx2 -p ./data -i input.mp4 -s ./shaders --gpu-filter 0,5,12 -o output.mp4 --copy-audio
 @endcode
 
 <b>Single shader, fullscreen, with audio reactivity:</b>
 @code{.sh}
-./acmx2 -f effect.glsl -d 0 -n -w --audio-input 3
+./acmx2 -p ./data -f effect.glsl -d 0 -n -w --audio-input 3
 @endcode
 
 <b>3D mode with a model:</b>
 @code{.sh}
-./acmx2 -s ./shaders --enable-3d --model cube.mxmod -d 0
+./acmx2 -p ./data -s ./shaders --enable-3d --model cube.mxmod -d 0
 @endcode
 
 <b>Silent (headless) batch processing:</b>
 @code{.sh}
-./acmx2 -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
+./acmx2 -p ./data -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
 @endcode
 
 <b>Build shader cache:</b>
@@ -259,6 +259,7 @@ All fragment shaders receive the following uniforms automatically.
 | Key           | Action |
 |---------------|--------|
 | Up/Down       | Previous/Next shader (or playlist shader) |
+| K             | Toggle shader lock (prevent Up/Down from switching shaders) |
 | Left/Right    | Previous/Next GPU filter |
 | Space         | Toggle shader processing bypass |
 | P             | Toggle playlist mode / Pause video |
