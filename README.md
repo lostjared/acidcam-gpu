@@ -212,6 +212,8 @@ sudo bash build-script/install-deps-arch.sh
 | `T` | Toggle time on/off (Audio build) |
 | `Q` | Toggle audio-reactive time (Audio build) |
 | `Home` | Toggle audio delta time scaling (Audio build) |
+| `Page Up/Down` | Increase/Decrease Time Speed |
+
 
 ### Audio Controls (Audio build)
 
