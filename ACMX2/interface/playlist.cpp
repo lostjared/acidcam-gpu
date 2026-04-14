@@ -1,6 +1,7 @@
 #include "playlist.hpp"
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QSettings>
 #include <QTextStream>
@@ -9,7 +10,7 @@
 PlaylistDialog::PlaylistDialog(const QStringList &shaderNames, QWidget *parent)
     : QDialog(parent) {
     setWindowTitle("Shader Playlist Settings");
-    setMinimumSize(500, 550);
+    setMinimumSize(600, 600);
     setupUI();
     loadShaders(shaderNames);
 }
@@ -21,8 +22,8 @@ void PlaylistDialog::setupUI() {
     mainLayout->addWidget(enableCheckBox);
 
     QLabel *infoLabel = new QLabel(
-        "Build a playlist of shaders. When enabled, the playlist file is passed\n"
-        "to acmx2. Press P to toggle playlist mode; Up/Down to navigate the list.",
+        "Build a playlist tree of shaders. Create named nodes, then add shaders to each node.\n"
+        "When enabled, the playlist file is passed to acmx2. Press P to toggle; Up/Down to navigate.",
         this);
     infoLabel->setWordWrap(true);
     mainLayout->addWidget(infoLabel);
@@ -56,9 +57,19 @@ void PlaylistDialog::setupUI() {
     comboLayout->addWidget(shaderComboBox, 1);
     shaderMainLayout->addLayout(comboLayout);
 
+    QHBoxLayout *nodeButtonLayout = new QHBoxLayout();
+    addNodeButton = new QPushButton("+ Node", this);
+    renameNodeButton = new QPushButton("Rename Node", this);
+    removeNodeButton = new QPushButton("- Node", this);
+    nodeButtonLayout->addWidget(addNodeButton);
+    nodeButtonLayout->addWidget(renameNodeButton);
+    nodeButtonLayout->addWidget(removeNodeButton);
+    nodeButtonLayout->addStretch();
+    shaderMainLayout->addLayout(nodeButtonLayout);
+
     QHBoxLayout *buttonLayout = new QHBoxLayout();
-    addButton = new QPushButton("Add →", this);
-    removeButton = new QPushButton("← Remove", this);
+    addButton = new QPushButton("Add Shader", this);
+    removeButton = new QPushButton("Remove", this);
     upButton = new QPushButton("↑ Up", this);
     downButton = new QPushButton("↓ Down", this);
     clearButton = new QPushButton("Clear All", this);
@@ -69,11 +80,14 @@ void PlaylistDialog::setupUI() {
     buttonLayout->addWidget(clearButton);
     shaderMainLayout->addLayout(buttonLayout);
 
-    QLabel *selectedLabel = new QLabel("Playlist Order (press P in acmx2 to toggle, Up/Down to navigate):", this);
+    QLabel *selectedLabel = new QLabel("Playlist Tree (press P in acmx2 to toggle, Up/Down to navigate):", this);
     shaderMainLayout->addWidget(selectedLabel);
-    selectedShadersList = new QListWidget(this);
-    selectedShadersList->setMinimumHeight(200);
-    shaderMainLayout->addWidget(selectedShadersList);
+    playlistTree = new QTreeWidget(this);
+    playlistTree->setHeaderLabels({"Shader / Node"});
+    playlistTree->setMinimumHeight(250);
+    playlistTree->setDragDropMode(QAbstractItemView::InternalMove);
+    playlistTree->setSelectionMode(QAbstractItemView::SingleSelection);
+    shaderMainLayout->addWidget(playlistTree);
 
     QHBoxLayout *fileButtonLayout = new QHBoxLayout();
     saveButton = new QPushButton("Save Playlist...", this);
@@ -93,6 +107,9 @@ void PlaylistDialog::setupUI() {
     dialogButtonLayout->addWidget(cancelButton);
     mainLayout->addLayout(dialogButtonLayout);
 
+    connect(addNodeButton, &QPushButton::clicked, this, &PlaylistDialog::addNode);
+    connect(renameNodeButton, &QPushButton::clicked, this, &PlaylistDialog::renameNode);
+    connect(removeNodeButton, &QPushButton::clicked, this, &PlaylistDialog::removeNode);
     connect(addButton, &QPushButton::clicked, this, &PlaylistDialog::addShader);
     connect(removeButton, &QPushButton::clicked, this, &PlaylistDialog::removeShader);
     connect(upButton, &QPushButton::clicked, this, &PlaylistDialog::moveUp);
@@ -106,8 +123,11 @@ void PlaylistDialog::setupUI() {
 
     connect(enableCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         shaderComboBox->setEnabled(checked);
-        selectedShadersList->setEnabled(checked);
+        playlistTree->setEnabled(checked);
         searchLineEdit->setEnabled(checked);
+        addNodeButton->setEnabled(checked);
+        renameNodeButton->setEnabled(checked);
+        removeNodeButton->setEnabled(checked);
         addButton->setEnabled(checked);
         removeButton->setEnabled(checked);
         upButton->setEnabled(checked);
@@ -119,8 +139,11 @@ void PlaylistDialog::setupUI() {
 
     enableCheckBox->setChecked(false);
     shaderComboBox->setEnabled(false);
-    selectedShadersList->setEnabled(false);
+    playlistTree->setEnabled(false);
     searchLineEdit->setEnabled(false);
+    addNodeButton->setEnabled(false);
+    renameNodeButton->setEnabled(false);
+    removeNodeButton->setEnabled(false);
     addButton->setEnabled(false);
     removeButton->setEnabled(false);
     upButton->setEnabled(false);
@@ -136,7 +159,14 @@ void PlaylistDialog::setupUI() {
                     "QCheckBox { color: cyan; }"
                     "QLineEdit { background-color: #001111; color: cyan; border: 1px solid cyan; padding: 3px; }"
                     "QComboBox { background-color: #001111; color: cyan; border: 1px solid cyan; }"
-                    "QListWidget { background-color: #001111; color: lime; border: 1px solid cyan; }"
+                    "QTreeWidget { background-color: #001111; color: lime; border: 1px solid cyan; }"
+                    "QTreeWidget::item { padding: 4px; }"
+                    "QTreeWidget::item:hover { background-color: #002222; }"
+                    "QTreeWidget::item:selected { background-color: #003333; color: lime; }"
+                    "QTreeWidget::branch { background-color: #001111; }"
+                    "QTreeWidget::branch:has-children:closed { image: none; }"
+                    "QTreeWidget::branch:has-children:open { image: none; }"
+                    "QHeaderView::section { background-color: #001111; color: cyan; border: 1px solid cyan; padding: 4px; }"
                     "QPushButton { border: 1px solid cyan; background-color: #001111; color: cyan; padding: 5px; }"
                     "QPushButton:hover { background-color: cyan; color: black; }";
     QSettings appSettings("LostSideDead");
@@ -173,56 +203,166 @@ void PlaylistDialog::filterSearchChanged(const QString &text) {
     }
 }
 
+QTreeWidgetItem *PlaylistDialog::currentNodeItem() const {
+    QTreeWidgetItem *current = playlistTree->currentItem();
+    if (!current)
+        return nullptr;
+    if (!current->parent())
+        return current;
+    return current->parent();
+}
+
+void PlaylistDialog::addNode() {
+    bool ok = false;
+    QString name = QInputDialog::getText(this, "New Playlist Node", "Node name:", QLineEdit::Normal, QString(), &ok);
+    if (!ok || name.trimmed().isEmpty())
+        return;
+
+    auto *nodeItem = new QTreeWidgetItem(playlistTree);
+    nodeItem->setText(0, name.trimmed());
+    nodeItem->setFlags(nodeItem->flags() | Qt::ItemIsEditable);
+    nodeItem->setExpanded(true);
+    playlistTree->setCurrentItem(nodeItem);
+}
+
+void PlaylistDialog::renameNode() {
+    QTreeWidgetItem *node = currentNodeItem();
+    if (!node) {
+        QMessageBox::information(this, "No Node Selected", "Select a playlist node to rename.");
+        return;
+    }
+
+    bool ok = false;
+    QString name = QInputDialog::getText(this, "Rename Node", "New name:", QLineEdit::Normal, node->text(0), &ok);
+    if (ok && !name.trimmed().isEmpty()) {
+        node->setText(0, name.trimmed());
+    }
+}
+
+void PlaylistDialog::removeNode() {
+    QTreeWidgetItem *node = currentNodeItem();
+    if (!node) {
+        QMessageBox::information(this, "No Node Selected", "Select a playlist node to remove.");
+        return;
+    }
+
+    if (node->childCount() > 0) {
+        auto reply = QMessageBox::question(this, "Remove Node",
+            "Node \"" + node->text(0) + "\" has " + QString::number(node->childCount()) +
+            " shader(s). Remove it and all its shaders?",
+            QMessageBox::Yes | QMessageBox::No);
+        if (reply != QMessageBox::Yes)
+            return;
+    }
+
+    delete node;
+}
+
 void PlaylistDialog::addShader() {
     if (shaderComboBox->currentIndex() < 0)
         return;
 
-    QString shaderName = shaderComboBox->currentText();
-    QListWidgetItem *item = new QListWidgetItem(shaderName);
-    if (shaderNameToIndex.contains(shaderName)) {
-        item->setData(Qt::UserRole, shaderNameToIndex[shaderName]);
+    QTreeWidgetItem *node = currentNodeItem();
+    if (!node) {
+        if (playlistTree->topLevelItemCount() == 0) {
+            auto *nodeItem = new QTreeWidgetItem(playlistTree);
+            nodeItem->setText(0, "Default");
+            nodeItem->setFlags(nodeItem->flags() | Qt::ItemIsEditable);
+            nodeItem->setExpanded(true);
+            node = nodeItem;
+        } else {
+            QMessageBox::information(this, "No Node Selected", "Select a playlist node to add the shader to.");
+            return;
+        }
     }
-    selectedShadersList->addItem(item);
+
+    QString shaderName = shaderComboBox->currentText();
+    auto *item = new QTreeWidgetItem(node);
+    item->setText(0, shaderName);
+    if (shaderNameToIndex.contains(shaderName)) {
+        item->setData(0, Qt::UserRole, shaderNameToIndex[shaderName]);
+    }
+    node->setExpanded(true);
 }
 
 void PlaylistDialog::removeShader() {
-    QListWidgetItem *item = selectedShadersList->currentItem();
-    if (item) {
-        delete selectedShadersList->takeItem(selectedShadersList->row(item));
+    QTreeWidgetItem *current = playlistTree->currentItem();
+    if (!current)
+        return;
+    if (!current->parent()) {
+        removeNode();
+        return;
     }
+    delete current;
 }
 
 void PlaylistDialog::moveUp() {
-    int currentRow = selectedShadersList->currentRow();
-    if (currentRow > 0) {
-        QListWidgetItem *item = selectedShadersList->takeItem(currentRow);
-        selectedShadersList->insertItem(currentRow - 1, item);
-        selectedShadersList->setCurrentRow(currentRow - 1);
+    QTreeWidgetItem *current = playlistTree->currentItem();
+    if (!current)
+        return;
+
+    QTreeWidgetItem *parent = current->parent();
+    if (parent) {
+        int idx = parent->indexOfChild(current);
+        if (idx > 0) {
+            parent->takeChild(idx);
+            parent->insertChild(idx - 1, current);
+            playlistTree->setCurrentItem(current);
+        }
+    } else {
+        int idx = playlistTree->indexOfTopLevelItem(current);
+        if (idx > 0) {
+            playlistTree->takeTopLevelItem(idx);
+            playlistTree->insertTopLevelItem(idx - 1, current);
+            playlistTree->setCurrentItem(current);
+        }
     }
 }
 
 void PlaylistDialog::moveDown() {
-    int currentRow = selectedShadersList->currentRow();
-    if (currentRow >= 0 && currentRow < selectedShadersList->count() - 1) {
-        QListWidgetItem *item = selectedShadersList->takeItem(currentRow);
-        selectedShadersList->insertItem(currentRow + 1, item);
-        selectedShadersList->setCurrentRow(currentRow + 1);
+    QTreeWidgetItem *current = playlistTree->currentItem();
+    if (!current)
+        return;
+
+    QTreeWidgetItem *parent = current->parent();
+    if (parent) {
+        int idx = parent->indexOfChild(current);
+        if (idx < parent->childCount() - 1) {
+            parent->takeChild(idx);
+            parent->insertChild(idx + 1, current);
+            playlistTree->setCurrentItem(current);
+        }
+    } else {
+        int idx = playlistTree->indexOfTopLevelItem(current);
+        if (idx < playlistTree->topLevelItemCount() - 1) {
+            playlistTree->takeTopLevelItem(idx);
+            playlistTree->insertTopLevelItem(idx + 1, current);
+            playlistTree->setCurrentItem(current);
+        }
     }
 }
 
 void PlaylistDialog::clearAll() {
-    selectedShadersList->clear();
+    playlistTree->clear();
 }
 
 void PlaylistDialog::savePlaylist() {
-    if (selectedShadersList->count() == 0) {
+    int shaderCount = 0;
+    for (int i = 0; i < playlistTree->topLevelItemCount(); ++i) {
+        shaderCount += playlistTree->topLevelItem(i)->childCount();
+    }
+    if (shaderCount == 0) {
         QMessageBox::information(this, "Empty Playlist", "Add shaders to the playlist before saving.");
         return;
     }
 
-    QString filePath = QFileDialog::getSaveFileName(this, "Save Playlist", QString(), "Text Files (*.txt);;All Files (*)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastPlaylistDir", "").toString();
+    QString filePath = QFileDialog::getSaveFileName(this, "Save Playlist", lastDir, "Text Files (*.txt);;All Files (*)");
     if (filePath.isEmpty())
         return;
+
+    appSettings.setValue("lastPlaylistDir", QFileInfo(filePath).absolutePath());
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -231,8 +371,12 @@ void PlaylistDialog::savePlaylist() {
     }
 
     QTextStream out(&file);
-    for (int i = 0; i < selectedShadersList->count(); ++i) {
-        out << selectedShadersList->item(i)->text() << "\n";
+    for (int i = 0; i < playlistTree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem *node = playlistTree->topLevelItem(i);
+        out << "[" << node->text(0) << "]\n";
+        for (int j = 0; j < node->childCount(); ++j) {
+            out << node->child(j)->text(0) << "\n";
+        }
     }
     file.close();
     playlistFilePath = filePath;
@@ -240,9 +384,13 @@ void PlaylistDialog::savePlaylist() {
 }
 
 void PlaylistDialog::loadPlaylist() {
-    QString filePath = QFileDialog::getOpenFileName(this, "Load Playlist", QString(), "Text Files (*.txt);;All Files (*)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastPlaylistDir", "").toString();
+    QString filePath = QFileDialog::getOpenFileName(this, "Load Playlist", lastDir, "Text Files (*.txt);;All Files (*)");
     if (filePath.isEmpty())
         return;
+
+    appSettings.setValue("lastPlaylistDir", QFileInfo(filePath).absolutePath());
 
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -250,21 +398,38 @@ void PlaylistDialog::loadPlaylist() {
         return;
     }
 
-    selectedShadersList->clear();
+    playlistTree->clear();
     QTextStream in(&file);
     int loadedCount = 0;
     int skippedCount = 0;
+    QTreeWidgetItem *currentNode = nullptr;
+
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
         if (line.isEmpty())
             continue;
-        if (shaderNameToIndex.contains(line)) {
-            QListWidgetItem *item = new QListWidgetItem(line);
-            item->setData(Qt::UserRole, shaderNameToIndex[line]);
-            selectedShadersList->addItem(item);
-            ++loadedCount;
+
+        if (line.startsWith('[') && line.endsWith(']')) {
+            QString nodeName = line.mid(1, line.length() - 2);
+            currentNode = new QTreeWidgetItem(playlistTree);
+            currentNode->setText(0, nodeName);
+            currentNode->setFlags(currentNode->flags() | Qt::ItemIsEditable);
+            currentNode->setExpanded(true);
         } else {
-            ++skippedCount;
+            if (!currentNode) {
+                currentNode = new QTreeWidgetItem(playlistTree);
+                currentNode->setText(0, "Default");
+                currentNode->setFlags(currentNode->flags() | Qt::ItemIsEditable);
+                currentNode->setExpanded(true);
+            }
+            if (shaderNameToIndex.contains(line)) {
+                auto *item = new QTreeWidgetItem(currentNode);
+                item->setText(0, line);
+                item->setData(0, Qt::UserRole, shaderNameToIndex[line]);
+                ++loadedCount;
+            } else {
+                ++skippedCount;
+            }
         }
     }
     file.close();
@@ -277,13 +442,22 @@ void PlaylistDialog::loadPlaylist() {
 }
 
 bool PlaylistDialog::isPlaylistEnabled() const {
-    return enableCheckBox->isChecked() && selectedShadersList->count() > 0;
+    if (!enableCheckBox->isChecked())
+        return false;
+    for (int i = 0; i < playlistTree->topLevelItemCount(); ++i) {
+        if (playlistTree->topLevelItem(i)->childCount() > 0)
+            return true;
+    }
+    return false;
 }
 
 QStringList PlaylistDialog::getSelectedShaderNames() const {
     QStringList names;
-    for (int i = 0; i < selectedShadersList->count(); ++i) {
-        names.append(selectedShadersList->item(i)->text());
+    for (int i = 0; i < playlistTree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem *node = playlistTree->topLevelItem(i);
+        for (int j = 0; j < node->childCount(); ++j) {
+            names.append(node->child(j)->text(0));
+        }
     }
     return names;
 }
@@ -297,19 +471,64 @@ void PlaylistDialog::setEnabled(bool enabled) {
 }
 
 void PlaylistDialog::setSelectedShaderNames(const QStringList &names) {
-    selectedShadersList->clear();
+    playlistTree->clear();
+    if (names.isEmpty())
+        return;
+
+    auto *node = new QTreeWidgetItem(playlistTree);
+    node->setText(0, "Default");
+    node->setFlags(node->flags() | Qt::ItemIsEditable);
+    node->setExpanded(true);
+
     for (const QString &name : names) {
         if (shaderNameToIndex.contains(name)) {
-            int idx = shaderNameToIndex[name];
-            QListWidgetItem *item = new QListWidgetItem(name);
-            item->setData(Qt::UserRole, idx);
-            selectedShadersList->addItem(item);
+            auto *item = new QTreeWidgetItem(node);
+            item->setText(0, name);
+            item->setData(0, Qt::UserRole, shaderNameToIndex[name]);
         }
     }
 }
 
 void PlaylistDialog::setPlaylistFile(const QString &path) {
     playlistFilePath = path;
+    if (!path.isEmpty()) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&file);
+            bool hasNodes = false;
+            while (!in.atEnd()) {
+                QString line = in.readLine().trimmed();
+                if (line.startsWith('[') && line.endsWith(']')) {
+                    hasNodes = true;
+                    break;
+                }
+            }
+            file.close();
+
+            if (hasNodes && file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                QTextStream in2(&file);
+                playlistTree->clear();
+                QTreeWidgetItem *currentNode = nullptr;
+                while (!in2.atEnd()) {
+                    QString line = in2.readLine().trimmed();
+                    if (line.isEmpty())
+                        continue;
+                    if (line.startsWith('[') && line.endsWith(']')) {
+                        QString nodeName = line.mid(1, line.length() - 2);
+                        currentNode = new QTreeWidgetItem(playlistTree);
+                        currentNode->setText(0, nodeName);
+                        currentNode->setFlags(currentNode->flags() | Qt::ItemIsEditable);
+                        currentNode->setExpanded(true);
+                    } else if (currentNode && shaderNameToIndex.contains(line)) {
+                        auto *item = new QTreeWidgetItem(currentNode);
+                        item->setText(0, line);
+                        item->setData(0, Qt::UserRole, shaderNameToIndex[line]);
+                    }
+                }
+                file.close();
+            }
+        }
+    }
 }
 
 void PlaylistDialog::updateShaderList(const QStringList &shaderNames) {

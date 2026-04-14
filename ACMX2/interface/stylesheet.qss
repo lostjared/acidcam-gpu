@@ -143,6 +143,52 @@ QListWidget::item:selected {
     color: #ffffff;
 }
 
+/* Tree Widgets */
+QTreeWidget {
+    background-color: #121212;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    outline: 0;
+    color: #f2f2f2;
+}
+
+QTreeWidget::item {
+    padding: 4px;
+    height: 22px;
+    background-color: #121212;
+}
+
+QTreeWidget::item:hover {
+    background-color: #1c1c1c;
+}
+
+QTreeWidget::item:selected {
+    background-color: #b71c1c;
+    color: #ffffff;
+}
+
+QTreeWidget::branch {
+    background-color: #121212;
+}
+
+QTreeWidget::branch:has-children:closed {
+    image: none;
+    border-image: none;
+}
+
+QTreeWidget::branch:has-children:open {
+    image: none;
+    border-image: none;
+}
+
+QTreeWidget QHeaderView::section {
+    background-color: #1a1a1a;
+    color: #f2f2f2;
+    border: 1px solid #333333;
+    padding: 4px;
+    font-weight: 600;
+}
+
 /* Sliders */
 QSlider::groove:horizontal {
     background: #2a2a2a;

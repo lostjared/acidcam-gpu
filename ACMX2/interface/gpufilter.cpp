@@ -1,5 +1,6 @@
 #include "gpufilter.hpp"
 #include <QCompleter>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QSettings>
@@ -269,9 +270,13 @@ void GPUFilterDialog::saveFilterList() {
         return;
     }
 
-    QString filePath = QFileDialog::getSaveFileName(this, "Save GPU Filter List", QString(), "Text Files (*.txt);;All Files (*)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastGpuFilterDir", "").toString();
+    QString filePath = QFileDialog::getSaveFileName(this, "Save GPU Filter List", lastDir, "Text Files (*.txt);;All Files (*)");
     if (filePath.isEmpty())
         return;
+
+    appSettings.setValue("lastGpuFilterDir", QFileInfo(filePath).absolutePath());
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -288,9 +293,13 @@ void GPUFilterDialog::saveFilterList() {
 }
 
 void GPUFilterDialog::loadFilterList() {
-    QString filePath = QFileDialog::getOpenFileName(this, "Load GPU Filter List", QString(), "Text Files (*.txt);;All Files (*)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastGpuFilterDir", "").toString();
+    QString filePath = QFileDialog::getOpenFileName(this, "Load GPU Filter List", lastDir, "Text Files (*.txt);;All Files (*)");
     if (filePath.isEmpty())
         return;
+
+    appSettings.setValue("lastGpuFilterDir", QFileInfo(filePath).absolutePath());
 
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {

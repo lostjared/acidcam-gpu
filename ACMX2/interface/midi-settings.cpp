@@ -1,5 +1,6 @@
 #include "midi-settings.hpp"
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QMessageBox>
@@ -102,10 +103,13 @@ int MidiSettings::getMidiDeviceIndex() const {
 }
 
 void MidiSettings::browseConfigFile() {
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastMidiConfigDir", QFileInfo(configFileEdit->text()).absolutePath()).toString();
     QString fileName = QFileDialog::getOpenFileName(
-        this, "Select MIDI Config File", configFileEdit->text(),
+        this, "Select MIDI Config File", lastDir,
         "MIDI Config (*.midi_cfg);;All Files (*)");
     if (!fileName.isEmpty()) {
+        appSettings.setValue("lastMidiConfigDir", QFileInfo(fileName).absolutePath());
         configFileEdit->setText(fileName);
     }
 }

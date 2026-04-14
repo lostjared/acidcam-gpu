@@ -1,6 +1,7 @@
 #include "shaderpass.hpp"
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QSettings>
 #include <QTextStream>
@@ -286,9 +287,13 @@ void ShaderPassDialog::saveShaderPass() {
         return;
     }
 
-    QString filePath = QFileDialog::getSaveFileName(this, "Save Shader Pass List", QString(), "Text Files (*.txt);;All Files (*)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastShaderPassDir", "").toString();
+    QString filePath = QFileDialog::getSaveFileName(this, "Save Shader Pass List", lastDir, "Text Files (*.txt);;All Files (*)");
     if (filePath.isEmpty())
         return;
+
+    appSettings.setValue("lastShaderPassDir", QFileInfo(filePath).absolutePath());
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -305,9 +310,13 @@ void ShaderPassDialog::saveShaderPass() {
 }
 
 void ShaderPassDialog::loadShaderPass() {
-    QString filePath = QFileDialog::getOpenFileName(this, "Load Shader Pass List", QString(), "Text Files (*.txt);;All Files (*)");
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastShaderPassDir", "").toString();
+    QString filePath = QFileDialog::getOpenFileName(this, "Load Shader Pass List", lastDir, "Text Files (*.txt);;All Files (*)");
     if (filePath.isEmpty())
         return;
+
+    appSettings.setValue("lastShaderPassDir", QFileInfo(filePath).absolutePath());
 
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {

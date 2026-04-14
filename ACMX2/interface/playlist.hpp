@@ -8,11 +8,11 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
 #include <QPushButton>
 #include <QSortFilterProxyModel>
 #include <QStandardItemModel>
 #include <QStringList>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 
 class PlaylistDialog : public QDialog {
@@ -30,6 +30,9 @@ class PlaylistDialog : public QDialog {
     void updateShaderList(const QStringList &shaderNames);
 
   public slots:
+    void addNode();
+    void renameNode();
+    void removeNode();
     void addShader();
     void removeShader();
     void moveUp();
@@ -42,11 +45,15 @@ class PlaylistDialog : public QDialog {
   private:
     void setupUI();
     void loadShaders(const QStringList &shaderNames);
+    QTreeWidgetItem *currentNodeItem() const;
 
     QCheckBox *enableCheckBox;
     QComboBox *shaderComboBox;
     QLineEdit *searchLineEdit;
-    QListWidget *selectedShadersList;
+    QTreeWidget *playlistTree;
+    QPushButton *addNodeButton;
+    QPushButton *renameNodeButton;
+    QPushButton *removeNodeButton;
     QPushButton *addButton;
     QPushButton *removeButton;
     QPushButton *upButton;
