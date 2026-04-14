@@ -48,13 +48,15 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>CUDA GPU filters</b> — apply GPU-accelerated pixel filters in addition to shaders
 - <b>3D mode</b> — render shaders onto a 3D model (`.mxmod`)
 - <b>Multipass shaders</b> — chain multiple shader passes in a single frame
-- <b>Shader playlists</b> — cycle through an ordered list of shaders
+- <b>Shader playlists with named nodes</b> — organize shaders into named tree nodes; each node loads its shaders into the multi-pass pipeline when selected at runtime
 - <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
 - <b>Video recording</b> with optional audio muxing via FFmpeg
 - <b>Silent mode</b> — headless video processing without a window
 - <b>Shader cache</b> — precompile shader binaries for fast startup
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
+- <b>MIDI Map Tool</b> — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
+- <b>Distrobox export</b> — script to export applications to the host desktop with icons and `.desktop` files
 
 @section install Installation & Prerequisites
 
@@ -265,7 +267,7 @@ All fragment shaders receive the following uniforms automatically.
 
 | Key           | Action |
 |---------------|--------|
-| Up/Down       | Previous/Next shader (or playlist shader) |
+| Up/Down       | Previous/Next shader; when playlist enabled, navigates tree nodes and loads node shaders into multi-pass pipeline |
 | K             | Toggle shader lock (prevent Up/Down from switching shaders) |
 | Left/Right    | Previous/Next GPU filter |
 | Space         | Toggle shader processing bypass |
@@ -827,6 +829,7 @@ The project requires a very specific dependency stack  not all of it is availabl
 -# Build and install <tt>acidcam-gpu/MXWrite</tt>: <tt>cmake .. && make -j$(nproc) && sudo make install</tt>
 -# Build and install the <tt>acidcam-gpu</tt> library and CLI: <tt>cmake .. && make -j$(nproc) && sudo make install</tt>. This installs the shared library, headers, and CMake package config so downstream projects can use <tt>find_package(acidcam-gpu)</tt>.
 -# Optionally build and install the Qt ACMX2 interface.
+-# Optionally build the MIDI Map tool: <tt>cd ACMX2/interface/midi-map && mkdir build && cd build && cmake .. && make -j$(nproc)</tt>.
 
 @subsubsection explained_container_distribution_podman Container Distribution (Podman)
 
@@ -866,6 +869,7 @@ The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers 
 
 
 - <tt>ACMX2/interface/*</tt>  Qt launcher/editor/dialog workflow
+- <tt>ACMX2/interface/midi-map/*</tt>  standalone MIDI controller mapping tool
 - <tt>ACMX2/shader_generator/*</tt>  AI-assisted shader generation utility
 - <tt>ACMX2/shader.packs/</tt>  shader pack metadata
 - <tt>ACMX2/macos/</tt>  platform-specific notes
@@ -896,13 +900,15 @@ The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers 
 - <b><tt>ACMX2/audio_transfer.cpp</tt>:</b> utility path for audio transfer/record style workflows and supporting media synchronization tasks.
 - <b><tt>ACMX2/models/*.mxmod</tt>:</b> model assets for 3D or scene-influenced visuals integrated with runtime rendering.
 - <b><tt>ACMX2/examples/*.glsl</tt>:</b> curated shader samples used as practical templates and quick-start visual blocks.
-- <b><tt>ACMX2/interface/*</tt>:</b> user-facing orchestration UI for session setup, process launch, list reordering, and settings persistence.
+- <b><tt>ACMX2/interface/*</tt>:</b> user-facing orchestration UI for session setup, process launch, list reordering, and settings persistence. The playlist dialog uses a tree widget with named nodes; each node groups shaders that load into the multi-pass pipeline as a unit.
+- <b><tt>ACMX2/interface/midi-map/*</tt>:</b> standalone Qt6 tool for creating MIDI controller mapping configurations (<tt>.midi_cfg</tt> files). Maps MIDI CC/note messages to ACMX2 keyboard actions (shader navigation, time control, 3D camera, etc.).
 - <b><tt>ACMX2/shader_generator/*</tt>:</b> assistant tooling that helps generate shader ideas/workflows while maintaining runtime-compatible output.
 - <b><tt>ACMX2/shader.packs/</tt>:</b> pack metadata and organization layer for large shader collections.
 - <b><tt>acidcam-gpu/include/ac-gpu/ac-gpu.hpp</tt>:</b> ABI/API boundary between host app and CUDA engine.
 - <b><tt>acidcam-gpu/src/filters.cu</tt>:</b> massive effect implementation + dispatch switch; this file is the core visual transformation engine.
 - <b><tt>acidcam-gpu/app/main_cv.cu</tt>:</b> standalone CLI proving the CUDA pipeline without the full ACMX2 UI stack.
 - <b><tt>podman/Containerfile</tt> and scripts:</b> reproducible deployment path for camera/GPU-enabled container runs.
+- <b><tt>acidcam-gpu/scripts/export-distrobox.sh</tt>:</b> exports ACMX2 applications from Distrobox to the host desktop with icons and <tt>.desktop</tt> files.
 
 @subsection explained_end_to_end_runtime_flow End-to-End Runtime Flow
 

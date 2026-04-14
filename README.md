@@ -190,8 +190,8 @@ sudo bash build-script/install-deps-arch.sh
 
 | Key | Action |
 |-----|--------|
-| `Up` | Previous shader (or previous playlist shader if playlist enabled) |
-| `Down` | Next shader (or next playlist shader if playlist enabled) |
+| `Up` | Previous shader (or previous playlist tree node if playlist enabled) |
+| `Down` | Next shader (or next playlist tree node if playlist enabled) |
 | `Left` | Previous GPU filter (if GPU filters enabled) |
 | `Right` | Next GPU filter (if GPU filters enabled) |
 | `Space` | Toggle shader processing bypass |
@@ -248,6 +248,7 @@ ACMX2 now supports MIDI input devices for real-time control of shaders and param
 - **MIDI Map Tool:** New standalone `midi-map` application for creating MIDI controller mappings:
   - Live MIDI message monitor
   - Capture button/knob assignments to ACMX2 actions (shader navigation, time control, pitch, yaw, speed, etc.)
+  - Updated action descriptions matching actual ACMX2 keybindings (playlist toggle, freeze frame, shader bypass, 3D camera controls, etc.)
   - Save/load `.midi_cfg` configuration files
 - **Qt Interface:** New **MIDI Settings** dialog with:
   - Enable/disable MIDI
@@ -278,18 +279,38 @@ The built-in GLSL shader editor has been significantly enhanced:
 - Audio muxing fix: uses video duration for precise audio/video sync
 - Audio track copy fix for finished recordings
 
-### Shader Playlist Support
+### Shader Playlist Tree with Named Nodes
 
-ACMX2 now supports shader playlists, allowing you to define an ordered list of shaders and cycle through them during playback.
+ACMX2 now supports shader playlists organized into named tree nodes, allowing you to group shaders and cycle through node groups during playback.
 
-- **Command line:** Use `--playlist <file.txt>` to load a playlist file (one shader name per line, with or without `.glsl` extension)
+- **Command line:** Use `--playlist <file.txt>` to load a playlist file. Supports the new `[NodeName]` section format as well as flat shader-per-line files.
 - **Runtime controls:**
-  - **P** — Toggle playlist mode on/off
-  - **Up/Down arrows** — Navigate to the previous/next shader in the playlist
-- **Qt Interface:** New **Shader Playlist Settings** dialog under the Playback menu with:
-  - Enable/disable checkbox
-  - Search, add, remove, and reorder shaders
-  - **Save List... / Load List...** buttons to persist playlists as text files
+  - **P** — Toggle playlist mode on/off (loads first node's shaders into multi-pass pipeline)
+  - **Up/Down arrows** — Navigate to the previous/next tree node and load its shaders into multi-pass
+- **Qt Interface:** The **Shader Playlist Settings** dialog features a tree widget with named nodes:
+  - Add, rename, and remove node groups
+  - Add shaders to specific nodes via search
+  - Each node's shaders are loaded as a multi-pass chain when selected at runtime
+  - **Save List... / Load List...** buttons persist playlists using `[NodeName]` section format
+- **File format:** Playlist files use `[NodeName]` headers to group shaders:
+  ```
+  [Ambient]
+  glow.glsl
+  blur.glsl
+  [Intense]
+  fractal.glsl
+  distort.glsl
+  ```
+
+### Distrobox Export
+
+A script is provided to export ACMX2 applications from a Distrobox container to the host desktop:
+
+```bash
+bash scripts/export-distrobox.sh
+```
+
+This installs the application icon, creates `.desktop` files for both `acmx2_interface` and `midi-map`, and registers them with the host application menu.
 
 ### Multipass Shader Pass Save/Load
 

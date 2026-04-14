@@ -51,6 +51,8 @@ Both CUDA kernels and GLSL shaders execute on the **same physical hardware** —
 - **Main window:** `ACMX2/interface/main_window.cpp` — QProcess supervision, log rendering, session menu
 - **GPU filter dialog:** `ACMX2/interface/gpufilter.cpp` — calls `--list-filters`, parses output, stores ordered selection
 - **Shader pass ordering:** `ACMX2/interface/shaderpass.cpp` — explicit multi-pass chain, output of pass N feeds into pass N+1
+- **Shader playlist tree:** `ACMX2/interface/playlist.cpp` — tree widget with named nodes; each node groups shaders that load into multi-pass when selected at runtime. File format uses `[NodeName]` sections.
+- **MIDI map tool:** `ACMX2/interface/midi-map/` — standalone Qt6 app for creating MIDI controller mappings (`.midi_cfg` files)
 - **Audio integration:** `ACMX2/audio.cpp/.hpp` — RtAudio amplitude extraction, reactive parameter modulation
 - **Shader cache:** `ACMX2/program.cpp/.hpp` — binary cache with source+driver fingerprinting to skip recompile
 - **3D geometry:** `ACMX2/models/*.mxmod` — MXMOD-format geometry used in scene-influenced render stages
@@ -61,9 +63,10 @@ Both CUDA kernels and GLSL shaders execute on the **same physical hardware** —
 1. **Filter discovery:** `gpufilter.cpp` spawns the `acmx2` binary with `--list-filters`, reads `index:name` lines from stdout, sorts the list alphabetically, and populates a selection dialog. The user picks from the full 905-filter catalog and reorders them via drag or list controls.
 2. **Chain persistence:** selected filter order is stored as an ordered index list and passed back to `acmx2` as arguments at run time. Changing the order produces a completely different visual output without touching any code.
 3. **Process supervision:** `main_window.cpp` binds a `QProcess` to the `acmx2` executable (built from `ACMX2/acmx.cpp`). stdout/stderr streams are captured and shown in the UI log panel so runtime errors (bad camera index, missing CUDA device, encoder failure) are immediately visible.
-4. **Session settings:** `QSettings` persists executable path, shader directory, preferred styles, and last-used filter chain so sessions can be resumed exactly.
+4. **Session settings:** `QSettings` persists executable path, shader directory, preferred styles, last-used filter chain, and per-dialog last directory so sessions can be resumed exactly.
 5. **Shader pass layer:** `shaderpass.cpp` manages an ordered list of GLSL pass configs. Each pass uses the previous pass output as input, compositing GLSL effects on top of the CUDA-processed frame.
-6. **Audio-reactive path:** when RtAudio is enabled at compile time, an audio callback computes per-buffer amplitude average. This value can modulate alpha or other per-frame parameters, making output visually reactive to microphone or line input.
+6. **Playlist tree integration:** `playlist.cpp` provides a tree widget where shaders are organized into named nodes. At runtime, toggling playlist mode (P key) loads the current node's shaders into the multi-pass pipeline; Up/Down navigates between nodes.
+7. **Audio-reactive path:** when RtAudio is enabled at compile time, an audio callback computes per-buffer amplitude average. This value can modulate alpha or other per-frame parameters, making output visually reactive to microphone or line input.
 
 ---
 
@@ -533,6 +536,7 @@ The project is developed on **Bazzite Linux** using **Arch Linux containers via 
 - `podman/Containerfile.arch`  Build containerized runtime image
 - `podman/run-acmx2-arch.sh`  GPU/camera/audio passthrough run script
 - `acidcam-gpu/scripts/*`  OpenCV CUDA and environment helper scripts
+- `acidcam-gpu/scripts/export-distrobox.sh`  export applications from Distrobox to host desktop with icons and `.desktop` files
 
 ### Expanded Meaning of Each Code Map Item
 
@@ -544,13 +548,15 @@ The project is developed on **Bazzite Linux** using **Arch Linux containers via 
 - **`ACMX2/audio_transfer.cpp`:** utility path for audio transfer/record style workflows and supporting media synchronization tasks.
 - **`ACMX2/models/*.mxmod`:** model assets for 3D or scene-influenced visuals integrated with runtime rendering.
 - **`ACMX2/examples/*.glsl`:** curated shader samples used as practical templates and quick-start visual blocks.
-- **`ACMX2/interface/*`:** user-facing orchestration UI for session setup, process launch, list reordering, and settings persistence.
+- **`ACMX2/interface/*`:** user-facing orchestration UI for session setup, process launch, list reordering, and settings persistence. The playlist dialog uses a tree widget with named nodes; each node groups shaders that load into the multi-pass pipeline as a unit.
+- **`ACMX2/interface/midi-map/*`:** standalone Qt6 tool for creating MIDI controller mapping configurations (`.midi_cfg` files). Maps MIDI CC/note messages to ACMX2 keyboard actions (shader navigation, time control, 3D camera, etc.).
 - **`ACMX2/shader_generator/*`:** assistant tooling that helps generate shader ideas/workflows while maintaining runtime-compatible output.
 - **`ACMX2/shader.packs/`:** pack metadata and organization layer for large shader collections.
 - **`acidcam-gpu/include/ac-gpu/ac-gpu.hpp`:** ABI/API boundary between host app and CUDA engine.
 - **`acidcam-gpu/src/filters.cu`:** massive effect implementation + dispatch switch; this file is the core visual transformation engine.
 - **`acidcam-gpu/app/main_cv.cu`:** standalone CLI proving the CUDA pipeline without the full ACMX2 UI stack.
 - **`podman/Containerfile` and scripts:** reproducible deployment path for camera/GPU-enabled container runs.
+- **`acidcam-gpu/scripts/export-distrobox.sh`:** exports ACMX2 applications from Distrobox to the host desktop with icons and `.desktop` files.
 
 ## End-to-End Runtime Flow
 
