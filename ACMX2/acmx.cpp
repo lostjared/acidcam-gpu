@@ -2701,6 +2701,8 @@ class ACView : public gl::GLObject {
     TextureUploader tex_uploader;
 
   public:
+    void requestStop() { running = false; }
+    bool needsAsyncShutdown() { return needsMux() || needsTransferAudio(); }
     /**
      * @brief Construct the rendering object from parsed CLI arguments.
      *
@@ -5062,15 +5064,19 @@ class ACView : public gl::GLObject {
 class MainWindow : public gl::GLWindow {
     bool silent_mode = false;
 
-    /**
-     * @brief Shared initialisation logic for both visible and headless windows.
-     *
-     * Sets the asset search path, loads the window icon (visible mode only),
-     * creates the ACView rendering object and calls its load() method to
-     * initialise OpenGL state, shaders, capture, and recording.
-     *
-     * @param args Parsed command-line arguments forwarded to ACView.
-     */
+    static int eventFilter(void *userdata, SDL_Event *event) {
+        if (event->type == SDL_QUIT ||
+            (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE)) {
+            auto *win = static_cast<MainWindow *>(userdata);
+            auto *view = static_cast<ACView *>(win->object.get());
+            if (view && view->needsAsyncShutdown()) {
+                view->requestStop();
+                return 0;
+            }
+        }
+        return 1;
+    }
+
     void initCommon(const MXArguments &args) {
         util.path = args.path;
 
@@ -5085,6 +5091,7 @@ class MainWindow : public gl::GLWindow {
 
         setObject(new ACView(args));
         object->load(this);
+        SDL_SetEventFilter(eventFilter, this);
         fflush(stdout);
         fflush(stderr);
     }
@@ -5116,7 +5123,9 @@ class MainWindow : public gl::GLWindow {
         initCommon(args);
     }
 
-    ~MainWindow() override {}
+    ~MainWindow() override {
+        SDL_SetEventFilter(nullptr, nullptr);
+    }
 
     /**
      * @brief Per-frame callback: clear, draw ACView, swap buffers.
