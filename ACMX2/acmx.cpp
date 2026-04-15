@@ -3408,7 +3408,7 @@ class ACView : public gl::GLObject {
         }
 
         if (!running) {
-            if (needsMux()) {
+            if (needsMux() || needsTransferAudio()) {
                 beginMuxing(win);
                 return;
             }
@@ -4909,6 +4909,10 @@ class ACView : public gl::GLObject {
 #endif
     }
 
+    bool needsTransferAudio() {
+        return !filename.empty() && !repeat && copy_audio && writer.is_open();
+    }
+
     /**
      * @brief Run ffmpeg synchronously to mux the recorded audio WAV into the video MP4.
      *
@@ -4992,6 +4996,10 @@ class ACView : public gl::GLObject {
                                << static_cast<int>(ts / 60) % 60 << ":"
                                << static_cast<int>(ts) % 60 << ") to file: " << ofilename << "\n";
                 fflush(stdout);
+            }
+            if (!filename.empty() && !repeat && copy_audio) {
+                transfer_audio(filename, ofilename);
+                mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
             runMuxSync();
             muxComplete = true;
