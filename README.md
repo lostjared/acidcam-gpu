@@ -483,11 +483,18 @@ Early Example (as a GIF)
 
 ![fractal](https://github.com/lostjared/acidcam-gpu/blob/main/ac.gif)
 
+[Example YouTube Music Video](https://youtu.be/R0Y1wN6XHZI)
+
+
 # Latest Shader Pack
 
-https://lostsidedead.biz/packs
+https://lostsidedead.biz/acmx2/shaders.zip
 
 # Latest 3D Geometry 
+
+https://lostsidedead.biz/acmx2/models.zip
+
+## Older Packs
 
 https://lostsidedead.biz/packs
 
