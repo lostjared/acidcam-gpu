@@ -653,3 +653,5 @@ This setup is designed to keep your development workflow fast and reproducible w
 
 
 Related Videos [YouTube Channel](https://youtube.com/+JaredBruni)
+Contact me: [Contact](https://lostsidedead.biz/contact.html)
+
