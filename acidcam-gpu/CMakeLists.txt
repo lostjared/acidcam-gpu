@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 project(acidcam-gpu 
-    VERSION 1.0.0
+    VERSION 1.1.0
     DESCRIPTION "GPU-accelerated video filter library using CUDA"
     LANGUAGES CXX CUDA)
 
