@@ -2190,6 +2190,7 @@ struct MXArguments {
     float time_speed = 1.0f;
     std::string playlist_file;
     double duration = 0.0;
+    float cross_fade_duration = 0.5f;
 };
 
 /**
@@ -2779,6 +2780,7 @@ class ACView : public gl::GLObject {
         }
         playlist_file = args.playlist_file;
         duration_limit = args.duration;
+        crossfadeDuration = args.cross_fade_duration;
 #ifdef MIDI_ENABLED
         if (!args.midi_map_file.empty()) {
             initMidi(args.midi_map_file, args.midi_device);
@@ -2829,6 +2831,69 @@ class ACView : public gl::GLObject {
         cached_shader_name = shader_pass_enabled
                                  ? library.getFullShaderName(shader_pass_list)
                                  : library.getFullShaderName();
+    }
+
+    void ensureCrossfadeFBO(int width, int height) {
+        if (crossfadeFBO)
+            return;
+        glGenFramebuffers(1, &crossfadeFBO);
+        glGenTextures(1, &crossfadeTexture);
+        glBindTexture(GL_TEXTURE_2D, crossfadeTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindFramebuffer(GL_FRAMEBUFFER, crossfadeFBO);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, crossfadeTexture, 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            throw mx::Exception("acmx2: crossfade framebuffer is not complete");
+        }
+        glGenTextures(1, &crossfadePrevTexture);
+        glBindTexture(GL_TEXTURE_2D, crossfadePrevTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    void beginCrossfade(gl::GLWindow *win) {
+        ensureCrossfadeFBO(win->w, win->h);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, captureFBO);
+        glBindTexture(GL_TEXTURE_2D, crossfadePrevTexture);
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, win->w, win->h);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        crossfadeAlpha = 0.0f;
+        crossfadeActive = true;
+        crossfadeStartTime = std::chrono::steady_clock::now();
+    }
+
+    void applyCrossfade(gl::GLWindow *win, GLuint currentTexture) {
+        if (!crossfadeActive)
+            return;
+        auto elapsed = std::chrono::duration<float>(std::chrono::steady_clock::now() - crossfadeStartTime).count();
+        crossfadeAlpha = elapsed / crossfadeDuration;
+        if (crossfadeAlpha >= 1.0f) {
+            crossfadeAlpha = 1.0f;
+            crossfadeActive = false;
+            return;
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, crossfadeFBO);
+        glViewport(0, 0, win->w, win->h);
+        glClear(GL_COLOR_BUFFER_BIT);
+        crossfadeShader.useProgram();
+        crossfadeShader.setUniform("mv_matrix", glm::mat4(1.0f));
+        crossfadeShader.setUniform("proj_matrix", glm::mat4(1.0f));
+        crossfadeShader.setUniform("fade_alpha", crossfadeAlpha);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, currentTexture);
+        crossfadeShader.setUniform("samp", 0);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, crossfadePrevTexture);
+        crossfadeShader.setUniform("prev_samp", 1);
+        sprite.setShader(&crossfadeShader);
+        sprite.setName("samp");
+        sprite.draw(currentTexture, 0, 0, win->w, win->h);
+        glActiveTexture(GL_TEXTURE0);
     }
 
     mx::Font overlayFont;
@@ -2951,6 +3016,18 @@ class ACView : public gl::GLObject {
                 glDeleteTextures(1, &passTexture[p]);
                 passTexture[p] = 0;
             }
+        }
+        if (crossfadeFBO) {
+            glDeleteFramebuffers(1, &crossfadeFBO);
+            crossfadeFBO = 0;
+        }
+        if (crossfadeTexture) {
+            glDeleteTextures(1, &crossfadeTexture);
+            crossfadeTexture = 0;
+        }
+        if (crossfadePrevTexture) {
+            glDeleteTextures(1, &crossfadePrevTexture);
+            crossfadePrevTexture = 0;
         }
         if (depthBuffer) {
             glDeleteRenderbuffers(1, &depthBuffer);
@@ -3288,6 +3365,9 @@ class ACView : public gl::GLObject {
         }
         if (!fshader3d.loadProgram(win->util.getFilePath("data/vertex.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
             throw mx::Exception("Error loading shader");
+        }
+        if (!crossfadeShader.loadProgram(win->util.getFilePath("data/vert.glsl"), win->util.getFilePath("data/crossfade.glsl"))) {
+            throw mx::Exception("Error loading crossfade shader");
         }
         GLenum error = glGetError();
         if (error != GL_NO_ERROR) {
@@ -3915,6 +3995,21 @@ class ACView : public gl::GLObject {
             sprite.draw(textureForSprite, 0, 0, win->w, win->h);
         }
 
+        if (crossfadeActive) {
+            applyCrossfade(win, fboTexture);
+            if (crossfadeActive) {
+                glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+                glViewport(0, 0, win->w, win->h);
+                glClear(GL_COLOR_BUFFER_BIT);
+                fshader.useProgram();
+                fshader.setUniform("mv_matrix", glm::mat4(1.0f));
+                fshader.setUniform("proj_matrix", glm::mat4(1.0f));
+                sprite.setShader(&fshader);
+                sprite.setName("samp");
+                sprite.draw(crossfadeTexture, 0, 0, win->w, win->h);
+            }
+        }
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, win->w, win->h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -4209,6 +4304,7 @@ class ACView : public gl::GLObject {
                 if (shaderLocked) break;
                 if (playlist_enabled && !playlist_tree.empty()) {
                     if (playlist_index > 0) {
+                        beginCrossfade(win);
                         --playlist_index;
                         const auto &node = playlist_tree[playlist_index];
                         shader_pass_list = node.shader_indices;
@@ -4219,8 +4315,10 @@ class ACView : public gl::GLObject {
                         fflush(stdout);
                     }
                 } else if (playlist_enabled && !playlist_indices.empty()) {
-                    if (playlist_index > 0)
+                    if (playlist_index > 0) {
+                        beginCrossfade(win);
                         --playlist_index;
+                    }
                     library.setIndex(playlist_indices[playlist_index]);
                     mx::system_out << "acmx2: Playlist [" << playlist_index << "/" << playlist_indices.size() << "]\n";
                     fflush(stdout);
@@ -4236,6 +4334,7 @@ class ACView : public gl::GLObject {
                 if (shaderLocked) break;
                 if (playlist_enabled && !playlist_tree.empty()) {
                     if (playlist_index + 1 < static_cast<int>(playlist_tree.size())) {
+                        beginCrossfade(win);
                         ++playlist_index;
                         const auto &node = playlist_tree[playlist_index];
                         shader_pass_list = node.shader_indices;
@@ -4246,8 +4345,10 @@ class ACView : public gl::GLObject {
                         fflush(stdout);
                     }
                 } else if (playlist_enabled && !playlist_indices.empty()) {
-                    if (playlist_index + 1 < static_cast<int>(playlist_indices.size()))
+                    if (playlist_index + 1 < static_cast<int>(playlist_indices.size())) {
+                        beginCrossfade(win);
                         ++playlist_index;
+                    }
                     library.setIndex(playlist_indices[playlist_index]);
                     mx::system_out << "acmx2: Playlist [" << playlist_index << "/" << playlist_indices.size() << "]\n";
                     fflush(stdout);
@@ -4291,6 +4392,7 @@ class ACView : public gl::GLObject {
                 if (!playlist_tree.empty()) {
                     playlist_enabled = !playlist_enabled;
                     if (playlist_enabled) {
+                        beginCrossfade(win);
                         saved_pass_list = shader_pass_list;
                         saved_pass_enabled = shader_pass_enabled;
                         if (playlist_index < 0 || playlist_index >= static_cast<int>(playlist_tree.size()))
@@ -4306,6 +4408,7 @@ class ACView : public gl::GLObject {
                                        << " [" << node.shader_indices.size() << " shaders] ("
                                        << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
                     } else {
+                        beginCrossfade(win);
                         shader_pass_list = saved_pass_list;
                         shader_pass_enabled = saved_pass_enabled;
                         if (is3d_enabled)
@@ -4319,6 +4422,7 @@ class ACView : public gl::GLObject {
                 } else if (!playlist_indices.empty()) {
                     playlist_enabled = !playlist_enabled;
                     if (playlist_enabled) {
+                        beginCrossfade(win);
                         if (playlist_index >= 0 && playlist_index < static_cast<int>(playlist_indices.size())) {
                             library.setIndex(playlist_indices[playlist_index]);
                             if (is3d_enabled)
@@ -4328,6 +4432,7 @@ class ACView : public gl::GLObject {
                         }
                         mx::system_out << "acmx2: Playlist mode enabled [" << playlist_indices.size() << " shaders]\n";
                     } else {
+                        beginCrossfade(win);
                         mx::system_out << "acmx2: Playlist mode disabled\n";
                     }
                     fflush(stdout);
@@ -4486,6 +4591,14 @@ class ACView : public gl::GLObject {
     GLuint depthBuffer = 0;
     GLuint passFBO[2] = {0, 0};
     GLuint passTexture[2] = {0, 0};
+    GLuint crossfadeFBO = 0;
+    GLuint crossfadeTexture = 0;
+    GLuint crossfadePrevTexture = 0;
+    gl::ShaderProgram crossfadeShader;
+    float crossfadeAlpha = 1.0f;
+    bool crossfadeActive = false;
+    float crossfadeDuration = 0.5f;
+    std::chrono::steady_clock::time_point crossfadeStartTime;
     std::thread writerThread;
     std::atomic<bool> running{false};
     std::atomic<bool> captureRunning{false};
@@ -5295,6 +5408,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
+        .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -5562,6 +5676,10 @@ int main(int argc, char **argv) {
                 if (args.duration > 0.0) {
                     mx::system_out << "acmx2: Duration set to: " << args.duration << " seconds\n";
                 }
+                break;
+            case 412:
+                args.cross_fade_duration = static_cast<float>(atof(arg.arg_value.c_str()));
+                mx::system_out << "acmx2: Crossfade duration set to: " << args.cross_fade_duration << " seconds\n";
                 break;
 #ifdef MIDI_ENABLED
             case 500:

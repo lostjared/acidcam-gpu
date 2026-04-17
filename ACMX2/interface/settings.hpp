@@ -39,6 +39,7 @@ class SettingsWindow : public QDialog {
     float getTimeSpeed() const;
     bool isDurationLimitEnabled() const;
     double getDurationLimit() const;
+    float getCrossFadeDuration() const;
     QString getCameraName(int device_index);
   private slots:
     void acceptSettings();
@@ -81,6 +82,7 @@ class SettingsWindow : public QDialog {
     QDoubleSpinBox *timeSpeedSpinBox;
     QCheckBox *durationLimitCheckBox;
     QDoubleSpinBox *durationLimitSpinBox;
+    QDoubleSpinBox *crossFadeSpinBox;
 
     int selectedCameraIndex;
     QSize selectedCameraResolution;

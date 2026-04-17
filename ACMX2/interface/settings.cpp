@@ -359,6 +359,17 @@ void SettingsWindow::init() {
     durationLayout->addWidget(durationLimitSpinBox);
     mainLayout->addLayout(durationLayout);
 
+    QHBoxLayout *crossFadeLayout = new QHBoxLayout;
+    QLabel *crossFadeLabel = new QLabel("Crossfade Duration (seconds):", this);
+    crossFadeSpinBox = new QDoubleSpinBox(this);
+    crossFadeSpinBox->setRange(0.0, 10.0);
+    crossFadeSpinBox->setSingleStep(0.1);
+    crossFadeSpinBox->setDecimals(2);
+    crossFadeSpinBox->setValue(0.5);
+    crossFadeLayout->addWidget(crossFadeLabel);
+    crossFadeLayout->addWidget(crossFadeSpinBox);
+    mainLayout->addLayout(crossFadeLayout);
+
     mainLayout->addLayout(buttonLayout);
 
     setLayout(mainLayout);
@@ -462,6 +473,10 @@ bool SettingsWindow::isDurationLimitEnabled() const {
 
 double SettingsWindow::getDurationLimit() const {
     return durationLimitSpinBox->value();
+}
+
+float SettingsWindow::getCrossFadeDuration() const {
+    return static_cast<float>(crossFadeSpinBox->value());
 }
 
 QString SettingsWindow::getCameraName(int device_index) {
