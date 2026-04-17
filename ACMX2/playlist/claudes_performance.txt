@@ -1,0 +1,14 @@
+Act	Theme	Nodes
+Overture	Genesis	1
+I	First Light - awakening visuals	9
+II	Descent - drains, wormholes, dark	10
+III	Color Storm - plasma, psychedelia, XOR	10
+IV	Fractal Deep Dive - DMD, Julia, octo	10
+V	Mirror Palace - wraps, folds, kaleidoscopes	7
+VI	Reactive Storm - audio-reactive chains	7
+VII	Liquid Theater - water, ripple, liquid crystal	7
+VIII	Geometric Trance - grids, stars, prisms	7
+IX	Hallucination - bends, tornadoes, glitch	8
+X	Echo Realm - echoes, ghosts, temporal	6
+XI	The Spectrum - rainbow chains	6
+XII	Grand Finale + Encore	12

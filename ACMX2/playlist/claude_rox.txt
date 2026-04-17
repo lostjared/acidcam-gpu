@@ -1,0 +1,526 @@
+[Overture: Genesis]
+fractal.glsl
+Liquid_Crystal.glsl
+rainbow_blur.glsl
+
+[Act I: First Light]
+aura3.glsl
+Light_Rainbow_Swirl.glsl
+bloom.glsl
+glow.glsl
+
+[Prismatic Dawn]
+prism_glass.glsl
+rainbow_prisim.glsl
+crystal.glsl
+
+[Liquid Sunrise]
+Liquid_Light_Rainbow_Blend.glsl
+Liquid_Light_Time.glsl
+water.glsl
+
+[Electric Awakening]
+ElectricMirror.glsl
+Electric_Fold.glsl
+neon.glsl
+
+[Aura Rising]
+aura5.glsl
+aura7.glsl
+aura9.glsl
+auraXi2.glsl
+
+[Echo of Creation]
+echo_rainbow_swirl.glsl
+echo_alpha_three_rgb.glsl
+echo_color5.glsl
+
+[Spiral Ignition]
+spiral_mirror.glsl
+spiral_wave.glsl
+wspiral.glsl
+
+[Crystal Lattice]
+crystal-2.glsl
+crystalprism.glsl
+crystalball.glsl
+
+[Gem Forge]
+gem-spiral-full.glsl
+gem_rainbow_metal.glsl
+gem-deep.glsl
+
+[Act II: Descent]
+drain_mirror.glsl
+drain_rainbow.glsl
+drain_mandella.glsl
+
+[Fractal Bloom]
+frac_shader01.glsl
+frac_shader01_smooth_neon.glsl
+fractal_diamond_rainbow.glsl
+
+[Underwater Kingdom]
+underwater.glsl
+underwaterenchanced.glsl
+ocean.glsl
+
+[Bubble Universe]
+bubble.glsl
+bubble-2.glsl
+bubble_amp.glsl
+mirror-bubble.glsl
+
+[Wormhole Entry]
+frac_shader03_wormhole.glsl
+frac_shader03_wormhole2.glsl
+HyperVortex.glsl
+
+[Dispersion Field]
+Dispersion.glsl
+DispersionRotate.glsl
+DispersionX.glsl
+DispersionY.glsl
+
+[Mirror Dimension]
+mirror-wrap-sphere.glsl
+mirror-wrap-spin.glsl
+frac_mir.glsl
+
+[Dark Matter]
+dark_psych_wave.glsl
+dark_rainbow_rubber_soul.glsl
+blackhole.glsl
+
+[Data Cascade]
+data.glsl
+datam3.glsl
+datam5.glsl
+datam_a.glsl
+
+[Glitch Transmission]
+glitch-react-color.glsl
+glitch_effect.glsl
+glitch_wave.glsl
+
+[Act III: Color Storm]
+color_flux_whirl.glsl
+color_swirl_beautiful.glsl
+rainbow_color_swirl.glsl
+
+[Plasma Engine]
+plasma_rainbow.glsl
+plasma_prism.glsl
+plasma3.glsl
+
+[Rainbow Metal]
+gem-rainbow-metal3.glsl
+rainbow_metal_fractal.glsl
+rainbow_cd_spin.glsl
+
+[Psychedelic Surge]
+psych_wave_rainbow.glsl
+psych_ripple.glsl
+psyche_wave.glsl
+
+[VHS Memories]
+vhs.glsl
+composite_crt.glsl
+damaged_vcr.glsl
+old-film.glsl
+
+[XOR Universe]
+xor_rgb_rainbow_1.glsl
+xor_rgb_smooth.glsl
+xor_rgb_smoother.glsl
+alpha_xor.glsl
+
+[Acid Baptism]
+acidcam.glsl
+acidcolor.glsl
+acidcolorrand.glsl
+
+[Gemstone Cathedral]
+gem_kale_large.glsl
+gem-hue-frac.glsl
+gem_glass.glsl
+gem_polar.glsl
+
+[Sine Trance]
+sine_grad4.glsl
+sine_swirl.glsl
+sine_ripple.glsl
+sine_grad7.glsl
+
+[Grid Reality]
+grid_pattern.glsl
+grid_sin.glsl
+gridcolor_gradient.glsl
+
+[Act IV: Fractal Deep Dive]
+frac_shader02_dmd6i.glsl
+frac_shader02_dmd6i_neon.glsl
+frac_shader02_dmd6i_bubble.glsl
+
+[Fractal Octo]
+frac_shader02_octo.glsl
+frac_shader02_octo_amp.glsl
+frac_shader02_dmd8i.glsl
+
+[Julia Set]
+frac_shader04_julia.glsl
+julia.glsl
+mandella1.glsl
+
+[Diamond Storm]
+diamond.glsl
+fractal_diamond_rainbow_overflow.glsl
+alpha_diamond.glsl
+diamond_pattern_1.glsl
+
+[Fractal Texture]
+fractal_texture_large.glsl
+frac_texture.glsl
+fractal_color_wave.glsl
+
+[Fractal Zoom]
+frac_zoom3.glsl
+frac_zoom5.glsl
+frac_zoom7.glsl
+
+[Fractal Echo Chamber]
+frac_shader04_echo.glsl
+frac_shader04_echo3_spin.glsl
+frac_shader_echo4_spin_full.glsl
+
+[Worm Through Spacetime]
+frac_shader03_wormhole3.glsl
+frac_shader03_wormhole4.glsl
+frac_shader03_worm4_amp.glsl
+
+[Fractal Fold]
+fractal-fold-neon.glsl
+fractal-fold-sketch.glsl
+frac_shader02_dmd6iFold.glsl
+
+[DMD Infinity]
+frac_shader02_dmdXi3.glsl
+frac_shader02_dmdXi5.glsl
+frac_shader02_dmdXi4.glsl
+
+[Act V: Mirror Palace]
+mirror-spiral.glsl
+mirror-twist.glsl
+mirror-color-swirl.glsl
+
+[Mirror Air]
+mirror-air-bowl.glsl
+mirror-airshader1.glsl
+air.glsl
+
+[Mirror Geometry]
+mirror-geometric.glsl
+mirror-pong.glsl
+mirror-prism.glsl
+mirror-bowl.glsl
+
+[Mirror Wrap Galaxy]
+mirror-wrap-rotate.glsl
+mirror-wrap-rotate90.glsl
+mirror-wrap2.glsl
+
+[Kaleidoscope]
+kale2.glsl
+kale3.glsl
+kale4.glsl
+gkale_echo2.glsl
+
+[Reflection Pool]
+mirror_blur2.glsl
+mirror_blur3.glsl
+mirror_offset.glsl
+
+[Fold Mirror Nexus]
+fold-mirror.glsl
+fold-spin.glsl
+fold-fov.glsl
+fold-water.glsl
+
+[Act VI: Reactive Storm]
+react5.glsl
+react_x_rainbow_beat.glsl
+react_x_spiral_twist.glsl
+
+[Bass Pulse]
+react_x_ripple_bass.glsl
+react_x_drum_zoom.glsl
+react_x_spin_amp.glsl
+
+[Reactive Glitch]
+react_x_glitch_peak.glsl
+react_x_hash_glitch.glsl
+react_x_noise_glitch.glsl
+
+[Rainbow React]
+react_x_rainbow_flow.glsl
+react_x_multi_rainbow.glsl
+react_x_xor_gradient.glsl
+
+[Chromatic React]
+react_x_chromatic_split.glsl
+rainbow_x_chromatic_storm.glsl
+react_x_wave_distort.glsl
+
+[Spiral React]
+react_x_ring_spiral.glsl
+react_x_swirl_deep.glsl
+react_x_double_spin.glsl
+
+[Phase Shift React]
+react_x_phase_stretch.glsl
+react_x_moving_phase.glsl
+react_x_vert_warp.glsl
+react_x_pingpong_glitch.glsl
+
+[Act VII: Liquid Theater]
+Liquid_Crystal_2.glsl
+Liquid_Crystal_Rainbow1.glsl
+Liquid_Fractal_Tunnel.glsl
+
+[Liquid Heat]
+Liquid_Heat.glsl
+Liquid_Heat_blend.glsl
+Liquid_Rainbow_Wave.glsl
+
+[Water Cathedral]
+water_prism.glsl
+water_full.glsl
+water_rgb.glsl
+waterbend.glsl
+
+[Ripple Cascade]
+ripple_rainbow.glsl
+ripple_prism.glsl
+ripple_cycle_prism.glsl
+
+[Ocean Depths]
+ocean_fast.glsl
+wave_spiral.glsl
+wave_diag.glsl
+
+[Drain Vortex]
+drain_mirror_amp.glsl
+drain_mirror_top.glsl
+cyclone_zoom.glsl
+drain_bend.glsl
+
+[Censored Liquid]
+Liquid_Censorship.glsl
+Liquid_Rainbow.glsl
+code_wave.glsl
+
+[Act VIII: Geometric Trance]
+geometric3.glsl
+geometric5.glsl
+sac-geo-xor.glsl
+
+[Prism Architecture]
+prism_quad_by_time.glsl
+prism_quad_strong.glsl
+prisim_glass_triangle.glsl
+
+[Star Geometry]
+star5.glsl
+starX2.glsl
+starX4.glsl
+stardust.glsl
+
+[Pixel Architecture]
+pixels.glsl
+block_pixels.glsl
+snes.glsl
+
+[Grid Hypnosis]
+grid-spiral.glsl
+square_grid2.glsl
+diagsquarecircle.glsl
+
+[Color Gradient]
+gradient.glsl
+color_grad_rainbow.glsl
+moving_gradient.glsl
+gradient_shift.glsl
+
+[CRT Television]
+crt.glsl
+composite.glsl
+composite_vhs_flat.glsl
+
+[Act IX: Hallucination]
+gpt_halluc.glsl
+gpt_trip2.glsl
+gptswirl2.glsl
+
+[Deep Seek Vision]
+deepseek3.glsl
+deepseek4.glsl
+deeps3.glsl
+dseek.glsl
+
+[Bend Reality]
+bend_twist.glsl
+crystalbend.glsl
+deform_cos.glsl
+
+[Elastic Dimension]
+elastic2.glsl
+inflate-ripple.glsl
+expand_mul_fast.glsl
+
+[Tornado Surge]
+tornado.glsl
+cyclone.glsl
+twarp2.glsl
+
+[Smoke Signal]
+smoke.glsl
+heat.glsl
+purple_haze.glsl
+
+[Tearing Fabric]
+tearing.glsl
+tearing_spiral.glsl
+tearing_max.glsl
+
+[Snake Passage]
+snake.glsl
+snake_dir.glsl
+slither.glsl
+slither_vert.glsl
+
+[Act X: The Echo Realm]
+echo_mix_colors.glsl
+echo_div4_rainbow.glsl
+echo_xor.glsl
+
+[Ghost Echo]
+gghost.glsl
+echo_bgr.glsl
+echo_sin_particle.glsl
+echo_loop2.glsl
+
+[Pingpong Echo]
+echo-pingpong.glsl
+echo-pingpong_c.glsl
+echo_mirror_2.glsl
+
+[Echo RGB Shift]
+echo_rgb.glsl
+echo_rgb1.glsl
+echo_s_rgb.glsl
+
+[Temporal Echo]
+Temporal.glsl
+echo_shift.glsl
+time_frac_xor.glsl
+
+[Color Echo]
+echo_color2.glsl
+echo_color4.glsl
+echo_or_and_xor.glsl
+echo_and_or_xor.glsl
+
+[Act XI: The Spectrum]
+rainbow_expand.glsl
+rainbow_expand_noise_xor_light.glsl
+rainbow_ink.glsl
+rainbow_bright.glsl
+
+[Rainbow Spiral]
+rainbow_spiral.glsl
+rainbow_spiral_rev.glsl
+rainbow_spiral_rev2.glsl
+
+[Rainbow CD]
+rainbow_cd.glsl
+rainbow_cd_curtain.glsl
+rainbow_cd_strobe.glsl
+
+[Rainbow Fractal]
+rainbow_fractal.glsl
+rainbow_fractal_random.glsl
+rainbow_x_fractal_bass.glsl
+
+[Rainbow Pulse]
+rainbow_x_pulse_blur.glsl
+rainbow_x_prism_pulse.glsl
+rainbow_x_light_bass.glsl
+
+[Rainbow Ink]
+rainbow_ink_t.glsl
+rainbow_x_ink_wave.glsl
+rainbow_x_swirl_freq.glsl
+
+[Act XII: Grand Finale]
+frac_shader02_dmd6i_amp.glsl
+gem-spiral-full-audio.glsl
+rainbow_x_spiral_beat.glsl
+
+[Crescendo]
+HyperFcousAmp.glsl
+HyperFocusTrails.glsl
+frac_shader02_dmdXi3_warp.glsl
+drain_mirror_amp.glsl
+
+[Supernova]
+frac_shader02_dmd6i_transparent.glsl
+fractal_diamond_rainbow_overflow_const.glsl
+Liquid_Light_Rainbow_Blend.glsl
+genergy.glsl
+
+[Encore: Infinity]
+frac_shader_echo4_spin_frac.glsl
+frac_shader02_dmdXi.glsl
+rainbow_x_xor_beat.glsl
+echo_rainbow_spin.glsl
+
+[Tremor Zone]
+tremor1.glsl
+tremor3.glsl
+tremor4.glsl
+
+[Pebble Beach]
+pebble.glsl
+pebble_fast.glsl
+putty.glsl
+
+[Dye Chamber]
+tdye.glsl
+tdye2.glsl
+dye.glsl
+chue.glsl
+
+[Air Full]
+air_full.glsl
+airshader1.glsl
+atan-bowl.glsl
+
+[HyperFocus]
+HyperFcousAmp.glsl
+HyperFocusTrails.glsl
+fisheye_warp.glsl
+
+[Composite Dreams]
+composite2.glsl
+composite3.glsl
+composite-static.glsl
+
+[Digital Light Storm]
+DigitalLight.glsl
+DigitalLightStorm.glsl
+XorKernBrighter.glsl
+
+[Curtain Call]
+pastel.glsl
+sepia.glsl
+lightfade.glsl
