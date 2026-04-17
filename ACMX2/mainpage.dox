@@ -2,7 +2,7 @@
 @mainpage ACMX2 — Real-Time GPU-Accelerated Video Glitch Engine
 
 @htmlonly
-<img src="https://lostsidedead.biz/acmx2.jpg" alt="Sreenshot1" style="max-width:800px; width:80%; height:auto;" />
+<img src="https://lostsidedead.biz/acmx2.jpg?v=2" alt="Sreenshot1" style="max-width:800px; width:80%; height:auto;" />
 @endhtmlonly
 
 @section intro Introduction
@@ -56,6 +56,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>Shader cache</b> — precompile shader binaries for fast startup
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
 - <b>MIDI Map Tool</b> — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
+- <b>Crossfade transitions</b> — smooth linear blend between old and new frames when switching playlist shaders, with configurable duration
 - <b>Distrobox export</b> — script to export applications to the host desktop with icons and `.desktop` files
 
 @section install Installation & Prerequisites
@@ -193,6 +194,7 @@ cmake .. && make -j$(nproc)
 |       | `--build`        | `<path>`    | Build shader cache and exit |
 |       | `--no-cache`     |             | Disable shader caching |
 |       | `--time-speed`   | `<float>`   | time_f speed multiplier (default: 1.0) |
+|       | `--cross-fade`   | `<seconds>` | Crossfade duration when switching playlist shaders (default: 0.5) |
 
 @subsection cli_gpu GPU Filter Options
 | Long              | Value       | Description |
@@ -325,7 +327,7 @@ The system operates as a <b>two-stage GPU pipeline</b>: first, CUDA kernels proc
 This is the current desktop ACMX2/acidcam-gpu interface in action.
 
 @htmlonly
-<img src="https://lostsidedead.biz/screen.png" alt="ACMX2 and acidcam-gpu running on desktop" style="max-width:800px; width:80%; height:auto;" />
+<img src="https://lostsidedead.biz/screen.png?v=2" alt="ACMX2 and acidcam-gpu running on desktop" style="max-width:800px; width:80%; height:auto;" />
 @endhtmlonly
 
 
@@ -780,6 +782,17 @@ Camera Frame
 @endcode
 
 The user independently controls both the CUDA filter list and the GLSL shader pass list. Changing either one  or just reordering elements  produces a completely different visual result.
+
+@subsubsection explained_crossfade_transitions Crossfade Transitions
+
+
+When the active shader changes during playlist playback (via keyboard navigation or automatic cycling), the system performs a smooth crossfade transition between the old and new shader output rather than a hard cut. This is implemented as a dedicated compositing pass with its own FBO and shader program.
+
+- <b>Snapshot:</b> When a shader switch is triggered, <tt>beginCrossfade()</tt> copies the current capture FBO contents into a dedicated previous-frame texture (<tt>crossfadePrevTexture</tt>) via <tt>glCopyTexSubImage2D</tt>. The blend factor (<tt>crossfadeAlpha</tt>) is reset to 0 and a start timestamp is recorded.
+- <b>Blend pass:</b> Each frame while the transition is active, <tt>applyCrossfade()</tt> computes a linear alpha from elapsed time divided by <tt>crossfadeDuration</tt> (configurable via <tt>--cross-fade</tt>, default 0.5 seconds). A fullscreen quad is drawn into <tt>crossfadeFBO</tt> using <tt>crossfade.glsl</tt>, which samples both the previous texture (<tt>prev_samp</tt>) and the current texture (<tt>samp</tt>) and blends them with <tt>mix(prev, curr, fade_alpha)</tt>.
+- <b>Completion:</b> Once <tt>crossfadeAlpha</tt> reaches 1.0, the transition ends and rendering returns to the normal pipeline.
+- <b>Resource management:</b> The crossfade FBO and its two textures are lazily allocated on first use by <tt>ensureCrossfadeFBO()</tt> and cleaned up in the <tt>~ACView()</tt> destructor.
+- <b>Qt interface:</b> The Settings dialog provides a "Crossfade Duration" spin box (0.0–10.0 seconds, step 0.1) that maps to the <tt>--cross-fade</tt> argument.
 
 @subsection explained_why_stacking_produces_infinite_visuals Why Stacking Produces Infinite Visuals
 

@@ -138,6 +138,7 @@ sudo bash build-script/install-deps-arch.sh
 | | `--build` | `<path>` | Build shader cache for specified library path and exit |
 | | `--no-cache` | | Disable shader caching (always recompile shaders) |
 | | `--time-speed` | `<float>` | Constant `time_f` speed multiplier (default: `1.0`) |
+| | `--cross-fade` | `<seconds>` | Crossfade duration in seconds when switching playlist shaders (default: `0.5`) |
 
 ### GPU Filter Options
 
@@ -238,6 +239,15 @@ sudo bash build-script/install-deps-arch.sh
 ---
 
 ## Recent Updates
+
+### Crossfade Transitions
+
+ACMX2 now supports smooth crossfade transitions when switching shaders during playlist playback.
+
+- **Command line:** Use `--cross-fade <seconds>` to set the transition duration (default: `0.5` seconds).
+- **How it works:** When the active shader changes (via playlist navigation or keyboard controls), the previous frame is captured and linearly blended with the new shader output over the configured duration using a dedicated GLSL crossfade shader.
+- **Qt Interface:** The **Settings** dialog includes a "Crossfade Duration" spin box (0.0–10.0 seconds, step 0.1).
+- **Implementation:** A separate FBO and shader program (`crossfade.glsl`) perform the blend. The `fade_alpha` uniform ramps from 0 to 1 over the configured duration, mixing the previous and current textures via `mix(prev, curr, fade_alpha)`.
 
 ### MIDI Controller Support
 

@@ -2190,7 +2190,7 @@ struct MXArguments {
     float time_speed = 1.0f;
     std::string playlist_file;
     double duration = 0.0;
-    float cross_fade_duration = 0.5f;
+    float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
 };
 
 /**
@@ -2833,6 +2833,18 @@ class ACView : public gl::GLObject {
                                  : library.getFullShaderName();
     }
 
+    /**
+     * @brief Lazily create the crossfade FBO and its two textures.
+     *
+     * Allocates a framebuffer object (@c crossfadeFBO) with an RGBA colour
+     * attachment (@c crossfadeTexture) and a second texture
+     * (@c crossfadePrevTexture) used to store the previous frame.
+     * Subsequent calls are no-ops once the FBO has been created.
+     *
+     * @param width  Framebuffer width in pixels.
+     * @param height Framebuffer height in pixels.
+     * @throws mx::Exception if the framebuffer is incomplete.
+     */
     void ensureCrossfadeFBO(int width, int height) {
         if (crossfadeFBO)
             return;
@@ -2855,6 +2867,16 @@ class ACView : public gl::GLObject {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
+    /**
+     * @brief Start a crossfade transition from the current frame.
+     *
+     * Snapshots the current capture FBO contents into @c crossfadePrevTexture,
+     * resets @c crossfadeAlpha to zero, and records the start time so that
+     * applyCrossfade() can linearly interpolate over @c crossfadeDuration
+     * seconds.
+     *
+     * @param win The GL window whose dimensions define the framebuffer size.
+     */
     void beginCrossfade(gl::GLWindow *win) {
         ensureCrossfadeFBO(win->w, win->h);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, captureFBO);
@@ -2867,6 +2889,19 @@ class ACView : public gl::GLObject {
         crossfadeStartTime = std::chrono::steady_clock::now();
     }
 
+    /**
+     * @brief Render the crossfade blend for the current frame.
+     *
+     * Computes a linear alpha from elapsed time and @c crossfadeDuration,
+     * then draws a full-screen quad into @c crossfadeFBO using the
+     * @c crossfadeShader.  The shader mixes @c crossfadePrevTexture
+     * (the old frame) with @p currentTexture (the new frame) via
+     * the @c fade_alpha uniform.  When the transition completes
+     * (@c crossfadeAlpha >= 1.0), @c crossfadeActive is set to false.
+     *
+     * @param win            The GL window (provides viewport dimensions).
+     * @param currentTexture The texture containing the newly rendered frame.
+     */
     void applyCrossfade(gl::GLWindow *win, GLuint currentTexture) {
         if (!crossfadeActive)
             return;
@@ -4591,14 +4626,14 @@ class ACView : public gl::GLObject {
     GLuint depthBuffer = 0;
     GLuint passFBO[2] = {0, 0};
     GLuint passTexture[2] = {0, 0};
-    GLuint crossfadeFBO = 0;
-    GLuint crossfadeTexture = 0;
-    GLuint crossfadePrevTexture = 0;
-    gl::ShaderProgram crossfadeShader;
-    float crossfadeAlpha = 1.0f;
-    bool crossfadeActive = false;
-    float crossfadeDuration = 0.5f;
-    std::chrono::steady_clock::time_point crossfadeStartTime;
+    GLuint crossfadeFBO = 0;                                  ///< FBO used for the crossfade compositing pass.
+    GLuint crossfadeTexture = 0;                               ///< Colour attachment of @c crossfadeFBO (blended output).
+    GLuint crossfadePrevTexture = 0;                           ///< Snapshot of the previous frame used as the blend source.
+    gl::ShaderProgram crossfadeShader;                         ///< Shader that mixes prev_samp and samp via fade_alpha.
+    float crossfadeAlpha = 1.0f;                               ///< Current blend factor (0 = old frame, 1 = new frame).
+    bool crossfadeActive = false;                              ///< True while a crossfade transition is in progress.
+    float crossfadeDuration = 0.5f;                            ///< Duration of the crossfade transition in seconds.
+    std::chrono::steady_clock::time_point crossfadeStartTime;  ///< Wall-clock time the current crossfade began.
     std::thread writerThread;
     std::atomic<bool> running{false};
     std::atomic<bool> captureRunning{false};
