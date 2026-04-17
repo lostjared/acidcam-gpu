@@ -1,0 +1,153 @@
+[Neon Gridlock]
+pigrid.glsl
+black_rings.glsl
+rightintwo.glsl
+[Color Vortex]
+color_swirl_sin_mouse.glsl
+fat-blue.glsl
+shift_dark.glsl
+[Twisted Reflections]
+mirror_x_audio40.glsl
+mirror-twist-sin.glsl
+seek.glsl
+[Sketchy Prism]
+edge_pencil.glsl
+frac_shader02_prisim.glsl
+sac-geo-xor.glsl
+[Dark Dispatch]
+distort-disp.glsl
+dark_rainbow_rubber_soul.glsl
+[Audio Mirror 8]
+mirror_x_audio8.glsl
+react10.glsl
+comp_quality.glsl
+[Fractal Zoom Out]
+frac_zoom7.glsl
+color_w2.glsl
+[Hallucination Station]
+halluc_audio.glsl
+apart.glsl
+strobe_in_out.glsl
+[XOR Madness]
+xorMouse.glsl
+composite_crt.glsl
+bend2.glsl
+[Echo Six]
+echo_x6.glsl
+react_x_spin_amp.glsl
+hurixyz.glsl
+[Purple Flash]
+strobe.glsl
+grid_pattern.glsl
+mirror_x_audio4.glsl
+[Zigzag Skinny]
+skinny.glsl
+purple_strobe.glsl
+zigzag.glsl
+[Dark Magic]
+XorKernBrighter.glsl
+magic-2.glsl
+[Analog Cosine]
+analog.glsl
+cos.glsl
+fractal_texture_large.glsl
+[Spiral Reactor]
+react_x_spiral_twist.glsl
+sine_grad2.glsl
+color_flux.glsl
+[Rainbow Snake]
+rainbow_swirl_limit.glsl
+snake_dir.glsl
+alpha_diamond.glsl
+[Echo Reverb]
+echo_5_mix_rev.glsl
+water_rgb.glsl
+react_x_noise_glitch.glsl
+[Warp Hole]
+random_x_audio_warp_tunnel.glsl
+huri1.glsl
+[Octo Strobe]
+echo_two.glsl
+frac_shader02_octo_strobe.glsl
+radial_distortion.glsl
+[Fractal Glitch]
+fractal_mirror_glitch_fractal.glsl
+blue.glsl
+glitch-zoom.glsl
+[Code Flux]
+code_flux_mouse.glsl
+fat-red.glsl
+mirror_x_audio24.glsl
+[Smoky Fractal]
+smoke.glsl
+frac_zoom8.glsl
+vhs_damage.glsl
+[Gem Echo]
+echo2.glsl
+gem_kale_large.glsl
+mandella1.glsl
+[Tunnel Glow]
+warp_tunnel.glsl
+glow.glsl
+gxor2.glsl
+[Deep Radial]
+frac_shader02_dmdi_radial.glsl
+deepcolor.glsl
+frac_shader02_dmd6i_air.glsl
+[Audio Drain]
+frac_shader02_dmd6i_audio.glsl
+drain_mirror_amp.glsl
+spiral_wave.glsl
+[Page Sphere]
+page_turn2.glsl
+tdye.glsl
+[Smooth Julia]
+gptsmooth2.glsl
+julia.glsl
+mirror_x_audio32.glsl
+[Expand Diamond]
+expand_mul_fast.glsl
+diamond.glsl
+rainbow-touch.glsl
+[Glitch Boil]
+glitch_boil2.glsl
+dark_rainbow2.glsl
+plasma3.glsl
+[Tangerine Aura]
+tan.glsl
+aura9.glsl
+mirror1_op.glsl
+[Glitch Jump]
+glitch_jump.glsl
+mirror-wrap-edge.glsl
+glitchf.glsl
+[Whirlpool Rev]
+whirlx.glsl
+mirror_rev2.glsl
+plasma_rainbow.glsl
+[Fractal Time]
+time_frac.glsl
+frac_shader_echo4_spin_full.glsl
+expand_mul.glsl
+[Loop Spiral]
+echo_loop2.glsl
+gem-spiral-full.glsl
+eye2.glsl
+[Wormhole React]
+frac_zoom4.glsl
+wormhole_audio.glsl
+react6.glsl
+[Glitch Peak]
+echo_mirror_3.glsl
+react_x_glitch_peak.glsl
+frac_shader02_dmdXi3_drain.glsl
+[Rainbow Blur]
+rainbow_blur.glsl
+mirror_8.glsl
+[Dispersion Rotate]
+DispersionRotate.glsl
+weirdlines.glsl
+xor_positional_offset.glsl
+[Fractal Origin]
+af_scale.glsl
+fractal.glsl

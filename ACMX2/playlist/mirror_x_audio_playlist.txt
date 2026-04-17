@@ -1,0 +1,226 @@
+[Mirror Audio Pulse Zoom]
+mirror_x_audio1.glsl
+gem-spiral-full-audio.glsl
+smooth_pixel.glsl
+fractal_audio.glsl
+[Mirror Audio Tiled Rotate]
+mirror_x_audio2.glsl
+geometric3.glsl
+grid_pattern.glsl
+gkale.glsl
+[Mirror Audio Ripple Wave]
+mirror_x_audio3.glsl
+ripple_rainbow.glsl
+water_full.glsl
+psyche_wave.glsl
+spiral_wave.glsl
+[Mirror Audio Polar Warp]
+mirror_x_audio4.glsl
+warp_ppong.glsl
+spiral-aura.glsl
+radial_distortion.glsl
+g_swirl.glsl
+[Mirror Audio Kaleidoscope]
+mirror_x_audio5.glsl
+kale3.glsl
+gkale_echo2.glsl
+frac_shader02_dmd6i_audio.glsl
+[Mirror Audio Chromatic Split]
+mirror_x_audio6.glsl
+glitch-react-color.glsl
+vhs.glsl
+rainbow_x_chromatic_storm.glsl
+react_x_chromatic_split.glsl
+[Mirror Audio Swirl Vortex]
+mirror_x_audio7.glsl
+gptswirl2.glsl
+sine_swirl.glsl
+g_swirl.glsl
+mirror-swirly.glsl
+[Mirror Audio Dual Blend]
+mirror_x_audio8.glsl
+mirror-self.glsl
+[Mirror Audio 8-Seg Kale]
+mirror_x_audio9.glsl
+kale4.glsl
+gem_kale_large.glsl
+gkale_echo.glsl
+frac_shader02_octo_amp.glsl
+[Mirror Audio Bulge Lens]
+mirror_x_audio10.glsl
+inflate-ripple.glsl
+zoom_pulse2.glsl
+pinch.glsl
+pebble_fast.glsl
+[Mirror Audio Quarter Chromatic]
+mirror_x_audio11.glsl
+react_x_chromatic_split.glsl
+glitch-react.glsl
+rgb_blur_time.glsl
+[Mirror Audio Fractal Fold]
+mirror_x_audio12.glsl
+fractal-fold-neon.glsl
+fractal-foldzx.glsl
+frac_shader02_dmd6iFold.glsl
+fractal_texture_large_audio.glsl
+[Mirror Audio Spiral]
+mirror_x_audio13.glsl
+spiral_mirror_wave.glsl
+rainbow_spiral.glsl
+spiral-center.glsl
+wormhole_audio.glsl
+[Mirror Audio Animated Split]
+mirror_x_audio14.glsl
+tearing.glsl
+rightintwo.glsl
+mirror-in.glsl
+[Mirror Audio Neon Rings]
+mirror_x_audio15.glsl
+neon.glsl
+light-rings.glsl
+light_pulse.glsl
+gem-aura.glsl
+[Mirror Audio Dynamic Grid]
+mirror_x_audio16.glsl
+square_grid2.glsl
+pigrid.glsl
+[Mirror Audio Center Spin]
+mirror_x_audio17.glsl
+rotate_xyz_zoom.glsl
+gt_rotate.glsl
+mirror-center.glsl
+rainbow_cd_spin.glsl
+[Mirror Audio Sine Fold]
+mirror_x_audio18.glsl
+triwavedistort.glsl
+sine_ripple.glsl
+psyche_ripple.glsl
+wave_spiral.glsl
+[Mirror Audio Radial Lens]
+mirror_x_audio19.glsl
+radial_distortion2.glsl
+mirror_rad.glsl
+zoom_fish.glsl
+mirror-fish-mouse.glsl
+[Mirror Audio HSV Rainbow]
+mirror_x_audio20.glsl
+rainbow_fractal.glsl
+rainbow_color_swirl.glsl
+rainbow_spiral_rev.glsl
+gem-color-spiral.glsl
+[Mirror Audio Pixelate Blend]
+mirror_x_audio21.glsl
+smooth_pixel.glsl
+pixels.glsl
+react_x_hash_glitch.glsl
+[Mirror Audio Fisheye Lens]
+mirror_x_audio22.glsl
+mirror-pong.glsl
+zoom_pulse.glsl
+inflate.glsl
+mirror-bubble.glsl
+[Mirror Audio Triple Fold Glow]
+mirror_x_audio23.glsl
+glow.glsl
+fractal-fold-neon.glsl
+gem-light-frac.glsl
+[Mirror Audio Log Spiral]
+mirror_x_audio24.glsl
+spiral_mirror_2.glsl
+wspiral.glsl
+spiral_edge.glsl
+rainbow_spiral_rev2.glsl
+[Mirror Audio Recursive Self-Sim]
+mirror_x_audio25.glsl
+fractal_texture_large_audio.glsl
+fractal2.glsl
+frac_zoom8.glsl
+new_fractal2.glsl
+[Mirror Audio Quarter Wobble]
+mirror_x_audio26.glsl
+mirror-putty.glsl
+pebble.glsl
+putty.glsl
+tremor3.glsl
+[Mirror Audio Kale Bloom]
+mirror_x_audio27.glsl
+gem-spiral-full-audio.glsl
+gem_rainbow_metal_audio.glsl
+halluc_gem2.glsl
+gkale_echo2.glsl
+[Mirror Audio Fisheye Chromatic]
+mirror_x_audio28.glsl
+thick_glass.glsl
+prism_glass.glsl
+glass_PI.glsl
+mirror-prism.glsl
+[Mirror Audio Double Fractal]
+mirror_x_audio29.glsl
+frac_shader02_dmd6i_audio.glsl
+fractal-fold-neon.glsl
+frac_shader04_echo3_spin.glsl
+frac_shader02_dmdXi3_warp.glsl
+[Mirror Audio Glitch Grid]
+mirror_x_audio30.glsl
+glitch-react.glsl
+glitch_wave.glsl
+react_x_glitch_peak.glsl
+react_x_noise_glitch.glsl
+[Mirror Audio 12-Seg Vignette]
+mirror_x_audio31.glsl
+kale2.glsl
+gem_kale_large.glsl
+frac_shader02_octo_amp.glsl
+[Mirror Audio Hex Fold]
+mirror_x_audio32.glsl
+geometric5.glsl
+sac-geo.glsl
+frac_shader_diamond.glsl
+mirdmd.glsl
+[Mirror Audio Vertical Split]
+mirror_x_audio33.glsl
+mirror-in.glsl
+tearing_spiral.glsl
+rightintwo.glsl
+mirror-l.glsl
+[Mirror Audio Flower Kale]
+mirror_x_audio34.glsl
+gem-spiral-cont2.glsl
+light_spiral.glsl
+gem-ripple.glsl
+halluc_gem.glsl
+[Mirror Audio Striped Interlace]
+mirror_x_audio35.glsl
+strobe_colors.glsl
+react_x_phase_stretch.glsl
+vhs-palette.glsl
+[Mirror Audio Kale Double Fold]
+mirror_x_audio36.glsl
+frac_shader02_dmd6iFold.glsl
+fractal-fold-neon.glsl
+gkale_echo.glsl
+gem_frac_spir.glsl
+[Mirror Audio Shatter Glass]
+mirror_x_audio37.glsl
+glitch_effect.glsl
+react_x_pingpong_glitch.glsl
+scramble-3.glsl
+tearing_max.glsl
+[Mirror Audio Diamond Twist]
+mirror_x_audio38.glsl
+frac_shader_diamond.glsl
+mirdmdrcolor.glsl
+fractal_diamond_rainbow_blend.glsl
+gem-deep.glsl
+[Mirror Audio Fractal Glow Chroma]
+mirror_x_audio39.glsl
+fractal-fold-neon.glsl
+gem-light-frac.glsl
+rainbow_x_fractal_bass.glsl
+react_x_spiral_twist.glsl
+[Mirror Audio Ultimate Combo]
+mirror_x_audio40.glsl
+fractal_audio.glsl
+gem-spiral-full-audio.glsl
+gem_rainbow_metal_audio.glsl
+halluc_audio.glsl

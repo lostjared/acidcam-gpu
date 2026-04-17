@@ -1,0 +1,406 @@
+[Pulsing Kaleidoscope Echo Feedback]
+fractal_mirror_kaleidoscope_pulse.glsl
+echo-pingpong.glsl
+bloom.glsl
+[Diamond Symmetry Chromatic Dispersion]
+fractal_mirror_diamond_wave.glsl
+crystalprism.glsl
+ripple_prism.glsl
+[Bass Zoom Breathing Tunnel]
+fractal_mirror_bass_zoom.glsl
+dream-tunnel.glsl
+breathe.glsl
+[Neon Fold Electric Lightning Storm]
+fractal_mirror_neon_bulge.glsl
+Electric_Fold.glsl
+DigitalLightStorm.glsl
+[Chromatic Split Prism Glass Refraction]
+fractal_mirror_chromatic_fold.glsl
+prism_glass.glsl
+react_x_chromatic_split.glsl
+[Glitch Fractal VHS Tape Damage]
+fractal_mirror_glitch_fractal.glsl
+vhs_damage.glsl
+glitch-react-color.glsl
+[Expanding Rings Liquid Heat Shimmer]
+fractal_mirror_ring_expand.glsl
+Liquid_Heat.glsl
+ripple.glsl
+[Stripe Kaleidoscope Rainbow Spiral]
+fractal_mirror_stripe_kaleidoscope.glsl
+rainbow_spiral.glsl
+spiral-aura.glsl
+[Vortex Mirror Deep Swirl Distortion]
+fractal_mirror_vortex_mirror.glsl
+react_x_swirl_deep.glsl
+tornado.glsl
+[Double Fold Echo Zoom Feedback]
+fractal_mirror_double_fold.glsl
+echo.glsl
+frac_shader04_echo.glsl
+[Sine Fold Underwater Wave Distortion]
+fractal_mirror_sine_fold_pulse.glsl
+underwater.glsl
+triwavedistort.glsl
+[Polar Reflection Tunnel Wormhole]
+fractal_mirror_polar_reflect.glsl
+warp_tunnel.glsl
+frac_shader03_wormhole.glsl
+[Neon Ring Electric Mirror Glow]
+fractal_mirror_neon_ring.glsl
+ElectricMirror.glsl
+glow.glsl
+[Zoom Pulse Drum Beat Inflate]
+fractal_mirror_zoom_pulse.glsl
+react_x_drum_zoom.glsl
+inflate.glsl
+[Warp Glitch Damaged VCR Scanlines]
+fractal_mirror_warp_glitch.glsl
+damaged_vcr.glsl
+crt.glsl
+[Diamond Reflect Rainbow Metal Ripple]
+fractal_mirror_diamond_reflect.glsl
+gem_rainbow_metal_audio.glsl
+rainbow_metal_fractal.glsl
+[Spiral Flip Log Polar Aura Spin]
+fractal_mirror_spiral_flip.glsl
+spiral-aura.glsl
+echo_rainbow_spin.glsl
+[Quad Fold Geometric Pattern Grid]
+fractal_mirror_quad_fold.glsl
+geometric3.glsl
+grid_pattern.glsl
+[Ripple Fold Pebble Pond Distortion]
+fractal_mirror_ripple_fold.glsl
+pebble.glsl
+water.glsl
+ripple_prism.glsl
+[Neon Stripe Plasma Rainbow Glow]
+fractal_mirror_neon_stripe.glsl
+plasma_rainbow.glsl
+neon.glsl
+[Bloom Mirror Stardust Light Pulse]
+fractal_mirror_bloom_mirror.glsl
+stardust.glsl
+light_pulse.glsl
+[Tunnel Reflect Fractal Wormhole Zoom]
+fractal_mirror_tunnel_reflect.glsl
+frac_shader03_wormhole.glsl
+frac_zoom1.glsl
+[Mosaic Fold Broken Glass Shatter]
+fractal_mirror_mosaic_fold.glsl
+brokenglass.glsl
+[Radial Pulse Bass Ripple Breathe]
+fractal_mirror_radial_pulse.glsl
+react_x_ripple_bass.glsl
+breathe.glsl
+[Swirl Mirror Cyclone Twist Drain]
+fractal_mirror_swirl_mirror.glsl
+cyclone.glsl
+twist.glsl
+[Triangle Fold Star Geometric Mask]
+fractal_mirror_tri_fold.glsl
+star.glsl
+geometric.glsl
+[Echo Fold Ping Pong Feedback Loop]
+fractal_mirror_echo_fold.glsl
+echo-pingpong.glsl
+echo_alpha_three_rgb.glsl
+[Prism Split Crystal Ball Refraction]
+fractal_mirror_prism_split.glsl
+crystalball.glsl
+prism_glass.glsl
+[Spiral Pulse Ring Beat Glow]
+fractal_mirror_spiral_pulse.glsl
+react_x_ring_spiral.glsl
+light_spiral.glsl
+[Chromatic Wave Rainbow Storm Audio]
+fractal_mirror_chromatic_wave.glsl
+rainbow_x_chromatic_storm.glsl
+react_x_chromatic_split.glsl
+[Aurora Mirror Ice Frost Shimmer]
+fractal_mirror_aurora_mirror.glsl
+ice.glsl
+Liquid_Crystal.glsl
+[Nebula Reflect Smoke Haze Glow]
+fractal_mirror_nebula_reflect.glsl
+smoke.glsl
+halluc_gem.glsl
+bloom.glsl
+[Crystal Fold Diamond Gem Sparkle]
+fractal_mirror_crystal_fold.glsl
+gem-deep.glsl
+diamond.glsl
+[Julia Warp Fractal Bass Rainbow]
+fractal_mirror_julia_warp.glsl
+rainbow_x_fractal_bass.glsl
+frac_shader04_julia.glsl
+[Infinite Reflect Kaleidoscope Gem Spiral]
+fractal_mirror_infinite_reflect.glsl
+gem-spiral-full-audio.glsl
+kale.glsl
+[Hex Fold Geometric Yin Yang Pattern]
+fractal_mirror_hex_fold.glsl
+yin-yang.glsl
+geometric3.glsl
+[Bloom Fold Glow Light Rainbow Swirl]
+fractal_mirror_bloom_fold.glsl
+Light_Rainbow_Swirl.glsl
+glow.glsl
+[Dual Kaleidoscope Liquid Fractal Tunnel]
+fractal_mirror_dual_kaleidoscope.glsl
+Liquid_Fractal_Tunnel.glsl
+kale3.glsl
+[Log Polar Chromatic Gem Metal Audio]
+fractal_mirror_logpolar_chromatic.glsl
+gem_rainbow_metal_audio.glsl
+react_x_spiral_twist.glsl
+[Cascade Fold Waterfall Bend Twist]
+fractal_mirror_cascade_fold.glsl
+waterbend.glsl
+bend_twist.glsl
+[Petal Reflect Aura Glow Kaleidoscope]
+fractal_mirror_petal_reflect.glsl
+aura5.glsl
+gem-aura.glsl
+[Grid Fold Pixel Mosaic Checkerboard]
+fractal_mirror_grid_fold.glsl
+brokenglass.glsl
+grid_pattern.glsl
+[Helix Mirror Spiral Wave Twist]
+fractal_mirror_helix_mirror.glsl
+wave_spiral.glsl
+spiral_mirror_wave.glsl
+[Shatter Fold Broken Glass Glitch]
+fractal_mirror_shatter_fold.glsl
+brokenglass.glsl
+glitch_boil.glsl
+[Rotating Mirror Spin Wrap Cyclone]
+fractal_mirror_rotating_mirror.glsl
+mirror_x_audio40.glsl
+cyclone.glsl
+[Wave Fold Ocean Ripple Distortion]
+fractal_mirror_wave_fold.glsl
+ocean.glsl
+ripple.glsl
+[Depth Wave Liquid Crystal Shimmer]
+fractal_mirror_depth_wave.glsl
+Liquid_Crystal.glsl
+thick_glass.glsl
+[Kaleidoscope Pulse Acid Color Echo]
+fractal_mirror_kaleidoscope_pulse.glsl
+acidcolor.glsl
+echo_color3.glsl
+[Bass Zoom Blackhole Gravity Pull]
+fractal_mirror_bass_zoom.glsl
+blackhole.glsl
+drain.glsl
+[Diamond Wave Fractal Rainbow Overflow]
+fractal_mirror_diamond_wave.glsl
+fractal_diamond_rainbow.glsl
+fractal_color_wave.glsl
+[Neon Bulge Hallucination Audio Gem]
+fractal_mirror_neon_bulge.glsl
+halluc_audio.glsl
+gem_frac.glsl
+[Chromatic Fold Edge Rainbow Pencil]
+fractal_mirror_chromatic_fold.glsl
+edge_rainbow.glsl
+pencil_draw.glsl
+[Vortex Mirror Hyper Vortex Tunnel]
+fractal_mirror_vortex_mirror.glsl
+HyperVortex.glsl
+warp_tunnel.glsl
+[Double Fold XOR Dark Rainbow Blend]
+fractal_mirror_double_fold.glsl
+xor_rgb_dark_rainbow.glsl
+echo_xor.glsl
+[Sine Fold Snake Slither Distortion]
+fractal_mirror_sine_fold_pulse.glsl
+snake.glsl
+slither.glsl
+[Glitch Fractal Boiling Noise Tear]
+fractal_mirror_glitch_fractal.glsl
+glitch_boil.glsl
+tear.glsl
+single-glittch.glsl
+[Ring Expand Drain Rainbow Spiral]
+fractal_mirror_ring_expand.glsl
+drain_rainbow.glsl
+rainbow_spiral.glsl
+[Zoom Pulse Inflate Pong Oscillation]
+fractal_mirror_zoom_pulse.glsl
+zoom_pong.glsl
+inflate.glsl
+putty.glsl
+[Stripe Kaleidoscope Tie Dye Audio]
+fractal_mirror_stripe_kaleidoscope.glsl
+tdye.glsl
+mirror_audio.glsl
+[Polar Reflect Gem Polar Tunnel Zoom]
+fractal_mirror_polar_reflect.glsl
+gem_polar.glsl
+dream-tunnel.glsl
+[Neon Ring Fractal Fold Neon Palette]
+fractal_mirror_neon_ring.glsl
+fractal-fold-neon.glsl
+frac_shader02_dmd6i_neon.glsl
+[Radial Pulse Tremor Shake Audio]
+fractal_mirror_radial_pulse.glsl
+tremor1.glsl
+react.glsl
+[Bloom Mirror Thick Glass Refraction]
+fractal_mirror_bloom_mirror.glsl
+thick_glass.glsl
+crystalball.glsl
+[Mosaic Fold Square Grid Checkerboard]
+fractal_mirror_mosaic_fold.glsl
+square_grid.glsl
+diamond.glsl
+[Crystal Fold Liquid Crystal Rainbow]
+fractal_mirror_crystal_fold.glsl
+Liquid_Crystal_Rainbow1.glsl
+Liquid_Crystal_2.glsl
+[Spiral Flip Tearing Spiral Cascade]
+fractal_mirror_spiral_flip.glsl
+tearing_spiral.glsl
+spiral_mirror.glsl
+[Cascade Fold Echo Mirror Feedback]
+fractal_mirror_cascade_fold.glsl
+echo_mirror_1.glsl
+echo-pingpong.glsl
+[Swirl Mirror Cosine Swirl Color]
+fractal_mirror_swirl_mirror.glsl
+cosine_swirl.glsl
+color_swirl_beautiful.glsl
+[Helix Mirror Whirlpool Spiral Wave]
+fractal_mirror_helix_mirror.glsl
+wspiral.glsl
+wave_spiral.glsl
+[Aurora Mirror Plasma Ice Frost]
+fractal_mirror_aurora_mirror.glsl
+plasma.glsl
+ice.glsl
+[Julia Warp Orbit Trap Color Cycle]
+fractal_mirror_julia_warp.glsl
+frac_shader04_julia.glsl
+color_flux.glsl
+[Infinite Reflect Fractal Diamond Fold]
+fractal_mirror_infinite_reflect.glsl
+frac_shader02_dmd6i.glsl
+frac_shader_diamond.glsl
+[Hex Fold Six Segment Kaleidoscope]
+fractal_mirror_hex_fold.glsl
+kale.glsl
+aura7.glsl
+[Nebula Reflect Ocean Smoke Drift]
+fractal_mirror_nebula_reflect.glsl
+ocean.glsl
+smoke.glsl
+[Log Polar Chromatic Fisheye Lens]
+fractal_mirror_logpolar_chromatic.glsl
+fisheye.glsl
+react_x_chromatic_split.glsl
+[Grid Fold Acid Pixel Block Mosaic]
+fractal_mirror_grid_fold.glsl
+brokenglass.glsl
+8bit.glsl
+[Petal Reflect Flower Color Spiral]
+fractal_mirror_petal_reflect.glsl
+gem-spiral-cont.glsl
+bright_rainbow.glsl
+[Rotating Mirror Audio Mirror Spin]
+fractal_mirror_rotating_mirror.glsl
+mirror_x_audio25.glsl
+mirror_x_audio15.glsl
+[Warp Glitch Digital Light Strobe]
+fractal_mirror_warp_glitch.glsl
+DigitalLight.glsl
+glitch-react.glsl
+[Prism Split Rainbow Prism Pulse]
+fractal_mirror_prism_split.glsl
+rainbow_x_prism_pulse.glsl
+prism_glass.glsl
+[Shatter Fold Glitch Wave Tremor]
+fractal_mirror_shatter_fold.glsl
+glitch_wave.glsl
+tremor1.glsl
+[Tri Fold Aura Fractal Sketch]
+fractal_mirror_tri_fold.glsl
+fractal-fold-sketch.glsl
+aura9.glsl
+[Echo Fold Feedback Color Shift]
+fractal_mirror_echo_fold.glsl
+echo_color3.glsl
+color_flux.glsl
+[Wave Fold Water Prism Chromatic]
+fractal_mirror_wave_fold.glsl
+water_prism.glsl
+Liquid_Rainbow.glsl
+[Depth Wave Bubble Lens Fisheye]
+fractal_mirror_depth_wave.glsl
+bubble.glsl
+fisheye.glsl
+[Bloom Fold Light Spiral Stardust]
+fractal_mirror_bloom_fold.glsl
+light_spiral.glsl
+stardust.glsl
+[Dual Kaleidoscope Gem Aura Spiral]
+fractal_mirror_dual_kaleidoscope.glsl
+gem-aura.glsl
+spiral-aura.glsl
+[Diamond Reflect Audio Wormhole Zoom]
+fractal_mirror_diamond_reflect.glsl
+wormhole_audio.glsl
+frac_zoom1.glsl
+[Chromatic Wave Liquid Light Time]
+fractal_mirror_chromatic_wave.glsl
+Liquid_Light_Time.glsl
+DigitalLight.glsl
+[Spiral Pulse Gem Spiral Beat Audio]
+fractal_mirror_spiral_pulse.glsl
+rainbow_x_spiral_beat.glsl
+gem-spiral-full-audio.glsl
+[Ripple Fold Psychedelic Wave All]
+fractal_mirror_ripple_fold.glsl
+mirror-psyce-wave-all.glsl
+ripple_rainbow.glsl
+[Quad Fold XOR Sine Swirl Pattern]
+fractal_mirror_quad_fold.glsl
+xor_sine_swirl.glsl
+sine_swirl.glsl
+[Neon Stripe CRT Scanline Retro]
+fractal_mirror_neon_stripe.glsl
+crt.glsl
+vhs.glsl
+[Kaleidoscope Pulse VHS Retro Glow]
+fractal_mirror_kaleidoscope_pulse.glsl
+vhs.glsl
+bloom.glsl
+neon.glsl
+[Bass Zoom React Drum Zoom Breathe]
+fractal_mirror_bass_zoom.glsl
+react_x_drum_zoom.glsl
+zoom_pulse.glsl
+breathe.glsl
+[Crystal Fold Electric Fold Lightning]
+fractal_mirror_crystal_fold.glsl
+Electric_Fold.glsl
+ElectricMirror.glsl
+[Julia Warp Liquid Fractal Tunnel]
+fractal_mirror_julia_warp.glsl
+Liquid_Fractal_Tunnel.glsl
+Liquid_Crystal.glsl
+[Infinite Reflect HyperFocus Amp Audio]
+fractal_mirror_infinite_reflect.glsl
+HyperFcousAmp.glsl
+halluc_audio.glsl
+[Nebula Reflect Sepia Old Film Dream]
+fractal_mirror_nebula_reflect.glsl
+sepia.glsl
+old-film.glsl
+smoke.glsl
+[Glitch Fractal React Noise Chaos]
+fractal_mirror_glitch_fractal.glsl
+react_x_noise_glitch.glsl
+react_x_hash_glitch.glsl

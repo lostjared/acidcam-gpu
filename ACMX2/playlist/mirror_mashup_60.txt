@@ -1,0 +1,235 @@
+[Diagonal Symmetry Soft Glow]
+mirror1.glsl
+mirror_blur1.glsl
+mirror1_s.glsl
+[Horizontal Fold Chromatic Prism]
+mirror2.glsl
+mirror-prism.glsl
+mirror_blur2.glsl
+[Rotating 8-Tile Kaleidoscope Spiral]
+mirror_8.glsl
+mirror-spiral.glsl
+mirror-wrap-rotate.glsl
+[Crystal Ball Refraction Twist]
+mirrorg.glsl
+mirror-twist.glsl
+mirror-center.glsl
+[Left Fold Tangent Stretch]
+mirror_b.glsl
+mirror-l.glsl
+mirror_p.glsl
+[Cycling Directional Spin Wrap]
+mirror_dir.glsl
+mirror-wrap-spin.glsl
+mirror-wrap-rotate-snap.glsl
+[Pulsing Stretch Radial Lens]
+mirror_p.glsl
+mirror_rad.glsl
+mirror-bubble.glsl
+[Quad Grid Counter-Rotate Fold]
+mirror_r4.glsl
+mirror-wrap-rotate90.glsl
+mirror-self.glsl
+[Octal Tile Spiral Fractal]
+mirror_r8.glsl
+mirror-spiral-f.glsl
+mirror-wrap-dmd6i.glsl
+[Hard Left-Right Split Twist]
+mirror_rev.glsl
+mirror-twist-sin.glsl
+mirror_rev2.glsl
+[Top-Bottom Fold Pebble Ripple]
+mirror_revy.glsl
+mirror-pebble.glsl
+mirror_rev2y.glsl
+[Offset Drift Putty Stretch]
+mirror_offset.glsl
+mirror-putty.glsl
+mirror_offset_rev.glsl
+[Blurred Diagonal Gradient Overlay]
+mirror_blur1.glsl
+mirror-grad.glsl
+mirror-sin-osc.glsl
+[Horizontal Blur Psyche Ripple]
+mirror_blur2.glsl
+mirror-psyce-wave-all.glsl
+mirror-swirly.glsl
+[Folded Bowl Swirl Time Warp]
+mirror-self.glsl
+mirror-bowl.glsl
+mirror-bowl-by-time.glsl
+[Center Swirl Mandala Rainbow]
+mirror-center.glsl
+mirror-mandella.glsl
+mirror-grad.glsl
+[Polar Atan Barrel Distortion Wrap]
+mirror-atan.glsl
+mirror-wrap-edge.glsl
+mirror-wrap.glsl
+[Air Current Chromatic Bowl]
+mirror-air-bowl.glsl
+mirror-airshader1.glsl
+mirror-prism.glsl
+[Bubble Lens 3D Perspective]
+mirror-bubble.glsl
+mirror-bubble-zoom-mouse.glsl
+mirror-zoom.glsl
+[Radial Color Synthesis Swirl]
+mirror-color-mouse.glsl
+mirror-color-swirl.glsl
+mirror-color-o1.glsl
+[Six-Fold Diamond Neon Fractal]
+mirror-wrap-dmd6i.glsl
+mirror-comb-mouse.glsl
+mirror-frac-mouse-z2.glsl
+[Fisheye Dispersion Ripple Pond]
+mirror-fish-mouse.glsl
+mirror-swirly.glsl
+mirror-pebble.glsl
+[Geometric Organic Wave Bend]
+mirror-geometric.glsl
+mirror-psyce-wave-all.glsl
+mirror-bowl.glsl
+[XOR Blur Sin Color Feedback]
+mirror-goofy.glsl
+mirror-gpt.glsl
+mirror_blur1.glsl
+[Mandala Spiral Rainbow Vignette]
+mirror-mandella.glsl
+mirror-spiral-aura.glsl
+mirror-grad.glsl
+[Triple Atan Chaos Spin]
+mirror-pong.glsl
+mirror-pong2.glsl
+mirror-twist-gpt.glsl
+[Prism Split Folded Oscillation]
+mirror-prism.glsl
+mirror-sin-osc.glsl
+mirror-c.glsl
+[Pulsing Spiral Angular Fractal]
+mirror-spiral.glsl
+mirror-spiral-f.glsl
+mirror-wrap-rotate.glsl
+[Aura Halo Spinning Wrap]
+mirror-spiral-aura.glsl
+mirror-wrap-spin.glsl
+mirror-color-o1.glsl
+[Vortex Twist Folded Sine]
+mirror-twist.glsl
+mirror-twisted.glsl
+mirror-twist-sin.glsl
+[Audio Reactive Twist Ripple]
+mirror-twist-gpt.glsl
+mirror-air-bowl.glsl
+mirror-fish-mouse.glsl
+[Edge Fade Rotation Tile]
+mirror-wrap-edge.glsl
+mirror-wrap-rotate.glsl
+mirror_c.glsl
+[Snapped Quarter Turn Diamond]
+mirror-wrap-rotate-snap.glsl
+mirror-wrap-dmd6i.glsl
+mirror-geometric.glsl
+[Sphere Mapped Fold Zoom]
+mirror-zoom.glsl
+[UFO Warp 3D Radial Wave]
+mirror-ufo-wrap.glsl
+mirror-bubble-zoom-mouse.glsl
+mirror-atan.glsl
+[Log Polar Kaleidoscope Pulse]
+mirror-zoom.glsl
+mirror-spiral-f.glsl
+mirror-sin-osc.glsl
+mirror-c.glsl
+[Saturated Flip Chromatic Stretch]
+mirror1_s.glsl
+mirror2_s.glsl
+mirror-prism.glsl
+mirror-putty.glsl
+[Inverted Color Double Fold]
+mirror1_op.glsl
+mirror2_op.glsl
+mirror-self.glsl
+[Half Mirror Breathing Lens]
+mirror_half_dir.glsl
+mirror_p.glsl
+mirror_rad.glsl
+[Blur Stack Soft Psyche Wave]
+mirror_blur1.glsl
+mirror_blur2.glsl
+mirror_blur3.glsl
+mirror-psyce-wave-all.glsl
+[Fractal Kaleidoscope Color Overlay]
+mirror-frac-mouse-z2.glsl
+mirror-color-swirl.glsl
+mirror-wrap-dmd6i.glsl
+[Bowl Swirl Air Current Chromatic]
+mirror-bowl.glsl
+mirror-airshader1.glsl
+mirror-prism.glsl
+[Pebble Pond Psyche Bubble]
+mirror-pebble.glsl
+mirror-psyce-wave-all.glsl
+mirror-bubble.glsl
+[Goofy XOR Mandala Halo]
+mirror-goofy.glsl
+mirror-mandella.glsl
+mirror-spiral-aura.glsl
+[Elastic Putty Tangent Mirror]
+mirror-putty.glsl
+mirror-l.glsl
+mirror-pong.glsl
+[Continuous Spin Fold Aura]
+mirror-wrap-spin.glsl
+mirror-self.glsl
+mirror-spiral-aura.glsl
+[Wandering Rotate Pong Mirror]
+mirror-pong2.glsl
+mirror-wrap-rotate90.glsl
+mirror_half_dir.glsl
+[Crystal Refraction Twist Glow]
+mirrorg.glsl
+mirror-twisted.glsl
+mirror-grad.glsl
+[3D Perspective Comb Fractal]
+mirror-bubble-zoom-mouse.glsl
+mirror-comb-mouse.glsl
+mirror-zoom.glsl
+[Oscillating Fold Color Pulse]
+mirror-c.glsl
+mirror-color-mouse.glsl
+mirror-sin-osc.glsl
+[Radial Barrel Wave Displacement]
+mirror-atan.glsl
+mirror-psyce-wave-all.glsl
+mirror-pebble.glsl
+[Diamond Fold Rotating Prism]
+mirror-wrap-dmd6i.glsl
+mirror-wrap-rotate.glsl
+mirror-prism.glsl
+[Swirly Ripple Fisheye Dispersion]
+mirror-swirly.glsl
+mirror-fish-mouse.glsl
+mirror-spiral.glsl
+[Center Spiral Bowl Geometry]
+mirror-center.glsl
+mirror-spiral.glsl
+mirror-bowl-by-time.glsl
+mirror-geometric.glsl
+[Feedback Color Shift Warp]
+mirror-gpt.glsl
+mirror-color-swirl.glsl
+mirror-twist-sin.glsl
+[Air Ripple Chromatic Bubble Lens]
+mirror-airshader1.glsl
+mirror-bubble.glsl
+mirror-prism.glsl
+[Kaleidoscope Blur Saturation]
+mirror_8.glsl
+mirror_blur2.glsl
+mirror1_s.glsl
+[Polar Spin Gradient Rainbow]
+mirror-sin-osc.glsl
+mirror-grad.glsl
+mirror-wrap-spin.glsl
+mirror-mandella.glsl

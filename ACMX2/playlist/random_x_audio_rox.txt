@@ -1,0 +1,198 @@
+[Descent into Bass]
+random_x_audio_bass_tunnel.glsl
+drain_mirror.glsl
+warp_tunnel.glsl
+frac_shader03_wormhole.glsl
+[Prismatic Kaleidoscope]
+random_x_audio_freq_kaleidoscope.glsl
+kale2.glsl
+gkale_echo.glsl
+fold-spin.glsl
+[VHS Malfunction]
+random_x_audio_glitch_pulse.glsl
+vhs.glsl
+glitch_wave.glsl
+glitch_effect.glsl
+[Crystal Chamber]
+random_x_audio_crystal_breathe.glsl
+crystal.glsl
+crystalball.glsl
+gem_glass.glsl
+[Plasma Reactor]
+random_x_audio_plasma_storm.glsl
+plasma_rainbow.glsl
+plasma_prism.glsl
+plasma3.glsl
+[Cyclone Core]
+random_x_audio_vortex_spin.glsl
+cyclone.glsl
+tornado.glsl
+drain_mirror.glsl
+[Neon Outline]
+random_x_audio_neon_edge.glsl
+neon.glsl
+pencil_draw.glsl
+bloom.glsl
+[Shattered Light]
+random_x_audio_prism_shatter.glsl
+prism_glass.glsl
+Dispersion.glsl
+DispersionX.glsl
+[Echo Depths]
+random_x_audio_echo_cascade.glsl
+echo_rainbow_swirl.glsl
+echo_color5.glsl
+echo_alpha_three_rgb.glsl
+[Grid Meltdown]
+random_x_audio_wave_grid.glsl
+grid_pattern.glsl
+square_grid.glsl
+grid-spiral.glsl
+[Aberration Pulse]
+random_x_audio_chromatic_pulse.glsl
+react_x_chromatic_split.glsl
+rainbow_x_chromatic_storm.glsl
+react_x_wave_distort.glsl
+[Spiral Descent]
+random_x_audio_spiral_zoom.glsl
+spiral_wave.glsl
+spiral_mirror.glsl
+wspiral.glsl
+[Infinite Fold]
+random_x_audio_mirror_fold.glsl
+fold-mirror.glsl
+fold-spin.glsl
+mirror-wrap-spin.glsl
+[Pixel Bomb]
+random_x_audio_pixel_scatter.glsl
+pixels.glsl
+block_pixels.glsl
+snes.glsl
+random_pixels_static.glsl
+[Heat Mirage]
+random_x_audio_heat_shimmer.glsl
+heat.glsl
+heat-wave.glsl
+smoke.glsl
+[Event Horizon]
+random_x_audio_blackhole_pull.glsl
+blackhole.glsl
+dark_psych_wave.glsl
+HyperVortex.glsl
+[Fractal Bloom]
+random_x_audio_fractal_bloom.glsl
+fractal_audio.glsl
+bloom.glsl
+frac_shader01.glsl
+[RGB Splinter]
+random_x_audio_rgb_split.glsl
+rgb_blur.glsl
+echo_rgb.glsl
+[Diamond Pressure]
+random_x_audio_diamond_pulse.glsl
+diamond.glsl
+fractal_diamond_rainbow.glsl
+alpha_diamond.glsl
+[Twisted Cyclone]
+random_x_audio_cyclone_twist.glsl
+cyclone.glsl
+twist_full.glsl
+twarp2.glsl
+[Color Strobe]
+random_x_audio_strobe_color.glsl
+strobe_colors.glsl
+strobe.glsl
+[Fisheye Beat]
+random_x_audio_fisheye_throb.glsl
+fisheye_warp.glsl
+zoom_fish.glsl
+inflate.glsl
+[Tile Shatter]
+random_x_audio_tile_explode.glsl
+snes.glsl
+geometric3.glsl
+[Ripple Cascade]
+random_x_audio_ripple_rings.glsl
+ripple.glsl
+ripple_rainbow.glsl
+ripple_prism.glsl
+[Polar Distortion]
+random_x_audio_polar_warp.glsl
+radial_distortion.glsl
+radial.glsl
+warp_ppong.glsl
+[Mosaic Pulse]
+random_x_audio_mosaic_beat.glsl
+smooth_pixel.glsl
+pixels.glsl
+[Sine Wave Fracture]
+random_x_audio_sine_fold.glsl
+sine_swirl.glsl
+sine_ripple.glsl
+sine_grad4.glsl
+[Radial Smear]
+random_x_audio_radial_blur.glsl
+zoom_pulse.glsl
+radial.glsl
+gblur.glsl
+[Color Orbit]
+random_x_audio_color_orbit.glsl
+color_flux_whirl.glsl
+color_swirl_beautiful.glsl
+rainbow_color_swirl.glsl
+[Shockwave Impact]
+random_x_audio_shockwave.glsl
+react_x_ripple_bass.glsl
+react_x_drum_zoom.glsl
+pulse1.glsl
+[Warp Drive]
+random_x_audio_warp_tunnel.glsl
+frac_shader03_wormhole.glsl
+HyperVortex.glsl
+warp_tunnel.glsl
+[Cracked Glass]
+random_x_audio_glass_crack.glsl
+glass_PI.glsl
+gem_glass.glsl
+crystal-2.glsl
+[Nebula Flow]
+random_x_audio_nebula_flow.glsl
+smoke.glsl
+purple_haze.glsl
+aura5.glsl
+[Digital Sort]
+random_x_audio_pixelsort.glsl
+glitch_wave.glsl
+vhs.glsl
+tearing.glsl
+[Hex Matrix]
+random_x_audio_hexgrid.glsl
+geometric3.glsl
+geometric5.glsl
+grid_pattern.glsl
+[Zoom Flash]
+random_x_audio_zoom_strobe.glsl
+zoom_pulse.glsl
+react_x_drum_zoom.glsl
+strobe.glsl
+[Twisted Reflection]
+random_x_audio_twist_mirror.glsl
+mirror-twist.glsl
+mirror-wrap-spin.glsl
+twist_full.glsl
+[Frequency Spectrum]
+random_x_audio_freq_rings.glsl
+light-rings.glsl
+rainbow_cd.glsl
+ripple_cycle.glsl
+[Torn Signal]
+random_x_audio_glitch_tear.glsl
+tearing.glsl
+tearing_spiral.glsl
+glitch-react-color.glsl
+[Aurora Borealis]
+random_x_audio_aurora.glsl
+aura5.glsl
+aura7.glsl
+green_aura.glsl
+lightfade.glsl
