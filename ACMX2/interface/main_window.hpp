@@ -91,6 +91,7 @@ class MainWindow : public QMainWindow {
     QMenu *playbackMenu;
     QMenu *runMenu;
     QMenu *listMenu;
+    QMenu *viewMenu;
     QMenu *helpMenu;
     QAction *fileMenu_prop, *fileMenu_exit;
     QAction *cameraSet, *audioSet;
@@ -156,6 +157,7 @@ class MainWindow : public QMainWindow {
     QString midi_config_file;
     int midi_device = -1;
     QAction *midiSettingsAction;
+    QAction *stayOnTopAction;
     bool playlist_enabled = false;
     QStringList playlist_names;
     QList<QPair<QString, QStringList>> playlist_tree_data;

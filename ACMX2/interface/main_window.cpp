@@ -75,7 +75,20 @@ void MainWindow::initControls() {
     playbackMenu = menuBarPtr->addMenu(tr("Playback"));
     runMenu = menuBarPtr->addMenu(tr("Run"));
     listMenu = menuBarPtr->addMenu(tr("List"));
+    viewMenu = menuBarPtr->addMenu(tr("View"));
     helpMenu = menuBarPtr->addMenu(tr("Help"));
+    stayOnTopAction = new QAction(tr("Stay on Top"), this);
+    stayOnTopAction->setCheckable(true);
+    stayOnTopAction->setChecked(false);
+    connect(stayOnTopAction, &QAction::toggled, this, [this](bool checked) {
+        if (checked) {
+            setWindowFlags(windowFlags() | Qt::WindowStaysOnTopHint);
+        } else {
+            setWindowFlags(windowFlags() & ~Qt::WindowStaysOnTopHint);
+        }
+        show();
+    });
+    viewMenu->addAction(stayOnTopAction);
     fileMenu_prop = new QAction(tr("Properties"), this);
     fileMenu->addAction(fileMenu_prop);
     connect(fileMenu_prop, &QAction::triggered, this, &MainWindow::fileOpenProp);
