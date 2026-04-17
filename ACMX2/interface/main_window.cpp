@@ -5,6 +5,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QIcon>
 #include <QInputDialog>
 #include <QLayout>
@@ -87,6 +88,9 @@ void MainWindow::initControls() {
             setWindowFlags(windowFlags() & ~Qt::WindowStaysOnTopHint);
         }
         show();
+        if (checked && QGuiApplication::platformName() == "wayland") {
+            Log("Stay on Top may not work on Wayland. Launch with QT_QPA_PLATFORM=xcb for X11 support.");
+        }
     });
     viewMenu->addAction(stayOnTopAction);
     fileMenu_prop = new QAction(tr("Properties"), this);
