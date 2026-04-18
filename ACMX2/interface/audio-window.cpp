@@ -27,10 +27,10 @@ AudioSettings::AudioSettings(QWidget *parent)
 
     QLabel *sensitivityLabel = new QLabel("Sensitivity:", this);
     sensitivitySlider = new QSlider(Qt::Horizontal, this);
-    sensitivitySlider->setRange(1, 200);
-    sensitivitySlider->setValue(5);
+    sensitivitySlider->setRange(1, 50);
+    sensitivitySlider->setValue(10);
 
-    QLabel *sensitivityValueLabel = new QLabel("0.5", this);
+    QLabel *sensitivityValueLabel = new QLabel("1.0", this);
     connect(sensitivitySlider, &QSlider::valueChanged, this, [this, sensitivityValueLabel](int value) {
         double floatValue = value / 10.0;
         sensitivityValueLabel->setText(QString::number(floatValue, 'f', 1));

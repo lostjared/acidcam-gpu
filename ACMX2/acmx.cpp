@@ -2781,6 +2781,15 @@ class ACView : public gl::GLObject {
                     modelRotZ = fmod(modelRotZ + 360.0f, 360.0f);
                     mx::system_out << "acmx2: Model RotZ: " << modelRotZ << "\n";
                     fflush(stdout);
+                } else if (activeKey == 514) {
+                    modelRenderScale += 0.05f;
+                    mx::system_out << "acmx2: Model scale increased to " << modelRenderScale << "\n";
+                    fflush(stdout);
+                } else if (activeKey == 515) {
+                    modelRenderScale -= 0.05f;
+                    if (modelRenderScale < 0.05f) modelRenderScale = 0.05f;
+                    mx::system_out << "acmx2: Model scale decreased to " << modelRenderScale << "\n";
+                    fflush(stdout);
                 } else {
                     SDL_Keycode k = (val > 64)
                         ? midiKeyToSDL(mc.key1)
@@ -3935,6 +3944,17 @@ class ACView : public gl::GLObject {
                     mx::system_out << "acmx2: cameraDistance decreased: " << cameraDistance << "\n";
                     fflush(stdout);
                 }
+                if (keystate[SDL_SCANCODE_RIGHTBRACKET]) {
+                    modelRenderScale += 0.5f * dt;
+                    mx::system_out << "acmx2: Model scale increased to " << modelRenderScale << "\n";
+                    fflush(stdout);
+                }
+                if (keystate[SDL_SCANCODE_LEFTBRACKET]) {
+                    modelRenderScale -= 0.5f * dt;
+                    if (modelRenderScale < 0.05f) modelRenderScale = 0.05f;
+                    mx::system_out << "acmx2: Model scale decreased to " << modelRenderScale << "\n";
+                    fflush(stdout);
+                }
             }
             static float t = 0.0f;
             float oscOffset = 0.0f;
@@ -4825,14 +4845,15 @@ class ACView : public gl::GLObject {
                 break;
 #ifdef AUDIO_ENABLED
             case SDLK_INSERT: {
-                float s = get_sense() + 0.5f;
+                float s = get_sense() + 0.1f;
+                if (s > 5.0f) s = 5.0f;
                 set_sense(s);
                 mx::system_out << "acmx2: Audio sensitivity increased to " << s << "\n";
                 fflush(stdout);
                 break;
             }
             case SDLK_DELETE: {
-                float s = get_sense() - 0.5f;
+                float s = get_sense() - 0.1f;
                 if (s < 0.1f) s = 0.1f;
                 set_sense(s);
                 mx::system_out << "acmx2: Audio sensitivity decreased to " << s << "\n";
@@ -5578,6 +5599,8 @@ const char *message = R"(
     N - decrease movement speed
     C - Toggle Object Wave
     E - Enable/Disable Watermark
+    ] - Increase model scale
+    [ - Decrease model scale
 }
 )";
 

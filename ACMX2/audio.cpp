@@ -19,7 +19,7 @@ float gSmooth = 0.0f;
 float gLow = 0.0f;
 float gMid = 0.0f;
 float gHigh = 0.0f;
-float amp_sense = 25.0f;
+float amp_sense = 1.0f;
 unsigned int input_channels = 2;
 unsigned int output_channels = 0;
 bool output_buffer = false;
@@ -151,7 +151,7 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFra
 
 float get_amp() { return gAmplitude; }
 float get_sense() { return amp_sense; }
-void set_sense(float s) { amp_sense = s; }
+void set_sense(float s) { amp_sense = std::clamp(s, 0.1f, 5.0f); }
 float get_freq() { return gFrequency; }
 float get_amp_peak() { return gPeak; }
 float get_amp_rms() { return gRMS; }
