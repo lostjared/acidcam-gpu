@@ -16,6 +16,7 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU f
 - **CUDA GPU filters** — apply GPU-accelerated pixel filters in addition to shaders
 - **3D mode** — render shaders onto a 3D model (`.mxmod`)
 - **Multipass shaders** — chain multiple shader passes in a single frame
+- **Random multipass mode** — generate random 1–5 shader chains on the fly with crossfade transitions; navigate the main shader with Up/Down while in random mode
 - **Shader playlists** — cycle through an ordered list of shaders
 - **Audio reactivity** — shaders respond to real-time audio input (RtAudio/PulseAudio)
 - **MIDI control** — map hardware knobs and buttons to shader parameters
@@ -23,6 +24,7 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU f
 - **Silent mode** — headless video processing without a window
 - **Shader cache** — precompile shader binaries for fast startup
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
+- **MIDI Map Tool** — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 
 ---
 
@@ -170,6 +172,8 @@ cp -rf ../data/ .
 | `Up` | Previous shader (or previous playlist shader if playlist enabled) |
 | `Down` | Next shader (or next playlist shader if playlist enabled) |
 | `K` | Toggle shader lock (prevent Up/Down from switching shaders) |
+| `R` | Toggle random multipass mode (generates random 1–5 shader chain with crossfade; press again to restore previous state) |
+| `G` | Generate a new random shader chain (while in random multipass mode) |
 | `Left` | Previous GPU filter (if GPU filters enabled) |
 | `Right` | Next GPU filter (if GPU filters enabled) |
 | `Space` | Toggle shader processing bypass |

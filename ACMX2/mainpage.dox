@@ -48,6 +48,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>CUDA GPU filters</b> — apply GPU-accelerated pixel filters in addition to shaders
 - <b>3D mode</b> — render shaders onto a 3D model (`.mxmod`)
 - <b>Multipass shaders</b> — chain multiple shader passes in a single frame
+- <b>Random multipass mode</b> — generate random 1–5 shader chains on the fly with crossfade transitions; navigate the main shader while in random mode
 - <b>Shader playlists with named nodes</b> — organize shaders into named tree nodes; each node loads its shaders into the multi-pass pipeline when selected at runtime
 - <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
@@ -271,6 +272,8 @@ All fragment shaders receive the following uniforms automatically.
 |---------------|--------|
 | Up/Down       | Previous/Next shader; when playlist enabled, navigates tree nodes and loads node shaders into multi-pass pipeline |
 | K             | Toggle shader lock (prevent Up/Down from switching shaders) |
+| R             | Toggle random multipass mode (generates random 1–5 shader chain with crossfade; press again to restore previous state) |
+| G             | Generate a new random shader chain (while in random multipass mode) |
 | Left/Right    | Previous/Next GPU filter |
 | Page Up/Down  | Increase / Decrease Time Speed |
 | Space         | Toggle shader processing bypass |

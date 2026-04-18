@@ -193,6 +193,8 @@ sudo bash build-script/install-deps-arch.sh
 |-----|--------|
 | `Up` | Previous shader (or previous playlist tree node if playlist enabled) |
 | `Down` | Next shader (or next playlist tree node if playlist enabled) |
+| `R` | Toggle random multipass mode (generates random 1–5 shader chain with crossfade; press again to restore previous state) |
+| `G` | Generate a new random shader chain (while in random multipass mode) |
 | `Left` | Previous GPU filter (if GPU filters enabled) |
 | `Right` | Next GPU filter (if GPU filters enabled) |
 | `Space` | Toggle shader processing bypass |
@@ -239,6 +241,15 @@ sudo bash build-script/install-deps-arch.sh
 ---
 
 ## Recent Updates
+
+### Random Multipass Mode
+
+ACMX2 now supports a random multipass mode for spontaneous creative exploration.
+
+- **R key** — Toggle random multipass mode. On entry, the current shader state is saved and a random chain of 1–5 shaders is generated with a crossfade transition. Press R again to crossfade back to the previous state.
+- **G key** — While in random mode, generate a new random shader chain with crossfade.
+- **Up/Down keys** — While in random mode, change the main (post-processing) shader with crossfade while keeping the random pass list intact.
+- **MIDI support** — R (code 82) and G (code 71) are available as MIDI-mappable actions in the MIDI Map Tool.
 
 ### Crossfade Transitions
 

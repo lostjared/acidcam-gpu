@@ -40,6 +40,7 @@
 #include <optional>
 #include <queue>
 #include <sstream>
+#include <random>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -2362,10 +2363,12 @@ class ACView : public gl::GLObject {
         case 65:  return "A";
         case 66:  return "B";
         case 68:  return "D";
+        case 71:  return "G";
         case 72:  return "H";
         case 76:  return "L";
         case 78:  return "N";
         case 80:  return "P";
+        case 82:  return "R";
         case 83:  return "S";
         case 87:  return "W";
         case 500: return "TimeFwd";
@@ -2473,10 +2476,12 @@ class ACView : public gl::GLObject {
         case 65:  return SDLK_a;
         case 66:  return SDLK_b;
         case 68:  return SDLK_d;
+        case 71:  return SDLK_g;
         case 72:  return SDLK_h;
         case 76:  return SDLK_l;
         case 78:  return SDLK_n;
         case 80:  return SDLK_p;
+        case 82:  return SDLK_r;
         case 83:  return SDLK_s;
         case 75:  return SDLK_k;
         case 87:  return SDLK_w;
@@ -2820,6 +2825,37 @@ class ACView : public gl::GLObject {
     std::vector<int> saved_pass_list;
     bool saved_pass_enabled = false;
     double duration_limit = 0.0;
+
+    bool random_multipass_mode = false;
+    std::vector<int> saved_pass_list_before_random;
+    bool saved_pass_enabled_before_random = false;
+    size_t saved_shader_index_before_random = 0;
+
+    void generateRandomMultipass(gl::GLWindow *win) {
+        static std::mt19937 rng(std::random_device{}());
+        size_t shader_count = library.size();
+        if (shader_count == 0) return;
+        std::uniform_int_distribution<int> count_dist(1, 5);
+        std::uniform_int_distribution<int> shader_dist(0, static_cast<int>(shader_count) - 1);
+        int chain_len = count_dist(rng);
+        beginCrossfade(win);
+        shader_pass_list.clear();
+        for (int i = 0; i < chain_len; ++i) {
+            shader_pass_list.push_back(shader_dist(rng));
+        }
+        shader_pass_enabled = true;
+        if (is3d_enabled)
+            cube.setShaderProgram(library.shader());
+        sprite.setShader(library.shader());
+        updateShaderNameCache();
+        mx::system_out << "acmx2: Random multipass [";
+        for (size_t i = 0; i < shader_pass_list.size(); ++i) {
+            mx::system_out << library.getShaderNameByIndex(shader_pass_list[i]);
+            if (i + 1 < shader_pass_list.size()) mx::system_out << ", ";
+        }
+        mx::system_out << "]\n";
+        fflush(stdout);
+    }
 
     /**
      * @brief Refresh the cached shader name string for the HUD overlay.
@@ -4312,7 +4348,8 @@ class ACView : public gl::GLObject {
      * @brief Handle SDL keyboard events (shader navigation, mode toggles, etc.).
      *
      * Key bindings (SDL_KEYUP):
-     * - Up/Down: Previous/next shader (or playlist entry if playlist enabled).
+     * - Up/Down: Previous/next shader (or playlist entry if playlist enabled,
+     *   or change main shader with crossfade while in random multipass mode).
      * - Left/Right: Previous/next GPU CUDA filter.
      * - Space: Toggle shader bypass.
      * - P: Toggle playlist mode or pause video.
@@ -4321,6 +4358,8 @@ class ACView : public gl::GLObject {
      * - T: Toggle active time.  Q: Toggle audio time.  Home: Toggle audio delta.
      * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.  X: Reset camera.
      * - 3: Toggle 2D/3D mode.  M: Toggle multi-pass.  E: Watermark.
+     * - R: Toggle random multipass mode (generates 1-5 random shader chain).
+     * - G: Generate new random shader chain (while in random multipass mode).
      * - F9: Toggle HUD overlay visibility.
      *
      * Key bindings (SDL_KEYDOWN):
@@ -4337,7 +4376,12 @@ class ACView : public gl::GLObject {
             switch (e.key.keysym.sym) {
             case SDLK_UP:
                 if (shaderLocked) break;
-                if (playlist_enabled && !playlist_tree.empty()) {
+                if (random_multipass_mode) {
+                    beginCrossfade(win);
+                    library.dec();
+                    mx::system_out << "acmx2: Random mode shader: " << library.getFullShaderName(shader_pass_list) << "\n";
+                    fflush(stdout);
+                } else if (playlist_enabled && !playlist_tree.empty()) {
                     if (playlist_index > 0) {
                         beginCrossfade(win);
                         --playlist_index;
@@ -4367,7 +4411,12 @@ class ACView : public gl::GLObject {
                 break;
             case SDLK_DOWN:
                 if (shaderLocked) break;
-                if (playlist_enabled && !playlist_tree.empty()) {
+                if (random_multipass_mode) {
+                    beginCrossfade(win);
+                    library.inc();
+                    mx::system_out << "acmx2: Random mode shader: " << library.getFullShaderName(shader_pass_list) << "\n";
+                    fflush(stdout);
+                } else if (playlist_enabled && !playlist_tree.empty()) {
                     if (playlist_index + 1 < static_cast<int>(playlist_tree.size())) {
                         beginCrossfade(win);
                         ++playlist_index;
@@ -4560,6 +4609,37 @@ class ACView : public gl::GLObject {
                     updateShaderNameCache();
                     mx::system_out << "acmx2: " << (is3d_enabled ? "3D" : "2D") << " mode "
                                    << (is3d_enabled ? "enabled" : "disabled") << "\n";
+                    fflush(stdout);
+                }
+                break;
+            case SDLK_r:
+                if (!random_multipass_mode) {
+                    random_multipass_mode = true;
+                    saved_pass_list_before_random = shader_pass_list;
+                    saved_pass_enabled_before_random = shader_pass_enabled;
+                    saved_shader_index_before_random = library.index();
+                    generateRandomMultipass(win);
+                    mx::system_out << "acmx2: Random multipass mode enabled\n";
+                    fflush(stdout);
+                } else {
+                    random_multipass_mode = false;
+                    beginCrossfade(win);
+                    shader_pass_list = saved_pass_list_before_random;
+                    shader_pass_enabled = saved_pass_enabled_before_random;
+                    library.setIndex(saved_shader_index_before_random);
+                    if (is3d_enabled)
+                        cube.setShaderProgram(library.shader());
+                    sprite.setShader(library.shader());
+                    updateShaderNameCache();
+                    mx::system_out << "acmx2: Random multipass mode disabled - restored original\n";
+                    fflush(stdout);
+                }
+                break;
+            case SDLK_g:
+                if (random_multipass_mode) {
+                    generateRandomMultipass(win);
+                } else {
+                    mx::system_out << "acmx2: Press R first to enable random multipass mode\n";
                     fflush(stdout);
                 }
                 break;

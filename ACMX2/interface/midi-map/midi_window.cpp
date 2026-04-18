@@ -180,6 +180,8 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"D", "Camera yaw right (3D)", 68, 0, false, 0, 0, 0});
     mappings.push_back({"B", "Increase movement speed (3D)", 66, 0, false, 0, 0, 0});
     mappings.push_back({"K", "Toggle shader lock", 75, 0, false, 0, 0, 0});
+    mappings.push_back({"R", "Toggle random multipass mode", 82, 0, false, 0, 0, 0});
+    mappings.push_back({"G", "Generate new random shader chain", 71, 0, false, 0, 0, 0});
 }
 
 void MidiMapWindow::updateTable() {
