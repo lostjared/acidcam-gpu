@@ -143,6 +143,9 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFra
         gRecordFadeIn.store(fadePos, std::memory_order_relaxed);
     }
 
+    // Snapshot the raw PCM input for FFT analysis on the render thread.
+    push_audio_buffer(in, nBufferFrames, input_channels);
+
     return 0;
 }
 
@@ -411,4 +414,122 @@ void close_audio() {
         audio.closeStream();
         std::cout << "acmx2: Audio stream closed.\n";
     }
+}
+
+// ---------------------------------------------------------------------------
+// FFT spectrum analysis
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Double-buffered PCM snapshot for lock-free audio→render transfer.
+ *
+ * Two buffers (`buf[0]` and `buf[1]`) alternate roles as *front* (render
+ * reads) and *back* (audio callback writes).  The atomic `which` index
+ * tells the render thread which buffer holds the most recent complete
+ * snapshot.  Because only one thread writes each buffer at a time, no
+ * mutex is required.
+ */
+static float gFftBuffer[2][FFT_SIZE] = {};
+
+/// Index (0 or 1) of the buffer currently readable by the render thread.
+static std::atomic<int> gFftWhich{0};
+
+/// Internal storage for the last computed magnitude spectrum.
+static std::vector<float> gFftMagnitudes(FFT_SIZE / 2, 0.0f);
+
+void push_audio_buffer(const float *samples, unsigned int count, unsigned int channels) {
+    int back = 1 - gFftWhich.load(std::memory_order_acquire);
+    unsigned int n = std::min(static_cast<unsigned int>(FFT_SIZE), count);
+    for (unsigned int i = 0; i < n; ++i)
+        gFftBuffer[back][i] = samples[i * channels];
+    for (unsigned int i = n; i < FFT_SIZE; ++i)
+        gFftBuffer[back][i] = 0.0f;
+    gFftWhich.store(back, std::memory_order_release);
+}
+
+/**
+ * @brief In-place iterative radix-2 Cooley–Tukey FFT.
+ *
+ * This is the classic decimation-in-time butterfly algorithm.  It
+ * operates on interleaved real/imaginary pairs stored in a flat array
+ * of length `2 * n` (where `n` is a power of two).
+ *
+ * ### Algorithm outline
+ * 1. **Bit-reversal permutation** — reorder the input so that each
+ *    butterfly stage reads its operands from adjacent memory.
+ * 2. **Butterfly passes** — for each stage \f$s = 1 \ldots \log_2 n\f$,
+ *    combine pairs of sub-transforms using the twiddle factor
+ *    \f$W_N^k = e^{-2\pi i\,k / N}\f$.
+ *
+ * @param data  Flat array of `[re0, im0, re1, im1, …]` — length `2*n`.
+ * @param n     Number of complex samples.  **Must** be a power of two.
+ */
+static void fft_radix2(float *data, int n) {
+    // --- Bit-reversal permutation ---
+    for (int i = 1, j = 0; i < n; ++i) {
+        int bit = n >> 1;
+        while (j & bit) {
+            j ^= bit;
+            bit >>= 1;
+        }
+        j ^= bit;
+        if (i < j) {
+            std::swap(data[2 * i], data[2 * j]);
+            std::swap(data[2 * i + 1], data[2 * j + 1]);
+        }
+    }
+    // --- Butterfly stages ---
+    for (int len = 2; len <= n; len <<= 1) {
+        float angle = -2.0f * 3.14159265358979f / static_cast<float>(len);
+        float wRe = std::cos(angle);
+        float wIm = std::sin(angle);
+        for (int i = 0; i < n; i += len) {
+            float curRe = 1.0f, curIm = 0.0f;
+            for (int j = 0; j < len / 2; ++j) {
+                int even = i + j;
+                int odd = i + j + len / 2;
+                float tRe = curRe * data[2 * odd] - curIm * data[2 * odd + 1];
+                float tIm = curRe * data[2 * odd + 1] + curIm * data[2 * odd];
+                data[2 * odd] = data[2 * even] - tRe;
+                data[2 * odd + 1] = data[2 * even + 1] - tIm;
+                data[2 * even] += tRe;
+                data[2 * even + 1] += tIm;
+                float newRe = curRe * wRe - curIm * wIm;
+                curIm = curRe * wIm + curIm * wRe;
+                curRe = newRe;
+            }
+        }
+    }
+}
+
+void compute_audio_fft() {
+    int front = gFftWhich.load(std::memory_order_acquire);
+
+    // Pack into interleaved complex array: [re0, im0, re1, im1, …]
+    float complex[FFT_SIZE * 2];
+    for (int i = 0; i < FFT_SIZE; ++i) {
+        // Apply Hann window to reduce spectral leakage:
+        //   w(n) = 0.5 * (1 - cos(2π n / (N-1)))
+        float hann = 0.5f * (1.0f - std::cos(2.0f * 3.14159265358979f * i / (FFT_SIZE - 1)));
+        complex[2 * i] = gFftBuffer[front][i] * hann;  // real part
+        complex[2 * i + 1] = 0.0f;                      // imaginary part
+    }
+
+    fft_radix2(complex, FFT_SIZE);
+
+    // Compute magnitude of each positive-frequency bin
+    float inv = 2.0f / static_cast<float>(FFT_SIZE);
+    for (int i = 0; i < FFT_SIZE / 2; ++i) {
+        float re = complex[2 * i];
+        float im = complex[2 * i + 1];
+        gFftMagnitudes[i] = std::sqrt(re * re + im * im) * inv;
+    }
+}
+
+const std::vector<float> &get_fft_magnitudes() {
+    return gFftMagnitudes;
+}
+
+int get_fft_bin_count() {
+    return FFT_SIZE / 2;
 }

@@ -560,6 +560,152 @@ bool loadProgramBinaryFunctions() {
     return true;
 }
 
+#ifdef AUDIO_ENABLED
+/**
+ * @class SpectrumTexture
+ * @brief Manages a 1D OpenGL texture that holds the FFT frequency-magnitude spectrum.
+ *
+ * ### What this class does
+ * Every audio frame, the RtAudio callback captures raw PCM samples into a
+ * double buffer (see `push_audio_buffer()`).  On the **render** thread,
+ * `update()` calls `compute_audio_fft()` to run a radix-2 FFT and then
+ * uploads the resulting magnitude array into a **GL_TEXTURE_1D** so that
+ * any GLSL shader can sample it.
+ *
+ * ### How the 1D texture works
+ * A 1D texture is like a single-row image.  Each texel (pixel) stores one
+ * float — the energy at that frequency bin.  The texture is `FFT_SIZE/2`
+ * texels wide (256 by default) because a real-valued FFT is symmetric and
+ * only the first half carries unique information.
+ *
+ * The internal format is **GL_R32F** (one 32-bit float per texel, red
+ * channel only).  In GLSL you read it with:
+ * @code{.glsl}
+ *   uniform sampler1D spectrum;           // bound to texture unit 9
+ *   float energy = texture(spectrum, x).r; // x in [0,1]
+ * @endcode
+ * where `x = 0.0` is the DC bin and `x = 1.0` is the Nyquist frequency.
+ *
+ * ### Texture parameters
+ * - **GL_LINEAR** filtering — the GPU interpolates between adjacent bins,
+ *   giving smooth results even when the shader samples at non-integer
+ *   frequency positions.
+ * - **GL_CLAMP_TO_EDGE** wrapping — lookups outside [0,1] clamp to the
+ *   nearest edge bin instead of wrapping or returning black.
+ *
+ * ### Texture unit
+ * The spectrum is bound to **GL_TEXTURE9** (unit 9).  Units 0 is the main
+ * video frame, units 1–8 are the temporal frame cache, so 9 is the first
+ * free slot.
+ *
+ * ### RAII
+ * `init()` creates the texture; `cleanup()` deletes it.  The destructor
+ * calls `cleanup()` automatically, so you never leak GPU resources.
+ *
+ * @see push_audio_buffer(), compute_audio_fft(), get_fft_magnitudes()
+ */
+class SpectrumTexture {
+public:
+    /**
+     * @brief Create the 1D texture and set its sampling parameters.
+     *
+     * Allocates a `GL_TEXTURE_1D` of width `FFT_SIZE / 2` (256 texels)
+     * with the `GL_R32F` internal format (one float per texel).  The
+     * initial texel data is nullptr — the texture is filled on the first
+     * `update()` call.
+     *
+     * The two filter parameters (`GL_LINEAR`) tell the GPU to linearly
+     * interpolate when a shader samples *between* two bins, which avoids
+     * visible staircase artefacts.  `GL_CLAMP_TO_EDGE` prevents wrap-
+     * around artefacts if a shader accidentally samples outside [0,1].
+     */
+    void init() {
+        if (textureID != 0) return;
+        bins = FFT_SIZE / 2;
+
+        glGenTextures(1, &textureID);
+        glBindTexture(GL_TEXTURE_1D, textureID);
+
+        // Allocate the texture storage — one 32-bit float per texel.
+        // GL_R32F  = internal format (single-channel 32-bit float)
+        // GL_RED   = source channel layout
+        // GL_FLOAT = source data type
+        glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, bins, 0, GL_RED, GL_FLOAT, nullptr);
+
+        // GL_LINEAR makes the GPU interpolate between adjacent frequency
+        // bins when the shader samples at a fractional position.
+        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        // Clamp so lookups outside [0,1] stick to the edge bin.
+        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+
+        glBindTexture(GL_TEXTURE_1D, 0);
+    }
+
+    /**
+     * @brief Compute a fresh FFT and upload the magnitudes into the texture.
+     *
+     * This is the per-frame call that bridges the audio and GPU worlds:
+     * 1. `compute_audio_fft()` reads the latest PCM snapshot, applies a
+     *    Hann window, runs the radix-2 FFT, and writes the magnitudes.
+     * 2. `glTexSubImage1D()` copies those magnitudes into the existing
+     *    texture **without** reallocating — much cheaper than `glTexImage1D`
+     *    every frame.
+     *
+     * Call this once per frame from the render thread, before binding the
+     * texture for shader use.
+     */
+    void update() {
+        if (textureID == 0) return;
+        compute_audio_fft();
+        const auto &mags = get_fft_magnitudes();
+        glBindTexture(GL_TEXTURE_1D, textureID);
+        // Upload new magnitude data into the existing texture allocation.
+        // Offset 0, width = bins, one float per texel.
+        glTexSubImage1D(GL_TEXTURE_1D, 0, 0, bins, GL_RED, GL_FLOAT, mags.data());
+        glBindTexture(GL_TEXTURE_1D, 0);
+    }
+
+    /**
+     * @brief Bind the spectrum texture to a specific texture unit.
+     *
+     * The caller passes a unit index (e.g. 9) and the corresponding
+     * `GL_TEXTURE9` unit is activated.  After this call the shader
+     * uniform `spectrum` should be set to the same unit index via
+     * `glUniform1i(loc, unit)`.
+     *
+     * @param unit  Texture unit index (0-based).  Default is 9.
+     */
+    void bind(int unit = SPECTRUM_TEXTURE_UNIT) const {
+        glActiveTexture(GL_TEXTURE0 + unit);
+        glBindTexture(GL_TEXTURE_1D, textureID);
+    }
+
+    /**
+     * @brief Delete the OpenGL texture and reset state.
+     *
+     * Safe to call more than once — the texture ID is checked before
+     * deletion and zeroed afterwards.
+     */
+    void cleanup() {
+        if (textureID) {
+            glDeleteTextures(1, &textureID);
+            textureID = 0;
+        }
+    }
+
+    ~SpectrumTexture() { cleanup(); }
+
+    /// Texture unit reserved for the spectrum (units 0–8 are taken).
+    static constexpr int SPECTRUM_TEXTURE_UNIT = 9;
+
+private:
+    GLuint textureID = 0;  ///< OpenGL name for the 1D texture.
+    int bins = 0;          ///< Number of texels (== FFT_SIZE / 2).
+};
+#endif // AUDIO_ENABLED
+
 /**
  * @class ShaderLibrary
  * @brief Manages the complete collection of compiled GLSL shader programs.
@@ -608,6 +754,7 @@ class ShaderLibrary {
         GLint iamp = -1;
         GLint amp_peak = -1, amp_rms = -1, amp_smooth = -1;
         GLint amp_low = -1, amp_mid = -1, amp_high = -1;
+        GLint spectrum_loc = -1; ///< Location of `uniform sampler1D spectrum;` (-1 if unused).
 #endif
         GLint texture_cache_loc[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
         GLint iFrame = -1;
@@ -789,6 +936,7 @@ class ShaderLibrary {
             names[pos].amp_mid = glGetUniformLocation(prog->id(), "amp_mid");
             names[pos].amp_high = glGetUniformLocation(prog->id(), "amp_high");
             names[pos].iSampleRate = glGetUniformLocation(prog->id(), "iSampleRate");
+            names[pos].spectrum_loc = glGetUniformLocation(prog->id(), "spectrum");
 #endif
             // acidcamGL-compatible uniform locations
             names[pos].value_alpha_r = glGetUniformLocation(prog->id(), "value_alpha_r");
@@ -1711,6 +1859,10 @@ class ShaderLibrary {
                 glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
             }
         }
+        // Tell the shader which texture unit holds the spectrum.
+        if (n.spectrum_loc != -1) {
+            glUniform1i(n.spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+        }
 #endif
     }
 
@@ -1825,6 +1977,9 @@ class ShaderLibrary {
             if (n.amp_high != -1) {
                 glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
             }
+        }
+        if (n.spectrum_loc != -1) {
+            glUniform1i(n.spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         }
 #endif
     }
@@ -1992,6 +2147,9 @@ class ShaderLibrary {
             if (n.amp_high != -1) {
                 glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
             }
+        }
+        if (names[index()].spectrum_loc != -1) {
+            glUniform1i(names[index()].spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         }
 #endif
     }
@@ -2316,6 +2474,7 @@ class ACView : public gl::GLObject {
     int audio_input_device;
     int audio_output_device;
     std::string audio_record_file;
+    SpectrumTexture spectrumTex; ///< 1D texture holding the FFT magnitude spectrum for shaders.
 #endif
 #ifdef MIDI_ENABLED
     RtMidiIn *midiIn = nullptr;
@@ -2750,6 +2909,10 @@ class ACView : public gl::GLObject {
             } else {
                 audio_is_enabled = true;
                 set_record_gain(args.record_gain);
+                spectrumTex.init();
+                mx::system_out << "acmx2: FFT spectrum texture initialised ("
+                               << get_fft_bin_count() << " bins on GL_TEXTURE"
+                               << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
             }
         }
 
@@ -3062,6 +3225,7 @@ class ACView : public gl::GLObject {
                 stop_audio_recording();
             }
             close_audio();
+            spectrumTex.cleanup();
         }
 #endif
 
@@ -3695,6 +3859,12 @@ class ACView : public gl::GLObject {
 
         if (!isFrozen && !library.isBypassed()) {
             library.useProgram();
+#ifdef AUDIO_ENABLED
+            if (audio_is_enabled) {
+                spectrumTex.update();
+                spectrumTex.bind();
+            }
+#endif
             library.update(win);
             library.setFPS(static_cast<float>(fps));
         }
