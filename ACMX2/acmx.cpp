@@ -3029,6 +3029,32 @@ class ACView : public gl::GLObject {
         fflush(stdout);
     }
 
+    void generateRandomMultipassLong(gl::GLWindow *win) {
+        static std::mt19937 rng(std::random_device{}());
+        size_t shader_count = library.size();
+        if (shader_count == 0) return;
+        std::uniform_int_distribution<int> count_dist(1, 10);
+        std::uniform_int_distribution<int> shader_dist(0, static_cast<int>(shader_count) - 1);
+        int chain_len = count_dist(rng);
+        beginCrossfade(win);
+        shader_pass_list.clear();
+        for (int i = 0; i < chain_len; ++i) {
+            shader_pass_list.push_back(shader_dist(rng));
+        }
+        shader_pass_enabled = true;
+        if (is3d_enabled)
+            cube.setShaderProgram(library.shader());
+        sprite.setShader(library.shader());
+        updateShaderNameCache();
+        mx::system_out << "acmx2: Long random multipass [";
+        for (size_t i = 0; i < shader_pass_list.size(); ++i) {
+            mx::system_out << library.getShaderNameByIndex(shader_pass_list[i]);
+            if (i + 1 < shader_pass_list.size()) mx::system_out << ", ";
+        }
+        mx::system_out << "]\n";
+        fflush(stdout);
+    }
+
     /**
      * @brief Refresh the cached shader name string for the HUD overlay.
      *
@@ -4550,6 +4576,7 @@ class ACView : public gl::GLObject {
      * - 3: Toggle 2D/3D mode.  M: Toggle multi-pass.  E: Watermark.
      * - R: Toggle random multipass mode (generates 1-5 random shader chain).
      * - G: Generate new random shader chain (while in random multipass mode).
+     * - H: Generate long random shader chain up to 10 (while in random multipass mode).
      * - F9: Toggle HUD overlay visibility.
      *
      * Key bindings (SDL_KEYDOWN):
@@ -4828,6 +4855,14 @@ class ACView : public gl::GLObject {
             case SDLK_g:
                 if (random_multipass_mode) {
                     generateRandomMultipass(win);
+                } else {
+                    mx::system_out << "acmx2: Press R first to enable random multipass mode\n";
+                    fflush(stdout);
+                }
+                break;
+            case SDLK_h:
+                if (random_multipass_mode) {
+                    generateRandomMultipassLong(win);
                 } else {
                     mx::system_out << "acmx2: Press R first to enable random multipass mode\n";
                     fflush(stdout);
