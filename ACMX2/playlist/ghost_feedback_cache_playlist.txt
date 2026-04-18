@@ -1,0 +1,12 @@
+[Ghost Echo]
+ghost_echo_cache.glsl
+[Phantom Drift]
+phantom_drift_cache.glsl
+[Spectral Smear]
+spectral_smear_cache.glsl
+[Ghost Fracture]
+ghost_fracture_cache.glsl
+[Feedback Recursion]
+feedback_recursion_cache.glsl
+[Temporal Prism]
+temporal_prism_cache.glsl

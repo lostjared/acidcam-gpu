@@ -1,0 +1,18 @@
+[Spectrum Glass Vortex]
+random_spectrum_glass_vortex.glsl
+[Spectrum Tunnel Rings]
+random_spectrum_tunnel_rings.glsl
+[Spectrum Fractal Kaleidoscope]
+random_spectrum_fractal_kaleidoscope.glsl
+[Spectrum Deep Melt]
+random_spectrum_deep_melt.glsl
+[Spectrum Plasma Neon]
+random_spectrum_plasma_neon.glsl
+[Spectrum Diamond Rings]
+random_spectrum_diamond_rings.glsl
+[Spectrum Mercury Vortex]
+random_spectrum_mercury_vortex.glsl
+[Spectrum Neon Organism]
+random_spectrum_neon_organism.glsl
+[Spectrum Wormhole]
+random_spectrum_wormhole.glsl
