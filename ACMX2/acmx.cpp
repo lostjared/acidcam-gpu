@@ -661,9 +661,19 @@ public:
         compute_audio_fft();
         const auto &mags = get_fft_magnitudes();
         glBindTexture(GL_TEXTURE_1D, textureID);
-        // Upload new magnitude data into the existing texture allocation.
-        // Offset 0, width = bins, one float per texel.
         glTexSubImage1D(GL_TEXTURE_1D, 0, 0, bins, GL_RED, GL_FLOAT, mags.data());
+        glBindTexture(GL_TEXTURE_1D, 0);
+    }
+
+    void update(float scale) {
+        if (textureID == 0) return;
+        compute_audio_fft();
+        const auto &mags = get_fft_magnitudes();
+        scaled_buf.resize(mags.size());
+        for (size_t i = 0; i < mags.size(); ++i)
+            scaled_buf[i] = mags[i] * scale;
+        glBindTexture(GL_TEXTURE_1D, textureID);
+        glTexSubImage1D(GL_TEXTURE_1D, 0, 0, bins, GL_RED, GL_FLOAT, scaled_buf.data());
         glBindTexture(GL_TEXTURE_1D, 0);
     }
 
@@ -703,6 +713,7 @@ public:
 private:
     GLuint textureID = 0;  ///< OpenGL name for the 1D texture.
     int bins = 0;          ///< Number of texels (== FFT_SIZE / 2).
+    std::vector<float> scaled_buf; ///< Scratch buffer for sensitivity-scaled magnitudes.
 };
 #endif // AUDIO_ENABLED
 
@@ -2475,6 +2486,7 @@ class ACView : public gl::GLObject {
     int audio_output_device;
     std::string audio_record_file;
     SpectrumTexture spectrumTex; ///< 1D texture holding the FFT magnitude spectrum for shaders.
+    bool spectrum_scale_by_sense = false; ///< When true, scale spectrum 1D buffer by audio sensitivity.
 #endif
 #ifdef MIDI_ENABLED
     RtMidiIn *midiIn = nullptr;
@@ -2513,6 +2525,7 @@ class ACView : public gl::GLObject {
         case 265: return "Up";
         case 266: return "PgUp";
         case 267: return "PgDn";
+        case 269: return "End";
         case 32:  return "Space";
         case 44:  return "Comma";
         case 45:  return "Minus";
@@ -2626,6 +2639,7 @@ class ACView : public gl::GLObject {
         case 265: return SDLK_UP;
         case 266: return SDLK_PAGEUP;
         case 267: return SDLK_PAGEDOWN;
+        case 269: return SDLK_END;
         case 32:  return SDLK_SPACE;
         case 44:  return SDLK_COMMA;
         case 45:  return SDLK_MINUS;
@@ -3896,7 +3910,10 @@ class ACView : public gl::GLObject {
             library.useProgram();
 #ifdef AUDIO_ENABLED
             if (audio_is_enabled) {
-                spectrumTex.update();
+                if (spectrum_scale_by_sense)
+                    spectrumTex.update(get_sense());
+                else
+                    spectrumTex.update();
                 spectrumTex.bind();
             }
 #endif
@@ -4582,6 +4599,7 @@ class ACView : public gl::GLObject {
      * Key bindings (SDL_KEYDOWN):
      * - U/I: Manual time step forward/backward.
      * - Insert/Delete: Audio sensitivity +/-.
+     * - End: Toggle spectrum sensitivity scaling on/off.
      * - Page Up/Down: Time speed (handled in draw() via key-state polling).
      *
      * @param win Hosting GLWindow.
@@ -4895,6 +4913,12 @@ class ACView : public gl::GLObject {
                 fflush(stdout);
                 break;
             }
+            case SDLK_END:
+                spectrum_scale_by_sense = !spectrum_scale_by_sense;
+                mx::system_out << "acmx2: Spectrum sensitivity scaling "
+                               << (spectrum_scale_by_sense ? "enabled" : "disabled") << "\n";
+                fflush(stdout);
+                break;
 #endif
             case SDLK_F9:
                 counter_disabled = !counter_disabled;
@@ -5621,6 +5645,7 @@ const char *message = R"(
     Q - toggle reactive time (if AUDIO_ENABLED)
     Insert - increase audio sensitivity
     Delete - decrease audio sensitivity
+    End - toggle spectrum sensitivity scaling on/off
     Home - toggle audio delta time scaling on/off
     M - toggle multi-shader pass (if --shader-pass set)
     3 - toggle 2D/3D mode (switches between 2D and 3D rendering)
