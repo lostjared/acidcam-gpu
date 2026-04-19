@@ -4881,7 +4881,10 @@ class ACView : public gl::GLObject {
                 }
                 break;
             case SDLK_r:
-                if (!random_multipass_mode) {
+                if (std::get<0>(flib) == 0) {
+                    mx::system_out << "acmx2: Random multipass mode not available in single shader mode\n";
+                    fflush(stdout);
+                } else if (!random_multipass_mode) {
                     random_multipass_mode = true;
                     saved_pass_list_before_random = shader_pass_list;
                     saved_pass_enabled_before_random = shader_pass_enabled;
