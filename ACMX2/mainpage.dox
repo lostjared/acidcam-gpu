@@ -58,6 +58,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
 - <b>MIDI Map Tool</b> — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 - <b>Crossfade transitions</b> — smooth linear blend between old and new frames when switching playlist shaders, with configurable duration
+- <b>Camera device enumeration</b> — query V4L2 devices for supported resolutions and frame rates via <tt>--enumerate-device</tt>; the Qt Settings dialog dynamically populates resolution and FPS dropdowns from the selected camera
 - <b>Distrobox export</b> — script to export applications to the host desktop with icons and `.desktop` files
 
 @section install Installation & Prerequisites
@@ -204,6 +205,7 @@ cmake .. && make -j$(nproc)
 | `--gpu-buffer`    | `<size>`    | GPU frame buffer size (4–32) |
 | `--list-filters`  |             | List available GPU filters and exit |
 | `--list-cuda-devices` |         | List available CUDA devices and exit |
+| `--enumerate-device` | `<index>` | List supported resolutions and frame rates for a camera device (Linux only) |
 | `--disable-counter` |           | Disable timer and FPS counter overlay |
 | `--silent`        |             | Process video without window |
 

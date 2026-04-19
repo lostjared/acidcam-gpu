@@ -148,6 +148,7 @@ sudo bash build-script/install-deps-arch.sh
 | `--gpu-buffer` | `<size>` | GPU frame buffer size (`4`–`32`) |
 | `--list-filters` | | List available GPU filters and exit |
 | `--list-cuda-devices` | | List available CUDA devices and exit |
+| `--enumerate-device` | `<index>` | List supported resolutions and frame rates for a camera device (Linux only) |
 | `--disable-counter` | | Disable timer and FPS counter overlay |
 | `--silent` | | Process video without window (video files only, requires `-o`) |
 
@@ -338,6 +339,11 @@ This installs the application icon, creates `.desktop` files for both `acmx2_int
 ### Multipass Shader Pass Save/Load
 
 The **Multipass Shader Settings** dialog now includes **Save List...** and **Load List...** buttons, allowing you to save and restore your multipass shader chain as a text file.
+
+### Camera Device Enumeration
+
+- **Command line:** Use `--enumerate-device <index>` to list all supported resolutions and frame rates for a V4L2 camera device (Linux only).
+- **Qt Interface:** The **Settings** dialog now automatically queries the selected camera device for its supported resolutions and frame rates. The resolution and FPS dropdowns are dynamically populated based on the device capabilities. Changing the camera device re-enumerates, and changing the resolution updates the available frame rates. In graphics file mode the FPS options default to 24, 30, and 60.
 
 ### GPU Filter Save/Load
 
