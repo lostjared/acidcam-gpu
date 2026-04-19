@@ -129,7 +129,7 @@ cp -rf ../data/ .
 @code{.sh}
 cd ACMX2/interface/midi-map
 mkdir build && cd build
-cmake .. && make -j$(nproc)
+cmake .. && make -j$(nproc) && sudo make install
 @endcode
 
 @section usage Usage Examples

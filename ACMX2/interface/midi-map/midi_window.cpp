@@ -183,6 +183,7 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"R", "Toggle random multipass mode", 82, 0, false, 0, 0, 0});
     mappings.push_back({"G", "Generate new random shader chain", 71, 0, false, 0, 0, 0});
     mappings.push_back({"H", "Generate long random chain (up to 10)", 72, 0, false, 0, 0, 0});
+    mappings.push_back({"F", "Generate short random pair (2 shaders)", 70, 0, false, 0, 0, 0});
     mappings.push_back({"End", "Toggle spectrum sensitivity scaling", 269, 0, false, 0, 0, 0});
 }
 

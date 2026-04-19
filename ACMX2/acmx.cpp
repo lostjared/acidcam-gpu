@@ -2542,6 +2542,7 @@ class ACView : public gl::GLObject {
         case 66:  return "B";
         case 68:  return "D";
         case 71:  return "G";
+        case 70:  return "F";
         case 72:  return "H";
         case 76:  return "L";
         case 78:  return "N";
@@ -2656,6 +2657,7 @@ class ACView : public gl::GLObject {
         case 66:  return SDLK_b;
         case 68:  return SDLK_d;
         case 71:  return SDLK_g;
+        case 70:  return SDLK_f;
         case 72:  return SDLK_h;
         case 76:  return SDLK_l;
         case 78:  return SDLK_n;
@@ -3041,6 +3043,30 @@ class ACView : public gl::GLObject {
         sprite.setShader(library.shader());
         updateShaderNameCache();
         mx::system_out << "acmx2: Random multipass [";
+        for (size_t i = 0; i < shader_pass_list.size(); ++i) {
+            mx::system_out << library.getShaderNameByIndex(shader_pass_list[i]);
+            if (i + 1 < shader_pass_list.size()) mx::system_out << ", ";
+        }
+        mx::system_out << "]\n";
+        fflush(stdout);
+    }
+
+    void generateRandomMultipassShort(gl::GLWindow *win) {
+        static std::mt19937 rng(std::random_device{}());
+        size_t shader_count = library.size();
+        if (shader_count == 0) return;
+        std::uniform_int_distribution<int> shader_dist(0, static_cast<int>(shader_count) - 1);
+        beginCrossfade(win);
+        shader_pass_list.clear();
+        for (int i = 0; i < 2; ++i) {
+            shader_pass_list.push_back(shader_dist(rng));
+        }
+        shader_pass_enabled = true;
+        if (is3d_enabled)
+            cube.setShaderProgram(library.shader());
+        sprite.setShader(library.shader());
+        updateShaderNameCache();
+        mx::system_out << "acmx2: Short random multipass [";
         for (size_t i = 0; i < shader_pass_list.size(); ++i) {
             mx::system_out << library.getShaderNameByIndex(shader_pass_list[i]);
             if (i + 1 < shader_pass_list.size()) mx::system_out << ", ";
@@ -4600,6 +4626,7 @@ class ACView : public gl::GLObject {
      * - R: Toggle random multipass mode (generates 1-5 random shader chain).
      * - G: Generate new random shader chain (while in random multipass mode).
      * - H: Generate long random shader chain up to 10 (while in random multipass mode).
+     * - F: Generate short random shader pair of 2 (while in random multipass mode).
      * - F9: Toggle HUD overlay visibility.
      *
      * Key bindings (SDL_KEYDOWN):
@@ -4887,6 +4914,14 @@ class ACView : public gl::GLObject {
             case SDLK_h:
                 if (random_multipass_mode) {
                     generateRandomMultipassLong(win);
+                } else {
+                    mx::system_out << "acmx2: Press R first to enable random multipass mode\n";
+                    fflush(stdout);
+                }
+                break;
+            case SDLK_f:
+                if (random_multipass_mode) {
+                    generateRandomMultipassShort(win);
                 } else {
                     mx::system_out << "acmx2: Press R first to enable random multipass mode\n";
                     fflush(stdout);
