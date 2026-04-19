@@ -56,6 +56,12 @@
 #include "program.hpp"
 #include <ac-gpu/ac-gpu.hpp>
 #include <cuda_gl_interop.h>
+#ifdef __linux__
+#include <linux/videodev2.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 #include <deque>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -5777,6 +5783,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
+        .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -6049,6 +6056,73 @@ int main(int argc, char **argv) {
                 args.cross_fade_duration = static_cast<float>(atof(arg.arg_value.c_str()));
                 mx::system_out << "acmx2: Crossfade duration set to: " << args.cross_fade_duration << " seconds\n";
                 break;
+            case 413: {
+#ifdef __linux__
+                int dev_idx = atoi(arg.arg_value.c_str());
+                std::string dev_path = "/dev/video" + std::to_string(dev_idx);
+                int fd = open(dev_path.c_str(), O_RDWR);
+                if (fd < 0) {
+                    mx::system_err << "acmx2: Cannot open " << dev_path << ": " << strerror(errno) << "\n";
+                    exit(EXIT_FAILURE);
+                }
+                v4l2_capability cap{};
+                if (ioctl(fd, VIDIOC_QUERYCAP, &cap) == 0) {
+                    mx::system_out << "Device " << dev_idx << ": " << dev_path << "\n";
+                    mx::system_out << "  Driver : " << cap.driver << "\n";
+                    mx::system_out << "  Card   : " << cap.card << "\n";
+                    mx::system_out << "  Bus    : " << cap.bus_info << "\n";
+                }
+                v4l2_fmtdesc fmt{};
+                fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                fmt.index = 0;
+                while (ioctl(fd, VIDIOC_ENUM_FMT, &fmt) == 0) {
+                    char fourcc[5] = {
+                        static_cast<char>(fmt.pixelformat & 0xFF),
+                        static_cast<char>((fmt.pixelformat >> 8) & 0xFF),
+                        static_cast<char>((fmt.pixelformat >> 16) & 0xFF),
+                        static_cast<char>((fmt.pixelformat >> 24) & 0xFF),
+                        '\0'
+                    };
+                    mx::system_out << "\n  Format: " << fourcc << " (" << fmt.description << ")\n";
+                    v4l2_frmsizeenum fsize{};
+                    fsize.pixel_format = fmt.pixelformat;
+                    fsize.index = 0;
+                    while (ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &fsize) == 0) {
+                        if (fsize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
+                            mx::system_out << "    " << fsize.discrete.width << "x" << fsize.discrete.height;
+                            v4l2_frmivalenum fival{};
+                            fival.pixel_format = fmt.pixelformat;
+                            fival.width = fsize.discrete.width;
+                            fival.height = fsize.discrete.height;
+                            fival.index = 0;
+                            bool first = true;
+                            while (ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &fival) == 0) {
+                                if (fival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+                                    double fps_val = static_cast<double>(fival.discrete.denominator) / fival.discrete.numerator;
+                                    mx::system_out << (first ? " @ " : ", ") << std::fixed << std::setprecision(1) << fps_val << " fps";
+                                    first = false;
+                                }
+                                fival.index++;
+                            }
+                            mx::system_out << "\n";
+                        } else if (fsize.type == V4L2_FRMSIZE_TYPE_STEPWISE || fsize.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) {
+                            mx::system_out << "    " << fsize.stepwise.min_width << "x" << fsize.stepwise.min_height
+                                           << " to " << fsize.stepwise.max_width << "x" << fsize.stepwise.max_height
+                                           << " (step " << fsize.stepwise.step_width << "x" << fsize.stepwise.step_height << ")\n";
+                            break;
+                        }
+                        fsize.index++;
+                    }
+                    fmt.index++;
+                }
+                close(fd);
+#else
+                mx::system_out << "acmx2: --enumerate-device is only supported on Linux\n";
+#endif
+                fflush(stdout);
+                exit(EXIT_SUCCESS);
+                break;
+            }
 #ifdef MIDI_ENABLED
             case 500:
                 args.midi_map_file = arg.arg_value;

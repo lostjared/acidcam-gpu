@@ -10,7 +10,7 @@
 #include <unistd.h>
 #endif
 
-SettingsWindow::SettingsWindow(QWidget *parent)
+SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
     : QDialog(parent),
       selectedCameraIndex(0),
       selectedCameraResolution(640, 480),
@@ -26,7 +26,8 @@ SettingsWindow::SettingsWindow(QWidget *parent)
       graphicsDuration(10),
       modelFile("data/cube.mxmod.z"),
       selectedCudaDevice(0),
-      maxDuration(0.0) {
+      maxDuration(0.0),
+      executablePath(execPath) {
     init();
 }
 
@@ -114,31 +115,22 @@ void SettingsWindow::init() {
 
     QLabel *cameraResolutionLabel = new QLabel("Select Camera Resolution:", this);
     cameraResolutionComboBox = new QComboBox(this);
-    QStringList cameraResolutions;
-    cameraResolutions << "Default"
-                      << "320x240"
-                      << "640x360"
-                      << "640x480"
-                      << "720x480"
-                      << "800x600"
-                      << "960x720"
-                      << "1024x768"
-                      << "1280x720"
-                      << "1280x960"
-                      << "1280x1024"
-                      << "1600x1200"
-                      << "1920x1080"
-                      << "1920x1200"
-                      << "2560x1440"
-                      << "2560x1600"
-                      << "3840x2160";
-    cameraResolutionComboBox->addItems(cameraResolutions);
-    cameraResolutionComboBox->setCurrentIndex(8);
+    cameraResolutionComboBox->addItem("Default");
 
     QLabel *cameraFPSLabel = new QLabel("Set FPS:", this);
-    cameraFPSSpinBox = new QSpinBox(this);
-    cameraFPSSpinBox->setRange(1, 120);
-    cameraFPSSpinBox->setValue(30);
+    cameraFPSComboBox = new QComboBox(this);
+    cameraFPSComboBox->addItem("30");
+
+    // Enumerate capabilities for the initially selected camera
+    if (cameraIndexComboBox->count() > 0) {
+        int devIdx = cameraIndexComboBox->currentData().toInt();
+        enumerateDevice(devIdx);
+    }
+
+    connect(cameraIndexComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SettingsWindow::onCameraDeviceChanged);
+    connect(cameraResolutionComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SettingsWindow::onCameraResolutionChanged);
 
     QHBoxLayout *inputVideoFileLayout = new QHBoxLayout;
     inputVideoFileLineEdit = new QLineEdit(this);
@@ -215,13 +207,14 @@ void SettingsWindow::init() {
         if (checked) {
             cameraIndexComboBox->setEnabled(true);
             cameraResolutionComboBox->setEnabled(true);
-            cameraFPSSpinBox->setEnabled(true);
+            cameraFPSComboBox->setEnabled(true);
             inputVideoFileLineEdit->setEnabled(false);
             browseInputVideoButton->setEnabled(false);
             graphicsFileLineEdit->setEnabled(false);
             browseGraphicsButton->setEnabled(false);
             textureCacheCheckBox->setEnabled(false);
             cacheDelaySpinBox->setEnabled(false);
+            populateFPS();
         }
     });
 
@@ -229,7 +222,7 @@ void SettingsWindow::init() {
         if (checked) {
             cameraIndexComboBox->setEnabled(false);
             cameraResolutionComboBox->setEnabled(false);
-            cameraFPSSpinBox->setEnabled(true);
+            cameraFPSComboBox->setEnabled(true);
             inputVideoFileLineEdit->setEnabled(true);
             browseInputVideoButton->setEnabled(true);
             graphicsFileLineEdit->setEnabled(false);
@@ -243,13 +236,16 @@ void SettingsWindow::init() {
         if (checked) {
             cameraIndexComboBox->setEnabled(false);
             cameraResolutionComboBox->setEnabled(false);
-            cameraFPSSpinBox->setEnabled(true);
+            cameraFPSComboBox->setEnabled(true);
             inputVideoFileLineEdit->setEnabled(false);
             browseInputVideoButton->setEnabled(false);
             graphicsFileLineEdit->setEnabled(true);
             browseGraphicsButton->setEnabled(true);
             textureCacheCheckBox->setEnabled(false);
             cacheDelaySpinBox->setEnabled(false);
+            cameraFPSComboBox->clear();
+            cameraFPSComboBox->addItems({"24", "30", "60"});
+            cameraFPSComboBox->setCurrentIndex(1);
         }
     });
 
@@ -276,7 +272,7 @@ void SettingsWindow::init() {
     mainLayout->addWidget(cameraResolutionLabel);
     mainLayout->addWidget(cameraResolutionComboBox);
     mainLayout->addWidget(cameraFPSLabel);
-    mainLayout->addWidget(cameraFPSSpinBox);
+    mainLayout->addWidget(cameraFPSComboBox);
     mainLayout->addLayout(inputVideoFileLayout);
     mainLayout->addLayout(graphicsFileLayout);
     mainLayout->addWidget(saveOutputVideoCheckBox);
@@ -518,7 +514,7 @@ void SettingsWindow::acceptSettings() {
         }
     }
 
-    cameraFPS = cameraFPSSpinBox->value();
+    cameraFPS = cameraFPSComboBox->currentText().toInt();
 
     QStringList screenResParts = screenResolutionComboBox->currentText().split('x');
     if (screenResParts.size() == 2) {
@@ -591,4 +587,129 @@ void SettingsWindow::browseModelFile() {
         appSettings.setValue("lastModelDir", QFileInfo(fileName).absolutePath());
         modelFileLineEdit->setText(fileName);
     }
+}
+
+void SettingsWindow::enumerateDevice(int deviceIndex) {
+    deviceCapabilities.clear();
+
+    QProcess process;
+    process.start(executablePath, QStringList() << "--enumerate-device" << QString::number(deviceIndex));
+    process.waitForFinished(5000);
+
+    QString output = process.readAllStandardOutput();
+    if (output.isEmpty() || process.exitCode() != 0) {
+        populateResolutions();
+        return;
+    }
+
+    // Parse lines like: "    1920x1080 @ 30.0 fps, 24.0 fps"
+    QRegularExpression resRegex(R"(^\s+(\d+x\d+)\s*@\s*(.+)$)");
+    QRegularExpression fpsRegex(R"((\d+(?:\.\d+)?)\s*fps)");
+
+    QStringList lines = output.split('\n');
+    for (const QString &line : lines) {
+        QRegularExpressionMatch resMatch = resRegex.match(line);
+        if (resMatch.hasMatch()) {
+            QString resolution = resMatch.captured(1);
+            QString fpsStr = resMatch.captured(2);
+            QList<double> fpsList;
+
+            QRegularExpressionMatchIterator it = fpsRegex.globalMatch(fpsStr);
+            while (it.hasNext()) {
+                QRegularExpressionMatch fpsMatch = it.next();
+                fpsList.append(fpsMatch.captured(1).toDouble());
+            }
+
+            if (deviceCapabilities.contains(resolution)) {
+                // Merge FPS values from different formats
+                QList<double> &existing = deviceCapabilities[resolution];
+                for (double fps : fpsList) {
+                    if (!existing.contains(fps)) {
+                        existing.append(fps);
+                    }
+                }
+            } else {
+                deviceCapabilities[resolution] = fpsList;
+            }
+        }
+    }
+
+    populateResolutions();
+}
+
+void SettingsWindow::populateResolutions() {
+    cameraResolutionComboBox->blockSignals(true);
+    cameraResolutionComboBox->clear();
+    cameraResolutionComboBox->addItem("Default");
+
+    if (deviceCapabilities.isEmpty()) {
+        cameraResolutionComboBox->blockSignals(false);
+        populateFPS();
+        return;
+    }
+
+    // Sort resolutions by pixel count descending
+    QStringList resolutions = deviceCapabilities.keys();
+    std::sort(resolutions.begin(), resolutions.end(), [](const QString &a, const QString &b) {
+        QStringList pa = a.split('x');
+        QStringList pb = b.split('x');
+        int pixA = pa[0].toInt() * pa[1].toInt();
+        int pixB = pb[0].toInt() * pb[1].toInt();
+        return pixA > pixB;
+    });
+
+    for (const QString &res : resolutions) {
+        cameraResolutionComboBox->addItem(res);
+    }
+
+    // Try to select 1280x720 by default, otherwise first real resolution
+    int idx = cameraResolutionComboBox->findText("1280x720");
+    if (idx < 0 && cameraResolutionComboBox->count() > 1) {
+        idx = 1;
+    }
+    if (idx >= 0) {
+        cameraResolutionComboBox->setCurrentIndex(idx);
+    }
+
+    cameraResolutionComboBox->blockSignals(false);
+    populateFPS();
+}
+
+void SettingsWindow::populateFPS() {
+    cameraFPSComboBox->clear();
+
+    QString currentRes = cameraResolutionComboBox->currentText();
+    if (currentRes == "Default" || !deviceCapabilities.contains(currentRes)) {
+        cameraFPSComboBox->addItem("30");
+        return;
+    }
+
+    QList<double> fpsList = deviceCapabilities[currentRes];
+    std::sort(fpsList.begin(), fpsList.end(), std::greater<double>());
+
+    for (double fps : fpsList) {
+        int iFps = static_cast<int>(fps);
+        if (qAbs(fps - iFps) < 0.05) {
+            cameraFPSComboBox->addItem(QString::number(iFps));
+        } else {
+            cameraFPSComboBox->addItem(QString::number(fps, 'f', 1));
+        }
+    }
+
+    // Select 30 fps if available
+    int idx = cameraFPSComboBox->findText("30");
+    if (idx >= 0) {
+        cameraFPSComboBox->setCurrentIndex(idx);
+    }
+}
+
+void SettingsWindow::onCameraDeviceChanged(int comboIndex) {
+    if (comboIndex < 0) return;
+    int deviceIndex = cameraIndexComboBox->currentData().toInt();
+    enumerateDevice(deviceIndex);
+}
+
+void SettingsWindow::onCameraResolutionChanged(int comboIndex) {
+    Q_UNUSED(comboIndex);
+    populateFPS();
 }

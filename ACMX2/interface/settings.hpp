@@ -9,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMap>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSpinBox>
@@ -17,7 +18,7 @@
 class SettingsWindow : public QDialog {
     Q_OBJECT
   public:
-    explicit SettingsWindow(QWidget *parent = nullptr);
+    explicit SettingsWindow(const QString &execPath, QWidget *parent = nullptr);
     int getSelectedCameraIndex() const;
     QSize getSelectedCameraResolution() const;
     QSize getSelectedScreenResolution() const;
@@ -48,16 +49,25 @@ class SettingsWindow : public QDialog {
     void browseOutputVideoFile();
     void browseGraphicsFile();
     void browseModelFile();
+    void onCameraDeviceChanged(int comboIndex);
+    void onCameraResolutionChanged(int comboIndex);
 
   private:
     void init();
     void populateCameraDevices();
     void populateCudaDevices();
+    void enumerateDevice(int deviceIndex);
+    void populateResolutions();
+    void populateFPS();
+
+    QString executablePath;
+    QComboBox *cameraFPSComboBox;
+    // resolution -> list of FPS values
+    QMap<QString, QList<double>> deviceCapabilities;
 
     QComboBox *cameraIndexComboBox;
     QComboBox *cameraResolutionComboBox;
     QComboBox *screenResolutionComboBox;
-    QSpinBox *cameraFPSSpinBox;
     QSpinBox *saveFileKbpsSpinBox;
     QPushButton *okButton;
     QPushButton *cancelButton;

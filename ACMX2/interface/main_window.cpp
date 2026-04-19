@@ -847,7 +847,7 @@ void MainWindow::menuPlaylistSettings() {
 }
 
 void MainWindow::cameraSettings() {
-    SettingsWindow settingsWindow(this);
+    SettingsWindow settingsWindow(executable_path, this);
     if (settingsWindow.exec() == QDialog::Accepted) {
         full_screen_value = settingsWindow.isFullscreen();
         if (settingsWindow.isUsingInputVideoFile()) {
