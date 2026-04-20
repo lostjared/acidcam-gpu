@@ -2349,6 +2349,7 @@ struct MXArguments {
     std::string record_audio_file;
     float record_gain = 1.0f;
     std::string audio_file;
+    bool audio_trunc = false; ///< When true, stop playback when file audio reaches the end.
 #endif
     bool silent = false;
 #ifdef MIDI_ENABLED
@@ -2497,6 +2498,7 @@ class ACView : public gl::GLObject {
     bool spectrum_scale_by_sense = false; ///< When true, scale spectrum 1D buffer by audio sensitivity.
     bool file_audio_mode = false; ///< True when audio comes from a file instead of RtAudio.
     std::string audio_file_path; ///< Path to the audio file used for file_audio_mode.
+    bool audio_trunc_mode = false; ///< When true, stop playback when file audio samples are exhausted.
 #endif
 #ifdef MIDI_ENABLED
     RtMidiIn *midiIn = nullptr;
@@ -2943,6 +2945,7 @@ class ACView : public gl::GLObject {
                 audio_is_enabled = true;
                 file_audio_mode = true;
                 audio_file_path = args.audio_file;
+                audio_trunc_mode = args.audio_trunc;
                 set_sense(args.audio_sensitivty);
                 spectrumTex.init();
                 mx::system_out << "acmx2: File audio enabled from: " << args.audio_file << "\n";
@@ -3967,8 +3970,14 @@ class ACView : public gl::GLObject {
             library.useProgram();
 #ifdef AUDIO_ENABLED
             if (audio_is_enabled) {
-                if (file_audio_mode)
+                if (file_audio_mode) {
                     file_audio_process_frame(fps);
+                    if (audio_trunc_mode && !file_audio_is_active()) {
+                        mx::system_out << "acmx2: Audio file finished, stopping (--audio-trunc).\n";
+                        fflush(stdout);
+                        running = false;
+                    }
+                }
                 if (spectrum_scale_by_sense)
                     spectrumTex.update(get_sense());
                 else
@@ -5466,6 +5475,8 @@ class ACView : public gl::GLObject {
 
     bool needsFileAudioMux() {
 #ifdef AUDIO_ENABLED
+        /// @brief Check whether the output video needs file-audio muxing.
+        /// @return @c true when file_audio_mode is active and an output file is set.
         return file_audio_mode && !audio_file_path.empty() && !ofilename.empty();
 #else
         return false;
@@ -5518,6 +5529,15 @@ class ACView : public gl::GLObject {
 #endif
     }
 
+    /**
+     * @brief Run ffmpeg synchronously to mux the audio file into the output video.
+     *
+     * Copies the video stream from the output file and encodes the audio
+     * file track as AAC 192 kbps.  If the video is shorter than the audio
+     * the audio track is truncated to match the video duration.
+     * The result is written to a temporary file which replaces the
+     * original on success.
+     */
     void runFileAudioMuxSync() {
 #ifdef AUDIO_ENABLED
         if (!file_audio_mode || audio_file_path.empty() || ofilename.empty())
@@ -5880,6 +5900,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(303, "record-audio", "Record captured audio to WAV file")
         .addOptionDoubleValue(304, "record-gain", "Recording volume gain 0.0-2.0 (default: 1.0)")
         .addOptionDoubleValue(305, "audio-file", "Use audio from file (WAV/MP3/etc.) for reactivity instead of mic")
+        .addOptionDouble(306, "audio-trunc", "Stop playback when the audio file reaches the end")
 #endif
         .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
         .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
@@ -6108,6 +6129,9 @@ int main(int argc, char **argv) {
             case 305:
                 args.audio_file = arg.arg_value;
                 args.audio_enabled = true;
+                break;
+            case 306:
+                args.audio_trunc = true;
                 break;
 #endif
             case 405:

@@ -51,6 +51,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>Random multipass mode</b> — generate random 1–5 shader chains on the fly with crossfade transitions; navigate the main shader while in random mode
 - <b>Shader playlists with named nodes</b> — organize shaders into named tree nodes; each node loads its shaders into the multi-pass pipeline when selected at runtime
 - <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
+- <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; the audio track is automatically muxed into the output video
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
 - <b>Video recording</b> with optional audio muxing via FFmpeg
 - <b>Silent mode</b> — headless video processing without a window
@@ -164,6 +165,16 @@ cmake .. && make -j$(nproc) && sudo make install
 ./acmx2 -p ./data --build ./shaders --enable-3d
 @endcode
 
+<b>Process a video with audio-reactive shaders driven by a music file:</b>
+@code{.sh}
+./acmx2 -p ./data -i input.mp4 -s ./shaders --audio-file music.mp3 -o output.mp4
+@endcode
+
+<b>Same as above, but stop when the audio track ends:</b>
+@code{.sh}
+./acmx2 -p ./data -i input.mp4 -s ./shaders --audio-file music.mp3 --audio-trunc -o output.mp4
+@endcode
+
 @section cli_args Command-Line Arguments
 
 @subsection cli_general General
@@ -230,6 +241,8 @@ cmake .. && make -j$(nproc) && sudo make install
 |       | `--list-devices` |             | List audio devices and exit |
 |       | `--record-audio` | `<file>`    | Record captured audio to WAV |
 |       | `--record-gain`  | `<float>`   | Recording volume gain (0.0–2.0) |
+|       | `--audio-file`   | `<file>`    | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
+|       | `--audio-trunc`  |             | Stop playback when the audio file reaches the end |
 
 @subsection cli_midi MIDI Options (requires MIDI_ENABLED build)
 | Long            | Value       | Description |
@@ -880,6 +893,7 @@ The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers 
 
 
 - <tt>ACMX2/audio.cpp/.hpp</tt>  RtAudio amplitude/reactive hooks
+- <tt>ACMX2/file_audio.cpp/.hpp</tt>  FFmpeg-based file audio decoder for audio reactivity from media files
 - <tt>ACMX2/audio_transfer.cpp</tt>  audio transfer helper
 - <tt>ACMX2/models/*.mxmod</tt>  MXMOD geometry library
 - <tt>ACMX2/examples/*.glsl</tt>  sample shader library/index
@@ -916,6 +930,7 @@ The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers 
 - <b><tt>ACMX2/program.cpp/.hpp</tt>:</b> shader binary cache layer uses source+driver fingerprinting to skip repeated compile/link cycles and reduce startup latency.
 - <b><tt>ACMX2/data/*.glsl</tt>:</b> baseline vertex/fragment units that form base render stages and buffer transfer steps.
 - <b><tt>ACMX2/audio.cpp/.hpp</tt>:</b> real-time amplitude extraction from audio input; callback computes average magnitude used for reactive controls.
+- <b><tt>ACMX2/file_audio.cpp/.hpp</tt>:</b> alternative audio source that decodes a media file (WAV, MP3, FLAC, AAC, OGG, or a video container) via FFmpeg into a mono float buffer at 44 100 Hz.  Each video frame, <tt>file_audio_process_frame()</tt> advances through the buffer, computes amplitude / peak / RMS / 3-band energy / dominant frequency, and pushes samples to the FFT ring buffer — driving the same shader uniforms as the live microphone path.  When recording, the audio file track is muxed into the output MP4 via <tt>runFileAudioMuxSync()</tt>.
 - <b><tt>ACMX2/audio_transfer.cpp</tt>:</b> utility path for audio transfer/record style workflows and supporting media synchronization tasks.
 - <b><tt>ACMX2/models/*.mxmod</tt>:</b> model assets for 3D or scene-influenced visuals integrated with runtime rendering.
 - <b><tt>ACMX2/examples/*.glsl</tt>:</b> curated shader samples used as practical templates and quick-start visual blocks.

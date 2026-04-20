@@ -1,3 +1,14 @@
+/**
+ * @file file_audio.cpp
+ * @brief FFmpeg-based audio file decoder for audio-reactive shaders.
+ *
+ * Decodes an entire audio file upfront into a mono float buffer at
+ * 44 100 Hz using FFmpeg's libavformat / libavcodec / libswresample.
+ * Each video frame, file_audio_process_frame() advances through the
+ * buffer and updates the shared audio globals that feed the shader
+ * uniform pipeline and FFT spectrum texture.
+ */
+
 #include "file_audio.hpp"
 #include "audio.hpp"
 
@@ -40,6 +51,17 @@ static std::atomic<bool> fileAudioActive{false};
 static float lpState = 0.0f;
 static float mpState = 0.0f;
 
+/**
+ * @brief Decode every audio packet from the open format context.
+ *
+ * Reads packets from @c fmtCtx, sends them through the codec, and
+ * resamples the output to mono float 44 100 Hz via @c swrCtx.
+ * Decoded samples are appended to the module-level @c decodedSamples
+ * vector.  The resampler is flushed at the end to capture trailing
+ * samples.
+ *
+ * @return @c true if decoding completed without fatal errors.
+ */
 static bool decodeAllSamples() {
     AVPacket *pkt = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
@@ -93,6 +115,7 @@ static bool decodeAllSamples() {
     return true;
 }
 
+/// @copydoc file_audio_open
 bool file_audio_open(const std::string &filepath) {
     file_audio_close();
 
@@ -174,6 +197,7 @@ bool file_audio_open(const std::string &filepath) {
     return true;
 }
 
+/// @copydoc file_audio_process_frame
 void file_audio_process_frame(double video_fps) {
     if (!fileAudioActive || decodedSamples.empty())
         return;
@@ -247,10 +271,12 @@ void file_audio_process_frame(double video_fps) {
     playbackPos += available;
 }
 
+/// @copydoc file_audio_is_active
 bool file_audio_is_active() {
     return fileAudioActive.load(std::memory_order_relaxed);
 }
 
+/// @copydoc file_audio_close
 void file_audio_close() {
     fileAudioActive = false;
     if (swrCtx) swr_free(&swrCtx);

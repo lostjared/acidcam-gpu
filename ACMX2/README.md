@@ -19,6 +19,7 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU f
 - **Random multipass mode** — generate random 1–5 shader chains on the fly with crossfade transitions; navigate the main shader with Up/Down while in random mode
 - **Shader playlists** — cycle through an ordered list of shaders
 - **Audio reactivity** — shaders respond to real-time audio input (RtAudio/PulseAudio)
+- **File-based audio reactivity** — drive audio-reactive shaders from an audio or video file instead of a live microphone via `--audio-file`; the audio track is automatically muxed into the output video
 - **MIDI control** — map hardware knobs and buttons to shader parameters
 - **Video recording** with optional audio muxing via FFmpeg
 - **Silent mode** — headless video processing without a window
@@ -79,6 +80,16 @@ cp -rf ../data/ .
 **Build shader cache:**
 ```bash
 ./acmx2 -p ./data --build ./shaders --enable-3d
+```
+
+**Process a video with audio-reactive shaders driven by a music file:**
+```bash
+./acmx2 -p ./data -i input.mp4 -s ./shaders --audio-file music.mp3 -o output.mp4
+```
+
+**Same as above, but stop when the audio track ends:**
+```bash
+./acmx2 -p ./data -i input.mp4 -s ./shaders --audio-file music.mp3 --audio-trunc -o output.mp4
 ```
 
 ---
@@ -152,6 +163,8 @@ cp -rf ../data/ .
 | | `--list-devices` | | List audio devices and exit |
 | | `--record-audio` | `<file>` | Record captured audio to WAV file |
 | | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
+| | `--audio-file` | `<file>` | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
+| | `--audio-trunc` | | Stop playback when the audio file reaches the end |
 
 ### MIDI Options (requires `MIDI_ENABLED` build)
 

@@ -741,6 +741,7 @@ void MainWindow::menuAudioSettings() {
         } else {
             audio_file = "";
         }
+        audio_trunc = audio_set.isAudioTruncEnabled();
         Log("Audio Settings Saved");
     }
 }
@@ -1015,6 +1016,9 @@ void MainWindow::runSelected() {
 
     if (!audio_file.isEmpty()) {
         arguments << "--audio-file" << audio_file;
+        if (audio_trunc) {
+            arguments << "--audio-trunc";
+        }
     }
 
     if (enable_3d) {
@@ -1176,6 +1180,9 @@ void MainWindow::runAll() {
 
     if (!audio_file.isEmpty()) {
         arguments << "--audio-file" << audio_file;
+        if (audio_trunc) {
+            arguments << "--audio-trunc";
+        }
     }
 
     if (enable_3d) {

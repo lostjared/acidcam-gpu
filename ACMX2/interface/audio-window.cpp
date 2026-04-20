@@ -65,10 +65,13 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioFileLineEdit->setEnabled(false);
     audioFileBrowseButton = new QPushButton("Browse", this);
     audioFileBrowseButton->setEnabled(false);
+    audioTruncCheckBox = new QCheckBox("Stop video when audio file completes", this);
+    audioTruncCheckBox->setEnabled(false);
 
     connect(audioFileCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         audioFileLineEdit->setEnabled(checked);
         audioFileBrowseButton->setEnabled(checked);
+        audioTruncCheckBox->setEnabled(checked);
         // When using file audio, disable mic-specific controls
         audioPassThroughCheckBox->setEnabled(!checked);
         channelSpinBox->setEnabled(!checked);
@@ -127,6 +130,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioFileLayout->addWidget(audioFileBrowseButton);
     mainLayout->addWidget(audioFileCheckBox);
     mainLayout->addLayout(audioFileLayout);
+    mainLayout->addWidget(audioTruncCheckBox);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addWidget(okButton);
@@ -279,4 +283,8 @@ bool AudioSettings::isAudioFileEnabled() const {
 
 QString AudioSettings::getAudioFilePath() const {
     return audioFileLineEdit->text();
+}
+
+bool AudioSettings::isAudioTruncEnabled() const {
+    return audioTruncCheckBox->isChecked();
 }
