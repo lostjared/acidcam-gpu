@@ -250,3 +250,6 @@ target_link_libraries(acmx2 PRIVATE
 )
 install(TARGETS acmx2 DESTINATION bin)
 install(TARGETS audio_transfer DESTINATION bin)
+install(FILES acmx2.desktop DESTINATION share/applications)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/data/win-icon.png DESTINATION share/acmx2 RENAME acmx2.png)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data DESTINATION share/acmx2)

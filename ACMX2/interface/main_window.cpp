@@ -3,6 +3,7 @@
 #include "settings.hpp"
 #include <QApplication>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -942,6 +943,8 @@ void MainWindow::runSelected() {
 #ifdef BUILD_BUNDLE
     executable_path = dirPath + "/../Helpers/acmx2";
 #endif
+    if (!QFileInfo::exists(dirPath + "/data/win-icon.png"))
+        dirPath = "/usr/local/share/acmx2";
     QString shader_file = shader_path + "/" + data;
     arguments << "--path" << dirPath << "--fragment" << shader_file;
     QString res;
@@ -1107,6 +1110,8 @@ void MainWindow::runAll() {
 #ifdef BUILD_BUNDLE
     executable_path = dirPath + "/../Helpers/acmx2";
 #endif
+    if (!QFileInfo::exists(dirPath + "/data/win-icon.png"))
+        dirPath = "/usr/local/share/acmx2";
 
     QString shader_file = shader_path;
     arguments << "--path" << dirPath << "--shaders" << shader_file;
@@ -1361,7 +1366,7 @@ void MainWindow::menuBuildShaderCache() {
 #ifdef BUILD_BUNDLE
     QString assets_path = dirPath + "/../Helpers";
 #else
-    QString assets_path = dirPath;
+    QString assets_path = QFileInfo::exists(dirPath + "/data/win-icon.png") ? dirPath : QStringLiteral("/usr/local/share/acmx2");
 #endif
 
     QStringList args;

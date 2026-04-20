@@ -5793,6 +5793,10 @@ class MainWindow : public gl::GLWindow {
 
     void initCommon(const MXArguments &args) {
         util.path = args.path;
+        if (!std::filesystem::exists(util.path + "/data/win-icon.png")) {
+            if (std::filesystem::exists("/usr/local/share/acmx2/data"))
+                util.path = "/usr/local/share/acmx2";
+        }
 
         if (!silent_mode) {
             SDL_Surface *ico = png::LoadPNG(util.getFilePath("data/win-icon.png").c_str());
@@ -6556,6 +6560,10 @@ int main(int argc, char **argv) {
             }
             mx::system_out << "acmx2: Silent mode enabled - processing without window\n";
         }
+
+        SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
+        SDL_SetHint("SDL_VIDEO_WAYLAND_WMCLASS", "acmx2");
+        SDL_SetHint("SDL_VIDEO_X11_WMCLASS", "ACMX2");
 
         if (args.silent) {
             MainWindow main_window(args, true);

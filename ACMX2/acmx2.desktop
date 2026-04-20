@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ACMX2
+Comment=Real-time GPU-accelerated video glitch engine
+Exec=acmx2
+Icon=/usr/local/share/acmx2/acmx2.png
+Terminal=true
+Categories=AudioVideo;Video;
+StartupWMClass=ACMX2

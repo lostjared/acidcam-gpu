@@ -141,6 +141,8 @@ endif()
 
 target_compile_options(acmx2_interface PRIVATE ${COMPILER_FLAGS})
 install(TARGETS acmx2_interface DESTINATION bin RENAME launcher)
+install(FILES acmx2-interface.desktop DESTINATION share/applications)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../data/win-icon.png DESTINATION share/acmx2 RENAME acmx2.png)
 message(STATUS "")
 message(STATUS "============================================")
 message(STATUS "Configuration Summary:")
