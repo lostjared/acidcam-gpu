@@ -148,6 +148,10 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"Rotate X Axis W/S Knob", "Camera pitch up/down (3D)", 506, 507, false, 0, 0, 0});
     mappings.push_back({"Rotate Y Axis A/D Knob", "Camera yaw right/left (3D)", 508, 509, false, 0, 0, 0});
     mappings.push_back({"Rotate Z Axis Knob", "Camera roll right/left (3D)", 512, 513, false, 0, 0, 0});
+    mappings.push_back({"Slider 1 Knob", "Shader uniform slider1 (0.0-1.0)", 600, 601, false, 0, 0, 0});
+    mappings.push_back({"Slider 2 Knob", "Shader uniform slider2 (0.0-1.0)", 602, 603, false, 0, 0, 0});
+    mappings.push_back({"Slider 3 Knob", "Shader uniform slider3 (0.0-1.0)", 604, 605, false, 0, 0, 0});
+    mappings.push_back({"Slider 4 Knob", "Shader uniform slider4 (0.0-1.0)", 606, 607, false, 0, 0, 0});
     mappings.push_back({"RotSpeed Up", "Camera rotation speed increase", 510, 0, false, 0, 0, 0});
     mappings.push_back({"RotSpeed Down", "Camera rotation speed decrease", 511, 0, false, 0, 0, 0});
 

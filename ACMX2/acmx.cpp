@@ -743,6 +743,9 @@ class ShaderLibrary {
     bool time_active = true;
     float time_f = 1.0;
     float time_speed = 1.0f;
+#ifdef MIDI_ENABLED
+    float midi_slider[4] = {0.0f, 0.0f, 0.0f, 0.0f}; ///< MIDI CC slider values (0.0–1.0) for shader uniforms slider1–slider4.
+#endif
     bool is3d = false;
     bool dual_mode = false;
 
@@ -794,6 +797,9 @@ class ShaderLibrary {
         GLint inc_value_loc = -1;
         GLint inc_valuex_loc = -1;
         GLint time_speed_loc = -1;
+#ifdef MIDI_ENABLED
+        GLint slider_loc[4] = {-1, -1, -1, -1}; ///< Locations of optional `uniform float slider1..slider4;`
+#endif
     };
     size_t library_index = 0;
     bool use_cache = false;
@@ -820,6 +826,11 @@ class ShaderLibrary {
   public:
     ShaderLibrary() = default;
     ~ShaderLibrary() {}
+
+#ifdef MIDI_ENABLED
+    /// Set a MIDI slider value (index 0–3, value 0.0–1.0).
+    void setMidiSlider(int idx, float val) { if (idx >= 0 && idx < 4) midi_slider[idx] = val; }
+#endif
 
     /**
      * @brief Enable or disable use of the ac::ShaderProgram binary-cache wrapper.
@@ -971,6 +982,12 @@ class ShaderLibrary {
             names[pos].inc_value_loc = glGetUniformLocation(prog->id(), "inc_value");
             names[pos].inc_valuex_loc = glGetUniformLocation(prog->id(), "inc_valuex");
             names[pos].time_speed_loc = glGetUniformLocation(prog->id(), "time_speed");
+#ifdef MIDI_ENABLED
+            names[pos].slider_loc[0] = glGetUniformLocation(prog->id(), "slider1");
+            names[pos].slider_loc[1] = glGetUniformLocation(prog->id(), "slider2");
+            names[pos].slider_loc[2] = glGetUniformLocation(prog->id(), "slider3");
+            names[pos].slider_loc[3] = glGetUniformLocation(prog->id(), "slider4");
+#endif
         }
     }
 
@@ -1882,6 +1899,12 @@ class ShaderLibrary {
             glUniform1i(n.spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         }
 #endif
+#ifdef MIDI_ENABLED
+        for (int i = 0; i < 4; ++i) {
+            if (n.slider_loc[i] != -1)
+                glUniform1f(n.slider_loc[i], midi_slider[i]);
+        }
+#endif
     }
 
     /**
@@ -1998,6 +2021,12 @@ class ShaderLibrary {
         }
         if (n.spectrum_loc != -1) {
             glUniform1i(n.spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+        }
+#endif
+#ifdef MIDI_ENABLED
+        for (int i = 0; i < 4; ++i) {
+            if (n.slider_loc[i] != -1)
+                glUniform1f(n.slider_loc[i], midi_slider[i]);
         }
 #endif
     }
@@ -2168,6 +2197,12 @@ class ShaderLibrary {
         }
         if (names[index()].spectrum_loc != -1) {
             glUniform1i(names[index()].spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+        }
+#endif
+#ifdef MIDI_ENABLED
+        for (int i = 0; i < 4; ++i) {
+            if (names[index()].slider_loc[i] != -1)
+                glUniform1f(names[index()].slider_loc[i], midi_slider[i]);
         }
 #endif
     }
@@ -2570,6 +2605,16 @@ class ACView : public gl::GLObject {
         case 511: return "RotSpdDn";
         case 512: return "RollR";
         case 513: return "RollL";
+        case 514: return "ScaleUp";
+        case 515: return "ScaleDn";
+        case 600: return "Slider1";
+        case 601: return "Slider1";
+        case 602: return "Slider2";
+        case 603: return "Slider2";
+        case 604: return "Slider3";
+        case 605: return "Slider3";
+        case 606: return "Slider4";
+        case 607: return "Slider4";
         default:  return "?";
         }
     }
@@ -2753,6 +2798,12 @@ class ACView : public gl::GLObject {
             auto it = knobState.find(key);
             if (it == knobState.end()) continue;
             unsigned char val = it->second;
+            // Slider knobs: map CC value (0-127) directly to 0.0-1.0
+            if (mc.key1 >= 600 && mc.key1 <= 606 && (mc.key1 % 2 == 0)) {
+                int idx = (mc.key1 - 600) / 2;
+                library.setMidiSlider(idx, static_cast<float>(val) / 127.0f);
+                continue;
+            }
             if (val == 64) continue; // dead zone at center
             int dist = (val > 64) ? (val - 64) : (64 - val); // 1..64
             // Map distance to frame skip: max dist (63-64) = 1 (every frame),

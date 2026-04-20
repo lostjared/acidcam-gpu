@@ -292,6 +292,17 @@ All fragment shaders receive the following uniforms automatically. Uniforms that
 | `amp_high` | `float` | High-frequency energy (>3000 Hz) |
 | `iSampleRate` | `float` | Audio sample rate (`44100.0`) |
 
+### MIDI Slider Uniforms (requires `MIDI=ON` build)
+
+| Uniform | Type | Description |
+|---------|------|-------------|
+| `slider1` | `float` | MIDI CC knob value mapped to 0.0–1.0 |
+| `slider2` | `float` | MIDI CC knob value mapped to 0.0–1.0 |
+| `slider3` | `float` | MIDI CC knob value mapped to 0.0–1.0 |
+| `slider4` | `float` | MIDI CC knob value mapped to 0.0–1.0 |
+
+These uniforms are optional. If a shader does not declare them they are silently skipped. Map physical MIDI knobs to Slider 1–4 in the midi-map tool, then use `uniform float slider1;` etc. in your GLSL code to receive live 0.0–1.0 values.
+
 ### Virtual Audio Device (PipeWire / PulseAudio)
 
 Route application audio into ACMX2 for reactive effects:
