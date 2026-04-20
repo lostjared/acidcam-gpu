@@ -736,6 +736,11 @@ void MainWindow::menuAudioSettings() {
         record_volume = audio_set.getRecordVolume();
         audio_input = audio_set.getInputDeviceIndex();
         audio_output = audio_set.getOutputDeviceIndex();
+        if (audio_set.isAudioFileEnabled()) {
+            audio_file = audio_set.getAudioFilePath();
+        } else {
+            audio_file = "";
+        }
         Log("Audio Settings Saved");
     }
 }
@@ -1008,6 +1013,10 @@ void MainWindow::runSelected() {
         }
     }
 
+    if (!audio_file.isEmpty()) {
+        arguments << "--audio-file" << audio_file;
+    }
+
     if (enable_3d) {
         arguments << "--enable-3d";
         arguments << "--model" << model_file;
@@ -1163,6 +1172,10 @@ void MainWindow::runAll() {
             arguments << "--record-audio" << wavPath;
             arguments << "--record-gain" << QString::number(record_volume, 'f', 2);
         }
+    }
+
+    if (!audio_file.isEmpty()) {
+        arguments << "--audio-file" << audio_file;
     }
 
     if (enable_3d) {

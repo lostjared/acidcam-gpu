@@ -49,6 +49,7 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libavformat
     libavutil
     libswscale
+    libswresample
 )
 if(NOT FFMPEG_FOUND)
     message(FATAL_ERROR "FFMPEG libraries not found. Please install ffmpeg development libraries (libavcodec, libavformat, libavutil, libswscale).")
@@ -121,7 +122,7 @@ if(AUDIO)
     endif()
     set(AUDIO_INCLUDE ${RTAUDIO_INCLUDE_DIR})
     set(AUDIO_LIBS ${RTAUDIO_LIBRARY})
-    set(AUDIO_SRC "audio.cpp")
+    set(AUDIO_SRC "audio.cpp" "file_audio.cpp")
     message(STATUS "AUDIO ENABLED")
     message(STATUS "AUDIO LIBRARY: ${RTAUDIO_LIBRARY}")
     message(STATUS "AUDIO INCLUDE: ${RTAUDIO_INCLUDE_DIR}")
@@ -227,6 +228,7 @@ target_include_directories(acmx2 PRIVATE
     ${MXWrite_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
+    ${FFMPEG_INCLUDE_DIRS}
     /usr/local/include
     /usr/local/include/opencv4
     /opt/cuda/include
@@ -243,6 +245,8 @@ target_link_libraries(acmx2 PRIVATE
     OpenGL::OpenGL
     GL
     Threads::Threads
+    PkgConfig::FFMPEG
+    ${FFMPEG_LIBRARIES}
 )
 install(TARGETS acmx2 DESTINATION bin)
 install(TARGETS audio_transfer DESTINATION bin)

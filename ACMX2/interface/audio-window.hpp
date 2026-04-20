@@ -6,6 +6,7 @@
 #include <QDialog>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
@@ -25,6 +26,8 @@ class AudioSettings : public QDialog {
     double getSensitivity() const;
     int getInputDeviceIndex() const;
     int getOutputDeviceIndex() const;
+    bool isAudioFileEnabled() const;
+    QString getAudioFilePath() const;
 
   private:
     void populateAudioDevices();
@@ -37,6 +40,9 @@ class AudioSettings : public QDialog {
     QSlider *sensitivitySlider;
     QComboBox *inputDeviceComboBox;
     QComboBox *outputDeviceComboBox;
+    QCheckBox *audioFileCheckBox;
+    QLineEdit *audioFileLineEdit;
+    QPushButton *audioFileBrowseButton;
     QPushButton *okButton;
     QPushButton *cancelButton;
 };

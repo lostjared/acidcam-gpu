@@ -49,6 +49,7 @@
 #include <vector>
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
+#include "file_audio.hpp"
 #endif
 #ifdef MIDI_ENABLED
 #include <rtmidi/RtMidi.h>
@@ -2347,6 +2348,7 @@ struct MXArguments {
     float audio_sensitivty = 0.25f;
     std::string record_audio_file;
     float record_gain = 1.0f;
+    std::string audio_file;
 #endif
     bool silent = false;
 #ifdef MIDI_ENABLED
@@ -2493,6 +2495,8 @@ class ACView : public gl::GLObject {
     std::string audio_record_file;
     SpectrumTexture spectrumTex; ///< 1D texture holding the FFT magnitude spectrum for shaders.
     bool spectrum_scale_by_sense = false; ///< When true, scale spectrum 1D buffer by audio sensitivity.
+    bool file_audio_mode = false; ///< True when audio comes from a file instead of RtAudio.
+    std::string audio_file_path; ///< Path to the audio file used for file_audio_mode.
 #endif
 #ifdef MIDI_ENABLED
     RtMidiIn *midiIn = nullptr;
@@ -2898,7 +2902,7 @@ class ACView : public gl::GLObject {
 
   public:
     void requestStop() { running = false; }
-    bool needsAsyncShutdown() { return needsMux() || needsTransferAudio(); }
+    bool needsAsyncShutdown() { return needsMux() || needsTransferAudio() || needsFileAudioMux(); }
     /**
      * @brief Construct the rendering object from parsed CLI arguments.
      *
@@ -2934,7 +2938,21 @@ class ACView : public gl::GLObject {
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
         audio_record_file = args.record_audio_file;
-        if (args.audio_enabled) {
+        if (!args.audio_file.empty()) {
+            if (file_audio_open(args.audio_file)) {
+                audio_is_enabled = true;
+                file_audio_mode = true;
+                audio_file_path = args.audio_file;
+                set_sense(args.audio_sensitivty);
+                spectrumTex.init();
+                mx::system_out << "acmx2: File audio enabled from: " << args.audio_file << "\n";
+                mx::system_out << "acmx2: FFT spectrum texture initialised ("
+                               << get_fft_bin_count() << " bins on GL_TEXTURE"
+                               << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
+            } else {
+                mx::system_err << "acmx2: Error could not open audio file: " << args.audio_file << "\n";
+            }
+        } else if (args.audio_enabled) {
             if (init_audio(args.audio_channels, args.audio_sensitivty, audio_input_device, audio_output_device) != 0) {
                 mx::system_err << "acmx2: Error could not initalize audio\n";
             } else {
@@ -3291,9 +3309,13 @@ class ACView : public gl::GLObject {
 
         if (!isMuxing.load()) {
             bool shouldMux = needsMux() && writer.is_open();
+            bool shouldFileAudioMux = needsFileAudioMux() && writer.is_open();
             stopWriterThread();
             if (shouldMux) {
                 runMuxSync();
+            }
+            if (shouldFileAudioMux) {
+                runFileAudioMuxSync();
             }
         }
         if (muxThread.joinable()) {
@@ -3305,7 +3327,10 @@ class ACView : public gl::GLObject {
             if (is_audio_recording()) {
                 stop_audio_recording();
             }
-            close_audio();
+            if (file_audio_mode)
+                file_audio_close();
+            else
+                close_audio();
             spectrumTex.cleanup();
         }
 #endif
@@ -3806,7 +3831,7 @@ class ACView : public gl::GLObject {
         }
 
         if (!running) {
-            if (needsMux() || needsTransferAudio()) {
+            if (needsMux() || needsTransferAudio() || needsFileAudioMux()) {
                 beginMuxing(win);
                 return;
             }
@@ -3942,6 +3967,8 @@ class ACView : public gl::GLObject {
             library.useProgram();
 #ifdef AUDIO_ENABLED
             if (audio_is_enabled) {
+                if (file_audio_mode)
+                    file_audio_process_frame(fps);
                 if (spectrum_scale_by_sense)
                     spectrumTex.update(get_sense());
                 else
@@ -5437,6 +5464,14 @@ class ACView : public gl::GLObject {
         return !filename.empty() && !repeat && copy_audio && writer.is_open();
     }
 
+    bool needsFileAudioMux() {
+#ifdef AUDIO_ENABLED
+        return file_audio_mode && !audio_file_path.empty() && !ofilename.empty();
+#else
+        return false;
+#endif
+    }
+
     /**
      * @brief Run ffmpeg synchronously to mux the recorded audio WAV into the video MP4.
      *
@@ -5476,6 +5511,38 @@ class ACView : public gl::GLObject {
             mx::system_out << "acmx2: muxed recorded audio from: " << audio_record_file << " to " << ofilename << "\n";
         } else {
             mx::system_err << "acmx2: ffmpeg mux failed (exit code " << ret << ")\n";
+            std::remove(tmp_out.c_str());
+        }
+        fflush(stdout);
+        fflush(stderr);
+#endif
+    }
+
+    void runFileAudioMuxSync() {
+#ifdef AUDIO_ENABLED
+        if (!file_audio_mode || audio_file_path.empty() || ofilename.empty())
+            return;
+        std::string tmp_out = ofilename + ".tmp.mp4";
+        int64_t fc = writer.get_frame_count();
+        double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
+        std::ostringstream cmd;
+        cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_file_path
+            << "\" -map 0:v:0 -map 1:a:0"
+            << " -c:v copy -c:a aac -b:a 192k";
+        if (video_duration > 0.0) {
+            cmd << " -t " << std::fixed << std::setprecision(3) << video_duration;
+        }
+        cmd << " -movflags +faststart \""
+            << tmp_out << "\" 2>&1";
+        mx::system_out << "acmx2: muxing audio file into video...\n";
+        fflush(stdout);
+        int ret = std::system(cmd.str().c_str());
+        if (ret == 0) {
+            std::remove(ofilename.c_str());
+            std::rename(tmp_out.c_str(), ofilename.c_str());
+            mx::system_out << "acmx2: muxed audio from: " << audio_file_path << " to " << ofilename << "\n";
+        } else {
+            mx::system_err << "acmx2: ffmpeg audio file mux failed (exit code " << ret << ")\n";
             std::remove(tmp_out.c_str());
         }
         fflush(stdout);
@@ -5526,6 +5593,7 @@ class ACView : public gl::GLObject {
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
             runMuxSync();
+            runFileAudioMuxSync();
             muxComplete = true;
         });
     }
@@ -5811,6 +5879,7 @@ int main(int argc, char **argv) {
         .addOptionDouble(302, "list-devices", "list audio devices")
         .addOptionDoubleValue(303, "record-audio", "Record captured audio to WAV file")
         .addOptionDoubleValue(304, "record-gain", "Recording volume gain 0.0-2.0 (default: 1.0)")
+        .addOptionDoubleValue(305, "audio-file", "Use audio from file (WAV/MP3/etc.) for reactivity instead of mic")
 #endif
         .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
         .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
@@ -6035,6 +6104,10 @@ int main(int argc, char **argv) {
                 break;
             case 304:
                 args.record_gain = static_cast<float>(atof(arg.arg_value.c_str()));
+                break;
+            case 305:
+                args.audio_file = arg.arg_value;
+                args.audio_enabled = true;
                 break;
 #endif
             case 405:

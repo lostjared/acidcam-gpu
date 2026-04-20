@@ -1,4 +1,6 @@
 #include "audio-window.hpp"
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSettings>
@@ -57,6 +59,34 @@ AudioSettings::AudioSettings(QWidget *parent)
     okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
 
+    audioFileCheckBox = new QCheckBox("Use Audio File for Reactivity (instead of mic)", this);
+    audioFileLineEdit = new QLineEdit(this);
+    audioFileLineEdit->setReadOnly(true);
+    audioFileLineEdit->setEnabled(false);
+    audioFileBrowseButton = new QPushButton("Browse", this);
+    audioFileBrowseButton->setEnabled(false);
+
+    connect(audioFileCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        audioFileLineEdit->setEnabled(checked);
+        audioFileBrowseButton->setEnabled(checked);
+        // When using file audio, disable mic-specific controls
+        audioPassThroughCheckBox->setEnabled(!checked);
+        channelSpinBox->setEnabled(!checked);
+        inputDeviceComboBox->setEnabled(!checked);
+        outputDeviceComboBox->setEnabled(!checked);
+    });
+
+    connect(audioFileBrowseButton, &QPushButton::clicked, this, [this]() {
+        QSettings appSettings("LostSideDead");
+        QString lastDir = appSettings.value("lastAudioFileDir", "").toString();
+        QString fileName = QFileDialog::getOpenFileName(this, "Select Audio File", lastDir,
+                                                        "Audio Files (*.wav *.mp3 *.flac *.aac *.ogg *.m4a *.wma *.mp4 *.mkv *.mov *.avi)");
+        if (!fileName.isEmpty()) {
+            appSettings.setValue("lastAudioFileDir", QFileInfo(fileName).absolutePath());
+            audioFileLineEdit->setText(fileName);
+        }
+    });
+
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 
@@ -91,6 +121,12 @@ AudioSettings::AudioSettings(QWidget *parent)
     outputDeviceLayout->addWidget(outputDeviceLabel);
     outputDeviceLayout->addWidget(outputDeviceComboBox);
     mainLayout->addLayout(outputDeviceLayout);
+
+    QHBoxLayout *audioFileLayout = new QHBoxLayout();
+    audioFileLayout->addWidget(audioFileLineEdit);
+    audioFileLayout->addWidget(audioFileBrowseButton);
+    mainLayout->addWidget(audioFileCheckBox);
+    mainLayout->addLayout(audioFileLayout);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addWidget(okButton);
@@ -235,4 +271,12 @@ int AudioSettings::getInputDeviceIndex() const {
 
 int AudioSettings::getOutputDeviceIndex() const {
     return outputDeviceComboBox->currentData().toInt();
+}
+
+bool AudioSettings::isAudioFileEnabled() const {
+    return audioFileCheckBox->isChecked() && !audioFileLineEdit->text().isEmpty();
+}
+
+QString AudioSettings::getAudioFilePath() const {
+    return audioFileLineEdit->text();
 }

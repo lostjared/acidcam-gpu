@@ -132,6 +132,7 @@ class MainWindow : public QMainWindow {
     bool enable_3d = false;
     int audio_input = -1;
     int audio_output = -1;
+    QString audio_file;
     QString model_file;
     bool gpu_filter_enabled = false;
     QString gpu_filter_indices;
