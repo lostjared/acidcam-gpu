@@ -743,6 +743,7 @@ class ShaderLibrary {
     bool time_active = true;
     float time_f = 1.0;
     float time_speed = 1.0f;
+    double video_fps = 0.0;
 #ifdef MIDI_ENABLED
     float midi_slider[4] = {0.0f, 0.0f, 0.0f, 0.0f}; ///< MIDI CC slider values (0.0–1.0) for shader uniforms slider1–slider4.
 #endif
@@ -1037,6 +1038,11 @@ class ShaderLibrary {
     /// @brief Set the absolute time_f advancement speed multiplier.
     void setTimeSpeed(float speed) {
         time_speed = speed;
+    }
+
+    /// @brief Set the video FPS for constant time_f advancement in video mode.
+    void setVideoFPS(double fps) {
+        video_fps = fps;
     }
 
     /**
@@ -2067,7 +2073,11 @@ class ShaderLibrary {
         frame_counter++;
 
         if (time_audio == false && time_active) {
-            time_f += static_cast<float>(delta_time) * time_speed;
+            if (video_fps > 0.0) {
+                time_f += static_cast<float>(1.0 / video_fps) * time_speed;
+            } else {
+                time_f += static_cast<float>(delta_time) * time_speed;
+            }
         } else {
 #ifdef AUDIO_ENABLED
             if (time_audio) {
@@ -3600,6 +3610,7 @@ class ACView : public gl::GLObject {
             h = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
             fps = cap.get(cv::CAP_PROP_FPS);
             totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
+            library.setVideoFPS(fps);
 
             frame_w = w;
             frame_h = h;
