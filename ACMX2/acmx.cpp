@@ -5477,7 +5477,7 @@ class ACView : public gl::GLObject {
                         continue;
                     }
 #ifdef AUDIO_ENABLED
-                    if (writerRunning && audio_is_enabled && !audio_record_file.empty() && !is_audio_recording()) {
+                    if (writerRunning && audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !is_audio_recording()) {
                         if (!start_audio_recording(audio_record_file)) {
                             mx::system_err << "acmx2: Error could not start audio recording\n";
                         }
@@ -5514,7 +5514,7 @@ class ACView : public gl::GLObject {
      */
     bool needsMux() {
 #ifdef AUDIO_ENABLED
-        return audio_is_enabled && !audio_record_file.empty() && !ofilename.empty();
+        return audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !ofilename.empty();
 #else
         return false;
 #endif
