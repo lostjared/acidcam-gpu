@@ -99,7 +99,8 @@ RUN cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/usr \
     && cmake --build build -j${BUILDJOBS} \
-    && cp -rf data/ build/
+    && cmake --install build \
+    && ldconfig
 
 # ---- Build ACMX2 MIDI Map tool ----
 WORKDIR /opt/src/acidcam-gpu/ACMX2/interface/midi-map
@@ -107,7 +108,8 @@ RUN cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/usr \
     && cmake --build build -j${BUILDJOBS} \
-    && cp build/midi-map /usr/bin/
+    && cmake --install build \
+    && ldconfig
 
 # ---- Download shader packs & models ----
 WORKDIR /opt/src
@@ -119,5 +121,5 @@ RUN mkdir -p files/shaders \
     && curl -L https://lostsidedead.biz/acmx2/models.zip -o models.zip \
     && unzip models.zip
 
-WORKDIR /opt/src/acidcam-gpu/ACMX2/interface/build
-CMD ["/opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface"]
+WORKDIR /root
+CMD ["acmx2_interface"]

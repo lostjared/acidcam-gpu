@@ -62,7 +62,8 @@ cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/usr \
     && cmake --build build -j${BUILDJOBS} \
-    && cp -rf data/ build/
+    && cmake --install build \
+    && ldconfig
 
 # ---- Build ACMX2 MIDI Map tool ----
 cd /opt/src/acidcam-gpu/ACMX2/interface/midi-map
@@ -70,7 +71,8 @@ cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/usr \
     && cmake --build build -j${BUILDJOBS} \
-    && cp build/midi-map /usr/bin/
+    && cmake --install build \
+    && ldconfig
 
 
 # ---- Download shader packs & models ----
@@ -89,8 +91,15 @@ echo "Models installed to: /opt/src/files/models"
 
 # ---- Fix ownership of installed binaries ----
 if [ -n "${SUDO_USER}" ]; then
-#    chown "${SUDO_USER}:${SUDO_USER}" /usr/bin/acmx2 2>/dev/null || true
      chown -R "${SUDO_USER}:${SUDO_USER}" /opt/src/acidcam-gpu/ACMX2/interface
 fi
-echo "Interface located at: /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface"
+
+echo ""
+echo "=== Installation Complete ==="
+echo "Binaries installed to: /usr/bin/"
+echo "  acmx2, acmx2_interface, midi-map, audio_transfer"
+echo "Data directory: /usr/share/acmx2/data/"
+echo "Desktop files: /usr/share/applications/"
+echo "Shaders: /opt/src/files/shaders"
+echo "Models:  /opt/src/files/models"
 

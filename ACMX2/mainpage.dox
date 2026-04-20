@@ -122,8 +122,7 @@ make -j$(nproc) && sudo make install
 @code{.sh}
 cd ACMX2/interface
 mkdir build && cd build
-cmake .. && make -j$(nproc)
-cp -rf ../data/ .
+cmake .. && make -j$(nproc) && sudo make install
 @endcode
 
 @subsection build_midimap MIDI Map Tool
@@ -132,6 +131,36 @@ cd ACMX2/interface/midi-map
 mkdir build && cd build
 cmake .. && make -j$(nproc) && sudo make install
 @endcode
+
+@subsection install_layout Installed File Layout
+
+`make install` places files under `CMAKE_INSTALL_PREFIX` (default `/usr/local`):
+
+| Path | Contents |
+|------|----------|
+| `bin/acmx2` | Main engine binary |
+| `bin/acmx2_interface` | Qt6 GUI launcher |
+| `share/acmx2/data/` | Assets (icon, fonts, models, shaders, textures) |
+| `share/acmx2/acmx2.png` | Application icon |
+| `share/applications/acmx2.desktop` | Desktop entry for `acmx2` |
+| `share/applications/acmx2-interface.desktop` | Desktop entry for `acmx2_interface` |
+
+Both `acmx2` and `acmx2_interface` automatically locate the installed data
+directory at `<prefix>/share/acmx2/` when the local `./data` directory is not
+present. You can still override the assets path with `-p <dir>`.
+
+@subsection distrobox_export Distrobox Export
+
+When running inside a Distrobox container, export the applications to the host
+desktop so they appear in the GNOME/KDE application launcher:
+
+@code{.sh}
+distrobox-export --app acmx2_interface
+distrobox-export --app acmx2
+@endcode
+
+The `.desktop` files include `StartupWMClass` entries so the correct icon
+appears in the dock while the application is running.
 
 @section usage Usage Examples
 

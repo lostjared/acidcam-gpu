@@ -45,9 +45,36 @@ The Qt6 GUI is built separately:
 ```bash
 cd ACMX2/interface
 mkdir build && cd build
-cmake .. && make -j$(nproc)
-cp -rf ../data/ .
+cmake .. && make -j$(nproc) && sudo make install
 ```
+
+---
+
+## Installed File Layout
+
+`make install` places files under `CMAKE_INSTALL_PREFIX` (default `/usr/local`):
+
+| Path | Contents |
+|------|----------|
+| `bin/acmx2` | Main engine binary |
+| `bin/acmx2_interface` | Qt6 GUI launcher |
+| `share/acmx2/data/` | Assets (icon, fonts, models, shaders, textures) |
+| `share/acmx2/acmx2.png` | Application icon |
+| `share/applications/acmx2.desktop` | Desktop entry for `acmx2` |
+| `share/applications/acmx2-interface.desktop` | Desktop entry for `acmx2_interface` |
+
+Both `acmx2` and `acmx2_interface` automatically locate the installed data directory at `<prefix>/share/acmx2/` when the local `./data` directory is not present. You can still override the assets path with `-p <dir>`.
+
+### Distrobox Export
+
+When running inside a Distrobox container, export the applications to the host desktop:
+
+```bash
+distrobox-export --app acmx2_interface
+distrobox-export --app acmx2
+```
+
+The `.desktop` files include `StartupWMClass` entries so the correct icon appears in the dock while running.
 ---
 
 ## Usage Examples

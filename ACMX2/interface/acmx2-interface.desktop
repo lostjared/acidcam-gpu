@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ACMX2 Interface
+Comment=ACMX2 shader and video processing interface
+Exec=acmx2_interface
+Icon=/usr/local/share/acmx2/acmx2.png
+Terminal=false
+Categories=AudioVideo;Video;
+StartupWMClass=acmx2_interface
