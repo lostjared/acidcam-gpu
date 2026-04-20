@@ -2,6 +2,7 @@
 #include <QApplication>
 
 int main(int argc, char **argv) {
+    qputenv("QT_WAYLAND_APP_ID", "acmx2_interface");
     QApplication app(argc, argv);
     QApplication::setWindowIcon(QIcon(":/win-icon.png"));
     QFile styleFile(":/stylesheet.qss");
