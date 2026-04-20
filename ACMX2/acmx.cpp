@@ -2405,6 +2405,7 @@ struct MXArguments {
     std::string playlist_file;
     double duration = 0.0;
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
+    bool use_yuv = false;
 };
 
 /**
@@ -2419,6 +2420,7 @@ struct FrameData {
     int width = 0;                     ///< Frame width in pixels.
     int height = 0;                    ///< Frame height in pixels.
     bool isSnapshot = false;           ///< True if this frame should be saved as a PNG snapshot.
+    bool isRawSnapshot = false;        ///< True if this frame should be saved as a raw RGBA file.
 };
 
 /**
@@ -3039,6 +3041,7 @@ class ACView : public gl::GLObject {
             mx::system_out << "acmx2: GPU filtering enabled with " << gpu_filters.size() << " filter(s)\n";
         }
         counter_disabled = args.disable_counter;
+        use_yuv = args.use_yuv;
 
         if (args.shader_pass_enabled && !args.shader_pass_list.empty()) {
             shader_pass_list = args.shader_pass_list;
@@ -3548,7 +3551,10 @@ class ACView : public gl::GLObject {
                 cap.set(cv::CAP_PROP_FRAME_WIDTH, win->w);
                 cap.set(cv::CAP_PROP_FRAME_HEIGHT, win->h);
             }
-            cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+            if (use_yuv)
+                cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y', 'U', 'Y', 'V'));
+            else
+                cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
             cap.set(cv::CAP_PROP_FPS, fps);
             w = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
             h = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
@@ -4454,11 +4460,11 @@ class ACView : public gl::GLObject {
             glDisable(GL_BLEND);
         }
 
-        bool needWriter = (writer.is_open() || snapshot_state > 0) && !isFrozen;
+        bool needWriter = (writer.is_open() || snapshot_state > 0 || raw_snapshot_state > 0) && !isFrozen;
 
         if (needWriter) {
 
-            if (snapshot_state == 1) {
+            if (snapshot_state == 1 || raw_snapshot_state == 1) {
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
@@ -4467,15 +4473,17 @@ class ACView : public gl::GLObject {
 
                 pboIndex = (pboIndex + 1) % 2;
                 pboNextIndex = (pboNextIndex + 1) % 2;
-                snapshot_state = 2;
+                if (snapshot_state == 1) snapshot_state = 2;
+                if (raw_snapshot_state == 1) raw_snapshot_state = 2;
             } else {
                 bool is_snapshot_frame = (snapshot_state == 2);
+                bool is_raw_snapshot_frame = (raw_snapshot_state == 2);
 
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-                if (writer.is_open() || is_snapshot_frame) {
+                if (writer.is_open() || is_snapshot_frame || is_raw_snapshot_frame) {
                     glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboNextIndex]);
                     GLubyte *src = static_cast<GLubyte *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
 
@@ -4498,15 +4506,19 @@ class ACView : public gl::GLObject {
                         fd.width = win->w;
                         fd.height = win->h;
                         fd.isSnapshot = is_snapshot_frame;
+                        fd.isRawSnapshot = is_raw_snapshot_frame;
 
                         if (is_snapshot_frame) {
                             snapshot_state = 0;
+                        }
+                        if (is_raw_snapshot_frame) {
+                            raw_snapshot_state = 0;
                         }
 
                         {
                             std::unique_lock<std::mutex> lock(queueMutex);
                             bool is_camera_mode = filename.empty() && graphic.empty();
-                            if (is_camera_mode && !is_snapshot_frame) {
+                            if (is_camera_mode && !is_snapshot_frame && !is_raw_snapshot_frame) {
                                 if (frameQueue.size() > 30) {
                                     frames_dropped++;
                                     frameQueue.pop();
@@ -4900,6 +4912,11 @@ class ACView : public gl::GLObject {
                     snapshot_state = 1;
                 }
                 break;
+            case SDLK_6:
+                if (raw_snapshot_state == 0) {
+                    raw_snapshot_state = 1;
+                }
+                break;
 #ifdef AUDIO_ENABLED
             case SDLK_t:
                 library.activeTime(!library.timeActive());
@@ -5077,6 +5094,7 @@ class ACView : public gl::GLObject {
     bool repeat = false;
     bool full = false;
     int snapshot_state = 0;
+    int raw_snapshot_state = 0;
     double totalFrames = 0;
     cv::VideoCapture cap;
     cv::Mat graphic_frame;
@@ -5134,6 +5152,7 @@ class ACView : public gl::GLObject {
     int gpu_cuda_device = 0;
     bool silent_mode = false;
     bool use_shader_cache_flag = true;
+    bool use_yuv = false;
     int last_progress_percent = -1;
     bool enableWatermark = false;
 
@@ -5468,7 +5487,30 @@ class ACView : public gl::GLObject {
                             fflush(stdout);
                         });
                     }
+                    if (fd.isRawSnapshot) {
+                        uint64_t current_offset = snapshotOffset.fetch_add(1);
+                        std::string snap_prefix = prefix_path;
+                        snapshot_pool.enqueue([snap_prefix, fd, current_offset] {
+                            auto now1 = std::chrono::system_clock::now();
+                            std::time_t now_c = std::chrono::system_clock::to_time_t(now1);
+                            std::tm localTime{};
+#ifdef _WIN32
+                            localtime_s(&localTime, &now_c);
+#else
+                            localtime_r(&now_c, &localTime);
+#endif
+                            std::ostringstream oss;
+                            oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
+                            std::string name = snap_prefix + "/ACMX2.Raw-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".raw";
 
+                            png::SaveRawBytes(name.c_str(), fd.pixels.data(),
+                                              static_cast<size_t>(fd.width),
+                                              static_cast<size_t>(fd.height), 4);
+
+                            mx::system_out << "acmx2: Saved raw frame: " << name << "\n";
+                            fflush(stdout);
+                        });
+                    }
                     if (writer.is_open() && (!filename.empty() || !graphic.empty()) && written_frame_counter == 0) {
                         written_frame_counter++;
                         continue;
@@ -5963,6 +6005,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
+        .addOptionDouble(414, "use-yuv", "Use YUV (YUYV) camera format instead of MJPG")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -6309,6 +6352,10 @@ int main(int argc, char **argv) {
                 exit(EXIT_SUCCESS);
                 break;
             }
+            case 414:
+                args.use_yuv = true;
+                mx::system_out << "acmx2: Using YUV (YUYV) camera format\n";
+                break;
 #ifdef MIDI_ENABLED
             case 500:
                 args.midi_map_file = arg.arg_value;

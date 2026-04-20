@@ -12,6 +12,7 @@
 #include <QMap>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSet>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
@@ -35,6 +36,7 @@ class SettingsWindow : public QDialog {
     bool isFullscreen() const;
     bool isCopyAudioEnabled() const;
     bool is3dEnabled() const;
+    bool isUseYuvEnabled() const;
     QString getModelFile() const;
     int getSelectedCudaDevice() const;
     float getTimeSpeed() const;
@@ -64,6 +66,7 @@ class SettingsWindow : public QDialog {
     QComboBox *cameraFPSComboBox;
     // resolution -> list of FPS values
     QMap<QString, QList<double>> deviceCapabilities;
+    QSet<QString> yuvResolutions;
 
     QComboBox *cameraIndexComboBox;
     QComboBox *cameraResolutionComboBox;
@@ -86,6 +89,7 @@ class SettingsWindow : public QDialog {
     QCheckBox *fullscreenCheckBox;
     QCheckBox *copyAudioCheckBox;
     QCheckBox *enable3dCheckBox;
+    QCheckBox *useYuvCheckBox;
     QLineEdit *modelFileLineEdit;
     QPushButton *browseModelButton;
     QComboBox *cudaDeviceComboBox;

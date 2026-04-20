@@ -152,6 +152,7 @@ class MainWindow : public QMainWindow {
     int cuda_device = 0;
     float time_speed = 1.0f;
     bool use_shader_cache = true;
+    bool use_yuv = false;
     bool duration_limit_enabled = false;
     double max_duration = 0.0;
     float cross_fade_duration = 0.5f;

@@ -887,6 +887,7 @@ void MainWindow::cameraSettings() {
             output_fps = settingsWindow.getCameraFPS();
             cache_enabled = false;
             cache_delay = 1;
+            use_yuv = settingsWindow.isUseYuvEnabled();
         }
         if (settingsWindow.isSavingToOutputVideoFile()) {
             output_file = settingsWindow.getOutputVideoFile();
@@ -965,6 +966,8 @@ void MainWindow::runSelected() {
             arguments << "--resolution" << scr_res;
         arguments << "--device" << QString::number(camera_index);
         arguments << "--fps" << QString::number(output_fps);
+        if (use_yuv)
+            arguments << "--use-yuv";
     } else {
         arguments << "--input" << video_file;
         if (screen_res.width() != 0)
@@ -1128,6 +1131,8 @@ void MainWindow::runAll() {
             arguments << "--resolution" << scr_res;
         arguments << "--device" << QString::number(camera_index);
         arguments << "--fps" << QString::number(output_fps);
+        if (use_yuv)
+            arguments << "--use-yuv";
     } else {
         arguments << "--input" << video_file;
         if (screen_res.width() != 0)

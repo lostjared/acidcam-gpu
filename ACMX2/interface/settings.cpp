@@ -132,6 +132,10 @@ void SettingsWindow::init() {
     connect(cameraResolutionComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SettingsWindow::onCameraResolutionChanged);
 
+    useYuvCheckBox = new QCheckBox("Use YUV (YUYV) camera format", this);
+    useYuvCheckBox->setChecked(false);
+    useYuvCheckBox->setEnabled(false);
+
     QHBoxLayout *inputVideoFileLayout = new QHBoxLayout;
     inputVideoFileLineEdit = new QLineEdit(this);
     inputVideoFileLineEdit->setReadOnly(true);
@@ -215,6 +219,10 @@ void SettingsWindow::init() {
             textureCacheCheckBox->setEnabled(false);
             cacheDelaySpinBox->setEnabled(false);
             populateFPS();
+            QString currentRes = cameraResolutionComboBox->currentText();
+            useYuvCheckBox->setEnabled(yuvResolutions.contains(currentRes));
+            if (!useYuvCheckBox->isEnabled())
+                useYuvCheckBox->setChecked(false);
         }
     });
 
@@ -229,6 +237,8 @@ void SettingsWindow::init() {
             browseGraphicsButton->setEnabled(false);
             textureCacheCheckBox->setEnabled(true);
             cacheDelaySpinBox->setEnabled(textureCacheCheckBox->isChecked());
+            useYuvCheckBox->setEnabled(false);
+            useYuvCheckBox->setChecked(false);
         }
     });
 
@@ -246,6 +256,8 @@ void SettingsWindow::init() {
             cameraFPSComboBox->clear();
             cameraFPSComboBox->addItems({"24", "30", "60"});
             cameraFPSComboBox->setCurrentIndex(1);
+            useYuvCheckBox->setEnabled(false);
+            useYuvCheckBox->setChecked(false);
         }
     });
 
@@ -273,6 +285,7 @@ void SettingsWindow::init() {
     mainLayout->addWidget(cameraResolutionComboBox);
     mainLayout->addWidget(cameraFPSLabel);
     mainLayout->addWidget(cameraFPSComboBox);
+    mainLayout->addWidget(useYuvCheckBox);
     mainLayout->addLayout(inputVideoFileLayout);
     mainLayout->addLayout(graphicsFileLayout);
     mainLayout->addWidget(saveOutputVideoCheckBox);
@@ -451,6 +464,10 @@ bool SettingsWindow::isCopyAudioEnabled() const {
     return copyAudioCheckBox->isChecked();
 }
 
+bool SettingsWindow::isUseYuvEnabled() const {
+    return useYuvCheckBox->isChecked();
+}
+
 QString SettingsWindow::getModelFile() const {
     return modelFile;
 }
@@ -591,6 +608,7 @@ void SettingsWindow::browseModelFile() {
 
 void SettingsWindow::enumerateDevice(int deviceIndex) {
     deviceCapabilities.clear();
+    yuvResolutions.clear();
 
     QProcess process;
     process.start(executablePath, QStringList() << "--enumerate-device" << QString::number(deviceIndex));
@@ -605,9 +623,17 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
     // Parse lines like: "    1920x1080 @ 30.0 fps, 24.0 fps"
     QRegularExpression resRegex(R"(^\s+(\d+x\d+)\s*@\s*(.+)$)");
     QRegularExpression fpsRegex(R"((\d+(?:\.\d+)?)\s*fps)");
+    QRegularExpression formatRegex(R"(^\s*Format:\s*(\S+))");
 
+    QString currentFormat;
     QStringList lines = output.split('\n');
     for (const QString &line : lines) {
+        QRegularExpressionMatch fmtMatch = formatRegex.match(line);
+        if (fmtMatch.hasMatch()) {
+            currentFormat = fmtMatch.captured(1).toUpper();
+            continue;
+        }
+
         QRegularExpressionMatch resMatch = resRegex.match(line);
         if (resMatch.hasMatch()) {
             QString resolution = resMatch.captured(1);
@@ -618,6 +644,10 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
             while (it.hasNext()) {
                 QRegularExpressionMatch fpsMatch = it.next();
                 fpsList.append(fpsMatch.captured(1).toDouble());
+            }
+
+            if (currentFormat == "YUYV") {
+                yuvResolutions.insert(resolution);
             }
 
             if (deviceCapabilities.contains(resolution)) {
@@ -712,4 +742,9 @@ void SettingsWindow::onCameraDeviceChanged(int comboIndex) {
 void SettingsWindow::onCameraResolutionChanged(int comboIndex) {
     Q_UNUSED(comboIndex);
     populateFPS();
+    QString currentRes = cameraResolutionComboBox->currentText();
+    bool yuvSupported = yuvResolutions.contains(currentRes);
+    useYuvCheckBox->setEnabled(cameraOptionRadioButton->isChecked() && yuvSupported);
+    if (!useYuvCheckBox->isEnabled())
+        useYuvCheckBox->setChecked(false);
 }
