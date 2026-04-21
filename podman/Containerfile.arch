@@ -63,15 +63,6 @@ RUN cmake -S . -B build -G Ninja \
 WORKDIR /opt/src
 RUN git clone --depth=1 https://github.com/lostjared/acidcam-gpu.git
 
-# ---- Build & install MXWrite ----
-WORKDIR /opt/src/acidcam-gpu/MXWrite
-RUN cmake -S . -B build -G Ninja \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr \
-    && cmake --build build -j${BUILDJOBS} \
-    && cmake --install build \
-    && ldconfig
-
 # ---- Build & install acidcam-gpu library (CUDA heavy) ----
 WORKDIR /opt/src/acidcam-gpu/acidcam-gpu
 RUN cmake -S . -B build -G Ninja \

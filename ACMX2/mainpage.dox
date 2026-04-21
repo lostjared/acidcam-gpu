@@ -905,7 +905,7 @@ The project requires a very specific dependency stack  not all of it is availabl
 - <b>NVIDIA Proprietary Drivers:</b> v535 or newer. The CUDA runtime links against driver libraries at version-specific interfaces.
 - <b>CUDA Toolkit 12.x:</b> provides <tt>nvcc</tt>, <tt>cuda_runtime.h</tt>, <tt>cudaMalloc/cudaMemcpy/cudaDeviceSynchronize</tt>, and device code compilation.
 - <b>OpenCV with CUDA support:</b> must be compiled from source with <tt>WITH_CUDA=ON</tt> and matching CUDA architecture flags. Provides <tt>cv::cuda::GpuMat</tt>, <tt>cv::cuda::cvtColor</tt>, <tt>cv::cuda::printShortCudaDeviceInfo</tt>, and the <tt>cv::VideoCapture</tt> backend used in the CLI.
-- <b>libmx2 / MXWrite:</b> the MX2 ecosystem library provides MXMOD 3D model parsing and the MXWrite encoder wrapper around FFmpeg. Must be built and installed before building acidcam-gpu.
+- <b>libmx2 / MXWrite:</b> the MX2 ecosystem library provides MXMOD 3D model parsing and the MXWrite encoder wrapper around FFmpeg. Build and install <tt>libmx2</tt> first; ACMX2 now builds MXWrite from the local source tree via CMake.
 - <b>Qt6:</b> required only for the ACMX2 Qt interface, not for the library or CLI.
 - <b>C++20 compiler:</b> the project uses <tt>std::format</tt>, <tt>std::filesystem</tt>, and other C++20 features throughout <tt>main_cv.cu</tt>.
 
@@ -913,7 +913,6 @@ The project requires a very specific dependency stack  not all of it is availabl
 
 
 -# Build and install <tt>libmx2/libmx</tt> (with OpenGL support): <tt>cmake .. -DEXAMPLES=OFF -DOPENGL=ON && make -j$(nproc) && sudo make install</tt>
--# Build and install <tt>acidcam-gpu/MXWrite</tt>: <tt>cmake .. && make -j$(nproc) && sudo make install</tt>
 -# Build and install the <tt>acidcam-gpu</tt> library and CLI: <tt>cmake .. && make -j$(nproc) && sudo make install</tt>. This installs the shared library, headers, and CMake package config so downstream projects can use <tt>find_package(acidcam-gpu)</tt>.
 -# Optionally build and install the Qt ACMX2 interface.
 -# Optionally build the MIDI Map tool: <tt>cd ACMX2/interface/midi-map && mkdir build && cd build && cmake .. && make -j$(nproc)</tt>.

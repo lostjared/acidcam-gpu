@@ -479,10 +479,6 @@ make -j$(nproc)
 sudo make install
 cd ../../../
 git clone https://github.com/lostjared/acidcam-gpu.git
-cd acidcam-gpu/MXWrite
-mkdir build1 && cd build1
-cmake .. && make -j$(nrpoc) && sudo make install
-cd ../..
 cd acidcam-gpu
 mkdir build && cd build
 cmake .. 

@@ -28,11 +28,23 @@ message(STATUS "OpenCV libraries: ${OpenCV_LIBRARIES}")
 if(NOT OpenCV_CUDA_VERSION)
     message(WARNING "OpenCV CUDA support may not be available. Some features might not work.")
 endif()
-find_package(MXWrite REQUIRED)
-if(NOT MXWrite_FOUND)
-    message(FATAL_ERROR "MXWrite not found. Please ensure MXWrite is installed and CMAKE_PREFIX_PATH is set correctly.")
+set(ACMX2_LOCAL_MXWRITE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite")
+set(ACMX2_MXWRITE_TARGET "")
+
+if(EXISTS "${ACMX2_LOCAL_MXWRITE_DIR}/CMakeLists.txt")
+    add_subdirectory("${ACMX2_LOCAL_MXWRITE_DIR}" "${CMAKE_BINARY_DIR}/acmx2_mxwrite_build")
+    set(ACMX2_MXWRITE_TARGET mxwrite)
+    set(MXWrite_INCLUDE_DIRS "${ACMX2_LOCAL_MXWRITE_DIR}")
+    set(MXWrite_FOUND TRUE)
+    message(STATUS "MXWrite source build enabled from: ${ACMX2_LOCAL_MXWRITE_DIR}")
+else()
+    find_package(MXWrite REQUIRED)
+    if(NOT MXWrite_FOUND)
+        message(FATAL_ERROR "MXWrite not found. Please ensure MXWrite is installed and CMAKE_PREFIX_PATH is set correctly.")
+    endif()
+    set(ACMX2_MXWRITE_TARGET MXWrite::mxwrite)
+    message(STATUS "MXWrite found: ${MXWrite_INCLUDE_DIRS}")
 endif()
-message(STATUS "MXWrite found: ${MXWrite_INCLUDE_DIRS}")
 find_package(CUDAToolkit REQUIRED)
 if(NOT CUDAToolkit_FOUND)
     message(FATAL_ERROR "CUDA Toolkit not found. Please install CUDA Toolkit.")
@@ -200,7 +212,7 @@ target_include_directories(audio_transfer PRIVATE
     ${SDL2_TTF_INCLUDE_DIRS}
 )
 target_link_libraries(audio_transfer PRIVATE 
-    MXWrite::mxwrite
+    ${ACMX2_MXWRITE_TARGET}
     PkgConfig::FFMPEG
 )
 add_executable(acmx2 acmx.cpp program.cpp ${AUDIO_SRC})
@@ -239,7 +251,7 @@ target_link_libraries(acmx2 PRIVATE
     ${OpenCV_LIBRARIES} 
     ${AUDIO_LIBS}
     ${MIDI_LIBS}
-    MXWrite::mxwrite
+    ${ACMX2_MXWRITE_TARGET}
     acidcam-gpu::acidcam-gpu
     CUDA::cudart
     OpenGL::OpenGL

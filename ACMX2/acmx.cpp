@@ -35,7 +35,7 @@
 #include <iomanip>
 #include <mutex>
 #include <mx.hpp>
-#include <mxwrite.hpp>
+#include "../MXWrite/mxwrite.hpp"
 #include <opencv2/opencv.hpp>
 #include <optional>
 #include <queue>
@@ -2960,6 +2960,7 @@ class ACView : public gl::GLObject {
     bool isFrozen = false;
     bool shaderLocked = false;
     GLuint pboIds[2] = {0, 0};
+    cudaGraphicsResource *recordCudaPboResources[2] = {nullptr, nullptr};
     int pboIndex = 0;
     int pboNextIndex = 1;
     SnapshotThreadPool snapshot_pool{2};
@@ -3402,6 +3403,13 @@ class ACView : public gl::GLObject {
         }
 #endif
 
+        for (int i = 0; i < 2; ++i) {
+            if (recordCudaPboResources[i]) {
+                CHECK_CUDA(cudaGraphicsUnregisterResource(recordCudaPboResources[i]));
+                recordCudaPboResources[i] = nullptr;
+            }
+        }
+
         if (pboIds[0]) {
             glDeleteBuffers(2, pboIds);
             pboIds[0] = pboIds[1] = 0;
@@ -3807,6 +3815,7 @@ class ACView : public gl::GLObject {
         for (int i = 0; i < 2; i++) {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[i]);
             glBufferData(GL_PIXEL_PACK_BUFFER, pboSize, nullptr, GL_STREAM_READ);
+            CHECK_CUDA(cudaGraphicsGLRegisterBuffer(&recordCudaPboResources[i], pboIds[i], cudaGraphicsMapFlagsReadOnly));
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
@@ -4495,51 +4504,76 @@ class ACView : public gl::GLObject {
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
                 if (writer.is_open() || is_snapshot_frame || is_raw_snapshot_frame) {
-                    glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboNextIndex]);
-                    GLubyte *src = static_cast<GLubyte *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
+                    bool used_zero_copy = false;
 
-                    if (src) {
-                        std::vector<unsigned char> pixels(win->w * win->h * 4);
-                        std::memcpy(pixels.data(), src, pixels.size());
-                        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                    if (writer.is_open() && !is_snapshot_frame && !is_raw_snapshot_frame && recordCudaPboResources[pboNextIndex]) {
+                        cudaGraphicsResource *resource = recordCudaPboResources[pboNextIndex];
+                        void *devPtr = nullptr;
+                        size_t mappedBytes = 0;
 
-                        std::vector<unsigned char> flipped_pixels(win->w * win->h * 4);
-                        for (int y = 0; y < win->h; ++y) {
-                            int src_row_start = y * win->w * 4;
-                            int dest_row_start = (win->h - 1 - y) * win->w * 4;
-                            std::copy(pixels.begin() + src_row_start,
-                                      pixels.begin() + src_row_start + (win->w * 4),
-                                      flipped_pixels.begin() + dest_row_start);
+                        CHECK_CUDA(cudaGraphicsMapResources(1, &resource, 0));
+                        CHECK_CUDA(cudaGraphicsResourceGetMappedPointer(&devPtr, &mappedBytes, resource));
+
+                        const size_t requiredBytes = static_cast<size_t>(win->w) * static_cast<size_t>(win->h) * 4;
+                        if (devPtr && mappedBytes >= requiredBytes) {
+                            used_zero_copy = writer.write_cuda_rgba(devPtr, static_cast<int>(win->w) * 4, true);
                         }
 
-                        FrameData fd;
-                        fd.pixels = std::move(flipped_pixels);
-                        fd.width = win->w;
-                        fd.height = win->h;
-                        fd.isSnapshot = is_snapshot_frame;
-                        fd.isRawSnapshot = is_raw_snapshot_frame;
+                        CHECK_CUDA(cudaGraphicsUnmapResources(1, &resource, 0));
+                    }
 
-                        if (is_snapshot_frame) {
-                            snapshot_state = 0;
-                        }
-                        if (is_raw_snapshot_frame) {
-                            raw_snapshot_state = 0;
-                        }
+                    if (!used_zero_copy) {
+                        glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboNextIndex]);
+                        GLubyte *src = static_cast<GLubyte *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
 
-                        {
-                            std::unique_lock<std::mutex> lock(queueMutex);
-                            bool is_camera_mode = filename.empty() && graphic.empty();
-                            if (is_camera_mode && !is_snapshot_frame && !is_raw_snapshot_frame) {
-                                if (frameQueue.size() > 30) {
-                                    frames_dropped++;
-                                    frameQueue.pop();
-                                }
-                            } else {
-                                queueCondVar.wait(lock, [this] { return frameQueue.size() < 30 || !writerRunning; });
+                        if (src) {
+                            std::vector<unsigned char> pixels(win->w * win->h * 4);
+                            std::memcpy(pixels.data(), src, pixels.size());
+                            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+
+                            std::vector<unsigned char> flipped_pixels(win->w * win->h * 4);
+                            for (int y = 0; y < win->h; ++y) {
+                                int src_row_start = y * win->w * 4;
+                                int dest_row_start = (win->h - 1 - y) * win->w * 4;
+                                std::copy(pixels.begin() + src_row_start,
+                                          pixels.begin() + src_row_start + (win->w * 4),
+                                          flipped_pixels.begin() + dest_row_start);
                             }
-                            frameQueue.push(std::move(fd));
+
+                            FrameData fd;
+                            fd.pixels = std::move(flipped_pixels);
+                            fd.width = win->w;
+                            fd.height = win->h;
+                            fd.isSnapshot = is_snapshot_frame;
+                            fd.isRawSnapshot = is_raw_snapshot_frame;
+
+                            if (is_snapshot_frame) {
+                                snapshot_state = 0;
+                            }
+                            if (is_raw_snapshot_frame) {
+                                raw_snapshot_state = 0;
+                            }
+
+                            {
+                                std::unique_lock<std::mutex> lock(queueMutex);
+                                bool is_camera_mode = filename.empty() && graphic.empty();
+                                if (is_camera_mode && !is_snapshot_frame && !is_raw_snapshot_frame) {
+                                    if (frameQueue.size() > 30) {
+                                        frames_dropped++;
+                                        frameQueue.pop();
+                                    }
+                                } else {
+                                    queueCondVar.wait(lock, [this] { return frameQueue.size() < 30 || !writerRunning; });
+                                }
+                                frameQueue.push(std::move(fd));
+                            }
+                            queueCondVar.notify_one();
                         }
-                        queueCondVar.notify_one();
+                    }
+
+                    if (used_zero_copy) {
+                        snapshot_state = 0;
+                        raw_snapshot_state = 0;
                     }
                 }
 
