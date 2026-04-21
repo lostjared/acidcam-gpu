@@ -5925,6 +5925,13 @@ class ACView : public gl::GLObject {
         });
     }
 
+    /**
+     * @brief Start WAV audio capture if recording is configured and not already active.
+     *
+     * Used from both writer startup and writer loop paths to ensure
+     * `--record-audio` is activated reliably for file, image, and
+     * camera recording modes.
+     */
     void startAudioRecordingIfNeeded() {
 #ifdef AUDIO_ENABLED
         if (audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !is_audio_recording()) {
@@ -5935,6 +5942,13 @@ class ACView : public gl::GLObject {
 #endif
     }
 
+    /**
+     * @brief Determine if recorded-audio mux should run at shutdown.
+     *
+     * Returns true only when recorded audio mode is enabled, an output
+     * file is set, and either recording is still active or the recorded
+     * WAV file already exists.
+     */
     bool needsMux() {
 #ifdef AUDIO_ENABLED
         return audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !ofilename.empty() &&
@@ -5944,6 +5958,11 @@ class ACView : public gl::GLObject {
 #endif
     }
 
+    /**
+     * @brief Determine if source-track audio copy should run at shutdown.
+     *
+     * This applies to non-repeating video-file input with `--copy-audio`.
+     */
     bool needsTransferAudio() {
         return !filename.empty() && !repeat && copy_audio && writer.is_open();
     }
