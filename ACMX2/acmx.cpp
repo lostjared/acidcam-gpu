@@ -3263,7 +3263,13 @@ class ACView : public gl::GLObject {
 
   public:
     void requestStop() { running = false; }
-    bool needsAsyncShutdown() { return needsMux() || needsTransferAudio() || needsFileAudioMux(); }
+    void requestStopNoMux() {
+        skip_audio_mux_on_exit = true;
+        running = false;
+    }
+    bool needsAsyncShutdown() {
+        return !skip_audio_mux_on_exit.load() && (needsMux() || needsTransferAudio() || needsFileAudioMux());
+    }
     /**
      * @brief Construct the rendering object from parsed CLI arguments.
      *
@@ -3671,8 +3677,8 @@ class ACView : public gl::GLObject {
         }
 
         if (!isMuxing.load()) {
-            bool shouldMux = needsMux() && writer.is_open();
-            bool shouldFileAudioMux = needsFileAudioMux() && writer.is_open();
+            bool shouldMux = !skip_audio_mux_on_exit.load() && needsMux() && writer.is_open();
+            bool shouldFileAudioMux = !skip_audio_mux_on_exit.load() && needsFileAudioMux() && writer.is_open();
             stopWriterThread();
             if (shouldMux) {
                 runMuxSync();
@@ -4242,7 +4248,7 @@ class ACView : public gl::GLObject {
         }
 
         if (!running) {
-            if (needsMux() || needsTransferAudio() || needsFileAudioMux()) {
+            if (!skip_audio_mux_on_exit.load() && (needsMux() || needsTransferAudio() || needsFileAudioMux())) {
                 beginMuxing(win);
                 return;
             }
@@ -5116,7 +5122,8 @@ class ACView : public gl::GLObject {
      * - L: Freeze frame (stop updating texture but keep time advancing).
      * - Z: Take a PNG snapshot.
      * - T: Toggle active time.  Q: Toggle audio time.  Home: Toggle audio delta.
-     * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.  X: Reset camera.
+    * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.
+    * - X: Reset camera.  Ctrl+X: Quit immediately without audio mux/transfer.
      * - 3: Toggle 2D/3D mode.  M: Toggle multi-pass.  E: Watermark.
      * - R: Toggle random multipass mode (generates 1-5 random shader chain).
      * - G: Generate new random shader chain (while in random multipass mode).
@@ -5330,6 +5337,13 @@ class ACView : public gl::GLObject {
                 fflush(stdout);
                 break;
             case SDLK_x:
+                if ((e.key.keysym.mod & KMOD_CTRL) != 0) {
+                    requestStopNoMux();
+                    mx::system_out << "acmx2: Ctrl+X pressed, exiting without audio mux\n";
+                    fflush(stdout);
+                    win->quit();
+                    break;
+                }
                 cameraDistance = 0.0f;
                 mx::system_out << "acmx2: Camera distance reset\n";
                 fflush(stdout);
@@ -5530,6 +5544,7 @@ class ACView : public gl::GLObject {
     int cache_delay = 1;
     std::atomic<bool> finished{false};
     std::atomic<bool> copy_audio{false};
+    std::atomic<bool> skip_audio_mux_on_exit{false};
     std::atomic<bool> isMuxing{false};
     std::atomic<bool> muxComplete{false};
     std::thread muxThread;
@@ -6174,7 +6189,7 @@ class ACView : public gl::GLObject {
                      << std::setfill('0') << std::setw(2) << seconds;
 
             mx::system_out << "acmx2: " << " wrote " << timerStr.str() << " (" << final_frame_count << " frames) to file: " << ofilename << "\n";
-            if (!filename.empty() && repeat == false && copy_audio) {
+            if (!skip_audio_mux_on_exit.load() && !filename.empty() && repeat == false && copy_audio) {
                 transfer_audio(filename, ofilename);
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
@@ -6289,6 +6304,8 @@ class MainWindow : public gl::GLWindow {
 
 const char *message = R"(
 -[ Keyboard controls ]- {
+    Escape - Quit
+    Ctrl+X - Quit without Audio Mux
     Up arrow - Previous shader
     Down arrow - Next shader
     Left - Previous GPU filter (if enabled)
