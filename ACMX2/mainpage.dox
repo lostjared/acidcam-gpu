@@ -53,7 +53,10 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
 - <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; the audio track is automatically muxed into the output video
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
+- <b>FFmpeg CUDA video decode</b> — file input prefers FFmpeg hardware decode on CUDA, with automatic fallback when unavailable
 - <b>Video recording</b> with optional audio muxing via FFmpeg
+- <b>Hardware-first H.264 encoding</b> — prefers <tt>h264_nvenc</tt> via MXWrite and falls back to software H.264 automatically
+- <b>Pipeline mode reporting</b> — startup log prints active decode/encode modes for validation and benchmarking
 - <b>Silent mode</b> — headless video processing without a window
 - <b>Shader cache</b> — precompile shader binaries for fast startup
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
@@ -268,7 +271,7 @@ appears in the dock while the application is running.
 |       | `--audio-input`  | `<index>`   | Audio input device |
 |       | `--audio-output` | `<index>`   | Audio output device |
 |       | `--list-devices` |             | List audio devices and exit |
-|       | `--record-audio` | `<file>`    | Record captured audio to WAV |
+|       | `--record-audio` | `<file>`    | Record captured audio to WAV (temporary file is removed after successful mux) |
 |       | `--record-gain`  | `<float>`   | Recording volume gain (0.0–2.0) |
 |       | `--audio-file`   | `<file>`    | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
 |       | `--audio-trunc`  |             | Stop playback when the audio file reaches the end |
@@ -488,6 +491,10 @@ Called every frame of the main loop, this function performs the full GPU pipelin
 
 
 When recording is enabled, processed frames are passed to the <b>MXWrite</b> library which wraps FFmpeg encoding. MXWrite accepts raw frame data and handles container muxing, codec selection, and file writing. This keeps encoding off the critical path  the CUDA filter loop is not blocked by disk I/O.
+
+For H.264 output, MXWrite prefers <tt>h264_nvenc</tt> and automatically falls back to software H.264 if hardware encoding is unavailable. During startup, ACMX2 logs a unified pipeline status line showing the active decode mode (for example <tt>ffmpeg-cuda</tt>, <tt>ffmpeg-software</tt>, or <tt>opencv-ffmpeg</tt>) and encode mode (hardware or software).
+
+When <tt>--record-audio</tt> is used, the recorded WAV is muxed into the output MP4 at shutdown and then deleted after a successful mux, leaving only the final output video.
 
 @subsection explained_the_public_api_ac_gpu_hpp The Public API  ac-gpu.hpp
 

@@ -36,6 +36,8 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 
 ## Project Goals:
 * **Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
+* **FFmpeg CUDA Decode Path:** Prefer direct FFmpeg/CUDA hardware decode for video files, with automatic software/OpenCV fallback.
+* **Hardware-First Encoding:** Prefer `h264_nvenc` when available, with automatic software H.264 fallback.
 * **Visual User Interface** Simple to use User interface
 * **Command line tool** Command line tool
 
@@ -173,7 +175,7 @@ sudo bash build-script/install-deps-arch.sh
 | | `--audio-input` | `<index>` | Audio input device (`default` or index) |
 | | `--audio-output` | `<index>` | Audio output device (`default` or index) |
 | | `--list-devices` | | List audio devices and exit |
-| | `--record-audio` | `<file>` | Record captured audio to WAV file |
+| | `--record-audio` | `<file>` | Record captured audio to WAV file (used for mux, then removed after successful mux) |
 | | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
 
 ### MIDI Options (requires `MIDI_ENABLED` build)
@@ -295,6 +297,15 @@ The built-in GLSL shader editor has been significantly enhanced:
 - Toggle comment (Ctrl+/)
 - Smart Home key behavior
 - Block indent/unindent (Tab/Shift+Tab with selection)
+
+### Version 2.12.0
+
+- Video-file decode now prefers direct FFmpeg decode with CUDA hardware acceleration when available.
+- Automatic decode fallback path retained for software/OpenCV FFmpeg decode.
+- Startup pipeline status line added, reporting active decode and encode modes.
+- Recording path now starts WAV capture as soon as writer opens in file/image/camera modes.
+- Recorded-audio mux flow hardened (skip mux if recorded WAV is missing).
+- Temporary recorded WAV is automatically removed after successful mux.
 
 ### Version 2.7.0
 
