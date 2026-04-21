@@ -33,6 +33,7 @@ class Writer {
     void write_ts(void *rgba_buffer);
     void close();
     bool is_open() const { return opened; }
+    bool is_hardware_encode() const { return use_hw_encode; }
     int64_t get_frame_count() const { return frame_count; }
     double get_duration() const;
     ~Writer() {

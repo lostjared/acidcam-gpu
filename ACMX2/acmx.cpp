@@ -57,6 +57,11 @@
 #include "program.hpp"
 #include <ac-gpu/ac-gpu.hpp>
 #include <cuda_gl_interop.h>
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/hwcontext.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
 #ifdef __linux__
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
@@ -74,6 +79,290 @@
 
 /// @brief Copy the audio track from one media file to another via FFmpeg.
 void transfer_audio(std::string_view, std::string_view);
+
+class FFMpegVideoReader {
+  public:
+    ~FFMpegVideoReader() {
+        close();
+    }
+
+    bool open(const std::string &filename, bool prefer_cuda) {
+        close();
+
+        if (avformat_open_input(&format_ctx, filename.c_str(), nullptr, nullptr) < 0) {
+            return false;
+        }
+        if (avformat_find_stream_info(format_ctx, nullptr) < 0) {
+            return false;
+        }
+
+        stream_index = av_find_best_stream(format_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        if (stream_index < 0) {
+            return false;
+        }
+
+        AVStream *stream = format_ctx->streams[stream_index];
+        const AVCodec *codec = avcodec_find_decoder(stream->codecpar->codec_id);
+        if (!codec) {
+            return false;
+        }
+
+        codec_ctx = avcodec_alloc_context3(codec);
+        if (!codec_ctx) {
+            return false;
+        }
+
+        if (avcodec_parameters_to_context(codec_ctx, stream->codecpar) < 0) {
+            return false;
+        }
+
+        codec_ctx->thread_count = std::max(1u, std::thread::hardware_concurrency());
+
+        if (prefer_cuda) {
+            enableCudaHwDecode(codec);
+        }
+
+        if (avcodec_open2(codec_ctx, codec, nullptr) < 0) {
+            return false;
+        }
+
+        decoded_frame = av_frame_alloc();
+        sw_frame = av_frame_alloc();
+        packet = av_packet_alloc();
+        if (!decoded_frame || !sw_frame || !packet) {
+            return false;
+        }
+
+        width = codec_ctx->width;
+        height = codec_ctx->height;
+        fps = av_q2d(stream->avg_frame_rate);
+        if (fps <= 0.0) {
+            fps = av_q2d(stream->r_frame_rate);
+        }
+        frame_count = static_cast<double>(stream->nb_frames);
+
+        return true;
+    }
+
+    bool read(cv::Mat &out_bgr) {
+        if (!codec_ctx || !format_ctx) {
+            return false;
+        }
+
+        while (true) {
+            if (!draining) {
+                const int read_ret = av_read_frame(format_ctx, packet);
+                if (read_ret >= 0) {
+                    if (packet->stream_index == stream_index) {
+                        if (avcodec_send_packet(codec_ctx, packet) < 0) {
+                            av_packet_unref(packet);
+                            return false;
+                        }
+                    }
+                    av_packet_unref(packet);
+                } else {
+                    if (!drain_packet_sent) {
+                        if (avcodec_send_packet(codec_ctx, nullptr) < 0) {
+                            return false;
+                        }
+                        drain_packet_sent = true;
+                        draining = true;
+                    }
+                }
+            }
+
+            const int receive_ret = avcodec_receive_frame(codec_ctx, decoded_frame);
+            if (receive_ret == AVERROR(EAGAIN)) {
+                if (draining) {
+                    return false;
+                }
+                continue;
+            }
+            if (receive_ret == AVERROR_EOF) {
+                return false;
+            }
+            if (receive_ret < 0) {
+                return false;
+            }
+
+            AVFrame *src = decoded_frame;
+            if (hw_decode_enabled && decoded_frame->format == hw_pix_fmt) {
+                if (av_hwframe_transfer_data(sw_frame, decoded_frame, 0) < 0) {
+                    av_frame_unref(decoded_frame);
+                    return false;
+                }
+                src = sw_frame;
+            }
+
+            if (!sws_ctx || sws_src_format != static_cast<AVPixelFormat>(src->format) || sws_w != src->width || sws_h != src->height) {
+                if (sws_ctx) {
+                    sws_freeContext(sws_ctx);
+                }
+                sws_src_format = static_cast<AVPixelFormat>(src->format);
+                sws_w = src->width;
+                sws_h = src->height;
+                sws_ctx = sws_getContext(
+                    sws_w,
+                    sws_h,
+                    sws_src_format,
+                    sws_w,
+                    sws_h,
+                    AV_PIX_FMT_BGR24,
+                    SWS_BILINEAR,
+                    nullptr,
+                    nullptr,
+                    nullptr);
+                if (!sws_ctx) {
+                    av_frame_unref(decoded_frame);
+                    av_frame_unref(sw_frame);
+                    return false;
+                }
+            }
+
+            out_bgr.create(src->height, src->width, CV_8UC3);
+            uint8_t *dst_data[4] = {out_bgr.data, nullptr, nullptr, nullptr};
+            int dst_linesize[4] = {static_cast<int>(out_bgr.step), 0, 0, 0};
+
+            sws_scale(
+                sws_ctx,
+                src->data,
+                src->linesize,
+                0,
+                src->height,
+                dst_data,
+                dst_linesize);
+
+            av_frame_unref(decoded_frame);
+            av_frame_unref(sw_frame);
+            return true;
+        }
+    }
+
+    bool seekStart() {
+        if (!format_ctx || !codec_ctx || stream_index < 0) {
+            return false;
+        }
+        if (av_seek_frame(format_ctx, stream_index, 0, AVSEEK_FLAG_BACKWARD) < 0) {
+            return false;
+        }
+        avcodec_flush_buffers(codec_ctx);
+        drain_packet_sent = false;
+        draining = false;
+        return true;
+    }
+
+    int getWidth() const { return width; }
+    int getHeight() const { return height; }
+    double getFps() const { return fps; }
+    double getFrameCount() const { return frame_count; }
+    bool isHwDecodeEnabled() const { return hw_decode_enabled; }
+
+  private:
+    static AVPixelFormat getHwFormat(AVCodecContext *ctx, const AVPixelFormat *pix_fmts) {
+        auto *self = static_cast<FFMpegVideoReader *>(ctx->opaque);
+        if (!self) {
+            return pix_fmts[0];
+        }
+
+        for (const AVPixelFormat *p = pix_fmts; *p != AV_PIX_FMT_NONE; ++p) {
+            if (*p == self->hw_pix_fmt) {
+                return *p;
+            }
+        }
+        return pix_fmts[0];
+    }
+
+    void enableCudaHwDecode(const AVCodec *codec) {
+        for (int i = 0;; ++i) {
+            const AVCodecHWConfig *cfg = avcodec_get_hw_config(codec, i);
+            if (!cfg) {
+                return;
+            }
+
+            if ((cfg->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) && cfg->device_type == AV_HWDEVICE_TYPE_CUDA) {
+                hw_pix_fmt = cfg->pix_fmt;
+                break;
+            }
+        }
+
+        if (hw_pix_fmt == AV_PIX_FMT_NONE) {
+            return;
+        }
+
+        if (av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, nullptr, nullptr, 0) < 0) {
+            return;
+        }
+
+        codec_ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+        codec_ctx->opaque = this;
+        codec_ctx->get_format = &FFMpegVideoReader::getHwFormat;
+        hw_decode_enabled = (codec_ctx->hw_device_ctx != nullptr);
+    }
+
+    void close() {
+        if (packet) {
+            av_packet_free(&packet);
+            packet = nullptr;
+        }
+        if (decoded_frame) {
+            av_frame_free(&decoded_frame);
+            decoded_frame = nullptr;
+        }
+        if (sw_frame) {
+            av_frame_free(&sw_frame);
+            sw_frame = nullptr;
+        }
+        if (sws_ctx) {
+            sws_freeContext(sws_ctx);
+            sws_ctx = nullptr;
+        }
+        if (codec_ctx) {
+            avcodec_free_context(&codec_ctx);
+            codec_ctx = nullptr;
+        }
+        if (format_ctx) {
+            avformat_close_input(&format_ctx);
+            format_ctx = nullptr;
+        }
+        if (hw_device_ctx) {
+            av_buffer_unref(&hw_device_ctx);
+            hw_device_ctx = nullptr;
+        }
+
+        stream_index = -1;
+        hw_pix_fmt = AV_PIX_FMT_NONE;
+        hw_decode_enabled = false;
+        draining = false;
+        drain_packet_sent = false;
+        width = 0;
+        height = 0;
+        fps = 0.0;
+        frame_count = 0.0;
+        sws_src_format = AV_PIX_FMT_NONE;
+        sws_w = 0;
+        sws_h = 0;
+    }
+
+    AVFormatContext *format_ctx = nullptr;
+    AVCodecContext *codec_ctx = nullptr;
+    AVFrame *decoded_frame = nullptr;
+    AVFrame *sw_frame = nullptr;
+    AVPacket *packet = nullptr;
+    SwsContext *sws_ctx = nullptr;
+    AVBufferRef *hw_device_ctx = nullptr;
+    int stream_index = -1;
+    AVPixelFormat hw_pix_fmt = AV_PIX_FMT_NONE;
+    AVPixelFormat sws_src_format = AV_PIX_FMT_NONE;
+    int sws_w = 0;
+    int sws_h = 0;
+    int width = 0;
+    int height = 0;
+    double fps = 0.0;
+    double frame_count = 0.0;
+    bool hw_decode_enabled = false;
+    bool draining = false;
+    bool drain_packet_sent = false;
+};
 
 /**
  * @class SnapshotThreadPool
@@ -3543,6 +3832,11 @@ class ACView : public gl::GLObject {
                     mx::system_out << "acmx2: Opened: " << ofilename
                                    << " for writing at: CRF: " << crf
                                    << " FPS: " << fps << "\n";
+#ifdef AUDIO_ENABLED
+                    startAudioRecordingIfNeeded();
+#endif
+                    mx::system_out << "acmx2: Pipeline mode => decode: graphic/image, encode: "
+                                   << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
 
                     fflush(stdout);
                     fflush(stderr);
@@ -3603,39 +3897,64 @@ class ACView : public gl::GLObject {
                     mx::system_out << "acmx2: Opened: " << ofilename
                                    << " for writing at: CRF: " << crf
                                    << " FPS: " << fps << "\n";
+#ifdef AUDIO_ENABLED
+                    startAudioRecordingIfNeeded();
+#endif
+                    mx::system_out << "acmx2: Pipeline mode => decode: camera, encode: "
+                                   << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
                 } else {
                     throw mx::Exception("Could not open output video file: " + ofilename);
                 }
             }
         } else if (!filename.empty() && graphic.empty()) {
-            std::vector<int> file_params = {
-                cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY};
-            cap.open(filename, cv::CAP_FFMPEG, file_params);
-            if (!cap.isOpened()) {
-                throw mx::Exception("Could not open video file: " + filename);
+            use_ffmpeg_reader = ffmpeg_reader.open(filename, true);
+            const char *decode_mode = nullptr;
+            if (use_ffmpeg_reader) {
+                decode_mode = ffmpeg_reader.isHwDecodeEnabled() ? "ffmpeg-cuda" : "ffmpeg-software";
+                w = ffmpeg_reader.getWidth();
+                h = ffmpeg_reader.getHeight();
+                fps = ffmpeg_reader.getFps();
+                totalFrames = ffmpeg_reader.getFrameCount();
+                library.setVideoFPS(fps);
+
+                frame_w = w;
+                frame_h = h;
+
+                mx::system_out << "acmx2: Video opened (FFmpeg decode): " << w << "x" << h
+                               << " at FPS: " << fps
+                               << " Total Frames: " << totalFrames << "\n";
+                mx::system_out << "acmx2: FFmpeg CUDA decode: " << (ffmpeg_reader.isHwDecodeEnabled() ? "enabled" : "unavailable/fallback") << "\n";
+            } else {
+                decode_mode = "opencv-ffmpeg";
+                std::vector<int> file_params = {
+                    cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY};
+                cap.open(filename, cv::CAP_FFMPEG, file_params);
+                if (!cap.isOpened()) {
+                    throw mx::Exception("Could not open video file: " + filename);
+                }
+                w = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
+                h = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+                fps = cap.get(cv::CAP_PROP_FPS);
+                totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
+                library.setVideoFPS(fps);
+
+                frame_w = w;
+                frame_h = h;
+
+                mx::system_out << "acmx2: Video opened (OpenCV/FFmpeg fallback): " << w << "x" << h
+                               << " at FPS: " << fps
+                               << " Total Frames: " << totalFrames << "\n";
+
+                int hw_accel = static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
+                mx::system_out << "acmx2: HW Acceleration result: " << hw_accel
+                               << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (auto preference)"
+                                                                                                  : hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)"
+                                                                                                  : hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)"
+                                                                                                  : hw_accel == cv::VIDEO_ACCELERATION_MFX   ? " (MFX)"
+                                                                                                  : hw_accel == cv::VIDEO_ACCELERATION_DRM   ? " (DRM)"
+                                                                                                                                             : " (other)")
+                               << "\n";
             }
-            w = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
-            h = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
-            fps = cap.get(cv::CAP_PROP_FPS);
-            totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
-            library.setVideoFPS(fps);
-
-            frame_w = w;
-            frame_h = h;
-
-            mx::system_out << "acmx2: Video opened: " << w << "x" << h
-                           << " at FPS: " << fps
-                           << " Total Frames: " << totalFrames << "\n";
-
-            int hw_accel = static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
-            mx::system_out << "acmx2: HW Acceleration result: " << hw_accel
-                           << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (auto preference)"
-                                                                                              : hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)"
-                                                                                              : hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)"
-                                                                                              : hw_accel == cv::VIDEO_ACCELERATION_MFX   ? " (MFX)"
-                                                                                              : hw_accel == cv::VIDEO_ACCELERATION_DRM   ? " (DRM)"
-                                                                                                                                         : " (other)")
-                           << "\n";
 
             fflush(stdout);
             fflush(stderr);
@@ -3662,6 +3981,12 @@ class ACView : public gl::GLObject {
                 if (writer.open(ofilename, w, h, fps, crf.c_str())) {
                     mx::system_out << "acmx2: Opened: " << ofilename
                                    << " for writing at: CRF: " << crf << "\n";
+#ifdef AUDIO_ENABLED
+                    startAudioRecordingIfNeeded();
+#endif
+                    mx::system_out << "acmx2: Pipeline mode => decode: " << decode_mode
+                                   << ", encode: "
+                                   << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
                     fflush(stdout);
                     fflush(stderr);
                 } else {
@@ -3930,22 +4255,39 @@ class ACView : public gl::GLObject {
                     captureQueue.pop();
                 }
             } else {
-                if (!cap.read(newFrame)) {
-                    if (!filename.empty() && repeat) {
+                bool read_ok = false;
+                if (use_ffmpeg_reader) {
+                    read_ok = ffmpeg_reader.read(newFrame);
+                    if (!read_ok && !filename.empty() && repeat) {
                         mx::system_out << "acmx2: video loop...\n";
-                        cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-                        if (!cap.read(newFrame)) {
+                        if (ffmpeg_reader.seekStart()) {
+                            read_ok = ffmpeg_reader.read(newFrame);
+                        }
+                        if (!read_ok) {
                             mx::system_out << "acmx2: cannot read after looping.\n";
                         }
-                    } else {
-                        if (silent_mode) {
-                            std::cout << "\n";
+                    }
+                } else {
+                    read_ok = cap.read(newFrame);
+                    if (!read_ok && !filename.empty() && repeat) {
+                        mx::system_out << "acmx2: video loop...\n";
+                        cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                        read_ok = cap.read(newFrame);
+                        if (!read_ok) {
+                            mx::system_out << "acmx2: cannot read after looping.\n";
                         }
-                        running = false;
-                        finished = true;
-                        return;
                     }
                 }
+
+                if (!read_ok) {
+                    if (silent_mode) {
+                        std::cout << "\n";
+                    }
+                    running = false;
+                    finished = true;
+                    return;
+                }
+
                 if (!newFrame.empty())
                     cv::flip(newFrame, newFrame, 0);
             }
@@ -5142,6 +5484,8 @@ class ACView : public gl::GLObject {
     int raw_snapshot_state = 0;
     double totalFrames = 0;
     cv::VideoCapture cap;
+    FFMpegVideoReader ffmpeg_reader;
+    bool use_ffmpeg_reader = false;
     cv::Mat graphic_frame;
     gl::GLSprite sprite;
     GLuint camera_texture = 0;
@@ -5564,44 +5908,37 @@ class ACView : public gl::GLObject {
                         continue;
                     }
 #ifdef AUDIO_ENABLED
-                    if (writerRunning && audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !is_audio_recording()) {
-                        if (!start_audio_recording(audio_record_file)) {
-                            mx::system_err << "acmx2: Error could not start audio recording\n";
-                        }
-                    }
+                    startAudioRecordingIfNeeded();
 #endif
 
                     if (writer.is_open() && !fd.isSnapshot) {
-                        if (!filename.empty() || !graphic.empty()) {
+                        if (!filename.empty() || !graphic.empty())
                             writer.write(fd.pixels.data());
-                        } else {
+                        else
                             writer.write_ts(fd.pixels.data());
-                        }
-                        written_frame_counter++;
                     }
                 }
             } catch (const std::exception &e) {
-                mx::system_err << "acmx2: Writer thread exception: " << e.what() << "\n";
-                writerRunning = false;
-                running = false;
-                fflush(stderr);
-                fflush(stdout);
+                mx::system_err << "acmx2: writer thread exception: " << e.what() << "\n";
             }
+            writerRunning = false;
         });
     }
 
-    /**
-     * @brief Check whether post-recording audio muxing is required.
-     *
-     * Returns true only when audio is enabled, a recording file
-     * was specified, AND an output video file exists.  Used to
-     * decide whether to launch the mux thread on shutdown.
-     *
-     * @return True if ffmpeg audio muxing should run.
-     */
+    void startAudioRecordingIfNeeded() {
+#ifdef AUDIO_ENABLED
+        if (audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !is_audio_recording()) {
+            if (!start_audio_recording(audio_record_file)) {
+                mx::system_err << "acmx2: Error could not start audio recording to: " << audio_record_file << "\n";
+            }
+        }
+#endif
+    }
+
     bool needsMux() {
 #ifdef AUDIO_ENABLED
-        return audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !ofilename.empty();
+        return audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !ofilename.empty() &&
+               (is_audio_recording() || std::filesystem::exists(audio_record_file));
 #else
         return false;
 #endif
@@ -5636,6 +5973,11 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
         if (!audio_is_enabled || audio_record_file.empty() || ofilename.empty())
             return;
+        if (!is_audio_recording() && !std::filesystem::exists(audio_record_file)) {
+            mx::system_out << "acmx2: recorded audio file not found, skipping recorded-audio mux: " << audio_record_file << "\n";
+            fflush(stdout);
+            return;
+        }
         if (is_audio_recording()) {
             stop_audio_recording();
         }
@@ -5658,6 +6000,11 @@ class ACView : public gl::GLObject {
             std::remove(ofilename.c_str());
             std::rename(tmp_out.c_str(), ofilename.c_str());
             mx::system_out << "acmx2: muxed recorded audio from: " << audio_record_file << " to " << ofilename << "\n";
+            if (std::remove(audio_record_file.c_str()) == 0) {
+                mx::system_out << "acmx2: removed temporary recorded audio: " << audio_record_file << "\n";
+            } else {
+                mx::system_err << "acmx2: warning could not remove recorded audio file: " << audio_record_file << "\n";
+            }
         } else {
             mx::system_err << "acmx2: ffmpeg mux failed (exit code " << ret << ")\n";
             std::remove(tmp_out.c_str());
@@ -5732,6 +6079,16 @@ class ACView : public gl::GLObject {
         isMuxing = true;
         muxComplete = false;
         muxThread = std::thread([this]() {
+            const bool shouldTransferAudio = !filename.empty() && !repeat && copy_audio;
+#ifdef AUDIO_ENABLED
+            const bool shouldRecordedMux = audio_is_enabled && !file_audio_mode && !audio_record_file.empty() &&
+                                           (is_audio_recording() || std::filesystem::exists(audio_record_file));
+            const bool shouldFileAudioMux = file_audio_mode && !audio_file_path.empty() && !ofilename.empty();
+#else
+            const bool shouldRecordedMux = false;
+            const bool shouldFileAudioMux = false;
+#endif
+
             if (captureThread.joinable())
                 captureThread.join();
             if (writerThread.joinable())
@@ -5746,12 +6103,14 @@ class ACView : public gl::GLObject {
                                << static_cast<int>(ts) % 60 << ") to file: " << ofilename << "\n";
                 fflush(stdout);
             }
-            if (!filename.empty() && !repeat && copy_audio) {
+            if (shouldTransferAudio) {
                 transfer_audio(filename, ofilename);
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
-            runMuxSync();
-            runFileAudioMuxSync();
+            if (shouldRecordedMux)
+                runMuxSync();
+            if (shouldFileAudioMux)
+                runFileAudioMuxSync();
             muxComplete = true;
         });
     }
