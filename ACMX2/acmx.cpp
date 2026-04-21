@@ -140,6 +140,7 @@ class FFMpegVideoReader {
             fps = av_q2d(stream->r_frame_rate);
         }
         frame_count = static_cast<double>(stream->nb_frames);
+        current_frame = 0;
 
         return true;
     }
@@ -234,6 +235,7 @@ class FFMpegVideoReader {
 
             av_frame_unref(decoded_frame);
             av_frame_unref(sw_frame);
+            ++current_frame;
             return true;
         }
     }
@@ -248,6 +250,7 @@ class FFMpegVideoReader {
         avcodec_flush_buffers(codec_ctx);
         drain_packet_sent = false;
         draining = false;
+        current_frame = 0;
         return true;
     }
 
@@ -255,6 +258,7 @@ class FFMpegVideoReader {
     int getHeight() const { return height; }
     double getFps() const { return fps; }
     double getFrameCount() const { return frame_count; }
+    int64_t getCurrentFrame() const { return current_frame; }
     bool isHwDecodeEnabled() const { return hw_decode_enabled; }
 
   private:
@@ -338,6 +342,7 @@ class FFMpegVideoReader {
         height = 0;
         fps = 0.0;
         frame_count = 0.0;
+        current_frame = 0;
         sws_src_format = AV_PIX_FMT_NONE;
         sws_w = 0;
         sws_h = 0;
@@ -359,6 +364,7 @@ class FFMpegVideoReader {
     int height = 0;
     double fps = 0.0;
     double frame_count = 0.0;
+    int64_t current_frame = 0;
     bool hw_decode_enabled = false;
     bool draining = false;
     bool drain_packet_sent = false;
@@ -4149,7 +4155,7 @@ class ACView : public gl::GLObject {
         else if (filename.empty())
             win->setWindowTitle("ACMX2 - Capture Input");
         else
-            win->setWindowTitle("ACMX2 - [" + filename + "] 0 seconds, frame 0");
+            win->setWindowTitle("ACMX2 - [" + filename + "]");
 
         if (full) {
             win->setFullScreen(true);
@@ -4987,8 +4993,12 @@ class ACView : public gl::GLObject {
                 lastUpdate = now;
             }
 
-        } else if (cap.isOpened() && !filename.empty()) {
-            frame_counter = static_cast<unsigned int>(cap.get(cv::CAP_PROP_POS_FRAMES));
+        } else if (!filename.empty()) {
+            if (use_ffmpeg_reader) {
+                frame_counter = static_cast<unsigned int>(std::max<int64_t>(0, ffmpeg_reader.getCurrentFrame()));
+            } else if (cap.isOpened()) {
+                frame_counter = static_cast<unsigned int>(cap.get(cv::CAP_PROP_POS_FRAMES));
+            }
 
             if (silent_mode && totalFrames > 0.0) {
                 int current_percent = static_cast<int>((static_cast<double>(frame_counter) / totalFrames) * 100.0);
@@ -5010,15 +5020,14 @@ class ACView : public gl::GLObject {
                 }
             }
 
-            if (!silent_mode && std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 3) {
-                if (totalFrames <= 0.0) {
+            if (!silent_mode && std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 1) {
+                if (totalFrames <= 0.0 && !use_ffmpeg_reader && cap.isOpened()) {
                     totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
                 }
                 std::string timeStr = getTimeString();
-                int64_t displayFrames = getFrameCount();
                 std::ostringstream stream;
                 stream << "ACMX2 - ["
-                       << displayFrames << "/"
+                       << frame_counter << "/"
                        << static_cast<int>(totalFrames) << "] - "
                        << timeStr << " - Video Mode";
                 if (writer.is_open()) {
