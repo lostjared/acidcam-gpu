@@ -55,8 +55,26 @@
 #include <rtmidi/RtMidi.h>
 #endif
 #include "program.hpp"
+#ifdef ACMX2_WITH_CUDA
 #include <ac-gpu/ac-gpu.hpp>
 #include <cuda_gl_interop.h>
+#else
+// Stubs so code compiled without CUDA still has the symbols it references.
+#ifndef CHECK_CUDA
+#define CHECK_CUDA(call) do { (void)(call); } while (0)
+#endif
+namespace ac_gpu {
+    inline constexpr int AC_FILTER_MAX = 0;
+    struct Filter { int index; std::string name; };
+    struct GPUFilter { int index; };
+    struct DynamicFrameBuffer {
+        int arraySize = 0;
+    };
+    // Empty filter table so code referencing ac_gpu::filters still compiles.
+    // (Never indexed in no-CUDA builds because AC_FILTER_MAX == 0 guards all uses.)
+    inline Filter filters[1] = {{0, ""}};
+}
+#endif
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/hwcontext.h>
@@ -72,8 +90,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <model.hpp>
+#ifdef ACMX2_WITH_CUDA
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaimgproc.hpp>
+#endif
 #include <opencv2/opencv.hpp>
 #include <string_view>
 
@@ -118,9 +138,13 @@ class FFMpegVideoReader {
 
         codec_ctx->thread_count = std::max(1u, std::thread::hardware_concurrency());
 
+#ifdef ACMX2_WITH_CUDA
         if (prefer_cuda) {
             enableCudaHwDecode(codec);
         }
+#else
+        (void)prefer_cuda;
+#endif
 
         if (avcodec_open2(codec_ctx, codec, nullptr) < 0) {
             return false;
@@ -277,6 +301,7 @@ class FFMpegVideoReader {
     }
 
     void enableCudaHwDecode(const AVCodec *codec) {
+#ifdef ACMX2_WITH_CUDA
         for (int i = 0;; ++i) {
             const AVCodecHWConfig *cfg = avcodec_get_hw_config(codec, i);
             if (!cfg) {
@@ -301,6 +326,9 @@ class FFMpegVideoReader {
         codec_ctx->opaque = this;
         codec_ctx->get_format = &FFMpegVideoReader::getHwFormat;
         hw_decode_enabled = (codec_ctx->hw_device_ctx != nullptr);
+#else
+        (void)codec;
+#endif
     }
 
     void close() {
@@ -565,7 +593,9 @@ class TextureUploader {
   public:
     GLuint textureID = 0;           ///< OpenGL texture receiving the frame data.
     GLuint pboID = 0;               ///< PBO shared between CUDA and OpenGL.
+#ifdef ACMX2_WITH_CUDA
     cudaGraphicsResource *cudaPboResource = nullptr; ///< CUDA handle to the mapped PBO.
+#endif
     int width = 0;                  ///< Current texture width in pixels.
     int height = 0;                 ///< Current texture height in pixels.
 
@@ -600,7 +630,9 @@ class TextureUploader {
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboID);
         glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, NULL, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+#ifdef ACMX2_WITH_CUDA
         CHECK_CUDA(cudaGraphicsGLRegisterBuffer(&cudaPboResource, pboID, cudaGraphicsMapFlagsWriteDiscard));
+#endif
     }
 
     /**
@@ -619,6 +651,7 @@ class TextureUploader {
      *
      * @param gpuFrame The CUDA GpuMat (CV_8UC4 / RGBA) to upload.
      */
+#ifdef ACMX2_WITH_CUDA
     void update(const cv::cuda::GpuMat &gpuFrame) {
         if (gpuFrame.cols != width || gpuFrame.rows != height) {
             init(gpuFrame.cols, gpuFrame.rows);
@@ -635,6 +668,7 @@ class TextureUploader {
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+#endif
 
     /**
      * @brief Release all GPU resources (CUDA registration, PBO, texture).
@@ -645,10 +679,12 @@ class TextureUploader {
      * reset to zero / nullptr afterwards.
      */
     void cleanup() {
+#ifdef ACMX2_WITH_CUDA
         if (cudaPboResource) {
             CHECK_CUDA(cudaGraphicsUnregisterResource(cudaPboResource));
             cudaPboResource = nullptr;
         }
+#endif
         if (pboID) {
             glDeleteBuffers(1, &pboID);
             pboID = 0;
@@ -3285,7 +3321,9 @@ class ACView : public gl::GLObject {
     bool isFrozen = false;
     bool shaderLocked = false;
     GLuint pboIds[2] = {0, 0};
+#ifdef ACMX2_WITH_CUDA
     cudaGraphicsResource *recordCudaPboResources[2] = {nullptr, nullptr};
+#endif
     int pboIndex = 0;
     int pboNextIndex = 1;
     SnapshotThreadPool snapshot_pool{2};
@@ -3370,6 +3408,7 @@ class ACView : public gl::GLObject {
         m_file = args.model_file;
 
         gpu_filter_enabled = args.gpu_filter_enabled;
+#ifdef ACMX2_WITH_CUDA
         if (gpu_filter_enabled && !args.gpu_filter_indices.empty()) {
             for (int idx : args.gpu_filter_indices) {
                 if (idx >= 0 && idx < ac_gpu::AC_FILTER_MAX) {
@@ -3382,6 +3421,12 @@ class ACView : public gl::GLObject {
             CHECK_CUDA(cudaMalloc(&d_ptrList, args.gpu_frame_buffer_size * sizeof(unsigned char *)));
             mx::system_out << "acmx2: GPU filtering enabled with " << gpu_filters.size() << " filter(s)\n";
         }
+#else
+        if (gpu_filter_enabled) {
+            mx::system_err << "acmx2: GPU filters requested but this build has no CUDA support; disabling.\n";
+            gpu_filter_enabled = false;
+        }
+#endif
         counter_disabled = args.disable_counter;
         use_yuv = args.use_yuv;
 
@@ -3410,7 +3455,9 @@ class ACView : public gl::GLObject {
     std::vector<ac_gpu::Filter> gpu_filters;
     int gpu_current_filter_index = 0;
     std::unique_ptr<ac_gpu::DynamicFrameBuffer> gpu_frame_buffer;
+#ifdef ACMX2_WITH_CUDA
     cv::cuda::GpuMat gpuWorkingBuffer;
+#endif
     cv::Mat gpuFilteredFrame;
     unsigned char **d_ptrList = nullptr;
     ac_gpu::GPUFilter *d_filterList = nullptr;
@@ -3657,6 +3704,7 @@ class ACView : public gl::GLObject {
         cleanupMidi();
 #endif
         tex_uploader.cleanup();
+#ifdef ACMX2_WITH_CUDA
         if (d_ptrList) {
             cudaFree(d_ptrList);
             d_ptrList = nullptr;
@@ -3665,6 +3713,7 @@ class ACView : public gl::GLObject {
             cudaFree(d_filterList);
             d_filterList = nullptr;
         }
+#endif
         gpu_frame_buffer.reset();
 
         stopCaptureThread();
@@ -3735,10 +3784,14 @@ class ACView : public gl::GLObject {
 #endif
 
         for (int i = 0; i < 2; ++i) {
+#ifdef ACMX2_WITH_CUDA
             if (recordCudaPboResources[i]) {
                 CHECK_CUDA(cudaGraphicsUnregisterResource(recordCudaPboResources[i]));
                 recordCudaPboResources[i] = nullptr;
             }
+#else
+            (void)i;
+#endif
         }
 
         if (pboIds[0]) {
@@ -3819,12 +3872,17 @@ class ACView : public gl::GLObject {
      * @param win Pointer to the hosting GLWindow.
      */
     virtual void load(gl::GLWindow *win) override {
+#ifdef ACMX2_WITH_CUDA
         cudaError_t cuda_err = cudaSetDevice(gpu_cuda_device);
         if (cuda_err != cudaSuccess) {
             throw mx::Exception("Failed to set CUDA device " + std::to_string(gpu_cuda_device) + ": " + std::string(cudaGetErrorString(cuda_err)));
         }
         mx::system_out << "acmx2: Using CUDA device: " << gpu_cuda_device << "\n";
         fflush(stdout);
+#else
+        mx::system_out << "acmx2: CUDA support disabled (compiled without ACMX2_WITH_CUDA)\n";
+        fflush(stdout);
+#endif
 
         frame_counter = 0;
         sessionStartTime = std::chrono::steady_clock::now();
@@ -4182,7 +4240,9 @@ class ACView : public gl::GLObject {
         for (int i = 0; i < 2; i++) {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[i]);
             glBufferData(GL_PIXEL_PACK_BUFFER, pboSize, nullptr, GL_STREAM_READ);
+#ifdef ACMX2_WITH_CUDA
             CHECK_CUDA(cudaGraphicsGLRegisterBuffer(&recordCudaPboResources[i], pboIds[i], cudaGraphicsMapFlagsReadOnly));
+#endif
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
@@ -4344,6 +4404,7 @@ class ACView : public gl::GLObject {
             library.useProgram();
         }
         if (!isFrozen && !newFrame.empty()) {
+#ifdef ACMX2_WITH_CUDA
             if (gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
                 gpu_frame_buffer->update(newFrame);
 
@@ -4407,6 +4468,12 @@ class ACView : public gl::GLObject {
                 glActiveTexture(GL_TEXTURE0);
                 updateTexture(camera_texture, newFrame);
             }
+#else
+            {
+                glActiveTexture(GL_TEXTURE0);
+                updateTexture(camera_texture, newFrame);
+            }
+#endif
             if (texture_cache && library.isCache() && (!filename.empty() || !graphic.empty())) {
                 static int counter = 0;
                 if (++counter > cache_delay) {
@@ -4890,6 +4957,7 @@ class ACView : public gl::GLObject {
                 if (writer.is_open() || is_snapshot_frame || is_raw_snapshot_frame) {
                     bool used_zero_copy = false;
 
+#ifdef ACMX2_WITH_CUDA
                     if (writer.is_open() && !is_snapshot_frame && !is_raw_snapshot_frame && recordCudaPboResources[pboNextIndex]) {
                         cudaGraphicsResource *resource = recordCudaPboResources[pboNextIndex];
                         void *devPtr = nullptr;
@@ -4905,6 +4973,7 @@ class ACView : public gl::GLObject {
 
                         CHECK_CUDA(cudaGraphicsUnmapResources(1, &resource, 0));
                     }
+#endif
 
                     if (!used_zero_copy) {
                         glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboNextIndex]);
@@ -6374,6 +6443,7 @@ const char *message = R"(
 
 /// @brief Verify CUDA device availability and print GPU info.
 void checkDevices(bool list_only = false) {
+#ifdef ACMX2_WITH_CUDA
     int device_count = 0;
     cudaError_t error = cudaGetDeviceCount(&device_count);
     if (error != cudaSuccess || device_count == 0) {
@@ -6392,6 +6462,10 @@ void checkDevices(bool list_only = false) {
             cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
         }
     }
+#else
+    (void)list_only;
+    std::cerr << "acmx2: CUDA support was disabled at build time (ACMX2_WITH_CUDA not defined).\n";
+#endif
 }
 
 /// @brief Print program version, author, arguments, and keyboard controls.
@@ -6461,6 +6535,7 @@ int main(int argc, char **argv) {
         .addOptionSingleValue('m', "CUDA device index")
         .addOptionDoubleValue('M', "cuda-device", "CUDA device index")
         .addOptionDouble(404, "list-cuda-devices", "List available CUDA devices")
+        .addOptionDouble(415, "check-cuda", "Report whether CUDA support is compiled in")
 #ifdef AUDIO_ENABLED
         .addOptionSingle('w', "Enable Audio Reactivity")
         .addOptionDouble('W', "enable-audio", "enabled audio reacitivty")
@@ -6499,6 +6574,33 @@ int main(int argc, char **argv) {
     if (argc == 1) {
         printAbout(parser);
         exit(EXIT_SUCCESS);
+    }
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--check-cuda") {
+#ifdef ACMX2_WITH_CUDA
+            std::cout << "CUDA: enabled" << std::endl;
+#else
+            std::cout << "CUDA: disabled" << std::endl;
+#endif
+            return EXIT_SUCCESS;
+        }
+        if (std::string(argv[i]) == "--check-midi") {
+#ifdef MIDI_ENABLED
+            std::cout << "MIDI: enabled" << std::endl;
+#else
+            std::cout << "MIDI: disabled" << std::endl;
+#endif
+            return EXIT_SUCCESS;
+        }
+        if (std::string(argv[i]) == "--check-audio") {
+#ifdef AUDIO_ENABLED
+            std::cout << "AUDIO: enabled" << std::endl;
+#else
+            std::cout << "AUDIO: disabled" << std::endl;
+#endif
+            return EXIT_SUCCESS;
+        }
     }
 
     mx::system_out << PROGRAM_NAME << " " << VERSION_INFO << "\n";
@@ -6662,6 +6764,14 @@ int main(int argc, char **argv) {
                 break;
             case 404:
                 checkDevices(true);
+                exit(EXIT_SUCCESS);
+                break;
+            case 415:
+#ifdef ACMX2_WITH_CUDA
+                std::cout << "CUDA: enabled\n";
+#else
+                std::cout << "CUDA: disabled\n";
+#endif
                 exit(EXIT_SUCCESS);
                 break;
 #ifdef AUDIO_ENABLED

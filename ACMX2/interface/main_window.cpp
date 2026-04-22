@@ -251,6 +251,7 @@ void MainWindow::initControls() {
     executable_path = appSettings.value("exePath", "acmx2").toString();
 #endif
     prefix_path = appSettings.value("prefix_path", ".").toString();
+    detectCudaSupport();
     bool useCustomStyle = appSettings.value("useCustomStyle", false).toBool();
     styleSheetAction->setChecked(useCustomStyle);
     midi_enabled = appSettings.value("midiEnabled", false).toBool();
@@ -727,6 +728,11 @@ void MainWindow::fileExit() {
 }
 
 void MainWindow::menuAudioSettings() {
+    if (!audio_available) {
+        QMessageBox::information(this, tr("Audio Settings"),
+            tr("Audio support is unavailable: acmx2 was built without audio support."));
+        return;
+    }
     AudioSettings audio_set(this);
     if (audio_set.exec() == QDialog::Accepted) {
         audio_enabled = audio_set.isAudioReactivityEnabled();
@@ -748,6 +754,11 @@ void MainWindow::menuAudioSettings() {
 }
 
 void MainWindow::menuGPUFilterSettings() {
+    if (!cuda_available) {
+        QMessageBox::information(this, tr("GPU Filter Settings"),
+            tr("GPU filters are unavailable: acmx2 was built without CUDA support."));
+        return;
+    }
     GPUFilterDialog gpuDialog(executable_path, this);
     if (gpuDialog.exec() == QDialog::Accepted) {
         gpu_filter_enabled = gpuDialog.isGPUFilterEnabled();
@@ -762,6 +773,11 @@ void MainWindow::menuGPUFilterSettings() {
 }
 
 void MainWindow::menuMidiSettings() {
+    if (!midi_available) {
+        QMessageBox::information(this, tr("MIDI Settings"),
+            tr("MIDI support is unavailable: acmx2 was built without MIDI support."));
+        return;
+    }
     MidiSettings midiDialog(executable_path, this);
     if (midiDialog.exec() == QDialog::Accepted) {
         midi_enabled = midiDialog.isMidiEnabled();
@@ -855,6 +871,7 @@ void MainWindow::menuPlaylistSettings() {
 
 void MainWindow::cameraSettings() {
     SettingsWindow settingsWindow(executable_path, this);
+    settingsWindow.setCudaAvailable(cuda_available);
     if (settingsWindow.exec() == QDialog::Accepted) {
         full_screen_value = settingsWindow.isFullscreen();
         if (settingsWindow.isUsingInputVideoFile()) {
@@ -990,7 +1007,7 @@ void MainWindow::runSelected() {
         arguments << "--output" << output_file;
         arguments << "--bitrate" << QString::number(output_kbps);
     }
-    if (audio_enabled) {
+    if (audio_available && audio_enabled) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
         arguments << "--sense" << QString::number(audio_sense);
@@ -1020,7 +1037,7 @@ void MainWindow::runSelected() {
         }
     }
 
-    if (!audio_file.isEmpty()) {
+    if (audio_available && !audio_file.isEmpty()) {
         arguments << "--audio-file" << audio_file;
         if (audio_trunc) {
             arguments << "--audio-trunc";
@@ -1032,12 +1049,14 @@ void MainWindow::runSelected() {
         arguments << "--model" << model_file;
     }
 
-    if (gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
+    if (cuda_available && gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
         arguments << "--gpu-filter" << gpu_filter_indices;
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
 
-    arguments << "--cuda-device" << QString::number(cuda_device);
+    if (cuda_available) {
+        arguments << "--cuda-device" << QString::number(cuda_device);
+    }
 
     if (time_speed != 1.0f) {
         arguments << "--time-speed" << QString::number(static_cast<double>(time_speed), 'f', 2);
@@ -1047,7 +1066,7 @@ void MainWindow::runSelected() {
         arguments << "--no-cache";
     }
 
-    if (midi_enabled && !midi_config_file.isEmpty()) {
+    if (midi_available && midi_enabled && !midi_config_file.isEmpty()) {
         arguments << "--midi-map" << midi_config_file;
         if (midi_device >= 0)
             arguments << "--midi-device" << QString::number(midi_device);
@@ -1158,7 +1177,7 @@ void MainWindow::runAll() {
     }
     arguments << "--shader" << QString::number(index);
 
-    if (audio_enabled) {
+    if (audio_available && audio_enabled) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
         arguments << "--sense" << QString::number(audio_sense);
@@ -1188,7 +1207,7 @@ void MainWindow::runAll() {
         }
     }
 
-    if (!audio_file.isEmpty()) {
+    if (audio_available && !audio_file.isEmpty()) {
         arguments << "--audio-file" << audio_file;
         if (audio_trunc) {
             arguments << "--audio-trunc";
@@ -1200,7 +1219,7 @@ void MainWindow::runAll() {
         arguments << "--model" << model_file;
     }
 
-    if (gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
+    if (cuda_available && gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
         arguments << "--gpu-filter" << gpu_filter_indices;
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
@@ -1212,7 +1231,9 @@ void MainWindow::runAll() {
         }
     }
 
-    arguments << "--cuda-device" << QString::number(cuda_device);
+    if (cuda_available) {
+        arguments << "--cuda-device" << QString::number(cuda_device);
+    }
 
     if (time_speed != 1.0f) {
         arguments << "--time-speed" << QString::number(static_cast<double>(time_speed), 'f', 2);
@@ -1222,7 +1243,7 @@ void MainWindow::runAll() {
         arguments << "--no-cache";
     }
 
-    if (midi_enabled && !midi_config_file.isEmpty()) {
+    if (midi_available && midi_enabled && !midi_config_file.isEmpty()) {
         arguments << "--midi-map" << midi_config_file;
         if (midi_device >= 0)
             arguments << "--midi-device" << QString::number(midi_device);
@@ -1430,5 +1451,71 @@ void MainWindow::menuRecompileShaders() {
         shader_path = old_path;
     } else {
         Log("Shaders will be recompiled on next run");
+    }
+}
+
+void MainWindow::detectCudaSupport() {
+    detectFeatureSupport();
+}
+
+static bool probeFeature(const QString &exe, const QString &flag, const QString &token) {
+    QProcess probe;
+    probe.start(exe, QStringList() << flag);
+    if (!probe.waitForFinished(5000)) {
+        probe.kill();
+        return false;
+    }
+    const QString out = QString::fromLocal8Bit(probe.readAllStandardOutput()).trimmed();
+    return out.contains(token, Qt::CaseInsensitive);
+}
+
+void MainWindow::detectFeatureSupport() {
+    cuda_available = probeFeature(executable_path, "--check-cuda", "CUDA: enabled");
+    audio_available = probeFeature(executable_path, "--check-audio", "AUDIO: enabled");
+    midi_available = probeFeature(executable_path, "--check-midi", "MIDI: enabled");
+
+    Log(cuda_available ? "CUDA: enabled (acmx2 built with CUDA support)"
+                       : "CUDA: disabled (acmx2 built without CUDA support)");
+    Log(audio_available ? "AUDIO: enabled (acmx2 built with audio support)"
+                        : "AUDIO: disabled (acmx2 built without audio support)");
+    Log(midi_available ? "MIDI: enabled (acmx2 built with MIDI support)"
+                       : "MIDI: disabled (acmx2 built without MIDI support)");
+
+    if (gpuFilterAction) {
+        gpuFilterAction->setEnabled(cuda_available);
+        if (!cuda_available) {
+            gpuFilterAction->setToolTip(tr("Disabled: acmx2 was built without CUDA support."));
+        }
+    }
+    if (!cuda_available) {
+        gpu_filter_enabled = false;
+        gpu_filter_indices.clear();
+        cuda_device = 0;
+    }
+
+    if (audioSet) {
+        audioSet->setEnabled(audio_available);
+        if (!audio_available) {
+            audioSet->setToolTip(tr("Disabled: acmx2 was built without audio support."));
+        }
+    }
+    if (!audio_available) {
+        audio_enabled = false;
+        record_audio = false;
+        audio_passthrough = false;
+        audio_file.clear();
+        audio_trunc = false;
+    }
+
+    if (midiSettingsAction) {
+        midiSettingsAction->setEnabled(midi_available);
+        if (!midi_available) {
+            midiSettingsAction->setToolTip(tr("Disabled: acmx2 was built without MIDI support."));
+        }
+    }
+    if (!midi_available) {
+        midi_enabled = false;
+        midi_config_file.clear();
+        midi_device = -1;
     }
 }

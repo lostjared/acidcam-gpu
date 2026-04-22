@@ -20,6 +20,7 @@ class SettingsWindow : public QDialog {
     Q_OBJECT
   public:
     explicit SettingsWindow(const QString &execPath, QWidget *parent = nullptr);
+    void setCudaAvailable(bool available);
     int getSelectedCameraIndex() const;
     QSize getSelectedCameraResolution() const;
     QSize getSelectedScreenResolution() const;
@@ -93,6 +94,7 @@ class SettingsWindow : public QDialog {
     QLineEdit *modelFileLineEdit;
     QPushButton *browseModelButton;
     QComboBox *cudaDeviceComboBox;
+    QLabel *cudaDeviceLabel = nullptr;
     QDoubleSpinBox *timeSpeedSpinBox;
     QCheckBox *durationLimitCheckBox;
     QDoubleSpinBox *durationLimitSpinBox;

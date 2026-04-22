@@ -100,6 +100,7 @@ void SettingsWindow::init() {
     populateCameraDevices();
 
     QLabel *cudaDeviceLabel = new QLabel("Select CUDA Device:", this);
+    this->cudaDeviceLabel = cudaDeviceLabel;
     cudaDeviceComboBox = new QComboBox(this);
     populateCudaDevices();
 
@@ -474,6 +475,20 @@ QString SettingsWindow::getModelFile() const {
 
 int SettingsWindow::getSelectedCudaDevice() const {
     return selectedCudaDevice;
+}
+
+void SettingsWindow::setCudaAvailable(bool available) {
+    if (cudaDeviceComboBox) {
+        cudaDeviceComboBox->setEnabled(available);
+        if (!available) {
+            cudaDeviceComboBox->clear();
+            cudaDeviceComboBox->addItem("CUDA disabled (acmx2 built without CUDA)", 0);
+            cudaDeviceComboBox->setToolTip("CUDA support is not compiled into this acmx2 build.");
+        }
+    }
+    if (cudaDeviceLabel) {
+        cudaDeviceLabel->setEnabled(available);
+    }
 }
 
 float SettingsWindow::getTimeSpeed() const {

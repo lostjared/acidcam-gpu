@@ -103,6 +103,11 @@ class MainWindow : public QMainWindow {
     QString lastSearchText;
     int lastFoundIndex = -1;
     QString executable_path;
+    bool cuda_available = false;
+    bool audio_available = false;
+    bool midi_available = false;
+    void detectCudaSupport();
+    void detectFeatureSupport();
     QAction *listMenu_search;
     QString shader_path;
     QProcess *process;

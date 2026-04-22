@@ -15,17 +15,23 @@ find_package(PkgConfig REQUIRED)
 if(NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "pkg-config not found. Please install pkg-config.")
 endif()
+option(WITH_CUDA "Enable CUDA / acidcam-gpu GPU acceleration" ON)
+
 find_package(SDL2 REQUIRED)
 find_package(SDL2_ttf REQUIRED)
 find_package(SDL2_mixer REQUIRED)
 find_package(libmx2 REQUIRED)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio cudaimgproc)
+if(WITH_CUDA)
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio cudaimgproc)
+else()
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio)
+endif()
 if(NOT OpenCV_FOUND)
-    message(FATAL_ERROR "OpenCV not found. Please install OpenCV development libraries with CUDA support.")
+    message(FATAL_ERROR "OpenCV not found. Please install OpenCV development libraries.")
 endif()
 message(STATUS "OpenCV found: version ${OpenCV_VERSION}")
 message(STATUS "OpenCV libraries: ${OpenCV_LIBRARIES}")
-if(NOT OpenCV_CUDA_VERSION)
+if(WITH_CUDA AND NOT OpenCV_CUDA_VERSION)
     message(WARNING "OpenCV CUDA support may not be available. Some features might not work.")
 endif()
 set(ACMX2_LOCAL_MXWRITE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite")
@@ -45,17 +51,22 @@ else()
     set(ACMX2_MXWRITE_TARGET MXWrite::mxwrite)
     message(STATUS "MXWrite found: ${MXWrite_INCLUDE_DIRS}")
 endif()
-find_package(CUDAToolkit REQUIRED)
-if(NOT CUDAToolkit_FOUND)
-    message(FATAL_ERROR "CUDA Toolkit not found. Please install CUDA Toolkit.")
+if(WITH_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    if(NOT CUDAToolkit_FOUND)
+        message(FATAL_ERROR "CUDA Toolkit not found. Please install CUDA Toolkit or configure with -DWITH_CUDA=OFF.")
+    endif()
+    message(STATUS "CUDA Toolkit found: version ${CUDAToolkit_VERSION}")
+    message(STATUS "CUDA include dirs: ${CUDAToolkit_INCLUDE_DIRS}")
+    find_package(acidcam-gpu REQUIRED CONFIG)
+    if(NOT acidcam-gpu_FOUND)
+        message(FATAL_ERROR "acidcam-gpu not found. Please ensure acidcam-gpu is installed and CMAKE_PREFIX_PATH is set correctly, or configure with -DWITH_CUDA=OFF.")
+    endif()
+    message(STATUS "acidcam-gpu found")
+else()
+    message(STATUS "CUDA / acidcam-gpu support DISABLED (WITH_CUDA=OFF)")
+    set(CUDAToolkit_INCLUDE_DIRS "")
 endif()
-message(STATUS "CUDA Toolkit found: version ${CUDAToolkit_VERSION}")
-message(STATUS "CUDA include dirs: ${CUDAToolkit_INCLUDE_DIRS}")
-find_package(acidcam-gpu REQUIRED CONFIG)
-if(NOT acidcam-gpu_FOUND)
-    message(FATAL_ERROR "acidcam-gpu not found. Please ensure acidcam-gpu is installed and CMAKE_PREFIX_PATH is set correctly.")
-endif()
-message(STATUS "acidcam-gpu found")
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libavcodec
     libavformat
@@ -77,8 +88,10 @@ set(CMAKE_REQUIRED_INCLUDES
     ${FFMPEG_INCLUDE_DIRS}
     /usr/local/include
     /usr/local/include/opencv4
-    /opt/cuda/include
 )
+if(WITH_CUDA)
+    list(APPEND CMAKE_REQUIRED_INCLUDES /opt/cuda/include)
+endif()
 check_include_file_cxx("vector" HAVE_VECTOR)
 check_include_file_cxx("string" HAVE_STRING)
 check_include_file_cxx("fstream" HAVE_FSTREAM)
@@ -102,12 +115,14 @@ if(NOT HAVE_OPTIONAL OR NOT HAVE_STRING_VIEW)
 endif()
 set(CMAKE_REQUIRED_INCLUDES ${OpenCV_INCLUDE_DIRS} /usr/local/include/opencv4)
 check_include_file_cxx("opencv2/opencv.hpp" HAVE_OPENCV_HPP)
-check_include_file_cxx("opencv2/core/cuda.hpp" HAVE_OPENCV_CUDA_HPP)
-check_include_file_cxx("opencv2/cudaimgproc.hpp" HAVE_OPENCV_CUDAIMGPROC_HPP)
+if(WITH_CUDA)
+    check_include_file_cxx("opencv2/core/cuda.hpp" HAVE_OPENCV_CUDA_HPP)
+    check_include_file_cxx("opencv2/cudaimgproc.hpp" HAVE_OPENCV_CUDAIMGPROC_HPP)
+endif()
 if(NOT HAVE_OPENCV_HPP)
     message(FATAL_ERROR "OpenCV headers not found. Please install OpenCV development libraries.")
 endif()
-if(NOT HAVE_OPENCV_CUDA_HPP OR NOT HAVE_OPENCV_CUDAIMGPROC_HPP)
+if(WITH_CUDA AND (NOT HAVE_OPENCV_CUDA_HPP OR NOT HAVE_OPENCV_CUDAIMGPROC_HPP))
     message(WARNING "OpenCV CUDA headers not found. CUDA-accelerated image processing may not be available.")
 endif()
 check_include_file_cxx("glm/gtc/matrix_transform.hpp" HAVE_GLM)
@@ -195,7 +210,11 @@ message(STATUS "OpenGL found: ${OPENGL_opengl_LIBRARY}")
 message(STATUS "")
 message(STATUS "=== ACMX2 Configuration Summary ===")
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
-message(STATUS "CUDA Version: ${CUDAToolkit_VERSION}")
+if(WITH_CUDA)
+    message(STATUS "CUDA Support: ENABLED (version ${CUDAToolkit_VERSION})")
+else()
+    message(STATUS "CUDA Support: DISABLED")
+endif()
 message(STATUS "OpenCV Version: ${OpenCV_VERSION}")
 message(STATUS "Audio Support: ${AUDIO}")
 message(STATUS "FFMPEG Libraries: ${FFMPEG_LIBRARIES}")
@@ -221,6 +240,9 @@ set_target_properties(acmx2 PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 target_compile_definitions(acmx2 PRIVATE WITH_GL)
+if(WITH_CUDA)
+    target_compile_definitions(acmx2 PRIVATE ACMX2_WITH_CUDA)
+endif()
 if(AUDIO)
     target_compile_definitions(acmx2 PRIVATE AUDIO_ENABLED)
 endif()
@@ -243,8 +265,10 @@ target_include_directories(acmx2 PRIVATE
     ${FFMPEG_INCLUDE_DIRS}
     /usr/local/include
     /usr/local/include/opencv4
-    /opt/cuda/include
 )
+if(WITH_CUDA)
+    target_include_directories(acmx2 PRIVATE /opt/cuda/include)
+endif()
 target_link_libraries(acmx2 PRIVATE 
     libmx2::mx 
     mxgl
@@ -252,14 +276,18 @@ target_link_libraries(acmx2 PRIVATE
     ${AUDIO_LIBS}
     ${MIDI_LIBS}
     ${ACMX2_MXWRITE_TARGET}
-    acidcam-gpu::acidcam-gpu
-    CUDA::cudart
     OpenGL::OpenGL
     GL
     Threads::Threads
     PkgConfig::FFMPEG
     ${FFMPEG_LIBRARIES}
 )
+if(WITH_CUDA)
+    target_link_libraries(acmx2 PRIVATE
+        acidcam-gpu::acidcam-gpu
+        CUDA::cudart
+    )
+endif()
 install(TARGETS acmx2 DESTINATION bin)
 install(TARGETS audio_transfer DESTINATION bin)
 install(FILES acmx2.desktop DESTINATION share/applications)
