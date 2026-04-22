@@ -1435,77 +1435,85 @@ class ShaderLibrary {
         if (!file.is_open()) {
             throw mx::Exception("acmx2: Could not load index.txt at shader path: " + text);
         }
-        size_t total_shaders = 0;
+
+        // Collect all shader files first
+        std::vector<std::string> shader_files;
         {
             std::string line;
             while (std::getline(file, line)) {
                 if (!line.empty() && std::filesystem::exists(text + "/" + line) && line.find("material") == std::string::npos) {
-                    total_shaders++;
+                    shader_files.push_back(line);
                 }
             }
-            file.clear();
-            file.seekg(0);
+            file.close();
         }
+
+        // Case-insensitive sort to match Qt interface behavior
+        std::sort(shader_files.begin(), shader_files.end(),
+                  [](const std::string &a, const std::string &b) {
+                      return std::lexicographical_compare(
+                          a.begin(), a.end(),
+                          b.begin(), b.end(),
+                          [](unsigned char ca, unsigned char cb) {
+                              return std::tolower(ca) < std::tolower(cb);
+                          });
+                  });
+
+        size_t total_shaders = shader_files.size();
 
         mx::system_out << "acmx2: Compiling " << total_shaders << " shaders (" << (dual_mode ? "2D+3D" : "2D") << ")...\n";
         fflush(stdout);
 
         int last_percent_reported = -1;
-        size_t shader_index = 0;
-        while (!file.eof()) {
-            std::string line_data;
-            std::getline(file, line_data);
-            if (file && !line_data.empty() && std::filesystem::exists(text + "/" + line_data) && line_data.find("material") == std::string::npos) {
-                programs_2d.push_back(makeProgram());
+        for (size_t shader_index = 0; shader_index < shader_files.size(); ++shader_index) {
+            const std::string &line_data = shader_files[shader_index];
+            programs_2d.push_back(makeProgram());
+            try {
+                if (!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
+                    mx::system_out << "acmx2: ❌ Failed to compile 2D shader: " << line_data << "\n";
+                    fflush(stdout);
+                    throw mx::Exception("\nacmx2: Error could not load 2D shader: " + line_data);
+                }
+            } catch (mx::Exception &e) {
+                fflush(stdout);
+                fflush(stderr);
+                throw;
+            }
+            setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text + "/" + line_data);
+            if (dual_mode) {
+                programs_3d.push_back(makeProgram());
                 try {
-                    if (!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
-                        mx::system_out << "acmx2: ❌ Failed to compile 2D shader: " << line_data << "\n";
+                    if (!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
+                        mx::system_out << "acmx2: ❌ Failed to compile 3D shader: " << line_data << "\n";
                         fflush(stdout);
-                        throw mx::Exception("\nacmx2: Error could not load 2D shader: " + line_data);
+                        throw mx::Exception("acmx2: Error could not load 3D shader: " + line_data);
                     }
                 } catch (mx::Exception &e) {
                     fflush(stdout);
                     fflush(stderr);
                     throw;
                 }
-                setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text + "/" + line_data);
-                if (dual_mode) {
-                    programs_3d.push_back(makeProgram());
-                    try {
-                        if (!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
-                            mx::system_out << "acmx2: ❌ Failed to compile 3D shader: " << line_data << "\n";
-                            fflush(stdout);
-                            throw mx::Exception("acmx2: Error could not load 3D shader: " + line_data);
-                        }
-                    } catch (mx::Exception &e) {
-                        fflush(stdout);
-                        fflush(stderr);
-                        throw;
-                    }
-                    setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text + "/" + line_data);
-                }
-                shader_index++;
+                setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text + "/" + line_data);
+            }
 
-                int percent = static_cast<int>(shader_index * 100 / total_shaders);
-                int percent_bucket = (percent / 10) * 10;
-                if (percent_bucket > last_percent_reported) {
-                    last_percent_reported = percent_bucket;
-                    mx::system_out << "acmx2: Compiling... " << percent_bucket << "% (" << shader_index << "/" << total_shaders << " shaders)\n";
-                    fflush(stdout);
+            int percent = static_cast<int>((shader_index + 1) * 100 / total_shaders);
+            int percent_bucket = (percent / 10) * 10;
+            if (percent_bucket > last_percent_reported) {
+                last_percent_reported = percent_bucket;
+                mx::system_out << "acmx2: Compiling... " << percent_bucket << "% (" << (shader_index + 1) << "/" << total_shaders << " shaders)\n";
+                fflush(stdout);
 
-                    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                    glClear(GL_COLOR_BUFFER_BIT);
-                    if (loadingFont.handle().has_value()) {
-                        std::string loadingText = "Compiling Shader " + std::to_string(shader_index) + "/" + std::to_string(total_shaders) + "...";
-                        win->text.printText_Blended(loadingFont, 10, 10, loadingText);
-                    }
-                    SDL_GL_SwapWindow(win->getWindow());
-                    SDL_PumpEvents();
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                if (loadingFont.handle().has_value()) {
+                    std::string loadingText = "Compiling Shader " + std::to_string(shader_index + 1) + "/" + std::to_string(total_shaders) + "...";
+                    win->text.printText_Blended(loadingFont, 10, 10, loadingText);
                 }
+                SDL_GL_SwapWindow(win->getWindow());
+                SDL_PumpEvents();
             }
         }
-        file.close();
-        mx::system_out << "acmx2: Compiled " << shader_index << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+        mx::system_out << "acmx2: Compiled " << shader_files.size() << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
     }
 
@@ -1555,6 +1563,17 @@ class ShaderLibrary {
             }
         }
         file.close();
+
+        // Case-insensitive sort to match Qt interface behavior
+        std::sort(shader_files.begin(), shader_files.end(),
+                  [](const std::string &a, const std::string &b) {
+                      return std::lexicographical_compare(
+                          a.begin(), a.end(),
+                          b.begin(), b.end(),
+                          [](unsigned char ca, unsigned char cb) {
+                              return std::tolower(ca) < std::tolower(cb);
+                          });
+                  });
 
         mx::system_out << "acmx2: Building shader cache for " << shader_files.size() << " shaders...\n";
         fflush(stdout);
@@ -1840,6 +1859,17 @@ class ShaderLibrary {
             }
         }
         file.close();
+
+        // Case-insensitive sort to match Qt interface behavior
+        std::sort(shader_files.begin(), shader_files.end(),
+                  [](const std::string &a, const std::string &b) {
+                      return std::lexicographical_compare(
+                          a.begin(), a.end(),
+                          b.begin(), b.end(),
+                          [](unsigned char ca, unsigned char cb) {
+                              return std::tolower(ca) < std::tolower(cb);
+                          });
+                  });
 
         if (shader_files.size() != cache.entries.size()) {
             mx::system_out << "acmx2: Shader count mismatch: index.txt has " << shader_files.size()
