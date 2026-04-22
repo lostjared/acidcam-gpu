@@ -706,10 +706,13 @@ class TextureUploader {
 struct ShaderCacheEntry {
     std::string shader_name;       ///< Stem of the .glsl filename.
     std::vector<char> binary_2d;   ///< GL program binary (2D vertex shader).
-    GLenum format_2d;              ///< GL binary format token for 2D.
+    GLenum format_2d = 0;          ///< GL binary format token for 2D.
     std::vector<char> binary_3d;   ///< GL program binary (3D vertex shader).
-    GLenum format_3d;              ///< GL binary format token for 3D.
-    uint64_t source_hash;          ///< FNV-1a-64 hash of the fragment source.
+    GLenum format_3d = 0;          ///< GL binary format token for 3D.
+    uint64_t source_hash = 0;      ///< FNV-1a-64 hash of the fragment source.
+    bool failed = false;           ///< True if this shader failed to compile;
+                                   ///< a passthrough program is substituted at load time
+                                   ///< to preserve the user-visible shader index.
 };
 
 /**
@@ -723,7 +726,7 @@ struct ShaderCacheEntry {
  */
 struct ShaderCache {
     static constexpr uint32_t CACHE_MAGIC = 0x53484452;   ///< File magic: "SHDR".
-    static constexpr uint32_t CACHE_VERSION = 2;           ///< Current format version.
+    static constexpr uint32_t CACHE_VERSION = 3;           ///< Current format version.
     std::string gl_renderer;
     std::string gl_version;
     bool dual_mode = false;
@@ -774,6 +777,8 @@ struct ShaderCache {
 
         for (const auto &e : entries) {
             writeString(e.shader_name);
+            uint8_t failed_flag = e.failed ? 1 : 0;
+            file.write(reinterpret_cast<const char *>(&failed_flag), sizeof(failed_flag));
             file.write(reinterpret_cast<const char *>(&e.source_hash), sizeof(e.source_hash));
             file.write(reinterpret_cast<const char *>(&e.format_2d), sizeof(e.format_2d));
             uint32_t size_2d = static_cast<uint32_t>(e.binary_2d.size());
@@ -833,6 +838,9 @@ struct ShaderCache {
 
         for (auto &e : entries) {
             e.shader_name = readString();
+            uint8_t failed_flag = 0;
+            file.read(reinterpret_cast<char *>(&failed_flag), sizeof(failed_flag));
+            e.failed = (failed_flag != 0);
             file.read(reinterpret_cast<char *>(&e.source_hash), sizeof(e.source_hash));
             file.read(reinterpret_cast<char *>(&e.format_2d), sizeof(e.format_2d));
             uint32_t size_2d;
@@ -1153,6 +1161,49 @@ class ShaderLibrary {
         if (use_cache)
             return std::make_unique<ac::ShaderProgram>();
         return std::make_unique<gl::ShaderProgram>();
+    }
+
+    /**
+     * @brief Compile a minimal passthrough fragment shader as a stand-in.
+     *
+     * Used when a shader in the library fails to compile (either during
+     * cache-build or source-compile).  A placeholder program is inserted
+     * at the failing shader's index so that numeric indices remain
+     * aligned with the on-disk index.txt listing — this keeps
+     * user-selected indices (e.g. from the Qt interface or CLI
+     * --shader-index) pointing at the intended slot even when one or
+     * more shaders in the library are broken.
+     *
+     * The fragment shader samples the input frame texture `samp` and
+     * writes it unchanged, so the placeholder renders as a no-op
+     * passthrough instead of causing a hard error.
+     *
+     * @param vert_path Path to the vertex shader to pair with the passthrough.
+     * @return A compiled ShaderProgram, or an empty unique_ptr on failure.
+     */
+    std::unique_ptr<gl::ShaderProgram> makePassthroughProgram(const std::string &vert_path) {
+        static constexpr const char *kPassthroughFrag =
+            "#version 330 core\n"
+            "in vec2 tc;\n"
+            "out vec4 color;\n"
+            "uniform sampler2D samp;\n"
+            "void main() {\n"
+            "    color = texture(samp, tc);\n"
+            "}\n";
+
+        std::ifstream vf(vert_path);
+        if (!vf.is_open())
+            return {};
+        std::stringstream vss;
+        vss << vf.rdbuf();
+        std::string vert_source = vss.str();
+
+        auto prog = makeProgram();
+        prog->setSilent(true);
+        if (!prog->loadProgramFromText(vert_source, kPassthroughFrag)) {
+            return {};
+        }
+        return prog;
     }
 
   public:
@@ -1503,33 +1554,73 @@ class ShaderLibrary {
         int last_percent_reported = -1;
         for (size_t shader_index = 0; shader_index < shader_files.size(); ++shader_index) {
             const std::string &line_data = shader_files[shader_index];
+            std::string full_path = text + "/" + line_data;
+            std::string vert_2d = win->util.getFilePath("data/vert.glsl");
+            std::string vert_3d = win->util.getFilePath("data/vertex.glsl");
+
+            bool ok_2d = false;
             programs_2d.push_back(makeProgram());
             try {
-                if (!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text + "/" + line_data)) {
-                    mx::system_out << "acmx2: ❌ Failed to compile 2D shader: " << line_data << "\n";
+                if (programs_2d.back()->loadProgram(vert_2d, full_path)) {
+                    ok_2d = true;
+                } else {
+                    mx::system_out << "acmx2: ⚠ Failed to compile 2D shader: " << line_data
+                                   << " — substituting passthrough placeholder\n";
                     fflush(stdout);
-                    throw mx::Exception("\nacmx2: Error could not load 2D shader: " + line_data);
                 }
-            } catch (mx::Exception &e) {
+            } catch (const std::exception &e) {
+                mx::system_out << "acmx2: ⚠ Exception compiling 2D shader: " << line_data
+                               << " (" << e.what() << ") — substituting passthrough placeholder\n";
                 fflush(stdout);
-                fflush(stderr);
-                throw;
+                ok_2d = false;
+            } catch (...) {
+                mx::system_out << "acmx2: ⚠ Unknown exception compiling 2D shader: " << line_data
+                               << " — substituting passthrough placeholder\n";
+                fflush(stdout);
+                ok_2d = false;
             }
-            setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text + "/" + line_data);
+            if (!ok_2d) {
+                // Replace the broken slot with a passthrough program so the
+                // shader index stays aligned with index.txt ordering.
+                programs_2d.pop_back();
+                auto ph = makePassthroughProgram(vert_2d);
+                if (!ph) {
+                    throw mx::Exception("acmx2: Error could not build 2D passthrough placeholder for: " + line_data);
+                }
+                programs_2d.push_back(std::move(ph));
+            }
+            setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, full_path);
             if (dual_mode) {
+                bool ok_3d = false;
                 programs_3d.push_back(makeProgram());
                 try {
-                    if (!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text + "/" + line_data)) {
-                        mx::system_out << "acmx2: ❌ Failed to compile 3D shader: " << line_data << "\n";
+                    if (programs_3d.back()->loadProgram(vert_3d, full_path)) {
+                        ok_3d = true;
+                    } else {
+                        mx::system_out << "acmx2: ⚠ Failed to compile 3D shader: " << line_data
+                                       << " — substituting passthrough placeholder\n";
                         fflush(stdout);
-                        throw mx::Exception("acmx2: Error could not load 3D shader: " + line_data);
                     }
-                } catch (mx::Exception &e) {
+                } catch (const std::exception &e) {
+                    mx::system_out << "acmx2: ⚠ Exception compiling 3D shader: " << line_data
+                                   << " (" << e.what() << ") — substituting passthrough placeholder\n";
                     fflush(stdout);
-                    fflush(stderr);
-                    throw;
+                    ok_3d = false;
+                } catch (...) {
+                    mx::system_out << "acmx2: ⚠ Unknown exception compiling 3D shader: " << line_data
+                                   << " — substituting passthrough placeholder\n";
+                    fflush(stdout);
+                    ok_3d = false;
                 }
-                setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text + "/" + line_data);
+                if (!ok_3d) {
+                    programs_3d.pop_back();
+                    auto ph = makePassthroughProgram(vert_3d);
+                    if (!ph) {
+                        throw mx::Exception("acmx2: Error could not build 3D passthrough placeholder for: " + line_data);
+                    }
+                    programs_3d.push_back(std::move(ph));
+                }
+                setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, full_path);
             }
 
             int percent = static_cast<int>((shader_index + 1) * 100 / total_shaders);
@@ -1631,6 +1722,18 @@ class ShaderLibrary {
             mx::system_out << "done\n";
             fflush(stdout);
 
+            auto mark_failed = [&](const char *reason) {
+                entry.failed = true;
+                entry.binary_2d.clear();
+                entry.binary_3d.clear();
+                entry.format_2d = 0;
+                entry.format_3d = 0;
+                mx::system_out << "  ⚠ SKIPPED: " << reason
+                               << " (slot preserved; will run as passthrough)\n";
+                fflush(stdout);
+                cache.entries.push_back(std::move(entry));
+            };
+
             try {
                 mx::system_out << "  - Compiling 2D shader... ";
                 fflush(stdout);
@@ -1640,6 +1743,7 @@ class ShaderLibrary {
                 if (!prog_2d.loadProgram(vert_2d, full_path)) {
                     mx::system_out << " ❌ (2D compile failed)\n";
                     fflush(stdout);
+                    mark_failed("2D compile failed");
                     continue;
                 }
                 mx::system_out << "done (id=" << prog_2d.id() << ")\n";
@@ -1650,6 +1754,7 @@ class ShaderLibrary {
                 if (link_status != GL_TRUE) {
                     mx::system_out << "  - ❌ Program not properly linked\n";
                     fflush(stdout);
+                    mark_failed("2D link failed");
                     continue;
                 }
 
@@ -1671,6 +1776,7 @@ class ShaderLibrary {
                 if (gl_error != GL_NO_ERROR) {
                     mx::system_out << " ❌ (GL error: " << gl_error << ")\n";
                     fflush(stdout);
+                    mark_failed("GL error retrieving 2D binary length");
                     continue;
                 }
 
@@ -1682,6 +1788,7 @@ class ShaderLibrary {
                     if (!binary_buffer) {
                         mx::system_out << "❌ (malloc failed)\n";
                         fflush(stdout);
+                        mark_failed("malloc failed for 2D binary");
                         continue;
                     }
 
@@ -1701,6 +1808,7 @@ class ShaderLibrary {
                         mx::system_out << " ❌ (binary extraction failed, gl_error=" << gl_error << ")\n";
                         fflush(stdout);
                         free(binary_buffer);
+                        mark_failed("2D binary extraction failed");
                         continue;
                     }
 
@@ -1711,6 +1819,7 @@ class ShaderLibrary {
                 } else {
                     mx::system_out << " ❌ (no binary available)\n";
                     fflush(stdout);
+                    mark_failed("no 2D binary available");
                     continue;
                 }
 
@@ -1723,6 +1832,7 @@ class ShaderLibrary {
                     if (!prog_3d.loadProgram(vert_3d, full_path)) {
                         mx::system_out << " ❌ (3D compile failed)\n";
                         fflush(stdout);
+                        mark_failed("3D compile failed");
                         continue;
                     }
 
@@ -1754,17 +1864,26 @@ class ShaderLibrary {
             } catch (const std::exception &e) {
                 mx::system_out << " ❌ (exception: " << e.what() << ")\n";
                 fflush(stdout);
+                mark_failed("exception during compile");
                 continue;
             } catch (...) {
                 mx::system_out << " ❌ (unknown exception)\n";
                 fflush(stdout);
+                mark_failed("unknown exception during compile");
                 continue;
             }
         }
 
         if (cache.save(cache_file)) {
+            size_t ok_count = 0;
+            size_t failed_count = 0;
+            for (const auto &e : cache.entries) {
+                if (e.failed) ++failed_count; else ++ok_count;
+            }
             mx::system_out << "acmx2: Shader cache saved to: " << cache_file << "\n";
-            mx::system_out << "acmx2: Cached " << cache.entries.size() << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+            mx::system_out << "acmx2: Cached " << ok_count << " shaders ("
+                           << (dual_mode ? "2D+3D" : "2D only")
+                           << "), " << failed_count << " failed (passthrough placeholders)\n";
             fflush(stdout);
             return true;
         } else {
@@ -1948,8 +2067,64 @@ class ShaderLibrary {
 
         int last_percent_reported = -1;
 
+        // Helper: insert a passthrough program at the current slot to preserve
+        // index alignment with index.txt when a cache entry cannot be used.
+        auto push_passthrough_2d = [&](size_t i, const char *reason) {
+            auto ph = makePassthroughProgram(vert_2d.empty()
+                                                 ? win->util.getFilePath("data/vert.glsl")
+                                                 : vert_2d);
+            if (!ph) {
+                mx::system_err << "acmx2: ❌ Failed to build 2D passthrough for slot "
+                               << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?"))
+                               << "]\n";
+                return false;
+            }
+            mx::system_out << "acmx2: ⚠ Slot " << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?"))
+                           << "] using passthrough (" << reason << ")\n";
+            fflush(stdout);
+            programs_2d.push_back(std::move(ph));
+            setupProgramUniforms(win, programs_2d.back().get(), program_names_2d,
+                                 programs_2d.size() - 1,
+                                 library_path + "/" + shader_files[i]);
+            return true;
+        };
+        auto push_passthrough_3d = [&](size_t i, const char *reason) {
+            auto ph = makePassthroughProgram(vert_3d.empty()
+                                                 ? win->util.getFilePath("data/vertex.glsl")
+                                                 : vert_3d);
+            if (!ph) {
+                mx::system_err << "acmx2: ❌ Failed to build 3D passthrough for slot "
+                               << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?"))
+                               << "]\n";
+                return false;
+            }
+            mx::system_out << "acmx2: ⚠ Slot " << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?"))
+                           << "] using 3D passthrough (" << reason << ")\n";
+            fflush(stdout);
+            programs_3d.push_back(std::move(ph));
+            setupProgramUniforms(win, programs_3d.back().get(), program_names_3d,
+                                 programs_3d.size() - 1,
+                                 library_path + "/" + shader_files[i]);
+            return true;
+        };
+
         for (size_t i = 0; i < cache.entries.size(); ++i) {
             const auto &entry = cache.entries[i];
+
+            // If this entry was marked as failed when the cache was built,
+            // substitute a passthrough program so the slot index stays
+            // aligned with index.txt.
+            if (entry.failed || entry.binary_2d.empty()) {
+                if (!push_passthrough_2d(i, entry.failed ? "cached as failed" : "missing 2D binary")) {
+                    return false;
+                }
+                if (dual_mode) {
+                    if (!push_passthrough_3d(i, entry.failed ? "cached as failed" : "missing 3D binary")) {
+                        return false;
+                    }
+                }
+                continue;
+            }
 
             programs_2d.push_back(makeProgram());
             GLuint prog_id_2d = glCreateProgram();
@@ -1970,28 +2145,45 @@ class ShaderLibrary {
                 fflush(stdout);
                 glDeleteProgram(prog_id_2d);
                 programs_2d.pop_back();
-                return false;
+                // Substitute passthrough to keep slot index valid.
+                if (!push_passthrough_2d(i, "2D binary load failed")) {
+                    return false;
+                }
+                if (dual_mode) {
+                    if (!push_passthrough_3d(i, "2D binary load failed")) {
+                        return false;
+                    }
+                }
+                continue;
             }
 
             *programs_2d.back() = gl::ShaderProgram(prog_id_2d);
             setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, library_path + "/" + shader_files[i]);
 
-            if (dual_mode && !entry.binary_3d.empty()) {
-                programs_3d.push_back(makeProgram());
-                GLuint prog_id_3d = glCreateProgram();
-                glProgramBinaryFunc(prog_id_3d, entry.format_3d, entry.binary_3d.data(), static_cast<GLsizei>(entry.binary_3d.size()));
+            if (dual_mode) {
+                if (entry.binary_3d.empty()) {
+                    if (!push_passthrough_3d(i, "missing 3D binary")) {
+                        return false;
+                    }
+                } else {
+                    programs_3d.push_back(makeProgram());
+                    GLuint prog_id_3d = glCreateProgram();
+                    glProgramBinaryFunc(prog_id_3d, entry.format_3d, entry.binary_3d.data(), static_cast<GLsizei>(entry.binary_3d.size()));
 
-                glGetProgramiv(prog_id_3d, GL_LINK_STATUS, &link_status);
-                if (link_status != GL_TRUE) {
-                    mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 3D binary load failed\n";
-                    fflush(stdout);
-                    glDeleteProgram(prog_id_3d);
-                    programs_3d.pop_back();
-                    return false;
+                    glGetProgramiv(prog_id_3d, GL_LINK_STATUS, &link_status);
+                    if (link_status != GL_TRUE) {
+                        mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 3D binary load failed\n";
+                        fflush(stdout);
+                        glDeleteProgram(prog_id_3d);
+                        programs_3d.pop_back();
+                        if (!push_passthrough_3d(i, "3D binary load failed")) {
+                            return false;
+                        }
+                    } else {
+                        *programs_3d.back() = gl::ShaderProgram(prog_id_3d);
+                        setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, library_path + "/" + shader_files[i]);
+                    }
                 }
-
-                *programs_3d.back() = gl::ShaderProgram(prog_id_3d);
-                setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, library_path + "/" + shader_files[i]);
             }
 
             int percent = static_cast<int>((i + 1) * 100 / cache.entries.size());
