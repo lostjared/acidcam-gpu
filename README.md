@@ -512,6 +512,70 @@ cd ../../../
 echo "completed..."
 ```
 
+### Optional Build Features (CUDA / Audio / MIDI)
+
+Each of the major optional subsystems is toggled by a CMake flag on ACMX2:
+
+| Flag | Default | Effect when `OFF` |
+|------|---------|-------------------|
+| `-DWITH_CUDA=ON/OFF` | `ON`  | Skips all CUDA GPU-filter paths and CUDA/OpenGL zero-copy interop; OpenCV `cudaimgproc` is no longer required; FFmpeg CUDA hw-decode is disabled; `--gpu-filter`, `--gpu-buffer`, `--cuda-device`, `--list-cuda-devices` are not available |
+| `-DAUDIO=ON/OFF`     | `OFF` | No RtAudio / audio reactivity |
+| `-DMIDI=ON/OFF`      | `OFF` | No RtMidi / MIDI control |
+
+#### Building without CUDA (pure OpenGL build)
+
+If you do not have an NVIDIA GPU, cannot install the CUDA toolkit, or want to
+build against a stock OpenCV (no CUDA modules), configure ACMX2 with
+`-DWITH_CUDA=OFF`. The engine falls back to the OpenGL/SDL2 shader path — all
+shader-based features continue to work; only the CUDA GPU filter stack is
+omitted.
+
+```bash
+# libmx2 (built from source, same as above)
+git clone https://github.com/lostjared/libmx2.git
+cd libmx2/libmx
+mkdir build && cd build
+cmake .. -DEXAMPLES=OFF -DOPENGL=ON
+make -j$(nproc) && sudo make install
+cd ../../../
+
+# ACMX2 without CUDA
+git clone https://github.com/lostjared/acidcam-gpu.git
+cd acidcam-gpu/ACMX2
+mkdir build && cd build
+cmake .. -DWITH_CUDA=OFF
+make -j$(nproc) && sudo make install
+
+# Qt6 GUI (unchanged)
+cd ../interface
+mkdir build && cd build
+cmake .. && make -j$(nproc) && sudo make install
+```
+
+Note: when `WITH_CUDA=OFF` you do **not** need `opencv-cuda` or the NVIDIA
+CUDA toolkit — stock `opencv` is sufficient, and the top-level `acidcam-gpu`
+CUDA library does not need to be installed.
+
+You can combine flags freely — for example an OpenGL-only build with audio:
+
+```bash
+cmake .. -DWITH_CUDA=OFF -DAUDIO=ON
+```
+
+#### Runtime feature detection
+
+At startup the Qt6 interface probes the installed `acmx2` binary with
+`--check-cuda`, `--check-audio`, and `--check-midi`, and automatically disables
+the menu entries (GPU Filter Settings, Audio Settings, MIDI Settings), the
+Session-Properties CUDA device selector, and the corresponding CLI arguments
+for any feature that is not compiled in. You can also run the probes directly:
+
+```bash
+acmx2 --check-cuda     # "CUDA: enabled"  or "CUDA: disabled"
+acmx2 --check-audio    # "AUDIO: enabled" or "AUDIO: disabled"
+acmx2 --check-midi     # "MIDI: enabled"  or "MIDI: disabled"
+```
+
 Early Example (as a GIF)
 
 ![jaredrgb](https://github.com/user-attachments/assets/1d2115ba-7b86-4c30-8845-1f2154af00c2)

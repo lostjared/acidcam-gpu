@@ -48,6 +48,49 @@ mkdir build && cd build
 cmake .. && make -j$(nproc) && sudo make install
 ```
 
+### Optional Features
+
+CUDA, audio, and MIDI support are all **optional** at compile time. Each subsystem
+is gated by a CMake option and a corresponding preprocessor definition:
+
+| Option | Default | Definition | Disables |
+|--------|---------|------------|----------|
+| `WITH_CUDA` | `ON`  | `ACMX2_WITH_CUDA` | CUDA GPU filters, zero-copy CUDA/GL interop, FFmpeg CUDA hw-decode, `--gpu-filter`, `--gpu-buffer`, `--cuda-device`, `--list-cuda-devices` |
+| `AUDIO`     | `OFF` | `AUDIO_ENABLED`   | RtAudio capture, audio reactivity, `--enable-audio`, `--audio-file`, `--record-audio`, audio controls |
+| `MIDI`      | `OFF` | `MIDI_ENABLED`    | RtMidi input, `--midi-map`, `--midi-device`, `--list-midi`, MIDI overlay |
+
+#### Building without CUDA (OpenGL-only)
+
+If you do not have an NVIDIA GPU, do not want to install the CUDA toolkit, or want
+to build against a stock OpenCV that was not compiled with CUDA support, turn
+`WITH_CUDA` off. The engine falls back to pure OpenGL/SDL2 rendering; shader-based
+effects still work, only the CUDA GPU filter stack is omitted.
+
+```bash
+cd ACMX2
+mkdir build-nocuda && cd build-nocuda
+cmake .. -DWITH_CUDA=OFF
+make -j$(nproc) && sudo make install
+```
+
+You can combine the flags freely — for example an OpenGL-only build with audio:
+
+```bash
+cmake .. -DWITH_CUDA=OFF -DAUDIO=ON
+```
+
+At startup, the Qt6 interface probes the installed `acmx2` binary with
+`--check-cuda`, `--check-audio`, and `--check-midi` and automatically disables
+menu entries (GPU Filter Settings, Audio Settings, MIDI Settings) and CLI
+arguments corresponding to features that were not compiled in. You can also run
+the probes manually:
+
+```bash
+acmx2 --check-cuda     # "CUDA: enabled"  or "CUDA: disabled"
+acmx2 --check-audio    # "AUDIO: enabled" or "AUDIO: disabled"
+acmx2 --check-midi     # "MIDI: enabled"  or "MIDI: disabled"
+```
+
 ---
 
 ## Installed File Layout

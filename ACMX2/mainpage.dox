@@ -121,6 +121,54 @@ cmake .. -DAUDIO=ON -DMIDI=ON
 make -j$(nproc) && sudo make install
 @endcode
 
+@subsection build_optional Optional Build Features (CUDA / Audio / MIDI)
+
+CUDA, audio, and MIDI support are all optional at compile time:
+
+| Flag | Default | Definition | Effect when <tt>OFF</tt> |
+|------|---------|------------|--------------------------|
+| <tt>-DWITH_CUDA=ON/OFF</tt> | <tt>ON</tt>  | <tt>ACMX2_WITH_CUDA</tt> | Skips CUDA GPU-filter paths and CUDA/OpenGL zero-copy interop; OpenCV <tt>cudaimgproc</tt> is not required; FFmpeg CUDA hw-decode is disabled; <tt>--gpu-filter</tt>, <tt>--gpu-buffer</tt>, <tt>--cuda-device</tt>, <tt>--list-cuda-devices</tt> are unavailable |
+| <tt>-DAUDIO=ON/OFF</tt>     | <tt>OFF</tt> | <tt>AUDIO_ENABLED</tt>   | No RtAudio / audio reactivity |
+| <tt>-DMIDI=ON/OFF</tt>      | <tt>OFF</tt> | <tt>MIDI_ENABLED</tt>    | No RtMidi / MIDI control |
+
+@subsubsection build_nocuda Building without CUDA (pure OpenGL build)
+
+If you do not have an NVIDIA GPU, cannot install the CUDA toolkit, or want to
+build against a stock OpenCV (no CUDA modules), configure ACMX2 with
+<tt>-DWITH_CUDA=OFF</tt>. The engine falls back to the OpenGL/SDL2 shader path;
+all shader-based features continue to work, only the CUDA GPU filter stack is
+omitted. In this configuration <tt>opencv-cuda</tt> and the NVIDIA CUDA toolkit
+are not required — stock <tt>opencv</tt> is sufficient, and the top-level
+<tt>acidcam-gpu</tt> CUDA library does not need to be installed.
+
+@code{.sh}
+cd ACMX2
+mkdir build-nocuda && cd build-nocuda
+cmake .. -DWITH_CUDA=OFF
+make -j$(nproc) && sudo make install
+@endcode
+
+Flags can be combined freely — for example an OpenGL-only build with audio:
+
+@code{.sh}
+cmake .. -DWITH_CUDA=OFF -DAUDIO=ON
+@endcode
+
+@subsubsection build_feature_probes Runtime feature detection
+
+At startup the Qt6 interface probes the installed <tt>acmx2</tt> binary with
+<tt>--check-cuda</tt>, <tt>--check-audio</tt>, and <tt>--check-midi</tt> and
+automatically disables menu entries (GPU Filter Settings, Audio Settings, MIDI
+Settings), the Session-Properties CUDA device selector, and the corresponding
+CLI arguments for any feature that was not compiled in. You can also run the
+probes manually:
+
+@code{.sh}
+acmx2 --check-cuda     # "CUDA: enabled"  or "CUDA: disabled"
+acmx2 --check-audio    # "AUDIO: enabled" or "AUDIO: disabled"
+acmx2 --check-midi     # "MIDI: enabled"  or "MIDI: disabled"
+@endcode
+
 @subsection build_qt6 Qt6 GUI
 @code{.sh}
 cd ACMX2/interface
