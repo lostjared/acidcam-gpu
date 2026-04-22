@@ -1645,6 +1645,170 @@ class ShaderLibrary {
     }
 
     /**
+     * @brief Compile every shader in a library and rewrite index.txt without
+     *        the ones that fail to compile.
+     *
+     * Reads `<library_path>/index.txt`, attempts to compile each referenced
+     * fragment shader against the supplied 2D (and optionally 3D) vertex
+     * shaders, and produces a new `index.txt` that omits broken shaders.
+     * The original file is preserved as `index.txt.bak` (overwritten each run).
+     *
+     * Non-shader lines (blank lines and lines containing "material") are
+     * preserved verbatim. Files listed in index.txt that do not exist on
+     * disk are also dropped.
+     *
+     * The existing `.shader_cache` is deleted so the library is rebuilt
+     * fresh on next launch.
+     *
+     * @param win           GL window (for asset resolution).
+     * @param library_path  Directory containing index.txt and .glsl files.
+     * @param vert_2d       Path to the 2D vertex shader.
+     * @param vert_3d       Path to the 3D vertex shader (only used when @ref dual_mode is set).
+     * @return true if index.txt was rewritten successfully (even when no shaders were removed).
+     */
+    bool removeBrokenShaders(gl::GLWindow *win,
+                             const std::string &library_path,
+                             const std::string &vert_2d,
+                             const std::string &vert_3d) {
+        std::string index_path = library_path + "/index.txt";
+        std::ifstream in(index_path);
+        if (!in.is_open()) {
+            mx::system_err << "acmx2: Could not open index.txt at: " << library_path << "\n";
+            return false;
+        }
+
+        // Preserve ordering and non-shader lines (blank / "material" lines).
+        struct Line {
+            std::string raw;    ///< Original line text.
+            bool is_shader;     ///< True if this line references a fragment shader file.
+            bool keep = true;   ///< False if the shader failed to compile.
+        };
+        std::vector<Line> lines;
+        {
+            std::string l;
+            while (std::getline(in, l)) {
+                Line entry;
+                entry.raw = l;
+                bool is_shader_line =
+                    !l.empty() &&
+                    l.find("material") == std::string::npos &&
+                    std::filesystem::exists(library_path + "/" + l);
+                entry.is_shader = is_shader_line;
+                if (!is_shader_line && !l.empty() &&
+                    l.find("material") == std::string::npos) {
+                    // Referenced file is missing — drop this entry too.
+                    mx::system_out << "acmx2: ⚠ Removing missing file from index: " << l << "\n";
+                    entry.is_shader = false;
+                    entry.keep = false;
+                }
+                lines.push_back(std::move(entry));
+            }
+        }
+        in.close();
+
+        size_t total_shaders = 0;
+        for (const auto &e : lines) {
+            if (e.is_shader) ++total_shaders;
+        }
+
+        mx::system_out << "acmx2: Scanning " << total_shaders
+                       << " shaders in " << library_path
+                       << " for compile errors ("
+                       << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+        fflush(stdout);
+
+        size_t removed = 0;
+        size_t kept = 0;
+        size_t scanned = 0;
+        for (auto &entry : lines) {
+            if (!entry.is_shader) continue;
+            ++scanned;
+            std::string full_path = library_path + "/" + entry.raw;
+
+            mx::system_out << "acmx2: [" << scanned << "/" << total_shaders << "] "
+                           << entry.raw << " ... ";
+            fflush(stdout);
+
+            bool compiled = true;
+            try {
+                gl::ShaderProgram prog_2d;
+                prog_2d.setSilent(true);
+                if (!prog_2d.loadProgram(vert_2d, full_path)) {
+                    compiled = false;
+                } else {
+                    GLint link_status = 0;
+                    glGetProgramiv(prog_2d.id(), GL_LINK_STATUS, &link_status);
+                    if (link_status != GL_TRUE) compiled = false;
+                }
+                if (compiled && dual_mode) {
+                    gl::ShaderProgram prog_3d;
+                    prog_3d.setSilent(true);
+                    if (!prog_3d.loadProgram(vert_3d, full_path)) {
+                        compiled = false;
+                    } else {
+                        GLint link_status = 0;
+                        glGetProgramiv(prog_3d.id(), GL_LINK_STATUS, &link_status);
+                        if (link_status != GL_TRUE) compiled = false;
+                    }
+                }
+            } catch (const std::exception &e) {
+                mx::system_out << "exception: " << e.what() << " ";
+                compiled = false;
+            } catch (...) {
+                compiled = false;
+            }
+
+            if (compiled) {
+                mx::system_out << "OK\n";
+                ++kept;
+            } else {
+                mx::system_out << "❌ REMOVED\n";
+                entry.keep = false;
+                ++removed;
+            }
+            fflush(stdout);
+        }
+
+        // Back up the original index.txt before rewriting.
+        std::error_code ec;
+        std::filesystem::copy_file(
+            index_path,
+            library_path + "/index.txt.bak",
+            std::filesystem::copy_options::overwrite_existing,
+            ec);
+        if (ec) {
+            mx::system_out << "acmx2: Warning: could not create index.txt.bak ("
+                           << ec.message() << ")\n";
+        }
+
+        std::ofstream out(index_path, std::ios::trunc);
+        if (!out.is_open()) {
+            mx::system_err << "acmx2: Could not rewrite index.txt at: " << library_path << "\n";
+            return false;
+        }
+        for (const auto &entry : lines) {
+            if (!entry.keep) continue;
+            out << entry.raw << "\n";
+        }
+        out.close();
+
+        // Invalidate the on-disk cache since the library composition changed.
+        std::string cache_file = library_path + "/.shader_cache";
+        if (std::filesystem::exists(cache_file)) {
+            std::filesystem::remove(cache_file, ec);
+            if (!ec) {
+                mx::system_out << "acmx2: Removed stale shader cache: " << cache_file << "\n";
+            }
+        }
+
+        mx::system_out << "acmx2: Remove-broken complete: kept " << kept
+                       << ", removed " << removed << " shader(s). "
+                       << "Backup written to index.txt.bak\n";
+        fflush(stdout);
+        return true;
+    }
+
+    /**
      * @brief Build the on-disk shader binary cache for all shaders in a library.
      * @param win    GL window (provides vertex shader paths).
      * @param library_path  Directory containing index.txt and .glsl files.
@@ -2963,6 +3127,8 @@ struct MXArguments {
     bool shader_pass_enabled = false;
     bool build_cache = false;
     std::string build_library_path;
+    bool remove_broken = false;        ///< True when `--remove-broken <path>` was specified.
+    std::string remove_broken_path;    ///< Library path passed to `--remove-broken`.
     bool use_shader_cache = true;
     float time_speed = 1.0f;
     std::string playlist_file;
@@ -6750,6 +6916,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)")
         .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
         .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)")
+        .addOptionDoubleValue(416, "remove-broken", "Compile each shader in library path; remove shaders that fail to compile from index.txt, then exit")
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
@@ -7048,6 +7215,10 @@ int main(int argc, char **argv) {
                 args.build_cache = true;
                 args.build_library_path = arg.arg_value;
                 break;
+            case 416:
+                args.remove_broken = true;
+                args.remove_broken_path = arg.arg_value;
+                break;
             case 408:
                 args.use_shader_cache = false;
                 mx::system_out << "acmx2: Shader caching disabled\n";
@@ -7182,6 +7353,93 @@ int main(int argc, char **argv) {
         args.path = ".";
         mx::system_out << "acmx2: Path name not provided, using current path...\n";
     }
+    if (args.remove_broken) {
+        if (args.remove_broken_path.empty()) {
+            mx::system_err << "acmx2: Error: --remove-broken requires a shader library path\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        }
+        if (!std::filesystem::exists(args.remove_broken_path + "/index.txt")) {
+            mx::system_err << "acmx2: Error: No index.txt found at: " << args.remove_broken_path << "\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        }
+        try {
+            mx::system_out << "acmx2: Creating scan window for remove-broken...\n";
+            fflush(stdout);
+
+            /**
+             * @brief Headless GL context used exclusively by the
+             *        `--remove-broken` CLI flag.
+             *
+             * Mirrors `BuildWindow`: opens a minimal hidden 640x480 window
+             * just long enough to get a valid OpenGL context, invokes
+             * `ShaderLibrary::removeBrokenShaders()` once, and then exits.
+             */
+            class RemoveBrokenWindow : public gl::GLWindow {
+              public:
+                ShaderLibrary library;
+                std::string lib_path;
+                bool enable_3d;
+                std::string assets_path;
+                bool success = false;
+                bool done = false;
+                bool active = true;
+
+                RemoveBrokenWindow(const std::string &path, bool is3d, const std::string &assets)
+                    : gl::GLWindow("ACMX2 Remove-Broken", 640, 480, false),
+                      lib_path(path), enable_3d(is3d), assets_path(assets) {
+                    util.path = assets_path;
+                    library.enableDualMode(enable_3d);
+                }
+
+                void draw() override {
+                    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                    glClear(GL_COLOR_BUFFER_BIT);
+                    if (!done) {
+                        done = true;
+                        std::string vert_2d = util.getFilePath("data/vert.glsl");
+                        std::string vert_3d = util.getFilePath("data/vertex.glsl");
+                        mx::system_out << "acmx2: Scanning library: " << lib_path << "\n";
+                        mx::system_out << "acmx2: Mode: " << (enable_3d ? "2D+3D" : "2D only") << "\n";
+                        mx::system_out << "acmx2: OpenGL Renderer: " << glGetString(GL_RENDERER) << "\n";
+                        mx::system_out << "acmx2: OpenGL Version: " << glGetString(GL_VERSION) << "\n";
+                        fflush(stdout);
+                        success = library.removeBrokenShaders(this, lib_path, vert_2d, vert_3d);
+                        library.clear();
+                        active = false;
+                    }
+                    swap();
+                }
+
+                void event(SDL_Event &) override {}
+
+                void scanLoop() {
+                    SDL_Event ev;
+                    while (active) {
+                        while (SDL_PollEvent(&ev)) {
+                            if (ev.type == SDL_QUIT) active = false;
+                            event(ev);
+                        }
+                        draw();
+                    }
+                }
+            };
+
+            RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d, args.path);
+            rb_win.scanLoop();
+            return rb_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
+        } catch (const mx::Exception &e) {
+            mx::system_err << "acmx2: Remove-broken failed: " << e.text() << "\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        } catch (std::exception &e) {
+            mx::system_err << "acmx2: Remove-broken failed: " << e.what() << "\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        }
+    }
+
     if (args.build_cache) {
         if (args.build_library_path.empty()) {
             mx::system_err << "acmx2: Error: --build requires a shader library path\n";

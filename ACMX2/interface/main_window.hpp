@@ -66,6 +66,7 @@ class MainWindow : public QMainWindow {
     void menuBuildShaderCache();
     void menuRunFromCache();
     void menuRecompileShaders();
+    void menuRemoveBroken();
     void menuMidiSettings();
 
   protected:
@@ -149,6 +150,7 @@ class MainWindow : public QMainWindow {
     QAction *buildCacheAction;
     QAction *runFromCacheAction;
     QAction *recompileShadersAction;
+    QAction *removeBrokenAction;
     QString customStyleSheet;
     void applyCustomStyleSheet(bool enable);
     bool shader_pass_enabled = false;

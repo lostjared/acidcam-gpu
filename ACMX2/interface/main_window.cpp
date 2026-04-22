@@ -148,6 +148,10 @@ void MainWindow::initControls() {
     connect(buildCacheAction, &QAction::triggered, this, &MainWindow::menuBuildShaderCache);
     playbackMenu->addAction(buildCacheAction);
 
+    removeBrokenAction = new QAction(tr("Remove Broken"), this);
+    connect(removeBrokenAction, &QAction::triggered, this, &MainWindow::menuRemoveBroken);
+    playbackMenu->addAction(removeBrokenAction);
+
     runFromCacheAction = new QAction(tr("Run from Cache"), this);
     runFromCacheAction->setCheckable(true);
     runFromCacheAction->setChecked(true);
@@ -1411,6 +1415,93 @@ void MainWindow::menuBuildShaderCache() {
 }
 
 void MainWindow::menuRunFromCache() {
+}
+
+void MainWindow::menuRemoveBroken() {
+    QString scan_path = shader_path;
+    if (scan_path.isEmpty()) {
+        QSettings appSettings("LostSideDead");
+        scan_path = appSettings.value("shaders", "").toString();
+    }
+    if (scan_path.isEmpty()) {
+        QMessageBox::warning(this, "Error",
+            "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
+        return;
+    }
+    if (process->state() == QProcess::Running) {
+        QMessageBox::warning(this, "Error",
+            "A process is already running. Please wait for it to finish.");
+        return;
+    }
+
+    QMessageBox::StandardButton reply = QMessageBox::question(this,
+        tr("Remove Broken Shaders"),
+        tr("This will compile every shader in:\n\n%1\n\n"
+           "Any shader that fails to compile will be removed from index.txt "
+           "(the original will be backed up as index.txt.bak).\n\nContinue?")
+            .arg(scan_path),
+        QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes) return;
+
+    QString dirPath = QCoreApplication::applicationDirPath();
+#ifdef BUILD_BUNDLE
+    QString assets_path = dirPath + "/../Helpers";
+#else
+    QString assets_path = QFileInfo::exists(dirPath + "/data/win-icon.png")
+                              ? dirPath
+                              : QStringLiteral("/usr/local/share/acmx2");
+#endif
+
+    QStringList args;
+    args << "--remove-broken" << scan_path;
+    args << "-p" << assets_path;
+    if (enable_3d) args << "--enable-3d";
+
+    Log("Scanning for broken shaders in: " + scan_path);
+    Log("Command: " + executable_path + " " + args.join(" "));
+
+    // Use a dedicated QProcess so we can reload the list when it finishes
+    // without interfering with the main playback process.
+    QProcess *scan = new QProcess(this);
+    scan->setProcessChannelMode(QProcess::SeparateChannels);
+    connect(scan, &QProcess::readyReadStandardOutput, this, [this, scan]() {
+        QString output = scan->readAllStandardOutput();
+        output.replace("\n", "<br>");
+        this->Write(output);
+    });
+    connect(scan, &QProcess::readyReadStandardError, this, [this, scan]() {
+        QString output = scan->readAllStandardError();
+        output.replace("\n", "<br>");
+        this->Write("<b style='color:red;'>" + output + "</b>");
+    });
+    connect(scan,
+            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
+            this,
+            [this, scan, scan_path](int exitCode, QProcess::ExitStatus) {
+                Log(QString("Remove-broken finished with exit code: %1<br>").arg(exitCode));
+                if (exitCode == 0) {
+                    // Reload the list view from the updated index.txt.
+                    loadShaders(scan_path, true);
+                    QMessageBox::information(this,
+                        tr("Remove Broken"),
+                        tr("Finished scanning shader library.\n\n"
+                           "index.txt has been updated and the shader list reloaded.\n"
+                           "A backup of the original is at:\n%1/index.txt.bak")
+                            .arg(scan_path));
+                } else {
+                    QMessageBox::warning(this,
+                        tr("Remove Broken"),
+                        tr("Remove-broken failed with exit code %1. "
+                           "index.txt was not changed.").arg(exitCode));
+                }
+                scan->deleteLater();
+            });
+
+    scan->start(executable_path, args);
+    if (!scan->waitForStarted()) {
+        Log("<b style='color:red;'>Error:</b> Failed to start remove-broken process");
+        scan->deleteLater();
+    }
 }
 
 void MainWindow::menuRecompileShaders() {
