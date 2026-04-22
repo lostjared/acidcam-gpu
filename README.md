@@ -2,6 +2,7 @@
 
 ![screenshot](https://github.com/lostjared/acidcam-gpu/raw/main/acmx2.png)
 <img width="2560" height="1440" alt="Screenshot From 2026-04-12 19-33-51" src="https://github.com/user-attachments/assets/88b6c714-031d-422d-9a9f-65d56ac190bf" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/a57c5f22-8f13-4a11-a727-7cdde1b22360" />
 
 [![License: BSD 2-Clause](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
 [![Hardware: NVIDIA RTX](https://img.shields.io/badge/Hardware-NVIDIA%20RTX%202070-green.svg)](https://www.nvidia.com/en-us/geforce/rtx/)
