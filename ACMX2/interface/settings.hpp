@@ -44,8 +44,6 @@ class SettingsWindow : public QDialog {
     QSize getSelectedScreenResolution() const;
     /// @return Selected camera capture FPS.
     int getCameraFPS() const;
-    /// @return Output video bitrate in kbps.
-    int getSaveFileKbps() const;
     /// @return Input video file path.
     QString getInputVideoFile() const;
     /// @return Output video file path.
@@ -132,7 +130,6 @@ class SettingsWindow : public QDialog {
     QComboBox *cameraIndexComboBox;
     QComboBox *cameraResolutionComboBox;
     QComboBox *screenResolutionComboBox;
-    QSpinBox *saveFileKbpsSpinBox;
     QPushButton *okButton;
     QPushButton *cancelButton;
     QLineEdit *inputVideoFileLineEdit;
@@ -170,7 +167,6 @@ class SettingsWindow : public QDialog {
     QSize selectedCameraResolution;
     QSize selectedScreenResolution;
     int cameraFPS;
-    int saveFileKbps;
     QString inputVideoFile;
     QString outputVideoFile;
     bool useInputVideoFile;

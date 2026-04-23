@@ -146,7 +146,6 @@ class MainWindow : public QMainWindow {
     QString graphics_file;
     QString prefix_path;
     QString output_file;
-    int output_kbps = 10000;
     double output_fps = 24.0f;
     QString encode_preset = "medium";
     QString encode_tune;        // empty => "none"

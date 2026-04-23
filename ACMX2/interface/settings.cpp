@@ -20,7 +20,6 @@ SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
     selectedCameraResolution(1280, 720),
     selectedScreenResolution(0, 0),
       cameraFPS(30),
-      saveFileKbps(23),
       inputVideoFile(""),
       outputVideoFile(""),
       useInputVideoFile(false),
@@ -146,10 +145,6 @@ void SettingsWindow::init() {
     outputVideoFileLineEdit->setReadOnly(true);
     browseOutputVideoButton = new QPushButton("Browse", this);
 
-    saveFileKbpsSpinBox = new QSpinBox(this);
-    saveFileKbpsSpinBox->setRange(0, 51);
-    saveFileKbpsSpinBox->setValue(23);
-
     copyAudioCheckBox = new QCheckBox("Copy Audio Track", this);
     copyAudioCheckBox->setChecked(false);
     copyAudioCheckBox->setEnabled(false);
@@ -269,8 +264,6 @@ void SettingsWindow::init() {
     outputRow->addWidget(outputVideoFileLineEdit);
     outputRow->addWidget(browseOutputVideoButton);
     outputGrid->addLayout(outputRow, r, 1);
-    outputGrid->addWidget(new QLabel("Save Quality:", this),         ++r, 0);
-    outputGrid->addWidget(saveFileKbpsSpinBox,                      r, 1);
     outputGrid->addWidget(copyAudioCheckBox,                      ++r, 0, 1, 2);
 
     // ── Encoding group ────────────────────────────────────────────────
@@ -434,7 +427,6 @@ void SettingsWindow::init() {
     connect(saveOutputVideoCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         outputVideoFileLineEdit->setEnabled(checked);
         browseOutputVideoButton->setEnabled(checked);
-        saveFileKbpsSpinBox->setEnabled(checked);
         bool enableAudio = checked && inputVideoOptionRadioButton->isChecked();
         copyAudioCheckBox->setEnabled(enableAudio);
         if (!enableAudio)
@@ -455,7 +447,6 @@ void SettingsWindow::init() {
     browseGraphicsButton->setEnabled(false);
     outputVideoFileLineEdit->setEnabled(false);
     browseOutputVideoButton->setEnabled(false);
-    saveFileKbpsSpinBox->setEnabled(false);
 
     loadUiState();
 }
@@ -501,7 +492,6 @@ void SettingsWindow::loadUiState() {
 
     saveOutputVideoCheckBox->setChecked(appSettings.value("interface/save_output", false).toBool());
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
-    saveFileKbpsSpinBox->setValue(appSettings.value("interface/output_quality", 23).toInt());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
 
     fullscreenCheckBox->setChecked(appSettings.value("interface/fullscreen", false).toBool());
@@ -545,7 +535,6 @@ void SettingsWindow::saveUiState() {
 
     appSettings.setValue("interface/save_output", saveOutputVideoCheckBox->isChecked());
     appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
-    appSettings.setValue("interface/output_quality", saveFileKbpsSpinBox->value());
     appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
 
     appSettings.setValue("interface/fullscreen", fullscreenCheckBox->isChecked());
@@ -581,10 +570,6 @@ QSize SettingsWindow::getSelectedScreenResolution() const {
 
 int SettingsWindow::getCameraFPS() const {
     return cameraFPS;
-}
-
-int SettingsWindow::getSaveFileKbps() const {
-    return saveFileKbps;
 }
 
 QString SettingsWindow::getInputVideoFile() const {
@@ -746,7 +731,6 @@ void SettingsWindow::acceptSettings() {
             reject();
             return;
         }
-        saveFileKbps = saveFileKbpsSpinBox->value();
     }
 
     if (enable3dCheckBox->isChecked()) {

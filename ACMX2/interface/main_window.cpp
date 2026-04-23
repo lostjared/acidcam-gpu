@@ -913,10 +913,8 @@ void MainWindow::cameraSettings() {
         }
         if (settingsWindow.isSavingToOutputVideoFile()) {
             output_file = settingsWindow.getOutputVideoFile();
-            output_kbps = settingsWindow.getSaveFileKbps();
         } else {
             output_file = "";
-            output_kbps = 23;
         }
     }
     enable_3d = settingsWindow.is3dEnabled();
