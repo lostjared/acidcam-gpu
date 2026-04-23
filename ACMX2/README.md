@@ -34,6 +34,7 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU f
 - **File-based audio reactivity** — drive audio-reactive shaders from an audio or video file instead of a live microphone via `--audio-file`; the audio track is automatically muxed into the output video
 - **MIDI control** — map hardware knobs and buttons to shader parameters
 - **Video recording** with optional audio muxing via FFmpeg
+- **Up to 8K recording support** — 4K and below records as H.264; above 4K records as HEVC (H.265)
 - **Silent mode** — headless video processing without a window
 - **Shader cache** — precompile shader binaries for fast startup
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)

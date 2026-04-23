@@ -55,6 +55,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
 - <b>FFmpeg CUDA video decode</b> — file input prefers FFmpeg hardware decode on CUDA, with automatic fallback when unavailable
 - <b>Video recording</b> with optional audio muxing via FFmpeg
+- <b>Up to 8K recording support</b> — 4K and below records as H.264; above 4K records as HEVC (H.265)
 - <b>Hardware-first H.264 encoding</b> — prefers <tt>h264_nvenc</tt> via MXWrite and falls back to software H.264 automatically
 - <b>Pipeline mode reporting</b> — startup log prints active decode/encode modes for validation and benchmarking
 - <b>Silent mode</b> — headless video processing without a window
