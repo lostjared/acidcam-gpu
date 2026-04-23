@@ -202,11 +202,23 @@ check_cxx_source_compiles("
 if(NOT HAVE_THREADING)
     message(FATAL_ERROR "Threading support not available. Please ensure your compiler supports std::thread and std::mutex.")
 endif()
-find_package(OpenGL REQUIRED COMPONENTS OpenGL)
+if(APPLE)
+    # On Apple platforms OpenGL is the framework (libGL component is
+    # the legacy OpenGL.framework target). The "OpenGL" GLVND component
+    # only exists on Linux/X11 systems.
+    set(OpenGL_GL_PREFERENCE LEGACY)
+    find_package(OpenGL REQUIRED)
+else()
+    find_package(OpenGL REQUIRED COMPONENTS OpenGL)
+endif()
 if(NOT OpenGL_FOUND)
     message(FATAL_ERROR "OpenGL not found. Please install OpenGL development libraries.")
 endif()
-message(STATUS "OpenGL found: ${OPENGL_opengl_LIBRARY}")
+if(APPLE)
+    message(STATUS "OpenGL found: ${OPENGL_gl_LIBRARY}")
+else()
+    message(STATUS "OpenGL found: ${OPENGL_opengl_LIBRARY}")
+endif()
 message(STATUS "")
 message(STATUS "=== ACMX2 Configuration Summary ===")
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
@@ -276,12 +288,19 @@ target_link_libraries(acmx2 PRIVATE
     ${AUDIO_LIBS}
     ${MIDI_LIBS}
     ${ACMX2_MXWRITE_TARGET}
-    OpenGL::OpenGL
-    GL
+    OpenGL::GL
     Threads::Threads
     PkgConfig::FFMPEG
     ${FFMPEG_LIBRARIES}
 )
+if(APPLE)
+    # On macOS OpenGL is provided by the OpenGL.framework which the
+    # OpenGL::GL imported target above resolves to. Do not link the
+    # Linux-only libGL ("GL"), which would not exist on Apple platforms.
+    target_link_libraries(acmx2 PRIVATE "-framework OpenGL")
+else()
+    target_link_libraries(acmx2 PRIVATE GL)
+endif()
 if(WITH_CUDA)
     target_link_libraries(acmx2 PRIVATE
         acidcam-gpu::acidcam-gpu

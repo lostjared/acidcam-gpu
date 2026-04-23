@@ -2,7 +2,9 @@
 #include <QApplication>
 
 int main(int argc, char **argv) {
+#ifdef __linux__
     qputenv("QT_QPA_PLATFORM", "xcb");
+#endif
     QApplication app(argc, argv);
     QApplication::setWindowIcon(QIcon(":/win-icon.png"));
     QFile styleFile(":/stylesheet.qss");

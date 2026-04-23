@@ -3129,7 +3129,14 @@ struct MXArguments {
     std::string build_library_path;
     bool remove_broken = false;        ///< True when `--remove-broken <path>` was specified.
     std::string remove_broken_path;    ///< Library path passed to `--remove-broken`.
+#ifdef __APPLE__
+    // The shader binary cache is unsupported on macOS (no usable
+    // glProgramBinary path under the system OpenGL framework), so it
+    // is permanently disabled on Apple platforms.
+    bool use_shader_cache = false;
+#else
     bool use_shader_cache = true;
+#endif
     float time_speed = 1.0f;
     std::string playlist_file;
     double duration = 0.0;
@@ -6021,7 +6028,11 @@ class ACView : public gl::GLObject {
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
     bool silent_mode = false;
+#ifdef __APPLE__
+    bool use_shader_cache_flag = false;
+#else
     bool use_shader_cache_flag = true;
+#endif
     bool use_yuv = false;
     int last_progress_percent = -1;
     bool enableWatermark = false;
