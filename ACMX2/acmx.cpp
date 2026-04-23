@@ -100,6 +100,14 @@ namespace ac_gpu {
 /// @brief Copy the audio track from one media file to another via FFmpeg.
 void transfer_audio(std::string_view, std::string_view);
 
+static std::string safeGLString(GLenum name) {
+    const GLubyte *value = glGetString(name);
+    if (!value) {
+        return "unavailable";
+    }
+    return reinterpret_cast<const char *>(value);
+}
+
 class FFMpegVideoReader {
   public:
     ~FFMpegVideoReader() {
@@ -1670,6 +1678,12 @@ class ShaderLibrary {
                              const std::string &library_path,
                              const std::string &vert_2d,
                              const std::string &vert_3d) {
+        (void)win;
+        if (glGetString(GL_VERSION) == nullptr) {
+            mx::system_err << "acmx2: remove-broken requires a valid OpenGL context\n";
+            return false;
+        }
+
         std::string index_path = library_path + "/index.txt";
         std::ifstream in(index_path);
         if (!in.is_open()) {
@@ -1817,6 +1831,12 @@ class ShaderLibrary {
      * @return true on success.
      */
     bool buildShaderCache(gl::GLWindow *win, const std::string &library_path, const std::string &vert_2d, const std::string &vert_3d) {
+        (void)win;
+        if (glGetString(GL_VERSION) == nullptr) {
+            mx::system_err << "acmx2: build-cache requires a valid OpenGL context\n";
+            return false;
+        }
+
         GLint numFormats = 0;
         glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &numFormats);
         if (numFormats == 0) {
@@ -1842,8 +1862,8 @@ class ShaderLibrary {
         }
 
         ShaderCache cache;
-        cache.gl_renderer = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
-        cache.gl_version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
+        cache.gl_renderer = safeGLString(GL_RENDERER);
+        cache.gl_version = safeGLString(GL_VERSION);
         cache.dual_mode = dual_mode;
 
         std::vector<std::string> shader_files;
@@ -2146,8 +2166,8 @@ class ShaderLibrary {
             return false;
         }
 
-        std::string current_renderer = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
-        std::string current_version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
+        std::string current_renderer = safeGLString(GL_RENDERER);
+        std::string current_version = safeGLString(GL_VERSION);
 
         if (cache.gl_renderer != current_renderer) {
             mx::system_out << "acmx2: GPU changed (was: " << cache.gl_renderer << ", now: " << current_renderer << "), will recompile\n";
@@ -7413,8 +7433,8 @@ int main(int argc, char **argv) {
                         std::string vert_3d = util.getFilePath("data/vertex.glsl");
                         mx::system_out << "acmx2: Scanning library: " << lib_path << "\n";
                         mx::system_out << "acmx2: Mode: " << (enable_3d ? "2D+3D" : "2D only") << "\n";
-                        mx::system_out << "acmx2: OpenGL Renderer: " << glGetString(GL_RENDERER) << "\n";
-                        mx::system_out << "acmx2: OpenGL Version: " << glGetString(GL_VERSION) << "\n";
+                        mx::system_out << "acmx2: OpenGL Renderer: " << safeGLString(GL_RENDERER) << "\n";
+                        mx::system_out << "acmx2: OpenGL Version: " << safeGLString(GL_VERSION) << "\n";
                         fflush(stdout);
                         success = library.removeBrokenShaders(this, lib_path, vert_2d, vert_3d);
                         library.clear();
@@ -7523,8 +7543,8 @@ int main(int argc, char **argv) {
 
                         mx::system_out << "acmx2: Building shader cache for: " << lib_path << "\n";
                         mx::system_out << "acmx2: Mode: " << (enable_3d ? "2D+3D" : "2D only") << "\n";
-                        mx::system_out << "acmx2: OpenGL Renderer: " << glGetString(GL_RENDERER) << "\n";
-                        mx::system_out << "acmx2: OpenGL Version: " << glGetString(GL_VERSION) << "\n";
+                        mx::system_out << "acmx2: OpenGL Renderer: " << safeGLString(GL_RENDERER) << "\n";
+                        mx::system_out << "acmx2: OpenGL Version: " << safeGLString(GL_VERSION) << "\n";
                         fflush(stdout);
                         success = library.buildShaderCache(this, lib_path, vert_2d, vert_3d);
                         library.clear();
