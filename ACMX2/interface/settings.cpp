@@ -1,7 +1,11 @@
 #include "settings.hpp"
+#include <algorithm>
+#include <QApplication>
 #include <QMessageBox>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QGridLayout>
+#include <QScreen>
 #include <QSet>
 #include <QSettings>
 #include <QFileInfo>
@@ -87,127 +91,241 @@ void SettingsWindow::populateCudaDevices() {
 }
 
 void SettingsWindow::init() {
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    cameraOptionRadioButton = new QRadioButton("Use Camera", this);
-    inputVideoOptionRadioButton = new QRadioButton("Use Video File as Input", this);
+    setStyleSheet(qApp->styleSheet());
+
+    // ── Create all widgets ────────────────────────────────────────────
+    cameraOptionRadioButton       = new QRadioButton("Use Camera", this);
+    inputVideoOptionRadioButton   = new QRadioButton("Use Video File as Input", this);
     graphicsFileOptionRadioButton = new QRadioButton("Use Graphics File as Input", this);
     cameraOptionRadioButton->setChecked(true);
-    mainLayout->addWidget(cameraOptionRadioButton);
-    mainLayout->addWidget(inputVideoOptionRadioButton);
-    mainLayout->addWidget(graphicsFileOptionRadioButton);
-    QLabel *cameraIndexLabel = new QLabel("Select Camera Index:", this);
+
     cameraIndexComboBox = new QComboBox(this);
     populateCameraDevices();
 
-    QLabel *cudaDeviceLabel = new QLabel("Select CUDA Device:", this);
-    this->cudaDeviceLabel = cudaDeviceLabel;
+    cudaDeviceLabel    = new QLabel("CUDA Device:", this);
     cudaDeviceComboBox = new QComboBox(this);
     populateCudaDevices();
 
-    QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
-                    "* { color: red; font-weight: bold; } "
-                    "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
-                    "QPushButton:hover { background-color: red; color: black; }";
-
-    QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", false).toBool()) {
-        setStyleSheet(style);
-    }
-
-    QLabel *cameraResolutionLabel = new QLabel("Select Camera Resolution:", this);
     cameraResolutionComboBox = new QComboBox(this);
     cameraResolutionComboBox->addItem("Default");
-
-    QLabel *cameraFPSLabel = new QLabel("Set FPS:", this);
     cameraFPSComboBox = new QComboBox(this);
     cameraFPSComboBox->addItem("30");
 
-    // Enumerate capabilities for the initially selected camera
-    if (cameraIndexComboBox->count() > 0) {
-        int devIdx = cameraIndexComboBox->currentData().toInt();
-        enumerateDevice(devIdx);
-    }
-
-    connect(cameraIndexComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &SettingsWindow::onCameraDeviceChanged);
-    connect(cameraResolutionComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &SettingsWindow::onCameraResolutionChanged);
+    if (cameraIndexComboBox->count() > 0)
+        enumerateDevice(cameraIndexComboBox->currentData().toInt());
 
     useYuvCheckBox = new QCheckBox("Use YUV (YUYV) camera format", this);
     useYuvCheckBox->setChecked(false);
     useYuvCheckBox->setEnabled(false);
 
-    QHBoxLayout *inputVideoFileLayout = new QHBoxLayout;
     inputVideoFileLineEdit = new QLineEdit(this);
     inputVideoFileLineEdit->setReadOnly(true);
     browseInputVideoButton = new QPushButton("Browse", this);
-    inputVideoFileLayout->addWidget(inputVideoFileLineEdit);
-    inputVideoFileLayout->addWidget(browseInputVideoButton);
 
-    QHBoxLayout *graphicsFileLayout = new QHBoxLayout;
     graphicsFileLineEdit = new QLineEdit(this);
     graphicsFileLineEdit->setReadOnly(true);
     browseGraphicsButton = new QPushButton("Browse", this);
-    graphicsFileLayout->addWidget(graphicsFileLineEdit);
-    graphicsFileLayout->addWidget(browseGraphicsButton);
+
+    screenResolutionComboBox = new QComboBox(this);
+    screenResolutionComboBox->addItems({
+        "Default",
+        "320x240",  "240x320",  "400x300",  "300x400",  "512x384",  "384x512",
+        "640x360",  "360x640",  "640x480",  "480x640",  "720x480",  "480x720",
+        "800x600",  "600x800",  "960x720",  "720x960",  "1024x768", "768x1024",
+        "1152x864", "864x1152", "1280x720", "720x1280", "1280x960", "960x1280",
+        "1280x1024","1024x1280","1366x768", "768x1366", "1440x900", "900x1440",
+        "1600x900", "900x1600", "1600x1200","1200x1600","1440x1080","1080x1440",
+        "1920x1080","1080x1920","1920x1200","1200x1920","2048x1536","1536x2048",
+        "2560x1440","1440x2560","2560x1600","1600x2560","2560x1920","1920x2560",
+        "3440x1440","1440x3440","3840x1600","1600x3840","3840x2160","2160x3840",
+        "7680x4320","4320x7680"});
+    screenResolutionComboBox->setCurrentIndex(0);
 
     saveOutputVideoCheckBox = new QCheckBox("Save Output to Video File", this);
-
-    QHBoxLayout *outputVideoFileLayout = new QHBoxLayout;
     outputVideoFileLineEdit = new QLineEdit(this);
     outputVideoFileLineEdit->setReadOnly(true);
     browseOutputVideoButton = new QPushButton("Browse", this);
-    outputVideoFileLayout->addWidget(outputVideoFileLineEdit);
-    outputVideoFileLayout->addWidget(browseOutputVideoButton);
 
-    QLabel *saveFileKbpsLabel = new QLabel("Set Save File CRF:", this);
     saveFileKbpsSpinBox = new QSpinBox(this);
     saveFileKbpsSpinBox->setRange(0, 51);
     saveFileKbpsSpinBox->setValue(23);
 
-    QLabel *screenResolutionLabel = new QLabel("Select Screen Resolution:", this);
-    screenResolutionComboBox = new QComboBox(this);
-    QStringList screenResolutions = {
-        "Default",
-        "320x240", "240x320",
-        "400x300", "300x400",
-        "512x384", "384x512",
-        "640x360", "360x640",
-        "640x480", "480x640",
-        "720x480", "480x720",
-        "800x600", "600x800",
-        "960x720", "720x960",
-        "1024x768", "768x1024",
-        "1152x864", "864x1152",
-        "1280x720", "720x1280",
-        "1280x960", "960x1280",
-        "1280x1024", "1024x1280",
-        "1366x768", "768x1366",
-        "1440x900", "900x1440",
-        "1600x900", "900x1600",
-        "1600x1200", "1200x1600",
-        "1440x1080", "1080x1440",
-        "1920x1080", "1080x1920",
-        "1920x1200", "1200x1920",
-        "2048x1536", "1536x2048",
-        "2560x1440", "1440x2560",
-        "2560x1600", "1600x2560",
-        "2560x1920", "1920x2560",
-        "3440x1440", "1440x3440",
-        "3840x1600", "1600x3840",
-        "3840x2160", "2160x3840",
-        "7680x4320", "4320x7680"};
-    screenResolutionComboBox->addItems(screenResolutions);
-    screenResolutionComboBox->setCurrentIndex(0);
+    copyAudioCheckBox = new QCheckBox("Copy Audio Track", this);
+    copyAudioCheckBox->setChecked(false);
+    copyAudioCheckBox->setEnabled(false);
 
-    textureCacheCheckBox = new QCheckBox("Enable Texture Cache", this);
+    timeSpeedSpinBox = new QDoubleSpinBox(this);
+    timeSpeedSpinBox->setRange(0.0, 100.0);
+    timeSpeedSpinBox->setSingleStep(0.1);
+    timeSpeedSpinBox->setDecimals(2);
+    timeSpeedSpinBox->setValue(1.0);
+
+    durationLimitCheckBox = new QCheckBox("Max Duration (sec):", this);
+    durationLimitSpinBox  = new QDoubleSpinBox(this);
+    durationLimitSpinBox->setRange(0.1, 86400.0);
+    durationLimitSpinBox->setSingleStep(1.0);
+    durationLimitSpinBox->setDecimals(1);
+    durationLimitSpinBox->setValue(60.0);
+    durationLimitSpinBox->setEnabled(false);
+
+    crossFadeSpinBox = new QDoubleSpinBox(this);
+    crossFadeSpinBox->setRange(0.0, 10.0);
+    crossFadeSpinBox->setSingleStep(0.1);
+    crossFadeSpinBox->setDecimals(2);
+    crossFadeSpinBox->setValue(0.5);
+
+    fullscreenCheckBox = new QCheckBox("Fullscreen", this);
+
+    enable3dCheckBox = new QCheckBox("Enable 3D", this);
+    enable3dCheckBox->setChecked(false);
+
+    modelFileLineEdit = new QLineEdit(this);
+    modelFileLineEdit->setText("data/cube.mxmod.z");
+    modelFileLineEdit->setReadOnly(true);
+    modelFileLineEdit->setEnabled(false);
+    browseModelButton = new QPushButton("Model", this);
+    browseModelButton->setEnabled(false);
+
+    textureCacheCheckBox = new QCheckBox("Texture Cache", this);
+    textureCacheCheckBox->setEnabled(false);
     cacheDelaySpinBox = new QSpinBox(this);
     cacheDelaySpinBox->setRange(1, 8);
     cacheDelaySpinBox->setValue(1);
     cacheDelaySpinBox->setEnabled(false);
-    textureCacheCheckBox->setEnabled(false);
+
+    okButton     = new QPushButton("OK", this);
+    cancelButton = new QPushButton("Cancel", this);
+
+    // ── Input Source group ────────────────────────────────────────────
+    auto *sourceGroup  = new QGroupBox("Input Source", this);
+    auto *sourceGrid   = new QGridLayout(sourceGroup);
+    sourceGrid->setVerticalSpacing(6);
+    sourceGrid->setColumnStretch(1, 1);
+    int r = 0;
+    sourceGrid->addWidget(cameraOptionRadioButton,       r, 0, 1, 2);
+    sourceGrid->addWidget(inputVideoOptionRadioButton,   ++r, 0, 1, 2);
+    sourceGrid->addWidget(graphicsFileOptionRadioButton, ++r, 0, 1, 2);
+    sourceGrid->addWidget(new QLabel("Camera:", this),   ++r, 0);
+    sourceGrid->addWidget(cameraIndexComboBox,              r, 1);
+    sourceGrid->addWidget(new QLabel("Resolution:", this), ++r, 0);
+    sourceGrid->addWidget(cameraResolutionComboBox,         r, 1);
+    sourceGrid->addWidget(new QLabel("FPS:", this),      ++r, 0);
+    sourceGrid->addWidget(cameraFPSComboBox,               r, 1);
+    sourceGrid->addWidget(useYuvCheckBox,                ++r, 0, 1, 2);
+    sourceGrid->addWidget(new QLabel("Input Video:", this), ++r, 0);
+    auto *inputRow = new QHBoxLayout;
+    inputRow->setSpacing(4);
+    inputRow->addWidget(inputVideoFileLineEdit);
+    inputRow->addWidget(browseInputVideoButton);
+    sourceGrid->addLayout(inputRow, r, 1);
+    sourceGrid->addWidget(new QLabel("Graphics:", this), ++r, 0);
+    auto *graphicsRow = new QHBoxLayout;
+    graphicsRow->setSpacing(4);
+    graphicsRow->addWidget(graphicsFileLineEdit);
+    graphicsRow->addWidget(browseGraphicsButton);
+    sourceGrid->addLayout(graphicsRow, r, 1);
+
+    // ── Output group ──────────────────────────────────────────────────
+    auto *outputGroup = new QGroupBox("Output", this);
+    auto *outputGrid  = new QGridLayout(outputGroup);
+    outputGrid->setVerticalSpacing(6);
+    outputGrid->setColumnStretch(1, 1);
+    r = 0;
+    outputGrid->addWidget(new QLabel("Screen Resolution:", this), r, 0);
+    outputGrid->addWidget(screenResolutionComboBox,                r, 1);
+    outputGrid->addWidget(saveOutputVideoCheckBox,               ++r, 0, 1, 2);
+    outputGrid->addWidget(new QLabel("Output File:", this),      ++r, 0);
+    auto *outputRow = new QHBoxLayout;
+    outputRow->setSpacing(4);
+    outputRow->addWidget(outputVideoFileLineEdit);
+    outputRow->addWidget(browseOutputVideoButton);
+    outputGrid->addLayout(outputRow, r, 1);
+    outputGrid->addWidget(new QLabel("Save Quality:", this),         ++r, 0);
+    outputGrid->addWidget(saveFileKbpsSpinBox,                      r, 1);
+    outputGrid->addWidget(copyAudioCheckBox,                      ++r, 0, 1, 2);
+
+    // ── Playback group ────────────────────────────────────────────────
+    auto *playbackGroup = new QGroupBox("Playback", this);
+    auto *playbackGrid  = new QGridLayout(playbackGroup);
+    playbackGrid->setVerticalSpacing(6);
+    playbackGrid->setColumnStretch(1, 1);
+    r = 0;
+    playbackGrid->addWidget(cudaDeviceLabel,                       r, 0);
+    playbackGrid->addWidget(cudaDeviceComboBox,                    r, 1);
+    playbackGrid->addWidget(new QLabel("Time Speed:", this),     ++r, 0);
+    playbackGrid->addWidget(timeSpeedSpinBox,                       r, 1);
+    playbackGrid->addWidget(new QLabel("Crossfade (sec):", this), ++r, 0);
+    playbackGrid->addWidget(crossFadeSpinBox,                       r, 1);
+    auto *durationRow = new QHBoxLayout;
+    durationRow->addWidget(durationLimitCheckBox);
+    durationRow->addWidget(durationLimitSpinBox);
+    playbackGrid->addLayout(durationRow,                          ++r, 0, 1, 2);
+    auto *cacheRow = new QHBoxLayout;
+    cacheRow->addWidget(textureCacheCheckBox);
+    cacheRow->addWidget(new QLabel("Delay:", this));
+    cacheRow->addWidget(cacheDelaySpinBox);
+    cacheRow->addStretch();
+    playbackGrid->addLayout(cacheRow,                             ++r, 0, 1, 2);
+
+    // ── Display & 3D group ────────────────────────────────────────────
+    auto *displayGroup = new QGroupBox("Display & 3D", this);
+    auto *displayGrid  = new QGridLayout(displayGroup);
+    displayGrid->setVerticalSpacing(6);
+    displayGrid->setColumnStretch(1, 1);
+    r = 0;
+    displayGrid->addWidget(fullscreenCheckBox,                     r, 0);
+    displayGrid->addWidget(enable3dCheckBox,                       r, 1);
+    displayGrid->addWidget(new QLabel("3D Model:", this),        ++r, 0);
+    auto *modelRow = new QHBoxLayout;
+    modelRow->setSpacing(4);
+    modelRow->addWidget(modelFileLineEdit);
+    modelRow->addWidget(browseModelButton);
+    displayGrid->addLayout(modelRow,                               r, 1);
+
+    // ── Assemble two-column layout ────────────────────────────────────
+    auto *leftCol = new QVBoxLayout;
+    leftCol->addWidget(sourceGroup);
+    leftCol->addStretch();
+
+    auto *rightCol = new QVBoxLayout;
+    rightCol->addWidget(outputGroup);
+    rightCol->addWidget(playbackGroup);
+    rightCol->addWidget(displayGroup);
+    rightCol->addStretch();
+
+    auto *columnsLayout = new QHBoxLayout;
+    columnsLayout->setSpacing(12);
+    columnsLayout->addLayout(leftCol, 1);
+    columnsLayout->addLayout(rightCol, 1);
+
+    auto *buttonLayout = new QHBoxLayout;
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(okButton);
+    buttonLayout->addWidget(cancelButton);
+
+    auto *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
+    mainLayout->setSpacing(8);
+    mainLayout->addLayout(columnsLayout);
+    mainLayout->addLayout(buttonLayout);
+    setLayout(mainLayout);
+    setWindowTitle("Settings");
+
+    // ── Signals ───────────────────────────────────────────────────────
+    connect(cameraIndexComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SettingsWindow::onCameraDeviceChanged);
+    connect(cameraResolutionComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SettingsWindow::onCameraResolutionChanged);
 
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheDelaySpinBox, &QSpinBox::setEnabled);
+    connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
+
+    connect(enable3dCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        modelFileLineEdit->setEnabled(checked);
+        browseModelButton->setEnabled(checked);
+        if (!checked)
+            modelFileLineEdit->clear();
+    });
 
     connect(cameraOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
         if (checked) {
@@ -242,6 +360,10 @@ void SettingsWindow::init() {
             useYuvCheckBox->setEnabled(false);
             useYuvCheckBox->setChecked(false);
         }
+        bool enableAudio = checked && saveOutputVideoCheckBox->isChecked();
+        copyAudioCheckBox->setEnabled(enableAudio);
+        if (!enableAudio)
+            copyAudioCheckBox->setChecked(false);
     });
 
     connect(graphicsFileOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
@@ -267,132 +389,20 @@ void SettingsWindow::init() {
         outputVideoFileLineEdit->setEnabled(checked);
         browseOutputVideoButton->setEnabled(checked);
         saveFileKbpsSpinBox->setEnabled(checked);
-    });
-
-    QHBoxLayout *textureCacheLayout = new QHBoxLayout;
-    textureCacheLayout->addWidget(textureCacheCheckBox);
-    textureCacheLayout->addWidget(cacheDelaySpinBox);
-    QHBoxLayout *fullScreenLayout = new QHBoxLayout;
-    fullscreenCheckBox = new QCheckBox("Fullscreen", this);
-    fullScreenLayout->addWidget(fullscreenCheckBox);
-    QHBoxLayout *buttonLayout = new QHBoxLayout;
-    okButton = new QPushButton("OK", this);
-    cancelButton = new QPushButton("Cancel", this);
-    buttonLayout->addWidget(okButton);
-    buttonLayout->addWidget(cancelButton);
-
-    mainLayout->addWidget(cameraIndexLabel);
-    mainLayout->addWidget(cameraIndexComboBox);
-    mainLayout->addWidget(cameraResolutionLabel);
-    mainLayout->addWidget(cameraResolutionComboBox);
-    mainLayout->addWidget(cameraFPSLabel);
-    mainLayout->addWidget(cameraFPSComboBox);
-    mainLayout->addWidget(useYuvCheckBox);
-    mainLayout->addLayout(inputVideoFileLayout);
-    mainLayout->addLayout(graphicsFileLayout);
-    mainLayout->addWidget(saveOutputVideoCheckBox);
-    copyAudioCheckBox = new QCheckBox("Copy Audio Track", this);
-    mainLayout->addWidget(copyAudioCheckBox);
-    copyAudioCheckBox->setChecked(false);
-
-    connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
-        bool enableAudio = checked && saveOutputVideoCheckBox->isChecked();
-        copyAudioCheckBox->setEnabled(enableAudio);
-        if (!enableAudio) {
-            copyAudioCheckBox->setChecked(false);
-        }
-    });
-    connect(saveOutputVideoCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         bool enableAudio = checked && inputVideoOptionRadioButton->isChecked();
         copyAudioCheckBox->setEnabled(enableAudio);
-        if (!enableAudio) {
+        if (!enableAudio)
             copyAudioCheckBox->setChecked(false);
-        }
     });
 
-    QHBoxLayout *enable3d_layout = new QHBoxLayout;
-    enable3dCheckBox = new QCheckBox("Enable 3D", this);
-    enable3dCheckBox->setChecked(false);
-    enable3d_layout->addWidget(enable3dCheckBox);
-
-    QHBoxLayout *modelFileLayout = new QHBoxLayout;
-    modelFileLineEdit = new QLineEdit(this);
-    modelFileLineEdit->setText("data/cube.mxmod.z");
-    modelFileLineEdit->setReadOnly(true);
-    modelFileLineEdit->setEnabled(false);
-    browseModelButton = new QPushButton("Model", this);
-    browseModelButton->setEnabled(false);
-    modelFileLayout->addWidget(modelFileLineEdit);
-    modelFileLayout->addWidget(browseModelButton);
-
-    connect(enable3dCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
-        modelFileLineEdit->setEnabled(checked);
-        browseModelButton->setEnabled(checked);
-        if (!checked) {
-            modelFileLineEdit->clear();
-        }
-    });
-
-    mainLayout->addLayout(outputVideoFileLayout);
-    mainLayout->addWidget(saveFileKbpsLabel);
-    mainLayout->addWidget(saveFileKbpsSpinBox);
-    mainLayout->addWidget(screenResolutionLabel);
-    mainLayout->addWidget(screenResolutionComboBox);
-    copyAudioCheckBox->setEnabled(false);
-    mainLayout->addLayout(textureCacheLayout);
-    mainLayout->addLayout(fullScreenLayout);
-    mainLayout->addLayout(enable3d_layout);
-    mainLayout->addLayout(modelFileLayout);
-    mainLayout->addWidget(cudaDeviceLabel);
-    mainLayout->addWidget(cudaDeviceComboBox);
-
-    QHBoxLayout *timeSpeedLayout = new QHBoxLayout;
-    QLabel *timeSpeedLabel = new QLabel("Time Speed:", this);
-    timeSpeedSpinBox = new QDoubleSpinBox(this);
-    timeSpeedSpinBox->setRange(0.0, 100.0);
-    timeSpeedSpinBox->setSingleStep(0.1);
-    timeSpeedSpinBox->setDecimals(2);
-    timeSpeedSpinBox->setValue(1.0);
-    timeSpeedLayout->addWidget(timeSpeedLabel);
-    timeSpeedLayout->addWidget(timeSpeedSpinBox);
-    mainLayout->addLayout(timeSpeedLayout);
-
-    QHBoxLayout *durationLayout = new QHBoxLayout;
-    durationLimitCheckBox = new QCheckBox("Max Duration (seconds):", this);
-    durationLimitSpinBox = new QDoubleSpinBox(this);
-    durationLimitSpinBox->setRange(0.1, 86400.0);
-    durationLimitSpinBox->setSingleStep(1.0);
-    durationLimitSpinBox->setDecimals(1);
-    durationLimitSpinBox->setValue(60.0);
-    durationLimitSpinBox->setEnabled(false);
-    connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
-    durationLayout->addWidget(durationLimitCheckBox);
-    durationLayout->addWidget(durationLimitSpinBox);
-    mainLayout->addLayout(durationLayout);
-
-    QHBoxLayout *crossFadeLayout = new QHBoxLayout;
-    QLabel *crossFadeLabel = new QLabel("Crossfade Duration (seconds):", this);
-    crossFadeSpinBox = new QDoubleSpinBox(this);
-    crossFadeSpinBox->setRange(0.0, 10.0);
-    crossFadeSpinBox->setSingleStep(0.1);
-    crossFadeSpinBox->setDecimals(2);
-    crossFadeSpinBox->setValue(0.5);
-    crossFadeLayout->addWidget(crossFadeLabel);
-    crossFadeLayout->addWidget(crossFadeSpinBox);
-    mainLayout->addLayout(crossFadeLayout);
-
-    mainLayout->addLayout(buttonLayout);
-
-    setLayout(mainLayout);
-    setWindowTitle("Settings");
-
-    connect(okButton, &QPushButton::clicked, this, &SettingsWindow::acceptSettings);
-    connect(cancelButton, &QPushButton::clicked, this, &SettingsWindow::rejectSettings);
+    connect(okButton,               &QPushButton::clicked, this, &SettingsWindow::acceptSettings);
+    connect(cancelButton,           &QPushButton::clicked, this, &SettingsWindow::rejectSettings);
     connect(browseInputVideoButton, &QPushButton::clicked, this, &SettingsWindow::browseInputVideoFile);
-    connect(browseOutputVideoButton, &QPushButton::clicked, this, &SettingsWindow::browseOutputVideoFile);
-    connect(browseGraphicsButton, &QPushButton::clicked, this, &SettingsWindow::browseGraphicsFile);
-    connect(browseModelButton, &QPushButton::clicked, this, &SettingsWindow::browseModelFile);
+    connect(browseOutputVideoButton,&QPushButton::clicked, this, &SettingsWindow::browseOutputVideoFile);
+    connect(browseGraphicsButton,   &QPushButton::clicked, this, &SettingsWindow::browseGraphicsFile);
+    connect(browseModelButton,      &QPushButton::clicked, this, &SettingsWindow::browseModelFile);
 
+    // ── Initial enabled states ────────────────────────────────────────
     inputVideoFileLineEdit->setEnabled(false);
     browseInputVideoButton->setEnabled(false);
     graphicsFileLineEdit->setEnabled(false);

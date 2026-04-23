@@ -11,6 +11,7 @@
 #include <QDialog>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -20,6 +21,7 @@
 #include <QSet>
 #include <QSpinBox>
 #include <QVBoxLayout>
+
 
 /**
  * @brief Dialog that collects camera, input source, output, and runtime options.
