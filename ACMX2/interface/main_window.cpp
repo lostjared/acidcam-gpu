@@ -165,18 +165,6 @@ void MainWindow::initControls() {
     });
     playbackMenu->addAction(runFromCacheAction);
 
-#ifdef Q_OS_MAC
-    // The shader binary cache is unsupported on macOS, force-disable
-    // both the on-demand rebuild action and the persistent cache
-    // toggle so the user cannot enable them from the UI.
-    use_shader_cache = false;
-    buildCacheAction->setEnabled(false);
-    buildCacheAction->setToolTip(tr("Shader cache is not supported on macOS"));
-    runFromCacheAction->setChecked(false);
-    runFromCacheAction->setEnabled(false);
-    runFromCacheAction->setToolTip(tr("Shader cache is not supported on macOS"));
-#endif
-
     playbackMenu->addSeparator();
     midiSettingsAction = new QAction(tr("MIDI Settings..."), this);
     connect(midiSettingsAction, &QAction::triggered, this, &MainWindow::menuMidiSettings);
