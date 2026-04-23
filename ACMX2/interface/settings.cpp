@@ -195,7 +195,8 @@ void SettingsWindow::init() {
         "2560x1920", "1920x2560",
         "3440x1440", "1440x3440",
         "3840x1600", "1600x3840",
-        "3840x2160", "2160x3840"};
+        "3840x2160", "2160x3840",
+        "7680x4320", "4320x7680"};
     screenResolutionComboBox->addItems(screenResolutions);
     screenResolutionComboBox->setCurrentIndex(0);
 
