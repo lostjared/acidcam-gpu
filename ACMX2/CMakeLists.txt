@@ -198,11 +198,18 @@ check_cxx_source_compiles("
 if(NOT HAVE_THREADING)
     message(FATAL_ERROR "Threading support not available. Please ensure your compiler supports std::thread and std::mutex.")
 endif()
-find_package(OpenGL REQUIRED COMPONENTS OpenGL)
+find_package(OpenGL REQUIRED)
 if(NOT OpenGL_FOUND)
     message(FATAL_ERROR "OpenGL not found. Please install OpenGL development libraries.")
 endif()
-message(STATUS "OpenGL found: ${OPENGL_opengl_LIBRARY}")
+if(TARGET OpenGL::GL)
+    set(ACMX2_OPENGL_TARGET OpenGL::GL)
+elseif(TARGET OpenGL::OpenGL)
+    set(ACMX2_OPENGL_TARGET OpenGL::OpenGL)
+else()
+    message(FATAL_ERROR "No usable OpenGL imported target found (expected OpenGL::GL or OpenGL::OpenGL).")
+endif()
+message(STATUS "OpenGL target selected: ${ACMX2_OPENGL_TARGET}")
 message(STATUS "")
 message(STATUS "=== ACMX2 Configuration Summary ===")
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
@@ -272,7 +279,7 @@ target_link_libraries(acmx2 PRIVATE
     ${AUDIO_LIBS}
     ${MIDI_LIBS}
     ${ACMX2_MXWRITE_TARGET}
-    OpenGL::OpenGL
+    ${ACMX2_OPENGL_TARGET}
     Threads::Threads
     PkgConfig::FFMPEG
     ${FFMPEG_LIBRARIES}
