@@ -57,14 +57,33 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>Video recording</b> with optional audio muxing via FFmpeg
 - <b>Up to 8K recording support</b> — 4K and below records as H.264; above 4K records as HEVC (H.265)
 - <b>Hardware-first H.264 encoding</b> — prefers <tt>h264_nvenc</tt> via MXWrite and falls back to software H.264 automatically
+- <b>Configurable recording quality</b> — preset, tune, CRF, codec mode, and realtime low-latency flags are available in both CLI and Qt session settings
 - <b>Pipeline mode reporting</b> — startup log prints active decode/encode modes for validation and benchmarking
 - <b>Silent mode</b> — headless video processing without a window
 - <b>Shader cache</b> — precompile shader binaries for fast startup
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
+- <b>Persistent Qt session dialogs</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened, with fresh defaults of <tt>1280x720</tt> camera capture and <tt>Default</tt> display resolution
 - <b>MIDI Map Tool</b> — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 - <b>Crossfade transitions</b> — smooth linear blend between old and new frames when switching playlist shaders, with configurable duration
 - <b>Camera device enumeration</b> — query V4L2 devices for supported resolutions and frame rates via <tt>--enumerate-device</tt>; the Qt Settings dialog dynamically populates resolution and FPS dropdowns from the selected camera
 - <b>Distrobox export</b> — script to export applications to the host desktop with icons and `.desktop` files
+
+@section ui_notes Qt Interface Session Behavior
+
+The Qt launcher persists the visible state of the main <b>Settings</b>, <b>Audio Settings</b>,
+<b>GPU Filter Settings</b>, and <b>MIDI Settings</b> dialogs through <tt>QSettings</tt>.
+Closing and reopening these dialogs restores the most recent values so iterative setup does not
+reset back to factory choices each time the window is rebuilt.
+
+On a fresh configuration where no saved values exist yet, the session dialog starts with camera
+capture resolution set to <tt>1280x720</tt> and display/output resolution set to <tt>Default</tt>.
+When saved device-backed selections exist, the interface restores them by stored values when
+possible instead of relying only on combo-box position.
+
+The main session dialog also exposes an <b>Encoding Quality</b> group with controls for encoder
+preset, tune, CRF, codec mode (<tt>auto</tt>, <tt>software</tt>, or <tt>nvenc</tt>), and a realtime
+low-latency toggle. These values are persisted across launches and translated directly into the
+matching command-line encode options.
 
 @section install Installation & Prerequisites
 
@@ -328,6 +347,11 @@ appears in the dock while the application is running.
 | `-n`  | `--fullscreen` |             | Fullscreen window (Escape to quit) |
 | `-m`  | `--cuda-device`| `<index>`   | CUDA device index |
 |       | `--duration`   | `<seconds>` | Recording duration limit (float) |
+|       | `--encode-preset` | `<name>`  | Encoder preset: <tt>ultrafast</tt>..<tt>veryslow</tt> |
+|       | `--encode-tune`   | `<name>`  | Encoder tune: <tt>none</tt>, <tt>film</tt>, <tt>animation</tt>, <tt>grain</tt>, <tt>stillimage</tt>, <tt>psnr</tt>, <tt>ssim</tt>, <tt>fastdecode</tt>, <tt>zerolatency</tt> |
+|       | `--encode-crf`    | `<0-51>`  | Encoder CRF quality override (default: 18) |
+|       | `--encode-codec`  | `<mode>`  | Encoder codec mode: <tt>auto</tt>, <tt>software</tt>, or <tt>nvenc</tt> |
+|       | `--encode-realtime` |         | Enable low-latency realtime encoding flags |
 
 @subsection cli_shader Shader Options
 | Short | Long             | Value       | Description |
@@ -593,7 +617,7 @@ Called every frame of the main loop, this function performs the full GPU pipelin
 
 When recording is enabled, processed frames are passed to the <b>MXWrite</b> library which wraps FFmpeg encoding. MXWrite accepts raw frame data and handles container muxing, codec selection, and file writing. This keeps encoding off the critical path  the CUDA filter loop is not blocked by disk I/O.
 
-For H.264 output, MXWrite prefers <tt>h264_nvenc</tt> and automatically falls back to software H.264 if hardware encoding is unavailable. During startup, ACMX2 logs a unified pipeline status line showing the active decode mode (for example <tt>ffmpeg-cuda</tt>, <tt>ffmpeg-software</tt>, or <tt>opencv-ffmpeg</tt>) and encode mode (hardware or software).
+For H.264 output, MXWrite prefers <tt>h264_nvenc</tt> and automatically falls back to software H.264 if hardware encoding is unavailable. The encoder can now also be steered explicitly through preset, tune, CRF, codec mode, and realtime low-latency flags supplied either on the command line or through the Qt session dialog. During startup, ACMX2 logs a unified pipeline status line showing the active decode mode (for example <tt>ffmpeg-cuda</tt>, <tt>ffmpeg-software</tt>, or <tt>opencv-ffmpeg</tt>) and encode mode (hardware or software).
 
 When <tt>--record-audio</tt> is used, the recorded WAV is muxed into the output MP4 at shutdown and then deleted after a successful mux, leaving only the final output video.
 

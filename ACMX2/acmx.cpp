@@ -3272,6 +3272,8 @@ struct MXArguments {
     double duration = 0.0;
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
+    // User-configurable encoder quality (see EncodeOptions in mxwrite.hpp).
+    EncodeOptions encode_opts{};
 };
 
 /**
@@ -3846,6 +3848,7 @@ class ACView : public gl::GLObject {
      */
     ACView(const MXArguments &args)
         : crf{args.crf},
+          encode_opts{args.encode_opts},
           prefix_path{args.prefix_path},
           filename{args.filename},
           ofilename{args.ofilename},
@@ -4423,9 +4426,13 @@ class ACView : public gl::GLObject {
             glViewport(0, 0, win->w, win->h);
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
             if (!ofilename.empty()) {
-                if (writer.open(ofilename, w, h, fps, crf.c_str())) {
+                if (writer.open(ofilename, w, h, fps, encode_opts)) {
                     mx::system_out << "acmx2: Opened: " << ofilename
-                                   << " for writing at: CRF: " << crf
+                                   << " for writing at: CRF: " << encode_opts.crf
+                                   << " preset: " << encode_opts.preset
+                                   << " tune: " << (encode_opts.tune.empty() ? "none" : encode_opts.tune)
+                                   << " codec: " << encode_opts.codec
+                                   << (encode_opts.realtime ? " [realtime]" : "")
                                    << " FPS: " << fps << "\n";
 #ifdef AUDIO_ENABLED
                     startAudioRecordingIfNeeded();
@@ -4488,9 +4495,16 @@ class ACView : public gl::GLObject {
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
             if (!ofilename.empty()) {
-                if (writer.open_ts(ofilename, w, h, fps, crf.c_str())) {
+                // Camera capture path — force realtime semantics to avoid
+                // encoder stalls on live input regardless of user preset.
+                EncodeOptions cam_opts = encode_opts;
+                cam_opts.realtime = true;
+                if (writer.open_ts(ofilename, w, h, fps, cam_opts)) {
                     mx::system_out << "acmx2: Opened: " << ofilename
-                                   << " for writing at: CRF: " << crf
+                                   << " for writing at: CRF: " << cam_opts.crf
+                                   << " preset: " << cam_opts.preset
+                                   << " codec: " << cam_opts.codec
+                                   << " [realtime]"
                                    << " FPS: " << fps << "\n";
 #ifdef AUDIO_ENABLED
                     startAudioRecordingIfNeeded();
@@ -4573,9 +4587,14 @@ class ACView : public gl::GLObject {
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
             if (!ofilename.empty()) {
-                if (writer.open(ofilename, w, h, fps, crf.c_str())) {
+                if (writer.open(ofilename, w, h, fps, encode_opts)) {
                     mx::system_out << "acmx2: Opened: " << ofilename
-                                   << " for writing at: CRF: " << crf << "\n";
+                                   << " for writing at: CRF: " << encode_opts.crf
+                                   << " preset: " << encode_opts.preset
+                                   << " tune: " << (encode_opts.tune.empty() ? "none" : encode_opts.tune)
+                                   << " codec: " << encode_opts.codec
+                                   << (encode_opts.realtime ? " [realtime]" : "")
+                                   << "\n";
 #ifdef AUDIO_ENABLED
                     startAudioRecordingIfNeeded();
 #endif
@@ -6087,6 +6106,7 @@ class ACView : public gl::GLObject {
     unsigned int frame_counter = 0;
     unsigned int written_frame_counter = 0;
     std::string crf = "23";
+    EncodeOptions encode_opts{};
     std::string prefix_path;
     std::string filename, ofilename, graphic;
     int camera_index = 0;
@@ -7064,6 +7084,11 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
         .addOptionDouble(414, "use-yuv", "Use YUV (YUYV) camera format instead of MJPG")
+        .addOptionDoubleValue(600, "encode-preset", "Encoder preset: ultrafast,superfast,veryfast,faster,fast,medium,slow,slower,veryslow (default: medium)")
+        .addOptionDoubleValue(601, "encode-tune", "Encoder tune: none,film,animation,grain,stillimage,psnr,ssim,fastdecode,zerolatency (default: none)")
+        .addOptionDoubleValue(602, "encode-crf", "Encoder CRF quality 0 (best) .. 51 (worst), default 18")
+        .addOptionDoubleValue(603, "encode-codec", "Encoder codec: auto,software,nvenc (default: auto)")
+        .addOptionDouble(604, "encode-realtime", "Enable low-latency realtime encoding flags")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -7189,6 +7214,12 @@ int main(int argc, char **argv) {
             case 'b':
             case 'B':
                 args.crf = arg.arg_value;
+                try {
+                    int v = std::stoi(arg.arg_value);
+                    if (v < 0) v = 0;
+                    if (v > 51) v = 51;
+                    args.encode_opts.crf = v;
+                } catch (...) {}
                 break;
             case 'u':
             case 'U':
@@ -7452,6 +7483,31 @@ int main(int argc, char **argv) {
             case 414:
                 args.use_yuv = true;
                 mx::system_out << "acmx2: Using YUV (YUYV) camera format\n";
+                break;
+            case 600:
+                args.encode_opts.preset = arg.arg_value;
+                mx::system_out << "acmx2: Encoder preset: " << args.encode_opts.preset << "\n";
+                break;
+            case 601:
+                args.encode_opts.tune = (arg.arg_value == "none") ? std::string{} : arg.arg_value;
+                mx::system_out << "acmx2: Encoder tune: " << (args.encode_opts.tune.empty() ? "none" : args.encode_opts.tune) << "\n";
+                break;
+            case 602: {
+                int v = atoi(arg.arg_value.c_str());
+                if (v < 0) v = 0;
+                if (v > 51) v = 51;
+                args.encode_opts.crf = v;
+                args.crf = std::to_string(v);
+                mx::system_out << "acmx2: Encoder CRF: " << v << "\n";
+                break;
+            }
+            case 603:
+                args.encode_opts.codec = arg.arg_value;
+                mx::system_out << "acmx2: Encoder codec: " << args.encode_opts.codec << "\n";
+                break;
+            case 604:
+                args.encode_opts.realtime = true;
+                mx::system_out << "acmx2: Encoder realtime mode enabled\n";
                 break;
 #ifdef MIDI_ENABLED
             case 500:

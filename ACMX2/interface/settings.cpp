@@ -17,8 +17,8 @@
 SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
     : QDialog(parent),
       selectedCameraIndex(0),
-      selectedCameraResolution(640, 480),
-      selectedScreenResolution(1280, 720),
+    selectedCameraResolution(1280, 720),
+    selectedScreenResolution(0, 0),
       cameraFPS(30),
       saveFileKbps(23),
       inputVideoFile(""),
@@ -196,6 +196,35 @@ void SettingsWindow::init() {
     okButton     = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
 
+    // ── Encoding quality widgets ──────────────────────────────────────
+    QSettings encSettings("LostSideDead", "acmx2");
+    encodePresetComboBox = new QComboBox(this);
+    encodePresetComboBox->addItems({
+        "ultrafast","superfast","veryfast","faster","fast",
+        "medium","slow","slower","veryslow"
+    });
+    encodePresetComboBox->setCurrentText(encSettings.value("recording/preset", "medium").toString());
+
+    encodeTuneComboBox = new QComboBox(this);
+    encodeTuneComboBox->addItems({
+        "none","film","animation","grain","stillimage",
+        "psnr","ssim","fastdecode","zerolatency"
+    });
+    encodeTuneComboBox->setCurrentText(encSettings.value("recording/tune", "none").toString());
+
+    encodeCrfSpinBox = new QSpinBox(this);
+    encodeCrfSpinBox->setRange(0, 51);
+    encodeCrfSpinBox->setValue(encSettings.value("recording/crf", 18).toInt());
+    encodeCrfSpinBox->setToolTip("Constant Rate Factor: 0 = lossless, 18 = visually lossless, 23 = default, 28 = small file");
+
+    encodeCodecComboBox = new QComboBox(this);
+    encodeCodecComboBox->addItems({"auto", "software", "nvenc"});
+    encodeCodecComboBox->setCurrentText(encSettings.value("recording/codec", "auto").toString());
+
+    encodeRealtimeCheckBox = new QCheckBox("Realtime (low-latency)", this);
+    encodeRealtimeCheckBox->setChecked(encSettings.value("recording/realtime", false).toBool());
+    encodeRealtimeCheckBox->setToolTip("Enable low-latency encoding. Required for live camera capture.");
+
     // ── Input Source group ────────────────────────────────────────────
     auto *sourceGroup  = new QGroupBox("Input Source", this);
     auto *sourceGrid   = new QGridLayout(sourceGroup);
@@ -244,6 +273,22 @@ void SettingsWindow::init() {
     outputGrid->addWidget(saveFileKbpsSpinBox,                      r, 1);
     outputGrid->addWidget(copyAudioCheckBox,                      ++r, 0, 1, 2);
 
+    // ── Encoding group ────────────────────────────────────────────────
+    auto *encodingGroup = new QGroupBox("Encoding Quality", this);
+    auto *encodingGrid  = new QGridLayout(encodingGroup);
+    encodingGrid->setVerticalSpacing(6);
+    encodingGrid->setColumnStretch(1, 1);
+    r = 0;
+    encodingGrid->addWidget(new QLabel("Preset:", this),      r, 0);
+    encodingGrid->addWidget(encodePresetComboBox,             r, 1);
+    encodingGrid->addWidget(new QLabel("Tune:", this),      ++r, 0);
+    encodingGrid->addWidget(encodeTuneComboBox,               r, 1);
+    encodingGrid->addWidget(new QLabel("CRF (quality):", this), ++r, 0);
+    encodingGrid->addWidget(encodeCrfSpinBox,                 r, 1);
+    encodingGrid->addWidget(new QLabel("Codec:", this),     ++r, 0);
+    encodingGrid->addWidget(encodeCodecComboBox,              r, 1);
+    encodingGrid->addWidget(encodeRealtimeCheckBox,         ++r, 0, 1, 2);
+
     // ── Playback group ────────────────────────────────────────────────
     auto *playbackGroup = new QGroupBox("Playback", this);
     auto *playbackGrid  = new QGridLayout(playbackGroup);
@@ -289,6 +334,7 @@ void SettingsWindow::init() {
 
     auto *rightCol = new QVBoxLayout;
     rightCol->addWidget(outputGroup);
+    rightCol->addWidget(encodingGroup);
     rightCol->addWidget(playbackGroup);
     rightCol->addWidget(displayGroup);
     rightCol->addStretch();
@@ -410,6 +456,111 @@ void SettingsWindow::init() {
     outputVideoFileLineEdit->setEnabled(false);
     browseOutputVideoButton->setEnabled(false);
     saveFileKbpsSpinBox->setEnabled(false);
+
+    loadUiState();
+}
+
+void SettingsWindow::loadUiState() {
+    QSettings appSettings("LostSideDead", "acmx2");
+
+    QString inputMode = appSettings.value("interface/input_mode", "camera").toString();
+    if (inputMode == "video") {
+        inputVideoOptionRadioButton->setChecked(true);
+    } else if (inputMode == "graphic") {
+        graphicsFileOptionRadioButton->setChecked(true);
+    } else {
+        cameraOptionRadioButton->setChecked(true);
+    }
+
+    int cameraDevice = appSettings.value("interface/camera_device", 0).toInt();
+    int camIdx = cameraIndexComboBox->findData(cameraDevice);
+    if (camIdx >= 0) {
+        cameraIndexComboBox->setCurrentIndex(camIdx);
+    }
+
+    QString cameraRes = appSettings.value("interface/camera_resolution", "1280x720").toString();
+    int camResIdx = cameraResolutionComboBox->findText(cameraRes);
+    if (camResIdx >= 0) {
+        cameraResolutionComboBox->setCurrentIndex(camResIdx);
+    }
+
+    QString cameraFps = appSettings.value("interface/camera_fps", "30").toString();
+    int camFpsIdx = cameraFPSComboBox->findText(cameraFps);
+    if (camFpsIdx >= 0) {
+        cameraFPSComboBox->setCurrentIndex(camFpsIdx);
+    }
+
+    QString screenRes = appSettings.value("interface/screen_resolution", "Default").toString();
+    int screenResIdx = screenResolutionComboBox->findText(screenRes);
+    if (screenResIdx >= 0) {
+        screenResolutionComboBox->setCurrentIndex(screenResIdx);
+    }
+
+    inputVideoFileLineEdit->setText(appSettings.value("interface/input_video", "").toString());
+    graphicsFileLineEdit->setText(appSettings.value("interface/graphics_file", "").toString());
+
+    saveOutputVideoCheckBox->setChecked(appSettings.value("interface/save_output", false).toBool());
+    outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
+    saveFileKbpsSpinBox->setValue(appSettings.value("interface/output_quality", 23).toInt());
+    copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
+
+    fullscreenCheckBox->setChecked(appSettings.value("interface/fullscreen", false).toBool());
+    enable3dCheckBox->setChecked(appSettings.value("interface/enable_3d", false).toBool());
+    modelFileLineEdit->setText(appSettings.value("interface/model_file", "data/cube.mxmod.z").toString());
+
+    textureCacheCheckBox->setChecked(appSettings.value("interface/texture_cache", false).toBool());
+    cacheDelaySpinBox->setValue(appSettings.value("interface/cache_delay", 1).toInt());
+    useYuvCheckBox->setChecked(appSettings.value("interface/use_yuv", false).toBool());
+
+    int cudaDevice = appSettings.value("interface/cuda_device", 0).toInt();
+    int cudaIdx = cudaDeviceComboBox->findData(cudaDevice);
+    if (cudaIdx >= 0) {
+        cudaDeviceComboBox->setCurrentIndex(cudaIdx);
+    }
+
+    timeSpeedSpinBox->setValue(appSettings.value("interface/time_speed", 1.0).toDouble());
+    durationLimitCheckBox->setChecked(appSettings.value("interface/duration_enabled", false).toBool());
+    durationLimitSpinBox->setValue(appSettings.value("interface/duration_seconds", 60.0).toDouble());
+    crossFadeSpinBox->setValue(appSettings.value("interface/crossfade", 0.5).toDouble());
+}
+
+void SettingsWindow::saveUiState() {
+    QSettings appSettings("LostSideDead", "acmx2");
+
+    QString inputMode = "camera";
+    if (inputVideoOptionRadioButton->isChecked()) {
+        inputMode = "video";
+    } else if (graphicsFileOptionRadioButton->isChecked()) {
+        inputMode = "graphic";
+    }
+    appSettings.setValue("interface/input_mode", inputMode);
+
+    appSettings.setValue("interface/camera_device", cameraIndexComboBox->currentData().toInt());
+    appSettings.setValue("interface/camera_resolution", cameraResolutionComboBox->currentText());
+    appSettings.setValue("interface/camera_fps", cameraFPSComboBox->currentText());
+    appSettings.setValue("interface/screen_resolution", screenResolutionComboBox->currentText());
+
+    appSettings.setValue("interface/input_video", inputVideoFileLineEdit->text());
+    appSettings.setValue("interface/graphics_file", graphicsFileLineEdit->text());
+
+    appSettings.setValue("interface/save_output", saveOutputVideoCheckBox->isChecked());
+    appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
+    appSettings.setValue("interface/output_quality", saveFileKbpsSpinBox->value());
+    appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
+
+    appSettings.setValue("interface/fullscreen", fullscreenCheckBox->isChecked());
+    appSettings.setValue("interface/enable_3d", enable3dCheckBox->isChecked());
+    appSettings.setValue("interface/model_file", modelFileLineEdit->text());
+
+    appSettings.setValue("interface/texture_cache", textureCacheCheckBox->isChecked());
+    appSettings.setValue("interface/cache_delay", cacheDelaySpinBox->value());
+    appSettings.setValue("interface/use_yuv", useYuvCheckBox->isChecked());
+
+    appSettings.setValue("interface/cuda_device", cudaDeviceComboBox->currentData().toInt());
+    appSettings.setValue("interface/time_speed", timeSpeedSpinBox->value());
+    appSettings.setValue("interface/duration_enabled", durationLimitCheckBox->isChecked());
+    appSettings.setValue("interface/duration_seconds", durationLimitSpinBox->value());
+    appSettings.setValue("interface/crossfade", crossFadeSpinBox->value());
 }
 
 bool SettingsWindow::is3dEnabled() const {
@@ -518,6 +669,28 @@ float SettingsWindow::getCrossFadeDuration() const {
     return static_cast<float>(crossFadeSpinBox->value());
 }
 
+QString SettingsWindow::getEncodePreset() const {
+    return encodePresetComboBox ? encodePresetComboBox->currentText() : QString("medium");
+}
+
+QString SettingsWindow::getEncodeTune() const {
+    if (!encodeTuneComboBox) return QString();
+    QString t = encodeTuneComboBox->currentText();
+    return (t == "none") ? QString() : t;
+}
+
+int SettingsWindow::getEncodeCrf() const {
+    return encodeCrfSpinBox ? encodeCrfSpinBox->value() : 18;
+}
+
+QString SettingsWindow::getEncodeCodec() const {
+    return encodeCodecComboBox ? encodeCodecComboBox->currentText() : QString("auto");
+}
+
+bool SettingsWindow::isEncodeRealtime() const {
+    return encodeRealtimeCheckBox && encodeRealtimeCheckBox->isChecked();
+}
+
 QString SettingsWindow::getCameraName(int device_index) {
     QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(device_index);
     QFile file(sysfs_path);
@@ -582,10 +755,21 @@ void SettingsWindow::acceptSettings() {
 
     selectedCudaDevice = cudaDeviceComboBox->currentData().toInt();
 
+    saveUiState();
+
+    // Persist encoding quality settings for next session.
+    QSettings encSettings("LostSideDead", "acmx2");
+    if (encodePresetComboBox)   encSettings.setValue("recording/preset",   encodePresetComboBox->currentText());
+    if (encodeTuneComboBox)     encSettings.setValue("recording/tune",     encodeTuneComboBox->currentText());
+    if (encodeCrfSpinBox)       encSettings.setValue("recording/crf",      encodeCrfSpinBox->value());
+    if (encodeCodecComboBox)    encSettings.setValue("recording/codec",    encodeCodecComboBox->currentText());
+    if (encodeRealtimeCheckBox) encSettings.setValue("recording/realtime", encodeRealtimeCheckBox->isChecked());
+
     accept();
 }
 
 void SettingsWindow::rejectSettings() {
+    saveUiState();
     reject();
 }
 

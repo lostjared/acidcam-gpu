@@ -248,14 +248,66 @@ void Writer::calculateFPSFraction(float fps, int &fps_num, int &fps_den) {
     }
 }
 
+namespace {
+
+// Map an x264-style preset name to an NVENC preset (p1..p7).
+// p1 = fastest/lowest quality, p7 = slowest/highest quality.
+const char *x264_preset_to_nvenc(const std::string &p) {
+    if (p == "ultrafast") return "p1";
+    if (p == "superfast") return "p2";
+    if (p == "veryfast" || p == "faster") return "p3";
+    if (p == "fast") return "p4";
+    if (p == "medium" || p.empty()) return "p5";
+    if (p == "slow" || p == "slower") return "p6";
+    if (p == "veryslow") return "p7";
+    // Allow passing NVENC preset names through directly.
+    return p.c_str();
+}
+
+bool is_valid_x264_preset(const std::string &p) {
+    static const char *presets[] = {
+        "ultrafast","superfast","veryfast","faster","fast",
+        "medium","slow","slower","veryslow","placebo"
+    };
+    for (const char *n : presets) if (p == n) return true;
+    return false;
+}
+
+} // namespace
+
 bool Writer::open(const std::string &filename, int w, int h, float fps, const char *crf) {
     std::lock_guard<std::mutex> lock(writer_mutex);
-    return openInternal(filename, w, h, fps, crf, false);
+    EncodeOptions opts;
+    if (crf && *crf) {
+        try { opts.crf = std::stoi(crf); } catch (...) {}
+    }
+    // Preserve legacy low-latency behaviour for old callers.
+    opts.preset = "ultrafast";
+    opts.tune = "zerolatency";
+    opts.realtime = true;
+    return openInternal(filename, w, h, fps, opts, false);
+}
+
+bool Writer::open(const std::string &filename, int w, int h, float fps, const EncodeOptions &opts) {
+    std::lock_guard<std::mutex> lock(writer_mutex);
+    return openInternal(filename, w, h, fps, opts, false);
 }
 
 bool Writer::open_ts(const std::string &filename, int w, int h, float fps, const char *crf) {
     std::lock_guard<std::mutex> lock(writer_mutex);
-    return openInternal(filename, w, h, fps, crf, true);
+    EncodeOptions opts;
+    if (crf && *crf) {
+        try { opts.crf = std::stoi(crf); } catch (...) {}
+    }
+    opts.preset = "ultrafast";
+    opts.tune = "zerolatency";
+    opts.realtime = true;
+    return openInternal(filename, w, h, fps, opts, true);
+}
+
+bool Writer::open_ts(const std::string &filename, int w, int h, float fps, const EncodeOptions &opts) {
+    std::lock_guard<std::mutex> lock(writer_mutex);
+    return openInternal(filename, w, h, fps, opts, true);
 }
 
 bool Writer::initHardwareEncoding() {
@@ -299,7 +351,7 @@ bool Writer::initHardwareEncoding() {
     return true;
 }
 
-bool Writer::openInternal(const std::string &filename, int w, int h, float fps, const char *crf, bool ts_mode) {
+bool Writer::openInternal(const std::string &filename, int w, int h, float fps, const EncodeOptions &opts, bool ts_mode) {
     avformat_network_init();
     av_log_set_level(AV_LOG_ERROR);
     opened = false;
@@ -324,17 +376,42 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
     const char *hw_codec_name = is_high_res ? "hevc_nvenc" : "h264_nvenc";
     const AVCodecID sw_codec_id = is_high_res ? AV_CODEC_ID_HEVC : AV_CODEC_ID_H264;
 
-    const AVCodec *codec = avcodec_find_encoder_by_name(hw_codec_name);
-    bool wants_hw = (codec != nullptr);
-    if (!codec) {
+    // Codec selection based on user preference.
+    const AVCodec *codec = nullptr;
+    bool wants_hw = false;
+    const std::string &codec_pref = opts.codec;
+    if (codec_pref == "software" || codec_pref == "x264" || codec_pref == "cpu") {
         codec = avcodec_find_encoder(sw_codec_id);
+        wants_hw = false;
+    } else {
+        // "auto" or "nvenc" or anything else => try NVENC first.
+        codec = avcodec_find_encoder_by_name(hw_codec_name);
+        wants_hw = (codec != nullptr);
+        if (!codec) {
+            if (codec_pref == "nvenc") {
+                std::cerr << "MXWrite: NVENC requested but " << hw_codec_name
+                          << " not available; falling back to software.\n";
+            }
+            codec = avcodec_find_encoder(sw_codec_id);
+        }
     }
+
     if (!codec) {
         std::cerr << "Could not find " << (is_high_res ? "H.265" : "H.264") << " encoder.\n";
         avformat_free_context(format_ctx);
         format_ctx = nullptr;
         return false;
     }
+
+    // Validate / sanitise preset and CRF.
+    std::string preset = opts.preset.empty() ? std::string("medium") : opts.preset;
+    if (!is_valid_x264_preset(preset)) {
+        // Accept unknown names; forward as-is. If empty, medium.
+    }
+    int crf_val = opts.crf;
+    if (crf_val < 0) crf_val = 0;
+    if (crf_val > 51) crf_val = 51;
+    const std::string crf_str = std::to_string(crf_val);
 
     stream = avformat_new_stream(format_ctx, codec);
     if (!stream) {
@@ -369,18 +446,21 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
     codec_ctx->slices = 4;
     codec_ctx->delay = 0;
 
-    if (ts_mode) {
+    if (ts_mode || opts.realtime) {
         codec_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
     }
 
     if (wants_hw) {
-        av_opt_set(codec_ctx->priv_data, "preset", "p4", 0);
-        av_opt_set(codec_ctx->priv_data, "tune", "ll", 0);
+        const char *nv_preset = x264_preset_to_nvenc(preset);
+        av_opt_set(codec_ctx->priv_data, "preset", nv_preset, 0);
+        // NVENC "tune": hq (high quality), ll (low latency), ull (ultra low latency), lossless.
+        const char *nv_tune = opts.realtime ? "ll" : "hq";
+        av_opt_set(codec_ctx->priv_data, "tune", nv_tune, 0);
         av_opt_set(codec_ctx->priv_data, "rc", "vbr", 0);
-        if (crf && *crf) {
-            av_opt_set(codec_ctx->priv_data, "cq", crf, 0);
+        av_opt_set(codec_ctx->priv_data, "cq", crf_str.c_str(), 0);
+        if (opts.realtime) {
+            av_opt_set(codec_ctx->priv_data, "zerolatency", "1", 0);
         }
-        av_opt_set(codec_ctx->priv_data, "zerolatency", "1", 0);
         if (is_high_res) {
             av_opt_set(codec_ctx->priv_data, "tier", "high", 0);
         }
@@ -422,18 +502,26 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
             codec_ctx->slices = 4;
             codec_ctx->delay = 0;
 
-            if (ts_mode) {
+            if (ts_mode || opts.realtime) {
                 codec_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
             }
         }
     }
 
     if (!use_hw_encode) {
-        av_opt_set(codec_ctx->priv_data, "preset", "ultrafast", 0);
-        av_opt_set(codec_ctx->priv_data, "tune", "zerolatency", 0);
-        av_opt_set(codec_ctx->priv_data, "crf", crf, 0);
-        av_opt_set(codec_ctx->priv_data, "x264-params", "bframes=0:ref=1:me=dia:subme=0", 0);
-        av_opt_set(codec_ctx->priv_data, "force_cfr", "1", 0);
+        av_opt_set(codec_ctx->priv_data, "preset", preset.c_str(), 0);
+        // Apply tune: realtime forces zerolatency; otherwise honour user value.
+        std::string tune = opts.realtime ? std::string("zerolatency") : opts.tune;
+        if (!tune.empty() && tune != "none") {
+            av_opt_set(codec_ctx->priv_data, "tune", tune.c_str(), 0);
+        }
+        av_opt_set(codec_ctx->priv_data, "crf", crf_str.c_str(), 0);
+        if (opts.realtime) {
+            // Legacy low-latency parameters kept for realtime path to avoid
+            // pipeline stalls during live capture.
+            av_opt_set(codec_ctx->priv_data, "x264-params", "bframes=0:ref=1:me=dia:subme=0", 0);
+            av_opt_set(codec_ctx->priv_data, "force_cfr", "1", 0);
+        }
     }
 
     time_base = tb;

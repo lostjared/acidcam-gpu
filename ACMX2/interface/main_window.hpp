@@ -148,6 +148,11 @@ class MainWindow : public QMainWindow {
     QString output_file;
     int output_kbps = 10000;
     double output_fps = 24.0f;
+    QString encode_preset = "medium";
+    QString encode_tune;        // empty => "none"
+    int encode_crf = 18;
+    QString encode_codec = "auto";
+    bool encode_realtime = false;
     /// @brief Join list items into a comma-separated argument string.
     /// @param lst Input list of values.
     /// @return Concatenated string for command-line usage.

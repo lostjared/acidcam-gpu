@@ -73,19 +73,17 @@ MidiSettings::MidiSettings(const QString &executablePath, QWidget *parent)
     buttonLayout->addWidget(cancelButton);
     mainLayout->addLayout(buttonLayout);
 
-    connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
-    connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
-
-    // Load saved settings
-    configFileEdit->setText(appSettings.value("midiConfigFile", "").toString());
-    enableCheckBox->setChecked(appSettings.value("midiEnabled", false).toBool());
+    connect(okButton, &QPushButton::clicked, this, [this]() {
+        saveUiState();
+        accept();
+    });
+    connect(cancelButton, &QPushButton::clicked, this, [this]() {
+        saveUiState();
+        reject();
+    });
 
     populateMidiDevices();
-
-    int savedDevice = appSettings.value("midiDevice", 0).toInt();
-    if (savedDevice >= 0 && savedDevice < deviceComboBox->count()) {
-        deviceComboBox->setCurrentIndex(savedDevice);
-    }
+    loadUiState();
 }
 
 bool MidiSettings::isMidiEnabled() const {
@@ -99,7 +97,26 @@ QString MidiSettings::getMidiConfigFile() const {
 int MidiSettings::getMidiDeviceIndex() const {
     if (deviceComboBox->count() == 0)
         return -1;
-    return deviceComboBox->currentIndex();
+    return deviceComboBox->currentData().toInt();
+}
+
+void MidiSettings::loadUiState() {
+    QSettings appSettings("LostSideDead", "acmx2");
+    configFileEdit->setText(appSettings.value("midiConfigFile", "").toString());
+    enableCheckBox->setChecked(appSettings.value("midiEnabled", false).toBool());
+
+    int savedDevice = appSettings.value("midiDevice", -1).toInt();
+    int idx = deviceComboBox->findData(savedDevice);
+    if (idx >= 0) {
+        deviceComboBox->setCurrentIndex(idx);
+    }
+}
+
+void MidiSettings::saveUiState() {
+    QSettings appSettings("LostSideDead", "acmx2");
+    appSettings.setValue("midiEnabled", enableCheckBox->isChecked());
+    appSettings.setValue("midiConfigFile", configFileEdit->text());
+    appSettings.setValue("midiDevice", getMidiDeviceIndex());
 }
 
 void MidiSettings::browseConfigFile() {
@@ -132,7 +149,7 @@ void MidiSettings::populateMidiDevices() {
     QProcess proc;
     proc.start(execPath, {"--list-midi"});
     if (!proc.waitForFinished(5000)) {
-        deviceComboBox->addItem("(could not query devices)");
+        deviceComboBox->addItem("(could not query devices)", -1);
         return;
     }
 
@@ -150,12 +167,13 @@ void MidiSettings::populateMidiDevices() {
         if (match.hasMatch()) {
             QString idx = match.captured(1);
             QString name = match.captured(2).trimmed();
-            deviceComboBox->addItem(QString("%1: %2").arg(idx, name));
+            int deviceIndex = idx.toInt();
+            deviceComboBox->addItem(QString("%1: %2").arg(idx, name), deviceIndex);
             found = true;
         }
     }
 
     if (!found) {
-        deviceComboBox->addItem("No MIDI devices found");
+        deviceComboBox->addItem("No MIDI devices found", -1);
     }
 }

@@ -39,6 +39,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 * **Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
 * **FFmpeg CUDA Decode Path:** Prefer direct FFmpeg/CUDA hardware decode for video files, with automatic software/OpenCV fallback.
 * **Hardware-First Encoding:** Prefer `h264_nvenc` when available, with automatic software H.264 fallback.
+* **Encoding Quality Controls:** Preset, tune, CRF, codec mode, and realtime low-latency flags are available for recording.
 * **Visual User Interface** Simple to use User interface
 * **Command line tool** Command line tool
 
@@ -128,6 +129,11 @@ sudo bash build-script/install-deps-arch.sh
 | `-n` / `-N` | `--fullscreen` | | Fullscreen window (Escape to quit) |
 | `-m` | `--cuda-device` | `<index>` | CUDA device index |
 | | `--duration` | `<seconds>` | Recording duration limit in seconds (float); stop recording and exit after elapsed |
+| | `--encode-preset` | `<name>` | Encoder preset: `ultrafast`..`veryslow` |
+| | `--encode-tune` | `<name>` | Encoder tune: `none`, `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, `zerolatency` |
+| | `--encode-crf` | `<0-51>` | Encoder CRF quality override (default: `18`) |
+| | `--encode-codec` | `<mode>` | Encoder codec mode: `auto`, `software`, or `nvenc` |
+| | `--encode-realtime` | | Enable low-latency realtime encoding flags |
 
 ### Shader Options
 
@@ -263,6 +269,28 @@ ACMX2 now supports smooth crossfade transitions when switching shaders during pl
 - **How it works:** When the active shader changes (via playlist navigation or keyboard controls), the previous frame is captured and linearly blended with the new shader output over the configured duration using a dedicated GLSL crossfade shader.
 - **Qt Interface:** The **Settings** dialog includes a "Crossfade Duration" spin box (0.0–10.0 seconds, step 0.1).
 - **Implementation:** A separate FBO and shader program (`crossfade.glsl`) perform the blend. The `fade_alpha` uniform ramps from 0 to 1 over the configured duration, mixing the previous and current textures via `mix(prev, curr, fade_alpha)`.
+
+### Encoding Quality Controls
+
+Recording now exposes more detailed encoder controls in both the command line and Qt launcher.
+
+- **Command line options:**
+  - `--encode-preset <name>` — preset from `ultrafast` through `veryslow`
+  - `--encode-tune <name>` — tune from `none`, `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, or `zerolatency`
+  - `--encode-crf <0-51>` — explicit CRF quality control (default: `18`)
+  - `--encode-codec <auto|software|nvenc>` — choose automatic selection, software encode, or NVENC explicitly
+  - `--encode-realtime` — enable low-latency realtime encoding flags for live capture
+- **Qt Interface:** The **Settings** dialog now includes an **Encoding Quality** group with preset, tune, CRF, codec, and realtime controls.
+- **Persistence:** Encoding selections are stored and restored for later sessions.
+
+### Qt Interface Session Persistence
+
+The ACMX2 Qt interface now restores the last-used values when key dialogs are closed and reopened.
+
+- **Persistent dialogs:** **Settings**, **Audio Settings**, **GPU Filter Settings**, and **MIDI Settings** now save their visible state through `QSettings`.
+- **Reopen workflow:** Closing a dialog with either **OK** or **Cancel** preserves the current values so you can reopen it and continue adjusting from where you left off.
+- **Startup defaults:** When no saved preference exists yet, the **Settings** dialog now defaults the camera capture resolution to `1280x720` and the display/output resolution to `Default`.
+- **Device-aware restore:** Camera, CUDA, audio, and MIDI selectors restore by stored values where possible, which keeps the selected device stable even if combo-box ordering changes.
 
 ### MIDI Controller Support
 

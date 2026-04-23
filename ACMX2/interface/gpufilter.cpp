@@ -13,6 +13,7 @@ GPUFilterDialog::GPUFilterDialog(const QString &executablePath, QWidget *parent)
     setMinimumSize(500, 500);
     setupUI();
     loadFiltersFromExecutable();
+    loadUiState();
 }
 
 void GPUFilterDialog::setupUI() {
@@ -98,8 +99,14 @@ void GPUFilterDialog::setupUI() {
     connect(clearButton, &QPushButton::clicked, this, &GPUFilterDialog::clearAll);
     connect(saveButton, &QPushButton::clicked, this, &GPUFilterDialog::saveFilterList);
     connect(loadButton, &QPushButton::clicked, this, &GPUFilterDialog::loadFilterList);
-    connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
-    connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+    connect(okButton, &QPushButton::clicked, this, [this]() {
+        saveUiState();
+        accept();
+    });
+    connect(cancelButton, &QPushButton::clicked, this, [this]() {
+        saveUiState();
+        reject();
+    });
     connect(searchLineEdit, &QLineEdit::textChanged, this, &GPUFilterDialog::filterSearchChanged);
     connect(enableCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         filterComboBox->setEnabled(checked);
@@ -143,6 +150,36 @@ void GPUFilterDialog::setupUI() {
     if (appSettings.value("useCustomStyle", false).toBool()) {
         setStyleSheet(style);
     }
+}
+
+void GPUFilterDialog::loadUiState() {
+    QSettings appSettings("LostSideDead", "acmx2");
+
+    enableCheckBox->setChecked(appSettings.value("gpu_filter/enabled", false).toBool());
+    bufferSizeSpinBox->setValue(appSettings.value("gpu_filter/buffer", 8).toInt());
+    searchLineEdit->setText(appSettings.value("gpu_filter/search", "").toString());
+
+    const QStringList savedNames = appSettings.value("gpu_filter/selected_names").toStringList();
+    selectedFiltersList->clear();
+    for (const QString &name : savedNames) {
+        if (filterNameToIndex.contains(name)) {
+            selectedFiltersList->addItem(name);
+        }
+    }
+}
+
+void GPUFilterDialog::saveUiState() {
+    QSettings appSettings("LostSideDead", "acmx2");
+
+    appSettings.setValue("gpu_filter/enabled", enableCheckBox->isChecked());
+    appSettings.setValue("gpu_filter/buffer", bufferSizeSpinBox->value());
+    appSettings.setValue("gpu_filter/search", searchLineEdit->text());
+
+    QStringList selectedNames;
+    for (int i = 0; i < selectedFiltersList->count(); ++i) {
+        selectedNames.append(selectedFiltersList->item(i)->text());
+    }
+    appSettings.setValue("gpu_filter/selected_names", selectedNames);
 }
 
 void GPUFilterDialog::loadFiltersFromExecutable() {

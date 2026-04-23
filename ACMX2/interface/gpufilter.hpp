@@ -55,6 +55,8 @@ class GPUFilterDialog : public QDialog {
   private:
     void loadFiltersFromExecutable();
     void setupUI();
+    void loadUiState();
+    void saveUiState();
 
     QString execPath;
     QCheckBox *enableCheckBox;

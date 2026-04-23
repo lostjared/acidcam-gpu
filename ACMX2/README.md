@@ -35,10 +35,22 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU f
 - **MIDI control** — map hardware knobs and buttons to shader parameters
 - **Video recording** with optional audio muxing via FFmpeg
 - **Up to 8K recording support** — 4K and below records as H.264; above 4K records as HEVC (H.265)
+- **Recording quality controls** — preset, tune, CRF, codec mode, and realtime low-latency encoding are exposed in both CLI and Qt interface
 - **Silent mode** — headless video processing without a window
 - **Shader cache** — precompile shader binaries for fast startup
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
 - **MIDI Map Tool** — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
+
+## Qt Interface Notes
+
+Recent Qt interface updates focus on session usability and repeatability:
+
+- The **Settings**, **Audio Settings**, **GPU Filter Settings**, and **MIDI Settings** dialogs now restore the last values you used when reopened.
+- Dialog state is stored with `QSettings`, so the same values are also available again on the next launch.
+- If no saved settings exist yet, the **Settings** dialog starts with camera capture resolution set to `1280x720` and screen/output resolution set to `Default`.
+- Camera capability enumeration still dynamically fills the resolution/FPS lists, and the restored/default value is applied when available.
+- The **Settings** dialog also includes an **Encoding Quality** section for preset, tune, CRF, codec selection (`auto` / `software` / `nvenc`), and realtime low-latency encoding.
+- Encoding controls map directly to the CLI flags `--encode-preset`, `--encode-tune`, `--encode-crf`, `--encode-codec`, and `--encode-realtime`.
 
 ---
 
@@ -249,6 +261,11 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | `-n` / `-N` | `--fullscreen` | | Fullscreen window (Escape to quit) |
 | `-m` | `--cuda-device` | `<index>` | CUDA device index |
 | | `--duration` | `<seconds>` | Recording duration limit in seconds (float); stop recording and exit after elapsed |
+| | `--encode-preset` | `<name>` | Encoder preset: `ultrafast`..`veryslow` |
+| | `--encode-tune` | `<name>` | Encoder tune: `none`, `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, `zerolatency` |
+| | `--encode-crf` | `<0-51>` | Encoder CRF quality override (default: `18`) |
+| | `--encode-codec` | `<mode>` | Encoder codec mode: `auto`, `software`, or `nvenc` |
+| | `--encode-realtime` | | Enable low-latency realtime encoding flags |
 
 ### Shader Options
 

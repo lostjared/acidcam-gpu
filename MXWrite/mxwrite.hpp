@@ -22,14 +22,39 @@ struct Frame_Data {
     std::chrono::steady_clock::time_point capture_time;
 };
 
+/**
+ * @brief User-configurable video encoder quality options.
+ *
+ * preset: x264 preset name — ultrafast, superfast, veryfast, faster, fast,
+ *         medium, slow, slower, veryslow. Mapped to NVENC p1..p7.
+ * tune:   x264 tune — empty string (none), film, animation, grain, stillimage,
+ *         psnr, ssim, fastdecode, zerolatency.
+ * crf:    Constant Rate Factor, 0 (lossless) .. 51 (worst). 18 is visually
+ *         near-lossless; 23 is default for x264; 28 is typical "small file".
+ *         For NVENC this is forwarded as `cq`.
+ * codec:  "auto" (NVENC if available, else x264), "software" (force x264),
+ *         "nvenc" (force NVENC; falls back to x264 if NVENC unavailable).
+ * realtime: when true, applies low-latency settings (tune=zerolatency for x264,
+ *           tune=ll + zerolatency=1 for NVENC). Overrides tune value.
+ */
+struct EncodeOptions {
+    std::string preset = "medium";
+    std::string tune = "";
+    int crf = 18;
+    std::string codec = "auto";
+    bool realtime = false;
+};
+
 class Writer {
   public:
     Writer() = default;
 
     bool open(const std::string &filename, int width, int height, float fps, const char *crf);
+    bool open(const std::string &filename, int width, int height, float fps, const EncodeOptions &opts);
     void write(void *rgba_buffer);
     bool write_cuda_rgba(void *cuda_rgba_buffer, int src_stride, bool bottom_up = false);
     bool open_ts(const std::string &filename, int width, int height, float fps, const char *crf);
+    bool open_ts(const std::string &filename, int width, int height, float fps, const EncodeOptions &opts);
     void write_ts(void *rgba_buffer);
     void close();
     bool is_open() const { return opened; }
@@ -75,7 +100,7 @@ class Writer {
     std::mutex writer_mutex{};
     bool stop_requested = false;
 
-    bool openInternal(const std::string &filename, int w, int h, float fps, const char *crf, bool ts_mode);
+    bool openInternal(const std::string &filename, int w, int h, float fps, const EncodeOptions &opts, bool ts_mode);
     bool initHardwareEncoding();
     void startEncoderThread();
     void stopEncoderThread();

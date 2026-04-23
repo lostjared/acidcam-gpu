@@ -86,6 +86,17 @@ class SettingsWindow : public QDialog {
     /// @param device_index Camera device index.
     /// @return Human-readable camera name.
     QString getCameraName(int device_index);
+
+    /// @return Selected x264-style encoder preset name (ultrafast..veryslow).
+    QString getEncodePreset() const;
+    /// @return Selected encoder tune (empty for "none").
+    QString getEncodeTune() const;
+    /// @return Selected encoder CRF value (0..51).
+    int getEncodeCrf() const;
+    /// @return Selected encoder codec preference (auto/software/nvenc).
+    QString getEncodeCodec() const;
+    /// @return True if realtime low-latency encoding is enabled.
+    bool isEncodeRealtime() const;
   private slots:
     void acceptSettings();
     void rejectSettings();
@@ -102,6 +113,8 @@ class SettingsWindow : public QDialog {
 
   private:
     void init();
+    void loadUiState();
+    void saveUiState();
     void populateCameraDevices();
     void populateCudaDevices();
     /// @brief Query resolutions and FPS capabilities for one camera device.
@@ -146,6 +159,12 @@ class SettingsWindow : public QDialog {
     QCheckBox *durationLimitCheckBox;
     QDoubleSpinBox *durationLimitSpinBox;
     QDoubleSpinBox *crossFadeSpinBox;
+
+    QComboBox *encodePresetComboBox = nullptr;
+    QComboBox *encodeTuneComboBox = nullptr;
+    QSpinBox *encodeCrfSpinBox = nullptr;
+    QComboBox *encodeCodecComboBox = nullptr;
+    QCheckBox *encodeRealtimeCheckBox = nullptr;
 
     int selectedCameraIndex;
     QSize selectedCameraResolution;

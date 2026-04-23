@@ -50,6 +50,8 @@ class AudioSettings : public QDialog {
 
   private:
     void populateAudioDevices();
+    void loadUiState();
+    void saveUiState();
 
     QCheckBox *audioReactivityCheckBox;
     QCheckBox *audioPassThroughCheckBox;

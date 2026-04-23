@@ -926,6 +926,11 @@ void MainWindow::cameraSettings() {
     duration_limit_enabled = settingsWindow.isDurationLimitEnabled();
     max_duration = settingsWindow.getDurationLimit();
     cross_fade_duration = settingsWindow.getCrossFadeDuration();
+    encode_preset = settingsWindow.getEncodePreset();
+    encode_tune = settingsWindow.getEncodeTune();
+    encode_crf = settingsWindow.getEncodeCrf();
+    encode_codec = settingsWindow.getEncodeCodec();
+    encode_realtime = settingsWindow.isEncodeRealtime();
 }
 
 void MainWindow::runSelected() {
@@ -1009,7 +1014,15 @@ void MainWindow::runSelected() {
 
     if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
-        arguments << "--bitrate" << QString::number(output_kbps);
+        arguments << "--encode-crf" << QString::number(encode_crf);
+        if (!encode_preset.isEmpty())
+            arguments << "--encode-preset" << encode_preset;
+        if (!encode_tune.isEmpty())
+            arguments << "--encode-tune" << encode_tune;
+        if (!encode_codec.isEmpty() && encode_codec != "auto")
+            arguments << "--encode-codec" << encode_codec;
+        if (encode_realtime)
+            arguments << "--encode-realtime";
     }
     if (audio_available && audio_enabled) {
         arguments << "--enable-audio";
@@ -1177,7 +1190,15 @@ void MainWindow::runAll() {
     arguments << "--prefix" << prefix_path;
     if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
-        arguments << "--bitrate" << QString::number(output_kbps);
+        arguments << "--encode-crf" << QString::number(encode_crf);
+        if (!encode_preset.isEmpty())
+            arguments << "--encode-preset" << encode_preset;
+        if (!encode_tune.isEmpty())
+            arguments << "--encode-tune" << encode_tune;
+        if (!encode_codec.isEmpty() && encode_codec != "auto")
+            arguments << "--encode-codec" << encode_codec;
+        if (encode_realtime)
+            arguments << "--encode-realtime";
     }
     arguments << "--shader" << QString::number(index);
 

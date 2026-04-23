@@ -90,8 +90,14 @@ AudioSettings::AudioSettings(QWidget *parent)
         }
     });
 
-    connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
-    connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+    connect(okButton, &QPushButton::clicked, this, [this]() {
+        saveUiState();
+        accept();
+    });
+    connect(cancelButton, &QPushButton::clicked, this, [this]() {
+        saveUiState();
+        reject();
+    });
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(audioReactivityCheckBox);
@@ -138,6 +144,48 @@ AudioSettings::AudioSettings(QWidget *parent)
     mainLayout->addLayout(buttonLayout);
 
     setLayout(mainLayout);
+    loadUiState();
+}
+
+void AudioSettings::loadUiState() {
+    QSettings appSettings("LostSideDead", "acmx2");
+
+    audioReactivityCheckBox->setChecked(appSettings.value("audio/enabled", false).toBool());
+    audioPassThroughCheckBox->setChecked(appSettings.value("audio/passthrough", false).toBool());
+    recordAudioCheckBox->setChecked(appSettings.value("audio/record", false).toBool());
+    recordVolumeSlider->setValue(appSettings.value("audio/record_volume", 100).toInt());
+    channelSpinBox->setValue(appSettings.value("audio/channels", 2).toInt());
+    sensitivitySlider->setValue(appSettings.value("audio/sensitivity", 10).toInt());
+
+    int inputId = appSettings.value("audio/input_device", -1).toInt();
+    int outputId = appSettings.value("audio/output_device", -1).toInt();
+    int inputIdx = inputDeviceComboBox->findData(inputId);
+    int outputIdx = outputDeviceComboBox->findData(outputId);
+    if (inputIdx >= 0) {
+        inputDeviceComboBox->setCurrentIndex(inputIdx);
+    }
+    if (outputIdx >= 0) {
+        outputDeviceComboBox->setCurrentIndex(outputIdx);
+    }
+
+    audioFileCheckBox->setChecked(appSettings.value("audio/file_enabled", false).toBool());
+    audioFileLineEdit->setText(appSettings.value("audio/file_path", "").toString());
+    audioTruncCheckBox->setChecked(appSettings.value("audio/file_trunc", false).toBool());
+}
+
+void AudioSettings::saveUiState() {
+    QSettings appSettings("LostSideDead", "acmx2");
+    appSettings.setValue("audio/enabled", audioReactivityCheckBox->isChecked());
+    appSettings.setValue("audio/passthrough", audioPassThroughCheckBox->isChecked());
+    appSettings.setValue("audio/record", recordAudioCheckBox->isChecked());
+    appSettings.setValue("audio/record_volume", recordVolumeSlider->value());
+    appSettings.setValue("audio/channels", channelSpinBox->value());
+    appSettings.setValue("audio/sensitivity", sensitivitySlider->value());
+    appSettings.setValue("audio/input_device", inputDeviceComboBox->currentData().toInt());
+    appSettings.setValue("audio/output_device", outputDeviceComboBox->currentData().toInt());
+    appSettings.setValue("audio/file_enabled", audioFileCheckBox->isChecked());
+    appSettings.setValue("audio/file_path", audioFileLineEdit->text());
+    appSettings.setValue("audio/file_trunc", audioTruncCheckBox->isChecked());
 }
 
 void AudioSettings::populateAudioDevices() {

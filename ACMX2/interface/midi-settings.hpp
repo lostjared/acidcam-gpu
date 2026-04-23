@@ -37,6 +37,8 @@ class MidiSettings : public QDialog {
 
   private:
     void populateMidiDevices();
+    void loadUiState();
+    void saveUiState();
 
     QCheckBox *enableCheckBox;
     QLineEdit *configFileEdit;
