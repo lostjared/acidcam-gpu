@@ -1,6 +1,11 @@
 #ifndef __MIDI_WINDOW_H__
 #define __MIDI_WINDOW_H__
 
+/**
+ * @file midi_window.hpp
+ * @brief MIDI mapping editor window for action-to-message binding.
+ */
+
 #include <QMainWindow>
 #include <QComboBox>
 #include <QTableWidget>
@@ -15,6 +20,9 @@
 #include <string>
 #include <unordered_map>
 
+/**
+ * @brief Single MIDI action binding entry.
+ */
 struct MidiMapping {
     std::string actionName;
     std::string description;
@@ -26,6 +34,9 @@ struct MidiMapping {
     unsigned char byte2{};
 };
 
+/**
+ * @brief Main window for creating and testing MIDI action mappings.
+ */
 class MidiMapWindow : public QMainWindow {
     Q_OBJECT
 
@@ -34,12 +45,19 @@ public:
     ~MidiMapWindow() override;
 
 private slots:
+    /// @brief Refresh available MIDI input devices.
     void refreshDevices();
+    /// @brief Open selected MIDI input device.
     void openDevice(int index);
+    /// @brief Start capture mode for the currently selected mapping row.
     void captureMapping();
+    /// @brief Clear mapping bytes for the selected row.
     void clearMapping();
+    /// @brief Save mappings to a config file.
     void saveConfig();
+    /// @brief Load mappings from a config file.
     void loadConfig();
+    /// @brief Poll RtMidi input and apply capture logic.
     void pollMidi();
 
 private:

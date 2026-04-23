@@ -1,6 +1,11 @@
 #ifndef __SHADERPASS_HPP__
 #define __SHADERPASS_HPP__
 
+/**
+ * @file shaderpass.hpp
+ * @brief Dialog for configuring ordered multi-pass shader execution.
+ */
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -15,14 +20,21 @@
 #include <QStringList>
 #include <QVBoxLayout>
 
+/**
+ * @brief UI for selecting and ordering shader passes.
+ */
 class ShaderPassDialog : public QDialog {
     Q_OBJECT
   public:
     explicit ShaderPassDialog(const QStringList &shaderNames, QWidget *parent = nullptr);
 
+    /// @brief Return whether shader-pass mode is enabled.
     bool isShaderPassEnabled() const;
+    /// @brief Return selected pass indices corresponding to available shader list.
     QStringList getSelectedShaderIndices() const;
+    /// @brief Build CLI argument payload for selected shader passes.
     QString getShaderPassArgument() const;
+    /// @brief Return selected shader names in execution order.
     QStringList getSelectedShaderNames() const;
 
     // Set the current state

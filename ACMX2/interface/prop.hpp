@@ -1,5 +1,10 @@
 #ifndef PROP_HPP
 #define PROP_HPP
+
+/**
+ * @file prop.hpp
+ * @brief Dialog for selecting executable and resource directories.
+ */
 #include <QDialog>
 #include <QDir>
 #include <QFileDialog>
@@ -11,6 +16,9 @@
 #include <QSettings>
 #include <QVBoxLayout>
 
+/**
+ * @brief Launcher properties dialog for executable/shader/screenshot paths.
+ */
 class PropWindow : public QDialog {
     Q_OBJECT
   public:

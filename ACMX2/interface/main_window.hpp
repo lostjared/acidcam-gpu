@@ -3,6 +3,11 @@
 
 #ifndef __APP_WINDOW_H_
 #define __APP_WINDOW_H_
+
+/**
+ * @file main_window.hpp
+ * @brief Main launcher window for ACMX2 shader selection and execution.
+ */
 #include "editor.hpp"
 #include "gpufilter.hpp"
 #include "midi-settings.hpp"
@@ -22,6 +27,9 @@
 #include <QTextEdit>
 #include <random>
 
+/**
+ * @brief Read-only list model used for shader list display.
+ */
 class ReadOnlyStringListModel : public QStringListModel {
     Q_OBJECT
   public:
@@ -31,16 +39,31 @@ class ReadOnlyStringListModel : public QStringListModel {
     }
 };
 
+/**
+ * @brief Primary ACMX2 desktop UI.
+ *
+ * Manages shader discovery, process launch arguments, and related option dialogs.
+ */
 class MainWindow : public QMainWindow {
     Q_OBJECT
   public:
     MainWindow(QWidget *parent = 0) : QMainWindow(parent) {
         initControls();
     }
+    /// @brief Build menus, actions, widgets, and signal wiring.
     void initControls();
+    /// @brief Append timestamped text to the UI log output.
+    /// @param message Text to append to the launcher log.
     void Log(const QString &message);
+    /// @brief Write raw text to the lower output pane.
+    /// @param message Text block to display.
     void Write(const QString &message);
+    /// @brief Load shader names from index/cache for the provided path.
+    /// @param path Shader directory path to scan.
+    /// @param force When true, bypass index timestamp checks and reload.
+    /// @return true if shader list was loaded successfully.
     bool loadShaders(const QString &path, bool force = false);
+    /// @brief Refresh shader index metadata timestamp.
     void updateIndex();
     QDateTime indexTimestamp;
   public slots:
@@ -49,6 +72,8 @@ class MainWindow : public QMainWindow {
     void runSelected();
     void runAll();
     void cameraSettings();
+    /// @brief Handle shader list selection changes.
+    /// @param i Selected model index.
     void listClicked(const QModelIndex &i);
     void newList();
     void newShader();
@@ -70,6 +95,9 @@ class MainWindow : public QMainWindow {
     void menuMidiSettings();
 
   protected:
+    /// @brief Add shader to list if it is valid and not already present.
+    /// @param shaderName Candidate shader identifier.
+    /// @return true if the shader was added.
     bool addShaderToList(const QString &shaderName);
 
     void closeEvent(QCloseEvent *event) override {
@@ -120,9 +148,18 @@ class MainWindow : public QMainWindow {
     QString output_file;
     int output_kbps = 10000;
     double output_fps = 24.0f;
+    /// @brief Join list items into a comma-separated argument string.
+    /// @param lst Input list of values.
+    /// @return Concatenated string for command-line usage.
     QString concatList(const QStringList lst);
     QVector<QPointer<TextEditor>> open_files;
+    /// @brief Read an entire text file into memory.
+    /// @param filePath Path to source file.
+    /// @return File contents, or empty string on failure.
     QString readFileContents(const QString &filePath);
+    /// @brief Normalize shader names for filesystem/process safety.
+    /// @param name Raw shader name.
+    /// @return Sanitized shader name.
     QString sanitizeShaderName(const QString &name);
     void cleanupClosedEditors();
     bool audio_enabled = false;
@@ -152,9 +189,13 @@ class MainWindow : public QMainWindow {
     QAction *recompileShadersAction;
     QAction *removeBrokenAction;
     QString customStyleSheet;
+    /// @brief Apply or remove the custom stylesheet override.
+    /// @param enable True to apply, false to revert.
     void applyCustomStyleSheet(bool enable);
     bool shader_pass_enabled = false;
     QStringList shader_pass_names;
+    /// @brief Map selected shader-pass names back to numeric indices.
+    /// @return Comma-separated list of indices used by CLI args.
     QString getShaderPassIndicesFromNames();
     int cuda_device = 0;
     float time_speed = 1.0f;

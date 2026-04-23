@@ -1,6 +1,11 @@
 #ifndef __PLAYLIST_HPP__
 #define __PLAYLIST_HPP__
 
+/**
+ * @file playlist.hpp
+ * @brief Dialog for building nested shader playlists.
+ */
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -15,14 +20,21 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+/**
+ * @brief Playlist editor dialog with tree nodes and ordered shader entries.
+ */
 class PlaylistDialog : public QDialog {
     Q_OBJECT
   public:
     explicit PlaylistDialog(const QStringList &shaderNames, QWidget *parent = nullptr);
 
+    /// @brief Return whether playlist mode is enabled.
     bool isPlaylistEnabled() const;
+    /// @brief Return flattened selection of shaders in current playlist.
     QStringList getSelectedShaderNames() const;
+    /// @brief Return tree representation as node-name and shader-list pairs.
     QList<QPair<QString, QStringList>> getPlaylistTree() const;
+    /// @brief Return current playlist file path.
     QString getPlaylistFile() const;
 
     void setEnabled(bool enabled);

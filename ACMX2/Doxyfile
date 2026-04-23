@@ -14,10 +14,20 @@ OUTPUT_DIRECTORY       = docs
 #---------------------------------------------------------------------------
 # Input
 #---------------------------------------------------------------------------
-INPUT                  = acmx.cpp \
-                         mainpage.dox
+INPUT                  = .
 FILE_PATTERNS          = *.cpp *.hpp *.h *.dox
-RECURSIVE              = NO
+RECURSIVE              = YES
+EXCLUDE                = build \
+                         build-nocuda \
+                         docs
+EXCLUDE_PATTERNS       = */CMakeFiles/* \
+                         */build/* \
+                         */*_autogen/* \
+                         */moc_*.cpp \
+                         */qrc_*.cpp \
+                         */mocs_compilation.cpp \
+                         */ui_*.h \
+                         */__pycache__/*
 EXTENSION_MAPPING      = dox=C++
 
 #---------------------------------------------------------------------------
@@ -52,7 +62,7 @@ REFERENCES_RELATION    = YES
 # HTML output — light Delphi/Borland theme
 #---------------------------------------------------------------------------
 GENERATE_HTML          = YES
-HTML_OUTPUT            = html
+HTML_OUTPUT            = versions/2.13.0
 HTML_EXTRA_STYLESHEET  = doxygen-custom.css
 HTML_COLORSTYLE        = LIGHT
 HTML_COLORSTYLE_HUE    = 220

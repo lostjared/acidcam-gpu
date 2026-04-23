@@ -21,6 +21,9 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+/**
+ * @brief Dialog for configuring live and file-based audio reactivity options.
+ */
 class AudioSettings : public QDialog {
     Q_OBJECT
 

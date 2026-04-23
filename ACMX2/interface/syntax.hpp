@@ -1,12 +1,20 @@
 #ifndef __SYNTAX__H_
 #define __SYNTAX__H_
 
+/**
+ * @file syntax.hpp
+ * @brief GLSL syntax highlighter for the embedded text editor.
+ */
+
 #include <QRegularExpression>
 #include <QStringList>
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 #include <QVector>
 
+/**
+ * @brief Rule-based GLSL syntax highlighter.
+ */
 class GlslSyntaxHighlighter : public QSyntaxHighlighter {
     Q_OBJECT
   public:

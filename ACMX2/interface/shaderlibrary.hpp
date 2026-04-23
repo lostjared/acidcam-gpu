@@ -1,6 +1,11 @@
 #ifndef __SHADER_LIB_H__Y
 #define __SHADER_LIB_H__Y
 
+/**
+ * @file shaderlibrary.hpp
+ * @brief Dialog for generating a shader index from a selected folder.
+ */
+
 #include <QCheckBox>
 #include <QDialog>
 #include <QDir>
@@ -13,6 +18,9 @@
 #include <QTextStream>
 #include <QVBoxLayout>
 
+/**
+ * @brief Shader-library utility dialog.
+ */
 class LibraryWindow : public QDialog {
     Q_OBJECT
 
@@ -29,6 +37,7 @@ class LibraryWindow : public QDialog {
     void createShaderIndexFile(const QString &folderPath);
 
   public:
+    /// @brief Return folder chosen for shader-library indexing.
     QString getShaderPath();
 
   private slots:

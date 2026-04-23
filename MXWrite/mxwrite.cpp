@@ -317,13 +317,20 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         return false;
     }
 
-    const AVCodec *codec = avcodec_find_encoder_by_name("h264_nvenc");
+    width = w;
+    height = h;
+
+    const bool is_high_res = (width > 3840 || height > 2160);
+    const char *hw_codec_name = is_high_res ? "hevc_nvenc" : "h264_nvenc";
+    const AVCodecID sw_codec_id = is_high_res ? AV_CODEC_ID_HEVC : AV_CODEC_ID_H264;
+
+    const AVCodec *codec = avcodec_find_encoder_by_name(hw_codec_name);
     bool wants_hw = (codec != nullptr);
     if (!codec) {
-        codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+        codec = avcodec_find_encoder(sw_codec_id);
     }
     if (!codec) {
-        std::cerr << "Could not find H.264 encoder.\n";
+        std::cerr << "Could not find " << (is_high_res ? "H.265" : "H.264") << " encoder.\n";
         avformat_free_context(format_ctx);
         format_ctx = nullptr;
         return false;
@@ -337,8 +344,6 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         return false;
     }
 
-    width = w;
-    height = h;
     calculateFPSFraction(fps, fps_num, fps_den);
 
     AVRational tb = {fps_den, fps_num};
@@ -376,19 +381,22 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
             av_opt_set(codec_ctx->priv_data, "cq", crf, 0);
         }
         av_opt_set(codec_ctx->priv_data, "zerolatency", "1", 0);
+        if (is_high_res) {
+            av_opt_set(codec_ctx->priv_data, "tier", "high", 0);
+        }
 
         if (initHardwareEncoding()) {
             use_hw_encode = true;
-            std::cout << "MXWrite: hardware encoder selected (h264_nvenc)\n";
+            std::cout << "MXWrite: hardware encoder selected (" << hw_codec_name << ")\n";
         } else {
-            std::cerr << "MXWrite: h264_nvenc present but CUDA context failed, falling back to software H.264\n";
+            std::cerr << "MXWrite: " << hw_codec_name << " present but CUDA context failed, falling back to software encoder\n";
             av_buffer_unref(&hw_frames_ctx);
             av_buffer_unref(&hw_device_ctx);
             avcodec_free_context(&codec_ctx);
 
-            codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+            codec = avcodec_find_encoder(sw_codec_id);
             if (!codec) {
-                std::cerr << "Could not find software H.264 encoder fallback.\n";
+                std::cerr << "Could not find software fallback encoder.\n";
                 avformat_free_context(format_ctx);
                 format_ctx = nullptr;
                 return false;

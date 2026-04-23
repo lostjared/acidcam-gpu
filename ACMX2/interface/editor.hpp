@@ -1,6 +1,11 @@
 #ifndef EDITOR_HPP
 #define EDITOR_HPP
 
+/**
+ * @file editor.hpp
+ * @brief Shader text editor widgets with line numbers and GLSL highlighting.
+ */
+
 #include "syntax.hpp"
 #include <QCloseEvent>
 #include <QDialog>
@@ -15,12 +20,17 @@
 
 class LineNumberArea;
 
+/**
+ * @brief Plain-text editor with line numbers and code-editing helpers.
+ */
 class CustomTextEdit : public QPlainTextEdit {
     Q_OBJECT
   public:
     explicit CustomTextEdit(QWidget *parent = nullptr);
 
+    /// @brief Paint callback used by the line-number side widget.
     void lineNumberAreaPaintEvent(QPaintEvent *event);
+    /// @brief Compute width required for current line-number digit count.
     int lineNumberAreaWidth();
     void updateLineNumberAreaWidth(int newBlockCount);
 
@@ -64,12 +74,17 @@ class LineNumberArea : public QWidget {
     CustomTextEdit *m_editor;
 };
 
+/**
+ * @brief Modal shader editor dialog used by ACMX2.
+ */
 class TextEditor : public QDialog {
     Q_OBJECT
 
   public:
     explicit TextEditor(QWidget *parent = nullptr);
+    /// @brief Replace editor contents and reset displayed text.
     void setText(const QString &text);
+    /// @brief Associate editor with a shader file path.
     void setFileName(const QString &filename);
 
   protected:

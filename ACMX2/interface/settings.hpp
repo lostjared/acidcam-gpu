@@ -1,6 +1,11 @@
 #ifndef SETTINGS_HPP
 #define SETTINGS_HPP
 
+/**
+ * @file settings.hpp
+ * @brief Main capture/playback settings dialog for ACMX2 execution.
+ */
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -16,34 +21,68 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+/**
+ * @brief Dialog that collects camera, input source, output, and runtime options.
+ */
 class SettingsWindow : public QDialog {
     Q_OBJECT
   public:
+    /// @brief Construct the settings dialog.
+    /// @param execPath Path to ACMX2 executable used for capability discovery.
+    /// @param parent Parent widget.
     explicit SettingsWindow(const QString &execPath, QWidget *parent = nullptr);
+    /// @brief Show or hide CUDA-specific controls based on availability.
+    /// @param available True when CUDA runtime/device support is available.
     void setCudaAvailable(bool available);
+    /// @return Selected camera device index.
     int getSelectedCameraIndex() const;
+    /// @return Selected input camera resolution.
     QSize getSelectedCameraResolution() const;
+    /// @return Selected output screen resolution.
     QSize getSelectedScreenResolution() const;
+    /// @return Selected camera capture FPS.
     int getCameraFPS() const;
+    /// @return Output video bitrate in kbps.
     int getSaveFileKbps() const;
+    /// @return Input video file path.
     QString getInputVideoFile() const;
+    /// @return Output video file path.
     QString getOutputVideoFile() const;
+    /// @return Graphics/video overlay file path.
     QString getGraphicsFile() const;
+    /// @return True if input-video mode is selected.
     bool isUsingInputVideoFile() const;
+    /// @return True if graphics-file mode is selected.
     bool isUsingGraphicsFile() const;
+    /// @return True if save-to-file is enabled.
     bool isSavingToOutputVideoFile() const;
+    /// @return True if texture cache is enabled.
     bool isTextureCacheEnabled() const;
+    /// @return Frame delay used by texture cache.
     int getCacheDelay() const;
+    /// @return True if fullscreen mode is enabled.
     bool isFullscreen() const;
+    /// @return True if input audio should be copied to output.
     bool isCopyAudioEnabled() const;
+    /// @return True if 3D rendering mode is enabled.
     bool is3dEnabled() const;
+    /// @return True if YUV mode is enabled for selected resolution.
     bool isUseYuvEnabled() const;
+    /// @return Selected 3D model file path.
     QString getModelFile() const;
+    /// @return Selected CUDA device index.
     int getSelectedCudaDevice() const;
+    /// @return Time speed multiplier applied at runtime.
     float getTimeSpeed() const;
+    /// @brief Return whether maximum duration limiting is enabled.
     bool isDurationLimitEnabled() const;
+    /// @brief Return configured max run duration in seconds.
     double getDurationLimit() const;
+    /// @brief Return crossfade duration between shader transitions.
     float getCrossFadeDuration() const;
+    /// @brief Resolve display name for a camera device index.
+    /// @param device_index Camera device index.
+    /// @return Human-readable camera name.
     QString getCameraName(int device_index);
   private slots:
     void acceptSettings();
@@ -52,13 +91,19 @@ class SettingsWindow : public QDialog {
     void browseOutputVideoFile();
     void browseGraphicsFile();
     void browseModelFile();
+    /// @brief React to camera-device combo selection changes.
+    /// @param comboIndex Selected combo-box index.
     void onCameraDeviceChanged(int comboIndex);
+    /// @brief React to camera-resolution selection changes.
+    /// @param comboIndex Selected combo-box index.
     void onCameraResolutionChanged(int comboIndex);
 
   private:
     void init();
     void populateCameraDevices();
     void populateCudaDevices();
+    /// @brief Query resolutions and FPS capabilities for one camera device.
+    /// @param deviceIndex Camera device index to inspect.
     void enumerateDevice(int deviceIndex);
     void populateResolutions();
     void populateFPS();

@@ -9,6 +9,14 @@
 
 [Full Documentation](https://lostsidedead.biz/acmx2/docs/)
 
+To regenerate local docs in a versioned folder and refresh `docs/latest`:
+
+```bash
+./build-docs.sh
+```
+
+This keeps `docs/index.html` as a stable redirect to the newest generated docs.
+
 The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU filters to live camera feeds, video files, or static images in real time. Supports 3D model rendering, audio reactivity, MIDI control, shader playlists, and multipass shader chains.
 
 ---
