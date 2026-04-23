@@ -290,6 +290,7 @@ if(WITH_CUDA)
 endif()
 install(TARGETS acmx2 DESTINATION bin)
 install(TARGETS audio_transfer DESTINATION bin)
-install(FILES acmx2.desktop DESTINATION share/applications)
+# acmx2 is a command-line application; only the Qt interface (acmx2_interface)
+# installs a .desktop file into share/applications.
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/data/win-icon.png DESTINATION share/acmx2 RENAME acmx2.png)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data DESTINATION share/acmx2)
