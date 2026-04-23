@@ -1,6 +1,10 @@
 #include "settings.hpp"
 #include <algorithm>
 #include <QApplication>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMessageBox>
 #include <QProcess>
 #include <QRegularExpression>
@@ -13,6 +17,48 @@
 #include <fcntl.h>
 #include <unistd.h>
 #endif
+
+namespace {
+#ifdef __APPLE__
+QStringList appleCameraNamesFromSystemProfiler() {
+    QProcess process;
+    process.start("/usr/sbin/system_profiler", {"-json", "SPCameraDataType"});
+    if (!process.waitForFinished(8000)) {
+        return {};
+    }
+
+    const QByteArray output = process.readAllStandardOutput();
+    const QJsonDocument document = QJsonDocument::fromJson(output);
+    if (!document.isObject()) {
+        return {};
+    }
+
+    QStringList cameraNames;
+    const QJsonArray cameras = document.object().value("SPCameraDataType").toArray();
+    for (const QJsonValue &cameraValue : cameras) {
+        const QJsonObject cameraObject = cameraValue.toObject();
+        const QString cameraName = cameraObject.value("_name").toString().trimmed();
+        if (!cameraName.isEmpty()) {
+            cameraNames.append(cameraName);
+        }
+    }
+    return cameraNames;
+}
+
+void appendUniqueFps(QList<double> &fpsList, double fps) {
+    if (fps <= 0.0) {
+        return;
+    }
+
+    for (double existing : fpsList) {
+        if (qAbs(existing - fps) < 0.05) {
+            return;
+        }
+    }
+    fpsList.append(fps);
+}
+#endif
+}
 
 SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
     : QDialog(parent),
@@ -37,6 +83,16 @@ SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
 void SettingsWindow::populateCameraDevices() {
     QSet<QString> addedCameras;
 
+#ifdef __APPLE__
+    const QStringList cameraNames = appleCameraNamesFromSystemProfiler();
+    for (int i = 0; i < cameraNames.size(); ++i) {
+        const QString cameraName = cameraNames.at(i).trimmed();
+        if (!cameraName.isEmpty() && !addedCameras.contains(cameraName)) {
+            cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
+            addedCameras.insert(cameraName);
+        }
+    }
+#else
     for (int i = 0; i < 20; ++i) {
         QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(i);
         QFile file(sysfs_path);
@@ -48,6 +104,7 @@ void SettingsWindow::populateCameraDevices() {
             }
         }
     }
+#endif
 
     if (cameraIndexComboBox->count() == 0) {
         cameraIndexComboBox->addItem("No cameras found", -1);
@@ -677,6 +734,21 @@ bool SettingsWindow::isEncodeRealtime() const {
 }
 
 QString SettingsWindow::getCameraName(int device_index) {
+#ifdef __APPLE__
+    for (int i = 0; i < cameraIndexComboBox->count(); ++i) {
+        if (cameraIndexComboBox->itemData(i).toInt() == device_index) {
+            const QString label = cameraIndexComboBox->itemText(i);
+            const int suffixPos = label.lastIndexOf(" [");
+            return suffixPos > 0 ? label.left(suffixPos).trimmed() : label;
+        }
+    }
+
+    const QStringList cameraNames = appleCameraNamesFromSystemProfiler();
+    if (device_index >= 0 && device_index < cameraNames.size()) {
+        return cameraNames.at(device_index);
+    }
+    return "Unknown Camera";
+#else
     QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(device_index);
     QFile file(sysfs_path);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -687,6 +759,7 @@ QString SettingsWindow::getCameraName(int device_index) {
         }
     }
     return "Unknown Camera";
+#endif
 }
 
 void SettingsWindow::acceptSettings() {
@@ -804,6 +877,44 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
     deviceCapabilities.clear();
     yuvResolutions.clear();
 
+#ifdef __APPLE__
+    QProcess process;
+    process.start("ffmpeg", {"-hide_banner", "-f", "avfoundation", "-list_formats", "true", "-i",
+                              QString("%1:none").arg(deviceIndex)});
+    process.waitForFinished(5000);
+
+    const QString output = QString::fromUtf8(process.readAllStandardError()) +
+                           QString::fromUtf8(process.readAllStandardOutput());
+
+    if (output.isEmpty() || process.error() == QProcess::FailedToStart) {
+        populateResolutions();
+        return;
+    }
+
+    const QRegularExpression rangeRegex(R"((\d+x\d+)\s*@\s*\[\s*(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*\]\s*fps)");
+    const QRegularExpression singleRegex(R"((\d+x\d+)\s*@\s*(\d+(?:\.\d+)?)\s*fps)");
+
+    const QStringList lines = output.split('\n');
+    for (const QString &line : lines) {
+        QRegularExpressionMatch rangeMatch = rangeRegex.match(line);
+        if (rangeMatch.hasMatch()) {
+            const QString resolution = rangeMatch.captured(1);
+            const double maxFps = rangeMatch.captured(3).toDouble();
+            appendUniqueFps(deviceCapabilities[resolution], maxFps);
+            continue;
+        }
+
+        QRegularExpressionMatch singleMatch = singleRegex.match(line);
+        if (singleMatch.hasMatch()) {
+            const QString resolution = singleMatch.captured(1);
+            const double fps = singleMatch.captured(2).toDouble();
+            appendUniqueFps(deviceCapabilities[resolution], fps);
+        }
+    }
+
+    populateResolutions();
+    return;
+#else
     QProcess process;
     process.start(executablePath, QStringList() << "--enumerate-device" << QString::number(deviceIndex));
     process.waitForFinished(5000);
@@ -859,6 +970,7 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
     }
 
     populateResolutions();
+#endif
 }
 
 void SettingsWindow::populateResolutions() {
