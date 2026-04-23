@@ -52,11 +52,12 @@ This runs `install-dep.sh` (Homebrew packages) and then `build-macos.sh`
    some cases crashes on). Use the curated macOS pack instead:
 
    ```
-   [macos_link]
+   https://lostsidedead.biz/acmx2/shaders.macos.zip
+   
    ```
 
    Unzip it somewhere and pass the path with `-s` or set it in the
-   GUI's *Settings → Shader Library Path*.
+   GUI's * File → Properties → Shader Directory *.
 
 4. **Run**
 

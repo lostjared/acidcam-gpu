@@ -4,11 +4,12 @@
 #
 # This script builds the full stack in a sibling work directory:
 #
-#     <cwd>/libmx2          (cloned from github.com/lostjared/libmx2)
-#     <cwd>/ACMX2           (cloned from github.com/lostjared/ACMX2)
-#         MXWrite/          (built first, in-tree)
-#         build/            (acmx2 CLI engine)
-#         interface/build/  (Qt6 GUI: acmx2_interface)
+#     <cwd>/libmx2               (cloned from github.com/lostjared/libmx2)
+#     <cwd>/acidcam-gpu/         (cloned from github.com/lostjared/acidcam-gpu)
+#         ACMX2/
+#             MXWrite/           (built first, in-tree)
+#             build/             (acmx2 CLI engine)
+#             interface/build/   (Qt6 GUI: acmx2_interface)
 #
 # CUDA is not available on macOS, so the engine is built with
 # -DWITH_CUDA=OFF. The shader-binary cache is also disabled by default
@@ -56,13 +57,13 @@ fi
     sudo make install
 )
 
-# ---- ACMX2 -------------------------------------------------------------------
-if [ ! -d ACMX2 ]; then
-    echo "==> cloning ACMX2"
-    git clone https://github.com/lostjared/ACMX2.git
+# ---- acidcam-gpu (contains ACMX2) -------------------------------------------
+if [ ! -d acidcam-gpu ]; then
+    echo "==> cloning acidcam-gpu"
+    git clone https://github.com/lostjared/acidcam-gpu.git
 fi
 
-cd ACMX2
+cd acidcam-gpu/ACMX2
 
 # MXWrite ships in-tree; build and install it before acmx2.
 (
@@ -114,7 +115,8 @@ echo "    acmx2            installed to /usr/local/bin/acmx2"
 echo "    acmx2_interface  installed to /usr/local/bin/acmx2_interface"
 echo
 echo "next: download the macOS-compatible shader pack and point the"
-echo "      interface at it (Settings -> Shader Library Path), or run"
+echo "      interface at it (File -> Properties -> Shader Directory), or run"
 echo "      from the command line with: acmx2 -s /path/to/shaders/index.txt"
 echo
-echo "      macOS shader pack: [macos_link]"
+echo "      macOS shader pack: https://lostsidedead.biz/acmx2/shaders.macos.zip"
+

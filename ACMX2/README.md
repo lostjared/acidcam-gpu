@@ -31,6 +31,57 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU f
 
 ## Building
 
+### macOS (Intel & Apple Silicon)
+
+ACMX2 builds and runs on macOS using OpenGL 4.1 backed by Metal. **CUDA is not available on macOS**, so the engine automatically builds with `-DWITH_CUDA=OFF`. Shader-based effects work fully; only the CUDA GPU-filter pipeline is omitted.
+
+The Apple Metal-backed OpenGL 4.1 driver does not support `glProgramBinary`, so **the shader binary cache is disabled by default at runtime** on macOS.
+
+**Quick start** (one command from an empty directory):
+
+```bash
+./macos/install.sh
+```
+
+This installs Homebrew packages, clones `libmx2` and `acidcam-gpu` (which contains `ACMX2`), builds everything, and installs to `/usr/local/bin/`.
+
+**Or step by step:**
+
+1. Install Homebrew packages:
+
+   ```bash
+   ./macos/install-dep.sh
+   ```
+
+   Required: `cmake`, `pkg-config`, `sdl2`, `sdl2_ttf`, `sdl2_mixer`, `sdl2_image`, `glm`, `opencv`, `ffmpeg`, `qt6`
+
+2. Build and install:
+
+   ```bash
+   ./macos/build-macos.sh
+   ```
+
+3. Download the **macOS-compatible shader pack** (the default library contains shaders that crash the Apple GL driver):
+
+   ```
+   https://lostsidedead.biz/acmx2/shaders.macos.zip
+
+   ```
+
+4. Run:
+
+   ```bash
+   acmx2_interface
+   # or from command line:
+   acmx2 -p /usr/local/share/acmx2/data -s /path/to/macos-shaders/index.txt -d 0
+   ```
+
+See [macos/README.md](macos/README.md) for full details, troubleshooting, and CMake flags.
+
+---
+
+### Linux
+
 ACMX2 is part of the acidcam-gpu project. See the [main README](../README.md) for full build instructions.
 
 ```bash

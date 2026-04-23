@@ -67,6 +67,8 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 
 @section install Installation & Prerequisites
 
+@subsection install_linux Prerequisites for Linux (NVIDIA GPU)
+
 This project is developed and tested on <b>Bazzite Linux</b> using <b>Arch Linux</b> containers
 via <b>Distrobox</b>.
 
@@ -103,6 +105,56 @@ sudo bash build-script/install-deps-arch.sh
 
 @section building Building
 
+@subsection build_macos Building on macOS (Intel & Apple Silicon)
+
+ACMX2 builds and runs on macOS using OpenGL 4.1 backed by Metal. <b>CUDA is not
+available on macOS</b>, so the engine automatically builds with
+<tt>-DWITH_CUDA=OFF</tt>. Shader-based effects work fully; only the CUDA
+GPU-filter pipeline is omitted.
+
+The Apple Metal-backed OpenGL 4.1 driver does not support <tt>glProgramBinary</tt>,
+so <b>the shader binary cache is disabled by default at runtime</b> on macOS. The
+Qt6 interface also disables cache-related UI options on Apple builds.
+
+<b>Quick start</b> (one command from an empty directory):
+
+@code{.sh}
+./macos/install.sh
+@endcode
+
+This installs Homebrew packages, clones <tt>libmx2</tt> and the
+<tt>acidcam-gpu</tt> repository (which contains <tt>ACMX2</tt>),
+builds everything, and installs to <tt>/usr/local/bin/</tt>.
+
+<b>Or step by step:</b>
+
+@code{.sh}
+# 1. Install Homebrew packages
+./macos/install-dep.sh
+
+# 2. Build and install
+./macos/build-macos.sh
+
+# 3. Download the macOS-compatible shader pack (default library crashes Apple GL):
+#    https://lostsidedead.biz/acmx2/shaders.macos.zip
+
+# 4. Run
+acmx2_interface
+# or: acmx2 -p /usr/local/share/acmx2/data -s /path/to/shaders/index.txt -d 0
+@endcode
+
+See <tt>macos/README.md</tt> for full details, troubleshooting, and CMake flags.
+
+CMake flags passed automatically:
+
+| Flag | Value | Reason |
+|------|-------|--------|
+| <tt>-DWITH_CUDA</tt> | <tt>OFF</tt> | No CUDA on macOS |
+| <tt>-DCMAKE_PREFIX_PATH</tt> | Homebrew prefix (auto-detected) | Find Qt6 + Homebrew libs on Apple Silicon |
+| <tt>-DCMAKE_INSTALL_RPATH</tt> | <tt>$(brew --prefix)/lib</tt> | Resolve dylibs at runtime |
+
+@subsection build_linux Building on Linux (NVIDIA GPU / CUDA)
+
 @subsection build_libmx2 libmx2 (built from source)
 @code{.sh}
 git clone https://github.com/lostjared/libmx2.git
@@ -113,7 +165,7 @@ make -j$(nproc)
 sudo make install
 @endcode
 
-@subsection build_acmx2 ACMX2
+@subsection build_acmx2_linux ACMX2
 @code{.sh}
 cd ACMX2
 mkdir build && cd build
