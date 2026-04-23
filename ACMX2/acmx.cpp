@@ -1733,6 +1733,29 @@ class ShaderLibrary {
         }
 
         std::string index_path = library_path + "/index.txt";
+        std::string crash_marker_path = library_path + "/.remove_broken_last_shader";
+
+        auto writeCrashMarker = [&](const std::string &shader_name) {
+            std::ofstream marker_out(crash_marker_path, std::ios::trunc);
+            if (marker_out.is_open()) {
+                marker_out << shader_name;
+                marker_out.flush();
+            }
+        };
+
+        auto clearCrashMarker = [&]() {
+            std::error_code marker_ec;
+            std::filesystem::remove(crash_marker_path, marker_ec);
+        };
+
+        std::string last_crashed_shader;
+        {
+            std::ifstream marker_in(crash_marker_path);
+            if (marker_in.is_open()) {
+                std::getline(marker_in, last_crashed_shader);
+            }
+        }
+
         std::ifstream in(index_path);
         if (!in.is_open()) {
             mx::system_err << "acmx2: Could not open index.txt at: " << library_path << "\n";
@@ -1768,6 +1791,23 @@ class ShaderLibrary {
         }
         in.close();
 
+        size_t pre_removed_from_crash = 0;
+        if (!last_crashed_shader.empty()) {
+            for (auto &entry : lines) {
+                if (!entry.is_shader || !entry.keep) {
+                    continue;
+                }
+                if (entry.raw == last_crashed_shader) {
+                    entry.keep = false;
+                    ++pre_removed_from_crash;
+                    mx::system_out << "acmx2: ⚠ Previous scan crashed while compiling '"
+                                   << last_crashed_shader
+                                   << "' — removing it and resuming scan\n";
+                    break;
+                }
+            }
+        }
+
         size_t total_shaders = 0;
         for (const auto &e : lines) {
             if (e.is_shader) ++total_shaders;
@@ -1779,20 +1819,33 @@ class ShaderLibrary {
                        << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
 
-        size_t removed = 0;
+        size_t removed = pre_removed_from_crash;
         size_t kept = 0;
         size_t scanned = 0;
         for (auto &entry : lines) {
-            if (!entry.is_shader) continue;
+            if (!entry.is_shader || !entry.keep) continue;
             ++scanned;
             std::string full_path = library_path + "/" + entry.raw;
 
-            mx::system_out << "acmx2: [" << scanned << "/" << total_shaders << "] "
-                           << entry.raw << " ... ";
-            fflush(stdout);
+            // Print the identifying line as a single complete line and
+            // fully flush BOTH the C++ ostream buffer and the underlying
+            // C stdout buffer before invoking the GL driver. On macOS
+            // some shaders cause the Metal-backed GL driver to abort the
+            // process; without a complete flush here, the output gets
+            // truncated mid-line (e.g. "[790/") and the user can't tell
+            // which shader killed the scan.
+            {
+                std::string scan_line = "acmx2: [" + std::to_string(scanned) + "/" +
+                                        std::to_string(total_shaders) + "] " +
+                                        entry.raw + " ...\n";
+                mx::system_out << scan_line;
+                mx::system_out.flush();
+                fflush(stdout);
+            }
 
             bool compiled = true;
             try {
+                writeCrashMarker(entry.raw);
 #if defined(__APPLE__)
                 // On macOS, shader compile/link failures can emit massive
                 // driver diagnostics to stderr; keep the scan log concise.
@@ -1824,17 +1877,21 @@ class ShaderLibrary {
             } catch (...) {
                 compiled = false;
             }
+            clearCrashMarker();
 
             if (compiled) {
-                mx::system_out << "OK\n";
+                mx::system_out << "acmx2:   -> OK\n";
                 ++kept;
             } else {
-                mx::system_out << "❌ REMOVED\n";
+                mx::system_out << "acmx2:   -> REMOVED\n";
                 entry.keep = false;
                 ++removed;
             }
+            mx::system_out.flush();
             fflush(stdout);
         }
+
+        clearCrashMarker();
 
         // Back up the original index.txt before rewriting.
         std::error_code ec;
