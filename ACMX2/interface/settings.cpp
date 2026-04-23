@@ -57,6 +57,21 @@ void appendUniqueFps(QList<double> &fpsList, double fps) {
     }
     fpsList.append(fps);
 }
+
+void populateAppleDefaultCapabilities(QMap<QString, QList<double>> &deviceCapabilities) {
+    static const QStringList kDefaultResolutions = {
+        "640x360",
+        "640x480",
+        "1280x720",
+        "1920x1080",
+        "3840x2160"
+    };
+    static const QList<double> kDefaultFps = {24.0, 30.0, 60.0};
+
+    for (const QString &resolution : kDefaultResolutions) {
+        deviceCapabilities.insert(resolution, kDefaultFps);
+    }
+}
 #endif
 }
 
@@ -887,6 +902,7 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
                            QString::fromUtf8(process.readAllStandardOutput());
 
     if (output.isEmpty() || process.error() == QProcess::FailedToStart) {
+        populateAppleDefaultCapabilities(deviceCapabilities);
         populateResolutions();
         return;
     }
@@ -910,6 +926,10 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
             const double fps = singleMatch.captured(2).toDouble();
             appendUniqueFps(deviceCapabilities[resolution], fps);
         }
+    }
+
+    if (deviceCapabilities.isEmpty()) {
+        populateAppleDefaultCapabilities(deviceCapabilities);
     }
 
     populateResolutions();
