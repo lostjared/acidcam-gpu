@@ -86,6 +86,10 @@ namespace ac_gpu {
 #include <fcntl.h>
 #include <unistd.h>
 #endif
+#if defined(__APPLE__)
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 #include <deque>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -107,6 +111,50 @@ static std::string safeGLString(GLenum name) {
     }
     return reinterpret_cast<const char *>(value);
 }
+
+#if defined(__APPLE__)
+class ScopedStderrSilence {
+  public:
+    ScopedStderrSilence() {
+        saved_stderr_fd = dup(STDERR_FILENO);
+        if (saved_stderr_fd < 0) {
+            return;
+        }
+        null_fd = open("/dev/null", O_WRONLY);
+        if (null_fd < 0) {
+            close(saved_stderr_fd);
+            saved_stderr_fd = -1;
+            return;
+        }
+        if (dup2(null_fd, STDERR_FILENO) < 0) {
+            close(null_fd);
+            close(saved_stderr_fd);
+            null_fd = -1;
+            saved_stderr_fd = -1;
+            return;
+        }
+        active = true;
+    }
+
+    ~ScopedStderrSilence() {
+        if (saved_stderr_fd >= 0) {
+            dup2(saved_stderr_fd, STDERR_FILENO);
+            close(saved_stderr_fd);
+        }
+        if (null_fd >= 0) {
+            close(null_fd);
+        }
+    }
+
+    ScopedStderrSilence(const ScopedStderrSilence &) = delete;
+    ScopedStderrSilence &operator=(const ScopedStderrSilence &) = delete;
+
+  private:
+    int saved_stderr_fd = -1;
+    int null_fd = -1;
+    bool active = false;
+};
+#endif
 
 class FFMpegVideoReader {
   public:
@@ -1745,6 +1793,11 @@ class ShaderLibrary {
 
             bool compiled = true;
             try {
+#if defined(__APPLE__)
+                // On macOS, shader compile/link failures can emit massive
+                // driver diagnostics to stderr; keep the scan log concise.
+                ScopedStderrSilence silence_stderr;
+#endif
                 gl::ShaderProgram prog_2d;
                 prog_2d.setSilent(true);
                 if (!prog_2d.loadProgram(vert_2d, full_path)) {
