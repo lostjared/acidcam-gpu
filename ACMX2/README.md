@@ -1,7 +1,11 @@
 
 # ACMX2
-
 <img width="2560" height="1440" alt="Screenshot From 2026-04-13 07-41-08" src="https://github.com/user-attachments/assets/0e0cd74f-ce6b-47e5-abfa-bc268cd74d4b" />
+
+#  Now  Works on AMD and Apple Hardware (without CUDA support)
+
+<img width="3360" height="2100" alt="acmx2 macos" src="https://github.com/user-attachments/assets/851527a0-978f-40ee-9edb-00b7d09b9b91" />
+
 
 [Full Documentation](https://lostsidedead.biz/acmx2/docs/)
 
