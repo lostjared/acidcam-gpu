@@ -128,6 +128,67 @@ void convertRgbaToBt2020PqYuv420p10(const uint8_t *rgba,
     }
 }
 
+// Convert 16-bit RGBA (already BT.2020-primaries, PQ- or HLG-encoded) into
+// BT.2020 YUV420P10LE limited-range. No transfer conversion is applied here
+// because the GPU HDR encode pass already produced the non-linear signal.
+// @c rgba is tightly-packed 16-bit (8 bytes/pixel), @c src_stride_shorts is
+// the row stride in 16-bit samples (i.e. bytes/2).
+void convertBt2020Rgba16EncodedToYuv420p10(const uint16_t *rgba,
+                                           int src_stride_shorts,
+                                           uint16_t *y_plane, int y_stride_shorts,
+                                           uint16_t *u_plane, int u_stride_shorts,
+                                           uint16_t *v_plane, int v_stride_shorts,
+                                           int width, int height) {
+    constexpr float kKr = 0.2627f;
+    constexpr float kKg = 0.6780f;
+    constexpr float kKb = 0.0593f;
+    constexpr float kPbDiv = 1.0f / 1.8814f;
+    constexpr float kPrDiv = 1.0f / 1.4746f;
+    constexpr float kInv65535 = 1.0f / 65535.0f;
+
+    for (int y = 0; y < height; y += 2) {
+        const int y1 = std::min(y + 1, height - 1);
+        const uint16_t *row0 = rgba + y  * src_stride_shorts;
+        const uint16_t *row1 = rgba + y1 * src_stride_shorts;
+        uint16_t *yr0 = y_plane + y  * y_stride_shorts;
+        uint16_t *yr1 = y_plane + y1 * y_stride_shorts;
+        uint16_t *ur  = u_plane + (y / 2) * u_stride_shorts;
+        uint16_t *vr  = v_plane + (y / 2) * v_stride_shorts;
+
+        for (int x = 0; x < width; x += 2) {
+            const int x1 = std::min(x + 1, width - 1);
+
+            auto load = [&](const uint16_t *px, float &Y, float &U, float &V) {
+                const float rp = px[0] * kInv65535;
+                const float gp = px[1] * kInv65535;
+                const float bp = px[2] * kInv65535;
+                Y = kKr * rp + kKg * gp + kKb * bp;
+                U = (bp - Y) * kPbDiv;
+                V = (rp - Y) * kPrDiv;
+            };
+
+            float Y00, U00, V00;
+            float Y01, U01, V01;
+            float Y10, U10, V10;
+            float Y11, U11, V11;
+            load(row0 + x  * 4, Y00, U00, V00);
+            load(row0 + x1 * 4, Y01, U01, V01);
+            load(row1 + x  * 4, Y10, U10, V10);
+            load(row1 + x1 * 4, Y11, U11, V11);
+
+            yr0[x]  = clamp10(Y00 * 876.0f + 64.0f);
+            yr0[x1] = clamp10(Y01 * 876.0f + 64.0f);
+            yr1[x]  = clamp10(Y10 * 876.0f + 64.0f);
+            yr1[x1] = clamp10(Y11 * 876.0f + 64.0f);
+
+            const float Uavg = 0.25f * (U00 + U01 + U10 + U11);
+            const float Vavg = 0.25f * (V00 + V01 + V10 + V11);
+            ur[x / 2] = clamp10(Uavg * 896.0f + 512.0f);
+            vr[x / 2] = clamp10(Vavg * 896.0f + 512.0f);
+        }
+    }
+}
+
 } // namespace
 
 
@@ -982,6 +1043,86 @@ void Writer::write(void *rgba_buffer) {
     queue_cv.notify_one();
 }
 
+void Writer::write_hdr_rgba16(void *rgba16_buffer) {
+    if (!rgba16_buffer) {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(writer_mutex);
+        if (!opened) {
+            return;
+        }
+        if (!hdr_output) {
+            std::cerr << "Writer: write_hdr_rgba16 called but writer not in HDR mode\n";
+            return;
+        }
+    }
+
+    AVFrame *queued_frame = av_frame_alloc();
+    if (!queued_frame) {
+        std::cerr << "Writer: failed to allocate queued HDR frame\n";
+        return;
+    }
+    queued_frame->format = AV_PIX_FMT_YUV420P10LE;
+    queued_frame->width = width;
+    queued_frame->height = height;
+    if (av_frame_get_buffer(queued_frame, 32) < 0) {
+        std::cerr << "Writer: failed to allocate YUV420P10 buffer\n";
+        releaseFrame(queued_frame);
+        return;
+    }
+    if (av_frame_make_writable(queued_frame) < 0) {
+        std::cerr << "Writer: queued HDR frame not writable\n";
+        releaseFrame(queued_frame);
+        return;
+    }
+
+    // Convert the already-PQ/HLG-encoded 16-bit BT.2020 RGBA into the
+    // 10-bit limited-range YUV420 plane that libx265 Main10 expects.
+    convertBt2020Rgba16EncodedToYuv420p10(
+        reinterpret_cast<const uint16_t *>(rgba16_buffer),
+        width * 4,
+        reinterpret_cast<uint16_t *>(queued_frame->data[0]),
+        queued_frame->linesize[0] / 2,
+        reinterpret_cast<uint16_t *>(queued_frame->data[1]),
+        queued_frame->linesize[1] / 2,
+        reinterpret_cast<uint16_t *>(queued_frame->data[2]),
+        queued_frame->linesize[2] / 2,
+        width,
+        height);
+
+    queued_frame->color_primaries = static_cast<AVColorPrimaries>(
+        hdr_info.color_primaries ? hdr_info.color_primaries : AVCOL_PRI_BT2020);
+    queued_frame->color_trc = static_cast<AVColorTransferCharacteristic>(
+        hdr_info.color_trc ? hdr_info.color_trc : AVCOL_TRC_SMPTE2084);
+    queued_frame->colorspace = static_cast<AVColorSpace>(
+        hdr_info.color_space ? hdr_info.color_space : AVCOL_SPC_BT2020_NCL);
+    queued_frame->color_range = static_cast<AVColorRange>(
+        hdr_info.color_range ? hdr_info.color_range : AVCOL_RANGE_MPEG);
+
+    {
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        if (block_when_full.load(std::memory_order_relaxed)) {
+            queue_cv.wait(lock, [this] {
+                return stop_requested || encode_queue.size() < MAX_QUEUE_SIZE;
+            });
+        }
+        if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
+            static int drop_counter = 0;
+            if (++drop_counter % 30 == 0) {
+                std::cerr << "Writer: dropped " << drop_counter << " HDR frames (encoder queue full)\n";
+            }
+            releaseFrame(queued_frame);
+            return;
+        }
+        queued_frame->pts = frame_count++;
+        encode_queue.push(queued_frame);
+    }
+
+    queue_cv.notify_one();
+}
+
 bool Writer::write_cuda_rgba(void *cuda_rgba_buffer, int src_stride, bool bottom_up) {
     if (!cuda_rgba_buffer || src_stride <= 0) {
         return false;
@@ -1144,6 +1285,11 @@ void Writer::encodeAndWriteFrame(AVFrame *in_frame) {
 
     AVFrame *encode_frame = in_frame;
     if (hdr_output) {
+        if (in_frame->format == AV_PIX_FMT_YUV420P10LE) {
+            // Frame has already been converted to BT.2020 PQ YUV420P10LE
+            // by write_hdr_rgba16(). Use directly.
+            encode_frame = in_frame;
+        } else {
         // in_frame is RGBA 8-bit from the shader pipeline. Convert to BT.2020
         // PQ YUV420P10LE in frame10 and submit that instead.
         if (av_frame_make_writable(frame10) < 0) {
@@ -1171,6 +1317,7 @@ void Writer::encodeAndWriteFrame(AVFrame *in_frame) {
         frame10->color_range = static_cast<AVColorRange>(
             hdr_info.color_range ? hdr_info.color_range : AVCOL_RANGE_MPEG);
         encode_frame = frame10;
+        }
     } else if (!use_hw_encode) {
         const uint8_t *src_data[1] = {in_frame->data[0]};
         int src_linesize[1] = {in_frame->linesize[0]};

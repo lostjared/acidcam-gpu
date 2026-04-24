@@ -192,6 +192,237 @@ class ScopedStderrSilence {
 };
 #endif
 
+// ---------------------------------------------------------------------------
+// Manual 10-bit BT.2020 YUV -> 16-bit RGBA converter.
+//
+// swscale's @c sws_setColorspaceDetails is unreliable — on several internal
+// paths it silently falls back to BT.601 coefficients even when the caller
+// requests BT.2020, which tints HDR decoding pink/green. We sidestep the
+// problem entirely by doing the YUV->RGB matrix on the CPU with the exact
+// coefficients defined in ITU-R BT.2100 / BT.2020 non-constant-luminance.
+//
+// Input: AV_PIX_FMT_YUV420P10LE or AV_PIX_FMT_P010LE, limited-range tv levels
+// (Y in [64,940], UV in [64,960] at 10-bit). UV is upsampled with nearest-
+// neighbour (swscale's default). The output is packed RGBA16 (R,G,B,A, 16
+// bits per channel, little-endian host) with A = 0xFFFF — exactly the bytes
+// the GL @c uploadHdrFrame path expects.
+//
+// The transfer function (PQ or HLG) is *not* applied here: the bits stay in
+// the non-linear BT.2020 RGB' encoding that the GL @c kHdrDecodeFrag shader
+// converts to scene-linear. Bit precision is preserved by keeping the math
+// in float and scaling to uint16_t only at the end.
+// ---------------------------------------------------------------------------
+inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) {
+    if (!src || !src->data[0] || !src->data[1]) {
+        return false;
+    }
+    const int w = src->width;
+    const int h = src->height;
+    if (w <= 0 || h <= 0) {
+        return false;
+    }
+
+    const bool is_p010 = (src->format == AV_PIX_FMT_P010LE);
+    if (!is_p010 && !src->data[2]) {
+        return false;  // planar formats need all three planes.
+    }
+
+    // Detect 10-bit sample position within a 16-bit container:
+    //   yuv420p10le  -> low 10 bits (shift = 0)
+    //   p010le       -> high 10 bits (shift = 6, so divide by 64)
+    int sample_shift = 0;
+    if (is_p010) {
+        sample_shift = 6;
+    }
+
+    const int y_stride_b = src->linesize[0];
+    const int uv_stride_b = src->linesize[1];   // UV interleaved (p010) or Cb (planar).
+    const int v_stride_b = is_p010 ? 0 : src->linesize[2];
+
+    // BT.2020 non-constant-luminance inverse matrix (per ITU-R BT.2020 §4).
+    constexpr float kCrR = 1.4746f;
+    constexpr float kCbG = -0.16455312684366f;   // -2*(1-0.2627)*0.2627/0.6780
+    constexpr float kCrG = -0.57135313725490f;   // -2*(1-0.0593)*0.0593/0.6780
+    constexpr float kCbB = 1.8814f;
+
+    out.create(h, w, CV_16UC4);
+
+    auto sample10 = [&](const uint8_t *plane, int stride_b, int x, int y) -> int {
+        const uint16_t raw = *reinterpret_cast<const uint16_t *>(
+            plane + y * stride_b + x * 2);
+        return static_cast<int>(raw >> sample_shift);
+    };
+
+    const uint8_t *yp = src->data[0];
+    const uint8_t *up = src->data[1];  // planar: Cb plane | p010: interleaved Cb,Cr.
+    const uint8_t *vp = is_p010 ? nullptr : src->data[2];
+
+    // 10-bit limited-range BT.2020 scaling:
+    //   Y' = (Y_sample - 64)  / 876    (876 = 940-64)
+    //   Cb = (Cb_sample - 512)/ 896    (896 = 2*448)
+    //   Cr = (Cr_sample - 512)/ 896
+    constexpr float kInvY = 1.0f / 876.0f;
+    constexpr float kInvC = 1.0f / 896.0f;
+
+    for (int y = 0; y < h; ++y) {
+        const int cy = y >> 1;  // 4:2:0 vertical subsampling, nearest.
+        uint16_t *dst = out.ptr<uint16_t>(y);
+        for (int x = 0; x < w; ++x) {
+            const int cx = x >> 1;
+            const int Ys = sample10(yp, y_stride_b, x, y);
+            int Cbs;
+            int Crs;
+            if (is_p010) {
+                // Interleaved Cb,Cr: each chroma pixel is 2 uint16 samples
+                // (Cb then Cr). Row stride is still linesize[1] bytes.
+                const uint16_t *row = reinterpret_cast<const uint16_t *>(
+                    up + cy * uv_stride_b);
+                Cbs = static_cast<int>(row[cx * 2 + 0]) >> sample_shift;
+                Crs = static_cast<int>(row[cx * 2 + 1]) >> sample_shift;
+            } else {
+                Cbs = sample10(up, uv_stride_b, cx, cy);
+                Crs = sample10(vp, v_stride_b, cx, cy);
+            }
+
+            const float Y  = (Ys  - 64)  * kInvY;
+            const float Cb = (Cbs - 512) * kInvC;
+            const float Cr = (Crs - 512) * kInvC;
+
+            float R = Y + kCrR * Cr;
+            float G = Y + kCbG * Cb + kCrG * Cr;
+            float B = Y + kCbB * Cb;
+
+            // Clamp to [0,1] — HLG/PQ code values outside this range are
+            // not legal in the non-linear domain.
+            R = R < 0.0f ? 0.0f : (R > 1.0f ? 1.0f : R);
+            G = G < 0.0f ? 0.0f : (G > 1.0f ? 1.0f : G);
+            B = B < 0.0f ? 0.0f : (B > 1.0f ? 1.0f : B);
+
+            dst[x * 4 + 0] = static_cast<uint16_t>(R * 65535.0f + 0.5f);
+            dst[x * 4 + 1] = static_cast<uint16_t>(G * 65535.0f + 0.5f);
+            dst[x * 4 + 2] = static_cast<uint16_t>(B * 65535.0f + 0.5f);
+            dst[x * 4 + 3] = 0xFFFF;
+        }
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// HDR pipeline shader sources.
+//
+// kHdrVertPassthrough is a minimal NDC-quad vertex shader that exposes a
+// `tc` varying for the fragment shaders below. It matches the 2D sprite
+// vertex attribute layout used by gl::GLSprite (position + texcoord).
+//
+// kHdrDecodeFrag runs once per video frame. It reads the freshly-uploaded
+// 16-bit normalised PQ/HLG-encoded BT.2020 source texture and writes linear
+// BT.2020 light (reference white = 1.0, so HDR highlights end up as values
+// well above 1.0) into an RGBA16F target. Subsequent user shaders sample
+// that linear texture via iChannel0/samp — they do not need any changes.
+//
+// kHdrEncodeFrag runs once after the user's last shader pass. It reads the
+// final linear BT.2020 RGBA16F result and produces PQ-encoded values in
+// [0,1], ready to be packed into a 16-bit normalised RGBA16 readback
+// target (MXWrite converts that to a 10-bit BT.2020 YUV P010 HEVC stream).
+//
+// The HLG inverse/forward OETFs are gated by a `uniform int transfer` so
+// the same two shaders handle both SMPTE ST.2084 (PQ) and ARIB STD-B67
+// (HLG) inputs. transfer: 1 = PQ, 2 = HLG.
+// ---------------------------------------------------------------------------
+constexpr const char *kHdrVertPassthrough =
+    "#version 330 core\n"
+    "layout(location = 0) in vec3 aPos;\n"
+    "layout(location = 1) in vec2 aTex;\n"
+    "out vec2 tc;\n"
+    "uniform mat4 mv_matrix;\n"
+    "uniform mat4 proj_matrix;\n"
+    "void main() {\n"
+    "    gl_Position = proj_matrix * mv_matrix * vec4(aPos, 1.0);\n"
+    "    tc = aTex;\n"
+    "}\n";
+
+constexpr const char *kHdrDecodeFrag =
+    "#version 330 core\n"
+    "in vec2 tc;\n"
+    "out vec4 color;\n"
+    "uniform sampler2D samp;\n"
+    "uniform int transfer;  // 1 = PQ (SMPTE2084), 2 = HLG (ARIB STD-B67)\n"
+    "// SMPTE ST.2084 inverse EOTF. Input: PQ code in [0,1]. Output: linear\n"
+    "// fractional luminance where 1.0 = PQ peak (10000 nits).\n"
+    "vec3 pqToLinear(vec3 e) {\n"
+    "    const float m1 = 2610.0 / 16384.0;\n"
+    "    const float m2 = (2523.0 / 4096.0) * 128.0;\n"
+    "    const float c1 = 3424.0 / 4096.0;\n"
+    "    const float c2 = (2413.0 / 4096.0) * 32.0;\n"
+    "    const float c3 = (2392.0 / 4096.0) * 32.0;\n"
+    "    vec3 em2 = pow(max(e, vec3(0.0)), vec3(1.0 / m2));\n"
+    "    vec3 num = max(em2 - c1, vec3(0.0));\n"
+    "    vec3 den = c2 - c3 * em2;\n"
+    "    return pow(num / den, vec3(1.0 / m1));\n"
+    "}\n"
+    "// ARIB STD-B67 (HLG) inverse OETF. Input HLG code [0,1]. Output scene\n"
+    "// linear [0,1] normalised so 0.5 HLG -> ~0.083 linear (reference white).\n"
+    "vec3 hlgToLinear(vec3 e) {\n"
+    "    const float a = 0.17883277;\n"
+    "    const float b = 0.28466892;\n"
+    "    const float c = 0.55991073;\n"
+    "    vec3 lo = (e * e) / 3.0;\n"
+    "    vec3 hi = (exp((e - c) / a) + b) / 12.0;\n"
+    "    return mix(lo, hi, step(vec3(0.5), e));\n"
+    "}\n"
+    "void main() {\n"
+    "    vec4 raw = texture(samp, tc);\n"
+    "    vec3 lin;\n"
+    "    if (transfer == 2) {\n"
+    "        // HLG: inverse-OETF then scale so reference white == 1.0.\n"
+    "        // Reference white sits at ~0.26 scene-linear; scale by 1/0.26\n"
+    "        // ~= 3.77 so shader colours match SDR at nominal exposure.\n"
+    "        lin = hlgToLinear(raw.rgb) * 3.77358491;\n"
+    "    } else {\n"
+    "        // PQ: inverse-EOTF, then rescale so 100 nits == 1.0 (reference\n"
+    "        // white). 100 / 10000 = 0.01, so we multiply by 100. Highlights\n"
+    "        // above reference end up as values > 1.0 (legal in RGBA16F).\n"
+    "        lin = pqToLinear(raw.rgb) * 100.0;\n"
+    "    }\n"
+    "    color = vec4(lin, raw.a);\n"
+    "}\n";
+
+constexpr const char *kHdrEncodeFrag =
+    "#version 330 core\n"
+    "in vec2 tc;\n"
+    "out vec4 color;\n"
+    "uniform sampler2D samp;\n"
+    "uniform int transfer;\n"
+    "vec3 linearToPq(vec3 L) {\n"
+    "    const float m1 = 2610.0 / 16384.0;\n"
+    "    const float m2 = (2523.0 / 4096.0) * 128.0;\n"
+    "    const float c1 = 3424.0 / 4096.0;\n"
+    "    const float c2 = (2413.0 / 4096.0) * 32.0;\n"
+    "    const float c3 = (2392.0 / 4096.0) * 32.0;\n"
+    "    vec3 Lm = pow(max(L, vec3(0.0)), vec3(m1));\n"
+    "    vec3 num = c1 + c2 * Lm;\n"
+    "    vec3 den = 1.0 + c3 * Lm;\n"
+    "    return pow(num / den, vec3(m2));\n"
+    "}\n"
+    "vec3 linearToHlg(vec3 L) {\n"
+    "    const float a = 0.17883277;\n"
+    "    const float b = 0.28466892;\n"
+    "    const float c = 0.55991073;\n"
+    "    vec3 lo = sqrt(3.0 * max(L, vec3(0.0)));\n"
+    "    vec3 hi = a * log(12.0 * max(L, vec3(0.0)) - b) + c;\n"
+    "    return mix(lo, hi, step(vec3(1.0 / 12.0), L));\n"
+    "}\n"
+    "void main() {\n"
+    "    vec3 lin = max(texture(samp, tc).rgb, vec3(0.0));\n"
+    "    vec3 enc;\n"
+    "    if (transfer == 2) {\n"
+    "        enc = linearToHlg(lin / 3.77358491);\n"
+    "    } else {\n"
+    "        enc = linearToPq(lin / 100.0);\n"
+    "    }\n"
+    "    color = vec4(clamp(enc, 0.0, 1.0), 1.0);\n"
+    "}\n";
+
 class FFMpegVideoReader {
   public:
     ~FFMpegVideoReader() {
@@ -404,6 +635,164 @@ class FFMpegVideoReader {
         }
     }
 
+    // HDR read path: convert decoded HDR frames to 16-bit-per-channel RGBA
+    // (AV_PIX_FMT_RGBA64LE) so the full 10/12-bit source fidelity and the
+    // original PQ/HLG transfer encoding are preserved. The output `cv::Mat`
+    // is CV_16UC4 laid out as R,G,B,A (16-bit unsigned, little-endian).
+    //
+    // Callers are expected to upload this straight to a GL_RGBA16 texture
+    // and run the dedicated HDR decode shader to convert PQ/HLG -> linear
+    // BT.2020 on the GPU before user shaders see it.
+    bool readHdr(cv::Mat &out_rgba16) {
+        if (!codec_ctx || !format_ctx) {
+            return false;
+        }
+
+        while (true) {
+            if (!draining) {
+                const int read_ret = av_read_frame(format_ctx, packet);
+                if (read_ret >= 0) {
+                    if (packet->stream_index == stream_index) {
+                        if (avcodec_send_packet(codec_ctx, packet) < 0) {
+                            av_packet_unref(packet);
+                            return false;
+                        }
+                    }
+                    av_packet_unref(packet);
+                } else {
+                    if (!drain_packet_sent) {
+                        if (avcodec_send_packet(codec_ctx, nullptr) < 0) {
+                            return false;
+                        }
+                        drain_packet_sent = true;
+                        draining = true;
+                    }
+                }
+            }
+
+            const int receive_ret = avcodec_receive_frame(codec_ctx, decoded_frame);
+            if (receive_ret == AVERROR(EAGAIN)) {
+                if (draining) {
+                    return false;
+                }
+                continue;
+            }
+            if (receive_ret == AVERROR_EOF) {
+                return false;
+            }
+            if (receive_ret < 0) {
+                return false;
+            }
+
+            AVFrame *src = decoded_frame;
+            if (hw_decode_enabled && decoded_frame->format == hw_pix_fmt) {
+                if (av_hwframe_transfer_data(sw_frame, decoded_frame, 0) < 0) {
+                    av_frame_unref(decoded_frame);
+                    return false;
+                }
+                src = sw_frame;
+            }
+
+            // Fast / correct path: for 10-bit BT.2020 planar YUV formats we
+            // run a hand-rolled BT.2020 NCL matrix on the CPU. This avoids
+            // swscale's infamous colorspace-detection quirks (it silently
+            // uses BT.601 on several internal paths even after
+            // @c sws_setColorspaceDetails), which manifested as a pink tint
+            // on HLG output.
+            if (src->format == AV_PIX_FMT_YUV420P10LE ||
+                src->format == AV_PIX_FMT_P010LE) {
+                if (convertBt2020Yuv10LimitedToRgba16(src, out_rgba16)) {
+                    av_frame_unref(decoded_frame);
+                    av_frame_unref(sw_frame);
+                    ++current_frame;
+                    return true;
+                }
+            }
+
+            if (!sws_ctx_hdr || sws_src_format_hdr != static_cast<AVPixelFormat>(src->format) || sws_w_hdr != src->width || sws_h_hdr != src->height) {
+                if (sws_ctx_hdr) {
+                    sws_freeContext(sws_ctx_hdr);
+                }
+                sws_src_format_hdr = static_cast<AVPixelFormat>(src->format);
+                sws_w_hdr = src->width;
+                sws_h_hdr = src->height;
+                // Convert to RGBA64LE: 16-bit per channel, interleaved RGBA.
+                // swscale does NOT perform transfer-function conversion, so
+                // the output bits are still PQ/HLG-encoded BT.2020 values
+                // scaled to occupy the full 16-bit range from the source's
+                // 10/12-bit depth (shifted up). That is exactly what we want
+                // for the GPU decode pass.
+                sws_ctx_hdr = sws_getContext(
+                    sws_w_hdr,
+                    sws_h_hdr,
+                    sws_src_format_hdr,
+                    sws_w_hdr,
+                    sws_h_hdr,
+                    AV_PIX_FMT_RGBA64LE,
+                    SWS_BILINEAR,
+                    nullptr,
+                    nullptr,
+                    nullptr);
+                if (!sws_ctx_hdr) {
+                    av_frame_unref(decoded_frame);
+                    av_frame_unref(sw_frame);
+                    return false;
+                }
+
+                // Force swscale to use the source's real YUV->RGB matrix.
+                // Without this, YUV420P10LE frames tagged BT.2020 get
+                // converted with the default BT.601 coefficients and the
+                // output RGB ends up with a pink/green bias. We pick the
+                // matrix from the decoded frame's colorspace tag (falling
+                // back to BT.2020 NCL for an HDR source) and the range
+                // from @c color_range.
+                int src_space = SWS_CS_DEFAULT;
+                switch (src->colorspace) {
+                case AVCOL_SPC_BT2020_NCL:
+                case AVCOL_SPC_BT2020_CL:
+                    src_space = SWS_CS_BT2020;
+                    break;
+                case AVCOL_SPC_BT709:
+                    src_space = SWS_CS_ITU709;
+                    break;
+                case AVCOL_SPC_SMPTE170M:
+                case AVCOL_SPC_BT470BG:
+                    src_space = SWS_CS_ITU601;
+                    break;
+                default:
+                    src_space = SWS_CS_BT2020;  // HDR default.
+                    break;
+                }
+                const int src_range = (src->color_range == AVCOL_RANGE_JPEG) ? 1 : 0;
+                const int *src_coefs = sws_getCoefficients(src_space);
+                const int *dst_coefs = sws_getCoefficients(SWS_CS_BT2020);
+                sws_setColorspaceDetails(
+                    sws_ctx_hdr,
+                    src_coefs, src_range,
+                    dst_coefs, 1 /* full-range RGB output */,
+                    0 /* brightness */, 1 << 16 /* contrast 1.0 */, 1 << 16 /* saturation 1.0 */);
+            }
+
+            out_rgba16.create(src->height, src->width, CV_16UC4);
+            uint8_t *dst_data[4] = {out_rgba16.data, nullptr, nullptr, nullptr};
+            int dst_linesize[4] = {static_cast<int>(out_rgba16.step), 0, 0, 0};
+
+            sws_scale(
+                sws_ctx_hdr,
+                src->data,
+                src->linesize,
+                0,
+                src->height,
+                dst_data,
+                dst_linesize);
+
+            av_frame_unref(decoded_frame);
+            av_frame_unref(sw_frame);
+            ++current_frame;
+            return true;
+        }
+    }
+
     bool seekStart() {
         if (!format_ctx || !codec_ctx || stream_index < 0) {
             return false;
@@ -496,6 +885,10 @@ class FFMpegVideoReader {
             sws_freeContext(sws_ctx);
             sws_ctx = nullptr;
         }
+        if (sws_ctx_hdr) {
+            sws_freeContext(sws_ctx_hdr);
+            sws_ctx_hdr = nullptr;
+        }
         if (codec_ctx) {
             avcodec_free_context(&codec_ctx);
             codec_ctx = nullptr;
@@ -522,6 +915,9 @@ class FFMpegVideoReader {
         sws_src_format = AV_PIX_FMT_NONE;
         sws_w = 0;
         sws_h = 0;
+        sws_src_format_hdr = AV_PIX_FMT_NONE;
+        sws_w_hdr = 0;
+        sws_h_hdr = 0;
         is_hdr = false;
         hdr_primaries = 0;
         hdr_trc = 0;
@@ -538,12 +934,19 @@ class FFMpegVideoReader {
     AVFrame *sw_frame = nullptr;
     AVPacket *packet = nullptr;
     SwsContext *sws_ctx = nullptr;
+    /// Separate SwsContext for the HDR read path (RGBA64LE output).
+    /// Kept independent of @ref sws_ctx so alternating between read() and
+    /// readHdr() does not repeatedly re-allocate either context.
+    SwsContext *sws_ctx_hdr = nullptr;
     AVBufferRef *hw_device_ctx = nullptr;
     int stream_index = -1;
     AVPixelFormat hw_pix_fmt = AV_PIX_FMT_NONE;
     AVPixelFormat sws_src_format = AV_PIX_FMT_NONE;
     int sws_w = 0;
     int sws_h = 0;
+    AVPixelFormat sws_src_format_hdr = AV_PIX_FMT_NONE;
+    int sws_w_hdr = 0;
+    int sws_h_hdr = 0;
     int width = 0;
     int height = 0;
     double fps = 0.0;
@@ -3392,11 +3795,12 @@ struct MXArguments {
  * plus metadata for the async writer (dimensions, snapshot flag).
  */
 struct FrameData {
-    std::vector<unsigned char> pixels; ///< RGBA pixel data.
+    std::vector<unsigned char> pixels; ///< RGBA pixel data (SDR 8-bit RGBA, or HDR 16-bit RGBA when @c isHdr).
     int width = 0;                     ///< Frame width in pixels.
     int height = 0;                    ///< Frame height in pixels.
     bool isSnapshot = false;           ///< True if this frame should be saved as a PNG snapshot.
     bool isRawSnapshot = false;        ///< True if this frame should be saved as a raw RGBA file.
+    bool isHdr = false;                ///< True when @c pixels holds 16-bit PQ/HLG-encoded BT.2020 RGBA (8 bytes/pixel).
 };
 
 /**
@@ -3943,6 +4347,299 @@ class ACView : public gl::GLObject {
     bool needsAsyncShutdown() {
         return !skip_audio_mux_on_exit.load() && (needsMux() || needsTransferAudio() || needsFileAudioMux());
     }
+
+    // --- HDR pipeline helpers ------------------------------------------------
+    //
+    // These functions are no-ops when @ref input_is_hdr is false, so the
+    // SDR frame path remains untouched. When HDR is active, they build and
+    // run the decode/encode fullscreen passes that wrap the existing user
+    // shader chain.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @brief Lazily allocate the HDR decode/encode textures, FBOs and shader
+     *        programs. Idempotent.
+     * @param w Target width (matches shader pass width).
+     * @param h Target height.
+     */
+    void ensureHdrResources(int w, int h) {
+        if (!input_is_hdr) {
+            return;
+        }
+        const bool resize_needed = (hdr_resource_w != w || hdr_resource_h != h);
+        if (hdr_linear_video_texture == 0) {
+            glGenTextures(1, &hdr_linear_video_texture);
+            glBindTexture(GL_TEXTURE_2D, hdr_linear_video_texture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
+                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        } else if (resize_needed) {
+            glBindTexture(GL_TEXTURE_2D, hdr_linear_video_texture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
+                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
+        if (hdr_linear_video_fbo == 0) {
+            glGenFramebuffers(1, &hdr_linear_video_fbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, hdr_linear_video_fbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D, hdr_linear_video_texture, 0);
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                mx::system_err << "acmx2: HDR linear-video FBO incomplete\n";
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+        if (hdr_encoded_texture == 0) {
+            glGenTextures(1, &hdr_encoded_texture);
+            glBindTexture(GL_TEXTURE_2D, hdr_encoded_texture);
+            // GL_RGBA16 = 16-bit unsigned normalised per channel. Readback
+            // as GL_UNSIGNED_SHORT gives us 16-bit PQ code values that the
+            // writer quantises to 10-bit for P010.
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0,
+                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        } else if (resize_needed) {
+            glBindTexture(GL_TEXTURE_2D, hdr_encoded_texture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0,
+                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
+        if (hdr_encoded_fbo == 0) {
+            glGenFramebuffers(1, &hdr_encoded_fbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, hdr_encoded_fbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D, hdr_encoded_texture, 0);
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                mx::system_err << "acmx2: HDR encoded FBO incomplete\n";
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+        if (hdr_decode_shader.id() == 0) {
+            if (!hdr_decode_shader.loadProgramFromText(kHdrVertPassthrough, kHdrDecodeFrag)) {
+                mx::system_err << "acmx2: failed to compile HDR decode shader\n";
+            }
+        }
+        if (hdr_encode_shader.id() == 0) {
+            if (!hdr_encode_shader.loadProgramFromText(kHdrVertPassthrough, kHdrEncodeFrag)) {
+                mx::system_err << "acmx2: failed to compile HDR encode shader\n";
+            }
+        }
+        hdr_resource_w = w;
+        hdr_resource_h = h;
+    }
+
+    /**
+     * @brief Run the PQ/HLG -> linear BT.2020 decode pass, sampling
+     *        @c camera_texture and writing into @c hdr_linear_video_texture.
+     *
+     * The sprite quad is re-used so the pixel coverage matches the rest of
+     * the pipeline. After this call, user shaders should sample
+     * @c hdr_linear_video_texture (via @c sampleSourceTextureForHdr()).
+     */
+    void runHdrDecodePass(int w, int h) {
+        if (!input_is_hdr || hdr_decode_shader.id() == 0) {
+            return;
+        }
+        const int transfer_mode =
+            (input_hdr_trc == AVCOL_TRC_ARIB_STD_B67) ? 2 : 1;
+
+        GLint prev_fbo = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+        GLint prev_viewport[4] = {0};
+        glGetIntegerv(GL_VIEWPORT, prev_viewport);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, hdr_linear_video_fbo);
+        glViewport(0, 0, w, h);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_BLEND);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        hdr_decode_shader.useProgram();
+        hdr_decode_shader.setUniform("mv_matrix", glm::mat4(1.0f));
+        hdr_decode_shader.setUniform("proj_matrix", glm::mat4(1.0f));
+        glUniform1i(glGetUniformLocation(hdr_decode_shader.id(), "samp"), 0);
+        glUniform1i(glGetUniformLocation(hdr_decode_shader.id(), "transfer"), transfer_mode);
+        sprite.setShader(&hdr_decode_shader);
+        sprite.setName("samp");
+        sprite.draw(camera_texture, 0, 0, w, h);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+        glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+    }
+
+    /**
+     * @brief Run the linear BT.2020 -> PQ/HLG encode pass from @p src_tex into
+     *        @c hdr_encoded_texture. Call this just before the PBO readback.
+     */
+    void runHdrEncodePass(GLuint src_tex, int w, int h) {
+        if (!input_is_hdr || hdr_encode_shader.id() == 0) {
+            return;
+        }
+        const int transfer_mode =
+            (input_hdr_trc == AVCOL_TRC_ARIB_STD_B67) ? 2 : 1;
+
+        GLint prev_fbo = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+        GLint prev_viewport[4] = {0};
+        glGetIntegerv(GL_VIEWPORT, prev_viewport);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, hdr_encoded_fbo);
+        glViewport(0, 0, w, h);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_BLEND);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        hdr_encode_shader.useProgram();
+        hdr_encode_shader.setUniform("mv_matrix", glm::mat4(1.0f));
+        hdr_encode_shader.setUniform("proj_matrix", glm::mat4(1.0f));
+        glUniform1i(glGetUniformLocation(hdr_encode_shader.id(), "samp"), 0);
+        glUniform1i(glGetUniformLocation(hdr_encode_shader.id(), "transfer"), transfer_mode);
+        sprite.setShader(&hdr_encode_shader);
+        sprite.setName("samp");
+        sprite.draw(src_tex, 0, 0, w, h);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+        glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+    }
+
+    /**
+     * @brief Upload a 16-bit-per-channel RGBA frame (from @c FFMpegVideoReader::readHdr())
+     *        into @c camera_texture. The texture must have been allocated as
+     *        GL_RGBA16 (done during HDR resource init).
+     */
+    void uploadHdrFrame(const cv::Mat &rgba16) {
+        if (rgba16.empty()) return;
+        glBindTexture(GL_TEXTURE_2D, camera_texture);
+        if (hdr_upload_tex_w != rgba16.cols || hdr_upload_tex_h != rgba16.rows) {
+            // The decoded HDR frame can differ from the output resolution
+            // when --resolution is used. Ensure camera_texture matches the
+            // source frame dimensions and 16-bit normalized format before
+            // sub-image upload; otherwise drivers may crash on invalid
+            // glTexSubImage2D parameters.
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16,
+                         rgba16.cols, rgba16.rows, 0,
+                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            hdr_upload_tex_w = rgba16.cols;
+            hdr_upload_tex_h = rgba16.rows;
+        }
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH,
+                      static_cast<GLint>(rgba16.step / (4 * sizeof(uint16_t))));
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                        rgba16.cols, rgba16.rows,
+                        GL_RGBA, GL_UNSIGNED_SHORT, rgba16.ptr());
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    /**
+     * @brief One-time conversion of existing GL resources from SDR (8-bit)
+     *        to HDR (16-bit) formats. Called the first time a video is
+     *        detected as HDR — after @c load() / @c setupCaptureFBO() have
+     *        already allocated SDR-format textures. Re-specifies the
+     *        existing texture objects so no IDs change and no callers break.
+     *
+     *  - @c camera_texture          : GL_RGBA16  (PQ/HLG-encoded source)
+     *  - @c fboTexture              : GL_RGBA16F (linear BT.2020 intermediate)
+     *  - @c crossfadeTexture        : GL_RGBA16F (if already created)
+     *  - @c crossfadePrevTexture    : GL_RGBA16F (if already created)
+     *  - @c passTexture[0..1]       : deferred; allocated on demand by the
+     *                                 shader-pass branch, which checks
+     *                                 @ref input_is_hdr and chooses the
+     *                                 correct internal format at that time.
+     *  - HDR decode/encode programs + linear/encoded textures: allocated
+     *    via @ref ensureHdrResources().
+     */
+    void convertResourcesToHdr(int w, int h) {
+        if (!input_is_hdr) return;
+
+        // Re-spec camera_texture as 16-bit normalised. Keep the same GL
+        // name so callers/sprites that already cached the ID stay valid.
+        if (camera_texture != 0) {
+            glBindTexture(GL_TEXTURE_2D, camera_texture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0,
+                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            hdr_upload_tex_w = w;
+            hdr_upload_tex_h = h;
+        }
+
+        // Re-spec fboTexture (colour attachment of captureFBO) as 16F.
+        if (fboTexture != 0) {
+            glBindTexture(GL_TEXTURE_2D, fboTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
+                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
+        // crossfade textures may or may not have been allocated yet.
+        auto respecFloat = [&](GLuint tex) {
+            if (tex == 0) return;
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
+                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        };
+        respecFloat(crossfadeTexture);
+        respecFloat(crossfadePrevTexture);
+
+        // If pass textures were already allocated (unusual at this point,
+        // but possible on re-entry), re-spec them too.
+        for (int p = 0; p < 2; ++p) {
+            respecFloat(passTexture[p]);
+        }
+
+        ensureHdrResources(w, h);
+    }
+
+    /**
+     * @brief HDR readback: run the encode pass and read 16-bit PQ-encoded
+     *        RGB pixels back into @p out. Output size is 8*w*h bytes
+     *        (uint16_t per channel, RGBA).
+     *
+     * @param src_linear_tex  Texture holding the final linear BT.2020
+     *                        result (typically @c fboTexture after the
+     *                        shader chain).
+     * @param w,h             Frame dimensions.
+     * @param out             Output byte vector, resized to 8*w*h.
+     */
+    void hdrReadback(GLuint src_linear_tex, int w, int h,
+                     std::vector<unsigned char> &out) {
+        runHdrEncodePass(src_linear_tex, w, h);
+        const size_t bytes = static_cast<size_t>(w) * h * 8;
+        out.resize(bytes);
+        glBindTexture(GL_TEXTURE_2D, hdr_encoded_texture);
+        glPixelStorei(GL_PACK_ALIGNMENT, 2);
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_SHORT, out.data());
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
     /**
      * @brief Construct the rendering object from parsed CLI arguments.
      *
@@ -4652,8 +5349,24 @@ class ACView : public gl::GLObject {
                 // are not colour-correct on that data (they assume 8-bit sRGB).
                 // Force-disable the CUDA filter stage and run shaders only.
                 if (ffmpeg_reader.isHdr()) {
+                    // Record HDR state so the GL pipeline switches to the
+                    // 16-bit linear BT.2020 path (allocated further below).
+                    input_is_hdr = true;
+                    input_hdr_trc = ffmpeg_reader.getHdrTransfer();
+                    const int trc = input_hdr_trc;
+                    const char *trc_label =
+                        (trc == AVCOL_TRC_SMPTE2084)    ? "PQ (SMPTE2084)" :
+                        (trc == AVCOL_TRC_ARIB_STD_B67) ? "HLG (ARIB STD-B67)" :
+                        (trc == AVCOL_TRC_BT2020_10)    ? "BT.2020 10-bit" :
+                        (trc == AVCOL_TRC_BT2020_12)    ? "BT.2020 12-bit" : "unknown";
+                    mx::system_out << "acmx2: ============================================================\n"
+                                   << "acmx2: *** PROCESSING IN HDR MODE ***\n"
+                                   << "acmx2:   Source is HDR: " << trc_label
+                                   << ", " << ffmpeg_reader.getHdrBitDepth() << "-bit,"
+                                   << " BT.2020 primaries\n"
+                                   << "acmx2: ============================================================\n";
                     mx::system_out << "acmx2: HDR input detected (primaries=" << ffmpeg_reader.getHdrPrimaries()
-                                   << ", transfer=" << ffmpeg_reader.getHdrTransfer()
+                                   << ", transfer=" << trc
                                    << ", bit_depth=" << ffmpeg_reader.getHdrBitDepth() << ")\n";
                     if (gpu_filter_enabled) {
                         mx::system_out << "acmx2: *** CUDA GPU filters DISABLED for HDR input "
@@ -4681,6 +5394,14 @@ class ACView : public gl::GLObject {
                                    << encode_opts.hdr.mastering_display.size()
                                    << ", content-light bytes="
                                    << encode_opts.hdr.content_light.size() << ")\n";
+
+                    // Upgrade existing SDR GL resources (camera_texture,
+                    // fboTexture, crossfade textures) to 16-bit formats
+                    // and lazily create the HDR decode/encode machinery.
+                    convertResourcesToHdr(w, h);
+                    mx::system_out << "acmx2: HDR GL pipeline: camera_texture=GL_RGBA16, "
+                                      "fboTexture=GL_RGBA16F, pass textures=GL_RGBA16F, "
+                                      "decode/encode shaders ready.\n";
                 }
             } else {
                 decode_mode = "opencv-ffmpeg";
@@ -4749,6 +5470,11 @@ class ACView : public gl::GLObject {
                                    << " codec: " << encode_opts.codec
                                    << (encode_opts.realtime ? " [realtime]" : "")
                                    << "\n";
+                    if (encode_opts.hdr.enabled) {
+                        mx::system_out << "acmx2: *** HDR OUTPUT ENABLED: writing HEVC Main10 + BT.2020 "
+                                       << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
+                                       << " ***\n";
+                    }
 #ifdef AUDIO_ENABLED
                     startAudioRecordingIfNeeded();
 #endif
@@ -4900,9 +5626,36 @@ class ACView : public gl::GLObject {
         sprite.initSize(win->w, win->h);
         tex_uploader.init(win->w, win->h);
         camera_texture = tex_uploader.textureID;
+        if (input_is_hdr) {
+            // HDR path uploads decoded frames directly via glTex(Sub)Image2D.
+            // Do not reuse TextureUploader's texture object here: when
+            // --resolution differs from source size, re-specifying that
+            // texture has caused driver crashes in headless EGL on NVIDIA.
+            // Keep an independent texture dedicated to HDR uploads.
+            glGenTextures(1, &camera_texture);
+            glBindTexture(GL_TEXTURE_2D, camera_texture);
+            const int upload_w = (frame_w > 0) ? frame_w : win->w;
+            const int upload_h = (frame_h > 0) ? frame_h : win->h;
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16,
+                         upload_w, upload_h, 0,
+                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            hdr_upload_tex_w = upload_w;
+            hdr_upload_tex_h = upload_h;
+        }
         sprite.setName("samp");
         sprite.initWithTexture(library.shader(), camera_texture, 0, 0, win->w, win->h);
         setupCaptureFBO(win->w, win->h);
+        if (input_is_hdr) {
+            // At HDR detection time, GL resources may not exist yet; run the
+            // conversion now with actual allocated textures/FBOs and the
+            // final output size.
+            convertResourcesToHdr(win->w, win->h);
+        }
         glGenBuffers(2, pboIds);
         size_t pboSize = win->w * win->h * 4;
         for (int i = 0; i < 2; i++) {
@@ -5029,14 +5782,27 @@ class ACView : public gl::GLObject {
             } else {
                 bool read_ok = false;
                 if (use_ffmpeg_reader) {
-                    read_ok = ffmpeg_reader.read(newFrame);
-                    if (!read_ok && !filename.empty() && repeat) {
-                        mx::system_out << "acmx2: video loop...\n";
-                        if (ffmpeg_reader.seekStart()) {
-                            read_ok = ffmpeg_reader.read(newFrame);
+                    if (input_is_hdr) {
+                        read_ok = ffmpeg_reader.readHdr(hdr_frame_mat);
+                        if (!read_ok && !filename.empty() && repeat) {
+                            mx::system_out << "acmx2: video loop...\n";
+                            if (ffmpeg_reader.seekStart()) {
+                                read_ok = ffmpeg_reader.readHdr(hdr_frame_mat);
+                            }
+                            if (!read_ok) {
+                                mx::system_out << "acmx2: cannot read after looping.\n";
+                            }
                         }
-                        if (!read_ok) {
-                            mx::system_out << "acmx2: cannot read after looping.\n";
+                    } else {
+                        read_ok = ffmpeg_reader.read(newFrame);
+                        if (!read_ok && !filename.empty() && repeat) {
+                            mx::system_out << "acmx2: video loop...\n";
+                            if (ffmpeg_reader.seekStart()) {
+                                read_ok = ffmpeg_reader.read(newFrame);
+                            }
+                            if (!read_ok) {
+                                mx::system_out << "acmx2: cannot read after looping.\n";
+                            }
                         }
                     }
                 } else {
@@ -5062,6 +5828,13 @@ class ACView : public gl::GLObject {
 
                 if (!newFrame.empty())
                     cv::flip(newFrame, newFrame, 0);
+                // HDR path: leave @c hdr_frame_mat top-down. The SDR path
+                // pre-flips because its shader chain produces a Y-flipped
+                // readback that the CPU loop then re-flips; the HDR path
+                // has an additional sprite.draw pass (hdr_encode) before
+                // the PBO-free readback, and empirically the single CPU
+                // flip in @c hdrReadback's caller is all that is needed
+                // to deliver top-down rows to the HEVC encoder.
             }
         }
         if (library.isBypassed()) {
@@ -5073,7 +5846,16 @@ class ACView : public gl::GLObject {
         } else {
             library.useProgram();
         }
-        if (!isFrozen && !newFrame.empty()) {
+        if (!isFrozen && input_is_hdr) {
+            // HDR branch: upload 16-bit RGBA (PQ/HLG-encoded BT.2020) and
+            // run the decode fullscreen pass so the user-shader chain
+            // samples linear BT.2020 light via @c hdr_linear_video_texture.
+            if (!hdr_frame_mat.empty()) {
+                glActiveTexture(GL_TEXTURE0);
+                uploadHdrFrame(hdr_frame_mat);
+                runHdrDecodePass(win->w, win->h);
+            }
+        } else if (!isFrozen && !newFrame.empty()) {
 #ifdef ACMX2_WITH_CUDA
             if (gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
                 gpu_frame_buffer->update(newFrame);
@@ -5327,7 +6109,7 @@ class ACView : public gl::GLObject {
             modelMatrix = glm::translate(modelMatrix, modelCenterOffset);
 
             glm::mat4 mvMatrix = viewMatrix * modelMatrix;
-            GLuint textureForMesh = camera_texture;
+            GLuint textureForMesh = input_is_hdr ? hdr_linear_video_texture : camera_texture;
             if (shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
                 glDisable(GL_DEPTH_TEST);
                 auto logPassWarning3D = [](const std::string &msg) {
@@ -5341,11 +6123,13 @@ class ACView : public gl::GLObject {
                 };
 
                 if (passFBO[0] == 0) {
+                    const GLint pass_internal = input_is_hdr ? GL_RGBA16F : GL_RGBA;
+                    const GLenum pass_type = input_is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
                     for (int p = 0; p < 2; ++p) {
                         glGenFramebuffers(1, &passFBO[p]);
                         glGenTextures(1, &passTexture[p]);
                         glBindTexture(GL_TEXTURE_2D, passTexture[p]);
-                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, win->w, win->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+                        glTexImage2D(GL_TEXTURE_2D, 0, pass_internal, win->w, win->h, 0, GL_RGBA, pass_type, nullptr);
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                         glBindFramebuffer(GL_FRAMEBUFFER, passFBO[p]);
@@ -5356,7 +6140,7 @@ class ACView : public gl::GLObject {
                     }
                 }
 
-                GLuint inputTex = camera_texture;
+                GLuint inputTex = input_is_hdr ? hdr_linear_video_texture : camera_texture;
                 int pingpong = 0;
                 bool pass_applied = false;
                 for (size_t i = 0; i < shader_pass_list.size(); ++i) {
@@ -5481,7 +6265,7 @@ class ACView : public gl::GLObject {
             glFrontFace(GL_CCW);
         } else {
             glDisable(GL_DEPTH_TEST);
-            GLuint textureForSprite = camera_texture;
+            GLuint textureForSprite = input_is_hdr ? hdr_linear_video_texture : camera_texture;
             if (shader_pass_enabled && !shader_pass_list.empty() && !library.isBypassed()) {
                 auto logPassWarning2D = [](const std::string &msg) {
                     static Uint64 last_warn_tick = 0;
@@ -5493,11 +6277,13 @@ class ACView : public gl::GLObject {
                     }
                 };
                 if (passFBO[0] == 0) {
+                    const GLint pass_internal = input_is_hdr ? GL_RGBA16F : GL_RGBA;
+                    const GLenum pass_type = input_is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
                     for (int p = 0; p < 2; ++p) {
                         glGenFramebuffers(1, &passFBO[p]);
                         glGenTextures(1, &passTexture[p]);
                         glBindTexture(GL_TEXTURE_2D, passTexture[p]);
-                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, win->w, win->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+                        glTexImage2D(GL_TEXTURE_2D, 0, pass_internal, win->w, win->h, 0, GL_RGBA, pass_type, nullptr);
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                         glBindFramebuffer(GL_FRAMEBUFFER, passFBO[p]);
@@ -5509,7 +6295,7 @@ class ACView : public gl::GLObject {
                     glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
                 }
 
-                GLuint inputTex = camera_texture;
+                GLuint inputTex = input_is_hdr ? hdr_linear_video_texture : camera_texture;
                 int pingpong = 0;
                 bool pass_applied = false;
 
@@ -5603,7 +6389,43 @@ class ACView : public gl::GLObject {
 
         bool needWriter = (writer.is_open() || snapshot_state > 0 || raw_snapshot_state > 0) && !isFrozen;
 
-        if (needWriter) {
+        if (needWriter && input_is_hdr && writer.is_open()
+            && snapshot_state == 0 && raw_snapshot_state == 0) {
+            // HDR writer readback path. Bypasses the 8-bit PBO ring entirely
+            // and reads 16-bit PQ-encoded BT.2020 RGBA from
+            // @c hdr_encoded_texture via a synchronous glGetTexImage. The
+            // resulting buffer (8 bytes/pixel) is pushed through the same
+            // frame queue with @c FrameData::isHdr set so the writer thread
+            // dispatches @c writer.write_hdr_rgba16() instead of the SDR
+            // @c writer.write().
+            //
+            // Orientation: glGetTexImage returns rows in GL Y order
+            // (row 0 == bottom of texture). The encoder expects rows in
+            // top-down order, so we vertical-flip during the pack step.
+            std::vector<unsigned char> pixels;
+            hdrReadback(fboTexture, win->w, win->h, pixels);
+
+            const int row_bytes = win->w * 8; // 4 channels * 2 bytes
+            std::vector<unsigned char> flipped_pixels(pixels.size());
+            for (int y = 0; y < win->h; ++y) {
+                std::copy(pixels.begin() + y * row_bytes,
+                          pixels.begin() + (y + 1) * row_bytes,
+                          flipped_pixels.begin() + (win->h - 1 - y) * row_bytes);
+            }
+
+            FrameData fd;
+            fd.pixels = std::move(flipped_pixels);
+            fd.width = win->w;
+            fd.height = win->h;
+            fd.isHdr = true;
+
+            {
+                std::unique_lock<std::mutex> lock(queueMutex);
+                queueCondVar.wait(lock, [this] { return frameQueue.size() < 30 || !writerRunning; });
+                frameQueue.push(std::move(fd));
+            }
+            queueCondVar.notify_one();
+        } else if (needWriter) {
 
             if (snapshot_state == 1 || raw_snapshot_state == 1) {
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
@@ -6326,6 +7148,25 @@ class ACView : public gl::GLObject {
     GLuint crossfadeFBO = 0;                                  ///< FBO used for the crossfade compositing pass.
     GLuint crossfadeTexture = 0;                               ///< Colour attachment of @c crossfadeFBO (blended output).
     GLuint crossfadePrevTexture = 0;                           ///< Snapshot of the previous frame used as the blend source.
+
+    // --- HDR-mode GL resources ----------------------------------------------
+    // Only allocated / used when @ref input_is_hdr is true. SDR path is
+    // entirely unchanged. Internal formats: GL_RGBA16 for textures that
+    // hold PQ/HLG-encoded normalised values (source upload + pre-encode
+    // readback target), GL_RGBA16F for linear-BT.2020 intermediates.
+    bool input_is_hdr = false;                                 ///< Active HDR pipeline for this input.
+    int input_hdr_trc = 0;                                     ///< AVColorTransferCharacteristic (PQ/HLG/BT2020).
+    int hdr_upload_tex_w = 0;                                  ///< Current GL size of @ref camera_texture in HDR upload mode.
+    int hdr_upload_tex_h = 0;                                  ///< Current GL size of @ref camera_texture in HDR upload mode.
+    int hdr_resource_w = 0;                                    ///< Width of HDR intermediate/encoded textures.
+    int hdr_resource_h = 0;                                    ///< Height of HDR intermediate/encoded textures.
+    GLuint hdr_linear_video_texture = 0;                       ///< GL_RGBA16F: PQ/HLG-decoded linear BT.2020 video.
+    GLuint hdr_linear_video_fbo = 0;                           ///< FBO writing into @ref hdr_linear_video_texture.
+    GLuint hdr_encoded_texture = 0;                            ///< GL_RGBA16: final PQ-re-encoded output for readback.
+    GLuint hdr_encoded_fbo = 0;                                ///< FBO writing into @ref hdr_encoded_texture.
+    gl::ShaderProgram hdr_decode_shader;                       ///< PQ/HLG -> linear BT.2020 fullscreen pass.
+    gl::ShaderProgram hdr_encode_shader;                       ///< Linear BT.2020 -> PQ (or HLG) fullscreen pass.
+    cv::Mat hdr_frame_mat;                                     ///< Scratch CV_16UC4 RGBA frame for HDR decode.
     gl::ShaderProgram crossfadeShader;                         ///< Shader that mixes prev_samp and samp via fade_alpha.
     float crossfadeAlpha = 1.0f;                               ///< Current blend factor (0 = old frame, 1 = new frame).
     bool crossfadeActive = false;                              ///< True while a crossfade transition is in progress.
@@ -6667,7 +7508,10 @@ class ACView : public gl::GLObject {
             try {
                 captureStartTime = std::chrono::steady_clock::now();
 
-                while (writerRunning) {
+                // Drain queued frames before exiting. shutdown paths set
+                // writerRunning=false first, then notify; if we only loop on
+                // writerRunning we can leave tail frames unwritten.
+                while (true) {
                     FrameData fd;
                     {
                         std::unique_lock<std::mutex> lock(queueMutex);
@@ -6746,7 +7590,9 @@ class ACView : public gl::GLObject {
 #endif
 
                     if (writer.is_open() && !fd.isSnapshot) {
-                        if (!filename.empty() || !graphic.empty())
+                        if (fd.isHdr) {
+                            writer.write_hdr_rgba16(fd.pixels.data());
+                        } else if (!filename.empty() || !graphic.empty())
                             writer.write(fd.pixels.data());
                         else
                             writer.write_ts(fd.pixels.data());

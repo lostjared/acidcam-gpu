@@ -85,6 +85,20 @@ class Writer {
     bool open(const std::string &filename, int width, int height, float fps, const char *crf);
     bool open(const std::string &filename, int width, int height, float fps, const EncodeOptions &opts);
     void write(void *rgba_buffer);
+    /**
+     * @brief Write a 16-bit RGBA frame that is already PQ- or HLG-encoded in
+     *        BT.2020 primaries (8 bytes/pixel: R16,G16,B16,A16, little-endian
+     *        unsigned normalised).
+     *
+     * The data is expected to originate from the HDR GPU encode pass: it is
+     * BT.2020 primaries with a non-linear PQ (or HLG) transfer already
+     * applied, so this path skips colour-space conversion and only performs
+     *   (a) the BT.2020 non-constant-luminance RGB'->YCbCr' matrix, and
+     *   (b) 16-bit -> 10-bit limited-range scaling,
+     * producing AV_PIX_FMT_YUV420P10LE for libx265 Main10. Requires the
+     * writer to have been opened with @ref EncodeOptions::HdrInfo::enabled.
+     */
+    void write_hdr_rgba16(void *rgba16_buffer);
     bool write_cuda_rgba(void *cuda_rgba_buffer, int src_stride, bool bottom_up = false);
     bool open_ts(const std::string &filename, int width, int height, float fps, const char *crf);
     bool open_ts(const std::string &filename, int width, int height, float fps, const EncodeOptions &opts);
