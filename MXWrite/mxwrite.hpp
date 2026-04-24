@@ -11,11 +11,14 @@ extern "C" {
 }
 #include <chrono>
 #include <condition_variable>
+#include <atomic>
 #include <mutex>
 #include <queue>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
+#include <cstdint>
 
 struct Frame_Data {
     void *data;
@@ -43,6 +46,36 @@ struct EncodeOptions {
     int crf = 18;
     std::string codec = "auto";
     bool realtime = false;
+
+    /**
+     * @brief HDR output options.
+     *
+     * When @ref HdrInfo::enabled is true, the writer switches to a dedicated
+     * HEVC Main10 + BT.2020 output path that:
+     *  - Encodes with libx265 at 10-bit (AV_PIX_FMT_YUV420P10LE).
+     *  - Tags the stream with BT.2020 primaries, BT.2020 non-constant luminance
+     *    matrix, and SMPTE ST.2084 (PQ) transfer.
+     *  - Converts incoming 8-bit sRGB RGBA shader output into PQ-encoded
+     *    10-bit YUV, placing SDR-range content at the 100-nit reference level
+     *    inside the PQ signal (SDR-in-HDR-container).
+     *  - Copies @ref mastering_display and @ref content_light side data from
+     *    the input stream when provided, so player HDR metadata is preserved.
+     *
+     * This mode is intended for use when the *input* video is HDR; the 8-bit
+     * GL pipeline cannot reconstruct the original highlight precision, but the
+     * resulting file is a correctly-tagged HDR container.
+     */
+    struct HdrInfo {
+        bool enabled = false;
+        int color_primaries = 0;  ///< AVColorPrimaries (e.g. AVCOL_PRI_BT2020).
+        int color_trc = 0;         ///< AVColorTransferCharacteristic (PQ/HLG).
+        int color_space = 0;       ///< AVColorSpace (e.g. AVCOL_SPC_BT2020_NCL).
+        int color_range = 0;       ///< AVColorRange (limited/full).
+        /// Raw AVMasteringDisplayMetadata side-data bytes, or empty.
+        std::vector<uint8_t> mastering_display;
+        /// Raw AVContentLightMetadata side-data bytes, or empty.
+        std::vector<uint8_t> content_light;
+    } hdr;
 };
 
 class Writer {
@@ -60,6 +93,11 @@ class Writer {
     bool is_open() const { return opened; }
     /// @brief True when the active encoder backend is hardware (NVENC).
     bool is_hardware_encode() const { return use_hw_encode; }
+    /// @brief If true, producer threads block when the encoder queue is full
+    /// instead of dropping frames. Intended for headless/batch transcoding
+    /// where every input frame must reach the output. Default: false (drop).
+    void set_block_when_full(bool value) { block_when_full = value; }
+    bool get_block_when_full() const { return block_when_full; }
     int64_t get_frame_count() const { return frame_count; }
     double get_duration() const;
     ~Writer() {
@@ -82,10 +120,13 @@ class Writer {
     AVStream *stream = nullptr;
     AVFrame *frameYUV = nullptr;
     AVFrame *frameRGBA = nullptr;
+    AVFrame *frame10 = nullptr;            ///< YUV420P10LE frame used for HDR output.
     AVFrame *upload_sw_frame = nullptr;
     AVBufferRef *hw_device_ctx = nullptr;
     AVBufferRef *hw_frames_ctx = nullptr;
     bool use_hw_encode = false;
+    bool hdr_output = false;              ///< True when HDR (HEVC Main10/PQ) output is active.
+    EncodeOptions::HdrInfo hdr_info;      ///< HDR metadata captured at open() time.
     SwsContext *sws_ctx = nullptr;
     AVRational time_base;
     void calculateFPSFraction(float fps, int &fps_num, int &fps_den);
@@ -99,6 +140,7 @@ class Writer {
     std::mutex queue_mutex{};
     std::mutex writer_mutex{};
     bool stop_requested = false;
+    std::atomic<bool> block_when_full{false};
 
     bool openInternal(const std::string &filename, int w, int h, float fps, const EncodeOptions &opts, bool ts_mode);
     bool initHardwareEncoding();

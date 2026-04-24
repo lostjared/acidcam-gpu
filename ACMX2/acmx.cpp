@@ -26,6 +26,7 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <csignal>
 #include <ctime>
 #include <deque>
 #include <filesystem>
@@ -110,6 +111,41 @@ static std::string safeGLString(GLenum name) {
         return "unavailable";
     }
     return reinterpret_cast<const char *>(value);
+}
+
+// ---------------------------------------------------------------------------
+// Graceful shutdown for headless / --silent mode.
+//
+// When acmx2 is running without a visible window (offscreen / batch mode),
+// pressing Ctrl+C should stop encoding, flush the writer, and close the
+// output file cleanly so the partial video is still playable. We install a
+// POSIX signal handler that does nothing but set an atomic flag; the main
+// render loop polls this flag each frame and triggers ACView::requestStop()
+// which unwinds the normal EOF path (flush encoder, close file, trailer).
+// ---------------------------------------------------------------------------
+namespace {
+    std::atomic<bool> g_shutdown_requested{false};
+
+#if defined(__linux__)
+    extern "C" void acmx2_signal_handler(int /*sig*/) {
+        // Async-signal-safe: only a relaxed atomic store.
+        g_shutdown_requested.store(true, std::memory_order_relaxed);
+    }
+
+    void installHeadlessSignalHandlers() {
+        struct sigaction sa{};
+        sa.sa_handler = &acmx2_signal_handler;
+        sigemptyset(&sa.sa_mask);
+        // No SA_RESTART: let blocking syscalls (e.g. read) return EINTR so
+        // the decoder thread can observe shutdown quickly.
+        sa.sa_flags = 0;
+        sigaction(SIGINT, &sa, nullptr);
+        sigaction(SIGTERM, &sa, nullptr);
+        sigaction(SIGHUP, &sa, nullptr);
+    }
+#else
+    void installHeadlessSignalHandlers() {}
+#endif
 }
 
 #if defined(__APPLE__)
@@ -233,12 +269,41 @@ class FFMpegVideoReader {
                                  (par->color_trc == AVCOL_TRC_BT2020_12);
             const bool space_hdr = (par->color_space == AVCOL_SPC_BT2020_NCL) ||
                                    (par->color_space == AVCOL_SPC_BT2020_CL);
-            const int bpp = par->bits_per_raw_sample;
+            int bpp = par->bits_per_raw_sample;
+            if (bpp <= 0) {
+                // Fall back to codec context pixel format depth. Many HDR
+                // files leave bits_per_raw_sample unset in the codecpar but
+                // the decoded format (yuv420p10le etc.) still reports 10-bit.
+                const AVPixelFormat pf = codec_ctx->pix_fmt;
+                if (pf != AV_PIX_FMT_NONE) {
+                    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pf);
+                    if (desc && desc->nb_components > 0) {
+                        bpp = desc->comp[0].depth;
+                    }
+                }
+            }
             const bool depth_hdr = (bpp >= 10);
             is_hdr = (primaries_hdr || trc_hdr || space_hdr) && depth_hdr;
             hdr_primaries = par->color_primaries;
             hdr_trc = par->color_trc;
+            hdr_colorspace = par->color_space;
+            hdr_color_range = par->color_range;
             hdr_bit_depth = bpp;
+
+            // Capture mastering display + content light side data from the
+            // input stream so they can be attached to the output when in HDR
+            // mode. Side data lives on codecpar->coded_side_data in modern
+            // ffmpeg.
+            hdr_mastering_display.clear();
+            hdr_content_light.clear();
+            for (int i = 0; i < par->nb_coded_side_data; ++i) {
+                const AVPacketSideData &sd = par->coded_side_data[i];
+                if (sd.type == AV_PKT_DATA_MASTERING_DISPLAY_METADATA) {
+                    hdr_mastering_display.assign(sd.data, sd.data + sd.size);
+                } else if (sd.type == AV_PKT_DATA_CONTENT_LIGHT_LEVEL) {
+                    hdr_content_light.assign(sd.data, sd.data + sd.size);
+                }
+            }
         }
 
         return true;
@@ -362,7 +427,11 @@ class FFMpegVideoReader {
     bool isHdr() const { return is_hdr; }
     int getHdrPrimaries() const { return hdr_primaries; }
     int getHdrTransfer() const { return hdr_trc; }
+    int getHdrColorspace() const { return hdr_colorspace; }
+    int getHdrColorRange() const { return hdr_color_range; }
     int getHdrBitDepth() const { return hdr_bit_depth; }
+    const std::vector<uint8_t> &getHdrMasteringDisplay() const { return hdr_mastering_display; }
+    const std::vector<uint8_t> &getHdrContentLight() const { return hdr_content_light; }
 
   private:
     static AVPixelFormat getHwFormat(AVCodecContext *ctx, const AVPixelFormat *pix_fmts) {
@@ -456,7 +525,11 @@ class FFMpegVideoReader {
         is_hdr = false;
         hdr_primaries = 0;
         hdr_trc = 0;
+        hdr_colorspace = 0;
+        hdr_color_range = 0;
         hdr_bit_depth = 0;
+        hdr_mastering_display.clear();
+        hdr_content_light.clear();
     }
 
     AVFormatContext *format_ctx = nullptr;
@@ -482,7 +555,11 @@ class FFMpegVideoReader {
     bool is_hdr = false;
     int hdr_primaries = 0;
     int hdr_trc = 0;
+    int hdr_colorspace = 0;
+    int hdr_color_range = 0;
     int hdr_bit_depth = 0;
+    std::vector<uint8_t> hdr_mastering_display;
+    std::vector<uint8_t> hdr_content_light;
 };
 
 /**
@@ -4458,6 +4535,11 @@ class ACView : public gl::GLObject {
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
             if (!ofilename.empty()) {
                 if (writer.open(ofilename, w, h, fps, encode_opts)) {
+                    if (silent_mode) {
+                        // Batch transcoding: block the producer when the
+                        // encoder queue fills instead of dropping frames.
+                        writer.set_block_when_full(true);
+                    }
                     mx::system_out << "acmx2: Opened: " << ofilename
                                    << " for writing at: CRF: " << encode_opts.crf
                                    << " preset: " << encode_opts.preset
@@ -4581,6 +4663,24 @@ class ACView : public gl::GLObject {
                     } else {
                         mx::system_out << "acmx2: CUDA GPU filters not in use; shader processing only for HDR input.\n";
                     }
+
+                    // Populate encode_opts.hdr so the writer switches to the
+                    // HEVC Main10 + BT.2020 output path for both write paths
+                    // below. We force libx265 + Main10 regardless of the
+                    // user's codec preference when the input is HDR.
+                    encode_opts.hdr.enabled = true;
+                    encode_opts.hdr.color_primaries = ffmpeg_reader.getHdrPrimaries();
+                    encode_opts.hdr.color_trc = ffmpeg_reader.getHdrTransfer();
+                    encode_opts.hdr.color_space = ffmpeg_reader.getHdrColorspace();
+                    encode_opts.hdr.color_range = ffmpeg_reader.getHdrColorRange();
+                    encode_opts.hdr.mastering_display = ffmpeg_reader.getHdrMasteringDisplay();
+                    encode_opts.hdr.content_light = ffmpeg_reader.getHdrContentLight();
+                    mx::system_out << "acmx2: HDR output mode enabled: HEVC Main10 + BT.2020 + "
+                                   << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
+                                   << " (mastering side-data bytes="
+                                   << encode_opts.hdr.mastering_display.size()
+                                   << ", content-light bytes="
+                                   << encode_opts.hdr.content_light.size() << ")\n";
                 }
             } else {
                 decode_mode = "opencv-ffmpeg";
@@ -4637,6 +4737,11 @@ class ACView : public gl::GLObject {
 
             if (!ofilename.empty()) {
                 if (writer.open(ofilename, w, h, fps, encode_opts)) {
+                    if (silent_mode) {
+                        // Batch transcoding: block the producer when the
+                        // encoder queue fills instead of dropping frames.
+                        writer.set_block_when_full(true);
+                    }
                     mx::system_out << "acmx2: Opened: " << ofilename
                                    << " for writing at: CRF: " << encode_opts.crf
                                    << " preset: " << encode_opts.preset
@@ -4855,7 +4960,9 @@ class ACView : public gl::GLObject {
      * @param win Pointer to the hosting GLWindow.
      */
     virtual void draw(gl::GLWindow *win) override {
-        if (fps > 0.0) {
+        // Skip FPS pacing in headless/silent batch mode so transcoding runs
+        // at full speed instead of being capped at the input's frame rate.
+        if (fps > 0.0 && !silent_mode) {
             auto now = std::chrono::steady_clock::now();
             auto frame_duration = std::chrono::microseconds(static_cast<long long>(1000000.0 / fps));
             if (now > lastFrameTime + (frame_duration * 4)) {
@@ -5670,21 +5777,57 @@ class ACView : public gl::GLObject {
 
             if (silent_mode && totalFrames > 0.0) {
                 int current_percent = static_cast<int>((static_cast<double>(frame_counter) / totalFrames) * 100.0);
-                if (current_percent > last_progress_percent && current_percent <= 100) {
-                    last_progress_percent = current_percent;
+                // Emit progress at least every ~500 ms, and on every percent
+                // boundary, so the user sees continuous headless progress
+                // even when stdout is piped / redirected / captured by a
+                // logger (no TTY, so carriage-return tricks don't render).
+                // We always write newline-terminated lines for headless mode
+                // to guarantee each update is flushed through line-buffered
+                // pipes and visible in real time.
+                static auto lastProgressEmit = std::chrono::steady_clock::now();
+                bool percent_changed = (current_percent > last_progress_percent && current_percent <= 100);
+                bool time_elapsed = (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastProgressEmit).count() >= 500);
+                if (percent_changed || time_elapsed) {
+                    if (percent_changed) {
+                        last_progress_percent = current_percent;
+                    }
+                    lastProgressEmit = now;
                     int64_t frames_written = writer.is_open() ? writer.get_frame_count() : 0;
                     double elapsed_secs = static_cast<double>(frame_counter) / fps;
                     uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600);
                     uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60) % 60;
                     uint64_t seconds = static_cast<uint64_t>(elapsed_secs) % 60;
 
-                    std::cout << "\racmx2: [" << std::setw(3) << current_percent << "%] "
+                    std::cout << "acmx2: [" << std::setw(3) << current_percent << "%] "
                               << "Frame " << frame_counter << "/" << static_cast<int>(totalFrames)
                               << " | Written: " << frames_written
                               << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
                               << std::setfill('0') << std::setw(2) << minutes << ":"
                               << std::setfill('0') << std::setw(2) << seconds
-                              << std::setfill(' ') << "     " << std::flush;
+                              << std::setfill(' ') << "\n" << std::flush;
+                }
+            } else if (silent_mode) {
+                // Fallback: input reports unknown frame count (e.g. some MKV
+                // / streaming containers). No percentage possible, so emit
+                // an elapsed-style progress line every 500 ms with what we
+                // do know: current frame number, frames written, elapsed
+                // time based on the input FPS.
+                static auto lastProgressEmitUnk = std::chrono::steady_clock::now();
+                if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastProgressEmitUnk).count() >= 500) {
+                    lastProgressEmitUnk = now;
+                    int64_t frames_written = writer.is_open() ? writer.get_frame_count() : 0;
+                    double elapsed_secs = (fps > 0.0) ? static_cast<double>(frame_counter) / fps : 0.0;
+                    uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600);
+                    uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60) % 60;
+                    uint64_t seconds = static_cast<uint64_t>(elapsed_secs) % 60;
+
+                    std::cout << "acmx2: [  ?%] "
+                              << "Frame " << frame_counter << "/?"
+                              << " | Written: " << frames_written
+                              << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
+                              << std::setfill('0') << std::setw(2) << minutes << ":"
+                              << std::setfill('0') << std::setw(2) << seconds
+                              << std::setfill(' ') << "\n" << std::flush;
                 }
             }
 
@@ -6959,9 +7102,29 @@ class MainWindow : public gl::GLWindow {
         glClearColor(0.f, 0.f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glViewport(0, 0, w, h);
+#if defined(__linux__)
+        if (silent_mode && g_shutdown_requested.load(std::memory_order_relaxed)) {
+            auto *view = static_cast<ACView *>(object.get());
+            if (view) {
+                static std::atomic<bool> reported{false};
+                if (!reported.exchange(true)) {
+                    mx::system_out << "\nacmx2: Ctrl+C received - finishing current frame and "
+                                      "flushing output file...\n";
+                    mx::system_out.flush();
+                    view->requestStopNoMux();
+                }
+            }
+            this->quit();
+        }
+#endif
         object->draw(this);
         swap();
-        delay();
+        // In headless/silent batch mode there is no user watching: skip the
+        // frame-pacing delay() so processing runs at full GPU/encoder speed
+        // instead of being throttled to the target playback FPS.
+        if (!silent_mode) {
+            delay();
+        }
     }
 
     /// @brief Placeholder—SDL events are forwarded to ACView::event() by libmx2.
@@ -7833,6 +7996,35 @@ int main(int argc, char **argv) {
                 return EXIT_FAILURE;
             }
             mx::system_out << "acmx2: Silent mode enabled - processing without window\n";
+
+            // In headless/batch mode stdout is usually a pipe (tee, logger,
+            // CI capture). Force line buffering so every progress line is
+            // delivered as soon as it's written, regardless of the child
+            // process's default fully-buffered pipe mode.
+            std::setvbuf(stdout, nullptr, _IOLBF, 0);
+
+            // True headless mode: force SDL to use the 'offscreen' video
+            // driver so the process runs without any X11 / Wayland display
+            // server. The offscreen driver uses EGL surfaceless rendering to
+            // provide an OpenGL context. Use setenv with overwrite=0 so a
+            // user who explicitly set SDL_VIDEODRIVER (e.g. to force a
+            // specific backend for debugging) is respected. Also disable
+            // joystick / gamecontroller / audio subsystems that can block or
+            // fail on a pure headless server.
+            setenv("SDL_VIDEODRIVER", "offscreen", 0);
+            setenv("SDL_AUDIODRIVER", "dummy", 0);
+            SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+            mx::system_out << "acmx2: Headless: SDL_VIDEODRIVER="
+                           << (getenv("SDL_VIDEODRIVER") ? getenv("SDL_VIDEODRIVER") : "(unset)")
+                           << ", SDL_AUDIODRIVER="
+                           << (getenv("SDL_AUDIODRIVER") ? getenv("SDL_AUDIODRIVER") : "(unset)") << "\n";
+#if defined(__linux__)
+            // Install Ctrl+C / SIGTERM / SIGHUP handlers so batch/headless runs
+            // can be interrupted cleanly: the writer flushes, mp4 trailer is
+            // written, and the partial output file stays playable.
+            installHeadlessSignalHandlers();
+            mx::system_out << "acmx2: Headless: signal handlers installed (SIGINT, SIGTERM, SIGHUP)\n";
+#endif
         }
 
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");

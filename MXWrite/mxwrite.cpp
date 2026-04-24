@@ -14,8 +14,122 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/opt.h>
+#include <libavutil/mastering_display_metadata.h>
 #include <libswscale/swscale.h>
 }
+
+namespace {
+
+// --- HDR helpers -----------------------------------------------------------
+// SMPTE ST.2084 (PQ) constants.
+constexpr float kPqM1 = 2610.0f / 16384.0f;
+constexpr float kPqM2 = (2523.0f / 4096.0f) * 128.0f;
+constexpr float kPqC1 = 3424.0f / 4096.0f;
+constexpr float kPqC2 = (2413.0f / 4096.0f) * 32.0f;
+constexpr float kPqC3 = (2392.0f / 4096.0f) * 32.0f;
+// SDR reference white as a fraction of PQ peak (100 nits / 10000 nits).
+constexpr float kSdrRefFraction = 100.0f / 10000.0f;
+
+inline float srgbEotf(float v) {
+    // sRGB non-linear -> linear light.
+    return (v <= 0.04045f) ? (v / 12.92f)
+                           : std::pow((v + 0.055f) / 1.055f, 2.4f);
+}
+
+inline float pqOetf(float L) {
+    // L in [0,1] where 1.0 == 10000 nits; returns PQ code value in [0,1].
+    const float Lm = std::pow(std::max(0.0f, L), kPqM1);
+    const float num = kPqC1 + kPqC2 * Lm;
+    const float den = 1.0f + kPqC3 * Lm;
+    return std::pow(num / den, kPqM2);
+}
+
+inline uint16_t clamp10(float v) {
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1023.0f) v = 1023.0f;
+    return static_cast<uint16_t>(v + 0.5f);
+}
+
+// Convert one RGBA8 row pair + 2 UV rows into BT.2020 PQ YUV420P10LE.
+// Assumes RGBA input is sRGB-gamma-encoded BT.709 SDR (which is what the
+// shader pipeline produces for HDR inputs after the 8-bit swscale path).
+// Output is limited-range 10-bit. Y: [64..940], UV: [64..960] centered at 512.
+void convertRgbaToBt2020PqYuv420p10(const uint8_t *rgba,
+                                    int src_stride_bytes,
+                                    uint16_t *y_plane, int y_stride_shorts,
+                                    uint16_t *u_plane, int u_stride_shorts,
+                                    uint16_t *v_plane, int v_stride_shorts,
+                                    int width, int height) {
+    // BT.2020 non-constant luminance RGB->YUV (limited range).
+    // E'Y = 0.2627*R + 0.6780*G + 0.0593*B
+    // E'Pb = (B - Y) / 1.8814
+    // E'Pr = (R - Y) / 1.4746
+    // Limited 10-bit: Y: 0..1 -> 64..940 (range 876), UV: -0.5..0.5 -> 64..960 (range 896, center 512).
+    constexpr float kKr = 0.2627f;
+    constexpr float kKg = 0.6780f;
+    constexpr float kKb = 0.0593f;
+    constexpr float kPbDiv = 1.0f / 1.8814f;
+    constexpr float kPrDiv = 1.0f / 1.4746f;
+
+    for (int y = 0; y < height; y += 2) {
+        const int y1 = std::min(y + 1, height - 1);
+        const uint8_t *row0 = rgba + y  * src_stride_bytes;
+        const uint8_t *row1 = rgba + y1 * src_stride_bytes;
+        uint16_t *yr0 = y_plane + y  * y_stride_shorts;
+        uint16_t *yr1 = y_plane + y1 * y_stride_shorts;
+        uint16_t *ur  = u_plane + (y / 2) * u_stride_shorts;
+        uint16_t *vr  = v_plane + (y / 2) * v_stride_shorts;
+
+        for (int x = 0; x < width; x += 2) {
+            const int x1 = std::min(x + 1, width - 1);
+
+            // Load 2x2 block of sRGB 8-bit pixels.
+            auto loadPq = [](const uint8_t *px,
+                             float &Y, float &U, float &V) {
+                // sRGB 8-bit -> linear [0,1]
+                const float r = srgbEotf(px[0] * (1.0f / 255.0f));
+                const float g = srgbEotf(px[1] * (1.0f / 255.0f));
+                const float b = srgbEotf(px[2] * (1.0f / 255.0f));
+                // Scale SDR linear [0,1] (reference 100 nits) to PQ fractional.
+                const float rL = r * kSdrRefFraction;
+                const float gL = g * kSdrRefFraction;
+                const float bL = b * kSdrRefFraction;
+                // PQ encode per channel (RGB PQ).
+                const float rp = pqOetf(rL);
+                const float gp = pqOetf(gL);
+                const float bp = pqOetf(bL);
+                // BT.2020 RGB' -> YUV'.
+                Y = kKr * rp + kKg * gp + kKb * bp;
+                U = (bp - Y) * kPbDiv;
+                V = (rp - Y) * kPrDiv;
+            };
+
+            float Y00, U00, V00;
+            float Y01, U01, V01;
+            float Y10, U10, V10;
+            float Y11, U11, V11;
+            loadPq(row0 + x  * 4, Y00, U00, V00);
+            loadPq(row0 + x1 * 4, Y01, U01, V01);
+            loadPq(row1 + x  * 4, Y10, U10, V10);
+            loadPq(row1 + x1 * 4, Y11, U11, V11);
+
+            // Y: per-pixel, limited-range 10-bit.
+            yr0[x]  = clamp10(Y00 * 876.0f + 64.0f);
+            yr0[x1] = clamp10(Y01 * 876.0f + 64.0f);
+            yr1[x]  = clamp10(Y10 * 876.0f + 64.0f);
+            yr1[x1] = clamp10(Y11 * 876.0f + 64.0f);
+
+            // UV: 4:2:0 average of 2x2 block.
+            const float Uavg = 0.25f * (U00 + U01 + U10 + U11);
+            const float Vavg = 0.25f * (V00 + V01 + V10 + V11);
+            ur[x / 2] = clamp10(Uavg * 896.0f + 512.0f);
+            vr[x / 2] = clamp10(Vavg * 896.0f + 512.0f);
+        }
+    }
+}
+
+} // namespace
+
 
 std::mutex transfer_audio_mutex;
 
@@ -371,6 +485,178 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
 
     width = w;
     height = h;
+    hdr_output = opts.hdr.enabled;
+    hdr_info = opts.hdr;
+
+    // ---- HDR (HEVC Main10 + BT.2020/PQ) path ------------------------------
+    // Short-circuits the normal SDR codec selection when opts.hdr.enabled is
+    // true. Forces software libx265 + YUV420P10LE + PQ metadata, writes the
+    // color tags and mastering/content-light side data, and bypasses NVENC.
+    if (hdr_output) {
+        const AVCodec *hdr_codec = avcodec_find_encoder_by_name("libx265");
+        if (!hdr_codec) {
+            std::cerr << "MXWrite: HDR output requested but libx265 encoder not available.\n";
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+
+        stream = avformat_new_stream(format_ctx, hdr_codec);
+        if (!stream) {
+            std::cerr << "MXWrite: could not create HDR stream.\n";
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+
+        calculateFPSFraction(fps, fps_num, fps_den);
+        AVRational tb_hdr = {fps_den, fps_num};
+        stream->time_base = tb_hdr;
+
+        codec_ctx = avcodec_alloc_context3(hdr_codec);
+        if (!codec_ctx) {
+            std::cerr << "MXWrite: could not allocate HDR codec context.\n";
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+
+        codec_ctx->width = width;
+        codec_ctx->height = height;
+        codec_ctx->time_base = stream->time_base;
+        codec_ctx->framerate = AVRational{fps_num, fps_den};
+        codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P10LE;
+        codec_ctx->profile = AV_PROFILE_HEVC_MAIN_10;
+        codec_ctx->bits_per_raw_sample = 10;
+        codec_ctx->gop_size = 30;
+        codec_ctx->max_b_frames = 0;
+        codec_ctx->thread_count = std::max(1u, std::thread::hardware_concurrency());
+        codec_ctx->thread_type = FF_THREAD_SLICE;
+        codec_ctx->delay = 0;
+
+        // Tag the stream with BT.2020 + PQ (or whatever the input used).
+        codec_ctx->color_primaries = static_cast<AVColorPrimaries>(
+            hdr_info.color_primaries ? hdr_info.color_primaries : AVCOL_PRI_BT2020);
+        codec_ctx->color_trc = static_cast<AVColorTransferCharacteristic>(
+            hdr_info.color_trc ? hdr_info.color_trc : AVCOL_TRC_SMPTE2084);
+        codec_ctx->colorspace = static_cast<AVColorSpace>(
+            hdr_info.color_space ? hdr_info.color_space : AVCOL_SPC_BT2020_NCL);
+        codec_ctx->color_range = static_cast<AVColorRange>(
+            hdr_info.color_range ? hdr_info.color_range : AVCOL_RANGE_MPEG);
+        codec_ctx->chroma_sample_location = AVCHROMA_LOC_LEFT;
+
+        // Encoder options: Main10, matching x265-params for color volume.
+        std::string preset_hdr = opts.preset.empty() ? std::string("medium") : opts.preset;
+        av_opt_set(codec_ctx->priv_data, "preset", preset_hdr.c_str(), 0);
+        int crf_val_hdr = opts.crf;
+        if (crf_val_hdr < 0) crf_val_hdr = 0;
+        if (crf_val_hdr > 51) crf_val_hdr = 51;
+        const std::string crf_hdr = std::to_string(crf_val_hdr);
+        av_opt_set(codec_ctx->priv_data, "crf", crf_hdr.c_str(), 0);
+
+        // x265 params: colorprim, transfer, colormatrix, range, hdr flag.
+        // These drive the stream VUI + SEI so players recognise the file as HDR.
+        std::string x265_params = "profile=main10:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:range=limited:repeat-headers=1";
+        // When HLG transfer is requested, swap transfer + mark hlg.
+        if (codec_ctx->color_trc == AVCOL_TRC_ARIB_STD_B67) {
+            x265_params = "profile=main10:colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc:range=limited:repeat-headers=1";
+        }
+        av_opt_set(codec_ctx->priv_data, "x265-params", x265_params.c_str(), 0);
+
+        time_base = tb_hdr;
+        if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
+            codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        }
+        if (avcodec_open2(codec_ctx, hdr_codec, nullptr) < 0) {
+            std::cerr << "MXWrite: could not open libx265 for HDR output.\n";
+            avcodec_free_context(&codec_ctx);
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+        if (avcodec_parameters_from_context(stream->codecpar, codec_ctx) < 0) {
+            std::cerr << "MXWrite: could not copy HDR codec parameters.\n";
+            avcodec_free_context(&codec_ctx);
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+
+        // Attach mastering-display / content-light side data to the stream
+        // codec parameters. Uses the modern AVCodecParameters coded_side_data
+        // API. Failures are logged but non-fatal.
+        auto attach_side = [&](AVPacketSideDataType type,
+                               const std::vector<uint8_t> &payload) {
+            if (payload.empty()) return;
+            uint8_t *buf = static_cast<uint8_t *>(av_malloc(payload.size()));
+            if (!buf) return;
+            std::memcpy(buf, payload.data(), payload.size());
+            const AVPacketSideData *added = av_packet_side_data_add(
+                &stream->codecpar->coded_side_data,
+                &stream->codecpar->nb_coded_side_data,
+                type,
+                buf,
+                payload.size(),
+                0);
+            if (!added) {
+                av_free(buf);
+                std::cerr << "MXWrite: failed to attach HDR side data (type " << (int)type << ").\n";
+            }
+        };
+        attach_side(AV_PKT_DATA_MASTERING_DISPLAY_METADATA, hdr_info.mastering_display);
+        attach_side(AV_PKT_DATA_CONTENT_LIGHT_LEVEL, hdr_info.content_light);
+
+        if (!(format_ctx->oformat->flags & AVFMT_NOFILE)) {
+            if (avio_open(&format_ctx->pb, filename.c_str(), AVIO_FLAG_WRITE) < 0) {
+                std::cerr << "MXWrite: could not open HDR output file: " << filename << "\n";
+                avcodec_free_context(&codec_ctx);
+                avformat_free_context(format_ctx);
+                format_ctx = nullptr;
+                return false;
+            }
+        }
+        if (avformat_write_header(format_ctx, nullptr) < 0) {
+            std::cerr << "MXWrite: error writing HDR MP4 header.\n";
+            avio_closep(&format_ctx->pb);
+            avcodec_free_context(&codec_ctx);
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+
+        // Allocate the 10-bit YUV staging frame used by encodeAndWriteFrame.
+        frame10 = av_frame_alloc();
+        if (!frame10) {
+            std::cerr << "MXWrite: could not allocate YUV420P10LE frame.\n";
+            avio_closep(&format_ctx->pb);
+            avcodec_free_context(&codec_ctx);
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+        frame10->format = AV_PIX_FMT_YUV420P10LE;
+        frame10->width = width;
+        frame10->height = height;
+        if (av_frame_get_buffer(frame10, 32) < 0) {
+            std::cerr << "MXWrite: could not allocate YUV420P10LE buffer.\n";
+            av_frame_free(&frame10);
+            avio_closep(&format_ctx->pb);
+            avcodec_free_context(&codec_ctx);
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+
+        opened = true;
+        use_hw_encode = false;
+        recordingStart = std::chrono::steady_clock::now();
+        startEncoderThread();
+        std::cout << "MXWrite: HDR output active (libx265 Main10, BT.2020, "
+                  << (codec_ctx->color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
+                  << ")\n";
+        return true;
+    }
+    // ---- End HDR path -----------------------------------------------------
 
     const bool is_high_res = (width > 3840 || height > 2160);
     const char *hw_codec_name = is_high_res ? "hevc_nvenc" : "h264_nvenc";
@@ -672,7 +958,15 @@ void Writer::write(void *rgba_buffer) {
     }
 
     {
-        std::lock_guard<std::mutex> lock(queue_mutex);
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        if (block_when_full.load(std::memory_order_relaxed)) {
+            // Headless / batch mode: wait for encoder to drain instead of
+            // dropping frames. This throttles the producer to the encoder
+            // throughput so no frames are lost.
+            queue_cv.wait(lock, [this] {
+                return stop_requested || encode_queue.size() < MAX_QUEUE_SIZE;
+            });
+        }
         if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
             static int drop_counter = 0;
             if (++drop_counter % 30 == 0) {
@@ -756,7 +1050,15 @@ bool Writer::write_cuda_rgba(void *cuda_rgba_buffer, int src_stride, bool bottom
 #endif
 
     {
-        std::lock_guard<std::mutex> lock(queue_mutex);
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        if (block_when_full.load(std::memory_order_relaxed)) {
+            // Headless / batch mode: wait for encoder to drain instead of
+            // dropping frames. This throttles the producer to the encoder
+            // throughput so no frames are lost.
+            queue_cv.wait(lock, [this] {
+                return stop_requested || encode_queue.size() < MAX_QUEUE_SIZE;
+            });
+        }
         if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
             static int drop_counter = 0;
             if (++drop_counter % 30 == 0) {
@@ -841,7 +1143,35 @@ void Writer::encodeAndWriteFrame(AVFrame *in_frame) {
     }
 
     AVFrame *encode_frame = in_frame;
-    if (!use_hw_encode) {
+    if (hdr_output) {
+        // in_frame is RGBA 8-bit from the shader pipeline. Convert to BT.2020
+        // PQ YUV420P10LE in frame10 and submit that instead.
+        if (av_frame_make_writable(frame10) < 0) {
+            std::cerr << "Writer: HDR frame not writable\n";
+            return;
+        }
+        convertRgbaToBt2020PqYuv420p10(
+            in_frame->data[0],
+            in_frame->linesize[0],
+            reinterpret_cast<uint16_t *>(frame10->data[0]),
+            frame10->linesize[0] / 2,
+            reinterpret_cast<uint16_t *>(frame10->data[1]),
+            frame10->linesize[1] / 2,
+            reinterpret_cast<uint16_t *>(frame10->data[2]),
+            frame10->linesize[2] / 2,
+            width,
+            height);
+        frame10->pts = in_frame->pts;
+        frame10->color_primaries = static_cast<AVColorPrimaries>(
+            hdr_info.color_primaries ? hdr_info.color_primaries : AVCOL_PRI_BT2020);
+        frame10->color_trc = static_cast<AVColorTransferCharacteristic>(
+            hdr_info.color_trc ? hdr_info.color_trc : AVCOL_TRC_SMPTE2084);
+        frame10->colorspace = static_cast<AVColorSpace>(
+            hdr_info.color_space ? hdr_info.color_space : AVCOL_SPC_BT2020_NCL);
+        frame10->color_range = static_cast<AVColorRange>(
+            hdr_info.color_range ? hdr_info.color_range : AVCOL_RANGE_MPEG);
+        encode_frame = frame10;
+    } else if (!use_hw_encode) {
         const uint8_t *src_data[1] = {in_frame->data[0]};
         int src_linesize[1] = {in_frame->linesize[0]};
         sws_scale(sws_ctx, src_data, src_linesize, 0, height, frameYUV->data, frameYUV->linesize);
@@ -874,6 +1204,8 @@ void Writer::encodeLoop(std::stop_token stop_token) {
             frame = encode_queue.front();
             encode_queue.pop();
         }
+        // Wake any producer blocked in write() waiting for queue space.
+        queue_cv.notify_one();
 
         encodeAndWriteFrame(frame);
         releaseFrame(frame);
@@ -908,6 +1240,7 @@ void Writer::close() {
 
     av_frame_free(&frameRGBA);
     av_frame_free(&frameYUV);
+    av_frame_free(&frame10);
     sws_freeContext(sws_ctx);
     av_frame_free(&upload_sw_frame);
     avcodec_free_context(&codec_ctx);
@@ -926,8 +1259,10 @@ void Writer::close() {
     sws_ctx = nullptr;
     frameRGBA = nullptr;
     frameYUV = nullptr;
+    frame10 = nullptr;
     upload_sw_frame = nullptr;
     use_hw_encode = false;
+    hdr_output = false;
     stop_requested = false;
 }
 
