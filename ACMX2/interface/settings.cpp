@@ -586,6 +586,10 @@ void SettingsWindow::init() {
     encodeRealtimeCheckBox->setChecked(encSettings.value("recording/realtime", false).toBool());
     encodeRealtimeCheckBox->setToolTip("Enable low-latency encoding. Required for live camera capture.");
 
+    encodeNoDropCheckBox = new QCheckBox("No Drop (block when encoder queue is full)", this);
+    encodeNoDropCheckBox->setChecked(encSettings.value("recording/no_drop", false).toBool());
+    encodeNoDropCheckBox->setToolTip("When enabled, avoid dropping frames by waiting for the encoder queue to drain.");
+
     // ── Input Source group ────────────────────────────────────────────
     auto *sourceGroup  = new QGroupBox("Input Source", this);
     auto *sourceGrid   = new QGridLayout(sourceGroup);
@@ -647,6 +651,7 @@ void SettingsWindow::init() {
     encodingGrid->addWidget(new QLabel("Codec:", this),     ++r, 0);
     encodingGrid->addWidget(encodeCodecComboBox,              r, 1);
     encodingGrid->addWidget(encodeRealtimeCheckBox,         ++r, 0, 1, 2);
+    encodingGrid->addWidget(encodeNoDropCheckBox,           ++r, 0, 1, 2);
 
     // ── Playback group ────────────────────────────────────────────────
     auto *playbackGroup = new QGroupBox("Playback", this);
@@ -1046,6 +1051,10 @@ bool SettingsWindow::isEncodeRealtime() const {
     return encodeRealtimeCheckBox && encodeRealtimeCheckBox->isChecked();
 }
 
+bool SettingsWindow::isEncodeNoDrop() const {
+    return encodeNoDropCheckBox && encodeNoDropCheckBox->isChecked();
+}
+
 QString SettingsWindow::getCameraName(int device_index) {
 #ifdef __APPLE__
     for (int i = 0; i < cameraIndexComboBox->count(); ++i) {
@@ -1154,6 +1163,7 @@ void SettingsWindow::acceptSettings() {
     if (encodeCrfSpinBox)       encSettings.setValue("recording/crf",      encodeCrfSpinBox->value());
     if (encodeCodecComboBox)    encSettings.setValue("recording/codec",    encodeCodecComboBox->currentText());
     if (encodeRealtimeCheckBox) encSettings.setValue("recording/realtime", encodeRealtimeCheckBox->isChecked());
+    if (encodeNoDropCheckBox)   encSettings.setValue("recording/no_drop",  encodeNoDropCheckBox->isChecked());
 
     accept();
 }

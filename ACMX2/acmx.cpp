@@ -3812,6 +3812,7 @@ struct MXArguments {
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
     bool flip_output = false;          ///< Vertical flip output frames when set (e.g., for HDR correction).
+    bool no_drop = false;              ///< In video mode, block when encoder queue is full instead of dropping.
     // User-configurable encoder quality (see EncodeOptions in mxwrite.hpp).
     EncodeOptions encode_opts{};
 };
@@ -4705,6 +4706,7 @@ class ACView : public gl::GLObject {
           copy_audio{args.copy_audio},
           gpu_cuda_device{args.cuda_device},
           silent_mode{args.silent},
+          no_drop_mode{args.no_drop},
           use_shader_cache_flag{args.use_shader_cache},
           flip_output{args.flip_output} {
 #ifdef AUDIO_ENABLED
@@ -5267,9 +5269,9 @@ class ACView : public gl::GLObject {
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
             if (!ofilename.empty()) {
                 if (writer.open(ofilename, w, h, fps, encode_opts)) {
-                    if (silent_mode) {
-                        // Batch transcoding: block the producer when the
-                        // encoder queue fills instead of dropping frames.
+                    if (silent_mode || no_drop_mode) {
+                        // Block the producer when the encoder queue fills
+                        // so no encoded frames are dropped.
                         writer.set_block_when_full(true);
                     }
                     mx::system_out << "acmx2: Opened: " << ofilename
@@ -5493,9 +5495,10 @@ class ACView : public gl::GLObject {
 
             if (!ofilename.empty()) {
                 if (writer.open(ofilename, w, h, fps, encode_opts)) {
-                    if (silent_mode) {
-                        // Batch transcoding: block the producer when the
-                        // encoder queue fills instead of dropping frames.
+                    if (silent_mode || no_drop_mode) {
+                        // Batch transcoding or --no-drop: block the producer
+                        // when the encoder queue fills instead of dropping
+                        // frames.
                         writer.set_block_when_full(true);
                     }
                     mx::system_out << "acmx2: Opened: " << ofilename
@@ -5505,6 +5508,9 @@ class ACView : public gl::GLObject {
                                    << " codec: " << encode_opts.codec
                                    << (encode_opts.realtime ? " [realtime]" : "")
                                    << "\n";
+                    if (no_drop_mode) {
+                        mx::system_out << "acmx2: --no-drop active (video mode): producer blocks when encoder queue is full\n";
+                    }
                     if (encode_opts.hdr.enabled) {
                         mx::system_out << "acmx2: *** HDR OUTPUT ENABLED: writing HEVC Main10 + BT.2020 "
                                        << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
@@ -7267,6 +7273,7 @@ class ACView : public gl::GLObject {
     std::atomic<uint64_t> snapshotOffset{0};
     int gpu_cuda_device = 0;
     bool silent_mode = false;
+    bool no_drop_mode = false;
 #ifdef __APPLE__
     bool use_shader_cache_flag = false;
 #else
@@ -8205,6 +8212,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(603, "encode-codec", "Encoder codec: auto,software,nvenc (default: auto)")
         .addOptionDouble(604, "encode-realtime", "Enable low-latency realtime encoding flags")
         .addOptionDouble(605, "flip", "Vertical flip output frames")
+        .addOptionDouble(606, "no-drop", "Video mode: never drop frames; block when encoder queue is full")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -8628,6 +8636,10 @@ int main(int argc, char **argv) {
             case 605:
                 args.flip_output = true;
                 mx::system_out << "acmx2: Output frame flipping enabled\n";
+                break;
+            case 606:
+                args.no_drop = true;
+                mx::system_out << "acmx2: --no-drop enabled (video mode)\n";
                 break;
 #ifdef MIDI_ENABLED
             case 500:

@@ -929,6 +929,7 @@ void MainWindow::cameraSettings() {
     encode_crf = settingsWindow.getEncodeCrf();
     encode_codec = settingsWindow.getEncodeCodec();
     encode_realtime = settingsWindow.isEncodeRealtime();
+    encode_no_drop = settingsWindow.isEncodeNoDrop();
 }
 
 void MainWindow::runSelected() {
@@ -1021,6 +1022,8 @@ void MainWindow::runSelected() {
             arguments << "--encode-codec" << encode_codec;
         if (encode_realtime)
             arguments << "--encode-realtime";
+        if (encode_no_drop)
+            arguments << "--no-drop";
     }
     if (audio_available && audio_enabled) {
         arguments << "--enable-audio";
@@ -1197,6 +1200,8 @@ void MainWindow::runAll() {
             arguments << "--encode-codec" << encode_codec;
         if (encode_realtime)
             arguments << "--encode-realtime";
+        if (encode_no_drop)
+            arguments << "--no-drop";
     }
     arguments << "--shader" << QString::number(index);
 

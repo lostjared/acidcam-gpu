@@ -95,6 +95,8 @@ class SettingsWindow : public QDialog {
     QString getEncodeCodec() const;
     /// @return True if realtime low-latency encoding is enabled.
     bool isEncodeRealtime() const;
+    /// @return True if no-drop encoder backpressure mode is enabled.
+    bool isEncodeNoDrop() const;
   private slots:
     void acceptSettings();
     void rejectSettings();
@@ -162,6 +164,7 @@ class SettingsWindow : public QDialog {
     QSpinBox *encodeCrfSpinBox = nullptr;
     QComboBox *encodeCodecComboBox = nullptr;
     QCheckBox *encodeRealtimeCheckBox = nullptr;
+    QCheckBox *encodeNoDropCheckBox = nullptr;
 
     int selectedCameraIndex;
     QSize selectedCameraResolution;

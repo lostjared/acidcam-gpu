@@ -152,6 +152,7 @@ class MainWindow : public QMainWindow {
     int encode_crf = 18;
     QString encode_codec = "auto";
     bool encode_realtime = false;
+    bool encode_no_drop = false;
     /// @brief Join list items into a comma-separated argument string.
     /// @param lst Input list of values.
     /// @return Concatenated string for command-line usage.

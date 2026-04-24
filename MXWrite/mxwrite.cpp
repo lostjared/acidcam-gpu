@@ -1021,14 +1021,18 @@ void Writer::write(void *rgba_buffer) {
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
         if (block_when_full.load(std::memory_order_relaxed)) {
-            // Headless / batch mode: wait for encoder to drain instead of
-            // dropping frames. This throttles the producer to the encoder
-            // throughput so no frames are lost.
-            queue_cv.wait(lock, [this] {
-                return stop_requested || encode_queue.size() < MAX_QUEUE_SIZE;
-            });
-        }
-        if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
+            if (encode_queue.size() >= MAX_QUEUE_SIZE) {
+                // In no-drop mode, once the queue reaches capacity we wait
+                // until the encoder thread drains it, then continue.
+                queue_cv.wait(lock, [this] {
+                    return stop_requested || encode_queue.empty();
+                });
+            }
+            if (stop_requested) {
+                releaseFrame(queued_frame);
+                return;
+            }
+        } else if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
             static int drop_counter = 0;
             if (++drop_counter % 30 == 0) {
                 std::cerr << "Writer: dropped " << drop_counter << " frames (encoder queue full)\n";
@@ -1104,11 +1108,16 @@ void Writer::write_hdr_rgba16(void *rgba16_buffer) {
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
         if (block_when_full.load(std::memory_order_relaxed)) {
-            queue_cv.wait(lock, [this] {
-                return stop_requested || encode_queue.size() < MAX_QUEUE_SIZE;
-            });
-        }
-        if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
+            if (encode_queue.size() >= MAX_QUEUE_SIZE) {
+                queue_cv.wait(lock, [this] {
+                    return stop_requested || encode_queue.empty();
+                });
+            }
+            if (stop_requested) {
+                releaseFrame(queued_frame);
+                return;
+            }
+        } else if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
             static int drop_counter = 0;
             if (++drop_counter % 30 == 0) {
                 std::cerr << "Writer: dropped " << drop_counter << " HDR frames (encoder queue full)\n";
@@ -1193,14 +1202,16 @@ bool Writer::write_cuda_rgba(void *cuda_rgba_buffer, int src_stride, bool bottom
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
         if (block_when_full.load(std::memory_order_relaxed)) {
-            // Headless / batch mode: wait for encoder to drain instead of
-            // dropping frames. This throttles the producer to the encoder
-            // throughput so no frames are lost.
-            queue_cv.wait(lock, [this] {
-                return stop_requested || encode_queue.size() < MAX_QUEUE_SIZE;
-            });
-        }
-        if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
+            if (encode_queue.size() >= MAX_QUEUE_SIZE) {
+                queue_cv.wait(lock, [this] {
+                    return stop_requested || encode_queue.empty();
+                });
+            }
+            if (stop_requested) {
+                releaseFrame(queued_frame);
+                return false;
+            }
+        } else if (stop_requested || encode_queue.size() >= MAX_QUEUE_SIZE) {
             static int drop_counter = 0;
             if (++drop_counter % 30 == 0) {
                 std::cerr << "Writer: dropped " << drop_counter << " frames (encoder queue full)\n";
