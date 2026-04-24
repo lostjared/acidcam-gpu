@@ -139,7 +139,20 @@ else()
     )
 endif()
 
+if(MINGW)
+    target_link_libraries(acmx2_interface
+        PRIVATE
+            ole32
+            oleaut32
+            strmiids
+    )
+endif()
+
 target_compile_options(acmx2_interface PRIVATE ${COMPILER_FLAGS})
+if(MINGW)
+    target_link_options(acmx2_interface PRIVATE -mwindows)
+    set_target_properties(acmx2_interface PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
 install(TARGETS acmx2_interface DESTINATION bin)
 install(FILES acmx2-interface.desktop DESTINATION share/applications)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../data/win-icon.png DESTINATION share/acmx2 RENAME acmx2.png)

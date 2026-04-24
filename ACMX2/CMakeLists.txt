@@ -274,7 +274,7 @@ if(WITH_CUDA)
 endif()
 target_link_libraries(acmx2 PRIVATE 
     libmx2::mx 
-    mxgl
+    libmx2::mxgl
     ${OpenCV_LIBRARIES} 
     ${AUDIO_LIBS}
     ${MIDI_LIBS}
@@ -284,7 +284,14 @@ target_link_libraries(acmx2 PRIVATE
     PkgConfig::FFMPEG
     ${FFMPEG_LIBRARIES}
 )
-if(NOT APPLE)
+if(MINGW)
+    target_link_libraries(acmx2 PRIVATE
+        SDL2::SDL2main
+        opengl32
+    )
+    target_link_options(acmx2 PRIVATE -mwindows)
+    set_target_properties(acmx2 PROPERTIES WIN32_EXECUTABLE TRUE)
+elseif(NOT APPLE)
     target_link_libraries(acmx2 PRIVATE GL)
 endif()
 if(WITH_CUDA)

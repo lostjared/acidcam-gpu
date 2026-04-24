@@ -1,5 +1,6 @@
 #include "settings.hpp"
 #include <algorithm>
+#include <memory>
 #include <QApplication>
 #include <QFile>
 #include <QJsonArray>
@@ -13,12 +14,31 @@
 #include <QSet>
 #include <QSettings>
 #include <QFileInfo>
+#include <vector>
+#ifdef _WIN32
+#include <windows.h>
+#include <dshow.h>
+#include <olectl.h>
+#endif
 #ifdef __linux__
 #include <fcntl.h>
 #include <unistd.h>
 #endif
 
 namespace {
+void appendUniqueFps(QList<double> &fpsList, double fps) {
+    if (fps <= 0.0) {
+        return;
+    }
+
+    for (double existing : fpsList) {
+        if (qAbs(existing - fps) < 0.05) {
+            return;
+        }
+    }
+    fpsList.append(fps);
+}
+
 #ifdef __APPLE__
 QStringList appleCameraNamesFromSystemProfiler() {
     QProcess process;
@@ -45,19 +65,6 @@ QStringList appleCameraNamesFromSystemProfiler() {
     return cameraNames;
 }
 
-void appendUniqueFps(QList<double> &fpsList, double fps) {
-    if (fps <= 0.0) {
-        return;
-    }
-
-    for (double existing : fpsList) {
-        if (qAbs(existing - fps) < 0.05) {
-            return;
-        }
-    }
-    fpsList.append(fps);
-}
-
 void populateAppleDefaultCapabilities(QMap<QString, QList<double>> &deviceCapabilities) {
     static const QStringList kDefaultResolutions = {
         "640x360",
@@ -71,6 +78,250 @@ void populateAppleDefaultCapabilities(QMap<QString, QList<double>> &deviceCapabi
     for (const QString &resolution : kDefaultResolutions) {
         deviceCapabilities.insert(resolution, kDefaultFps);
     }
+}
+#endif
+
+#ifdef _WIN32
+template <typename T>
+struct ComReleaser {
+    void operator()(T *value) const {
+        if (value != nullptr) {
+            value->Release();
+        }
+    }
+};
+
+template <typename T>
+using ComPtr = std::unique_ptr<T, ComReleaser<T>>;
+
+class ComInitScope {
+  public:
+    ComInitScope()
+        : result(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)), shouldUninitialize(SUCCEEDED(result)) {
+    }
+
+    ~ComInitScope() {
+        if (shouldUninitialize) {
+            CoUninitialize();
+        }
+    }
+
+    bool ready() const {
+        return SUCCEEDED(result) || result == RPC_E_CHANGED_MODE;
+    }
+
+  private:
+    HRESULT result;
+    bool shouldUninitialize;
+};
+
+struct WindowsCameraDeviceInfo {
+    int index = -1;
+    QString name;
+};
+
+void freeMediaType(AM_MEDIA_TYPE *mediaType) {
+    if (mediaType == nullptr) {
+        return;
+    }
+
+    if (mediaType->cbFormat != 0 && mediaType->pbFormat != nullptr) {
+        CoTaskMemFree(mediaType->pbFormat);
+        mediaType->cbFormat = 0;
+        mediaType->pbFormat = nullptr;
+    }
+
+    if (mediaType->pUnk != nullptr) {
+        mediaType->pUnk->Release();
+        mediaType->pUnk = nullptr;
+    }
+
+    CoTaskMemFree(mediaType);
+}
+
+QString cameraNameFromPropertyBag(IPropertyBag *propertyBag) {
+    if (propertyBag == nullptr) {
+        return {};
+    }
+
+    VARIANT value;
+    VariantInit(&value);
+
+    QString deviceName;
+    if (SUCCEEDED(propertyBag->Read(L"FriendlyName", &value, nullptr)) && value.vt == VT_BSTR && value.bstrVal != nullptr) {
+        deviceName = QString::fromWCharArray(value.bstrVal).trimmed();
+    }
+    VariantClear(&value);
+
+    if (!deviceName.isEmpty()) {
+        return deviceName;
+    }
+
+    VariantInit(&value);
+    if (SUCCEEDED(propertyBag->Read(L"Description", &value, nullptr)) && value.vt == VT_BSTR && value.bstrVal != nullptr) {
+        deviceName = QString::fromWCharArray(value.bstrVal).trimmed();
+    }
+    VariantClear(&value);
+
+    return deviceName;
+}
+
+std::vector<WindowsCameraDeviceInfo> enumerateWindowsCameraDevices() {
+    ComInitScope comScope;
+    if (!comScope.ready()) {
+        return {};
+    }
+
+    ICreateDevEnum *deviceEnumeratorRaw = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
+        return {};
+    }
+    ComPtr<ICreateDevEnum> deviceEnumerator(deviceEnumeratorRaw);
+
+    IEnumMoniker *enumMonikerRaw = nullptr;
+    const HRESULT createResult = deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory,
+                                                                         &enumMonikerRaw, 0);
+    if (createResult != S_OK || enumMonikerRaw == nullptr) {
+        return {};
+    }
+    ComPtr<IEnumMoniker> enumMoniker(enumMonikerRaw);
+
+    std::vector<WindowsCameraDeviceInfo> devices;
+    IMoniker *monikerRaw = nullptr;
+    ULONG fetched = 0;
+    int currentIndex = 0;
+    while (enumMoniker->Next(1, &monikerRaw, &fetched) == S_OK) {
+        ComPtr<IMoniker> moniker(monikerRaw);
+        monikerRaw = nullptr;
+
+        IPropertyBag *propertyBagRaw = nullptr;
+        if (SUCCEEDED(moniker->BindToStorage(nullptr, nullptr, IID_IPropertyBag,
+                                             reinterpret_cast<void **>(&propertyBagRaw)))) {
+            ComPtr<IPropertyBag> propertyBag(propertyBagRaw);
+            const QString deviceName = cameraNameFromPropertyBag(propertyBag.get());
+            if (!deviceName.isEmpty()) {
+                devices.push_back({currentIndex, deviceName});
+            } else {
+                devices.push_back({currentIndex, QString("Camera %1").arg(currentIndex)});
+            }
+        } else {
+            devices.push_back({currentIndex, QString("Camera %1").arg(currentIndex)});
+        }
+        ++currentIndex;
+    }
+
+    return devices;
+}
+
+ComPtr<IAMStreamConfig> openWindowsStreamConfig(int deviceIndex) {
+    ICreateDevEnum *deviceEnumeratorRaw = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
+        return {};
+    }
+    ComPtr<ICreateDevEnum> deviceEnumerator(deviceEnumeratorRaw);
+
+    IEnumMoniker *enumMonikerRaw = nullptr;
+    if (deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enumMonikerRaw, 0) != S_OK ||
+        enumMonikerRaw == nullptr) {
+        return {};
+    }
+    ComPtr<IEnumMoniker> enumMoniker(enumMonikerRaw);
+
+    IMoniker *monikerRaw = nullptr;
+    ULONG fetched = 0;
+    int currentIndex = 0;
+    while (enumMoniker->Next(1, &monikerRaw, &fetched) == S_OK) {
+        ComPtr<IMoniker> moniker(monikerRaw);
+        monikerRaw = nullptr;
+
+        if (currentIndex != deviceIndex) {
+            ++currentIndex;
+            continue;
+        }
+
+        IBaseFilter *filterRaw = nullptr;
+        if (FAILED(moniker->BindToObject(nullptr, nullptr, IID_IBaseFilter,
+                                         reinterpret_cast<void **>(&filterRaw)))) {
+            return {};
+        }
+        ComPtr<IBaseFilter> filter(filterRaw);
+
+        IEnumPins *enumPinsRaw = nullptr;
+        if (FAILED(filter->EnumPins(&enumPinsRaw)) || enumPinsRaw == nullptr) {
+            return {};
+        }
+        ComPtr<IEnumPins> enumPins(enumPinsRaw);
+
+        IPin *pinRaw = nullptr;
+        ULONG pinFetched = 0;
+        while (enumPins->Next(1, &pinRaw, &pinFetched) == S_OK) {
+            ComPtr<IPin> pin(pinRaw);
+            pinRaw = nullptr;
+
+            PIN_DIRECTION direction = PINDIR_INPUT;
+            if (FAILED(pin->QueryDirection(&direction)) || direction != PINDIR_OUTPUT) {
+                continue;
+            }
+
+            IAMStreamConfig *streamConfigRaw = nullptr;
+            if (SUCCEEDED(pin->QueryInterface(IID_IAMStreamConfig, reinterpret_cast<void **>(&streamConfigRaw))) &&
+                streamConfigRaw != nullptr) {
+                return ComPtr<IAMStreamConfig>(streamConfigRaw);
+            }
+        }
+
+        return {};
+    }
+
+    return {};
+}
+
+QString mediaSubtypeName(const GUID &subtype) {
+    if (subtype == MEDIASUBTYPE_YUY2) return "YUY2";
+    if (subtype == MEDIASUBTYPE_UYVY) return "UYVY";
+    if (subtype == MEDIASUBTYPE_YV12) return "YV12";
+    if (subtype == MEDIASUBTYPE_NV12) return "NV12";
+    if (subtype == MEDIASUBTYPE_I420) return "I420";
+    if (subtype == MEDIASUBTYPE_MJPG) return "MJPG";
+    if (subtype == MEDIASUBTYPE_RGB24) return "RGB24";
+    if (subtype == MEDIASUBTYPE_RGB32) return "RGB32";
+    return {};
+}
+
+bool isYuvSubtype(const GUID &subtype) {
+    return subtype == MEDIASUBTYPE_YUY2 || subtype == MEDIASUBTYPE_UYVY || subtype == MEDIASUBTYPE_YV12 ||
+           subtype == MEDIASUBTYPE_NV12 || subtype == MEDIASUBTYPE_I420;
+}
+
+bool extractDirectShowFormat(const AM_MEDIA_TYPE *mediaType, QSize &resolution, QString &formatName, double &fps) {
+    if (mediaType == nullptr) {
+        return false;
+    }
+
+    formatName = mediaSubtypeName(mediaType->subtype);
+    fps = 0.0;
+
+    if (mediaType->formattype == FORMAT_VideoInfo && mediaType->cbFormat >= sizeof(VIDEOINFOHEADER)) {
+        const auto *videoInfo = reinterpret_cast<const VIDEOINFOHEADER *>(mediaType->pbFormat);
+        resolution = QSize(videoInfo->bmiHeader.biWidth, std::abs(videoInfo->bmiHeader.biHeight));
+        if (videoInfo->AvgTimePerFrame > 0) {
+            fps = 10000000.0 / static_cast<double>(videoInfo->AvgTimePerFrame);
+        }
+        return resolution.width() > 0 && resolution.height() > 0;
+    }
+
+    if (mediaType->formattype == FORMAT_VideoInfo2 && mediaType->cbFormat >= sizeof(VIDEOINFOHEADER2)) {
+        const auto *videoInfo = reinterpret_cast<const VIDEOINFOHEADER2 *>(mediaType->pbFormat);
+        resolution = QSize(videoInfo->bmiHeader.biWidth, std::abs(videoInfo->bmiHeader.biHeight));
+        if (videoInfo->AvgTimePerFrame > 0) {
+            fps = 10000000.0 / static_cast<double>(videoInfo->AvgTimePerFrame);
+        }
+        return resolution.width() > 0 && resolution.height() > 0;
+    }
+
+    return false;
 }
 #endif
 }
@@ -104,6 +355,15 @@ void SettingsWindow::populateCameraDevices() {
         const QString cameraName = cameraNames.at(i).trimmed();
         if (!cameraName.isEmpty() && !addedCameras.contains(cameraName)) {
             cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
+            addedCameras.insert(cameraName);
+        }
+    }
+#elif defined(_WIN32)
+    const auto devices = enumerateWindowsCameraDevices();
+    for (const auto &device : devices) {
+        const QString cameraName = device.name.trimmed();
+        if (!cameraName.isEmpty() && !addedCameras.contains(cameraName)) {
+            cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(device.index), device.index);
             addedCameras.insert(cameraName);
         }
     }
@@ -763,6 +1023,22 @@ QString SettingsWindow::getCameraName(int device_index) {
         return cameraNames.at(device_index);
     }
     return "Unknown Camera";
+#elif defined(_WIN32)
+    for (int i = 0; i < cameraIndexComboBox->count(); ++i) {
+        if (cameraIndexComboBox->itemData(i).toInt() == device_index) {
+            const QString label = cameraIndexComboBox->itemText(i);
+            const int suffixPos = label.lastIndexOf(" [");
+            return suffixPos > 0 ? label.left(suffixPos).trimmed() : label;
+        }
+    }
+
+    const auto devices = enumerateWindowsCameraDevices();
+    for (const auto &device : devices) {
+        if (device.index == device_index) {
+            return device.name;
+        }
+    }
+    return QString("Camera %1").arg(device_index);
 #else
     QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(device_index);
     QFile file(sysfs_path);
@@ -930,6 +1206,67 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
 
     if (deviceCapabilities.isEmpty()) {
         populateAppleDefaultCapabilities(deviceCapabilities);
+    }
+
+    populateResolutions();
+    return;
+#elif defined(_WIN32)
+    ComInitScope comScope;
+    if (!comScope.ready()) {
+        populateResolutions();
+        return;
+    }
+
+    const auto streamConfig = openWindowsStreamConfig(deviceIndex);
+    if (!streamConfig) {
+        populateResolutions();
+        return;
+    }
+
+    int capabilityCount = 0;
+    int capabilitySize = 0;
+    if (FAILED(streamConfig->GetNumberOfCapabilities(&capabilityCount, &capabilitySize)) ||
+        capabilityCount <= 0 || capabilitySize <= 0) {
+        populateResolutions();
+        return;
+    }
+
+    QByteArray capabilityBuffer(capabilitySize, 0);
+    for (int capabilityIndex = 0; capabilityIndex < capabilityCount; ++capabilityIndex) {
+        AM_MEDIA_TYPE *mediaType = nullptr;
+        if (FAILED(streamConfig->GetStreamCaps(capabilityIndex, &mediaType,
+                                               reinterpret_cast<BYTE *>(capabilityBuffer.data()))) ||
+            mediaType == nullptr) {
+            continue;
+        }
+
+        const std::unique_ptr<AM_MEDIA_TYPE, decltype(&freeMediaType)> mediaTypeGuard(mediaType, &freeMediaType);
+
+        QSize resolution;
+        QString formatName;
+        double formatFps = 0.0;
+        if (!extractDirectShowFormat(mediaType, resolution, formatName, formatFps)) {
+            continue;
+        }
+
+        const QString resolutionKey = QString("%1x%2").arg(resolution.width()).arg(resolution.height());
+        if (isYuvSubtype(mediaType->subtype)) {
+            yuvResolutions.insert(resolutionKey);
+        }
+
+        appendUniqueFps(deviceCapabilities[resolutionKey], formatFps);
+
+        if (capabilitySize >= static_cast<int>(sizeof(VIDEO_STREAM_CONFIG_CAPS))) {
+            const auto *caps = reinterpret_cast<const VIDEO_STREAM_CONFIG_CAPS *>(capabilityBuffer.constData());
+            if (caps->MinFrameInterval > 0) {
+                appendUniqueFps(deviceCapabilities[resolutionKey],
+                                10000000.0 / static_cast<double>(caps->MinFrameInterval));
+            }
+            if (caps->MaxFrameInterval > 0) {
+                appendUniqueFps(deviceCapabilities[resolutionKey],
+                                10000000.0 / static_cast<double>(caps->MaxFrameInterval));
+            }
+        }
     }
 
     populateResolutions();

@@ -34,4 +34,9 @@ target_link_libraries(midi-map PRIVATE
     ${RTMIDI_LIBRARY}
 )
 
+if(MINGW)
+    target_link_options(midi-map PRIVATE -mwindows)
+    set_target_properties(midi-map PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
 install(TARGETS midi-map DESTINATION bin)
