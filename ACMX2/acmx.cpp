@@ -222,6 +222,25 @@ class FFMpegVideoReader {
         frame_count = static_cast<double>(stream->nb_frames);
         current_frame = 0;
 
+        // HDR detection: BT.2020 primaries, PQ (SMPTE2084) or HLG (ARIB STD-B67)
+        // transfer characteristics, or >=10-bit raw sample depth all indicate HDR.
+        {
+            const AVCodecParameters *par = stream->codecpar;
+            const bool primaries_hdr = (par->color_primaries == AVCOL_PRI_BT2020);
+            const bool trc_hdr = (par->color_trc == AVCOL_TRC_SMPTE2084) ||
+                                 (par->color_trc == AVCOL_TRC_ARIB_STD_B67) ||
+                                 (par->color_trc == AVCOL_TRC_BT2020_10) ||
+                                 (par->color_trc == AVCOL_TRC_BT2020_12);
+            const bool space_hdr = (par->color_space == AVCOL_SPC_BT2020_NCL) ||
+                                   (par->color_space == AVCOL_SPC_BT2020_CL);
+            const int bpp = par->bits_per_raw_sample;
+            const bool depth_hdr = (bpp >= 10);
+            is_hdr = (primaries_hdr || trc_hdr || space_hdr) && depth_hdr;
+            hdr_primaries = par->color_primaries;
+            hdr_trc = par->color_trc;
+            hdr_bit_depth = bpp;
+        }
+
         return true;
     }
 
@@ -340,6 +359,10 @@ class FFMpegVideoReader {
     double getFrameCount() const { return frame_count; }
     int64_t getCurrentFrame() const { return current_frame; }
     bool isHwDecodeEnabled() const { return hw_decode_enabled; }
+    bool isHdr() const { return is_hdr; }
+    int getHdrPrimaries() const { return hdr_primaries; }
+    int getHdrTransfer() const { return hdr_trc; }
+    int getHdrBitDepth() const { return hdr_bit_depth; }
 
   private:
     static AVPixelFormat getHwFormat(AVCodecContext *ctx, const AVPixelFormat *pix_fmts) {
@@ -430,6 +453,10 @@ class FFMpegVideoReader {
         sws_src_format = AV_PIX_FMT_NONE;
         sws_w = 0;
         sws_h = 0;
+        is_hdr = false;
+        hdr_primaries = 0;
+        hdr_trc = 0;
+        hdr_bit_depth = 0;
     }
 
     AVFormatContext *format_ctx = nullptr;
@@ -452,6 +479,10 @@ class FFMpegVideoReader {
     bool hw_decode_enabled = false;
     bool draining = false;
     bool drain_packet_sent = false;
+    bool is_hdr = false;
+    int hdr_primaries = 0;
+    int hdr_trc = 0;
+    int hdr_bit_depth = 0;
 };
 
 /**
@@ -4533,6 +4564,24 @@ class ACView : public gl::GLObject {
                                << " at FPS: " << fps
                                << " Total Frames: " << totalFrames << "\n";
                 mx::system_out << "acmx2: FFmpeg CUDA decode: " << (ffmpeg_reader.isHwDecodeEnabled() ? "enabled" : "unavailable/fallback") << "\n";
+
+                // If the input video carries HDR metadata (BT.2020 primaries /
+                // PQ or HLG transfer / >=10-bit depth), the CUDA glitch filters
+                // are not colour-correct on that data (they assume 8-bit sRGB).
+                // Force-disable the CUDA filter stage and run shaders only.
+                if (ffmpeg_reader.isHdr()) {
+                    mx::system_out << "acmx2: HDR input detected (primaries=" << ffmpeg_reader.getHdrPrimaries()
+                                   << ", transfer=" << ffmpeg_reader.getHdrTransfer()
+                                   << ", bit_depth=" << ffmpeg_reader.getHdrBitDepth() << ")\n";
+                    if (gpu_filter_enabled) {
+                        mx::system_out << "acmx2: *** CUDA GPU filters DISABLED for HDR input "
+                                          "(colour math assumes 8-bit sRGB). Shader processing only. ***\n";
+                        gpu_filter_enabled = false;
+                        gpu_filters.clear();
+                    } else {
+                        mx::system_out << "acmx2: CUDA GPU filters not in use; shader processing only for HDR input.\n";
+                    }
+                }
             } else {
                 decode_mode = "opencv-ffmpeg";
                 std::vector<int> file_params = {
