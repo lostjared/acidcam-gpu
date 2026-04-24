@@ -285,6 +285,10 @@ target_link_libraries(acmx2 PRIVATE
     ${FFMPEG_LIBRARIES}
 )
 if(MINGW)
+    target_sources(acmx2 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/interface/win-icon.rc
+        ${CMAKE_CURRENT_SOURCE_DIR}/interface/win-icon.ico
+    )
     target_link_libraries(acmx2 PRIVATE
         SDL2::SDL2main
         opengl32

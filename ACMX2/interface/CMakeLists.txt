@@ -140,6 +140,10 @@ else()
 endif()
 
 if(MINGW)
+    target_sources(acmx2_interface PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.rc
+        ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.ico
+    )
     target_link_libraries(acmx2_interface
         PRIVATE
             ole32

@@ -35,6 +35,10 @@ target_link_libraries(midi-map PRIVATE
 )
 
 if(MINGW)
+    target_sources(midi-map PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.rc
+        ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.ico
+    )
     target_link_options(midi-map PRIVATE -mwindows)
     set_target_properties(midi-map PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()

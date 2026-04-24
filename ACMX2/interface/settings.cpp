@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <vector>
 #ifdef _WIN32
+#include <optional>
 #include <windows.h>
 #include <dshow.h>
 #include <olectl.h>
@@ -82,6 +83,34 @@ void populateAppleDefaultCapabilities(QMap<QString, QList<double>> &deviceCapabi
 #endif
 
 #ifdef _WIN32
+std::optional<int> parseIndexedCameraLabel(const QString &label) {
+    const int openPos = label.lastIndexOf("[");
+    const int closePos = label.lastIndexOf("]");
+    if (openPos < 0 || closePos < 0 || closePos <= openPos + 1) {
+        return std::nullopt;
+    }
+
+    bool ok = false;
+    const int parsed = label.mid(openPos + 1, closePos - openPos - 1).trimmed().toInt(&ok);
+    if (!ok) {
+        return std::nullopt;
+    }
+    return parsed;
+}
+
+int resolveWindowsSelectedCameraIndex(const QComboBox *comboBox) {
+    if (comboBox == nullptr || comboBox->currentIndex() < 0) {
+        return -1;
+    }
+
+    const QString currentLabel = comboBox->currentText();
+    if (const auto parsedIndex = parseIndexedCameraLabel(currentLabel); parsedIndex.has_value()) {
+        return *parsedIndex;
+    }
+
+    return comboBox->currentData().toInt();
+}
+
 template <typename T>
 struct ComReleaser {
     void operator()(T *value) const {
@@ -626,6 +655,7 @@ void SettingsWindow::init() {
     playbackGrid->addWidget(timeSpeedSpinBox,                       r, 1);
     playbackGrid->addWidget(new QLabel("Crossfade (sec):", this), ++r, 0);
     playbackGrid->addWidget(crossFadeSpinBox,                       r, 1);
+    playbackGrid->addWidget(fullscreenCheckBox,                   ++r, 0, 1, 2);
     auto *durationRow = new QHBoxLayout;
     durationRow->addWidget(durationLimitCheckBox);
     durationRow->addWidget(durationLimitSpinBox);
@@ -643,8 +673,7 @@ void SettingsWindow::init() {
     displayGrid->setVerticalSpacing(6);
     displayGrid->setColumnStretch(1, 1);
     r = 0;
-    displayGrid->addWidget(fullscreenCheckBox,                     r, 0);
-    displayGrid->addWidget(enable3dCheckBox,                       r, 1);
+    displayGrid->addWidget(enable3dCheckBox,                       r, 0, 1, 2);
     displayGrid->addWidget(new QLabel("3D Model:", this),        ++r, 0);
     auto *modelRow = new QHBoxLayout;
     modelRow->setSpacing(4);
@@ -857,7 +886,11 @@ void SettingsWindow::saveUiState() {
     }
     appSettings.setValue("interface/input_mode", inputMode);
 
+#ifdef _WIN32
+    appSettings.setValue("interface/camera_device", resolveWindowsSelectedCameraIndex(cameraIndexComboBox));
+#else
     appSettings.setValue("interface/camera_device", cameraIndexComboBox->currentData().toInt());
+#endif
     appSettings.setValue("interface/camera_resolution", cameraResolutionComboBox->currentText());
     appSettings.setValue("interface/camera_fps", cameraFPSComboBox->currentText());
     appSettings.setValue("interface/screen_resolution", screenResolutionComboBox->currentText());
@@ -1072,7 +1105,11 @@ void SettingsWindow::acceptSettings() {
         graphicsFile = graphicsFileLineEdit->text();
     } else {
 
+    #ifdef _WIN32
+        selectedCameraIndex = resolveWindowsSelectedCameraIndex(cameraIndexComboBox);
+    #else
         selectedCameraIndex = cameraIndexComboBox->currentData().toInt();
+    #endif
         QStringList cameraResParts = cameraResolutionComboBox->currentText().split('x');
         if (cameraResParts.size() == 2) {
             selectedCameraResolution = QSize(cameraResParts[0].toInt(), cameraResParts[1].toInt());
@@ -1398,7 +1435,11 @@ void SettingsWindow::populateFPS() {
 
 void SettingsWindow::onCameraDeviceChanged(int comboIndex) {
     if (comboIndex < 0) return;
+#ifdef _WIN32
+    int deviceIndex = resolveWindowsSelectedCameraIndex(cameraIndexComboBox);
+#else
     int deviceIndex = cameraIndexComboBox->currentData().toInt();
+#endif
     enumerateDevice(deviceIndex);
 }
 
