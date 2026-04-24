@@ -19,7 +19,12 @@
 #include <optional>
 #include <windows.h>
 #include <dshow.h>
+#include <dvdmedia.h>  // VIDEOINFOHEADER2, FORMAT_VideoInfo2 (not pulled in by dshow.h in MinGW)
 #include <olectl.h>
+// MEDIASUBTYPE_I420 is absent from MinGW DirectShow headers — define it manually.
+#ifndef MEDIASUBTYPE_I420
+static const GUID MEDIASUBTYPE_I420 = {0x30323449, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71}};
+#endif
 #endif
 #ifdef __linux__
 #include <fcntl.h>
