@@ -423,6 +423,34 @@ constexpr const char *kHdrEncodeFrag =
     "    color = vec4(clamp(enc, 0.0, 1.0), 1.0);\n"
     "}\n";
 
+// Display shader that can optionally flip the Y coordinate of texture sampling.
+// Used when --flip is set for windowed display.
+constexpr const char *kDisplayVertFlip =
+    "#version 330 core\n"
+    "layout(location = 0) in vec3 aPos;\n"
+    "layout(location = 1) in vec2 aTex;\n"
+    "out vec2 tc;\n"
+    "uniform mat4 mv_matrix;\n"
+    "uniform mat4 proj_matrix;\n"
+    "uniform int flip_y;  // 1 to flip Y coordinate\n"
+    "void main() {\n"
+    "    gl_Position = proj_matrix * mv_matrix * vec4(aPos, 1.0);\n"
+    "    vec2 tex = aTex;\n"
+    "    if (flip_y == 1) {\n"
+    "        tex.y = 1.0 - tex.y;\n"
+    "    }\n"
+    "    tc = tex;\n"
+    "}\n";
+
+constexpr const char *kDisplayFragPassthrough =
+    "#version 330 core\n"
+    "in vec2 tc;\n"
+    "out vec4 color;\n"
+    "uniform sampler2D samp;\n"
+    "void main() {\n"
+    "    color = texture(samp, tc);\n"
+    "}\n";
+
 class FFMpegVideoReader {
   public:
     ~FFMpegVideoReader() {
@@ -4437,6 +4465,11 @@ class ACView : public gl::GLObject {
                 mx::system_err << "acmx2: failed to compile HDR encode shader\n";
             }
         }
+        if (display_flip_shader.id() == 0) {
+            if (!display_flip_shader.loadProgramFromText(kDisplayVertFlip, kDisplayFragPassthrough)) {
+                mx::system_err << "acmx2: failed to compile display flip shader\n";
+            }
+        }
         hdr_resource_w = w;
         hdr_resource_h = h;
     }
@@ -6373,10 +6406,25 @@ class ACView : public gl::GLObject {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
 
-        fshader.useProgram();
-        fshader.setUniform("mv_matrix", glm::mat4(1.0f));
-        fshader.setUniform("proj_matrix", glm::mat4(1.0f));
-        sprite.setShader(&fshader);
+        // In HDR windowed mode, flip by default to match headless orientation.
+        // When --flip is set, invert this (don't flip) to show upside down.
+        gl::ShaderProgram *display_shader = &fshader;
+        int flip_y_uniform = 0;
+        if (input_is_hdr && display_flip_shader.id() != 0) {
+            // Apply flip unless --flip flag is set (which inverts the behavior)
+            if (!flip_output) {
+                display_shader = &display_flip_shader;
+                flip_y_uniform = 1;
+            }
+        }
+
+        display_shader->useProgram();
+        display_shader->setUniform("mv_matrix", glm::mat4(1.0f));
+        display_shader->setUniform("proj_matrix", glm::mat4(1.0f));
+        if (flip_y_uniform == 1) {
+            glUniform1i(glGetUniformLocation(display_shader->id(), "flip_y"), flip_y_uniform);
+        }
+        sprite.setShader(display_shader);
         sprite.draw(fboTexture, 0, 0, win->w, win->h);
 
         if (enableWatermark && writer.is_open() && waterFont.handle().has_value()) {
@@ -7173,6 +7221,7 @@ class ACView : public gl::GLObject {
     GLuint hdr_encoded_fbo = 0;                                ///< FBO writing into @ref hdr_encoded_texture.
     gl::ShaderProgram hdr_decode_shader;                       ///< PQ/HLG -> linear BT.2020 fullscreen pass.
     gl::ShaderProgram hdr_encode_shader;                       ///< Linear BT.2020 -> PQ (or HLG) fullscreen pass.
+    gl::ShaderProgram display_flip_shader;                     ///< Display shader with optional Y-flip for windowed output.
     cv::Mat hdr_frame_mat;                                     ///< Scratch CV_16UC4 RGBA frame for HDR decode.
     gl::ShaderProgram crossfadeShader;                         ///< Shader that mixes prev_samp and samp via fade_alpha.
     float crossfadeAlpha = 1.0f;                               ///< Current blend factor (0 = old frame, 1 = new frame).
