@@ -3783,6 +3783,7 @@ struct MXArguments {
     double duration = 0.0;
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
+    bool flip_output = false;          ///< Vertical flip output frames when set (e.g., for HDR correction).
     // User-configurable encoder quality (see EncodeOptions in mxwrite.hpp).
     EncodeOptions encode_opts{};
 };
@@ -4671,7 +4672,8 @@ class ACView : public gl::GLObject {
           copy_audio{args.copy_audio},
           gpu_cuda_device{args.cuda_device},
           silent_mode{args.silent},
-          use_shader_cache_flag{args.use_shader_cache} {
+          use_shader_cache_flag{args.use_shader_cache},
+          flip_output{args.flip_output} {
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
@@ -6399,22 +6401,27 @@ class ACView : public gl::GLObject {
             // dispatches @c writer.write_hdr_rgba16() instead of the SDR
             // @c writer.write().
             //
-            // Orientation: glGetTexImage returns rows in GL Y order
-            // (row 0 == bottom of texture). The encoder expects rows in
-            // top-down order, so we vertical-flip during the pack step.
+            // Orientation: The HDR input frame is NOT pre-flipped (unlike SDR),
+            // and the hdr_encode shader pass produces top-down output. If
+            // flip_output is set, apply vertical flipping here to correct
+            // the output orientation.
             std::vector<unsigned char> pixels;
             hdrReadback(fboTexture, win->w, win->h, pixels);
 
-            const int row_bytes = win->w * 8; // 4 channels * 2 bytes
-            std::vector<unsigned char> flipped_pixels(pixels.size());
-            for (int y = 0; y < win->h; ++y) {
-                std::copy(pixels.begin() + y * row_bytes,
-                          pixels.begin() + (y + 1) * row_bytes,
-                          flipped_pixels.begin() + (win->h - 1 - y) * row_bytes);
+            // Apply vertical flip if requested (e.g., for HDR correction).
+            if (flip_output) {
+                const int row_bytes = win->w * 8; // 4 channels * 2 bytes
+                std::vector<unsigned char> flipped_pixels(pixels.size());
+                for (int y = 0; y < win->h; ++y) {
+                    std::copy(pixels.begin() + y * row_bytes,
+                              pixels.begin() + (y + 1) * row_bytes,
+                              flipped_pixels.begin() + (win->h - 1 - y) * row_bytes);
+                }
+                pixels = std::move(flipped_pixels);
             }
 
             FrameData fd;
-            fd.pixels = std::move(flipped_pixels);
+            fd.pixels = std::move(pixels);
             fd.width = win->w;
             fd.height = win->h;
             fd.isHdr = true;
@@ -7217,6 +7224,7 @@ class ACView : public gl::GLObject {
     bool use_shader_cache_flag = true;
 #endif
     bool use_yuv = false;
+    bool flip_output = false;
     int last_progress_percent = -1;
     bool enableWatermark = false;
 
@@ -8147,6 +8155,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(602, "encode-crf", "Encoder CRF quality 0 (best) .. 51 (worst), default 18")
         .addOptionDoubleValue(603, "encode-codec", "Encoder codec: auto,software,nvenc (default: auto)")
         .addOptionDouble(604, "encode-realtime", "Enable low-latency realtime encoding flags")
+        .addOptionDouble(605, "flip", "Vertical flip output frames")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -8566,6 +8575,10 @@ int main(int argc, char **argv) {
             case 604:
                 args.encode_opts.realtime = true;
                 mx::system_out << "acmx2: Encoder realtime mode enabled\n";
+                break;
+            case 605:
+                args.flip_output = true;
+                mx::system_out << "acmx2: Output frame flipping enabled\n";
                 break;
 #ifdef MIDI_ENABLED
             case 500:
