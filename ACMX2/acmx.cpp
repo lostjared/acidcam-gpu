@@ -56,6 +56,12 @@
 #include <rtmidi/RtMidi.h>
 #endif
 #include "program.hpp"
+#ifdef ACMX2_WITH_WEBP
+#include <webp/encode.h>
+#endif
+#ifdef ACMX2_WITH_TIFF
+#include <tiffio.h>
+#endif
 #ifdef ACMX2_WITH_CUDA
 #include <ac-gpu/ac-gpu.hpp>
 #include <cuda_gl_interop.h>
@@ -307,6 +313,290 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
     return true;
 }
 
+inline float clamp01f(float v) {
+    return (v < 0.0f) ? 0.0f : (v > 1.0f ? 1.0f : v);
+}
+
+inline float pqToLinearScalar(float e) {
+    // SMPTE ST.2084 inverse EOTF, output normalized so 1.0 == 10000 nits.
+    constexpr float m1 = 0.1593017578125f;
+    constexpr float m2 = 78.84375f;
+    constexpr float c1 = 0.8359375f;
+    constexpr float c2 = 18.8515625f;
+    constexpr float c3 = 18.6875f;
+    e = clamp01f(e);
+    const float p = std::pow(e, 1.0f / m2);
+    const float num = std::max(p - c1, 0.0f);
+    const float den = c2 - c3 * p;
+    if (den <= 0.0f) {
+        return 0.0f;
+    }
+    return std::pow(num / den, 1.0f / m1);
+}
+
+inline float hlgToLinearScalar(float e) {
+    // ARIB STD-B67 inverse OETF.
+    constexpr float a = 0.17883277f;
+    constexpr float b = 0.28466892f;
+    constexpr float c = 0.55991073f;
+    e = clamp01f(e);
+    if (e <= 0.5f) {
+        return (e * e) / 3.0f;
+    }
+    return (std::exp((e - c) / a) + b) / 12.0f;
+}
+
+inline unsigned char linearToSrgb8(float v) {
+    v = clamp01f(v);
+    float srgb = 0.0f;
+    if (v <= 0.0031308f) {
+        srgb = 12.92f * v;
+    } else {
+        srgb = 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f;
+    }
+    const int iv = static_cast<int>(srgb * 255.0f + 0.5f);
+    return static_cast<unsigned char>(std::clamp(iv, 0, 255));
+}
+
+inline uint16_t linearToSrgb16(float v) {
+    v = clamp01f(v);
+    float srgb = 0.0f;
+    if (v <= 0.0031308f) {
+        srgb = 12.92f * v;
+    } else {
+        srgb = 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f;
+    }
+    const int iv = static_cast<int>(srgb * 65535.0f + 0.5f);
+    return static_cast<uint16_t>(std::clamp(iv, 0, 65535));
+}
+
+inline std::vector<unsigned char> toneMapHdrRgba16ToSdrRgba8(const std::vector<unsigned char> &hdr_pixels,
+                                                              int w,
+                                                              int h,
+                                                              int hdr_trc) {
+    std::vector<unsigned char> sdr_pixels(static_cast<size_t>(w) * static_cast<size_t>(h) * 4, 0);
+    const bool is_hlg = (hdr_trc == AVCOL_TRC_ARIB_STD_B67);
+
+    // Linear BT.2020 -> Linear sRGB (D65).
+    constexpr float m00 = 1.6605f, m01 = -0.5876f, m02 = -0.0728f;
+    constexpr float m10 = -0.1246f, m11 = 1.1329f, m12 = -0.0083f;
+    constexpr float m20 = -0.0182f, m21 = -0.1006f, m22 = 1.1187f;
+
+    auto read_u16_le = [&](size_t byte_index) -> uint16_t {
+        return static_cast<uint16_t>(static_cast<uint16_t>(hdr_pixels[byte_index]) |
+                                     (static_cast<uint16_t>(hdr_pixels[byte_index + 1]) << 8));
+    };
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const size_t px = static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x);
+            const size_t src_idx = px * 8;
+            const size_t dst_idx = px * 4;
+
+            const float enc_r = read_u16_le(src_idx + 0) / 65535.0f;
+            const float enc_g = read_u16_le(src_idx + 2) / 65535.0f;
+            const float enc_b = read_u16_le(src_idx + 4) / 65535.0f;
+
+            float lin2020_r = 0.0f;
+            float lin2020_g = 0.0f;
+            float lin2020_b = 0.0f;
+
+            if (is_hlg) {
+                lin2020_r = hlgToLinearScalar(enc_r) * 3.77358491f;
+                lin2020_g = hlgToLinearScalar(enc_g) * 3.77358491f;
+                lin2020_b = hlgToLinearScalar(enc_b) * 3.77358491f;
+            } else {
+                lin2020_r = pqToLinearScalar(enc_r) * 100.0f;
+                lin2020_g = pqToLinearScalar(enc_g) * 100.0f;
+                lin2020_b = pqToLinearScalar(enc_b) * 100.0f;
+            }
+
+            float sr = m00 * lin2020_r + m01 * lin2020_g + m02 * lin2020_b;
+            float sg = m10 * lin2020_r + m11 * lin2020_g + m12 * lin2020_b;
+            float sb = m20 * lin2020_r + m21 * lin2020_g + m22 * lin2020_b;
+
+            sr = std::max(sr, 0.0f);
+            sg = std::max(sg, 0.0f);
+            sb = std::max(sb, 0.0f);
+
+            // Simple global tone map for SDR preview/export.
+            sr = sr / (1.0f + sr);
+            sg = sg / (1.0f + sg);
+            sb = sb / (1.0f + sb);
+
+            sdr_pixels[dst_idx + 0] = linearToSrgb8(sr);
+            sdr_pixels[dst_idx + 1] = linearToSrgb8(sg);
+            sdr_pixels[dst_idx + 2] = linearToSrgb8(sb);
+            sdr_pixels[dst_idx + 3] = 255;
+        }
+    }
+
+    return sdr_pixels;
+}
+
+// 16-bit-per-channel variant: tone-maps PQ/HLG BT.2020 RGBA16 -> sRGB RGBA16
+// (gamma-encoded sRGB, contiguous LE uint16 samples). Used by the HDR TIFF
+// snapshot path so the resulting file is correctly viewable on any display.
+inline std::vector<uint16_t> toneMapHdrRgba16ToSrgbRgba16(const unsigned char *hdr_pixels,
+                                                          int w,
+                                                          int h,
+                                                          int hdr_trc) {
+    std::vector<uint16_t> sdr_pixels(static_cast<size_t>(w) * static_cast<size_t>(h) * 4, 0);
+    const bool is_hlg = (hdr_trc == AVCOL_TRC_ARIB_STD_B67);
+
+    constexpr float m00 = 1.6605f, m01 = -0.5876f, m02 = -0.0728f;
+    constexpr float m10 = -0.1246f, m11 = 1.1329f, m12 = -0.0083f;
+    constexpr float m20 = -0.0182f, m21 = -0.1006f, m22 = 1.1187f;
+
+    auto read_u16_le = [&](size_t byte_index) -> uint16_t {
+        return static_cast<uint16_t>(static_cast<uint16_t>(hdr_pixels[byte_index]) |
+                                     (static_cast<uint16_t>(hdr_pixels[byte_index + 1]) << 8));
+    };
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const size_t px = static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x);
+            const size_t src_idx = px * 8;
+            const size_t dst_idx = px * 4;
+
+            const float enc_r = read_u16_le(src_idx + 0) / 65535.0f;
+            const float enc_g = read_u16_le(src_idx + 2) / 65535.0f;
+            const float enc_b = read_u16_le(src_idx + 4) / 65535.0f;
+
+            float lin2020_r = 0.0f, lin2020_g = 0.0f, lin2020_b = 0.0f;
+            if (is_hlg) {
+                lin2020_r = hlgToLinearScalar(enc_r) * 3.77358491f;
+                lin2020_g = hlgToLinearScalar(enc_g) * 3.77358491f;
+                lin2020_b = hlgToLinearScalar(enc_b) * 3.77358491f;
+            } else {
+                lin2020_r = pqToLinearScalar(enc_r) * 100.0f;
+                lin2020_g = pqToLinearScalar(enc_g) * 100.0f;
+                lin2020_b = pqToLinearScalar(enc_b) * 100.0f;
+            }
+
+            float sr = m00 * lin2020_r + m01 * lin2020_g + m02 * lin2020_b;
+            float sg = m10 * lin2020_r + m11 * lin2020_g + m12 * lin2020_b;
+            float sb = m20 * lin2020_r + m21 * lin2020_g + m22 * lin2020_b;
+
+            sr = std::max(sr, 0.0f);
+            sg = std::max(sg, 0.0f);
+            sb = std::max(sb, 0.0f);
+
+            sr = sr / (1.0f + sr);
+            sg = sg / (1.0f + sg);
+            sb = sb / (1.0f + sb);
+
+            sdr_pixels[dst_idx + 0] = linearToSrgb16(sr);
+            sdr_pixels[dst_idx + 1] = linearToSrgb16(sg);
+            sdr_pixels[dst_idx + 2] = linearToSrgb16(sb);
+            sdr_pixels[dst_idx + 3] = 65535;
+        }
+    }
+
+    return sdr_pixels;
+}
+
+#ifdef ACMX2_WITH_WEBP
+// Save an HDR snapshot as a WebP file.
+//
+// libwebp's bitstream is fundamentally 8-bit per channel and has no HDR
+// metadata, so we tone-map the PQ/HLG BT.2020 input to sRGB before encoding.
+// The resulting lossless RGBA WebP displays correctly on both SDR and HDR
+// viewers (including phone HDR displays which would otherwise interpret
+// PQ-encoded bytes as sRGB and produce washed-out colours).
+inline bool saveHdrWebPFromRgba16(const char *filename,
+                                  const unsigned char *rgba16,
+                                  int width,
+                                  int height,
+                                  int hdr_trc) {
+    if (filename == nullptr || rgba16 == nullptr || width <= 0 || height <= 0) {
+        return false;
+    }
+    const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
+    // Reuse the existing tone-mapper. It expects a vector view of the input.
+    const std::vector<unsigned char> hdr_view(rgba16, rgba16 + pixel_count * 8);
+    const std::vector<unsigned char> rgba8 =
+        toneMapHdrRgba16ToSdrRgba8(hdr_view, width, height, hdr_trc);
+
+    uint8_t *output = nullptr;
+    const int stride = width * 4;
+    const size_t out_size = WebPEncodeLosslessRGBA(rgba8.data(), width, height, stride, &output);
+    if (out_size == 0 || output == nullptr) {
+        if (output != nullptr) {
+            WebPFree(output);
+        }
+        return false;
+    }
+
+    std::ofstream ofs(filename, std::ios::binary);
+    if (!ofs.is_open()) {
+        WebPFree(output);
+        return false;
+    }
+    ofs.write(reinterpret_cast<const char *>(output), static_cast<std::streamsize>(out_size));
+    const bool ok = ofs.good();
+    ofs.close();
+    WebPFree(output);
+    return ok;
+}
+#endif  // ACMX2_WITH_WEBP
+
+#ifdef ACMX2_WITH_TIFF
+// Save an HDR snapshot as a 16-bit RGBA TIFF.
+//
+// We tone-map the PQ/HLG BT.2020 input to sRGB at full 16-bit precision
+// before writing. This keeps highlight detail (no 8-bit quantisation) while
+// producing a file that displays correctly on every viewer — without the
+// PQ-as-sRGB washed-out appearance that bare PQ data would have.
+inline bool saveHdrTiffFromRgba16(const char *filename,
+                                  const unsigned char *rgba16,
+                                  int width,
+                                  int height,
+                                  int hdr_trc) {
+    if (filename == nullptr || rgba16 == nullptr || width <= 0 || height <= 0) {
+        return false;
+    }
+
+    const std::vector<uint16_t> srgb16 =
+        toneMapHdrRgba16ToSrgbRgba16(rgba16, width, height, hdr_trc);
+
+    TIFF *tif = TIFFOpen(filename, "w");
+    if (tif == nullptr) {
+        return false;
+    }
+
+    TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, static_cast<uint32_t>(width));
+    TIFFSetField(tif, TIFFTAG_IMAGELENGTH, static_cast<uint32_t>(height));
+    TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 4);
+    TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
+    TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+    TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+    TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+    TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+    TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(tif, 0));
+
+    const uint16_t extra[1] = { EXTRASAMPLE_UNASSALPHA };
+    TIFFSetField(tif, TIFFTAG_EXTRASAMPLES, 1, extra);
+    TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION,
+                 "ACMX2 HDR snapshot: 16-bit RGBA, sRGB tone-mapped from BT.2020 PQ/HLG");
+
+    const tmsize_t row_samples = static_cast<tmsize_t>(width) * 4;
+    bool ok = true;
+    for (int y = 0; y < height; ++y) {
+        // libtiff's WriteScanline takes a non-const buffer.
+        uint16_t *row = const_cast<uint16_t *>(srgb16.data() + static_cast<size_t>(y) * static_cast<size_t>(row_samples));
+        if (TIFFWriteScanline(tif, row, static_cast<uint32_t>(y), 0) < 0) {
+            ok = false;
+            break;
+        }
+    }
+
+    TIFFClose(tif);
+    return ok;
+}
+#endif  // ACMX2_WITH_TIFF
+
 // ---------------------------------------------------------------------------
 // HDR pipeline shader sources.
 //
@@ -355,9 +645,13 @@ constexpr const char *kHdrDecodeFrag =
     "    const float c1 = 3424.0 / 4096.0;\n"
     "    const float c2 = (2413.0 / 4096.0) * 32.0;\n"
     "    const float c3 = (2392.0 / 4096.0) * 32.0;\n"
-    "    vec3 em2 = pow(max(e, vec3(0.0)), vec3(1.0 / m2));\n"
+    "    vec3 ec = clamp(e, vec3(0.0), vec3(1.0));\n"
+    "    vec3 em2 = pow(ec, vec3(1.0 / m2));\n"
     "    vec3 num = max(em2 - c1, vec3(0.0));\n"
-    "    vec3 den = c2 - c3 * em2;\n"
+    "    // Clamp denominator floor to avoid div-by-zero / sign-flip near\n"
+    "    // peak code values which would otherwise propagate NaN through\n"
+    "    // pow() and read back as zero on some drivers.\n"
+    "    vec3 den = max(c2 - c3 * em2, vec3(1e-6));\n"
     "    return pow(num / den, vec3(1.0 / m1));\n"
     "}\n"
     "// ARIB STD-B67 (HLG) inverse OETF. Input HLG code [0,1]. Output scene\n"
@@ -366,9 +660,10 @@ constexpr const char *kHdrDecodeFrag =
     "    const float a = 0.17883277;\n"
     "    const float b = 0.28466892;\n"
     "    const float c = 0.55991073;\n"
-    "    vec3 lo = (e * e) / 3.0;\n"
-    "    vec3 hi = (exp((e - c) / a) + b) / 12.0;\n"
-    "    return mix(lo, hi, step(vec3(0.5), e));\n"
+    "    vec3 ec = clamp(e, vec3(0.0), vec3(1.0));\n"
+    "    vec3 lo = (ec * ec) / 3.0;\n"
+    "    vec3 hi = (exp((ec - c) / a) + b) / 12.0;\n"
+    "    return mix(lo, hi, step(vec3(0.5), ec));\n"
     "}\n"
     "void main() {\n"
     "    vec4 raw = texture(samp, tc);\n"
@@ -408,12 +703,24 @@ constexpr const char *kHdrEncodeFrag =
     "    const float a = 0.17883277;\n"
     "    const float b = 0.28466892;\n"
     "    const float c = 0.55991073;\n"
-    "    vec3 lo = sqrt(3.0 * max(L, vec3(0.0)));\n"
-    "    vec3 hi = a * log(12.0 * max(L, vec3(0.0)) - b) + c;\n"
-    "    return mix(lo, hi, step(vec3(1.0 / 12.0), L));\n"
+    "    vec3 Lc = max(L, vec3(0.0));\n"
+    "    vec3 lo = sqrt(3.0 * Lc);\n"
+    "    // Floor the log argument so the unused 'hi' branch never produces\n"
+    "    // NaN. mix() with NaN is mix(lo, NaN, 0) = lo + NaN*0 = NaN, which\n"
+    "    // would surface as black pixels after the final clamp/UNORM cast.\n"
+    "    vec3 hi = a * log(max(12.0 * Lc - b, vec3(1e-6))) + c;\n"
+    "    return mix(lo, hi, step(vec3(1.0 / 12.0), Lc));\n"
     "}\n"
     "void main() {\n"
-    "    vec3 lin = max(texture(samp, tc).rgb, vec3(0.0));\n"
+    "    vec3 lin = texture(samp, tc).rgb;\n"
+    "    // Sanitise potentially-NaN/Inf values from prior user shader\n"
+    "    // computations so they do not survive the OETF and read back as\n"
+    "    // zero (=> black holes in dark/edge regions).\n"
+    "    bvec3 nans = isnan(lin);\n"
+    "    bvec3 infs = isinf(lin);\n"
+    "    lin = mix(lin, vec3(0.0), vec3(nans));\n"
+    "    lin = mix(lin, vec3(0.0), vec3(infs));\n"
+    "    lin = max(lin, vec3(0.0));\n"
     "    vec3 enc;\n"
     "    if (transfer == 2) {\n"
     "        enc = linearToHlg(lin / 3.77358491);\n"
@@ -3830,7 +4137,9 @@ struct FrameData {
     int height = 0;                    ///< Frame height in pixels.
     bool isSnapshot = false;           ///< True if this frame should be saved as a PNG snapshot.
     bool isRawSnapshot = false;        ///< True if this frame should be saved as a raw RGBA file.
+    bool isTiffSnapshot = false;       ///< True if this frame should be saved as a 16-bit HDR TIFF.
     bool isHdr = false;                ///< True when @c pixels holds 16-bit PQ/HLG-encoded BT.2020 RGBA (8 bytes/pixel).
+    int hdrTrc = 0;                    ///< AVColorTransferCharacteristic (PQ=16, HLG=18) when @c isHdr.
 };
 
 /**
@@ -4932,10 +5241,16 @@ class ACView : public gl::GLObject {
     void ensureCrossfadeFBO(int width, int height) {
         if (crossfadeFBO)
             return;
+        // In HDR mode the pipeline stores LINEAR BT.2020 light in RGBA16F
+        // (values frequently exceed 1.0). Allocating an 8-bit UNORM target
+        // here would clamp HDR highlights to 1.0 and crush the crossfade
+        // result. Match the rest of the HDR intermediate chain.
+        const GLint cf_internal = input_is_hdr ? GL_RGBA16F : GL_RGBA;
+        const GLenum cf_type    = input_is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
         glGenFramebuffers(1, &crossfadeFBO);
         glGenTextures(1, &crossfadeTexture);
         glBindTexture(GL_TEXTURE_2D, crossfadeTexture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, cf_internal, width, height, 0, GL_RGBA, cf_type, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glBindFramebuffer(GL_FRAMEBUFFER, crossfadeFBO);
@@ -4945,7 +5260,7 @@ class ACView : public gl::GLObject {
         }
         glGenTextures(1, &crossfadePrevTexture);
         glBindTexture(GL_TEXTURE_2D, crossfadePrevTexture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, cf_internal, width, height, 0, GL_RGBA, cf_type, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -6443,12 +6758,14 @@ class ACView : public gl::GLObject {
             glDisable(GL_BLEND);
         }
 
-        bool needWriter = (writer.is_open() || snapshot_state > 0 || raw_snapshot_state > 0) && !isFrozen;
+        bool needWriter = (writer.is_open() || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
 
         bool has_snapshot_request = (snapshot_state > 0);
+        bool has_hdr_snapshot_request = (hdr_snapshot_state > 0);
         bool has_raw_snapshot_request = (raw_snapshot_state > 0);
+        bool has_tiff_snapshot_request = (tiff_snapshot_state > 0);
         if (needWriter && input_is_hdr
-            && (writer.is_open() || has_snapshot_request || has_raw_snapshot_request)) {
+            && (writer.is_open() || has_snapshot_request || has_hdr_snapshot_request || has_raw_snapshot_request || has_tiff_snapshot_request)) {
             // HDR writer readback path. Bypasses the 8-bit PBO ring entirely
             // and reads 16-bit PQ-encoded BT.2020 RGBA from
             // @c hdr_encoded_texture via a synchronous glGetTexImage. The
@@ -6476,28 +6793,92 @@ class ACView : public gl::GLObject {
                 pixels = std::move(flipped_pixels);
             }
 
-            FrameData fd;
-            fd.pixels = std::move(pixels);
-            fd.width = win->w;
-            fd.height = win->h;
-            fd.isHdr = true;
-            fd.isSnapshot = has_snapshot_request;
-            fd.isRawSnapshot = has_raw_snapshot_request;
+            if (writer.is_open() || has_hdr_snapshot_request || has_raw_snapshot_request) {
+                FrameData fd;
+                fd.pixels = pixels;
+                fd.width = win->w;
+                fd.height = win->h;
+                fd.isHdr = true;
+                fd.hdrTrc = input_hdr_trc;
+                fd.isSnapshot = has_hdr_snapshot_request;
+                fd.isRawSnapshot = has_raw_snapshot_request;
+
+                {
+                    std::unique_lock<std::mutex> lock(queueMutex);
+                    queueCondVar.wait(lock, [this] { return frameQueue.size() < 30 || !writerRunning; });
+                    frameQueue.push(std::move(fd));
+                }
+                queueCondVar.notify_one();
+            }
+
+            if (has_tiff_snapshot_request) {
+                FrameData tiff_fd;
+                tiff_fd.pixels = pixels;
+                tiff_fd.width = win->w;
+                tiff_fd.height = win->h;
+                tiff_fd.isHdr = true;
+                tiff_fd.hdrTrc = input_hdr_trc;
+                tiff_fd.isSnapshot = false;
+                tiff_fd.isRawSnapshot = false;
+                tiff_fd.isTiffSnapshot = true;
+
+                {
+                    std::unique_lock<std::mutex> lock(queueMutex);
+                    queueCondVar.wait(lock, [this] { return frameQueue.size() < 30 || !writerRunning; });
+                    frameQueue.push(std::move(tiff_fd));
+                }
+                queueCondVar.notify_one();
+            }
+
+            if (has_snapshot_request) {
+                // In HDR mode, normal PNG snapshots intentionally use the
+                // non-HDR 8-bit readback path so viewers can open them as
+                // standard SDR PNGs.
+                std::vector<unsigned char> sdr_pixels(static_cast<size_t>(win->w) * static_cast<size_t>(win->h) * 4);
+                glBindTexture(GL_TEXTURE_2D, fboTexture);
+                glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, sdr_pixels.data());
+                glBindTexture(GL_TEXTURE_2D, 0);
+
+                std::vector<unsigned char> flipped_pixels(static_cast<size_t>(win->w) * static_cast<size_t>(win->h) * 4);
+                for (int y = 0; y < win->h; ++y) {
+                    const int src_row_start = y * win->w * 4;
+                    const int dest_row_start = (win->h - 1 - y) * win->w * 4;
+                    std::copy(sdr_pixels.begin() + src_row_start,
+                              sdr_pixels.begin() + src_row_start + (win->w * 4),
+                              flipped_pixels.begin() + dest_row_start);
+                }
+
+                FrameData sdr_fd;
+                sdr_fd.pixels = std::move(flipped_pixels);
+                sdr_fd.width = win->w;
+                sdr_fd.height = win->h;
+                sdr_fd.isHdr = false;
+                sdr_fd.isSnapshot = true;
+                sdr_fd.isRawSnapshot = false;
+
+                {
+                    std::unique_lock<std::mutex> lock(queueMutex);
+                    queueCondVar.wait(lock, [this] { return frameQueue.size() < 30 || !writerRunning; });
+                    frameQueue.push(std::move(sdr_fd));
+                }
+                queueCondVar.notify_one();
+            }
 
             if (has_snapshot_request) {
                 snapshot_state = 0;
+            }
+
+            if (has_hdr_snapshot_request) {
+                hdr_snapshot_state = 0;
             }
 
             if (has_raw_snapshot_request) {
                 raw_snapshot_state = 0;
             }
 
-            {
-                std::unique_lock<std::mutex> lock(queueMutex);
-                queueCondVar.wait(lock, [this] { return frameQueue.size() < 30 || !writerRunning; });
-                frameQueue.push(std::move(fd));
+            if (has_tiff_snapshot_request) {
+                tiff_snapshot_state = 0;
             }
-            queueCondVar.notify_one();
         } else if (needWriter) {
 
             if (snapshot_state == 1 || raw_snapshot_state == 1) {
@@ -6820,7 +7201,8 @@ class ACView : public gl::GLObject {
      * - Space: Toggle shader bypass.
      * - P: Toggle playlist mode or pause video.
      * - L: Freeze frame (stop updating texture but keep time advancing).
-     * - Z: Take a PNG snapshot.
+    * - Z: Take a PNG snapshot (8-bit non-HDR readback when HDR input is active).
+    * - 5: Take an HDR PNG snapshot (HDR mode only).
      * - T: Toggle active time.  Q: Toggle audio time.  Home: Toggle audio delta.
     * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.
     * - X: Reset camera.  Ctrl+X: Quit immediately without audio mux/transfer.
@@ -7015,6 +7397,18 @@ class ACView : public gl::GLObject {
                     snapshot_state = 1;
                 }
                 break;
+            case SDLK_4:
+#ifdef ACMX2_WITH_TIFF
+                if (input_is_hdr && tiff_snapshot_state == 0) {
+                    tiff_snapshot_state = 1;
+                }
+#endif
+                break;
+            case SDLK_5:
+                if (input_is_hdr && hdr_snapshot_state == 0) {
+                    hdr_snapshot_state = 1;
+                }
+                break;
             case SDLK_6:
                 if (raw_snapshot_state == 0) {
                     raw_snapshot_state = 1;
@@ -7205,7 +7599,9 @@ class ACView : public gl::GLObject {
     bool repeat = false;
     bool full = false;
     int snapshot_state = 0;
+    int hdr_snapshot_state = 0;
     int raw_snapshot_state = 0;
+    int tiff_snapshot_state = 0;
     double totalFrames = 0;
     cv::VideoCapture cap;
     FFMpegVideoReader ffmpeg_reader;
@@ -7621,10 +8017,21 @@ class ACView : public gl::GLObject {
                             std::ostringstream oss;
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
                             std::string snapshot_type = fd.isHdr ? "ACMX2.HDR.Snapshot" : "ACMX2.Snapshot";
-                            std::string name = snap_prefix + "/" + snapshot_type + "-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".png";
+#ifdef ACMX2_WITH_WEBP
+                            const char *snap_ext = fd.isHdr ? ".webp" : ".png";
+#else
+                            const char *snap_ext = ".png";
+#endif
+                            std::string name = snap_prefix + "/" + snapshot_type + "-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + snap_ext;
 
                             if (fd.isHdr) {
+#ifdef ACMX2_WITH_WEBP
+                                if (!saveHdrWebPFromRgba16(name.c_str(), fd.pixels.data(), fd.width, fd.height, fd.hdrTrc)) {
+                                    mx::system_err << "acmx2: ERROR: failed to write HDR WebP snapshot: " << name << "\n";
+                                }
+#else
                                 png::SavePNG_RGBA16(name.c_str(), fd.pixels.data(), fd.width, fd.height);
+#endif
                             } else {
                                 png::SavePNG_RGBA(name.c_str(),
                                                   const_cast<unsigned char *>(fd.pixels.data()),
@@ -7661,6 +8068,33 @@ class ACView : public gl::GLObject {
                             fflush(stdout);
                         });
                     }
+#ifdef ACMX2_WITH_TIFF
+                    if (fd.isTiffSnapshot) {
+                        uint64_t current_offset = snapshotOffset.fetch_add(1);
+                        std::string snap_prefix = prefix_path;
+                        snapshot_pool.enqueue([snap_prefix, fd, current_offset] {
+                            auto now1 = std::chrono::system_clock::now();
+                            std::time_t now_c = std::chrono::system_clock::to_time_t(now1);
+                            std::tm localTime{};
+#ifdef _WIN32
+                            localtime_s(&localTime, &now_c);
+#else
+                            localtime_r(&now_c, &localTime);
+#endif
+                            std::ostringstream oss;
+                            oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
+                            std::string name = snap_prefix + "/ACMX2.HDR.Snapshot-" + oss.str() + "-" +
+                                               std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" +
+                                               std::to_string(current_offset) + ".tiff";
+                            if (!saveHdrTiffFromRgba16(name.c_str(), fd.pixels.data(), fd.width, fd.height, fd.hdrTrc)) {
+                                mx::system_err << "acmx2: ERROR: failed to write HDR TIFF snapshot: " << name << "\n";
+                            } else {
+                                mx::system_out << "acmx2: Took snapshot: " << name << "\n";
+                            }
+                            fflush(stdout);
+                        });
+                    }
+#endif
                     if (writer.is_open() && (!filename.empty() || !graphic.empty()) && written_frame_counter == 0) {
                         written_frame_counter++;
                         continue;
@@ -7672,7 +8106,7 @@ class ACView : public gl::GLObject {
                     startAudioRecordingIfNeeded();
 #endif
 
-                    if (writer.is_open() && !fd.isSnapshot) {
+                    if (writer.is_open() && !fd.isSnapshot && !fd.isTiffSnapshot) {
                         if (fd.isHdr) {
                             writer.write_hdr_rgba16(fd.pixels.data());
                         } else if (!filename.empty() || !graphic.empty())
@@ -8075,7 +8509,8 @@ const char *message = R"(
     T - enable/disable time
     U/I - step time if not disabled
     Page Up/Page Down - increase/decrease time speed
-    Z - take snapshot
+    Z - take snapshot (8-bit non-HDR PNG in HDR mode)
+    5 - take HDR PNG snapshot (HDR mode)
     3 - toggle 2D/3D mode
     M - toggle multi-pass
     F - toggle fullscreen
