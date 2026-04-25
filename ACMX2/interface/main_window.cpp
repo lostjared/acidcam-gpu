@@ -125,6 +125,12 @@ void MainWindow::initControls() {
     runMenu_all->setShortcut(QKeySequence("Ctrl+E"));
     connect(runMenu_all, &QAction::triggered, this, &MainWindow::runAll);
     runMenu->addAction(runMenu_all);
+    runMenu->addSeparator();
+    QAction *runMenu_clearLog = new QAction(tr("Clear Log"), this);
+    connect(runMenu_clearLog, &QAction::triggered, this, [this]() {
+        bottomTextBox->clear();
+    });
+    runMenu->addAction(runMenu_clearLog);
     play_repeat = new QAction(tr("Repeat"), this);
     play_repeat->setCheckable(true);
     play_repeat->setChecked(false);
@@ -924,6 +930,7 @@ void MainWindow::cameraSettings() {
     duration_limit_enabled = settingsWindow.isDurationLimitEnabled();
     max_duration = settingsWindow.getDurationLimit();
     cross_fade_duration = settingsWindow.getCrossFadeDuration();
+    flip_enabled = settingsWindow.isFlipEnabled();
     encode_preset = settingsWindow.getEncodePreset();
     encode_tune = settingsWindow.getEncodeTune();
     encode_crf = settingsWindow.getEncodeCrf();
@@ -1096,6 +1103,10 @@ void MainWindow::runSelected() {
 
     if (cross_fade_duration != 0.5f) {
         arguments << "--cross-fade" << QString::number(static_cast<double>(cross_fade_duration), 'f', 2);
+    }
+
+    if (flip_enabled) {
+        arguments << "--flip";
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
@@ -1307,6 +1318,10 @@ void MainWindow::runAll() {
 
     if (cross_fade_duration != 0.5f) {
         arguments << "--cross-fade" << QString::number(static_cast<double>(cross_fade_duration), 'f', 2);
+    }
+
+    if (flip_enabled) {
+        arguments << "--flip";
     }
 
     Log("shell: acmx2 " + concatList(arguments) + "<br>");

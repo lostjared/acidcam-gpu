@@ -209,6 +209,7 @@ class MainWindow : public QMainWindow {
     bool duration_limit_enabled = false;
     double max_duration = 0.0;
     float cross_fade_duration = 0.5f;
+    bool flip_enabled = false;
     bool midi_enabled = false;
     QString midi_config_file;
     int midi_device = -1;

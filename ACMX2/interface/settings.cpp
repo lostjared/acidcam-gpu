@@ -535,6 +535,8 @@ void SettingsWindow::init() {
     crossFadeSpinBox->setDecimals(2);
     crossFadeSpinBox->setValue(0.5);
 
+    flipCheckBox = new QCheckBox("Flip", this);
+
     fullscreenCheckBox = new QCheckBox("Fullscreen", this);
 
     enable3dCheckBox = new QCheckBox("Enable 3D", this);
@@ -665,6 +667,7 @@ void SettingsWindow::init() {
     playbackGrid->addWidget(timeSpeedSpinBox,                       r, 1);
     playbackGrid->addWidget(new QLabel("Crossfade (sec):", this), ++r, 0);
     playbackGrid->addWidget(crossFadeSpinBox,                       r, 1);
+    playbackGrid->addWidget(flipCheckBox,                         ++r, 0, 1, 2);
     playbackGrid->addWidget(fullscreenCheckBox,                   ++r, 0, 1, 2);
     auto *durationRow = new QHBoxLayout;
     durationRow->addWidget(durationLimitCheckBox);
@@ -883,6 +886,7 @@ void SettingsWindow::loadUiState() {
     durationLimitCheckBox->setChecked(appSettings.value("interface/duration_enabled", false).toBool());
     durationLimitSpinBox->setValue(appSettings.value("interface/duration_seconds", 60.0).toDouble());
     crossFadeSpinBox->setValue(appSettings.value("interface/crossfade", 0.5).toDouble());
+    flipCheckBox->setChecked(appSettings.value("interface/flip", false).toBool());
 }
 
 void SettingsWindow::saveUiState() {
@@ -925,6 +929,7 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/duration_enabled", durationLimitCheckBox->isChecked());
     appSettings.setValue("interface/duration_seconds", durationLimitSpinBox->value());
     appSettings.setValue("interface/crossfade", crossFadeSpinBox->value());
+    appSettings.setValue("interface/flip", flipCheckBox->isChecked());
 }
 
 bool SettingsWindow::is3dEnabled() const {
@@ -1027,6 +1032,10 @@ double SettingsWindow::getDurationLimit() const {
 
 float SettingsWindow::getCrossFadeDuration() const {
     return static_cast<float>(crossFadeSpinBox->value());
+}
+
+bool SettingsWindow::isFlipEnabled() const {
+    return flipCheckBox->isChecked();
 }
 
 QString SettingsWindow::getEncodePreset() const {

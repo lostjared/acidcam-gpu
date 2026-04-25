@@ -6445,8 +6445,10 @@ class ACView : public gl::GLObject {
 
         bool needWriter = (writer.is_open() || snapshot_state > 0 || raw_snapshot_state > 0) && !isFrozen;
 
-        if (needWriter && input_is_hdr && writer.is_open()
-            && snapshot_state == 0 && raw_snapshot_state == 0) {
+        bool has_snapshot_request = (snapshot_state > 0);
+        bool has_raw_snapshot_request = (raw_snapshot_state > 0);
+        if (needWriter && input_is_hdr
+            && (writer.is_open() || has_snapshot_request || has_raw_snapshot_request)) {
             // HDR writer readback path. Bypasses the 8-bit PBO ring entirely
             // and reads 16-bit PQ-encoded BT.2020 RGBA from
             // @c hdr_encoded_texture via a synchronous glGetTexImage. The
@@ -6479,6 +6481,16 @@ class ACView : public gl::GLObject {
             fd.width = win->w;
             fd.height = win->h;
             fd.isHdr = true;
+            fd.isSnapshot = has_snapshot_request;
+            fd.isRawSnapshot = has_raw_snapshot_request;
+
+            if (has_snapshot_request) {
+                snapshot_state = 0;
+            }
+
+            if (has_raw_snapshot_request) {
+                raw_snapshot_state = 0;
+            }
 
             {
                 std::unique_lock<std::mutex> lock(queueMutex);
@@ -7608,11 +7620,16 @@ class ACView : public gl::GLObject {
 
                             std::ostringstream oss;
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
-                            std::string name = snap_prefix + "/ACMX2.Snapshot-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".png";
+                            std::string snapshot_type = fd.isHdr ? "ACMX2.HDR.Snapshot" : "ACMX2.Snapshot";
+                            std::string name = snap_prefix + "/" + snapshot_type + "-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".png";
 
-                            png::SavePNG_RGBA(name.c_str(),
-                                              const_cast<unsigned char *>(fd.pixels.data()),
-                                              fd.width, fd.height);
+                            if (fd.isHdr) {
+                                png::SavePNG_RGBA16(name.c_str(), fd.pixels.data(), fd.width, fd.height);
+                            } else {
+                                png::SavePNG_RGBA(name.c_str(),
+                                                  const_cast<unsigned char *>(fd.pixels.data()),
+                                                  fd.width, fd.height);
+                            }
 
                             mx::system_out << "acmx2: Took snapshot: " << name << "\n";
                             fflush(stdout);
@@ -7632,11 +7649,13 @@ class ACView : public gl::GLObject {
 #endif
                             std::ostringstream oss;
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
-                            std::string name = snap_prefix + "/ACMX2.Raw-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".raw";
+                            std::string snapshot_type = fd.isHdr ? "ACMX2.HDR.Snapshot" : "ACMX2.Raw";
+                            std::string name = snap_prefix + "/" + snapshot_type + "-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".raw";
 
+                            size_t bpp = fd.isHdr ? 8 : 4;
                             png::SaveRawBytes(name.c_str(), fd.pixels.data(),
                                               static_cast<size_t>(fd.width),
-                                              static_cast<size_t>(fd.height), 4);
+                                              static_cast<size_t>(fd.height), bpp);
 
                             mx::system_out << "acmx2: Saved raw frame: " << name << "\n";
                             fflush(stdout);

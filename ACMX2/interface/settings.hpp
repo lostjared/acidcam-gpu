@@ -80,6 +80,8 @@ class SettingsWindow : public QDialog {
     double getDurationLimit() const;
     /// @brief Return crossfade duration between shader transitions.
     float getCrossFadeDuration() const;
+    /// @brief Return whether flip mode is enabled.
+    bool isFlipEnabled() const;
     /// @brief Resolve display name for a camera device index.
     /// @param device_index Camera device index.
     /// @return Human-readable camera name.
@@ -158,6 +160,7 @@ class SettingsWindow : public QDialog {
     QCheckBox *durationLimitCheckBox;
     QDoubleSpinBox *durationLimitSpinBox;
     QDoubleSpinBox *crossFadeSpinBox;
+    QCheckBox *flipCheckBox;
 
     QComboBox *encodePresetComboBox = nullptr;
     QComboBox *encodeTuneComboBox = nullptr;
