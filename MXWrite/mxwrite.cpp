@@ -1,9 +1,12 @@
 #include "mxwrite.hpp"
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <numeric>
+#include <string>
 #include <thread>
 #ifdef MXWRITE_HAS_CUDA_COPY
 #include <cuda_runtime.h>
@@ -198,10 +201,20 @@ bool is_format_supported(const char *filename) {
     const char *ext = strrchr(filename, '.');
     if (!ext)
         return false;
-    return (strcmp(ext, ".mp4") == 0 ||
-            strcmp(ext, ".mkv") == 0 ||
-            strcmp(ext, ".avi") == 0 ||
-            strcmp(ext, ".mov") == 0);
+    // Lowercase the extension for case-insensitive comparison.
+    std::string lower_ext(ext);
+    std::transform(lower_ext.begin(), lower_ext.end(), lower_ext.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    static const char *kSupported[] = {
+        ".mp4", ".mkv", ".mov", ".avi", ".m4v",
+        ".ts",  ".mts", ".m2ts", ".mpg", ".mpeg",
+        ".flv", ".f4v", ".3gp", ".3g2", ".wmv",
+        ".asf", ".vob"
+    };
+    for (const char *s : kSupported) {
+        if (lower_ext == s) return true;
+    }
+    return false;
 }
 
 void cleanup_contexts(AVFormatContext *source_ctx,

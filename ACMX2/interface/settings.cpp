@@ -1195,11 +1195,24 @@ void SettingsWindow::browseInputVideoFile() {
 void SettingsWindow::browseOutputVideoFile() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastOutputVideoDir", "").toString();
-    QString fileName = QFileDialog::getSaveFileName(this, "Select Output Video File", lastDir, "Video Files (*.mp4 *.mkv);;MP4 Files (*.mp4);;Matroska Files (*.mkv)");
+    static const QStringList kVideoExts = {
+        "mp4", "mkv", "mov", "avi", "m4v",
+        "ts",  "mts", "m2ts", "mpg", "mpeg",
+        "flv", "f4v", "3gp", "3g2", "wmv",
+        "asf", "vob"
+    };
+    QStringList allPattern;
+    for (const QString &e : kVideoExts) allPattern << ("*." + e);
+    QString filter = QString("Video Files (%1)").arg(allPattern.join(' '));
+    filter += ";;MP4 Files (*.mp4);;Matroska Files (*.mkv);;QuickTime Files (*.mov);;AVI Files (*.avi);;MPEG-TS Files (*.ts *.mts *.m2ts);;MPEG Files (*.mpg *.mpeg);;Flash Video (*.flv *.f4v);;3GPP Files (*.3gp *.3g2);;Windows Media (*.wmv *.asf);;DVD VOB (*.vob);;All Files (*)";
+    QString fileName = QFileDialog::getSaveFileName(this, "Select Output Video File", lastDir, filter);
     if (!fileName.isEmpty()) {
         appSettings.setValue("lastOutputVideoDir", QFileInfo(fileName).absolutePath());
-        if (!fileName.endsWith(".mp4", Qt::CaseInsensitive) &&
-            !fileName.endsWith(".mkv", Qt::CaseInsensitive)) {
+        bool hasKnownExt = false;
+        for (const QString &e : kVideoExts) {
+            if (fileName.endsWith("." + e, Qt::CaseInsensitive)) { hasKnownExt = true; break; }
+        }
+        if (!hasKnownExt) {
             fileName += ".mp4";
         }
         outputVideoFileLineEdit->setText(fileName);
