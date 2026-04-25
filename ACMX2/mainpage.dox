@@ -9,9 +9,14 @@
 
 <b>acidcam-gpu / ACMX2</b> is a high-performance, real-time video manipulation engine
 designed to push the boundaries of psychedelic glitch art. Part of the <b>ACMX2</b> and
-<b>libmx2</b> ecosystem, it offloads complex glitch filters to <b>NVIDIA GPUs</b>, enabling
-fluid, high-resolution visual transformations at 60+ FPS. Requires OpenCV 4 compiled
-with CUDA support.
+<b>libmx2</b> ecosystem, it can optionally offload complex glitch filters to <b>NVIDIA GPUs</b>
+via CUDA, enabling fluid, high-resolution visual transformations at 60+ FPS.
+
+<b>CUDA acceleration is a compile-time option</b> (<tt>-DWITH_CUDA=ON/OFF</tt>, default
+<tt>ON</tt>). When enabled it requires OpenCV 4 compiled with CUDA support. When
+disabled, the engine builds against stock OpenCV and runs the full GLSL/SDL2
+shader pipeline without the CUDA GPU-filter stack — see
+@ref build_optional and @ref build_nocuda.
 
 @section purpose Purpose & Vision
 
@@ -20,7 +25,9 @@ However, as resolutions climbed to 4K and filter stacks became more complex, CPU
 processing hit a bottleneck.
 
 <b>acidcam-gpu</b> solves this by:
-- <b>Parallelizing the Chaos:</b> Using custom CUDA kernels to process millions of pixels simultaneously.
+- <b>Parallelizing the Chaos:</b> Using custom CUDA kernels to process millions of pixels simultaneously
+  (when built with <tt>-DWITH_CUDA=ON</tt>; otherwise the engine falls back to the
+  GLSL/SDL2 shader pipeline only).
 
 @section techstack Tech Stack
 
@@ -31,9 +38,14 @@ processing hit a bottleneck.
 
 @section why_nvidia Why NVIDIA & CUDA?
 
-This project is built specifically for the NVIDIA ecosystem to leverage:
+When built with CUDA support enabled (the default on Linux), this project leverages
+the NVIDIA ecosystem for:
 - <b>Shared Memory:</b> Fast on-chip memory to speed up neighborhood-based filters.
 - <b>Massive Throughput:</b> Harnessing thousands of CUDA cores to apply multiple glitch layers in a single pass.
+
+CUDA support is a compile-time option (<tt>-DWITH_CUDA=ON/OFF</tt>) and is
+automatically disabled on macOS. See @ref build_optional and @ref build_nocuda
+for building without CUDA on systems that lack an NVIDIA GPU.
 
 @section goals Project Goals
 
@@ -484,7 +496,10 @@ code to receive live 0.0–1.0 values.
 | Space         | Toggle shader processing bypass |
 | P             | Toggle playlist mode / Pause video |
 | L             | Toggle video freeze |
-| Z             | Take snapshot |
+| Z             | Take snapshot (8-bit PNG; 8-bit non-HDR PNG when input is HDR) |
+| 4             | Take 16-bit HDR TIFF snapshot (HDR input only; requires <tt>ACMX2_WITH_TIFF</tt> build) |
+| 5             | Take HDR snapshot — saves as lossless RGBA WebP if built with <tt>ACMX2_WITH_WEBP</tt>, otherwise as 16-bit RGBA PNG (HDR input only) |
+| 6             | Take raw RGBA snapshot — 16-bit RGBA (8 bytes/pixel) when HDR input, 8-bit RGBA (4 bytes/pixel) otherwise |
 | M             | Toggle multi-shader pass |
 | 3             | Toggle 2D/3D mode |
 | E             | Toggle watermark |
@@ -498,6 +513,29 @@ code to receive live 0.0–1.0 values.
 | +/-           | Increase/Decrease camera distance (3D mode) |
 | C             | Toggle wave effect (3D mode) |
 
+@subsection keyboard_raw_playback Playing Back Raw HDR Snapshots
+
+The <tt>6</tt> key writes the displayed frame as a headerless RGBA byte stream
+whose layout depends on the active pipeline. To preview an HDR raw snapshot
+(16-bit per channel, 4 channels = 8 bytes per pixel, BT.2020 PQ or HLG transfer)
+with <tt>ffplay</tt>, supply the dimensions encoded in the filename and use the
+<tt>rgba64le</tt> pixel format:
+
+@code{.sh}
+ffplay -loglevel warning \
+       -f rawvideo \
+       -pixel_format rgba64le \
+       -video_size 1920x1080 \
+       -i ACMX2.HDR.Snapshot-YYYY.MM.DD-HH.MM.SS-1920x1080-N.raw
+@endcode
+
+Replace <tt>1920x1080</tt> with the resolution embedded in the snapshot's
+filename (ACMX2 always writes <tt>WxH</tt> into the name). The PQ/HLG transfer
+is preserved as written; ffplay will display the values without HDR
+tone-mapping, so colors will look saturated/clipped on SDR monitors. For an
+SDR raw snapshot (8-bit RGBA, 4 bytes per pixel) use <tt>-pixel_format rgba</tt>
+instead.
+
 @section sysreq System Requirements
 
 - Linux (x86_64)
@@ -505,7 +543,11 @@ code to receive live 0.0–1.0 values.
 - NVIDIA proprietary drivers
 - X11 or XWayland
 
-@warning This build uses NVIDIA CUDA. It will <b>not</b> run on AMD or Intel GPUs.
+@warning When built with <tt>-DWITH_CUDA=ON</tt> (the default on Linux), this
+build uses NVIDIA CUDA and the CUDA GPU-filter stack will <b>not</b> run on
+AMD or Intel GPUs. Configure with <tt>-DWITH_CUDA=OFF</tt> for a CUDA-free
+build that runs on any GPU with the GLSL/SDL2 shader pipeline (the CUDA
+filter chain is omitted in that mode).
 
 @section docs External Documentation
 
@@ -519,7 +561,14 @@ code to receive live 0.0–1.0 values.
 @section explained_acidcam_gpu_acmx2_complete_technical_reference acidcam-gpu + ACMX2 — Complete Technical Reference
 
 
-<b>acidcam-gpu</b> is a CUDA-accelerated real-time video effects engine. It contains a library of <b>905 GPU filter kernels</b> that run entirely on the NVIDIA GPU, a <b>unified dispatch kernel</b> that chains any ordered subset of those filters per frame, a rotating device-side frame history buffer for temporal effects, and a CLI application that drives the full pipeline from camera or file input through to live display and optional MXWrite output encoding.
+<b>acidcam-gpu</b> is a CUDA-accelerated real-time video effects engine
+(CUDA acceleration is a compile-time option; see @ref build_optional). It
+contains a library of <b>905 GPU filter kernels</b> that, when CUDA is
+enabled, run entirely on the NVIDIA GPU, a <b>unified dispatch kernel</b>
+that chains any ordered subset of those filters per frame, a rotating
+device-side frame history buffer for temporal effects, and a CLI
+application that drives the full pipeline from camera or file input through
+to live display and optional MXWrite output encoding.
 
 <b>ACMX2</b> is the Qt-based orchestration layer — it wraps the same library and CLI with a visual interface, shader pass ordering, session persistence, and process monitoring. Together they form a layered creative tool: CUDA for pixel-level power, OpenGL for display, Qt for control, and Podman containers for distribution.
 

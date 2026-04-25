@@ -8510,7 +8510,10 @@ const char *message = R"(
     U/I - step time if not disabled
     Page Up/Page Down - increase/decrease time speed
     Z - take snapshot (8-bit non-HDR PNG in HDR mode)
-    5 - take HDR PNG snapshot (HDR mode)
+    4 - take 16-bit HDR TIFF snapshot (HDR input only; requires ACMX2_WITH_TIFF)
+    5 - take HDR snapshot: lossless WebP if ACMX2_WITH_WEBP, otherwise 16-bit PNG (HDR input only)
+    6 - take raw RGBA snapshot (16-bit RGBA in HDR mode, 8-bit RGBA otherwise)
+        playback example: ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw
     3 - toggle 2D/3D mode
     M - toggle multi-pass
     F - toggle fullscreen

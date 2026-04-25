@@ -252,6 +252,9 @@ Because headless mode writes newline-delimited progress updates to stdout, it wo
 | `P` | Toggle playlist mode / Pause video (Video/Image modes) |
 | `L` | Toggle video freeze (Video/Image modes) |
 | `Z` | Take snapshot |
+| `4` | Take 16-bit HDR TIFF snapshot (HDR input only; requires `ACMX2_WITH_TIFF` build) |
+| `5` | Take HDR snapshot — lossless RGBA WebP if built with `ACMX2_WITH_WEBP`, otherwise 16-bit RGBA PNG (HDR input only) |
+| `6` | Take raw RGBA snapshot — 16-bit RGBA (8 bytes/pixel) in HDR mode, 8-bit RGBA (4 bytes/pixel) otherwise |
 | `M` | Toggle multi-shader pass (if `--shader-pass` set) |
 | `3` | Toggle 2D/3D mode (if `--enable-3d` active) |
 | `E` | Toggle watermark |
@@ -288,6 +291,25 @@ Because headless mode writes newline-delimited progress updates to stdout, it wo
 | `B` | Increase movement speed |
 | `N` | Decrease movement speed |
 | `C` | Toggle wave effect |
+
+### Playing back raw HDR snapshots with ffplay
+
+The `6` key writes a headerless RGBA byte stream. The pixel layout depends on
+whether the input is HDR. Use the dimensions embedded in the snapshot's
+filename (ACMX2 always writes `WxH` into the name):
+
+```sh
+# HDR raw: 16-bit RGBA (8 bytes/pixel), BT.2020 PQ/HLG
+ffplay -f rawvideo -pixel_format rgba64le -video_size 1920x1080 \
+       ACMX2.HDR.Snapshot-YYYY.MM.DD-HH.MM.SS-1920x1080-1.raw
+
+# SDR raw: 8-bit RGBA (4 bytes/pixel)
+ffplay -f rawvideo -pixel_format rgba -video_size 1920x1080 \
+       ACMX2.Raw-YYYY.MM.DD-HH.MM.SS-1920x1080-1.raw
+```
+
+Note: ffplay shows raw PQ/HLG values without HDR tone-mapping, so colors may
+look saturated/clipped on SDR monitors.
 
 ---
 
