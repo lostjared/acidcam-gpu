@@ -8197,7 +8197,10 @@ class ACView : public gl::GLObject {
         if (is_audio_recording()) {
             stop_audio_recording();
         }
-        std::string tmp_out = ofilename + ".tmp.mp4";
+        std::string out_ext = std::filesystem::path(ofilename).extension().string();
+        if (out_ext.empty()) out_ext = ".mp4";
+        std::string tmp_out = ofilename + ".tmp" + out_ext;
+        bool is_mp4_like = (out_ext == ".mp4" || out_ext == ".MP4" || out_ext == ".mov" || out_ext == ".MOV" || out_ext == ".m4v" || out_ext == ".M4V");
         int64_t fc = writer.get_frame_count();
         double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
         std::ostringstream cmd;
@@ -8207,8 +8210,10 @@ class ACView : public gl::GLObject {
         if (video_duration > 0.0) {
             cmd << " -t " << std::fixed << std::setprecision(3) << video_duration;
         }
-        cmd << " -movflags +faststart \""
-            << tmp_out << "\" 2>&1";
+        if (is_mp4_like) {
+            cmd << " -movflags +faststart";
+        }
+        cmd << " \"" << tmp_out << "\" 2>&1";
         mx::system_out << "acmx2: muxing recorded audio into video...\n";
         fflush(stdout);
         int ret = std::system(cmd.str().c_str());
@@ -8243,7 +8248,10 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
         if (!file_audio_mode || audio_file_path.empty() || ofilename.empty())
             return;
-        std::string tmp_out = ofilename + ".tmp.mp4";
+        std::string out_ext = std::filesystem::path(ofilename).extension().string();
+        if (out_ext.empty()) out_ext = ".mp4";
+        std::string tmp_out = ofilename + ".tmp" + out_ext;
+        bool is_mp4_like = (out_ext == ".mp4" || out_ext == ".MP4" || out_ext == ".mov" || out_ext == ".MOV" || out_ext == ".m4v" || out_ext == ".M4V");
         int64_t fc = writer.get_frame_count();
         double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
         std::ostringstream cmd;
@@ -8253,8 +8261,10 @@ class ACView : public gl::GLObject {
         if (video_duration > 0.0) {
             cmd << " -t " << std::fixed << std::setprecision(3) << video_duration;
         }
-        cmd << " -movflags +faststart \""
-            << tmp_out << "\" 2>&1";
+        if (is_mp4_like) {
+            cmd << " -movflags +faststart";
+        }
+        cmd << " \"" << tmp_out << "\" 2>&1";
         mx::system_out << "acmx2: muxing audio file into video...\n";
         fflush(stdout);
         int ret = std::system(cmd.str().c_str());

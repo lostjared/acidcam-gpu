@@ -539,7 +539,9 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         encode_queue.pop();
     }
 
-    if (avformat_alloc_output_context2(&format_ctx, nullptr, "mp4", filename.c_str()) < 0) {
+    // Pass nullptr for format_name so libavformat picks the container based
+    // on the filename extension (mp4, mkv, mov, avi...).
+    if (avformat_alloc_output_context2(&format_ctx, nullptr, nullptr, filename.c_str()) < 0) {
         std::cerr << "Could not allocate output context.\n";
         return false;
     }

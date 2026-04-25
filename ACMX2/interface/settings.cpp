@@ -1195,10 +1195,11 @@ void SettingsWindow::browseInputVideoFile() {
 void SettingsWindow::browseOutputVideoFile() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastOutputVideoDir", "").toString();
-    QString fileName = QFileDialog::getSaveFileName(this, "Select Output Video File", lastDir, "MP4 Files (*.mp4)");
+    QString fileName = QFileDialog::getSaveFileName(this, "Select Output Video File", lastDir, "Video Files (*.mp4 *.mkv);;MP4 Files (*.mp4);;Matroska Files (*.mkv)");
     if (!fileName.isEmpty()) {
         appSettings.setValue("lastOutputVideoDir", QFileInfo(fileName).absolutePath());
-        if (!fileName.endsWith(".mp4")) {
+        if (!fileName.endsWith(".mp4", Qt::CaseInsensitive) &&
+            !fileName.endsWith(".mkv", Qt::CaseInsensitive)) {
             fileName += ".mp4";
         }
         outputVideoFileLineEdit->setText(fileName);
