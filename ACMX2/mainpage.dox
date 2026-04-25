@@ -60,6 +60,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 - <b>Configurable recording quality</b> — preset, tune, CRF, codec mode, and realtime low-latency flags are available in both CLI and Qt session settings
 - <b>Pipeline mode reporting</b> — startup log prints active decode/encode modes for validation and benchmarking
 - <b>Silent mode</b> — headless video processing without a window
+- <b>HDR video pipeline</b> — detects BT.2020 PQ/HLG sources, processes them in linear BT.2020, and writes HDR HEVC Main10 output
 - <b>Shader cache</b> — precompile shader binaries for fast startup
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
 - <b>Persistent Qt session dialogs</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened, with fresh defaults of <tt>1280x720</tt> camera capture and <tt>Default</tt> display resolution
@@ -312,6 +313,11 @@ appears in the dock while the application is running.
 ./acmx2 -p ./data -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
 @endcode
 
+<b>Silent HDR batch processing:</b>
+@code{.sh}
+./acmx2 -p ./data -i hdr_input.mp4 -s ./shaders --shader-pass 0,4,9 --silent -o hdr_output.mp4
+@endcode
+
 <b>Build shader cache:</b>
 @code{.sh}
 ./acmx2 -p ./data --build ./shaders --enable-3d
@@ -352,6 +358,7 @@ appears in the dock while the application is running.
 |       | `--encode-crf`    | `<0-51>`  | Encoder CRF quality override (default: 18) |
 |       | `--encode-codec`  | `<mode>`  | Encoder codec mode: <tts>auto</tt>, <tt>software</tt>, or <tt>nvenc</tt> |
 |       | `--encode-realtime` |         | Enable low-latency realtime encoding flags |
+|       | `--no-drop`      |           | Video-file processing: never drop frames; block when the encoder queue is full |
 
 @subsection cli_shader Shader Options
 | Short | Long             | Value       | Description |
@@ -375,7 +382,7 @@ appears in the dock while the application is running.
 | `--list-cuda-devices` |         | List available CUDA devices and exit |
 | `--enumerate-device` | `<index>` | List supported resolutions and frame rates for a camera device (Linux only) |
 | `--disable-counter` |           | Disable timer and FPS counter overlay |
-| `--silent`        |             | Process video without window |
+| `--silent`        |             | Process video without window; only valid for `-i/--input` video files and requires `-o/--output` |
 
 @subsection cli_3d 3D / Model Options
 | Long              | Value       | Description |
@@ -619,7 +626,23 @@ When recording is enabled, processed frames are passed to the <b>MXWrite</b> lib
 
 For H.264 output, MXWrite prefers <tt>h264_nvenc</tt> and automatically falls back to software H.264 if hardware encoding is unavailable. The encoder can now also be steered explicitly through preset, tune, CRF, codec mode, and realtime low-latency flags supplied either on the command line or through the Qt session dialog. During startup, ACMX2 logs a unified pipeline status line showing the active decode mode (for example <tt>ffmpeg-cuda</tt>, <tt>ffmpeg-software</tt>, or <tt>opencv-ffmpeg</tt>) and encode mode (hardware or software).
 
+For HDR sources, ACMX2 switches to a different path. BT.2020 video tagged with PQ (<tt>SMPTE ST.2084</tt>) or HLG (<tt>ARIB STD-B67</tt>), or decoded as 10-bit BT.2020 formats such as <tt>yuv420p10le</tt> and <tt>p010le</tt>, is uploaded as 16-bit RGBA while preserving the source HDR code values. A dedicated fullscreen shader decodes PQ or HLG into linear BT.2020 before the user's shader passes run, and a matching encode pass converts the final linear BT.2020 result back into PQ or HLG.
+
+The HDR writer path then emits <b>HEVC Main10</b> output rather than H.264. MXWrite receives BT.2020 HDR frames and writes them as a 10-bit <tt>P010</tt> HEVC stream with BT.2020 primaries and the original transfer characteristic preserved. When the source contains mastering-display or content-light metadata, ACMX2 forwards that metadata to the output stream so downstream HDR-capable players and editors continue to recognize the export as HDR.
+
 When <tt>--record-audio</tt> is used, the recorded WAV is muxed into the output MP4 at shutdown and then deleted after a successful mux, leaving only the final output video.
+
+@subsubsection explained_silent_mode_terminal_batching Silent Mode for Terminal Batching
+
+<tt>--silent</tt> is the headless batch-processing mode intended for terminal and scripted jobs. It creates an off-screen OpenGL context, suppresses the visible SDL window, and disables real-time FPS pacing so file processing runs as fast as decode, effects, and encode allow.
+
+Restrictions are enforced by the CLI parser:
+
+- it only works with <tt>-i/--input</tt> video files,
+- it requires <tt>-o/--output</tt>,
+- and it rejects camera capture and <tt>-g/--graphic</tt> image input.
+
+Audio-copy and mux operations still execute after frame processing when options such as <tt>--copy-audio</tt>, <tt>--audio-file</tt>, or <tt>--record-audio</tt> are active. In headless mode ACMX2 writes newline-delimited progress updates to stdout, so it works well with terminal logging and wrappers such as <tt>tee</tt>.
 
 @subsection explained_the_public_api_ac_gpu_hpp The Public API  ac-gpu.hpp
 

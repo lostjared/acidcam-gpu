@@ -37,6 +37,7 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU f
 - **Up to 8K recording support** — 4K and below records as H.264; above 4K records as HEVC (H.265)
 - **Recording quality controls** — preset, tune, CRF, codec mode, and realtime low-latency encoding are exposed in both CLI and Qt interface
 - **Silent mode** — headless video processing without a window
+- **HDR video pipeline** — detects BT.2020 HDR sources, processes them in linear BT.2020, and re-encodes them as HDR HEVC Main10
 - **Shader cache** — precompile shader binaries for fast startup
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
 - **MIDI Map Tool** — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
@@ -223,6 +224,11 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 ./acmx2 -p ./data -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
 ```
 
+**Silent HDR batch processing:**
+```bash
+./acmx2 -p ./data -i hdr_input.mp4 -s ./shaders --shader-pass 0,4,9 --silent -o hdr_output.mp4
+```
+
 **Build shader cache:**
 ```bash
 ./acmx2 -p ./data --build ./shaders --enable-3d
@@ -266,6 +272,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | | `--encode-crf` | `<0-51>` | Encoder CRF quality override (default: `18`) |
 | | `--encode-codec` | `<mode>` | Encoder codec mode: `auto`, `software`, or `nvenc` |
 | | `--encode-realtime` | | Enable low-latency realtime encoding flags |
+| | `--no-drop` | | Video-file processing: never drop frames; block when the encoder queue is full |
 
 ### Shader Options
 
@@ -289,7 +296,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | `--list-filters` | | List available GPU filters and exit |
 | `--list-cuda-devices` | | List available CUDA devices and exit |
 | `--disable-counter` | | Disable timer and FPS counter overlay |
-| `--silent` | | Process video without window (video files only, requires `-o`) |
+| `--silent` | | Process video without window. Only valid for `-i/--input` video files and requires `-o/--output`; camera and image input are not supported. |
 
 ### 3D / Model Options
 
@@ -324,6 +331,45 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | `--midi-map` | `<file>` | MIDI config file (`.midi_cfg`) |
 | `--midi-device` | `<index>` | MIDI input device index |
 | `--list-midi` | | List available MIDI input devices and exit |
+
+---
+
+## HDR Video Processing
+
+ACMX2 automatically enables its HDR path when the input video is tagged as BT.2020 HDR with PQ (`SMPTE ST.2084`) or HLG (`ARIB STD-B67`) transfer characteristics, or when the decoded stream is a 10-bit BT.2020 format such as `yuv420p10le` or `p010le`.
+
+On ingest, the program preserves the source HDR encoding long enough to upload each frame into a 16-bit RGBA texture. A dedicated HDR decode shader converts PQ or HLG into linear BT.2020 before the normal shader chain and optional CUDA filters run. After the last effect pass, a matching HDR encode shader converts the result back to the same HDR transfer family as the source.
+
+HDR exports are written as HEVC Main10, not H.264. The output path feeds MXWrite a BT.2020 HDR frame that is quantized to a 10-bit `P010` HEVC stream, with BT.2020 primaries and the original PQ or HLG transfer preserved. If the input contains mastering-display or content-light metadata, ACMX2 forwards that HDR metadata to the encoded output.
+
+That gives you an end-to-end HDR round-trip: HDR in, effects in linear BT.2020, HDR out. The terminal log reports this explicitly when active, for example `HDR output mode enabled: HEVC Main10 + BT.2020 + PQ`.
+
+## Using `--silent` for Terminal Processing
+
+`--silent` is the headless transcoding mode. It creates an off-screen context, does not open a visible SDL window, and skips playback pacing so the job runs as fast as possible instead of real time.
+
+- Use it only with `-i/--input` video files.
+- Always pair it with `-o/--output`.
+- Do not use it with camera capture or `-g/--graphic` image input.
+- Audio copy and mux steps still happen at the end when requested.
+
+Typical use:
+
+```bash
+./acmx2 -p ./data -i input.mp4 -s ./shaders -h 12 --silent -o output.mp4
+```
+
+HDR files use the same flag set and automatically stay in HDR:
+
+```bash
+./acmx2 -p ./data -i hdr_input.mp4 -s ./shaders --gpu-filter 0,5 --silent -o hdr_output.mp4 --copy-audio
+```
+
+Because progress is printed to stdout in headless mode, `--silent` is suitable for shell pipelines and logs:
+
+```bash
+./acmx2 -p ./data -i input.mp4 -s ./shaders --silent -o output.mp4 | tee acmx2-batch.log
+```
 
 ---
 

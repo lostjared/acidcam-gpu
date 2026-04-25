@@ -39,6 +39,7 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 * **Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
 * **FFmpeg CUDA Decode Path:** Prefer direct FFmpeg/CUDA hardware decode for video files, with automatic software/OpenCV fallback.
 * **Hardware-First Encoding:** Prefer `h264_nvenc` when available, with automatic software H.264 fallback.
+* **HDR Video Pipeline:** Detect BT.2020 PQ/HLG sources, process them in HDR, and write HEVC Main10 output with HDR signaling preserved.
 * **Encoding Quality Controls:** Preset, tune, CRF, codec mode, and realtime low-latency flags are available for recording.
 * **Visual User Interface** Simple to use User interface
 * **Command line tool** Command line tool
@@ -134,6 +135,7 @@ sudo bash build-script/install-deps-arch.sh
 | | `--encode-crf` | `<0-51>` | Encoder CRF quality override (default: `18`) |
 | | `--encode-codec` | `<mode>` | Encoder codec mode: `auto`, `software`, or `nvenc` |
 | | `--encode-realtime` | | Enable low-latency realtime encoding flags |
+| | `--no-drop` | | Video-file processing: never drop frames; block when the encoder queue is full |
 
 ### Shader Options
 
@@ -159,7 +161,7 @@ sudo bash build-script/install-deps-arch.sh
 | `--list-cuda-devices` | | List available CUDA devices and exit |
 | `--enumerate-device` | `<index>` | List supported resolutions and frame rates for a camera device (Linux only) |
 | `--disable-counter` | | Disable timer and FPS counter overlay |
-| `--silent` | | Process video without window (video files only, requires `-o`) |
+| `--silent` | | Process video without window. Only valid with `-i/--input` video files and requires `-o/--output`; camera and image input are rejected. |
 
 ### 3D / Model Options
 
@@ -192,6 +194,45 @@ sudo bash build-script/install-deps-arch.sh
 | `--midi-map` | `<file>` | MIDI config file (`.midi_cfg`) |
 | `--midi-device` | `<index>` | MIDI input device index |
 | `--list-midi` | | List available MIDI input devices and exit |
+
+---
+
+## HDR Video Processing
+
+ACMX2 automatically switches to its HDR pipeline when the input stream is tagged as BT.2020 with PQ (`SMPTE ST.2084`) or HLG (`ARIB STD-B67`) transfer characteristics, or when the decoded source is a 10-bit BT.2020 format such as `yuv420p10le` or `p010le`.
+
+On ingest, the program preserves the source HDR code values long enough to upload each frame into a 16-bit RGBA working texture. A dedicated HDR decode shader converts PQ or HLG into linear BT.2020 before your GLSL shader passes and optional CUDA filters run. After processing, a matching HDR encode shader converts the result back into the same HDR transfer family as the source.
+
+HDR exports use HEVC Main10 rather than the standard H.264 path. MXWrite receives BT.2020 HDR frames and writes a 10-bit `P010` HEVC stream with BT.2020 primaries and the original PQ or HLG transfer preserved. When the source includes mastering-display or content-light metadata, ACMX2 forwards that HDR metadata to the output stream as well.
+
+In practice, SDR jobs still follow the H.264-first path, while HDR jobs are written as HDR HEVC so compatible players and editors continue to recognize the output as HDR. Startup logs report this explicitly with lines such as `HDR output mode enabled: HEVC Main10 + BT.2020 + HLG`.
+
+## Using `--silent` in the Terminal
+
+`--silent` is the headless batch-processing mode for video files. It creates an off-screen OpenGL context, suppresses the visible SDL window, and skips display pacing so the file is processed as fast as decode, effects, and encode allow.
+
+- Use it only with `-i/--input` video files.
+- Always pair it with `-o/--output`.
+- Do not use it with camera capture or `-g/--graphic` image input.
+- Audio copy and mux steps still run after frame processing when you use options such as `--copy-audio`, `--audio-file`, or `--record-audio`.
+
+Typical terminal usage:
+
+```bash
+./acmx2 -p ./data -i input.mp4 -s ./shaders -h 12 --silent -o output.mp4
+```
+
+Silent HDR processing uses the same flag and keeps HDR active automatically:
+
+```bash
+./acmx2 -p ./data -i hdr_input.mp4 -s ./shaders --gpu-filter 0,5 --silent -o hdr_output.mp4 --copy-audio
+```
+
+Because headless mode writes newline-delimited progress updates to stdout, it works well with terminal logging:
+
+```bash
+./acmx2 -p ./data -i input.mp4 -s ./shaders --silent -o output.mp4 | tee batch.log
+```
 
 ---
 
