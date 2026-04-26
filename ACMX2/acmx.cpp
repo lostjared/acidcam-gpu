@@ -8167,8 +8167,9 @@ class ACView : public gl::GLObject {
     bool needsFileAudioMux() {
 #ifdef AUDIO_ENABLED
         /// @brief Check whether the output video needs file-audio muxing.
-        /// @return @c true when file_audio_mode is active and an output file is set.
-        return file_audio_mode && !audio_file_path.empty() && !ofilename.empty();
+        /// @return @c true when file_audio_mode is active, recording was explicitly
+        /// requested (used as mux opt-in), and an output file is set.
+        return file_audio_mode && !audio_file_path.empty() && !audio_record_file.empty() && !ofilename.empty();
 #else
         return false;
 #endif
@@ -8309,7 +8310,7 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
             const bool shouldRecordedMux = audio_is_enabled && !file_audio_mode && !audio_record_file.empty() &&
                                            (is_audio_recording() || std::filesystem::exists(audio_record_file));
-            const bool shouldFileAudioMux = file_audio_mode && !audio_file_path.empty() && !ofilename.empty();
+            const bool shouldFileAudioMux = file_audio_mode && !audio_file_path.empty() && !audio_record_file.empty() && !ofilename.empty();
 #else
             const bool shouldRecordedMux = false;
             const bool shouldFileAudioMux = false;
