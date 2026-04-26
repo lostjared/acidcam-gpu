@@ -61,10 +61,10 @@ class AudioSettings : public QDialog {
     QSlider *sensitivitySlider;
     QComboBox *inputDeviceComboBox;
     QComboBox *outputDeviceComboBox;
-    QCheckBox *audioFileCheckBox;          ///< Toggle file-based audio input.
-    QLineEdit *audioFileLineEdit;          ///< Displays the selected audio file path.
-    QPushButton *audioFileBrowseButton;    ///< Opens a file dialog to choose an audio file.
-    QCheckBox *audioTruncCheckBox;         ///< Stop playback when the audio file ends.
+    QCheckBox *audioFileCheckBox;       ///< Toggle file-based audio input.
+    QLineEdit *audioFileLineEdit;       ///< Displays the selected audio file path.
+    QPushButton *audioFileBrowseButton; ///< Opens a file dialog to choose an audio file.
+    QCheckBox *audioTruncCheckBox;      ///< Stop playback when the audio file ends.
     QPushButton *okButton;
     QPushButton *cancelButton;
 };

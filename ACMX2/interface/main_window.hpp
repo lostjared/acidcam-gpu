@@ -148,7 +148,7 @@ class MainWindow : public QMainWindow {
     QString output_file;
     double output_fps = 24.0f;
     QString encode_preset = "medium";
-    QString encode_tune;        // empty => "none"
+    QString encode_tune; // empty => "none"
     int encode_crf = 18;
     QString encode_codec = "auto";
     bool encode_realtime = false;

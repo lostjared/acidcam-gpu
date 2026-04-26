@@ -248,9 +248,9 @@ void PlaylistDialog::removeNode() {
 
     if (node->childCount() > 0) {
         auto reply = QMessageBox::question(this, "Remove Node",
-            "Node \"" + node->text(0) + "\" has " + QString::number(node->childCount()) +
-            " shader(s). Remove it and all its shaders?",
-            QMessageBox::Yes | QMessageBox::No);
+                                           "Node \"" + node->text(0) + "\" has " + QString::number(node->childCount()) +
+                                               " shader(s). Remove it and all its shaders?",
+                                           QMessageBox::Yes | QMessageBox::No);
         if (reply != QMessageBox::Yes)
             return;
     }

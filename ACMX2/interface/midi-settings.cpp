@@ -134,8 +134,8 @@ void MidiSettings::browseConfigFile() {
 void MidiSettings::launchMidiMapTool() {
     if (!QProcess::startDetached("midi-map", {})) {
         QMessageBox::warning(this, "Launch Failed",
-            "Could not launch midi-map.\n"
-            "Make sure it is installed and available in your system PATH.");
+                             "Could not launch midi-map.\n"
+                             "Make sure it is installed and available in your system PATH.");
     }
 }
 

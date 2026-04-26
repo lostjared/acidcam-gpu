@@ -22,7 +22,6 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
-
 /**
  * @brief Dialog that collects camera, input source, output, and runtime options.
  */

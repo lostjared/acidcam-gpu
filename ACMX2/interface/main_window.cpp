@@ -740,7 +740,7 @@ void MainWindow::fileExit() {
 void MainWindow::menuAudioSettings() {
     if (!audio_available) {
         QMessageBox::information(this, tr("Audio Settings"),
-            tr("Audio support is unavailable: acmx2 was built without audio support."));
+                                 tr("Audio support is unavailable: acmx2 was built without audio support."));
         return;
     }
     AudioSettings audio_set(this);
@@ -766,7 +766,7 @@ void MainWindow::menuAudioSettings() {
 void MainWindow::menuGPUFilterSettings() {
     if (!cuda_available) {
         QMessageBox::information(this, tr("GPU Filter Settings"),
-            tr("GPU filters are unavailable: acmx2 was built without CUDA support."));
+                                 tr("GPU filters are unavailable: acmx2 was built without CUDA support."));
         return;
     }
     GPUFilterDialog gpuDialog(executable_path, this);
@@ -785,7 +785,7 @@ void MainWindow::menuGPUFilterSettings() {
 void MainWindow::menuMidiSettings() {
     if (!midi_available) {
         QMessageBox::information(this, tr("MIDI Settings"),
-            tr("MIDI support is unavailable: acmx2 was built without MIDI support."));
+                                 tr("MIDI support is unavailable: acmx2 was built without MIDI support."));
         return;
     }
     MidiSettings midiDialog(executable_path, this);
@@ -1464,23 +1464,24 @@ void MainWindow::menuRemoveBroken() {
     }
     if (scan_path.isEmpty()) {
         QMessageBox::warning(this, "Error",
-            "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
+                             "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
         return;
     }
     if (process->state() == QProcess::Running) {
         QMessageBox::warning(this, "Error",
-            "A process is already running. Please wait for it to finish.");
+                             "A process is already running. Please wait for it to finish.");
         return;
     }
 
     QMessageBox::StandardButton reply = QMessageBox::question(this,
-        tr("Remove Broken Shaders"),
-        tr("This will compile every shader in:\n\n%1\n\n"
-           "Any shader that fails to compile will be removed from index.txt "
-           "(the original will be backed up as index.txt.bak).\n\nContinue?")
-            .arg(scan_path),
-        QMessageBox::Yes | QMessageBox::No);
-    if (reply != QMessageBox::Yes) return;
+                                                              tr("Remove Broken Shaders"),
+                                                              tr("This will compile every shader in:\n\n%1\n\n"
+                                                                 "Any shader that fails to compile will be removed from index.txt "
+                                                                 "(the original will be backed up as index.txt.bak).\n\nContinue?")
+                                                                  .arg(scan_path),
+                                                              QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes)
+        return;
 
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
@@ -1494,7 +1495,8 @@ void MainWindow::menuRemoveBroken() {
     QStringList args;
     args << "--remove-broken" << scan_path;
     args << "-p" << assets_path;
-    if (enable_3d) args << "--enable-3d";
+    if (enable_3d)
+        args << "--enable-3d";
 
     Log("Scanning for broken shaders in: " + scan_path);
     Log("Command: " + executable_path + " " + args.join(" "));
@@ -1522,16 +1524,17 @@ void MainWindow::menuRemoveBroken() {
                     // Reload the list view from the updated index.txt.
                     loadShaders(scan_path, true);
                     QMessageBox::information(this,
-                        tr("Remove Broken"),
-                        tr("Finished scanning shader library.\n\n"
-                           "index.txt has been updated and the shader list reloaded.\n"
-                           "A backup of the original is at:\n%1/index.txt.bak")
-                            .arg(scan_path));
+                                             tr("Remove Broken"),
+                                             tr("Finished scanning shader library.\n\n"
+                                                "index.txt has been updated and the shader list reloaded.\n"
+                                                "A backup of the original is at:\n%1/index.txt.bak")
+                                                 .arg(scan_path));
                 } else {
                     QMessageBox::warning(this,
-                        tr("Remove Broken"),
-                        tr("Remove-broken failed with exit code %1. "
-                           "index.txt was not changed.").arg(exitCode));
+                                         tr("Remove Broken"),
+                                         tr("Remove-broken failed with exit code %1. "
+                                            "index.txt was not changed.")
+                                             .arg(exitCode));
                 }
                 scan->deleteLater();
             });

@@ -107,12 +107,18 @@ void CustomTextEdit::highlightCurrentLine() {
 }
 
 static QChar matchingBracket(QChar ch) {
-    if (ch == '(') return ')';
-    if (ch == ')') return '(';
-    if (ch == '{') return '}';
-    if (ch == '}') return '{';
-    if (ch == '[') return ']';
-    if (ch == ']') return '[';
+    if (ch == '(')
+        return ')';
+    if (ch == ')')
+        return '(';
+    if (ch == '{')
+        return '}';
+    if (ch == '}')
+        return '{';
+    if (ch == '[')
+        return ']';
+    if (ch == ']')
+        return '[';
     return QChar();
 }
 
@@ -154,8 +160,10 @@ void CustomTextEdit::matchBrackets() {
                 ++depth;
             else if (c == match)
                 --depth;
-            if (forward) ++i;
-            else --i;
+            if (forward)
+                ++i;
+            else
+                --i;
         }
 
         if (depth == 0) {

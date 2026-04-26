@@ -1,26 +1,26 @@
 #include "settings.hpp"
-#include <algorithm>
-#include <memory>
 #include <QApplication>
 #include <QFile>
+#include <QFileInfo>
+#include <QGridLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QProcess>
 #include <QRegularExpression>
-#include <QGridLayout>
 #include <QScreen>
 #include <QSet>
 #include <QSettings>
-#include <QFileInfo>
+#include <algorithm>
+#include <memory>
 #include <vector>
 #ifdef _WIN32
+#include <dshow.h>
+#include <dvdmedia.h> // VIDEOINFOHEADER2, FORMAT_VideoInfo2 (not pulled in by dshow.h in MinGW)
+#include <olectl.h>
 #include <optional>
 #include <windows.h>
-#include <dshow.h>
-#include <dvdmedia.h>  // VIDEOINFOHEADER2, FORMAT_VideoInfo2 (not pulled in by dshow.h in MinGW)
-#include <olectl.h>
 // MEDIASUBTYPE_I420 is absent from MinGW DirectShow headers — define it manually.
 #ifndef MEDIASUBTYPE_I420
 static const GUID MEDIASUBTYPE_I420 = {0x30323449, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71}};
@@ -32,339 +32,346 @@ static const GUID MEDIASUBTYPE_I420 = {0x30323449, 0x0000, 0x0010, {0x80, 0x00, 
 #endif
 
 namespace {
-void appendUniqueFps(QList<double> &fpsList, double fps) {
-    if (fps <= 0.0) {
-        return;
-    }
-
-    for (double existing : fpsList) {
-        if (qAbs(existing - fps) < 0.05) {
+    void appendUniqueFps(QList<double> &fpsList, double fps) {
+        if (fps <= 0.0) {
             return;
         }
+
+        for (double existing : fpsList) {
+            if (qAbs(existing - fps) < 0.05) {
+                return;
+            }
+        }
+        fpsList.append(fps);
     }
-    fpsList.append(fps);
-}
 
 #ifdef __APPLE__
-QStringList appleCameraNamesFromSystemProfiler() {
-    QProcess process;
-    process.start("/usr/sbin/system_profiler", {"-json", "SPCameraDataType"});
-    if (!process.waitForFinished(8000)) {
-        return {};
+    QStringList appleCameraNamesFromSystemProfiler() {
+        QProcess process;
+        process.start("/usr/sbin/system_profiler", {"-json", "SPCameraDataType"});
+        if (!process.waitForFinished(8000)) {
+            return {};
+        }
+
+        const QByteArray output = process.readAllStandardOutput();
+        const QJsonDocument document = QJsonDocument::fromJson(output);
+        if (!document.isObject()) {
+            return {};
+        }
+
+        QStringList cameraNames;
+        const QJsonArray cameras = document.object().value("SPCameraDataType").toArray();
+        for (const QJsonValue &cameraValue : cameras) {
+            const QJsonObject cameraObject = cameraValue.toObject();
+            const QString cameraName = cameraObject.value("_name").toString().trimmed();
+            if (!cameraName.isEmpty()) {
+                cameraNames.append(cameraName);
+            }
+        }
+        return cameraNames;
     }
 
-    const QByteArray output = process.readAllStandardOutput();
-    const QJsonDocument document = QJsonDocument::fromJson(output);
-    if (!document.isObject()) {
-        return {};
-    }
+    void populateAppleDefaultCapabilities(QMap<QString, QList<double>> &deviceCapabilities) {
+        static const QStringList kDefaultResolutions = {
+            "640x360",
+            "640x480",
+            "1280x720",
+            "1920x1080",
+            "3840x2160"};
+        static const QList<double> kDefaultFps = {24.0, 30.0, 60.0};
 
-    QStringList cameraNames;
-    const QJsonArray cameras = document.object().value("SPCameraDataType").toArray();
-    for (const QJsonValue &cameraValue : cameras) {
-        const QJsonObject cameraObject = cameraValue.toObject();
-        const QString cameraName = cameraObject.value("_name").toString().trimmed();
-        if (!cameraName.isEmpty()) {
-            cameraNames.append(cameraName);
+        for (const QString &resolution : kDefaultResolutions) {
+            deviceCapabilities.insert(resolution, kDefaultFps);
         }
     }
-    return cameraNames;
-}
-
-void populateAppleDefaultCapabilities(QMap<QString, QList<double>> &deviceCapabilities) {
-    static const QStringList kDefaultResolutions = {
-        "640x360",
-        "640x480",
-        "1280x720",
-        "1920x1080",
-        "3840x2160"
-    };
-    static const QList<double> kDefaultFps = {24.0, 30.0, 60.0};
-
-    for (const QString &resolution : kDefaultResolutions) {
-        deviceCapabilities.insert(resolution, kDefaultFps);
-    }
-}
 #endif
 
 #ifdef _WIN32
-std::optional<int> parseIndexedCameraLabel(const QString &label) {
-    const int openPos = label.lastIndexOf("[");
-    const int closePos = label.lastIndexOf("]");
-    if (openPos < 0 || closePos < 0 || closePos <= openPos + 1) {
-        return std::nullopt;
-    }
-
-    bool ok = false;
-    const int parsed = label.mid(openPos + 1, closePos - openPos - 1).trimmed().toInt(&ok);
-    if (!ok) {
-        return std::nullopt;
-    }
-    return parsed;
-}
-
-int resolveWindowsSelectedCameraIndex(const QComboBox *comboBox) {
-    if (comboBox == nullptr || comboBox->currentIndex() < 0) {
-        return -1;
-    }
-
-    const QString currentLabel = comboBox->currentText();
-    if (const auto parsedIndex = parseIndexedCameraLabel(currentLabel); parsedIndex.has_value()) {
-        return *parsedIndex;
-    }
-
-    return comboBox->currentData().toInt();
-}
-
-template <typename T>
-struct ComReleaser {
-    void operator()(T *value) const {
-        if (value != nullptr) {
-            value->Release();
+    std::optional<int> parseIndexedCameraLabel(const QString &label) {
+        const int openPos = label.lastIndexOf("[");
+        const int closePos = label.lastIndexOf("]");
+        if (openPos < 0 || closePos < 0 || closePos <= openPos + 1) {
+            return std::nullopt;
         }
-    }
-};
 
-template <typename T>
-using ComPtr = std::unique_ptr<T, ComReleaser<T>>;
-
-class ComInitScope {
-  public:
-    ComInitScope()
-        : result(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)), shouldUninitialize(SUCCEEDED(result)) {
-    }
-
-    ~ComInitScope() {
-        if (shouldUninitialize) {
-            CoUninitialize();
+        bool ok = false;
+        const int parsed = label.mid(openPos + 1, closePos - openPos - 1).trimmed().toInt(&ok);
+        if (!ok) {
+            return std::nullopt;
         }
+        return parsed;
     }
 
-    bool ready() const {
-        return SUCCEEDED(result) || result == RPC_E_CHANGED_MODE;
+    int resolveWindowsSelectedCameraIndex(const QComboBox *comboBox) {
+        if (comboBox == nullptr || comboBox->currentIndex() < 0) {
+            return -1;
+        }
+
+        const QString currentLabel = comboBox->currentText();
+        if (const auto parsedIndex = parseIndexedCameraLabel(currentLabel); parsedIndex.has_value()) {
+            return *parsedIndex;
+        }
+
+        return comboBox->currentData().toInt();
     }
 
-  private:
-    HRESULT result;
-    bool shouldUninitialize;
-};
+    template <typename T>
+    struct ComReleaser {
+        void operator()(T *value) const {
+            if (value != nullptr) {
+                value->Release();
+            }
+        }
+    };
 
-struct WindowsCameraDeviceInfo {
-    int index = -1;
-    QString name;
-};
+    template <typename T>
+    using ComPtr = std::unique_ptr<T, ComReleaser<T>>;
 
-void freeMediaType(AM_MEDIA_TYPE *mediaType) {
-    if (mediaType == nullptr) {
-        return;
+    class ComInitScope {
+      public:
+        ComInitScope()
+            : result(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)), shouldUninitialize(SUCCEEDED(result)) {
+        }
+
+        ~ComInitScope() {
+            if (shouldUninitialize) {
+                CoUninitialize();
+            }
+        }
+
+        bool ready() const {
+            return SUCCEEDED(result) || result == RPC_E_CHANGED_MODE;
+        }
+
+      private:
+        HRESULT result;
+        bool shouldUninitialize;
+    };
+
+    struct WindowsCameraDeviceInfo {
+        int index = -1;
+        QString name;
+    };
+
+    void freeMediaType(AM_MEDIA_TYPE *mediaType) {
+        if (mediaType == nullptr) {
+            return;
+        }
+
+        if (mediaType->cbFormat != 0 && mediaType->pbFormat != nullptr) {
+            CoTaskMemFree(mediaType->pbFormat);
+            mediaType->cbFormat = 0;
+            mediaType->pbFormat = nullptr;
+        }
+
+        if (mediaType->pUnk != nullptr) {
+            mediaType->pUnk->Release();
+            mediaType->pUnk = nullptr;
+        }
+
+        CoTaskMemFree(mediaType);
     }
 
-    if (mediaType->cbFormat != 0 && mediaType->pbFormat != nullptr) {
-        CoTaskMemFree(mediaType->pbFormat);
-        mediaType->cbFormat = 0;
-        mediaType->pbFormat = nullptr;
-    }
+    QString cameraNameFromPropertyBag(IPropertyBag *propertyBag) {
+        if (propertyBag == nullptr) {
+            return {};
+        }
 
-    if (mediaType->pUnk != nullptr) {
-        mediaType->pUnk->Release();
-        mediaType->pUnk = nullptr;
-    }
+        VARIANT value;
+        VariantInit(&value);
 
-    CoTaskMemFree(mediaType);
-}
+        QString deviceName;
+        if (SUCCEEDED(propertyBag->Read(L"FriendlyName", &value, nullptr)) && value.vt == VT_BSTR && value.bstrVal != nullptr) {
+            deviceName = QString::fromWCharArray(value.bstrVal).trimmed();
+        }
+        VariantClear(&value);
 
-QString cameraNameFromPropertyBag(IPropertyBag *propertyBag) {
-    if (propertyBag == nullptr) {
-        return {};
-    }
+        if (!deviceName.isEmpty()) {
+            return deviceName;
+        }
 
-    VARIANT value;
-    VariantInit(&value);
+        VariantInit(&value);
+        if (SUCCEEDED(propertyBag->Read(L"Description", &value, nullptr)) && value.vt == VT_BSTR && value.bstrVal != nullptr) {
+            deviceName = QString::fromWCharArray(value.bstrVal).trimmed();
+        }
+        VariantClear(&value);
 
-    QString deviceName;
-    if (SUCCEEDED(propertyBag->Read(L"FriendlyName", &value, nullptr)) && value.vt == VT_BSTR && value.bstrVal != nullptr) {
-        deviceName = QString::fromWCharArray(value.bstrVal).trimmed();
-    }
-    VariantClear(&value);
-
-    if (!deviceName.isEmpty()) {
         return deviceName;
     }
 
-    VariantInit(&value);
-    if (SUCCEEDED(propertyBag->Read(L"Description", &value, nullptr)) && value.vt == VT_BSTR && value.bstrVal != nullptr) {
-        deviceName = QString::fromWCharArray(value.bstrVal).trimmed();
-    }
-    VariantClear(&value);
+    std::vector<WindowsCameraDeviceInfo> enumerateWindowsCameraDevices() {
+        ComInitScope comScope;
+        if (!comScope.ready()) {
+            return {};
+        }
 
-    return deviceName;
-}
+        ICreateDevEnum *deviceEnumeratorRaw = nullptr;
+        if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
+                                    IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
+            return {};
+        }
+        ComPtr<ICreateDevEnum> deviceEnumerator(deviceEnumeratorRaw);
 
-std::vector<WindowsCameraDeviceInfo> enumerateWindowsCameraDevices() {
-    ComInitScope comScope;
-    if (!comScope.ready()) {
-        return {};
-    }
+        IEnumMoniker *enumMonikerRaw = nullptr;
+        const HRESULT createResult = deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory,
+                                                                             &enumMonikerRaw, 0);
+        if (createResult != S_OK || enumMonikerRaw == nullptr) {
+            return {};
+        }
+        ComPtr<IEnumMoniker> enumMoniker(enumMonikerRaw);
 
-    ICreateDevEnum *deviceEnumeratorRaw = nullptr;
-    if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
-        return {};
-    }
-    ComPtr<ICreateDevEnum> deviceEnumerator(deviceEnumeratorRaw);
+        std::vector<WindowsCameraDeviceInfo> devices;
+        IMoniker *monikerRaw = nullptr;
+        ULONG fetched = 0;
+        int currentIndex = 0;
+        while (enumMoniker->Next(1, &monikerRaw, &fetched) == S_OK) {
+            ComPtr<IMoniker> moniker(monikerRaw);
+            monikerRaw = nullptr;
 
-    IEnumMoniker *enumMonikerRaw = nullptr;
-    const HRESULT createResult = deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory,
-                                                                         &enumMonikerRaw, 0);
-    if (createResult != S_OK || enumMonikerRaw == nullptr) {
-        return {};
-    }
-    ComPtr<IEnumMoniker> enumMoniker(enumMonikerRaw);
-
-    std::vector<WindowsCameraDeviceInfo> devices;
-    IMoniker *monikerRaw = nullptr;
-    ULONG fetched = 0;
-    int currentIndex = 0;
-    while (enumMoniker->Next(1, &monikerRaw, &fetched) == S_OK) {
-        ComPtr<IMoniker> moniker(monikerRaw);
-        monikerRaw = nullptr;
-
-        IPropertyBag *propertyBagRaw = nullptr;
-        if (SUCCEEDED(moniker->BindToStorage(nullptr, nullptr, IID_IPropertyBag,
-                                             reinterpret_cast<void **>(&propertyBagRaw)))) {
-            ComPtr<IPropertyBag> propertyBag(propertyBagRaw);
-            const QString deviceName = cameraNameFromPropertyBag(propertyBag.get());
-            if (!deviceName.isEmpty()) {
-                devices.push_back({currentIndex, deviceName});
+            IPropertyBag *propertyBagRaw = nullptr;
+            if (SUCCEEDED(moniker->BindToStorage(nullptr, nullptr, IID_IPropertyBag,
+                                                 reinterpret_cast<void **>(&propertyBagRaw)))) {
+                ComPtr<IPropertyBag> propertyBag(propertyBagRaw);
+                const QString deviceName = cameraNameFromPropertyBag(propertyBag.get());
+                if (!deviceName.isEmpty()) {
+                    devices.push_back({currentIndex, deviceName});
+                } else {
+                    devices.push_back({currentIndex, QString("Camera %1").arg(currentIndex)});
+                }
             } else {
                 devices.push_back({currentIndex, QString("Camera %1").arg(currentIndex)});
             }
-        } else {
-            devices.push_back({currentIndex, QString("Camera %1").arg(currentIndex)});
-        }
-        ++currentIndex;
-    }
-
-    return devices;
-}
-
-ComPtr<IAMStreamConfig> openWindowsStreamConfig(int deviceIndex) {
-    ICreateDevEnum *deviceEnumeratorRaw = nullptr;
-    if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
-        return {};
-    }
-    ComPtr<ICreateDevEnum> deviceEnumerator(deviceEnumeratorRaw);
-
-    IEnumMoniker *enumMonikerRaw = nullptr;
-    if (deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enumMonikerRaw, 0) != S_OK ||
-        enumMonikerRaw == nullptr) {
-        return {};
-    }
-    ComPtr<IEnumMoniker> enumMoniker(enumMonikerRaw);
-
-    IMoniker *monikerRaw = nullptr;
-    ULONG fetched = 0;
-    int currentIndex = 0;
-    while (enumMoniker->Next(1, &monikerRaw, &fetched) == S_OK) {
-        ComPtr<IMoniker> moniker(monikerRaw);
-        monikerRaw = nullptr;
-
-        if (currentIndex != deviceIndex) {
             ++currentIndex;
-            continue;
         }
 
-        IBaseFilter *filterRaw = nullptr;
-        if (FAILED(moniker->BindToObject(nullptr, nullptr, IID_IBaseFilter,
-                                         reinterpret_cast<void **>(&filterRaw)))) {
+        return devices;
+    }
+
+    ComPtr<IAMStreamConfig> openWindowsStreamConfig(int deviceIndex) {
+        ICreateDevEnum *deviceEnumeratorRaw = nullptr;
+        if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
+                                    IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
             return {};
         }
-        ComPtr<IBaseFilter> filter(filterRaw);
+        ComPtr<ICreateDevEnum> deviceEnumerator(deviceEnumeratorRaw);
 
-        IEnumPins *enumPinsRaw = nullptr;
-        if (FAILED(filter->EnumPins(&enumPinsRaw)) || enumPinsRaw == nullptr) {
+        IEnumMoniker *enumMonikerRaw = nullptr;
+        if (deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enumMonikerRaw, 0) != S_OK ||
+            enumMonikerRaw == nullptr) {
             return {};
         }
-        ComPtr<IEnumPins> enumPins(enumPinsRaw);
+        ComPtr<IEnumMoniker> enumMoniker(enumMonikerRaw);
 
-        IPin *pinRaw = nullptr;
-        ULONG pinFetched = 0;
-        while (enumPins->Next(1, &pinRaw, &pinFetched) == S_OK) {
-            ComPtr<IPin> pin(pinRaw);
-            pinRaw = nullptr;
+        IMoniker *monikerRaw = nullptr;
+        ULONG fetched = 0;
+        int currentIndex = 0;
+        while (enumMoniker->Next(1, &monikerRaw, &fetched) == S_OK) {
+            ComPtr<IMoniker> moniker(monikerRaw);
+            monikerRaw = nullptr;
 
-            PIN_DIRECTION direction = PINDIR_INPUT;
-            if (FAILED(pin->QueryDirection(&direction)) || direction != PINDIR_OUTPUT) {
+            if (currentIndex != deviceIndex) {
+                ++currentIndex;
                 continue;
             }
 
-            IAMStreamConfig *streamConfigRaw = nullptr;
-            if (SUCCEEDED(pin->QueryInterface(IID_IAMStreamConfig, reinterpret_cast<void **>(&streamConfigRaw))) &&
-                streamConfigRaw != nullptr) {
-                return ComPtr<IAMStreamConfig>(streamConfigRaw);
+            IBaseFilter *filterRaw = nullptr;
+            if (FAILED(moniker->BindToObject(nullptr, nullptr, IID_IBaseFilter,
+                                             reinterpret_cast<void **>(&filterRaw)))) {
+                return {};
             }
+            ComPtr<IBaseFilter> filter(filterRaw);
+
+            IEnumPins *enumPinsRaw = nullptr;
+            if (FAILED(filter->EnumPins(&enumPinsRaw)) || enumPinsRaw == nullptr) {
+                return {};
+            }
+            ComPtr<IEnumPins> enumPins(enumPinsRaw);
+
+            IPin *pinRaw = nullptr;
+            ULONG pinFetched = 0;
+            while (enumPins->Next(1, &pinRaw, &pinFetched) == S_OK) {
+                ComPtr<IPin> pin(pinRaw);
+                pinRaw = nullptr;
+
+                PIN_DIRECTION direction = PINDIR_INPUT;
+                if (FAILED(pin->QueryDirection(&direction)) || direction != PINDIR_OUTPUT) {
+                    continue;
+                }
+
+                IAMStreamConfig *streamConfigRaw = nullptr;
+                if (SUCCEEDED(pin->QueryInterface(IID_IAMStreamConfig, reinterpret_cast<void **>(&streamConfigRaw))) &&
+                    streamConfigRaw != nullptr) {
+                    return ComPtr<IAMStreamConfig>(streamConfigRaw);
+                }
+            }
+
+            return {};
         }
 
         return {};
     }
 
-    return {};
-}
+    QString mediaSubtypeName(const GUID &subtype) {
+        if (subtype == MEDIASUBTYPE_YUY2)
+            return "YUY2";
+        if (subtype == MEDIASUBTYPE_UYVY)
+            return "UYVY";
+        if (subtype == MEDIASUBTYPE_YV12)
+            return "YV12";
+        if (subtype == MEDIASUBTYPE_NV12)
+            return "NV12";
+        if (subtype == MEDIASUBTYPE_I420)
+            return "I420";
+        if (subtype == MEDIASUBTYPE_MJPG)
+            return "MJPG";
+        if (subtype == MEDIASUBTYPE_RGB24)
+            return "RGB24";
+        if (subtype == MEDIASUBTYPE_RGB32)
+            return "RGB32";
+        return {};
+    }
 
-QString mediaSubtypeName(const GUID &subtype) {
-    if (subtype == MEDIASUBTYPE_YUY2) return "YUY2";
-    if (subtype == MEDIASUBTYPE_UYVY) return "UYVY";
-    if (subtype == MEDIASUBTYPE_YV12) return "YV12";
-    if (subtype == MEDIASUBTYPE_NV12) return "NV12";
-    if (subtype == MEDIASUBTYPE_I420) return "I420";
-    if (subtype == MEDIASUBTYPE_MJPG) return "MJPG";
-    if (subtype == MEDIASUBTYPE_RGB24) return "RGB24";
-    if (subtype == MEDIASUBTYPE_RGB32) return "RGB32";
-    return {};
-}
+    bool isYuvSubtype(const GUID &subtype) {
+        return subtype == MEDIASUBTYPE_YUY2 || subtype == MEDIASUBTYPE_UYVY || subtype == MEDIASUBTYPE_YV12 ||
+               subtype == MEDIASUBTYPE_NV12 || subtype == MEDIASUBTYPE_I420;
+    }
 
-bool isYuvSubtype(const GUID &subtype) {
-    return subtype == MEDIASUBTYPE_YUY2 || subtype == MEDIASUBTYPE_UYVY || subtype == MEDIASUBTYPE_YV12 ||
-           subtype == MEDIASUBTYPE_NV12 || subtype == MEDIASUBTYPE_I420;
-}
+    bool extractDirectShowFormat(const AM_MEDIA_TYPE *mediaType, QSize &resolution, QString &formatName, double &fps) {
+        if (mediaType == nullptr) {
+            return false;
+        }
 
-bool extractDirectShowFormat(const AM_MEDIA_TYPE *mediaType, QSize &resolution, QString &formatName, double &fps) {
-    if (mediaType == nullptr) {
+        formatName = mediaSubtypeName(mediaType->subtype);
+        fps = 0.0;
+
+        if (mediaType->formattype == FORMAT_VideoInfo && mediaType->cbFormat >= sizeof(VIDEOINFOHEADER)) {
+            const auto *videoInfo = reinterpret_cast<const VIDEOINFOHEADER *>(mediaType->pbFormat);
+            resolution = QSize(videoInfo->bmiHeader.biWidth, std::abs(videoInfo->bmiHeader.biHeight));
+            if (videoInfo->AvgTimePerFrame > 0) {
+                fps = 10000000.0 / static_cast<double>(videoInfo->AvgTimePerFrame);
+            }
+            return resolution.width() > 0 && resolution.height() > 0;
+        }
+
+        if (mediaType->formattype == FORMAT_VideoInfo2 && mediaType->cbFormat >= sizeof(VIDEOINFOHEADER2)) {
+            const auto *videoInfo = reinterpret_cast<const VIDEOINFOHEADER2 *>(mediaType->pbFormat);
+            resolution = QSize(videoInfo->bmiHeader.biWidth, std::abs(videoInfo->bmiHeader.biHeight));
+            if (videoInfo->AvgTimePerFrame > 0) {
+                fps = 10000000.0 / static_cast<double>(videoInfo->AvgTimePerFrame);
+            }
+            return resolution.width() > 0 && resolution.height() > 0;
+        }
+
         return false;
     }
-
-    formatName = mediaSubtypeName(mediaType->subtype);
-    fps = 0.0;
-
-    if (mediaType->formattype == FORMAT_VideoInfo && mediaType->cbFormat >= sizeof(VIDEOINFOHEADER)) {
-        const auto *videoInfo = reinterpret_cast<const VIDEOINFOHEADER *>(mediaType->pbFormat);
-        resolution = QSize(videoInfo->bmiHeader.biWidth, std::abs(videoInfo->bmiHeader.biHeight));
-        if (videoInfo->AvgTimePerFrame > 0) {
-            fps = 10000000.0 / static_cast<double>(videoInfo->AvgTimePerFrame);
-        }
-        return resolution.width() > 0 && resolution.height() > 0;
-    }
-
-    if (mediaType->formattype == FORMAT_VideoInfo2 && mediaType->cbFormat >= sizeof(VIDEOINFOHEADER2)) {
-        const auto *videoInfo = reinterpret_cast<const VIDEOINFOHEADER2 *>(mediaType->pbFormat);
-        resolution = QSize(videoInfo->bmiHeader.biWidth, std::abs(videoInfo->bmiHeader.biHeight));
-        if (videoInfo->AvgTimePerFrame > 0) {
-            fps = 10000000.0 / static_cast<double>(videoInfo->AvgTimePerFrame);
-        }
-        return resolution.width() > 0 && resolution.height() > 0;
-    }
-
-    return false;
-}
 #endif
-}
+} // namespace
 
 SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
     : QDialog(parent),
       selectedCameraIndex(0),
-    selectedCameraResolution(1280, 720),
-    selectedScreenResolution(0, 0),
+      selectedCameraResolution(1280, 720),
+      selectedScreenResolution(0, 0),
       cameraFPS(30),
       inputVideoFile(""),
       outputVideoFile(""),
@@ -459,15 +466,15 @@ void SettingsWindow::init() {
     setStyleSheet(qApp->styleSheet());
 
     // ── Create all widgets ────────────────────────────────────────────
-    cameraOptionRadioButton       = new QRadioButton("Use Camera", this);
-    inputVideoOptionRadioButton   = new QRadioButton("Use Video File as Input", this);
+    cameraOptionRadioButton = new QRadioButton("Use Camera", this);
+    inputVideoOptionRadioButton = new QRadioButton("Use Video File as Input", this);
     graphicsFileOptionRadioButton = new QRadioButton("Use Graphics File as Input", this);
     cameraOptionRadioButton->setChecked(true);
 
     cameraIndexComboBox = new QComboBox(this);
     populateCameraDevices();
 
-    cudaDeviceLabel    = new QLabel("CUDA Device:", this);
+    cudaDeviceLabel = new QLabel("CUDA Device:", this);
     cudaDeviceComboBox = new QComboBox(this);
     populateCudaDevices();
 
@@ -492,18 +499,17 @@ void SettingsWindow::init() {
     browseGraphicsButton = new QPushButton("Browse", this);
 
     screenResolutionComboBox = new QComboBox(this);
-    screenResolutionComboBox->addItems({
-        "Default",
-        "320x240",  "240x320",  "400x300",  "300x400",  "512x384",  "384x512",
-        "640x360",  "360x640",  "640x480",  "480x640",  "720x480",  "480x720",
-        "800x600",  "600x800",  "960x720",  "720x960",  "1024x768", "768x1024",
-        "1152x864", "864x1152", "1280x720", "720x1280", "1280x960", "960x1280",
-        "1280x1024","1024x1280","1366x768", "768x1366", "1440x900", "900x1440",
-        "1600x900", "900x1600", "1600x1200","1200x1600","1440x1080","1080x1440",
-        "1920x1080","1080x1920","1920x1200","1200x1920","2048x1536","1536x2048",
-        "2560x1440","1440x2560","2560x1600","1600x2560","2560x1920","1920x2560",
-        "3440x1440","1440x3440","3840x1600","1600x3840","3840x2160","2160x3840",
-        "7680x4320","4320x7680"});
+    screenResolutionComboBox->addItems({"Default",
+                                        "320x240", "240x320", "400x300", "300x400", "512x384", "384x512",
+                                        "640x360", "360x640", "640x480", "480x640", "720x480", "480x720",
+                                        "800x600", "600x800", "960x720", "720x960", "1024x768", "768x1024",
+                                        "1152x864", "864x1152", "1280x720", "720x1280", "1280x960", "960x1280",
+                                        "1280x1024", "1024x1280", "1366x768", "768x1366", "1440x900", "900x1440",
+                                        "1600x900", "900x1600", "1600x1200", "1200x1600", "1440x1080", "1080x1440",
+                                        "1920x1080", "1080x1920", "1920x1200", "1200x1920", "2048x1536", "1536x2048",
+                                        "2560x1440", "1440x2560", "2560x1600", "1600x2560", "2560x1920", "1920x2560",
+                                        "3440x1440", "1440x3440", "3840x1600", "1600x3840", "3840x2160", "2160x3840",
+                                        "7680x4320", "4320x7680"});
     screenResolutionComboBox->setCurrentIndex(0);
 
     saveOutputVideoCheckBox = new QCheckBox("Save Output to Video File", this);
@@ -522,7 +528,7 @@ void SettingsWindow::init() {
     timeSpeedSpinBox->setValue(1.0);
 
     durationLimitCheckBox = new QCheckBox("Max Duration (sec):", this);
-    durationLimitSpinBox  = new QDoubleSpinBox(this);
+    durationLimitSpinBox = new QDoubleSpinBox(this);
     durationLimitSpinBox->setRange(0.1, 86400.0);
     durationLimitSpinBox->setSingleStep(1.0);
     durationLimitSpinBox->setDecimals(1);
@@ -556,23 +562,19 @@ void SettingsWindow::init() {
     cacheDelaySpinBox->setValue(1);
     cacheDelaySpinBox->setEnabled(false);
 
-    okButton     = new QPushButton("OK", this);
+    okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
 
     // ── Encoding quality widgets ──────────────────────────────────────
     QSettings encSettings("LostSideDead", "acmx2");
     encodePresetComboBox = new QComboBox(this);
-    encodePresetComboBox->addItems({
-        "ultrafast","superfast","veryfast","faster","fast",
-        "medium","slow","slower","veryslow"
-    });
+    encodePresetComboBox->addItems({"ultrafast", "superfast", "veryfast", "faster", "fast",
+                                    "medium", "slow", "slower", "veryslow"});
     encodePresetComboBox->setCurrentText(encSettings.value("recording/preset", "medium").toString());
 
     encodeTuneComboBox = new QComboBox(this);
-    encodeTuneComboBox->addItems({
-        "none","film","animation","grain","stillimage",
-        "psnr","ssim","fastdecode","zerolatency"
-    });
+    encodeTuneComboBox->addItems({"none", "film", "animation", "grain", "stillimage",
+                                  "psnr", "ssim", "fastdecode", "zerolatency"});
     encodeTuneComboBox->setCurrentText(encSettings.value("recording/tune", "none").toString());
 
     encodeCrfSpinBox = new QSpinBox(this);
@@ -593,21 +595,21 @@ void SettingsWindow::init() {
     encodeNoDropCheckBox->setToolTip("When enabled, avoid dropping frames by waiting for the encoder queue to drain.");
 
     // ── Input Source group ────────────────────────────────────────────
-    auto *sourceGroup  = new QGroupBox("Input Source", this);
-    auto *sourceGrid   = new QGridLayout(sourceGroup);
+    auto *sourceGroup = new QGroupBox("Input Source", this);
+    auto *sourceGrid = new QGridLayout(sourceGroup);
     sourceGrid->setVerticalSpacing(6);
     sourceGrid->setColumnStretch(1, 1);
     int r = 0;
-    sourceGrid->addWidget(cameraOptionRadioButton,       r, 0, 1, 2);
-    sourceGrid->addWidget(inputVideoOptionRadioButton,   ++r, 0, 1, 2);
+    sourceGrid->addWidget(cameraOptionRadioButton, r, 0, 1, 2);
+    sourceGrid->addWidget(inputVideoOptionRadioButton, ++r, 0, 1, 2);
     sourceGrid->addWidget(graphicsFileOptionRadioButton, ++r, 0, 1, 2);
-    sourceGrid->addWidget(new QLabel("Camera:", this),   ++r, 0);
-    sourceGrid->addWidget(cameraIndexComboBox,              r, 1);
+    sourceGrid->addWidget(new QLabel("Camera:", this), ++r, 0);
+    sourceGrid->addWidget(cameraIndexComboBox, r, 1);
     sourceGrid->addWidget(new QLabel("Resolution:", this), ++r, 0);
-    sourceGrid->addWidget(cameraResolutionComboBox,         r, 1);
-    sourceGrid->addWidget(new QLabel("FPS:", this),      ++r, 0);
-    sourceGrid->addWidget(cameraFPSComboBox,               r, 1);
-    sourceGrid->addWidget(useYuvCheckBox,                ++r, 0, 1, 2);
+    sourceGrid->addWidget(cameraResolutionComboBox, r, 1);
+    sourceGrid->addWidget(new QLabel("FPS:", this), ++r, 0);
+    sourceGrid->addWidget(cameraFPSComboBox, r, 1);
+    sourceGrid->addWidget(useYuvCheckBox, ++r, 0, 1, 2);
     sourceGrid->addWidget(new QLabel("Input Video:", this), ++r, 0);
     auto *inputRow = new QHBoxLayout;
     inputRow->setSpacing(4);
@@ -623,76 +625,76 @@ void SettingsWindow::init() {
 
     // ── Output group ──────────────────────────────────────────────────
     auto *outputGroup = new QGroupBox("Output", this);
-    auto *outputGrid  = new QGridLayout(outputGroup);
+    auto *outputGrid = new QGridLayout(outputGroup);
     outputGrid->setVerticalSpacing(6);
     outputGrid->setColumnStretch(1, 1);
     r = 0;
     outputGrid->addWidget(new QLabel("Screen Resolution:", this), r, 0);
-    outputGrid->addWidget(screenResolutionComboBox,                r, 1);
-    outputGrid->addWidget(saveOutputVideoCheckBox,               ++r, 0, 1, 2);
-    outputGrid->addWidget(new QLabel("Output File:", this),      ++r, 0);
+    outputGrid->addWidget(screenResolutionComboBox, r, 1);
+    outputGrid->addWidget(saveOutputVideoCheckBox, ++r, 0, 1, 2);
+    outputGrid->addWidget(new QLabel("Output File:", this), ++r, 0);
     auto *outputRow = new QHBoxLayout;
     outputRow->setSpacing(4);
     outputRow->addWidget(outputVideoFileLineEdit);
     outputRow->addWidget(browseOutputVideoButton);
     outputGrid->addLayout(outputRow, r, 1);
-    outputGrid->addWidget(copyAudioCheckBox,                      ++r, 0, 1, 2);
+    outputGrid->addWidget(copyAudioCheckBox, ++r, 0, 1, 2);
 
     // ── Encoding group ────────────────────────────────────────────────
     auto *encodingGroup = new QGroupBox("Encoding Quality", this);
-    auto *encodingGrid  = new QGridLayout(encodingGroup);
+    auto *encodingGrid = new QGridLayout(encodingGroup);
     encodingGrid->setVerticalSpacing(6);
     encodingGrid->setColumnStretch(1, 1);
     r = 0;
-    encodingGrid->addWidget(new QLabel("Preset:", this),      r, 0);
-    encodingGrid->addWidget(encodePresetComboBox,             r, 1);
-    encodingGrid->addWidget(new QLabel("Tune:", this),      ++r, 0);
-    encodingGrid->addWidget(encodeTuneComboBox,               r, 1);
+    encodingGrid->addWidget(new QLabel("Preset:", this), r, 0);
+    encodingGrid->addWidget(encodePresetComboBox, r, 1);
+    encodingGrid->addWidget(new QLabel("Tune:", this), ++r, 0);
+    encodingGrid->addWidget(encodeTuneComboBox, r, 1);
     encodingGrid->addWidget(new QLabel("CRF (quality):", this), ++r, 0);
-    encodingGrid->addWidget(encodeCrfSpinBox,                 r, 1);
-    encodingGrid->addWidget(new QLabel("Codec:", this),     ++r, 0);
-    encodingGrid->addWidget(encodeCodecComboBox,              r, 1);
-    encodingGrid->addWidget(encodeRealtimeCheckBox,         ++r, 0, 1, 2);
-    encodingGrid->addWidget(encodeNoDropCheckBox,           ++r, 0, 1, 2);
+    encodingGrid->addWidget(encodeCrfSpinBox, r, 1);
+    encodingGrid->addWidget(new QLabel("Codec:", this), ++r, 0);
+    encodingGrid->addWidget(encodeCodecComboBox, r, 1);
+    encodingGrid->addWidget(encodeRealtimeCheckBox, ++r, 0, 1, 2);
+    encodingGrid->addWidget(encodeNoDropCheckBox, ++r, 0, 1, 2);
 
     // ── Playback group ────────────────────────────────────────────────
     auto *playbackGroup = new QGroupBox("Playback", this);
-    auto *playbackGrid  = new QGridLayout(playbackGroup);
+    auto *playbackGrid = new QGridLayout(playbackGroup);
     playbackGrid->setVerticalSpacing(6);
     playbackGrid->setColumnStretch(1, 1);
     r = 0;
-    playbackGrid->addWidget(cudaDeviceLabel,                       r, 0);
-    playbackGrid->addWidget(cudaDeviceComboBox,                    r, 1);
-    playbackGrid->addWidget(new QLabel("Time Speed:", this),     ++r, 0);
-    playbackGrid->addWidget(timeSpeedSpinBox,                       r, 1);
+    playbackGrid->addWidget(cudaDeviceLabel, r, 0);
+    playbackGrid->addWidget(cudaDeviceComboBox, r, 1);
+    playbackGrid->addWidget(new QLabel("Time Speed:", this), ++r, 0);
+    playbackGrid->addWidget(timeSpeedSpinBox, r, 1);
     playbackGrid->addWidget(new QLabel("Crossfade (sec):", this), ++r, 0);
-    playbackGrid->addWidget(crossFadeSpinBox,                       r, 1);
-    playbackGrid->addWidget(flipCheckBox,                         ++r, 0, 1, 2);
-    playbackGrid->addWidget(fullscreenCheckBox,                   ++r, 0, 1, 2);
+    playbackGrid->addWidget(crossFadeSpinBox, r, 1);
+    playbackGrid->addWidget(flipCheckBox, ++r, 0, 1, 2);
+    playbackGrid->addWidget(fullscreenCheckBox, ++r, 0, 1, 2);
     auto *durationRow = new QHBoxLayout;
     durationRow->addWidget(durationLimitCheckBox);
     durationRow->addWidget(durationLimitSpinBox);
-    playbackGrid->addLayout(durationRow,                          ++r, 0, 1, 2);
+    playbackGrid->addLayout(durationRow, ++r, 0, 1, 2);
     auto *cacheRow = new QHBoxLayout;
     cacheRow->addWidget(textureCacheCheckBox);
     cacheRow->addWidget(new QLabel("Delay:", this));
     cacheRow->addWidget(cacheDelaySpinBox);
     cacheRow->addStretch();
-    playbackGrid->addLayout(cacheRow,                             ++r, 0, 1, 2);
+    playbackGrid->addLayout(cacheRow, ++r, 0, 1, 2);
 
     // ── Display & 3D group ────────────────────────────────────────────
     auto *displayGroup = new QGroupBox("Display & 3D", this);
-    auto *displayGrid  = new QGridLayout(displayGroup);
+    auto *displayGrid = new QGridLayout(displayGroup);
     displayGrid->setVerticalSpacing(6);
     displayGrid->setColumnStretch(1, 1);
     r = 0;
-    displayGrid->addWidget(enable3dCheckBox,                       r, 0, 1, 2);
-    displayGrid->addWidget(new QLabel("3D Model:", this),        ++r, 0);
+    displayGrid->addWidget(enable3dCheckBox, r, 0, 1, 2);
+    displayGrid->addWidget(new QLabel("3D Model:", this), ++r, 0);
     auto *modelRow = new QHBoxLayout;
     modelRow->setSpacing(4);
     modelRow->addWidget(modelFileLineEdit);
     modelRow->addWidget(browseModelButton);
-    displayGrid->addLayout(modelRow,                               r, 1);
+    displayGrid->addLayout(modelRow, r, 1);
 
     // ── Assemble two-column layout ────────────────────────────────────
     auto *leftCol = new QVBoxLayout;
@@ -807,12 +809,12 @@ void SettingsWindow::init() {
             copyAudioCheckBox->setChecked(false);
     });
 
-    connect(okButton,               &QPushButton::clicked, this, &SettingsWindow::acceptSettings);
-    connect(cancelButton,           &QPushButton::clicked, this, &SettingsWindow::rejectSettings);
+    connect(okButton, &QPushButton::clicked, this, &SettingsWindow::acceptSettings);
+    connect(cancelButton, &QPushButton::clicked, this, &SettingsWindow::rejectSettings);
     connect(browseInputVideoButton, &QPushButton::clicked, this, &SettingsWindow::browseInputVideoFile);
-    connect(browseOutputVideoButton,&QPushButton::clicked, this, &SettingsWindow::browseOutputVideoFile);
-    connect(browseGraphicsButton,   &QPushButton::clicked, this, &SettingsWindow::browseGraphicsFile);
-    connect(browseModelButton,      &QPushButton::clicked, this, &SettingsWindow::browseModelFile);
+    connect(browseOutputVideoButton, &QPushButton::clicked, this, &SettingsWindow::browseOutputVideoFile);
+    connect(browseGraphicsButton, &QPushButton::clicked, this, &SettingsWindow::browseGraphicsFile);
+    connect(browseModelButton, &QPushButton::clicked, this, &SettingsWindow::browseModelFile);
 
     // ── Initial enabled states ────────────────────────────────────────
     inputVideoFileLineEdit->setEnabled(false);
@@ -1043,7 +1045,8 @@ QString SettingsWindow::getEncodePreset() const {
 }
 
 QString SettingsWindow::getEncodeTune() const {
-    if (!encodeTuneComboBox) return QString();
+    if (!encodeTuneComboBox)
+        return QString();
     QString t = encodeTuneComboBox->currentText();
     return (t == "none") ? QString() : t;
 }
@@ -1128,11 +1131,11 @@ void SettingsWindow::acceptSettings() {
         graphicsFile = graphicsFileLineEdit->text();
     } else {
 
-    #ifdef _WIN32
+#ifdef _WIN32
         selectedCameraIndex = resolveWindowsSelectedCameraIndex(cameraIndexComboBox);
-    #else
+#else
         selectedCameraIndex = cameraIndexComboBox->currentData().toInt();
-    #endif
+#endif
         QStringList cameraResParts = cameraResolutionComboBox->currentText().split('x');
         if (cameraResParts.size() == 2) {
             selectedCameraResolution = QSize(cameraResParts[0].toInt(), cameraResParts[1].toInt());
@@ -1167,12 +1170,18 @@ void SettingsWindow::acceptSettings() {
 
     // Persist encoding quality settings for next session.
     QSettings encSettings("LostSideDead", "acmx2");
-    if (encodePresetComboBox)   encSettings.setValue("recording/preset",   encodePresetComboBox->currentText());
-    if (encodeTuneComboBox)     encSettings.setValue("recording/tune",     encodeTuneComboBox->currentText());
-    if (encodeCrfSpinBox)       encSettings.setValue("recording/crf",      encodeCrfSpinBox->value());
-    if (encodeCodecComboBox)    encSettings.setValue("recording/codec",    encodeCodecComboBox->currentText());
-    if (encodeRealtimeCheckBox) encSettings.setValue("recording/realtime", encodeRealtimeCheckBox->isChecked());
-    if (encodeNoDropCheckBox)   encSettings.setValue("recording/no_drop",  encodeNoDropCheckBox->isChecked());
+    if (encodePresetComboBox)
+        encSettings.setValue("recording/preset", encodePresetComboBox->currentText());
+    if (encodeTuneComboBox)
+        encSettings.setValue("recording/tune", encodeTuneComboBox->currentText());
+    if (encodeCrfSpinBox)
+        encSettings.setValue("recording/crf", encodeCrfSpinBox->value());
+    if (encodeCodecComboBox)
+        encSettings.setValue("recording/codec", encodeCodecComboBox->currentText());
+    if (encodeRealtimeCheckBox)
+        encSettings.setValue("recording/realtime", encodeRealtimeCheckBox->isChecked());
+    if (encodeNoDropCheckBox)
+        encSettings.setValue("recording/no_drop", encodeNoDropCheckBox->isChecked());
 
     accept();
 }
@@ -1197,12 +1206,12 @@ void SettingsWindow::browseOutputVideoFile() {
     QString lastDir = appSettings.value("lastOutputVideoDir", "").toString();
     static const QStringList kVideoExts = {
         "mp4", "mkv", "mov", "avi", "m4v",
-        "ts",  "mts", "m2ts", "mpg", "mpeg",
+        "ts", "mts", "m2ts", "mpg", "mpeg",
         "flv", "f4v", "3gp", "3g2", "wmv",
-        "asf", "vob"
-    };
+        "asf", "vob"};
     QStringList allPattern;
-    for (const QString &e : kVideoExts) allPattern << ("*." + e);
+    for (const QString &e : kVideoExts)
+        allPattern << ("*." + e);
     QString filter = QString("Video Files (%1)").arg(allPattern.join(' '));
     filter += ";;MP4 Files (*.mp4);;Matroska Files (*.mkv);;QuickTime Files (*.mov);;AVI Files (*.avi);;MPEG-TS Files (*.ts *.mts *.m2ts);;MPEG Files (*.mpg *.mpeg);;Flash Video (*.flv *.f4v);;3GPP Files (*.3gp *.3g2);;Windows Media (*.wmv *.asf);;DVD VOB (*.vob);;All Files (*)";
     QString fileName = QFileDialog::getSaveFileName(this, "Select Output Video File", lastDir, filter);
@@ -1210,7 +1219,10 @@ void SettingsWindow::browseOutputVideoFile() {
         appSettings.setValue("lastOutputVideoDir", QFileInfo(fileName).absolutePath());
         bool hasKnownExt = false;
         for (const QString &e : kVideoExts) {
-            if (fileName.endsWith("." + e, Qt::CaseInsensitive)) { hasKnownExt = true; break; }
+            if (fileName.endsWith("." + e, Qt::CaseInsensitive)) {
+                hasKnownExt = true;
+                break;
+            }
         }
         if (!hasKnownExt) {
             fileName += ".mp4";
@@ -1246,7 +1258,7 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
 #ifdef __APPLE__
     QProcess process;
     process.start("ffmpeg", {"-hide_banner", "-f", "avfoundation", "-list_formats", "true", "-i",
-                              QString("%1:none").arg(deviceIndex)});
+                             QString("%1:none").arg(deviceIndex)});
     process.waitForFinished(5000);
 
     const QString output = QString::fromUtf8(process.readAllStandardError()) +
@@ -1472,7 +1484,8 @@ void SettingsWindow::populateFPS() {
 }
 
 void SettingsWindow::onCameraDeviceChanged(int comboIndex) {
-    if (comboIndex < 0) return;
+    if (comboIndex < 0)
+        return;
 #ifdef _WIN32
     int deviceIndex = resolveWindowsSelectedCameraIndex(cameraIndexComboBox);
 #else
