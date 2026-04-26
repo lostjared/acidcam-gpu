@@ -5,10 +5,10 @@
 <img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/a57c5f22-8f13-4a11-a727-7cdde1b22360" />
 
 [![License: BSD 2-Clause](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
-[![Hardware: NVIDIA RTX](https://img.shields.io/badge/Hardware-NVIDIA%20RTX%202070-green.svg)](https://www.nvidia.com/en-us/geforce/rtx/)
-[![Framework: CUDA](https://img.shields.io/badge/Framework-CUDA%2012.x-76b900.svg)](https://developer.nvidia.com/cuda-zone)
+[![Hardware: NVIDIA RTX (optional)](https://img.shields.io/badge/Hardware-NVIDIA%20RTX%20(optional)-green.svg)](https://www.nvidia.com/en-us/geforce/rtx/)
+[![Framework: CUDA (optional)](https://img.shields.io/badge/Framework-CUDA%2012.x%20(optional)-76b900.svg)](https://developer.nvidia.com/cuda-zone)
 
-# ACMX2 – Linux (NVIDIA GPU Recommended)
+# ACMX2 – Linux / macOS (NVIDIA GPU Optional)
 ![screenshot](https://github.com/lostjared/acidcam-gpu/blob/main/image.jpg)
 
 # acidcam-gpu / ACMX2
@@ -16,24 +16,30 @@
 [Full Documentation](https://lostsidedead.biz/acmx2/docs/)
 
 
-**acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch  art. Part of the **ACMX2** and **libmx2** ecosystem, it offloads complex glitch filters to **NVIDIA GPUs**, enabling fluid, high-resolution visual transformations at 60+ FPS. Requires you have OpenCV 4 compiled with CUDA support.
+**acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
+
+> **NVIDIA GPUs are no longer required.** ACMX2 builds and runs on AMD, Intel, and Apple GPUs using the OpenGL/SDL2 path (`-DWITH_CUDA=OFF`). On NVIDIA systems with the CUDA toolkit and an OpenCV build that includes CUDA support, you can opt in to the CUDA GPU-filter stack and FFmpeg CUDA hardware decode by configuring with `-DWITH_CUDA=ON` (the default when CUDA is detected).
 
 ## 🚀 Purpose & Vision
 The original project brought a massive library of "glitch" filters to digital artists. However, as resolutions climbed to 4K and filter stacks became more complex, CPU-based processing hit a bottleneck. 
 
 **acidcam-gpu** solves this by:
-* **Parallelizing the Chaos:** Using custom CUDA kernels to process millions of pixels simultaneously.
+* **Parallelizing the Chaos:** Running effects on the GPU — GLSL shaders for the core pipeline, with optional CUDA kernels for additional GPU filters on NVIDIA hardware.
 
 ## 🛠 Tech Stack
 * **Language:** C++20
-* **Parallel Computing:** NVIDIA CUDA (Optimized for **RTX 2070**)
-* **Graphics API:** OpenGL / SDL (Hardware-accelerated rendering)
+* **Graphics API:** OpenGL / SDL2 (cross-vendor, hardware-accelerated rendering — works on NVIDIA, AMD, Intel, and Apple GPUs)
+* **Optional Parallel Computing:** NVIDIA CUDA (compile-time opt-in via `-DWITH_CUDA=ON`; tested on RTX 2070 and newer)
 * **Format Support:** Native **MX2 MXMOD** 3D model parsing for real-time geometry glitching.
 
-## ⚡ Why NVIDIA & CUDA?
-This project is built specifically for the NVIDIA ecosystem to leverage:
-* **Shared Memory:** Fast on-chip memory to speed up neighborhood-based filters.
-* **Massive Throughput:** Harnessing thousands of CUDA cores to apply multiple glitch layers in a single pass.
+## ⚡ Optional NVIDIA / CUDA Acceleration
+When built with `-DWITH_CUDA=ON` on a system with an NVIDIA GPU and CUDA-enabled OpenCV, ACMX2 can additionally leverage:
+* **Shared Memory:** Fast on-chip memory to speed up neighborhood-based CUDA filters.
+* **Massive Throughput:** Thousands of CUDA cores to apply multiple glitch layers in a single pass.
+* **CUDA/OpenGL Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
+* **FFmpeg CUDA Hardware Decode:** Direct hardware-accelerated decoding for video files.
+
+Without CUDA, all shader-based features continue to work — only the CUDA GPU-filter stack and CUDA-specific decode/encode paths are omitted.
 
 ## Project Goals:
 * **Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
@@ -45,11 +51,11 @@ This project is built specifically for the NVIDIA ecosystem to leverage:
 * **Command line tool** Command line tool
 
 ## 📦 Installation & Environment
-This project is developed and tested on **Bazzite Linux** using **Arch Linux** containers via **Distrobox**.
+This project is developed and tested on **Bazzite Linux** using **Arch Linux** containers via **Distrobox**, but it builds on any modern Linux distribution as well as macOS.
 
 ### Prerequisites
-* **NVIDIA GPU:** RTX 20-series or newer.
-* **Drivers:** NVIDIA Proprietary Drivers (v535+).
+* **GPU:** Any GPU with working OpenGL 3.3+ drivers (NVIDIA, AMD, Intel, or Apple Silicon). NVIDIA hardware is **optional** and only required if you want to enable the CUDA GPU-filter stack at compile time.
+* **Drivers:** Up-to-date GPU drivers for your platform. NVIDIA proprietary drivers (v535+) are required only when building with `-DWITH_CUDA=ON`.
 * **Environment:** Arch Linux (or compatible). Install all dependencies via `pacman`:
 
 **Build Tools:**
@@ -57,13 +63,17 @@ This project is developed and tested on **Bazzite Linux** using **Arch Linux** c
 sudo pacman -S --needed base-devel git cmake ninja pkg-config curl unzip
 ```
 
-**NVIDIA & CUDA:**
+**NVIDIA & CUDA (optional — only needed for `-DWITH_CUDA=ON`):**
 ```bash
 sudo pacman -S --needed nvidia-utils cuda
 ```
 
-**OpenCV (with CUDA support):**
+**OpenCV:**
 ```bash
+# Stock OpenCV (works for the default OpenGL-only build):
+sudo pacman -S --needed opencv hdf5 vtk fmt glew
+
+# Or, if you want CUDA GPU filters, install the CUDA-enabled build instead:
 sudo pacman -S --needed opencv-cuda hdf5 vtk fmt glew
 ```
 
@@ -459,14 +469,14 @@ The **GPU Filter Settings** dialog now includes **Save List...** and **Load List
 
 ---
 
-ACMX2 is built locally using a **Podman container** via the included `Containerfile.arch`.
-This avoids dependency issues and produces a self-contained image, but it **requires an NVIDIA GPU**.
+ACMX2 can also be built locally using a **Podman container** via the included `Containerfile.arch`.
+This avoids dependency issues and produces a self-contained image. The provided container recipe is the **CUDA-enabled** variant and therefore **requires an NVIDIA GPU**; if you do not have one, use the native build below with `-DWITH_CUDA=OFF` instead.
 
 ---
 
-## System Requirements
+## System Requirements (CUDA-enabled Container Build)
 
-Before building and running ACMX2, your system must have:
+The Podman container build below targets the optional CUDA path. For that specific path your system must have:
 
 - Linux (x86_64)
 - NVIDIA GPU
@@ -479,8 +489,8 @@ Before building and running ACMX2, your system must have:
 - Shader/Model files: https://lostsidedead.biz/packs/
 
 > ⚠️ **Important**
-> This build uses NVIDIA CUDA.
-> It will **not run on AMD or Intel GPUs**.
+> The container recipe in `podman/Containerfile.arch` is the CUDA build and will only run on NVIDIA GPUs.
+> For AMD, Intel, or Apple hardware, use the native build with `-DWITH_CUDA=OFF` (see below).
 
 ---
 
@@ -542,12 +552,12 @@ sudo bash build-script/acidcam-gpu-arch.sh
 
 ## NVIDIA License Notice
 
-This poject uses NVIDIA CUDA libraries.
+When built with `-DWITH_CUDA=ON`, this project uses NVIDIA CUDA libraries.
 
 Use of CUDA is subject to the NVIDIA Deep Learning Container License:
 https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
 
-By running this container, you agree to NVIDIA’s license terms.
+By building or running the CUDA-enabled variant of this project (including the provided NVIDIA container), you agree to NVIDIA’s license terms. The default OpenGL-only build (`-DWITH_CUDA=OFF`) does not link any CUDA libraries and is not subject to this notice.
 
 ---
 

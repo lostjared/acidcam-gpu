@@ -1,6 +1,8 @@
-# ACMX2 Podman Container
+# ACMX2 Podman Container (NVIDIA / CUDA Variant)
 
 This directory contains everything needed to build and run ACMX2 inside a rootless Podman container on an Arch Linux host with an NVIDIA GPU.
+
+> **Note:** ACMX2 itself does **not** require an NVIDIA GPU — the engine is built on OpenGL/SDL2 and runs on AMD, Intel, and Apple GPUs when configured with `-DWITH_CUDA=OFF`. The container recipe in this directory is the **CUDA-enabled variant** and is therefore NVIDIA-only. For non-NVIDIA hardware, use the native build instructions in the top-level [README.md](../README.md) with `-DWITH_CUDA=OFF`.
 
 ---
 

@@ -2,7 +2,7 @@
 # ACMX2
 <img width="2560" height="1440" alt="Screenshot From 2026-04-13 07-41-08" src="https://github.com/user-attachments/assets/0e0cd74f-ce6b-47e5-abfa-bc268cd74d4b" />
 
-#  Now  Works on AMD and Apple Hardware (without CUDA support)
+#  Now Works on AMD, Intel, and Apple Hardware (NVIDIA / CUDA Optional)
 
 <img width="3360" height="2100" alt="acmx2 macos" src="https://github.com/user-attachments/assets/851527a0-978f-40ee-9edb-00b7d09b9b91" />
 
@@ -17,7 +17,9 @@ To regenerate local docs in a versioned folder and refresh `docs/latest`:
 
 This keeps `docs/index.html` as a stable redirect to the newest generated docs.
 
-The command-line engine for **acidcam-gpu**. Applies GLSL shaders and CUDA GPU filters to live camera feeds, video files, or static images in real time. Supports 3D model rendering, audio reactivity, MIDI control, shader playlists, and multipass shader chains.
+The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera feeds, video files, or static images in real time, with optional CUDA-accelerated GPU filters when built on NVIDIA hardware. Supports 3D model rendering, audio reactivity, MIDI control, shader playlists, and multipass shader chains.
+
+> **NVIDIA GPUs are not required.** ACMX2 is built around an OpenGL/SDL2 shader pipeline that runs on NVIDIA, AMD, Intel, and Apple GPUs. The CUDA GPU-filter stack is **opt-in at compile time** via `-DWITH_CUDA=ON` and only requires NVIDIA hardware + CUDA-enabled OpenCV when you choose to enable it.
 
 ---
 
