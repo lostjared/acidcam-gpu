@@ -497,6 +497,36 @@ inline std::vector<uint16_t> toneMapHdrRgba16ToSrgbRgba16(const unsigned char *h
 }
 
 #ifdef ACMX2_WITH_WEBP
+inline bool saveSdrWebPFromRgba8(const char *filename,
+                                 const unsigned char *rgba8,
+                                 int width,
+                                 int height) {
+    if (filename == nullptr || rgba8 == nullptr || width <= 0 || height <= 0) {
+        return false;
+    }
+
+    uint8_t *output = nullptr;
+    const int stride = width * 4;
+    const size_t out_size = WebPEncodeLosslessRGBA(rgba8, width, height, stride, &output);
+    if (out_size == 0 || output == nullptr) {
+        if (output != nullptr) {
+            WebPFree(output);
+        }
+        return false;
+    }
+
+    std::ofstream ofs(filename, std::ios::binary);
+    if (!ofs.is_open()) {
+        WebPFree(output);
+        return false;
+    }
+    ofs.write(reinterpret_cast<const char *>(output), static_cast<std::streamsize>(out_size));
+    const bool ok = ofs.good();
+    ofs.close();
+    WebPFree(output);
+    return ok;
+}
+
 // Save an HDR snapshot as a WebP file.
 //
 // libwebp's bitstream is fundamentally 8-bit per channel and has no HDR
@@ -542,6 +572,49 @@ inline bool saveHdrWebPFromRgba16(const char *filename,
 #endif  // ACMX2_WITH_WEBP
 
 #ifdef ACMX2_WITH_TIFF
+inline bool saveSdrTiffFromRgba8(const char *filename,
+                                 const unsigned char *rgba8,
+                                 int width,
+                                 int height) {
+    if (filename == nullptr || rgba8 == nullptr || width <= 0 || height <= 0) {
+        return false;
+    }
+
+    TIFF *tif = TIFFOpen(filename, "w");
+    if (tif == nullptr) {
+        return false;
+    }
+
+    TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, static_cast<uint32_t>(width));
+    TIFFSetField(tif, TIFFTAG_IMAGELENGTH, static_cast<uint32_t>(height));
+    TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 4);
+    TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 8);
+    TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+    TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+    TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+    TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+    TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(tif, 0));
+
+    const uint16_t extra[1] = { EXTRASAMPLE_UNASSALPHA };
+    TIFFSetField(tif, TIFFTAG_EXTRASAMPLES, 1, extra);
+    TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION,
+                 "ACMX2 SDR snapshot: 8-bit RGBA TIFF");
+
+    const tmsize_t row_bytes = static_cast<tmsize_t>(width) * 4;
+    bool ok = true;
+    for (int y = 0; y < height; ++y) {
+        unsigned char *row = const_cast<unsigned char *>(rgba8 + static_cast<size_t>(y) * static_cast<size_t>(row_bytes));
+        if (TIFFWriteScanline(tif, row, static_cast<uint32_t>(y), 0) < 0) {
+            ok = false;
+            break;
+        }
+    }
+
+    TIFFClose(tif);
+    return ok;
+}
+
 // Save an HDR snapshot as a 16-bit RGBA TIFF.
 //
 // We tone-map the PQ/HLG BT.2020 input to sRGB at full 16-bit precision
@@ -4136,8 +4209,9 @@ struct FrameData {
     int width = 0;                     ///< Frame width in pixels.
     int height = 0;                    ///< Frame height in pixels.
     bool isSnapshot = false;           ///< True if this frame should be saved as a PNG snapshot.
+    bool isWebPSnapshot = false;       ///< True if this frame should be saved as a WebP snapshot.
     bool isRawSnapshot = false;        ///< True if this frame should be saved as a raw RGBA file.
-    bool isTiffSnapshot = false;       ///< True if this frame should be saved as a 16-bit HDR TIFF.
+    bool isTiffSnapshot = false;       ///< True if this frame should be saved as a TIFF snapshot (16-bit HDR, 8-bit SDR).
     bool isHdr = false;                ///< True when @c pixels holds 16-bit PQ/HLG-encoded BT.2020 RGBA (8 bytes/pixel).
     int hdrTrc = 0;                    ///< AVColorTransferCharacteristic (PQ=16, HLG=18) when @c isHdr.
 };
@@ -6801,6 +6875,7 @@ class ACView : public gl::GLObject {
                 fd.isHdr = true;
                 fd.hdrTrc = input_hdr_trc;
                 fd.isSnapshot = has_hdr_snapshot_request;
+                fd.isWebPSnapshot = has_hdr_snapshot_request;
                 fd.isRawSnapshot = has_raw_snapshot_request;
 
                 {
@@ -6819,6 +6894,7 @@ class ACView : public gl::GLObject {
                 tiff_fd.isHdr = true;
                 tiff_fd.hdrTrc = input_hdr_trc;
                 tiff_fd.isSnapshot = false;
+                tiff_fd.isWebPSnapshot = false;
                 tiff_fd.isRawSnapshot = false;
                 tiff_fd.isTiffSnapshot = true;
 
@@ -6854,6 +6930,7 @@ class ACView : public gl::GLObject {
                 sdr_fd.height = win->h;
                 sdr_fd.isHdr = false;
                 sdr_fd.isSnapshot = true;
+                sdr_fd.isWebPSnapshot = false;
                 sdr_fd.isRawSnapshot = false;
 
                 {
@@ -6881,7 +6958,7 @@ class ACView : public gl::GLObject {
             }
         } else if (needWriter) {
 
-            if (snapshot_state == 1 || raw_snapshot_state == 1) {
+            if (snapshot_state == 1 || hdr_snapshot_state == 1 || raw_snapshot_state == 1 || tiff_snapshot_state == 1) {
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
@@ -6891,20 +6968,24 @@ class ACView : public gl::GLObject {
                 pboIndex = (pboIndex + 1) % 2;
                 pboNextIndex = (pboNextIndex + 1) % 2;
                 if (snapshot_state == 1) snapshot_state = 2;
+                if (hdr_snapshot_state == 1) hdr_snapshot_state = 2;
                 if (raw_snapshot_state == 1) raw_snapshot_state = 2;
+                if (tiff_snapshot_state == 1) tiff_snapshot_state = 2;
             } else {
                 bool is_snapshot_frame = (snapshot_state == 2);
+                bool is_webp_snapshot_frame = (hdr_snapshot_state == 2);
                 bool is_raw_snapshot_frame = (raw_snapshot_state == 2);
+                bool is_tiff_snapshot_frame = (tiff_snapshot_state == 2);
 
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-                if (writer.is_open() || is_snapshot_frame || is_raw_snapshot_frame) {
+                if (writer.is_open() || is_snapshot_frame || is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
                     bool used_zero_copy = false;
 
 #ifdef ACMX2_WITH_CUDA
-                    if (writer.is_open() && !is_snapshot_frame && !is_raw_snapshot_frame && recordCudaPboResources[pboNextIndex]) {
+                    if (writer.is_open() && !is_snapshot_frame && !is_webp_snapshot_frame && !is_raw_snapshot_frame && !is_tiff_snapshot_frame && recordCudaPboResources[pboNextIndex]) {
                         cudaGraphicsResource *resource = recordCudaPboResources[pboNextIndex];
                         void *devPtr = nullptr;
                         size_t mappedBytes = 0;
@@ -6943,20 +7024,28 @@ class ACView : public gl::GLObject {
                             fd.pixels = std::move(flipped_pixels);
                             fd.width = win->w;
                             fd.height = win->h;
-                            fd.isSnapshot = is_snapshot_frame;
+                            fd.isSnapshot = (is_snapshot_frame || is_webp_snapshot_frame);
+                            fd.isWebPSnapshot = is_webp_snapshot_frame;
                             fd.isRawSnapshot = is_raw_snapshot_frame;
+                            fd.isTiffSnapshot = is_tiff_snapshot_frame;
 
                             if (is_snapshot_frame) {
                                 snapshot_state = 0;
                             }
+                            if (is_webp_snapshot_frame) {
+                                hdr_snapshot_state = 0;
+                            }
                             if (is_raw_snapshot_frame) {
                                 raw_snapshot_state = 0;
+                            }
+                            if (is_tiff_snapshot_frame) {
+                                tiff_snapshot_state = 0;
                             }
 
                             {
                                 std::unique_lock<std::mutex> lock(queueMutex);
                                 bool is_camera_mode = filename.empty() && graphic.empty();
-                                if (is_camera_mode && !is_snapshot_frame && !is_raw_snapshot_frame) {
+                                if (is_camera_mode && !is_snapshot_frame && !is_webp_snapshot_frame && !is_raw_snapshot_frame && !is_tiff_snapshot_frame) {
                                     if (frameQueue.size() > 30) {
                                         frames_dropped++;
                                         frameQueue.pop();
@@ -6972,7 +7061,9 @@ class ACView : public gl::GLObject {
 
                     if (used_zero_copy) {
                         snapshot_state = 0;
+                        hdr_snapshot_state = 0;
                         raw_snapshot_state = 0;
+                        tiff_snapshot_state = 0;
                     }
                 }
 
@@ -7399,13 +7490,13 @@ class ACView : public gl::GLObject {
                 break;
             case SDLK_4:
 #ifdef ACMX2_WITH_TIFF
-                if (input_is_hdr && tiff_snapshot_state == 0) {
+                if (tiff_snapshot_state == 0) {
                     tiff_snapshot_state = 1;
                 }
 #endif
                 break;
             case SDLK_5:
-                if (input_is_hdr && hdr_snapshot_state == 0) {
+                if (hdr_snapshot_state == 0) {
                     hdr_snapshot_state = 1;
                 }
                 break;
@@ -8018,7 +8109,8 @@ class ACView : public gl::GLObject {
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
                             std::string snapshot_type = fd.isHdr ? "ACMX2.HDR.Snapshot" : "ACMX2.Snapshot";
 #ifdef ACMX2_WITH_WEBP
-                            const char *snap_ext = fd.isHdr ? ".webp" : ".png";
+                            const bool write_webp = fd.isWebPSnapshot || fd.isHdr;
+                            const char *snap_ext = write_webp ? ".webp" : ".png";
 #else
                             const char *snap_ext = ".png";
 #endif
@@ -8033,9 +8125,21 @@ class ACView : public gl::GLObject {
                                 png::SavePNG_RGBA16(name.c_str(), fd.pixels.data(), fd.width, fd.height);
 #endif
                             } else {
-                                png::SavePNG_RGBA(name.c_str(),
-                                                  const_cast<unsigned char *>(fd.pixels.data()),
-                                                  fd.width, fd.height);
+                                if (fd.isWebPSnapshot) {
+#ifdef ACMX2_WITH_WEBP
+                                    if (!saveSdrWebPFromRgba8(name.c_str(), fd.pixels.data(), fd.width, fd.height)) {
+                                        mx::system_err << "acmx2: ERROR: failed to write SDR WebP snapshot: " << name << "\n";
+                                    }
+#else
+                                    png::SavePNG_RGBA(name.c_str(),
+                                                      const_cast<unsigned char *>(fd.pixels.data()),
+                                                      fd.width, fd.height);
+#endif
+                                } else {
+                                    png::SavePNG_RGBA(name.c_str(),
+                                                      const_cast<unsigned char *>(fd.pixels.data()),
+                                                      fd.width, fd.height);
+                                }
                             }
 
                             mx::system_out << "acmx2: Took snapshot: " << name << "\n";
@@ -8083,11 +8187,18 @@ class ACView : public gl::GLObject {
 #endif
                             std::ostringstream oss;
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
-                            std::string name = snap_prefix + "/ACMX2.HDR.Snapshot-" + oss.str() + "-" +
+                            std::string snapshot_type = fd.isHdr ? "ACMX2.HDR.Snapshot" : "ACMX2.Snapshot";
+                            std::string name = snap_prefix + "/" + snapshot_type + "-" + oss.str() + "-" +
                                                std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" +
                                                std::to_string(current_offset) + ".tiff";
-                            if (!saveHdrTiffFromRgba16(name.c_str(), fd.pixels.data(), fd.width, fd.height, fd.hdrTrc)) {
-                                mx::system_err << "acmx2: ERROR: failed to write HDR TIFF snapshot: " << name << "\n";
+                            bool ok = false;
+                            if (fd.isHdr) {
+                                ok = saveHdrTiffFromRgba16(name.c_str(), fd.pixels.data(), fd.width, fd.height, fd.hdrTrc);
+                            } else {
+                                ok = saveSdrTiffFromRgba8(name.c_str(), fd.pixels.data(), fd.width, fd.height);
+                            }
+                            if (!ok) {
+                                mx::system_err << "acmx2: ERROR: failed to write TIFF snapshot: " << name << "\n";
                             } else {
                                 mx::system_out << "acmx2: Took snapshot: " << name << "\n";
                             }
@@ -8520,9 +8631,9 @@ const char *message = R"(
     T - enable/disable time
     U/I - step time if not disabled
     Page Up/Page Down - increase/decrease time speed
-    Z - take snapshot (8-bit non-HDR PNG in HDR mode)
-    4 - take 16-bit HDR TIFF snapshot (HDR input only; requires ACMX2_WITH_TIFF)
-    5 - take HDR snapshot: lossless WebP if ACMX2_WITH_WEBP, otherwise 16-bit PNG (HDR input only)
+    Z - take snapshot (PNG: SDR 8-bit; in HDR mode this still captures SDR PNG)
+    4 - take TIFF snapshot (SDR: 8-bit RGBA TIFF; HDR: 16-bit RGBA TIFF, requires ACMX2_WITH_TIFF)
+    5 - take WebP snapshot (SDR: lossless WebP; HDR: lossless WebP tone-mapped from HDR, requires ACMX2_WITH_WEBP)
     6 - take raw RGBA snapshot (16-bit RGBA in HDR mode, 8-bit RGBA otherwise)
         playback example: ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw
     3 - toggle 2D/3D mode
