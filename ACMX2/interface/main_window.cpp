@@ -2,7 +2,10 @@
 #include "audio-window.hpp"
 #include "settings.hpp"
 #include <QApplication>
+#include <QClipboard>
 #include <QDateTime>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -11,14 +14,68 @@
 #include <QInputDialog>
 #include <QLayout>
 #include <QMessageBox>
+#include <QPlainTextEdit>
 #include <QProcess>
+#include <QPushButton>
+#include <QRegularExpression>
 #include <QTextStream>
+#include <QVBoxLayout>
 #include <algorithm>
+#include <filesystem>
+#include <functional>
 #include <random>
+#include <sstream>
 #ifdef __linux__
 #include <sys/types.h>
 #include <unistd.h>
 #endif
+
+namespace {
+QString shellQuote(const QString &value) {
+    if (value.isEmpty()) {
+        return "''";
+    }
+    QString out = value;
+    out.replace("'", "'\\''");
+    return "'" + out + "'";
+}
+
+QString buildShellCommand(const QStringList &envAssignments, const QString &program,
+                          const QStringList &arguments) {
+    QStringList parts;
+    parts.reserve(envAssignments.size() + 1 + arguments.size());
+    for (const QString &entry : envAssignments) {
+        int eq = entry.indexOf('=');
+        if (eq <= 0) {
+            continue;
+        }
+        QString key = entry.left(eq);
+        QString value = entry.mid(eq + 1);
+        parts << (key + "=" + shellQuote(value));
+    }
+    parts << shellQuote(program);
+    for (const QString &arg : arguments) {
+        parts << shellQuote(arg);
+    }
+    return parts.join(' ');
+}
+
+#ifdef __linux__
+QStringList defaultLinuxRunEnvAssignments() {
+    QStringList envAssignments;
+    QString uid = QString::number(getuid());
+    QString userRunPath = "/run/user/" + uid;
+    envAssignments << "SDL_VIDEODRIVER=x11";
+    if (QDir(userRunPath).exists()) {
+        envAssignments << ("XDG_RUNTIME_DIR=" + userRunPath);
+        envAssignments << ("PULSE_SERVER=unix:" + userRunPath + "/pulse/native");
+    }
+    envAssignments << "CUDA_VISIBLE_DEVICES=0";
+    envAssignments << "vblank_mode=0";
+    return envAssignments;
+}
+#endif
+} // namespace
 
 void MainWindow::initControls() {
     lastFoundIndex = -1;
@@ -125,6 +182,10 @@ void MainWindow::initControls() {
     runMenu_all->setShortcut(QKeySequence("Ctrl+E"));
     connect(runMenu_all, &QAction::triggered, this, &MainWindow::runAll);
     runMenu->addAction(runMenu_all);
+    runMenu->addSeparator();
+    runMenu_copyCommand = new QAction(tr("Edit Command"), this);
+    connect(runMenu_copyCommand, &QAction::triggered, this, &MainWindow::copyCommand);
+    runMenu->addAction(runMenu_copyCommand);
     runMenu->addSeparator();
     QAction *runMenu_clearLog = new QAction(tr("Clear Log"), this);
     connect(runMenu_clearLog, &QAction::triggered, this, [this]() {
@@ -1121,28 +1182,10 @@ void MainWindow::runSelected() {
     }
 }
 
-void MainWindow::runAll() {
-    if (process->state() == QProcess::Running) {
-        QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
-        return;
-    }
-
-#ifdef __linux__
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    QString uid = QString::number(getuid());
-    QString user_run_path = "/run/user/" + uid;
-    env.insert("SDL_VIDEODRIVER", "x11");
-    if (QDir(user_run_path).exists()) {
-        env.insert("XDG_RUNTIME_DIR", user_run_path);
-        env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
-    }
-    env.insert("CUDA_VISIBLE_DEVICES", "0");
-    env.insert("vblank_mode", "0");
-    process->setProcessEnvironment(env);
-#endif
+bool MainWindow::buildRunArguments(QStringList &arguments) {
     if (shader_path.length() == 0) {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
-        return;
+        return false;
     }
     int index = 0;
     QItemSelectionModel *selectionModel = list_view->selectionModel();
@@ -1155,7 +1198,6 @@ void MainWindow::runAll() {
         QString selectedData = selectedIndex.data(Qt::DisplayRole).toString();
         Log("Selected shader: " + selectedData + " at index: " + QString::number(index));
     }
-    QStringList arguments;
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
     executable_path = dirPath + "/../Helpers/acmx2";
@@ -1330,6 +1372,31 @@ void MainWindow::runAll() {
         arguments << "--flip";
     }
 
+    return true;
+}
+
+void MainWindow::runAll() {
+    if (process->state() == QProcess::Running) {
+        QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
+        return;
+    }
+
+#ifdef __linux__
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    for (const QString &entry : defaultLinuxRunEnvAssignments()) {
+        int eq = entry.indexOf('=');
+        if (eq <= 0) {
+            continue;
+        }
+        env.insert(entry.left(eq), entry.mid(eq + 1));
+    }
+    process->setProcessEnvironment(env);
+#endif
+
+    QStringList arguments;
+    if (!buildRunArguments(arguments))
+        return;
+
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
@@ -1338,6 +1405,117 @@ void MainWindow::runAll() {
     } else {
         play_stop->setEnabled(true);
     }
+}
+
+void MainWindow::copyCommand() {
+    QStringList arguments;
+    if (!buildRunArguments(arguments))
+        return;
+
+    QString exe = executable_path;
+    if (exe.isEmpty())
+        exe = "acmx2";
+    QStringList envAssignments;
+#ifdef __linux__
+    envAssignments = defaultLinuxRunEnvAssignments();
+#endif
+    QString commandText = buildShellCommand(envAssignments, exe, arguments).trimmed();
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Copy Command"));
+    dialog.resize(720, 320);
+
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    QPlainTextEdit *textBox = new QPlainTextEdit(&dialog);
+    textBox->setPlainText(commandText);
+    textBox->setReadOnly(false);
+    textBox->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+    textBox->setStyleSheet("QPlainTextEdit { background-color: black; color: lime; "
+                           "font-size: 14px; font-family: 'Courier New', Courier, monospace; "
+                           "border: 1px solid red; }");
+    layout->addWidget(textBox);
+
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(&dialog);
+    QPushButton *copyButton = buttonBox->addButton(tr("Copy to Clipboard"), QDialogButtonBox::ActionRole);
+    QPushButton *runButton = buttonBox->addButton(tr("Run"), QDialogButtonBox::ActionRole);
+    QPushButton *okButton = buttonBox->addButton(QDialogButtonBox::Ok);
+    layout->addWidget(buttonBox);
+
+    QString style = "QDialog { background-color: black; border: 3px solid red; }"
+                    "QLabel { color: red; }"
+                    "QPushButton { border: 1px solid red; background-color: #110000; color: red; padding: 5px; }"
+                    "QPushButton:hover { background-color: red; color: black; }";
+    QSettings appSettings("LostSideDead");
+    if (appSettings.value("useCustomStyle", false).toBool()) {
+        dialog.setStyleSheet(style);
+    }
+
+    connect(copyButton, &QPushButton::clicked, &dialog, [textBox, &dialog]() {
+        const QString copiedText = textBox->toPlainText();
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        clipboard->setText(copiedText, QClipboard::Clipboard);
+#ifdef __linux__
+        if (clipboard->supportsSelection()) {
+            clipboard->setText(copiedText, QClipboard::Selection);
+        }
+#endif
+        QCoreApplication::processEvents();
+        QMessageBox::information(&dialog, tr("Copied"),
+                                 tr("Command copied to clipboard."));
+    });
+    connect(runButton, &QPushButton::clicked, &dialog, [this, textBox, &dialog]() {
+        if (process->state() == QProcess::Running) {
+            QMessageBox::information(&dialog, tr("Process Running"),
+                                     tr("A process is already running. Please stop it first."));
+            return;
+        }
+        QString cmdText = textBox->toPlainText().trimmed();
+        if (cmdText.isEmpty()) {
+            QMessageBox::warning(&dialog, tr("Empty Command"), tr("The command is empty."));
+            return;
+        }
+        QStringList tokens = QProcess::splitCommand(cmdText);
+        if (tokens.isEmpty()) {
+            QMessageBox::warning(&dialog, tr("Invalid Command"), tr("Could not parse the command."));
+            return;
+        }
+
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        const QRegularExpression envKeyRegex("^[A-Za-z_][A-Za-z0-9_]*$");
+        while (!tokens.isEmpty()) {
+            const QString token = tokens.first();
+            const int eq = token.indexOf('=');
+            if (eq <= 0) {
+                break;
+            }
+            const QString key = token.left(eq);
+            if (!envKeyRegex.match(key).hasMatch()) {
+                break;
+            }
+            env.insert(key, token.mid(eq + 1));
+            tokens.removeFirst();
+        }
+        if (tokens.isEmpty()) {
+            QMessageBox::warning(&dialog, tr("Invalid Command"),
+                                 tr("No executable was found after environment assignments."));
+            return;
+        }
+
+        QString program = tokens.takeFirst();
+        process->setProcessEnvironment(env);
+        Log("shell: " + program + " " + concatList(tokens) + "<br>");
+        process->start(program, tokens);
+        if (!process->waitForStarted()) {
+            Log("<b style='color:red;'>Failed to start the program.</b>");
+            QMessageBox::critical(&dialog, tr("Error"), tr("Failed to start the program."));
+            return;
+        }
+        play_stop->setEnabled(true);
+        dialog.accept();
+    });
+    connect(okButton, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+    dialog.exec();
 }
 
 QString MainWindow::concatList(const QStringList lst) {
@@ -1565,15 +1743,42 @@ void MainWindow::menuRecompileShaders() {
         return;
     }
 
-    QString cacheFile = recompile_path + "/.shader_cache";
+    // Determine assets path (same logic acmx2 uses for --path resolution).
+    QString assetsPath = QCoreApplication::applicationDirPath();
+    if (!QFileInfo::exists(assetsPath + "/data/win-icon.png"))
+        assetsPath = "/usr/local/share/acmx2";
+
+    // Compute hashed cache filename matching ShaderLibrary::shaderCacheFilePath.
+    std::error_code ec;
+    std::filesystem::path libFsPath(recompile_path.toStdString());
+    std::filesystem::path absLib = std::filesystem::absolute(libFsPath, ec);
+    std::string key = ec ? recompile_path.toStdString()
+                         : absLib.lexically_normal().string();
+    std::ostringstream nameStream;
+    nameStream << ".shader_cache_" << std::hex
+               << std::hash<std::string>{}(key);
+    QString cacheFile = assetsPath + "/" + QString::fromStdString(nameStream.str());
+
+    bool removedAny = false;
     QFile cache(cacheFile);
     if (cache.exists()) {
         if (cache.remove()) {
             Log("Deleted shader cache: " + cacheFile);
+            removedAny = true;
         } else {
             Log("<b style='color:red;'>Warning:</b> Could not delete cache file: " + cacheFile);
         }
-    } else {
+    }
+    // Also clean up any legacy cache file stored alongside the library.
+    QString legacyCache = recompile_path + "/.shader_cache";
+    QFile legacy(legacyCache);
+    if (legacy.exists()) {
+        if (legacy.remove()) {
+            Log("Deleted legacy shader cache: " + legacyCache);
+            removedAny = true;
+        }
+    }
+    if (!removedAny) {
         Log("No existing shader cache found");
     }
 

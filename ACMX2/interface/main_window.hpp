@@ -71,6 +71,7 @@ class MainWindow : public QMainWindow {
     void fileExit();
     void runSelected();
     void runAll();
+    void copyCommand();
     void cameraSettings();
     /// @brief Handle shader list selection changes.
     /// @param i Selected model index.
@@ -125,6 +126,7 @@ class MainWindow : public QMainWindow {
     QAction *fileMenu_prop, *fileMenu_exit;
     QAction *cameraSet, *audioSet;
     QAction *runMenu_select, *runMenu_all;
+    QAction *runMenu_copyCommand = nullptr;
     QAction *play_repeat, *play_stop;
     QAction *listMenu_new, *listMenu_shader, *listMenu_remove, *listMenu_up, *listMenu_down, *listMenu_shuffle, *listMenu_sort;
     QAction *helpMenu_about;
@@ -157,6 +159,10 @@ class MainWindow : public QMainWindow {
     /// @param lst Input list of values.
     /// @return Concatenated string for command-line usage.
     QString concatList(const QStringList lst);
+    /// @brief Build acmx2 command-line arguments from current UI state.
+    /// @param arguments Output list to populate with command-line tokens.
+    /// @return true if arguments were built, false on user-facing error.
+    bool buildRunArguments(QStringList &arguments);
     QVector<QPointer<TextEditor>> open_files;
     /// @brief Read an entire text file into memory.
     /// @param filePath Path to source file.

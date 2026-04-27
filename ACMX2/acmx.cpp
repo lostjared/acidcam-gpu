@@ -27,6 +27,7 @@
 #include <cmath>
 #include <condition_variable>
 #include <csignal>
+#include <cstring>
 #include <ctime>
 #include <deque>
 #include <filesystem>
@@ -1730,9 +1731,23 @@ struct ShaderCache {
      * @return True if the file was written without stream errors.
      */
     bool save(const std::string &path) const {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(path).parent_path();
+        if (!parent.empty() && !std::filesystem::exists(parent, ec)) {
+            std::filesystem::create_directories(parent, ec);
+            if (ec) {
+                mx::system_err << "acmx2: Could not create cache directory '"
+                               << parent.string() << "': " << ec.message() << "\n";
+                return false;
+            }
+        }
         std::ofstream file(path, std::ios::binary);
-        if (!file.is_open())
+        if (!file.is_open()) {
+            mx::system_err << "acmx2: Could not open cache file for writing: '"
+                           << path << "' (errno=" << errno << " - "
+                           << std::strerror(errno) << ")\n";
             return false;
+        }
 
         file.write(reinterpret_cast<const char *>(&CACHE_MAGIC), sizeof(CACHE_MAGIC));
         file.write(reinterpret_cast<const char *>(&CACHE_VERSION), sizeof(CACHE_VERSION));
@@ -2118,6 +2133,77 @@ class ShaderLibrary {
     };
     size_t library_index = 0;
     bool use_cache = false;
+
+    /**
+     * @brief Resolve the on-disk path for the shader binary cache file.
+     *
+     * The cache is preferentially stored under the assets directory (`--path`)
+     * so users can point multiple read-only shader libraries at a single
+     * writable cache location. If the assets directory is not writable we
+     * fall back to placing the cache directly inside the shader library
+     * directory (legacy behaviour).
+     *
+     * The filename is derived from a hash of the absolute, normalised
+     * library path so different libraries do not collide.
+     *
+     * @param assets_path  Assets directory passed via `--path` (may be empty).
+     * @param library_path Shader library directory (containing index.txt).
+     * @return Absolute or relative path to the shader cache file.
+     */
+    static std::string shaderCacheFilePath(const std::string &assets_path,
+                                           const std::string &library_path) {
+        std::error_code ec;
+        std::filesystem::path lib(library_path);
+        std::filesystem::path abs_lib = std::filesystem::absolute(lib, ec);
+        std::string key = ec ? library_path : abs_lib.lexically_normal().string();
+        std::hash<std::string> hasher;
+        std::ostringstream name_stream;
+        name_stream << ".shader_cache_" << std::hex << hasher(key);
+        const std::string filename = name_stream.str();
+
+        auto isWritable = [](const std::filesystem::path &dir) {
+            std::error_code e;
+            if (dir.empty())
+                return false;
+            if (!std::filesystem::exists(dir, e)) {
+                std::filesystem::create_directories(dir, e);
+                if (e)
+                    return false;
+            }
+            // Probe writability by creating a temp file.
+            std::filesystem::path probe = dir / ".acmx2_write_probe";
+            std::ofstream f(probe, std::ios::binary);
+            bool ok = f.is_open();
+            f.close();
+            if (ok)
+                std::filesystem::remove(probe, e);
+            return ok;
+        };
+
+        std::filesystem::path assets(assets_path);
+        std::filesystem::path libdir(library_path);
+
+        // Prefer existing cache in assets; otherwise existing cache in lib dir.
+        std::filesystem::path assets_cache = assets.empty() ? std::filesystem::path() : assets / filename;
+        std::filesystem::path lib_cache = libdir / filename;
+        if (!assets.empty() && std::filesystem::exists(assets_cache, ec)) {
+            return assets_cache.string();
+        }
+        if (std::filesystem::exists(lib_cache, ec)) {
+            return lib_cache.string();
+        }
+        // No existing cache; pick a writable location, preferring assets.
+        if (!assets.empty() && isWritable(assets)) {
+            return assets_cache.string();
+        }
+        if (isWritable(libdir)) {
+            return lib_cache.string();
+        }
+        // Last resort: return assets path even if it isn't writable so the
+        // caller can surface a meaningful error.
+        return assets.empty() ? lib_cache.string() : assets_cache.string();
+    }
+
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_2d;
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_3d;
     bool time_audio = false;
@@ -2836,7 +2922,7 @@ class ShaderLibrary {
         out.close();
 
         // Invalidate the on-disk cache since the library composition changed.
-        std::string cache_file = library_path + "/.shader_cache";
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path);
         if (std::filesystem::exists(cache_file)) {
             std::filesystem::remove(cache_file, ec);
             if (!ec) {
@@ -2882,7 +2968,7 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Program binary functions loaded successfully\n";
         fflush(stdout);
 
-        std::string cache_file = library_path + "/.shader_cache";
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path);
         std::fstream file;
         file.open(library_path + "/index.txt", std::ios::in);
         if (!file.is_open()) {
@@ -3100,7 +3186,7 @@ class ShaderLibrary {
             fflush(stdout);
             return true;
         } else {
-            mx::system_err << "acmx2: Failed to save shader cache\n";
+            mx::system_err << "acmx2: Failed to save shader cache to: " << cache_file << "\n";
             return false;
         }
     }
@@ -3170,7 +3256,7 @@ class ShaderLibrary {
     /// @brief Attempt to load all shader programs from the binary cache file.
     bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont,
                        const std::string &vert_2d = "", const std::string &vert_3d = "") {
-        std::string cache_file = library_path + "/.shader_cache";
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path);
 
         mx::system_out << "acmx2: Checking for shader cache at: " << cache_file << "\n";
         fflush(stdout);
