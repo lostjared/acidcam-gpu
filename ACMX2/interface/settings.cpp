@@ -497,7 +497,7 @@ void SettingsWindow::init() {
     browseInputVideoButton = new QPushButton("Browse", this);
 
     hdrStatusLabel = new QLabel("HDR: not checked", this);
-    convertHdr10CheckBox = new QCheckBox("Convert to HDR10 after processing", this);
+    convertHdr10CheckBox = new QCheckBox("Convert HLG to HDR10 after processing", this);
     convertHdr10CheckBox->setChecked(false);
     convertHdr10CheckBox->setEnabled(false);
     convertHdr10CheckBox->setToolTip(
