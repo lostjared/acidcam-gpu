@@ -1,5 +1,6 @@
 #include "main_window.hpp"
 #include "audio-window.hpp"
+#include "metadata-viewer.hpp"
 #include "settings.hpp"
 #include <QApplication>
 #include <QClipboard>
@@ -181,6 +182,10 @@ void MainWindow::initControls() {
         }
     });
     viewMenu->addAction(stayOnTopAction);
+    QAction *metadataAction = new QAction(tr("Media Metadata Viewer..."), this);
+    connect(metadataAction, &QAction::triggered, this, &MainWindow::menuMetadataViewer);
+    viewMenu->addSeparator();
+    viewMenu->addAction(metadataAction);
     fileMenu_prop = new QAction(tr("Properties"), this);
     fileMenu->addAction(fileMenu_prop);
     connect(fileMenu_prop, &QAction::triggered, this, &MainWindow::fileOpenProp);
@@ -1437,7 +1442,20 @@ void MainWindow::runHdr10Conversion() {
     args << "-y"
          << "-i" << output_file;
 
-    if (cuda_available) {
+    // Honor the user's codec selection from the recording settings dialog.
+    // Values come from the encodeCodecComboBox: "auto", "software", "nvenc".
+    // "auto" picks NVENC if CUDA is available, otherwise libx265.
+    const QString codecChoice = encode_codec.toLower();
+    bool useNvenc;
+    if (codecChoice == "software" || codecChoice == "libx265" || codecChoice == "x265") {
+        useNvenc = false;
+    } else if (codecChoice == "nvenc" || codecChoice == "hevc_nvenc") {
+        useNvenc = true;
+    } else {
+        useNvenc = cuda_available; // "auto" or empty
+    }
+
+    if (useNvenc) {
         // NVENC HEVC HDR10 path. p010le = 10-bit 4:2:0 semi-planar, required
         // by hevc_nvenc Main10. NVENC's preset namespace is p1..p7 (fastest
         // -> slowest); map the x264-style names from the UI combo onto it.
@@ -1467,12 +1485,9 @@ void MainWindow::runHdr10Conversion() {
              << "-color_primaries" << "bt2020"
              << "-colorspace" << "bt2020nc"
              << "-color_trc" << "smpte2084";
-        Log("HDR10 codec: hevc_nvenc (CUDA detected, preset=" + nvencPreset + ")<br>");
+         Log("HDR10 codec: hevc_nvenc (CUDA detected, preset=" + nvencPreset + ")<br>");
     } else {
-        // libx265 software HDR10 path. yuv420p10le is the standard 10-bit
-        // pixel format for x265 Main10; the x265-params block embeds the
-        // HDR10 signalling into the bitstream.
-        args << "-vf" << "zscale=p=bt2020:t=smpte2084:m=bt2020nc,format=yuv420p10le"
+         args << "-vf" << "zscale=p=bt2020:t=smpte2084:m=bt2020nc,format=yuv420p10le"
              << "-c:v" << "libx265"
              << "-preset" << (encode_preset.isEmpty() ? QStringLiteral("medium") : encode_preset)
              << "-b:v" << "56M"
@@ -1480,11 +1495,14 @@ void MainWindow::runHdr10Conversion() {
              << "-bufsize" << "60M"
              << "-pix_fmt" << "yuv420p10le"
              << "-x265-params"
-             << "hdr10=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:range=limited"
+             << "hdr10=1:hdr10-opt=1:repeat-headers=1:"
+                "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:range=limited:"
+                "master-display=G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(10000000,1):"
+                "max-cll=1000,400"
              << "-color_primaries" << "bt2020"
              << "-colorspace" << "bt2020nc"
              << "-color_trc" << "smpte2084";
-        Log("HDR10 codec: libx265 (no CUDA detected)<br>");
+        Log("HDR10 codec: libx265 (codec=" + (codecChoice.isEmpty() ? QStringLiteral("auto") : codecChoice) + ")<br>");
     }
 
     args << "-c:a" << "copy"
@@ -1767,6 +1785,11 @@ void MainWindow::menuBuildShaderCache() {
 }
 
 void MainWindow::menuRunFromCache() {
+}
+
+void MainWindow::menuMetadataViewer() {
+    MetadataViewer dlg(this);
+    dlg.exec();
 }
 
 void MainWindow::menuRemoveBroken() {

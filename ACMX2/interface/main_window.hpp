@@ -94,6 +94,7 @@ class MainWindow : public QMainWindow {
     void menuRecompileShaders();
     void menuRemoveBroken();
     void menuMidiSettings();
+    void menuMetadataViewer();
 
   protected:
     /// @brief Add shader to list if it is valid and not already present.

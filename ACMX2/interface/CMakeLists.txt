@@ -75,6 +75,7 @@ set(LAUNCHER_GUI_HEADERS
     editor.hpp
     gpufilter.hpp
     main_window.hpp
+    metadata-viewer.hpp
     midi-settings.hpp
     playlist.hpp
     prop.hpp
@@ -92,6 +93,7 @@ set(LAUNCHER_GUI_SOURCES
     gpufilter.cpp
     main.cpp
     main_window.cpp
+    metadata-viewer.cpp
     midi-settings.cpp
     playlist.cpp
     prop.cpp

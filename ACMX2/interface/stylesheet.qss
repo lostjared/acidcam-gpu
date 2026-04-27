@@ -125,7 +125,15 @@ QListWidget {
     border-radius: 6px;
     gridline-color: #2a2a2a;
     outline: 0;
-    color: #f2f2f2;
+    color: #ffffff;
+}
+
+QListView {
+    background-color: #121212;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    outline: 0;
+    color: #ffffff;
 }
 
 QListWidget::item {
@@ -149,7 +157,15 @@ QTreeWidget {
     border: 1px solid #333333;
     border-radius: 6px;
     outline: 0;
-    color: #f2f2f2;
+    color: #ffffff;
+}
+
+QTreeView {
+    background-color: #121212;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    outline: 0;
+    color: #ffffff;
 }
 
 QTreeWidget::item {
@@ -313,6 +329,21 @@ QTextEdit:focus {
     border: 2px solid #d32f2f;
 }
 
+QPlainTextEdit {
+    background-color: #111111;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    padding: 8px;
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    color: #e6e6e6;
+}
+
+QPlainTextEdit:focus {
+    border: 2px solid #d32f2f;
+}
+
+
 /* Scroll Bars */
 QScrollBar:vertical {
     background-color: #101010;
@@ -437,33 +468,33 @@ QDialog {
 
 /* Tabs */
 QTabWidget::pane {
-    border: 1px solid #2c2c2c;
+    background-color: #0f0f0f;
 }
 
 QTabBar::tab {
-    background-color: #eeeeee;
+    background-color: #0f0f0f;
     color: #666666;
     padding: 8px 20px;
     margin-right: 2px;
-    border: 1px solid #e0e0e0;
     border-bottom: none;
     border-radius: 4px 4px 0 0;
 }
 
 QTabBar::tab:selected {
-    background-color: #2196F3;
-    color: white;
-    border: 1px solid #2196F3;
-    border-bottom: 2px solid #2196F3;
+    background-color: #1c1c1c;
+    color: #f2f2f2;
+    border-radius: 4px;
+    border: 1px solid #d32f2f;
 }
 
 QTabBar::tab:hover:!selected {
-    background-color: #f5f5f5;
+    background-color: #1c1c1c;
 }
 
 /* Separators */
 QFrame[frameShape="4"] {
-    background-color: #e0e0e0;
+    background-color: #1c1c1c;
+    color: #f2f2f2;
 }
 
 /* Tooltips */
