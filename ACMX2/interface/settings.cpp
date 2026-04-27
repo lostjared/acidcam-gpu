@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -10,6 +11,7 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QScreen>
+#include <QScrollArea>
 #include <QSet>
 #include <QSettings>
 #include <algorithm>
@@ -696,22 +698,23 @@ void SettingsWindow::init() {
     modelRow->addWidget(browseModelButton);
     displayGrid->addLayout(modelRow, r, 1);
 
-    // ── Assemble two-column layout ────────────────────────────────────
-    auto *leftCol = new QVBoxLayout;
-    leftCol->addWidget(sourceGroup);
-    leftCol->addStretch();
+    // ── Assemble responsive group layout ──────────────────────────────
+    // Groups are organised into independent left/right column VBoxes so
+    // each column is laid out top-to-bottom by its own contents (Output
+    // -> Playback -> Display sit flush on the right regardless of the
+    // left column's height). resizeEvent() reflows between two columns
+    // and a single column based on the current dialog width.
+    reflowGroups = {sourceGroup, outputGroup, encodingGroup, playbackGroup, displayGroup};
 
-    auto *rightCol = new QVBoxLayout;
-    rightCol->addWidget(outputGroup);
-    rightCol->addWidget(encodingGroup);
-    rightCol->addWidget(playbackGroup);
-    rightCol->addWidget(displayGroup);
-    rightCol->addStretch();
+    leftColumn = new QVBoxLayout;
+    leftColumn->setSpacing(8);
+    rightColumn = new QVBoxLayout;
+    rightColumn->setSpacing(8);
 
-    auto *columnsLayout = new QHBoxLayout;
-    columnsLayout->setSpacing(12);
-    columnsLayout->addLayout(leftCol, 1);
-    columnsLayout->addLayout(rightCol, 1);
+    groupsRow = new QHBoxLayout;
+    groupsRow->setSpacing(12);
+    groupsRow->addLayout(leftColumn, 1);
+    groupsRow->addLayout(rightColumn, 1);
 
     auto *buttonLayout = new QHBoxLayout;
     buttonLayout->addStretch();
@@ -721,10 +724,29 @@ void SettingsWindow::init() {
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(12, 12, 12, 12);
     mainLayout->setSpacing(8);
-    mainLayout->addLayout(columnsLayout);
+    mainLayout->addLayout(groupsRow, 1);
+    mainLayout->addStretch();
     mainLayout->addLayout(buttonLayout);
     setLayout(mainLayout);
     setWindowTitle("Settings");
+
+    // Allow the dialog to be resized down to fit small/high-DPI displays.
+    // The preferred size is intentionally modest (the layout itself will
+    // grow naturally based on its contents). On displays where Qt is
+    // applying scaling (high-DPI / fractional scaling) the available
+    // screen size already accounts for the scale factor, so clamping
+    // against availableSize() keeps the dialog inside the screen.
+    setSizeGripEnabled(true);
+    setMinimumSize(420, 320);
+    QSize preferred(820, 640);
+    if (QScreen *scr = QGuiApplication::primaryScreen()) {
+        const QSize avail = scr->availableSize();
+        preferred.setWidth(std::min(preferred.width(), avail.width() - 40));
+        preferred.setHeight(std::min(preferred.height(), avail.height() - 80));
+    }
+    resize(preferred);
+    // Initial flow uses 2 columns; resizeEvent will adapt as needed.
+    reflowGroupColumns(2);
 
     // ── Signals ───────────────────────────────────────────────────────
     connect(cameraIndexComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -825,6 +847,69 @@ void SettingsWindow::init() {
     browseOutputVideoButton->setEnabled(false);
 
     loadUiState();
+}
+
+void SettingsWindow::reflowGroupColumns(int columns) {
+    if (!leftColumn || !rightColumn || reflowGroups.isEmpty()) {
+        return;
+    }
+    columns = std::max(1, columns);
+    if (columns == currentColumnCount) {
+        return;
+    }
+    currentColumnCount = columns;
+
+    auto detachAll = [](QVBoxLayout *col) {
+        while (QLayoutItem *item = col->takeAt(0)) {
+            // Stretch / spacer items have no widget; they are owned here.
+            if (!item->widget()) {
+                delete item;
+            } else {
+                delete item; // widget stays alive; reparented when re-added
+            }
+        }
+    };
+    detachAll(leftColumn);
+    detachAll(rightColumn);
+
+    // reflowGroups order: 0=source, 1=output, 2=encoding, 3=playback, 4=display.
+    if (columns >= 2) {
+        // Left:  Source, Encoding
+        leftColumn->addWidget(reflowGroups[0]);
+        leftColumn->addWidget(reflowGroups[2]);
+        leftColumn->addStretch();
+        // Right: Output -> Playback -> Display (flush, top-aligned)
+        rightColumn->addWidget(reflowGroups[1]);
+        rightColumn->addWidget(reflowGroups[3]);
+        rightColumn->addWidget(reflowGroups[4]);
+        rightColumn->addStretch();
+        rightColumn->parentWidget(); // no-op; keep code consistent
+        if (groupsRow) {
+            groupsRow->setStretch(0, 1);
+            groupsRow->setStretch(1, 1);
+        }
+        for (QGroupBox *g : reflowGroups) {
+            g->setVisible(true);
+        }
+    } else {
+        // Single column: Source, Output, Playback, Display, Encoding.
+        const int singleOrder[] = {0, 1, 3, 4, 2};
+        for (int idx : singleOrder) {
+            leftColumn->addWidget(reflowGroups[idx]);
+        }
+        leftColumn->addStretch();
+        if (groupsRow) {
+            groupsRow->setStretch(0, 1);
+            groupsRow->setStretch(1, 0);
+        }
+    }
+}
+
+void SettingsWindow::resizeEvent(QResizeEvent *event) {
+    QDialog::resizeEvent(event);
+    const int w = width();
+    const int columns = (w >= 720) ? 2 : 1;
+    reflowGroupColumns(columns);
 }
 
 void SettingsWindow::loadUiState() {

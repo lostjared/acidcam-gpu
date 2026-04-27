@@ -168,6 +168,20 @@ class SettingsWindow : public QDialog {
     QCheckBox *encodeRealtimeCheckBox = nullptr;
     QCheckBox *encodeNoDropCheckBox = nullptr;
 
+    // Responsive layout: groups are reflowed between 1 and 2 columns
+    // depending on the dialog width when the user resizes the window.
+    QHBoxLayout *groupsRow = nullptr;
+    QVBoxLayout *leftColumn = nullptr;
+    QVBoxLayout *rightColumn = nullptr;
+    QList<QGroupBox *> reflowGroups;
+    int currentColumnCount = 0;
+    void reflowGroupColumns(int columns);
+
+  protected:
+    void resizeEvent(QResizeEvent *event) override;
+
+  private:
+
     int selectedCameraIndex;
     QSize selectedCameraResolution;
     QSize selectedScreenResolution;
