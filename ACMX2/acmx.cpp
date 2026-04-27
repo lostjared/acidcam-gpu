@@ -4188,6 +4188,7 @@ struct MXArguments {
 #endif
     float time_speed = 1.0f;
     std::string playlist_file;
+    int autopilot_frames = 0;            ///< Frames between random shader switches in autopilot mode (0 = disabled).
     double duration = 0.0;
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
@@ -5163,6 +5164,7 @@ class ACView : public gl::GLObject {
             fflush(stdout);
         }
         playlist_file = args.playlist_file;
+        autopilot_frames = args.autopilot_frames;
         duration_limit = args.duration;
         crossfadeDuration = args.cross_fade_duration;
 #ifdef MIDI_ENABLED
@@ -5203,6 +5205,10 @@ class ACView : public gl::GLObject {
     int playlist_index = 0;
     bool playlist_enabled = false;
     std::string playlist_file;
+    int autopilot_frames = 0;            ///< Frames between random switches in autopilot mode (0 = unset).
+    bool autopilot_enabled = false;       ///< Toggle autopilot via SDLK_j when playlist is enabled.
+    int autopilot_counter = 0;            ///< Frames elapsed since last autopilot switch.
+    std::mt19937 autopilot_rng{std::random_device{}()};
     std::vector<int> saved_pass_list;
     bool saved_pass_enabled = false;
     double duration_limit = 0.0;
@@ -5298,6 +5304,58 @@ class ACView : public gl::GLObject {
         cached_shader_name = shader_pass_enabled
                                  ? library.getFullShaderName(shader_pass_list)
                                  : library.getFullShaderName();
+    }
+
+    /**
+     * @brief Pick a random entry from the active playlist and apply it.
+     *
+     * Used by autopilot mode. Mirrors the right-arrow advance logic but
+     * selects a uniformly random index. No-op unless playlist mode is
+     * active and at least one entry exists.
+     *
+     * @param win Active window (used for crossfade animation).
+     */
+    void autopilotRandomSwitch(gl::GLWindow *win) {
+        if (!playlist_enabled)
+            return;
+        if (shaderLocked)
+            return;
+        if (!playlist_tree.empty()) {
+            const int n = static_cast<int>(playlist_tree.size());
+            if (n <= 0) return;
+            std::uniform_int_distribution<int> dist(0, n - 1);
+            int r = dist(autopilot_rng);
+            if (n > 1 && r == playlist_index)
+                r = (r + 1) % n;
+            beginCrossfade(win);
+            playlist_index = r;
+            const auto &node = playlist_tree[playlist_index];
+            shader_pass_list = node.shader_indices;
+            shader_pass_enabled = !shader_pass_list.empty();
+            if (is3d_enabled)
+                cube.setShaderProgram(library.shader());
+            sprite.setShader(library.shader());
+            updateShaderNameCache();
+            mx::system_out << "acmx2: Autopilot -> Node: " << node.name
+                           << " [" << node.shader_indices.size() << " shaders] ("
+                           << (playlist_index + 1) << "/" << n << ")\n";
+            fflush(stdout);
+        } else if (!playlist_indices.empty()) {
+            const int n = static_cast<int>(playlist_indices.size());
+            std::uniform_int_distribution<int> dist(0, n - 1);
+            int r = dist(autopilot_rng);
+            if (n > 1 && r == playlist_index)
+                r = (r + 1) % n;
+            beginCrossfade(win);
+            playlist_index = r;
+            library.setIndex(playlist_indices[playlist_index]);
+            if (is3d_enabled)
+                cube.setShaderProgram(library.shader());
+            sprite.setShader(library.shader());
+            updateShaderNameCache();
+            mx::system_out << "acmx2: Autopilot -> Playlist [" << (playlist_index + 1) << "/" << n << "]\n";
+            fflush(stdout);
+        }
     }
 
     /**
@@ -7230,6 +7288,12 @@ class ACView : public gl::GLObject {
                 lastUpdate = now;
             }
         }
+        if (playlist_enabled && autopilot_enabled && autopilot_frames > 0) {
+            if (++autopilot_counter >= autopilot_frames) {
+                autopilot_counter = 0;
+                autopilotRandomSwitch(win);
+            }
+        }
         frame_counter++;
     }
 
@@ -7481,6 +7545,26 @@ class ACView : public gl::GLObject {
             case SDLK_k:
                 shaderLocked = !shaderLocked;
                 mx::system_out << "acmx2: Shader lock: " << (shaderLocked ? "enabled" : "disabled") << "\n";
+                fflush(stdout);
+                break;
+            case SDLK_j:
+                if (!playlist_enabled) {
+                    mx::system_out << "acmx2: Autopilot requires playlist mode (press P first)\n";
+                    fflush(stdout);
+                    break;
+                }
+                if (playlist_tree.empty() && playlist_indices.empty()) {
+                    mx::system_out << "acmx2: Autopilot has no playlist entries\n";
+                    fflush(stdout);
+                    break;
+                }
+                autopilot_enabled = !autopilot_enabled;
+                autopilot_counter = 0;
+                if (autopilot_enabled && autopilot_frames <= 0) {
+                    autopilot_frames = 300; // sensible default if user never set it
+                }
+                mx::system_out << "acmx2: Autopilot " << (autopilot_enabled ? "enabled" : "disabled")
+                               << " (every " << autopilot_frames << " frames)\n";
                 fflush(stdout);
                 break;
             case SDLK_z:
@@ -8627,7 +8711,8 @@ const char *message = R"(
     Right - Next GPU filter (if enabled)
     Space - Enable/Disable Processing
     L - Enable/Disable video freeze (Video/Image Modes)
-    P - Enable/Disable pause video (Video/Image Modes)
+    P - Enable/Disable pause video (Video/Image Modes) / toggle shader playlist
+    J - Toggle autopilot mode (random playlist switching, requires playlist enabled)
     T - enable/disable time
     U/I - step time if not disabled
     Page Up/Page Down - increase/decrease time speed
@@ -8781,6 +8866,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(416, "remove-broken", "Compile each shader in library path; remove shaders that fail to compile from index.txt, then exit")
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
+        .addOptionDoubleValue(417, "autopilot-frames", "Autopilot frame interval; switch to a random playlist shader every N frames (J toggles)")
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
@@ -9105,6 +9191,12 @@ int main(int argc, char **argv) {
             case 410:
                 args.playlist_file = arg.arg_value;
                 mx::system_out << "acmx2: Playlist file: " << args.playlist_file << "\n";
+                break;
+            case 417:
+                args.autopilot_frames = atoi(arg.arg_value.c_str());
+                if (args.autopilot_frames < 0)
+                    args.autopilot_frames = 0;
+                mx::system_out << "acmx2: Autopilot frames: " << args.autopilot_frames << "\n";
                 break;
             case 411:
                 args.duration = atof(arg.arg_value.c_str());

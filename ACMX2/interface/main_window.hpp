@@ -219,6 +219,7 @@ class MainWindow : public QMainWindow {
     QStringList playlist_names;
     QList<QPair<QString, QStringList>> playlist_tree_data;
     QString playlist_file_path;
+    int autopilot_frames = 0;
     QAction *playlistAction;
     QString stderrBuffer;
 };

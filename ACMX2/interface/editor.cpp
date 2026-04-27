@@ -662,6 +662,14 @@ void TextEditor::init() {
     QAction *moveDownAction = editMenu->addAction("Move Line Dow&n");
     moveDownAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_Down));
 
+    editMenu->addSeparator();
+
+    QAction *shiftRightAction = editMenu->addAction("Shift &Right");
+    shiftRightAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
+
+    QAction *shiftLeftAction = editMenu->addAction("Shift &Left");
+    shiftLeftAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
+
     QMenu *viewMenu = menuBar->addMenu("&View");
 
     QAction *increaseFontAction = viewMenu->addAction("Increase Font Size");
@@ -720,6 +728,13 @@ void TextEditor::init() {
 
     connect(toggleWordWrapAction, &QAction::triggered, this, [this](bool checked) {
         m_textEdit->setLineWrapMode(checked ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+    });
+
+    connect(shiftRightAction, &QAction::triggered, this, [this]() {
+        m_textEdit->indentSelection();
+    });
+    connect(shiftLeftAction, &QAction::triggered, this, [this]() {
+        m_textEdit->unindentSelection();
     });
 
     connect(m_textEdit, &QPlainTextEdit::textChanged, this, [this]() {

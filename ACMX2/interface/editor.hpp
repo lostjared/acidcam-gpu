@@ -43,6 +43,10 @@ class CustomTextEdit : public QPlainTextEdit {
     void highlightCurrentLine();
     void matchBrackets();
 
+  public:
+    void indentSelection();
+    void unindentSelection();
+
   private:
     void autoIndentNewLine();
     void duplicateLine();
@@ -50,8 +54,6 @@ class CustomTextEdit : public QPlainTextEdit {
     void moveLineDown();
     void toggleComment();
     void smartHome(bool shift);
-    void indentSelection();
-    void unindentSelection();
     bool hasMultiLineSelection();
 
     LineNumberArea *m_lineNumberArea = nullptr;

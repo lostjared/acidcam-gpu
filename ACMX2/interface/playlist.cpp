@@ -97,6 +97,20 @@ void PlaylistDialog::setupUI() {
     fileButtonLayout->addStretch();
     shaderMainLayout->addLayout(fileButtonLayout);
 
+    QHBoxLayout *autopilotLayout = new QHBoxLayout();
+    QLabel *autopilotLabel = new QLabel(
+        "Autopilot frames (0 = off; switch to a random shader after this many frames, toggle with J):",
+        this);
+    autopilotLabel->setWordWrap(true);
+    autopilotFramesSpinBox = new QSpinBox(this);
+    autopilotFramesSpinBox->setRange(0, 1000000);
+    autopilotFramesSpinBox->setSingleStep(30);
+    autopilotFramesSpinBox->setValue(0);
+    autopilotFramesSpinBox->setSuffix(" frames");
+    autopilotLayout->addWidget(autopilotLabel, 1);
+    autopilotLayout->addWidget(autopilotFramesSpinBox);
+    shaderMainLayout->addLayout(autopilotLayout);
+
     mainLayout->addWidget(shaderGroup);
 
     QHBoxLayout *dialogButtonLayout = new QHBoxLayout();
@@ -135,6 +149,8 @@ void PlaylistDialog::setupUI() {
         clearButton->setEnabled(checked);
         saveButton->setEnabled(checked);
         loadButton->setEnabled(checked);
+        if (autopilotFramesSpinBox)
+            autopilotFramesSpinBox->setEnabled(checked);
     });
 
     enableCheckBox->setChecked(false);
@@ -151,6 +167,7 @@ void PlaylistDialog::setupUI() {
     clearButton->setEnabled(false);
     saveButton->setEnabled(false);
     loadButton->setEnabled(false);
+    autopilotFramesSpinBox->setEnabled(false);
 
     QString style = "QDialog { background-color: black; }"
                     "QGroupBox { color: cyan; border: 1px solid cyan; margin-top: 10px; padding-top: 10px; }"
@@ -477,6 +494,17 @@ QList<QPair<QString, QStringList>> PlaylistDialog::getPlaylistTree() const {
 
 QString PlaylistDialog::getPlaylistFile() const {
     return playlistFilePath;
+}
+
+int PlaylistDialog::getAutopilotFrames() const {
+    return autopilotFramesSpinBox ? autopilotFramesSpinBox->value() : 0;
+}
+
+void PlaylistDialog::setAutopilotFrames(int frames) {
+    if (autopilotFramesSpinBox) {
+        if (frames < 0) frames = 0;
+        autopilotFramesSpinBox->setValue(frames);
+    }
 }
 
 void PlaylistDialog::setEnabled(bool enabled) {

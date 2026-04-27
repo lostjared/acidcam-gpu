@@ -862,12 +862,14 @@ void MainWindow::menuPlaylistSettings() {
     if (!playlist_file_path.isEmpty()) {
         playlistDialog.setPlaylistFile(playlist_file_path);
     }
+    playlistDialog.setAutopilotFrames(autopilot_frames);
 
     if (playlistDialog.exec() == QDialog::Accepted) {
         playlist_enabled = playlistDialog.isPlaylistEnabled();
         playlist_names = playlistDialog.getSelectedShaderNames();
         playlist_tree_data = playlistDialog.getPlaylistTree();
         playlist_file_path = playlistDialog.getPlaylistFile();
+        autopilot_frames = playlistDialog.getAutopilotFrames();
         if (playlist_enabled) {
             Log("Playlist Settings Saved: " + QString::number(playlist_names.size()) + " shaders");
             if (!playlist_file_path.isEmpty()) {
@@ -1310,6 +1312,10 @@ void MainWindow::runAll() {
             playlist_file_path = plFile;
         }
         arguments << "--playlist" << plFile;
+    }
+
+    if (autopilot_frames > 0) {
+        arguments << "--autopilot-frames" << QString::number(autopilot_frames);
     }
 
     if (duration_limit_enabled && max_duration > 0.0) {

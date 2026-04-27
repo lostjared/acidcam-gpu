@@ -15,6 +15,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSortFilterProxyModel>
+#include <QSpinBox>
 #include <QStandardItemModel>
 #include <QStringList>
 #include <QTreeWidget>
@@ -36,11 +37,15 @@ class PlaylistDialog : public QDialog {
     QList<QPair<QString, QStringList>> getPlaylistTree() const;
     /// @brief Return current playlist file path.
     QString getPlaylistFile() const;
+    /// @brief Return frames-per-shader threshold for autopilot mode (0 = disabled).
+    int getAutopilotFrames() const;
 
     void setEnabled(bool enabled);
     void setSelectedShaderNames(const QStringList &names);
     void setPlaylistTree(const QList<QPair<QString, QStringList>> &tree);
     void setPlaylistFile(const QString &path);
+    /// @brief Set frames-per-shader threshold for autopilot mode.
+    void setAutopilotFrames(int frames);
     void updateShaderList(const QStringList &shaderNames);
 
   public slots:
@@ -77,6 +82,8 @@ class PlaylistDialog : public QDialog {
     QPushButton *loadButton;
     QPushButton *okButton;
     QPushButton *cancelButton;
+
+    QSpinBox *autopilotFramesSpinBox = nullptr;
 
     QStandardItemModel *shaderModel;
     QSortFilterProxyModel *proxyModel;
