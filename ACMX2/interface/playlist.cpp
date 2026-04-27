@@ -6,6 +6,7 @@
 #include <QSettings>
 #include <QTextStream>
 #include <algorithm>
+#include <random>
 
 PlaylistDialog::PlaylistDialog(const QStringList &shaderNames, QWidget *parent)
     : QDialog(parent) {
@@ -73,11 +74,13 @@ void PlaylistDialog::setupUI() {
     upButton = new QPushButton("↑ Up", this);
     downButton = new QPushButton("↓ Down", this);
     clearButton = new QPushButton("Clear All", this);
+    shuffleButton = new QPushButton("Shuffle", this);
     buttonLayout->addWidget(addButton);
     buttonLayout->addWidget(removeButton);
     buttonLayout->addWidget(upButton);
     buttonLayout->addWidget(downButton);
     buttonLayout->addWidget(clearButton);
+    buttonLayout->addWidget(shuffleButton);
     shaderMainLayout->addLayout(buttonLayout);
 
     QLabel *selectedLabel = new QLabel("Playlist Tree (press P in acmx2 to toggle, Up/Down to navigate):", this);
@@ -92,8 +95,10 @@ void PlaylistDialog::setupUI() {
     QHBoxLayout *fileButtonLayout = new QHBoxLayout();
     saveButton = new QPushButton("Save Playlist...", this);
     loadButton = new QPushButton("Load Playlist...", this);
+    concatButton = new QPushButton("Concat Playlist...", this);
     fileButtonLayout->addWidget(saveButton);
     fileButtonLayout->addWidget(loadButton);
+    fileButtonLayout->addWidget(concatButton);
     fileButtonLayout->addStretch();
     shaderMainLayout->addLayout(fileButtonLayout);
 
@@ -129,6 +134,8 @@ void PlaylistDialog::setupUI() {
     connect(upButton, &QPushButton::clicked, this, &PlaylistDialog::moveUp);
     connect(downButton, &QPushButton::clicked, this, &PlaylistDialog::moveDown);
     connect(clearButton, &QPushButton::clicked, this, &PlaylistDialog::clearAll);
+    connect(shuffleButton, &QPushButton::clicked, this, &PlaylistDialog::shufflePlaylist);
+    connect(concatButton, &QPushButton::clicked, this, &PlaylistDialog::concatPlaylist);
     connect(saveButton, &QPushButton::clicked, this, &PlaylistDialog::savePlaylist);
     connect(loadButton, &QPushButton::clicked, this, &PlaylistDialog::loadPlaylist);
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
@@ -147,6 +154,8 @@ void PlaylistDialog::setupUI() {
         upButton->setEnabled(checked);
         downButton->setEnabled(checked);
         clearButton->setEnabled(checked);
+        shuffleButton->setEnabled(checked);
+        concatButton->setEnabled(checked);
         saveButton->setEnabled(checked);
         loadButton->setEnabled(checked);
         if (autopilotFramesSpinBox)
@@ -165,6 +174,8 @@ void PlaylistDialog::setupUI() {
     upButton->setEnabled(false);
     downButton->setEnabled(false);
     clearButton->setEnabled(false);
+    shuffleButton->setEnabled(false);
+    concatButton->setEnabled(false);
     saveButton->setEnabled(false);
     loadButton->setEnabled(false);
     autopilotFramesSpinBox->setEnabled(false);
@@ -361,6 +372,101 @@ void PlaylistDialog::moveDown() {
 
 void PlaylistDialog::clearAll() {
     playlistTree->clear();
+}
+
+void PlaylistDialog::shufflePlaylist() {
+    int totalShaders = 0;
+    for (int i = 0; i < playlistTree->topLevelItemCount(); ++i) {
+        totalShaders += playlistTree->topLevelItem(i)->childCount();
+    }
+    if (totalShaders == 0) {
+        QMessageBox::information(this, "Empty Playlist", "Add shaders to the playlist before shuffling.");
+        return;
+    }
+
+    static thread_local std::mt19937 rng{std::random_device{}()};
+
+    for (int i = 0; i < playlistTree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem *node = playlistTree->topLevelItem(i);
+        const int n = node->childCount();
+        if (n < 2)
+            continue;
+
+        QList<QTreeWidgetItem *> children;
+        children.reserve(n);
+        while (node->childCount() > 0) {
+            children.append(node->takeChild(0));
+        }
+        std::shuffle(children.begin(), children.end(), rng);
+        for (QTreeWidgetItem *child : children) {
+            node->addChild(child);
+        }
+        node->setExpanded(true);
+    }
+}
+
+void PlaylistDialog::concatPlaylist() {
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastPlaylistDir", "").toString();
+    QString filePath = QFileDialog::getOpenFileName(this, "Concat Playlist", lastDir,
+                                                    "Text Files (*.txt);;All Files (*)");
+    if (filePath.isEmpty())
+        return;
+
+    appSettings.setValue("lastPlaylistDir", QFileInfo(filePath).absolutePath());
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Could not open playlist file: " + filePath);
+        return;
+    }
+
+    QTextStream in(&file);
+    int loadedCount = 0;
+    int skippedCount = 0;
+    int nodesAdded = 0;
+    QTreeWidgetItem *currentNode = nullptr;
+
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (line.isEmpty())
+            continue;
+
+        if (line.startsWith('[') && line.endsWith(']')) {
+            QString nodeName = line.mid(1, line.length() - 2);
+            currentNode = new QTreeWidgetItem(playlistTree);
+            currentNode->setText(0, nodeName);
+            currentNode->setFlags(currentNode->flags() | Qt::ItemIsEditable);
+            currentNode->setExpanded(true);
+            ++nodesAdded;
+        } else {
+            if (!currentNode) {
+                QString nodeName = QFileInfo(filePath).baseName();
+                if (nodeName.isEmpty())
+                    nodeName = "Concat";
+                currentNode = new QTreeWidgetItem(playlistTree);
+                currentNode->setText(0, nodeName);
+                currentNode->setFlags(currentNode->flags() | Qt::ItemIsEditable);
+                currentNode->setExpanded(true);
+                ++nodesAdded;
+            }
+            if (shaderNameToIndex.contains(line)) {
+                auto *item = new QTreeWidgetItem(currentNode);
+                item->setText(0, line);
+                item->setData(0, Qt::UserRole, shaderNameToIndex[line]);
+                ++loadedCount;
+            } else {
+                ++skippedCount;
+            }
+        }
+    }
+    file.close();
+
+    QString msg = "Concatenated " + QString::number(loadedCount) + " shader(s) into " +
+                  QString::number(nodesAdded) + " node(s).";
+    if (skippedCount > 0)
+        msg += "\n" + QString::number(skippedCount) + " shader(s) not found and skipped.";
+    QMessageBox::information(this, "Playlist Concatenated", msg);
 }
 
 void PlaylistDialog::savePlaylist() {

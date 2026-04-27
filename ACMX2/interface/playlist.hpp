@@ -57,6 +57,8 @@ class PlaylistDialog : public QDialog {
     void moveUp();
     void moveDown();
     void clearAll();
+    void shufflePlaylist();
+    void concatPlaylist();
     void filterSearchChanged(const QString &text);
     void savePlaylist();
     void loadPlaylist();
@@ -78,6 +80,8 @@ class PlaylistDialog : public QDialog {
     QPushButton *upButton;
     QPushButton *downButton;
     QPushButton *clearButton;
+    QPushButton *shuffleButton;
+    QPushButton *concatButton;
     QPushButton *saveButton;
     QPushButton *loadButton;
     QPushButton *okButton;
