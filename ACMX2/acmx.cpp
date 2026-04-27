@@ -7940,7 +7940,7 @@ class ACView : public gl::GLObject {
     float modelRotY = 0.0f;
     float modelRotZ = 0.0f;
     std::atomic<uint64_t> snapshotOffset{0};
-    int gpu_cuda_device = 0;
+    [[maybe_unused]] int gpu_cuda_device = 0;
     bool silent_mode = false;
     bool no_drop_mode = false;
 #ifdef __APPLE__

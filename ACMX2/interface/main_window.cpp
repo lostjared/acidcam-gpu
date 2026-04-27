@@ -70,7 +70,6 @@ QStringList defaultLinuxRunEnvAssignments() {
         envAssignments << ("XDG_RUNTIME_DIR=" + userRunPath);
         envAssignments << ("PULSE_SERVER=unix:" + userRunPath + "/pulse/native");
     }
-    envAssignments << "CUDA_VISIBLE_DEVICES=0";
     envAssignments << "vblank_mode=0";
     return envAssignments;
 }
@@ -1017,7 +1016,6 @@ void MainWindow::runSelected() {
         env.insert("XDG_RUNTIME_DIR", user_run_path);
         env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
     }
-    env.insert("CUDA_VISIBLE_DEVICES", "0");
     env.insert("vblank_mode", "0");
     process->setProcessEnvironment(env);
 #endif
