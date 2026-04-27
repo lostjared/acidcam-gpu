@@ -108,6 +108,12 @@ class MainWindow : public QMainWindow {
                 process->kill();
             }
         }
+        if (hdr10Process && hdr10Process->state() == QProcess::Running) {
+            hdr10Process->terminate();
+            if (!hdr10Process->waitForFinished(10000)) {
+                hdr10Process->kill();
+            }
+        }
         QMainWindow::closeEvent(event);
     }
 
@@ -142,6 +148,8 @@ class MainWindow : public QMainWindow {
     QAction *listMenu_search;
     QString shader_path;
     QProcess *process;
+    QProcess *hdr10Process = nullptr;
+    bool convert_to_hdr10 = false;
     QSize camera_res, screen_res;
     unsigned int camera_index;
     QString video_file;
@@ -163,6 +171,10 @@ class MainWindow : public QMainWindow {
     /// @param arguments Output list to populate with command-line tokens.
     /// @return true if arguments were built, false on user-facing error.
     bool buildRunArguments(QStringList &arguments);
+    /// @brief Run ffmpeg to convert the just-produced acmx2 output (assumed
+    ///        HLG HDR) into HDR10 (HEVC NVENC, BT.2020 / SMPTE2084) and pipe
+    ///        ffmpeg's stdout/stderr to the main log window.
+    void runHdr10Conversion();
     QVector<QPointer<TextEditor>> open_files;
     /// @brief Read an entire text file into memory.
     /// @param filePath Path to source file.

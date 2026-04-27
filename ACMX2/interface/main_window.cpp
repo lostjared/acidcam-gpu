@@ -117,6 +117,37 @@ void MainWindow::initControls() {
                 stream << "acmx2: Exited with Code: " << exitCode;
                 Log(text + "<br>");
                 play_stop->setEnabled(false);
+
+                // Optional post-process: convert the produced HLG HDR file
+                // to HDR10 via ffmpeg and stream its output to the log.
+                if (convert_to_hdr10 && exitCode == 0 && !output_file.isEmpty() &&
+                    QFileInfo::exists(output_file)) {
+                    runHdr10Conversion();
+                }
+            });
+
+    hdr10Process = new QProcess(this);
+    connect(hdr10Process, &QProcess::readyReadStandardOutput, this, [this]() {
+        QString output = QString::fromUtf8(hdr10Process->readAllStandardOutput());
+        output.replace("\n", "<br>");
+        this->Write(output);
+    });
+    connect(hdr10Process, &QProcess::readyReadStandardError, this, [this]() {
+        QString output = QString::fromUtf8(hdr10Process->readAllStandardError());
+        output.replace("\n", "<br>");
+        // ffmpeg writes progress to stderr; render in a neutral colour rather
+        // than the alarming red used for acmx2 errors.
+        this->Write("<span style='color:#88aaff;'>" + output + "</span>");
+    });
+    connect(hdr10Process,
+            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
+            this,
+            [this](int exitCode, QProcess::ExitStatus) {
+                QString text;
+                QTextStream stream(&text);
+                stream << "ffmpeg (HDR10): Exited with Code: " << exitCode;
+                Log(text + "<br>");
+                play_stop->setEnabled(false);
             });
 
     setStyleSheet(" QMainWindow { background-color: rgb(0,0,0); }");
@@ -198,7 +229,12 @@ void MainWindow::initControls() {
     play_stop = new QAction(tr("Stop"), this);
     play_stop->setEnabled(false);
     connect(play_stop, &QAction::triggered, this, [=]() {
-        process->terminate();
+        if (process->state() == QProcess::Running) {
+            process->terminate();
+        }
+        if (hdr10Process && hdr10Process->state() == QProcess::Running) {
+            hdr10Process->terminate();
+        }
     });
     playbackMenu->addAction(play_stop);
     playbackMenu->addSeparator();
@@ -984,6 +1020,12 @@ void MainWindow::cameraSettings() {
         } else {
             output_file = "";
         }
+        // Only meaningful in input-video mode + with an output file. The
+        // settings dialog already gates this on HDR detection, but we re-check
+        // here so it stays consistent if other modes are selected.
+        convert_to_hdr10 = settingsWindow.isConvertToHdr10Enabled() &&
+                           settingsWindow.isUsingInputVideoFile() &&
+                           settingsWindow.isSavingToOutputVideoFile();
     }
     enable_3d = settingsWindow.is3dEnabled();
     model_file = settingsWindow.getModelFile();
@@ -1371,6 +1413,95 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
     }
 
     return true;
+}
+
+void MainWindow::runHdr10Conversion() {
+    if (!hdr10Process) {
+        return;
+    }
+    if (hdr10Process->state() == QProcess::Running) {
+        Log("<b style='color:red;'>HDR10 conversion already running; skipping.</b>");
+        return;
+    }
+    if (output_file.isEmpty() || !QFileInfo::exists(output_file)) {
+        Log("<b style='color:red;'>HDR10 conversion: source file missing.</b>");
+        return;
+    }
+
+    QFileInfo fi(output_file);
+    const QString suffix = fi.suffix();
+    const QString hdr10Path = fi.absolutePath() + "/" + fi.completeBaseName() +
+                              ".HDR10" + (suffix.isEmpty() ? QString() : "." + suffix);
+
+    QStringList args;
+    args << "-y"
+         << "-i" << output_file;
+
+    if (cuda_available) {
+        // NVENC HEVC HDR10 path. p010le = 10-bit 4:2:0 semi-planar, required
+        // by hevc_nvenc Main10. NVENC's preset namespace is p1..p7 (fastest
+        // -> slowest); map the x264-style names from the UI combo onto it.
+        QString nvencPreset;
+        const QString p = encode_preset.toLower();
+        if (p == "ultrafast")      nvencPreset = "p1";
+        else if (p == "superfast") nvencPreset = "p2";
+        else if (p == "veryfast")  nvencPreset = "p3";
+        else if (p == "faster")    nvencPreset = "p4";
+        else if (p == "fast")      nvencPreset = "p5";
+        else if (p == "medium")    nvencPreset = "p6";
+        else if (p == "slow")      nvencPreset = "p6";
+        else if (p == "slower")    nvencPreset = "p7";
+        else if (p == "veryslow")  nvencPreset = "p7";
+        else if (p.startsWith("p") && p.size() == 2 && p[1].isDigit())
+            nvencPreset = p; // already an NVENC preset
+        else
+            nvencPreset = "p6";
+
+        args << "-vf" << "zscale=p=bt2020:t=smpte2084:m=bt2020nc,format=p010le"
+             << "-c:v" << "hevc_nvenc"
+             << "-preset" << nvencPreset
+             << "-tune" << "hq"
+             << "-b:v" << "56M"
+             << "-maxrate" << "60M"
+             << "-bufsize" << "60M"
+             << "-color_primaries" << "bt2020"
+             << "-colorspace" << "bt2020nc"
+             << "-color_trc" << "smpte2084";
+        Log("HDR10 codec: hevc_nvenc (CUDA detected, preset=" + nvencPreset + ")<br>");
+    } else {
+        // libx265 software HDR10 path. yuv420p10le is the standard 10-bit
+        // pixel format for x265 Main10; the x265-params block embeds the
+        // HDR10 signalling into the bitstream.
+        args << "-vf" << "zscale=p=bt2020:t=smpte2084:m=bt2020nc,format=yuv420p10le"
+             << "-c:v" << "libx265"
+             << "-preset" << (encode_preset.isEmpty() ? QStringLiteral("medium") : encode_preset)
+             << "-b:v" << "56M"
+             << "-maxrate" << "60M"
+             << "-bufsize" << "60M"
+             << "-pix_fmt" << "yuv420p10le"
+             << "-x265-params"
+             << "hdr10=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:range=limited"
+             << "-color_primaries" << "bt2020"
+             << "-colorspace" << "bt2020nc"
+             << "-color_trc" << "smpte2084";
+        Log("HDR10 codec: libx265 (no CUDA detected)<br>");
+    }
+
+    args << "-c:a" << "copy"
+         << hdr10Path;
+
+    Log("shell: ffmpeg " + concatList(args) + "<br>");
+    Log("HDR10 output: " + hdr10Path + "<br>");
+
+    // ffmpeg writes most of its progress to stderr; merge channels so the
+    // log keeps messages in source order.
+    hdr10Process->setProcessChannelMode(QProcess::MergedChannels);
+    hdr10Process->start("ffmpeg", args);
+    if (!hdr10Process->waitForStarted(5000)) {
+        Log("<b style='color:red;'>Failed to start ffmpeg for HDR10 conversion.</b>");
+        return;
+    }
+    play_stop->setEnabled(true);
 }
 
 void MainWindow::runAll() {

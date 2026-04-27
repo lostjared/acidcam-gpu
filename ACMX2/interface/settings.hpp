@@ -55,6 +55,10 @@ class SettingsWindow : public QDialog {
     bool isUsingGraphicsFile() const;
     /// @return True if save-to-file is enabled.
     bool isSavingToOutputVideoFile() const;
+    /// @return True if HDR was detected in the currently selected input video.
+    bool isInputHdrDetected() const;
+    /// @return True if the user enabled the post-process HDR10 conversion.
+    bool isConvertToHdr10Enabled() const;
     /// @return True if texture cache is enabled.
     bool isTextureCacheEnabled() const;
     /// @return Frame delay used by texture cache.
@@ -105,6 +109,9 @@ class SettingsWindow : public QDialog {
     void browseOutputVideoFile();
     void browseGraphicsFile();
     void browseModelFile();
+    /// @brief Probe the currently selected input video file with ffprobe and
+    ///        update HDR-related UI state (status label, HDR10 checkbox).
+    void detectInputHdr();
     /// @brief React to camera-device combo selection changes.
     /// @param comboIndex Selected combo-box index.
     void onCameraDeviceChanged(int comboIndex);
@@ -137,6 +144,8 @@ class SettingsWindow : public QDialog {
     QPushButton *cancelButton;
     QLineEdit *inputVideoFileLineEdit;
     QPushButton *browseInputVideoButton;
+    QLabel *hdrStatusLabel = nullptr;
+    QCheckBox *convertHdr10CheckBox = nullptr;
     QLineEdit *outputVideoFileLineEdit;
     QPushButton *browseOutputVideoButton;
     QLineEdit *graphicsFileLineEdit;
@@ -196,6 +205,7 @@ class SettingsWindow : public QDialog {
     QString modelFile;
     int selectedCudaDevice;
     double maxDuration;
+    bool inputHdrDetected = false;
 };
 
 #endif

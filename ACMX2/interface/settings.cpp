@@ -496,6 +496,15 @@ void SettingsWindow::init() {
     inputVideoFileLineEdit->setReadOnly(true);
     browseInputVideoButton = new QPushButton("Browse", this);
 
+    hdrStatusLabel = new QLabel("HDR: not checked", this);
+    convertHdr10CheckBox = new QCheckBox("Convert to HDR10 after processing", this);
+    convertHdr10CheckBox->setChecked(false);
+    convertHdr10CheckBox->setEnabled(false);
+    convertHdr10CheckBox->setToolTip(
+        "When the input is detected as HDR (HLG or PQ), enable this to run an "
+        "ffmpeg pass after acmx2 finishes that re-encodes the output to HDR10 "
+        "(HEVC NVENC, bt2020/PQ).");
+
     graphicsFileLineEdit = new QLineEdit(this);
     graphicsFileLineEdit->setReadOnly(true);
     browseGraphicsButton = new QPushButton("Browse", this);
@@ -618,6 +627,8 @@ void SettingsWindow::init() {
     inputRow->addWidget(inputVideoFileLineEdit);
     inputRow->addWidget(browseInputVideoButton);
     sourceGrid->addLayout(inputRow, r, 1);
+    sourceGrid->addWidget(hdrStatusLabel, ++r, 1);
+    sourceGrid->addWidget(convertHdr10CheckBox, ++r, 1);
     sourceGrid->addWidget(new QLabel("Graphics:", this), ++r, 0);
     auto *graphicsRow = new QHBoxLayout;
     graphicsRow->setSpacing(4);
@@ -738,7 +749,7 @@ void SettingsWindow::init() {
     // against availableSize() keeps the dialog inside the screen.
     setSizeGripEnabled(true);
     setMinimumSize(420, 320);
-    QSize preferred(820, 640);
+    QSize preferred(820, 680);
     if (QScreen *scr = QGuiApplication::primaryScreen()) {
         const QSize avail = scr->availableSize();
         preferred.setWidth(std::min(preferred.width(), avail.width() - 40));
@@ -955,6 +966,17 @@ void SettingsWindow::loadUiState() {
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
 
+    // Re-probe HDR for whatever video file we just restored so the checkbox
+    // reflects the actual capabilities of the cached path.
+    detectInputHdr();
+    if (convertHdr10CheckBox) {
+        const bool wantHdr10 =
+            appSettings.value("interface/convert_to_hdr10", false).toBool();
+        if (wantHdr10 && convertHdr10CheckBox->isEnabled()) {
+            convertHdr10CheckBox->setChecked(true);
+        }
+    }
+
     fullscreenCheckBox->setChecked(appSettings.value("interface/fullscreen", false).toBool());
     enable3dCheckBox->setChecked(appSettings.value("interface/enable_3d", false).toBool());
     modelFileLineEdit->setText(appSettings.value("interface/model_file", "data/cube.mxmod.z").toString());
@@ -1002,6 +1024,10 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/save_output", saveOutputVideoCheckBox->isChecked());
     appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
     appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
+    if (convertHdr10CheckBox) {
+        appSettings.setValue("interface/convert_to_hdr10",
+                             convertHdr10CheckBox->isChecked());
+    }
 
     appSettings.setValue("interface/fullscreen", fullscreenCheckBox->isChecked());
     appSettings.setValue("interface/enable_3d", enable3dCheckBox->isChecked());
@@ -1061,6 +1087,15 @@ bool SettingsWindow::isUsingGraphicsFile() const {
 
 bool SettingsWindow::isSavingToOutputVideoFile() const {
     return saveOutputVideoFile;
+}
+
+bool SettingsWindow::isInputHdrDetected() const {
+    return inputHdrDetected;
+}
+
+bool SettingsWindow::isConvertToHdr10Enabled() const {
+    return convertHdr10CheckBox && convertHdr10CheckBox->isChecked() &&
+           convertHdr10CheckBox->isEnabled();
 }
 
 bool SettingsWindow::isTextureCacheEnabled() const {
@@ -1283,6 +1318,76 @@ void SettingsWindow::browseInputVideoFile() {
     if (!fileName.isEmpty()) {
         appSettings.setValue("lastInputVideoDir", QFileInfo(fileName).absolutePath());
         inputVideoFileLineEdit->setText(fileName);
+        detectInputHdr();
+    }
+}
+
+void SettingsWindow::detectInputHdr() {
+    inputHdrDetected = false;
+    if (!convertHdr10CheckBox || !hdrStatusLabel) {
+        return;
+    }
+
+    const QString file = inputVideoFileLineEdit ? inputVideoFileLineEdit->text() : QString();
+    if (file.isEmpty() || !QFileInfo::exists(file)) {
+        hdrStatusLabel->setText("HDR: not checked");
+        convertHdr10CheckBox->setEnabled(false);
+        convertHdr10CheckBox->setChecked(false);
+        return;
+    }
+
+    QProcess probe;
+    QStringList args;
+    args << "-v" << "error"
+         << "-select_streams" << "v:0"
+         << "-show_entries" << "stream=color_transfer,color_primaries,color_space"
+         << "-of" << "default=noprint_wrappers=1:nokey=1"
+         << file;
+    probe.start("ffprobe", args);
+    if (!probe.waitForStarted(3000)) {
+        hdrStatusLabel->setText("HDR: ffprobe not available");
+        convertHdr10CheckBox->setEnabled(false);
+        convertHdr10CheckBox->setChecked(false);
+        return;
+    }
+    if (!probe.waitForFinished(8000)) {
+        probe.kill();
+        probe.waitForFinished(1000);
+        hdrStatusLabel->setText("HDR: ffprobe timed out");
+        convertHdr10CheckBox->setEnabled(false);
+        convertHdr10CheckBox->setChecked(false);
+        return;
+    }
+
+    const QString output = QString::fromUtf8(probe.readAllStandardOutput()).toLower();
+    QString transfer;
+    QString primaries;
+    QString space;
+    const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+    if (lines.size() >= 1) transfer = lines.value(0).trimmed();
+    if (lines.size() >= 2) primaries = lines.value(1).trimmed();
+    if (lines.size() >= 3) space = lines.value(2).trimmed();
+
+    const bool isHlg = transfer.contains("arib-std-b67");
+    const bool isPq = transfer.contains("smpte2084");
+    const bool isBt2020 = primaries.contains("bt2020") || space.contains("bt2020");
+    inputHdrDetected = isHlg || isPq || isBt2020;
+
+    QString label;
+    if (isPq) {
+        label = "HDR: detected (PQ / SMPTE2084)";
+    } else if (isHlg) {
+        label = "HDR: detected (HLG)";
+    } else if (isBt2020) {
+        label = "HDR: detected (BT.2020)";
+    } else {
+        QString t = transfer.isEmpty() ? QStringLiteral("unknown") : transfer;
+        label = "HDR: not detected (transfer=" + t + ")";
+    }
+    hdrStatusLabel->setText(label);
+    convertHdr10CheckBox->setEnabled(inputHdrDetected);
+    if (!inputHdrDetected) {
+        convertHdr10CheckBox->setChecked(false);
     }
 }
 
