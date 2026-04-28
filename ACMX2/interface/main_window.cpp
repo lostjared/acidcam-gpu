@@ -8,18 +8,22 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDataStream>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
 #include <QLayout>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QTextStream>
+#include <QTreeWidgetItem>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <filesystem>
@@ -75,6 +79,117 @@ QStringList defaultLinuxRunEnvAssignments() {
     return envAssignments;
 }
 #endif
+
+QString resolveAssetsPath() {
+    QString dirPath = QCoreApplication::applicationDirPath();
+#ifdef BUILD_BUNDLE
+    return dirPath + "/../Helpers";
+#else
+    if (QFileInfo::exists(dirPath + "/data/win-icon.png"))
+        return dirPath;
+    return QStringLiteral("/usr/local/share/acmx2");
+#endif
+}
+
+QString resolveShaderCachePath(const QString &libraryPath) {
+    const QString assets = resolveAssetsPath();
+    std::error_code ec;
+    std::filesystem::path libFsPath(libraryPath.toStdString());
+    std::filesystem::path absLib = std::filesystem::absolute(libFsPath, ec);
+    std::string key = ec ? libraryPath.toStdString() : absLib.lexically_normal().string();
+    std::ostringstream nameStream;
+    nameStream << ".shader_cache_" << std::hex << std::hash<std::string>{}(key);
+    const QString filename = QString::fromStdString(nameStream.str());
+
+    // Mirror ShaderLibrary::shaderCacheFilePath: prefer cache in assets dir,
+    // then fall back to the library directory itself (acmx2 writes there when
+    // assets isn't writable).
+    const QString assetsCache = assets + "/" + filename;
+    const QString libCache = libraryPath + "/" + filename;
+    if (QFileInfo::exists(assetsCache))
+        return assetsCache;
+    if (QFileInfo::exists(libCache))
+        return libCache;
+    return assetsCache;
+}
+
+// Parse the shader cache file produced by ShaderLibrary::buildShaderCache().
+// Returns a map of shader stem -> failed flag. Empty on missing/invalid cache.
+QHash<QString, bool> parseShaderCacheStatus(const QString &cachePath) {
+    QHash<QString, bool> result;
+    QFile f(cachePath);
+    if (!f.open(QIODevice::ReadOnly))
+        return result;
+
+    auto readU32 = [&](quint32 &v) -> bool {
+        return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
+    };
+    auto readU64 = [&](quint64 &v) -> bool {
+        return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
+    };
+    auto readU8 = [&](quint8 &v) -> bool {
+        return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
+    };
+    auto readStr = [&](QString &out) -> bool {
+        quint32 len = 0;
+        if (!readU32(len))
+            return false;
+        QByteArray buf = f.read(len);
+        if (quint32(buf.size()) != len)
+            return false;
+        out = QString::fromUtf8(buf);
+        return true;
+    };
+    auto skipBytes = [&](quint32 n) -> bool { return f.skip(n) == qint64(n); };
+
+    constexpr quint32 CACHE_MAGIC = 0x53484452;
+    constexpr quint32 CACHE_VERSION = 3;
+
+    quint32 magic = 0, version = 0;
+    if (!readU32(magic) || !readU32(version))
+        return result;
+    if (magic != CACHE_MAGIC || version != CACHE_VERSION)
+        return result;
+
+    QString tmp;
+    if (!readStr(tmp))
+        return result; // gl_renderer
+    if (!readStr(tmp))
+        return result; // gl_version
+
+    quint8 dual_mode = 0;
+    if (!readU8(dual_mode))
+        return result;
+
+    quint32 count = 0;
+    if (!readU32(count))
+        return result;
+
+    for (quint32 i = 0; i < count; ++i) {
+        QString name;
+        if (!readStr(name))
+            return result;
+        quint8 failed_flag = 0;
+        if (!readU8(failed_flag))
+            return result;
+        quint64 source_hash = 0;
+        if (!readU64(source_hash))
+            return result;
+        quint32 fmt2d = 0, sz2d = 0, fmt3d = 0, sz3d = 0;
+        if (!readU32(fmt2d) || !readU32(sz2d) || !skipBytes(sz2d))
+            return result;
+        if (!readU32(fmt3d) || !readU32(sz3d) || !skipBytes(sz3d))
+            return result;
+        result.insert(name, failed_flag != 0);
+    }
+    return result;
+}
+
+QString formatLastModified(const QDateTime &dt) {
+    if (!dt.isValid())
+        return QStringLiteral("-");
+    return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
+}
 } // namespace
 
 void MainWindow::initControls() {
@@ -118,6 +233,32 @@ void MainWindow::initControls() {
                 stream << "acmx2: Exited with Code: " << exitCode;
                 Log(text + "<br>");
                 play_stop->setEnabled(false);
+
+                // Refresh the shader tree's compile-health column now that
+                // the child process has (re)written the binary shader cache.
+                populateShaderTree();
+
+                // If this exit was a shader cache rebuild triggered by a
+                // pending Run, launch the actual session now.
+                if (pendingLaunchAfterBuild) {
+                    const QStringList queuedArgs = pendingLaunchArguments;
+                    pendingLaunchAfterBuild = false;
+                    pendingLaunchArguments.clear();
+                    if (exitCode == 0) {
+                        Log("Cache rebuild finished; launching acmx2...");
+                        Log("shell: acmx2 " + concatList(queuedArgs) + "<br>");
+                        process->start(executable_path, queuedArgs);
+                        if (!process->waitForStarted()) {
+                            Log("<b style='color:red;'>Failed to start the program.</b>");
+                        } else {
+                            play_stop->setEnabled(true);
+                        }
+                    } else {
+                        Log("<b style='color:red;'>Cache rebuild failed; "
+                            "aborting queued launch.</b>");
+                    }
+                    return;
+                }
 
                 // Optional post-process: convert the produced HLG HDR file
                 // to HDR10 via ffmpeg and stream its output to the log.
@@ -235,6 +376,10 @@ void MainWindow::initControls() {
     play_stop->setEnabled(false);
     connect(play_stop, &QAction::triggered, this, [=]() {
         if (process->state() == QProcess::Running) {
+            // If the user stops during a pending cache rebuild, cancel the
+            // queued launch so we don't auto-run after termination.
+            pendingLaunchAfterBuild = false;
+            pendingLaunchArguments.clear();
             process->terminate();
         }
         if (hdr10Process && hdr10Process->state() == QProcess::Running) {
@@ -333,16 +478,35 @@ void MainWindow::initControls() {
         box.exec();
     });
     helpMenu->addAction(helpMenu_about);
-    model = new ReadOnlyStringListModel(this);
-    model->setStringList(items);
-    list_view = new QListView(this);
-    list_view->setStyleSheet("QListView { background-color: black; color: white; font-size: 24px; font-family: 'Courier New', Courier, monospace; }");
-    list_view->setModel(model);
+    list_view = new QTreeWidget(this);
+    list_view->setColumnCount(4);
+    list_view->setHeaderLabels({tr("#"), tr("Name"), tr("Last Modified"), tr("Compile Health")});
+    list_view->setRootIsDecorated(false);
+    list_view->setUniformRowHeights(true);
+    list_view->setAlternatingRowColors(false);
+    list_view->setSelectionMode(QAbstractItemView::SingleSelection);
+    list_view->setSelectionBehavior(QAbstractItemView::SelectRows);
+    list_view->setSortingEnabled(false);
+    list_view->setAllColumnsShowFocus(true);
+    list_view->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    list_view->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+    list_view->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    list_view->header()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+#ifdef Q_OS_MACOS
+    // macOS does not support the persistent shader cache; hide the column.
+    list_view->setColumnHidden(3, true);
+#endif
+    list_view->setStyleSheet(
+        "QTreeWidget { background-color: black; color: white; font-size: 18px;"
+        " font-family: 'Courier New', Courier, monospace; }"
+        "QHeaderView::section { background-color: #110000; color: lime;"
+        " font-family: 'Courier New', Courier, monospace; padding: 4px;"
+        " border: 1px solid #330000; }");
     bottomTextBox = new QTextEdit(this);
     bottomTextBox->setHtml("<b style='color:red;'>ACMX2</b> - Interface: Loaded.");
     bottomTextBox->setStyleSheet("QTextEdit { background-color: black; color: lime; font-size: 24px; font-family: 'Courier New', Courier, monospace;; }");
     bottomTextBox->setReadOnly(true);
-    connect(list_view, &QListView::doubleClicked,
+    connect(list_view, &QTreeWidget::doubleClicked,
             this, &MainWindow::listClicked);
     QWidget *centralWidget = new QWidget(this);
     QVBoxLayout *layout = new QVBoxLayout(centralWidget);
@@ -432,24 +596,23 @@ void MainWindow::menuSearch() {
 
     lastSearchText = searchText;
     lastFoundIndex = -1;
-    QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
-    if (!model) {
-        QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
+    if (items.isEmpty()) {
+        QMessageBox::information(this, tr("Search Shaders"),
+                                 tr("No shaders are loaded."));
         return;
     }
-    QStringList shaderList = model->stringList();
     int foundIndex = -1;
 
-    for (int i = 0; i < shaderList.size(); ++i) {
-        if (shaderList[i].compare(searchText, Qt::CaseInsensitive) == 0) {
+    for (int i = 0; i < items.size(); ++i) {
+        if (items[i].compare(searchText, Qt::CaseInsensitive) == 0) {
             foundIndex = i;
             break;
         }
     }
 
     if (foundIndex == -1) {
-        for (int i = 0; i < shaderList.size(); ++i) {
-            if (shaderList[i].contains(searchText, Qt::CaseInsensitive)) {
+        for (int i = 0; i < items.size(); ++i) {
+            if (items[i].contains(searchText, Qt::CaseInsensitive)) {
                 foundIndex = i;
                 break;
             }
@@ -458,12 +621,8 @@ void MainWindow::menuSearch() {
 
     if (foundIndex != -1) {
         lastFoundIndex = foundIndex;
-        QModelIndex matchIndex = model->index(foundIndex, 0);
-        list_view->setCurrentIndex(matchIndex);
-        list_view->selectionModel()->select(matchIndex, QItemSelectionModel::ClearAndSelect);
-        list_view->scrollTo(matchIndex, QAbstractItemView::PositionAtCenter);
-
-        Log("Found shader: " + shaderList[foundIndex] + " at index " + QString::number(foundIndex));
+        selectShaderRow(foundIndex);
+        Log("Found shader: " + items[foundIndex] + " at index " + QString::number(foundIndex));
     } else {
         QMessageBox::information(this,
                                  tr("Not Found"),
@@ -480,22 +639,15 @@ void MainWindow::menuFindNext() {
         return;
     }
 
-    QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
-    if (!model) {
-        QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
-        return;
-    }
-
-    QStringList shaderList = model->stringList();
-    if (shaderList.isEmpty()) {
+    if (items.isEmpty()) {
         return;
     }
 
     int foundIndex = -1;
-    int startIndex = (lastFoundIndex + 1) % shaderList.size();
+    int startIndex = (lastFoundIndex + 1) % items.size();
 
-    for (int i = startIndex; i < shaderList.size(); ++i) {
-        if (shaderList[i].contains(lastSearchText, Qt::CaseInsensitive)) {
+    for (int i = startIndex; i < items.size(); ++i) {
+        if (items[i].contains(lastSearchText, Qt::CaseInsensitive)) {
             foundIndex = i;
             break;
         }
@@ -503,7 +655,7 @@ void MainWindow::menuFindNext() {
 
     if (foundIndex == -1 && startIndex > 0) {
         for (int i = 0; i < startIndex; ++i) {
-            if (shaderList[i].contains(lastSearchText, Qt::CaseInsensitive)) {
+            if (items[i].contains(lastSearchText, Qt::CaseInsensitive)) {
                 foundIndex = i;
                 break;
             }
@@ -512,12 +664,8 @@ void MainWindow::menuFindNext() {
 
     if (foundIndex != -1) {
         lastFoundIndex = foundIndex;
-        QModelIndex matchIndex = model->index(foundIndex, 0);
-        list_view->setCurrentIndex(matchIndex);
-        list_view->selectionModel()->select(matchIndex, QItemSelectionModel::ClearAndSelect);
-        list_view->scrollTo(matchIndex, QAbstractItemView::PositionAtCenter);
-
-        Log("Found next: " + shaderList[foundIndex] + " at index " + QString::number(foundIndex));
+        selectShaderRow(foundIndex);
+        Log("Found next: " + items[foundIndex] + " at index " + QString::number(foundIndex));
     } else {
         QMessageBox::information(this,
                                  tr("No More Results"),
@@ -538,112 +686,68 @@ void MainWindow::newShader() {
 }
 
 void MainWindow::menuRemove() {
-    QItemSelectionModel *selModel = list_view->selectionModel();
-    if (!selModel) {
+    int row = currentShaderRow();
+    if (row < 0 || row >= items.size())
         return;
-    }
-    QModelIndex currentIndex = selModel->currentIndex();
-    if (!currentIndex.isValid()) {
-        return;
-    }
-    model->removeRow(currentIndex.row());
+    items.removeAt(row);
+    populateShaderTree();
     updateIndex();
     loadShaders(shader_path, true);
 }
 
 void MainWindow::updateIndex() {
     QFile file(shader_path + "/index.txt");
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        QStringListModel *stringModel = qobject_cast<QStringListModel *>(list_view->model());
-        if (!stringModel) {
-            return;
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return;
+
+    QTextStream out(&file);
+    QStringList writtenItems;
+    const int rowCount = items.size();
+
+    for (int row = 0; row < rowCount; ++row) {
+        const QString shaderName = items.at(row).trimmed();
+        if (shaderName.isEmpty() || writtenItems.contains(shaderName, Qt::CaseInsensitive)) {
+            continue;
         }
 
-        QStringList writtenItems;
-        int rowCount = stringModel->rowCount();
-
-        for (int row = 0; row < rowCount; ++row) {
-            QModelIndex index = stringModel->index(row, 0);
-            QVariant data = stringModel->data(index, Qt::DisplayRole);
-            QString shaderName = data.toString().trimmed();
-
-            if (shaderName.isEmpty() || writtenItems.contains(shaderName, Qt::CaseInsensitive)) {
-                continue;
-            }
-
-            QString fullPath = shader_path + "/" + shaderName;
-            QFileInfo fileInfo(fullPath);
-            if (fileInfo.exists() && fileInfo.isFile()) {
-                out << shaderName << "\n";
-                writtenItems.append(shaderName);
-            } else {
-                Log("Warning: File no longer exists, removing from list: " + shaderName);
-            }
+        QString fullPath = shader_path + "/" + shaderName;
+        QFileInfo fileInfo(fullPath);
+        if (fileInfo.exists() && fileInfo.isFile()) {
+            out << shaderName << "\n";
+            writtenItems.append(shaderName);
+        } else {
+            Log("Warning: File no longer exists, removing from list: " + shaderName);
         }
-        file.close();
+    }
+    file.close();
 
-        indexTimestamp = QFileInfo(shader_path + "/index.txt").lastModified();
+    indexTimestamp = QFileInfo(shader_path + "/index.txt").lastModified();
 
-        if (writtenItems.size() != rowCount) {
-            items = writtenItems;
-            stringModel->setStringList(items);
-            Log("Updated shader list, removed " + QString::number(rowCount - writtenItems.size()) + " non-existent files");
-        }
+    if (writtenItems.size() != rowCount) {
+        items = writtenItems;
+        populateShaderTree();
+        Log("Updated shader list, removed " + QString::number(rowCount - writtenItems.size()) +
+            " non-existent files");
     }
 }
 
 void MainWindow::menuUp() {
-    QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
-    if (!model) {
-        QMessageBox::warning(list_view, "Error", "The model is not a QStringListModel.");
+    const int row = currentShaderRow();
+    if (row <= 0 || row >= items.size())
         return;
-    }
-    QItemSelectionModel *selModel = list_view->selectionModel();
-    if (!selModel) {
-        return;
-    }
-    QModelIndex currentIndex = selModel->currentIndex();
-    if (!currentIndex.isValid()) {
-        return;
-    }
-    int currentRow = currentIndex.row();
-    if (currentRow == 0) {
-        return;
-    }
-    QStringList shaderList = model->stringList();
-    shaderList.swapItemsAt(currentRow, currentRow - 1);
-    model->setStringList(shaderList);
-    QModelIndex newIndex = model->index(currentRow - 1);
-    list_view->selectionModel()->setCurrentIndex(newIndex, QItemSelectionModel::Select);
+    items.swapItemsAt(row, row - 1);
+    populateShaderTree();
+    selectShaderRow(row - 1);
     updateIndex();
 }
 
 void MainWindow::menuDown() {
-    QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
-    if (!model) {
+    const int row = currentShaderRow();
+    if (row < 0 || row >= items.size() - 1)
         return;
-    }
-    QItemSelectionModel *selModel = list_view->selectionModel();
-    if (!selModel) {
-        return;
-    }
-    QModelIndex currentIndex = selModel->currentIndex();
-    if (!currentIndex.isValid()) {
-        return;
-    }
-    int currentRow = currentIndex.row();
-    int rowCount = model->rowCount();
-
-    if (currentRow >= rowCount - 1) {
-        return;
-    }
-
-    QStringList shaderList = model->stringList();
-    shaderList.swapItemsAt(currentRow, currentRow + 1);
-    model->setStringList(shaderList);
-    QModelIndex newIndex = model->index(currentRow + 1);
-    list_view->selectionModel()->setCurrentIndex(newIndex, QItemSelectionModel::Select);
+    items.swapItemsAt(row, row + 1);
+    populateShaderTree();
+    selectShaderRow(row + 1);
     updateIndex();
 }
 
@@ -663,7 +767,10 @@ QString MainWindow::readFileContents(const QString &filePath) {
 void MainWindow::listClicked(const QModelIndex &i) {
     if (!i.isValid())
         return;
-    QString itemText = sanitizeShaderName(i.data(Qt::DisplayRole).toString());
+    const int row = i.row();
+    if (row < 0 || row >= items.size())
+        return;
+    QString itemText = sanitizeShaderName(items.at(row));
     if (itemText.isEmpty()) {
         Log("Invalid shader name");
         return;
@@ -673,8 +780,120 @@ void MainWindow::listClicked(const QModelIndex &i) {
     QString filePath = shader_path + "/" + itemText;
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
+    connect(editor, &TextEditor::fileSaved, this, [this](const QString &) {
+        populateShaderTree();
+    });
     open_files.append(editor);
     editor->show();
+}
+
+QString MainWindow::currentShaderName() const {
+    QTreeWidgetItem *it = list_view ? list_view->currentItem() : nullptr;
+    if (!it)
+        return QString();
+    const int row = list_view->indexOfTopLevelItem(it);
+    if (row < 0 || row >= items.size())
+        return it->text(1);
+    return items.at(row);
+}
+
+int MainWindow::currentShaderRow() const {
+    if (!list_view)
+        return -1;
+    QTreeWidgetItem *it = list_view->currentItem();
+    if (!it)
+        return -1;
+    return list_view->indexOfTopLevelItem(it);
+}
+
+void MainWindow::selectShaderRow(int row) {
+    if (!list_view || row < 0 || row >= list_view->topLevelItemCount())
+        return;
+    QTreeWidgetItem *it = list_view->topLevelItem(row);
+    if (!it)
+        return;
+    list_view->setCurrentItem(it);
+    list_view->scrollToItem(it, QAbstractItemView::PositionAtCenter);
+}
+
+void MainWindow::refreshShaderCacheStatus() {
+    shaderCacheStatus.clear();
+    shaderCacheMTime = QDateTime();
+    if (shader_path.isEmpty())
+        return;
+    const QString cachePath = resolveShaderCachePath(shader_path);
+    QFileInfo cacheInfo(cachePath);
+    if (!cacheInfo.exists() || !cacheInfo.isFile()) {
+        Log("Shader cache not found at: " + cachePath);
+        return;
+    }
+    shaderCacheMTime = cacheInfo.lastModified();
+    shaderCacheStatus = parseShaderCacheStatus(cachePath);
+    Log("Shader cache: " + cachePath + " (" + QString::number(shaderCacheStatus.size()) +
+        " entries)");
+}
+
+bool MainWindow::isShaderCacheStale() const {
+    if (!use_shader_cache || shader_path.isEmpty() || items.isEmpty())
+        return false;
+    const QString cachePath = resolveShaderCachePath(shader_path);
+    QFileInfo cacheInfo(cachePath);
+    if (!cacheInfo.exists() || !cacheInfo.isFile())
+        return false;
+    const QDateTime cacheMTime = cacheInfo.lastModified();
+    for (const QString &name : items) {
+        QFileInfo src(shader_path + "/" + name);
+        if (src.exists() && src.lastModified() > cacheMTime)
+            return true;
+    }
+    return false;
+}
+
+void MainWindow::populateShaderTree() {
+    if (!list_view)
+        return;
+    refreshShaderCacheStatus();
+
+    const QSignalBlocker blocker(list_view);
+    list_view->clear();
+
+    const int width = QString::number(items.size()).size();
+    for (int i = 0; i < items.size(); ++i) {
+        const QString &name = items.at(i);
+        QFileInfo fi(shader_path + "/" + name);
+        const QString stem = QFileInfo(name).completeBaseName();
+
+        QString health;
+        QColor healthColor;
+        if (shaderCacheStatus.isEmpty()) {
+            health = tr("No cache");
+            healthColor = QColor("#888888");
+        } else if (!shaderCacheStatus.contains(stem)) {
+            health = tr("Uncached");
+            healthColor = QColor("#cccc00");
+        } else if (shaderCacheStatus.value(stem)) {
+            health = tr("Failed");
+            healthColor = QColor("#ff5555");
+        } else if (fi.exists() && shaderCacheMTime.isValid() &&
+                   fi.lastModified() > shaderCacheMTime) {
+            health = tr("Stale");
+            healthColor = QColor("#ffaa00");
+        } else {
+            health = tr("Cached");
+            healthColor = QColor("#55ff55");
+        }
+
+        QStringList cols;
+        cols << QString("%1").arg(i, width, 10, QLatin1Char(' '))
+             << name
+             << (fi.exists() ? formatLastModified(fi.lastModified()) : tr("missing"))
+             << health;
+        auto *item = new QTreeWidgetItem(list_view, cols);
+        item->setTextAlignment(0, Qt::AlignRight | Qt::AlignVCenter);
+        item->setForeground(3, QBrush(healthColor));
+        if (!fi.exists())
+            item->setForeground(2, QBrush(QColor("#ff5555")));
+    }
 }
 
 void MainWindow::Log(const QString &message) {
@@ -777,15 +996,8 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     }
     shader_path = path;
     indexTimestamp = modified;
-    int previousRow = -1;
-    QModelIndex currentIndex = list_view->currentIndex();
-    if (currentIndex.isValid()) {
-        previousRow = currentIndex.row();
-    }
-    QString previouslySelected;
-    if (currentIndex.isValid()) {
-        previouslySelected = model->data(currentIndex, Qt::DisplayRole).toString();
-    }
+    const int previousRow = currentShaderRow();
+    const QString previouslySelected = currentShaderName();
     items.clear();
     QStringList uniqueItems;
     QTextStream in(&file);
@@ -804,16 +1016,15 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
         }
         if (!uniqueItems.contains(line, Qt::CaseInsensitive)) {
             uniqueItems.append(line);
-            // Log("Added shader: " + line);
         } else {
             Log("Skipping duplicate shader: " + line);
         }
     }
     file.close();
     items = uniqueItems;
-    model->setStringList(items);
 
     Log("Loaded " + QString::number(items.size()) + " unique shader files");
+    populateShaderTree();
     menuSort();
 
     if (!items.isEmpty()) {
@@ -825,10 +1036,7 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
                 restoredRow = 0;
             }
         }
-        QModelIndex restoredIndex = model->index(restoredRow, 0);
-        list_view->setCurrentIndex(restoredIndex);
-        list_view->selectionModel()->select(restoredIndex, QItemSelectionModel::ClearAndSelect);
-        list_view->scrollTo(restoredIndex, QAbstractItemView::PositionAtCenter);
+        selectShaderRow(restoredRow);
     }
 
     return true;
@@ -1071,13 +1279,11 @@ void MainWindow::runSelected() {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
     }
-    QItemSelectionModel *selectionModel = list_view->selectionModel();
-    if (!selectionModel->hasSelection()) {
+    const QString data = currentShaderName();
+    if (data.isEmpty()) {
         Log("<b>No item selected.</b>");
         return;
     }
-    QModelIndex selectedIndex = selectionModel->currentIndex();
-    QString data = selectedIndex.data(Qt::DisplayRole).toString();
     QStringList arguments;
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
@@ -1217,6 +1423,14 @@ void MainWindow::runSelected() {
         arguments << "--flip";
     }
 
+    if (isShaderCacheStale()) {
+        Log("Shader cache is out of date; rebuilding then launching automatically.");
+        pendingLaunchArguments = arguments;
+        pendingLaunchAfterBuild = true;
+        menuBuildShaderCache();
+        return;
+    }
+
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
@@ -1233,14 +1447,13 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         return false;
     }
     int index = 0;
-    QItemSelectionModel *selectionModel = list_view->selectionModel();
-    if (!selectionModel->hasSelection()) {
+    const int row = currentShaderRow();
+    if (row < 0) {
         index = 0;
         Log("No selection, defaulting to index 0");
     } else {
-        QModelIndex selectedIndex = selectionModel->currentIndex();
-        index = selectedIndex.row();
-        QString selectedData = selectedIndex.data(Qt::DisplayRole).toString();
+        index = row;
+        const QString selectedData = currentShaderName();
         Log("Selected shader: " + selectedData + " at index: " + QString::number(index));
     }
     QString dirPath = QCoreApplication::applicationDirPath();
@@ -1544,6 +1757,14 @@ void MainWindow::runAll() {
     if (!buildRunArguments(arguments))
         return;
 
+    if (isShaderCacheStale()) {
+        Log("Shader cache is out of date; rebuilding then launching automatically.");
+        pendingLaunchArguments = arguments;
+        pendingLaunchAfterBuild = true;
+        menuBuildShaderCache();
+        return;
+    }
+
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
@@ -1706,36 +1927,23 @@ void MainWindow::cleanupClosedEditors() {
 }
 
 void MainWindow::menuShuffle() {
-    QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
-    if (!model) {
-        QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
-        return;
-    }
-    QStringList shaderList = model->stringList();
-    if (shaderList.isEmpty()) {
+    if (items.isEmpty()) {
         return;
     }
     std::random_device rd;
     std::mt19937 g(rd());
-    std::shuffle(shaderList.begin(), shaderList.end(), g);
-
-    model->setStringList(shaderList);
+    std::shuffle(items.begin(), items.end(), g);
+    populateShaderTree();
     updateIndex();
     Log("Shaders shuffled");
 }
 
 void MainWindow::menuSort() {
-    QStringListModel *model = qobject_cast<QStringListModel *>(list_view->model());
-    if (!model) {
-        QMessageBox::warning(this, "Error", "The model is not a QStringListModel.");
+    if (items.isEmpty()) {
         return;
     }
-    QStringList shaderList = model->stringList();
-    if (shaderList.isEmpty()) {
-        return;
-    }
-    shaderList.sort(Qt::CaseInsensitive);
-    model->setStringList(shaderList);
+    items.sort(Qt::CaseInsensitive);
+    populateShaderTree();
     updateIndex();
     Log("Shaders sorted alphabetically");
 }

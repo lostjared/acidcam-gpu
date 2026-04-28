@@ -89,6 +89,10 @@ class TextEditor : public QDialog {
     /// @brief Associate editor with a shader file path.
     void setFileName(const QString &filename);
 
+  signals:
+    /// @brief Emitted after the editor successfully writes its contents to disk.
+    void fileSaved(const QString &path);
+
   protected:
     void closeEvent(QCloseEvent *event) override;
 

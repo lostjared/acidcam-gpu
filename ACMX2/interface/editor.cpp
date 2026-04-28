@@ -766,6 +766,7 @@ void TextEditor::saveContents() {
     m_modified = false;
     updateWindowTitle();
     m_statusBar->showMessage("File saved", 2000);
+    emit fileSaved(filename);
 }
 
 void TextEditor::saveAs() {

@@ -17,27 +17,15 @@
 #include "shaderlibrary.hpp"
 #include "shaderpass.hpp"
 #include "version_info.hpp" //defines VERSION_INFO
-#include <QListView>
+#include <QHash>
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QPointer>
 #include <QProcess>
 #include <QSettings>
-#include <QStringListModel>
 #include <QTextEdit>
+#include <QTreeWidget>
 #include <random>
-
-/**
- * @brief Read-only list model used for shader list display.
- */
-class ReadOnlyStringListModel : public QStringListModel {
-    Q_OBJECT
-  public:
-    using QStringListModel::QStringListModel;
-    Qt::ItemFlags flags(const QModelIndex &index) const override {
-        return QStringListModel::flags(index) & ~Qt::ItemIsEditable;
-    }
-};
 
 /**
  * @brief Primary ACMX2 desktop UI.
@@ -119,10 +107,30 @@ class MainWindow : public QMainWindow {
     }
 
   private:
-    QListView *list_view;
+    QTreeWidget *list_view;
     QStringList items;
-    ReadOnlyStringListModel *model;
     QTextEdit *bottomTextBox;
+    /// @brief Repopulate the shader tree widget from the current `items` list,
+    ///        recomputing Last Modified and Compile Health columns.
+    void populateShaderTree();
+    /// @brief Compile-health status for a single shader.
+    enum class CompileHealth { Unknown, Cached, Failed, Stale };
+    /// @brief Cached map of shader stem -> failed flag for the current library.
+    QHash<QString, bool> shaderCacheStatus;
+    /// @brief Modification time of the shader cache file when last read.
+    QDateTime shaderCacheMTime;
+    /// @brief Refresh `shaderCacheStatus` from the on-disk shader cache.
+    void refreshShaderCacheStatus();
+    /// @brief Return true if a shader source file has been modified after the
+    ///        on-disk shader cache was last written. False if there is no
+    ///        cache file or no shaders, or if `use_shader_cache` is disabled.
+    bool isShaderCacheStale() const;
+    /// @brief Return the filename in the Name column for the current selection.
+    QString currentShaderName() const;
+    /// @brief Return the row index of the current selection, or -1.
+    int currentShaderRow() const;
+    /// @brief Select the row at @p row and scroll it into view.
+    void selectShaderRow(int row);
     QMenu *fileMenu;
     QMenu *cameraMenu;
     QMenu *playbackMenu;
@@ -241,6 +249,12 @@ class MainWindow : public QMainWindow {
     int autopilot_frames = 0;
     QAction *playlistAction;
     QString stderrBuffer;
+    /// @brief When true, the next acmx2 process to finish is a shader cache
+    ///        build and the launcher should immediately re-launch using
+    ///        @ref pendingLaunchArguments.
+    bool pendingLaunchAfterBuild = false;
+    /// @brief Arguments queued for an automatic launch after a cache rebuild.
+    QStringList pendingLaunchArguments;
 };
 
 #endif
