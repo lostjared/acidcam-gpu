@@ -44,6 +44,20 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
 - **MIDI Map Tool** — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 
+## Recent Development Updates (last few days)
+
+Recent commits in this repository focused on workflow and output quality improvements:
+
+- **Headless/silent pipeline work** in `acmx.cpp`, including terminal-facing behavior refinements.
+- **Terminal readability improvements** with color-coded console status output.
+- **Shader workflow improvements**: reload support and cache rebuild wiring from the Qt editor.
+- **Editor safety improvements**: Escape/close path now prompts to save when content is modified.
+- **Qt interface enhancements**: new metadata viewer, settings wording fixes, and settings sizing/scale updates.
+- **Playlist control additions**: shuffle/concat/clear behavior and keyboard/autopilot control updates.
+- **HDR and color pipeline updates**: HLG-to-HDR10 conversion path updates and related settings integration.
+- **Output path updates**: MKV support, additional format handling, and SDR TIFF/WebP snapshot behavior changes.
+- **Audio-file mode behavior**: recording/mux path tightened so file-mode recording is explicitly opt-in.
+
 ## Qt Interface Notes
 
 Recent Qt interface updates focus on session usability and repeatability:

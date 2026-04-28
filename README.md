@@ -50,6 +50,18 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 * **Visual User Interface** Simple to use User interface
 * **Command line tool** Command line tool
 
+## Recent Development Updates (last few days)
+
+From the latest `acidcam-gpu` commits, current focus areas include:
+
+- **Headless and terminal workflow updates**: improved silent/headless processing behavior, terminal color-coded output, and related CLI flow refinements.
+- **HDR pipeline refinements**: recent HLG-to-HDR10 conversion work and continued HDR + silent mode stabilization.
+- **Editor and shader workflow improvements**: shader reload support, shader cache rebuild path, and safer editor close behavior with save prompts.
+- **Qt interface productivity features**: metadata viewer integration, settings text/scaling tweaks, and command edit/copy/run improvements.
+- **Playlist and live-control workflow**: shuffle/concat/clear playlist actions, combined playlist updates, and keyboard/autopilot navigation improvements.
+- **Output and recording path updates**: MKV output support, additional format handling, no-drop frame path work, and SDR TIFF/WebP snapshot behavior updates.
+- **Audio-file recording behavior hardening**: explicit opt-in handling for file-mode audio recording/mux behavior.
+
 ## 📦 Installation & Environment
 This project is developed and tested on **Bazzite Linux** using **Arch Linux** containers via **Distrobox**, but it builds on any modern Linux distribution as well as macOS.
 

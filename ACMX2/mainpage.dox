@@ -64,21 +64,30 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Shader playlists with named nodes</b> — organize shaders into named tree nodes; each node loads its shaders into the multi-pass pipeline when selected at runtime
 - <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
 - <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; the audio track is automatically muxed into the output video
+- <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; file-mode recording/mux behavior uses explicit opt-in semantics
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
 - <b>FFmpeg CUDA video decode</b> — file input prefers FFmpeg hardware decode on CUDA, with automatic fallback when unavailable
 - <b>Video recording</b> with optional audio muxing via FFmpeg
+- <b>Expanded output container support</b> — includes MKV output support in addition to the existing MP4 workflow
 - <b>Up to 8K recording support</b> — 4K and below records as H.264; above 4K records as HEVC (H.265)
 - <b>Hardware-first H.264 encoding</b> — prefers <tt>h264_nvenc</tt> via MXWrite and falls back to software H.264 automatically
 - <b>Configurable recording quality</b> — preset, tune, CRF, codec mode, and realtime low-latency flags are available in both CLI and Qt session settings
 - <b>Pipeline mode reporting</b> — startup log prints active decode/encode modes for validation and benchmarking
+- <b>Color-coded terminal status output</b> — improves readability when monitoring long-running headless jobs
 - <b>Silent mode</b> — headless video processing without a window
 - <b>HDR video pipeline</b> — detects BT.2020 PQ/HLG sources, processes them in linear BT.2020, and writes HDR HEVC Main10 output
+- <b>HLG to HDR10 conversion path</b> — improves interoperability across HDR source and export workflows
 - <b>Shader cache</b> — precompile shader binaries for fast startup
+- <b>Shader workflow tools</b> — reload and rebuild cache paths are integrated for faster iteration during shader authoring
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
 - <b>Persistent Qt session dialogs</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened, with fresh defaults of <tt>1280x720</tt> camera capture and <tt>Default</tt> display resolution
+- <b>Metadata viewer</b> — inspect media metadata directly from the Qt interface
 - <b>MIDI Map Tool</b> — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 - <b>Crossfade transitions</b> — smooth linear blend between old and new frames when switching playlist shaders, with configurable duration
+- <b>Playlist workflow controls</b> — shuffle, concat, and clear actions are available for fast playlist construction
+- <b>Keyboard live-control additions</b> — includes autopilot-oriented navigation shortcuts for performance workflows
 - <b>Camera device enumeration</b> — query V4L2 devices for supported resolutions and frame rates via <tt>--enumerate-device</tt>; the Qt Settings dialog dynamically populates resolution and FPS dropdowns from the selected camera
+- <b>Snapshot format refinements</b> — SDR TIFF/WebP save behavior improved for consistency across capture modes
 - <b>Distrobox export</b> — script to export applications to the host desktop with icons and `.desktop` files
 
 @section ui_notes Qt Interface Session Behavior
@@ -97,6 +106,9 @@ The main session dialog also exposes an <b>Encoding Quality</b> group with contr
 preset, tune, CRF, codec mode (<tt>auto</tt>, <tt>software</tt>, or <tt>nvenc</tt>), and a realtime
 low-latency toggle. These values are persisted across launches and translated directly into the
 matching command-line encode options.
+
+The Qt editor flow also includes safer close behavior: if modified shader content is open,
+closing via Escape or window close prompts to save changes before exiting the editor.
 
 @section install Installation & Prerequisites
 
