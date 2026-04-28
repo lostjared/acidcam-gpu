@@ -9715,6 +9715,16 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
         try {
+#if defined(__linux__)
+            if (args.silent) {
+                // Make remove-broken use the same offscreen path as silent batch mode.
+                setenv("SDL_VIDEODRIVER", "offscreen", 0);
+                setenv("SDL_AUDIODRIVER", "dummy", 0);
+                SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+                installHeadlessSignalHandlers();
+                mx::system_out << "acmx2: remove-broken headless mode enabled (Linux)\n";
+            }
+#endif
             mx::system_out << "acmx2: Creating scan window for remove-broken...\n";
             fflush(stdout);
 
@@ -9742,6 +9752,13 @@ int main(int argc, char **argv) {
                     util.path = assets_path;
                     library.enableDualMode(enable_3d);
                 }
+
+                                RemoveBrokenWindow(const std::string &path, bool is3d, const std::string &assets, bool)
+                                        : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
+                                            lib_path(path), enable_3d(is3d), assets_path(assets) {
+                                        util.path = assets_path;
+                                        library.enableDualMode(enable_3d);
+                                }
 
                 void draw() override {
                     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -9776,6 +9793,13 @@ int main(int argc, char **argv) {
                 }
             };
 
+#if defined(__linux__)
+            if (args.silent) {
+                RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d, args.path, true);
+                rb_win.scanLoop();
+                return rb_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
+            }
+#endif
             RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d, args.path);
             rb_win.scanLoop();
             return rb_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -9803,6 +9827,16 @@ int main(int argc, char **argv) {
         }
 
         try {
+#if defined(__linux__)
+            if (args.silent) {
+                // Make build-cache use the same offscreen path as silent batch mode.
+                setenv("SDL_VIDEODRIVER", "offscreen", 0);
+                setenv("SDL_AUDIODRIVER", "dummy", 0);
+                SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+                installHeadlessSignalHandlers();
+                mx::system_out << "acmx2: build headless mode enabled (Linux)\n";
+            }
+#endif
             mx::system_out << "acmx2: Creating build window...\n";
             fflush(stdout);
 
@@ -9842,6 +9876,15 @@ int main(int argc, char **argv) {
                     util.path = assets_path;
                     library.enableDualMode(enable_3d);
                 }
+
+                                BuildWindow(const std::string &path, bool is3d, const std::string &assets, bool)
+                                        : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
+                                            lib_path(path), enable_3d(is3d), assets_path(assets) {
+                                        mx::system_out << "acmx2: Window created, setting up...\n";
+                                        fflush(stdout);
+                                        util.path = assets_path;
+                                        library.enableDualMode(enable_3d);
+                                }
 
                 /**
                  * @brief Single-shot draw: compile all shaders, write cache, then signal exit.
@@ -9895,6 +9938,13 @@ int main(int argc, char **argv) {
                 }
             };
 
+#if defined(__linux__)
+            if (args.silent) {
+                BuildWindow build_win(args.build_library_path, args.is3d, args.path, true);
+                build_win.buildLoop();
+                return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
+            }
+#endif
             BuildWindow build_win(args.build_library_path, args.is3d, args.path);
             build_win.buildLoop();
 
