@@ -16,6 +16,7 @@
 
 [Full Documentation](https://lostsidedead.biz/acmx2/docs/)
 
+[YouTube Video Tutorial](https://youtu.be/-IDAF8MMmkg)
 
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
 
