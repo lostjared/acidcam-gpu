@@ -865,6 +865,10 @@ void MainWindow::populateShaderTree() {
         return;
     refreshShaderCacheStatus();
 
+    // Preserve the currently selected row so a refresh (e.g. after the
+    // child process exits) does not lose the user's place in the list.
+    const int previousRow = currentShaderRow();
+
     const QSignalBlocker blocker(list_view);
     list_view->clear();
 
@@ -904,6 +908,15 @@ void MainWindow::populateShaderTree() {
         item->setForeground(3, QBrush(healthColor));
         if (!fi.exists())
             item->setForeground(2, QBrush(QColor("#ff5555")));
+    }
+
+    // Restore the previously selected row after the rebuild.
+    if (previousRow >= 0 && previousRow < list_view->topLevelItemCount()) {
+        QTreeWidgetItem *it = list_view->topLevelItem(previousRow);
+        if (it) {
+            list_view->setCurrentItem(it);
+            list_view->scrollToItem(it, QAbstractItemView::PositionAtCenter);
+        }
     }
 }
 
