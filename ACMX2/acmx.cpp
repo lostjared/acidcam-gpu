@@ -30,6 +30,7 @@
 #include <cstring>
 #include <ctime>
 #include <deque>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -8876,51 +8877,6 @@ class MainWindow : public gl::GLWindow {
     }
 };
 
-const char *message = R"(
--[ Keyboard controls ]- {
-    Escape - Quit
-    Ctrl+X - Quit without Audio Mux
-    Up arrow - Previous shader
-    Down arrow - Next shader
-    Left - Previous GPU filter (if enabled)
-    Right - Next GPU filter (if enabled)
-    Space - Enable/Disable Processing
-    L - Enable/Disable video freeze (Video/Image Modes)
-    P - Enable/Disable pause video (Video/Image Modes) / toggle shader playlist
-    J - Toggle autopilot mode (random playlist switching, requires playlist enabled)
-    T - enable/disable time
-    U/I - step time if not disabled
-    Page Up/Page Down - increase/decrease time speed
-    Z - take snapshot (PNG: SDR 8-bit; in HDR mode this still captures SDR PNG)
-    4 - take TIFF snapshot (SDR: 8-bit RGBA TIFF; HDR: 16-bit RGBA TIFF, requires ACMX2_WITH_TIFF)
-    5 - take WebP snapshot (SDR: lossless WebP; HDR: lossless WebP tone-mapped from HDR, requires ACMX2_WITH_WEBP)
-    6 - take raw RGBA snapshot (16-bit RGBA in HDR mode, 8-bit RGBA otherwise)
-        playback example: ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw
-    3 - toggle 2D/3D mode
-    M - toggle multi-pass
-    F - toggle fullscreen
-    Q - toggle reactive time (if AUDIO_ENABLED)
-    Insert - increase audio sensitivity
-    Delete - decrease audio sensitivity
-    End - toggle spectrum sensitivity scaling on/off
-    Home - toggle audio delta time scaling on/off
-    M - toggle multi-shader pass (if --shader-pass set)
-    3 - toggle 2D/3D mode (switches between 2D and 3D rendering)
-    3D mode controls:
-    W,A,S,D - Look around 
-    V - Toggle view rotation
-    O - Oscillation Toggle
-    X - Reset camera distance
-    ( +, - ) - increase / decrease camera distance
-    B - increase movement speed
-    N - decrease movement speed
-    C - Toggle Object Wave
-    E - Enable/Disable Watermark
-    ] - Increase model scale
-    [ - Decrease model scale
-}
-)";
-
 /// @brief Verify CUDA device availability and print GPU info.
 void checkDevices(bool list_only = false) {
 #ifdef ACMX2_WITH_CUDA
@@ -8948,15 +8904,234 @@ void checkDevices(bool list_only = false) {
 #endif
 }
 
+namespace {
+    struct CliColors {
+        bool enabled = false;
+        std::string_view reset = "";
+        std::string_view title = "";
+        std::string_view section = "";
+        std::string_view flag = "";
+        std::string_view arg = "";
+        std::string_view desc = "";
+        std::string_view example = "";
+    };
+
+    struct HelpEntry {
+        std::string_view flags;
+        std::string_view description;
+        std::string_view example;
+    };
+
+    bool terminalSupportsColor() {
+        const char *no_color = std::getenv("NO_COLOR");
+        if (no_color && no_color[0] != '\0') {
+            return false;
+        }
+
+        const char *force = std::getenv("CLICOLOR_FORCE");
+        if (force && force[0] != '0' && force[0] != '\0') {
+            return true;
+        }
+
+#if defined(__linux__) || defined(__APPLE__)
+        if (!isatty(fileno(stdout))) {
+            return false;
+        }
+#else
+        return false;
+#endif
+
+        const char *term = std::getenv("TERM");
+        if (!term || std::strcmp(term, "dumb") == 0) {
+            return false;
+        }
+        return true;
+    }
+
+    CliColors makeCliColors() {
+        CliColors c;
+        c.enabled = terminalSupportsColor();
+        if (c.enabled) {
+            c.reset = "\033[0m";
+            c.title = "\033[1;96m";
+            c.section = "\033[1;93m";
+            c.flag = "\033[1;92m";
+            c.arg = "\033[36m";
+            c.desc = "\033[0;97m";
+            c.example = "\033[95m";
+        }
+        return c;
+    }
+
+    template <typename Stream>
+    void printSection(Stream &out, const CliColors &c, std::string_view name, const std::vector<HelpEntry> &entries) {
+        out << c.section << "\n" << name << c.reset << "\n";
+        for (const auto &entry : entries) {
+            out << "  " << c.flag << entry.flags << c.reset << "\n";
+            out << "    " << c.desc << entry.description << c.reset << "\n";
+            if (!entry.example.empty()) {
+                out << "    " << c.example << "example: " << entry.example << c.reset << "\n";
+            }
+        }
+    }
+
+    template <typename Stream>
+    void printDetailedArguments(Stream &out) {
+        const CliColors c = makeCliColors();
+        out << c.title << "\nArguments" << c.reset << "\n";
+        out << c.example << "Short and long forms are equivalent; values shown in <> are required." << c.reset << "\n";
+
+        printSection(out, c, "General", {
+            {"-v, --help", "Show this help screen and keyboard controls.", "acmx2 --help"},
+            {"-p <path>, --path <path>", "Set assets root directory (shaders, data files, defaults).", "acmx2 --path ./data"},
+            {"-r <WxH>, --resolution <WxH>", "Set output/window resolution (for display and recording).", "acmx2 --resolution 1920x1080"},
+            {"-N, --fullscreen", "Start in fullscreen mode (Escape to exit fullscreen).", "acmx2 --fullscreen"},
+            {"--silent", "Run headless (no preview window). Intended for file-to-file rendering.", "acmx2 -i in.mp4 -o out.mp4 --silent"},
+            {"--duration <seconds>", "Auto-stop recording/output after elapsed seconds.", "acmx2 -i in.mp4 -o out.mp4 --duration 30"}
+        });
+
+        printSection(out, c, "Input Source", {
+            {"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"},
+            {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"},
+            {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"},
+            {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"},
+            {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"},
+            {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}
+        });
+
+        printSection(out, c, "Shaders And Visual Pipeline", {
+            {"-s <index.txt>, --shaders <index.txt>", "Use shader library index file (playlist-able shader set).", "acmx2 --shaders ./shaders/index.txt"},
+            {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"},
+            {"-h <index>, --shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders index.txt --shader 3"},
+            {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"},
+            {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"},
+            {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"},
+            {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames.", "acmx2 --playlist live_set.txt --autopilot-frames 240"},
+            {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"},
+            {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"},
+            {"--remove-broken <library-path>", "Compile-check each shader, remove failing entries from index.txt, then exit.", "acmx2 --remove-broken ./shaders"},
+            {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"},
+            {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"},
+            {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"},
+            {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"},
+            {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"},
+            {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}
+        });
+
+        printSection(out, c, "GPU And CUDA", {
+            {"--gpu-filter <list>", "Apply CUDA filter chain by index list (comma-separated).", "acmx2 --gpu-filter 1,12,18"},
+            {"--gpu-buffer <N>", "Set GPU temporal frame buffer size (4..32).", "acmx2 --gpu-buffer 12"},
+            {"--list-filters", "List all built-in GPU filters and their indices.", "acmx2 --list-filters"},
+            {"-m <idx>, --cuda-device <idx>", "Select CUDA device index to run processing on.", "acmx2 --cuda-device 0"},
+            {"--list-cuda-devices", "List CUDA devices visible to the runtime.", "acmx2 --list-cuda-devices"},
+            {"--check-cuda", "Report whether this build has CUDA support enabled.", "acmx2 --check-cuda"}
+        });
+
+        printSection(out, c, "Recording And Encoding", {
+            {"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"},
+            {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"},
+            {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"},
+            {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"},
+            {"--encode-preset <name>", "Encoder speed/quality preset (ultrafast .. veryslow).", "acmx2 --encode-preset fast"},
+            {"--encode-tune <name>", "Tune encoder for content type or low latency.", "acmx2 --encode-tune film"},
+            {"--encode-crf <0-51>", "Set encoder quality directly (lower = better quality/larger file).", "acmx2 --encode-crf 18"},
+            {"--encode-codec <mode>", "Codec backend: auto, software, or nvenc.", "acmx2 --encode-codec nvenc"},
+            {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"},
+            {"--no-drop", "Never drop frames; block producer when encoder queue is full.", "acmx2 --no-drop"},
+            {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"},
+            {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}
+        });
+
+#ifdef AUDIO_ENABLED
+        printSection(out, c, "Audio Reactivity", {
+            {"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"},
+            {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"},
+            {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"},
+            {"-y, --pass-through", "Pass captured input audio directly to selected output device.", "acmx2 --pass-through"},
+            {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""},
+            {"--audio-output <device>", "Select output audio device name/id.", "acmx2 --audio-output \"Built-in Output\""},
+            {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"},
+            {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"},
+            {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"},
+            {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"},
+            {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"},
+            {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}
+        });
+#endif
+
+#ifdef MIDI_ENABLED
+        printSection(out, c, "MIDI Control", {
+            {"--midi-map <file>", "Load MIDI mapping configuration file.", "acmx2 --midi-map midi.midi_cfg"},
+            {"--midi-device <idx>", "Select MIDI input device index.", "acmx2 --midi-device 0"},
+            {"--list-midi", "List available MIDI input devices.", "acmx2 --list-midi"},
+            {"--check-midi", "Report whether this build has MIDI support enabled.", "acmx2 --check-midi"}
+        });
+#endif
+
+        printSection(out, c, "Runtime Overlay", {
+            {"--disable-counter", "Hide timer and FPS overlay text.", "acmx2 --disable-counter"}
+        });
+    }
+
+    template <typename Stream>
+    void printKeyboardControls(Stream &out) {
+        const CliColors c = makeCliColors();
+        out << c.title << "\nKeyboard Controls" << c.reset << "\n";
+
+        printSection(out, c, "Main", {
+            {"Escape", "Quit.", ""},
+            {"Ctrl+X", "Quit without audio mux.", ""},
+            {"Up Arrow", "Previous shader.", ""},
+            {"Down Arrow", "Next shader.", ""},
+            {"Left Arrow", "Previous GPU filter (if enabled).", ""},
+            {"Right Arrow", "Next GPU filter (if enabled).", ""},
+            {"Space", "Enable/disable processing.", ""},
+            {"L", "Toggle video freeze (Video/Image modes).", ""},
+            {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""},
+            {"J", "Toggle autopilot mode (requires playlist).", ""},
+            {"T", "Enable/disable time.", ""},
+            {"U / I", "Step time when time is disabled.", ""},
+            {"Page Up / Page Down", "Increase/decrease time speed.", ""},
+            {"M", "Toggle multi-pass / multi-shader pass.", ""},
+            {"F", "Toggle fullscreen.", ""},
+            {"Q", "Toggle reactive time (if AUDIO_ENABLED).", ""},
+            {"Insert", "Increase audio sensitivity.", ""},
+            {"Delete", "Decrease audio sensitivity.", ""},
+            {"End", "Toggle spectrum sensitivity scaling.", ""},
+            {"Home", "Toggle audio delta time scaling.", ""},
+            {"3", "Toggle 2D/3D mode.", ""}
+        });
+
+        printSection(out, c, "Snapshots", {
+            {"Z", "Save PNG snapshot (SDR 8-bit; HDR mode still outputs SDR PNG).", ""},
+            {"4", "Save TIFF snapshot (SDR: 8-bit RGBA; HDR: 16-bit RGBA; requires ACMX2_WITH_TIFF).", ""},
+            {"5", "Save lossless WebP snapshot (HDR is tone-mapped; requires ACMX2_WITH_WEBP).", ""},
+            {"6", "Save raw RGBA snapshot (HDR: 16-bit RGBA, otherwise 8-bit RGBA).", "ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw"}
+        });
+
+        printSection(out, c, "3D Mode", {
+            {"W / A / S / D", "Look around.", ""},
+            {"V", "Toggle view rotation.", ""},
+            {"O", "Toggle oscillation.", ""},
+            {"X", "Reset camera distance.", ""},
+            {"+ / -", "Increase/decrease camera distance.", ""},
+            {"B", "Increase movement speed.", ""},
+            {"N", "Decrease movement speed.", ""},
+            {"C", "Toggle object wave.", ""},
+            {"E", "Enable/disable watermark.", ""},
+            {"]", "Increase model scale.", ""},
+            {"[", "Decrease model scale.", ""}
+        });
+    }
+}
+
 /// @brief Print program version, author, arguments, and keyboard controls.
-template <typename T>
-void printAbout(Argz<T> &parser) {
+void printAbout() {
     mx::system_out << PROGRAM_NAME << ": " << VERSION_INFO << "\n";
     mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
-    mx::system_out << "Command Line Arguments:\n";
-    parser.help(mx::system_out);
-    mx::system_out << message;
+    printDetailedArguments(mx::system_out);
+    printKeyboardControls(mx::system_out);
 }
 
 /**
@@ -9061,7 +9236,7 @@ int main(int argc, char **argv) {
     ;
 
     if (argc == 1) {
-        printAbout(parser);
+        printAbout();
         exit(EXIT_SUCCESS);
     }
 
@@ -9104,7 +9279,7 @@ int main(int argc, char **argv) {
             switch (value) {
             case 'v':
             case 261:
-                printAbout(parser);
+                printAbout();
                 exit(EXIT_SUCCESS);
                 break;
             case 'p':
