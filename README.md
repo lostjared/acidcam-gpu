@@ -1,8 +1,9 @@
 # acidcam-gpu
 
-![screenshot](https://github.com/lostjared/acidcam-gpu/raw/main/acmx2.png)
-<img width="2560" height="1440" alt="Screenshot From 2026-04-12 19-33-51" src="https://github.com/user-attachments/assets/88b6c714-031d-422d-9a9f-65d56ac190bf" />
-<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/a57c5f22-8f13-4a11-a727-7cdde1b22360" />
+<img width="2560" height="1440" alt="screenshot3" src="https://github.com/user-attachments/assets/3af169df-abd3-49e8-84cc-70021a42e253" />
+<img width="2560" height="1440" alt="screenshot4" src="https://github.com/user-attachments/assets/35fb877a-4b2c-4bda-af6e-6dd894ae1593" />
+<img width="1300" height="783" alt="about" src="https://github.com/user-attachments/assets/e6cd44c8-9da7-4a3b-b09b-e946926b9a25" />
+
 
 [![License: BSD 2-Clause](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
 [![Hardware: NVIDIA RTX (optional)](https://img.shields.io/badge/Hardware-NVIDIA%20RTX%20(optional)-green.svg)](https://www.nvidia.com/en-us/geforce/rtx/)
