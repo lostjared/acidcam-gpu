@@ -225,7 +225,7 @@ sudo bash build-script/install-deps-arch.sh
 
 ACMX2 automatically switches to its HDR pipeline when the input stream is tagged as BT.2020 with PQ (`SMPTE ST.2084`) or HLG (`ARIB STD-B67`) transfer characteristics, or when the decoded source is a 10-bit BT.2020 format such as `yuv420p10le` or `p010le`.
 
-On ingest, the program preserves the source HDR code values long enough to upload each frame into a 16-bit RGBA working texture. A dedicated HDR decode shader converts PQ or HLG into linear BT.2020 before your GLSL shader passes and optional CUDA filters run. After processing, a matching HDR encode shader converts the result back into the same HDR transfer family as the source.
+On ingest, the program preserves the source HDR code values long enough to upload each frame into a 16-bit RGBA working texture. A dedicated HDR decode shader converts PQ or HLG into linear BT.2020 before your GLSL shader passes and does not run the CUDA filters since they are tied to 8 bit RGBA. After processing, a matching HDR encode shader converts the result back into the same HDR transfer family as the source.
 
 HDR exports use HEVC Main10 rather than the standard H.264 path. MXWrite receives BT.2020 HDR frames and writes a 10-bit `P010` HEVC stream with BT.2020 primaries and the original PQ or HLG transfer preserved. When the source includes mastering-display or content-light metadata, ACMX2 forwards that HDR metadata to the output stream as well.
 
