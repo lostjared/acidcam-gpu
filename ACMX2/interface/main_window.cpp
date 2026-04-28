@@ -399,6 +399,11 @@ void MainWindow::initControls() {
     buildCacheAction = new QAction(tr("Rebuild Shader Cache"), this);
     connect(buildCacheAction, &QAction::triggered, this, &MainWindow::menuBuildShaderCache);
     playbackMenu->addAction(buildCacheAction);
+#ifdef Q_OS_MACOS
+    // macOS does not support the persistent binary shader cache.
+    buildCacheAction->setVisible(false);
+    buildCacheAction->setEnabled(false);
+#endif
 
     removeBrokenAction = new QAction(tr("Remove Broken"), this);
     connect(removeBrokenAction, &QAction::triggered, this, &MainWindow::menuRemoveBroken);
@@ -834,6 +839,11 @@ void MainWindow::refreshShaderCacheStatus() {
 }
 
 bool MainWindow::isShaderCacheStale() const {
+#ifdef Q_OS_MACOS
+    // macOS does not support the persistent binary shader cache; never
+    // report staleness so we never trigger an auto-rebuild.
+    return false;
+#else
     if (!use_shader_cache || shader_path.isEmpty() || items.isEmpty())
         return false;
     const QString cachePath = resolveShaderCachePath(shader_path);
@@ -847,6 +857,7 @@ bool MainWindow::isShaderCacheStale() const {
             return true;
     }
     return false;
+#endif
 }
 
 void MainWindow::populateShaderTree() {
@@ -1949,6 +1960,13 @@ void MainWindow::menuSort() {
 }
 
 void MainWindow::menuBuildShaderCache() {
+#ifdef Q_OS_MACOS
+    // macOS does not support the persistent binary shader cache.
+    Log("Rebuild Shader Cache is not available on macOS.");
+    pendingLaunchAfterBuild = false;
+    pendingLaunchArguments.clear();
+    return;
+#else
     QString build_path = shader_path;
     if (build_path.isEmpty()) {
         QSettings appSettings("LostSideDead");
@@ -1990,6 +2008,7 @@ void MainWindow::menuBuildShaderCache() {
         Log("<b style='color:red;'>Error:</b> Failed to start shader cache build process");
         play_stop->setEnabled(false);
     }
+#endif
 }
 
 void MainWindow::menuRunFromCache() {

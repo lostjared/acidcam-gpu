@@ -95,9 +95,13 @@ class TextEditor : public QDialog {
 
   protected:
     void closeEvent(QCloseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
   private:
     void init();
+    /// @brief Show a Save/Discard/Cancel prompt if the document is modified.
+    /// @return True if the editor may close, false to cancel the close.
+    bool maybePromptSave();
     void saveContents();
     void saveAs();
     void findText();

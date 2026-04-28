@@ -922,21 +922,39 @@ void TextEditor::updateCursorPosition() {
 }
 
 void TextEditor::closeEvent(QCloseEvent *event) {
-    if (m_modified) {
-        QMessageBox::StandardButton reply = QMessageBox::question(
-            this, "Unsaved Changes",
-            "The document has been modified. Do you want to save your changes?",
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
-        if (reply == QMessageBox::Save) {
-            saveContents();
-            event->accept();
-        } else if (reply == QMessageBox::Discard) {
-            event->accept();
-        } else {
-            event->ignore();
-        }
-    } else {
+    if (maybePromptSave()) {
         event->accept();
+    } else {
+        event->ignore();
     }
+}
+
+void TextEditor::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Escape && event->modifiers() == Qt::NoModifier) {
+        if (maybePromptSave()) {
+            accept();
+        }
+        event->accept();
+        return;
+    }
+    QDialog::keyPressEvent(event);
+}
+
+bool TextEditor::maybePromptSave() {
+    if (!m_modified)
+        return true;
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "Unsaved Changes",
+        "The document has been modified. Do you want to save your changes?",
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+    if (reply == QMessageBox::Save) {
+        saveContents();
+        // saveContents clears m_modified on success; if the user cancelled
+        // a Save As dialog the flag stays true, so honour that as Cancel.
+        return !m_modified;
+    }
+    if (reply == QMessageBox::Discard)
+        return true;
+    return false;
 }
