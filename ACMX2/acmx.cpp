@@ -120,6 +120,76 @@ static std::string safeGLString(GLenum name) {
     return reinterpret_cast<const char *>(value);
 }
 
+static std::optional<std::string> normalizeShaderIndexEntry(const std::string &raw) {
+    const auto first = raw.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return std::nullopt;
+    }
+    const auto last = raw.find_last_not_of(" \t\r\n");
+    std::string entry = raw.substr(first, last - first + 1);
+
+    if (entry.empty() || entry.find("material") != std::string::npos) {
+        return std::nullopt;
+    }
+
+    std::replace(entry.begin(), entry.end(), '\\', '/');
+    std::filesystem::path rel(entry);
+    if (rel.is_absolute()) {
+        return std::nullopt;
+    }
+
+    std::filesystem::path normalized = rel.lexically_normal();
+    std::string normalized_str = normalized.generic_string();
+    while (normalized_str.rfind("./", 0) == 0) {
+        normalized_str.erase(0, 2);
+    }
+
+    if (normalized_str.empty() || normalized_str == "." || normalized_str == "..") {
+        return std::nullopt;
+    }
+    if (normalized_str.rfind("../", 0) == 0 ||
+        normalized_str.find("/../") != std::string::npos ||
+        (normalized_str.size() >= 3 && normalized_str.compare(normalized_str.size() - 3, 3, "/..") == 0)) {
+        return std::nullopt;
+    }
+
+    return normalized_str;
+}
+
+static bool resolveShaderPathInLibrary(const std::string &library_path,
+                                       const std::string &relative_path,
+                                       std::string &resolved_full_path) {
+    std::error_code ec;
+    std::filesystem::path base = std::filesystem::weakly_canonical(std::filesystem::path(library_path), ec);
+    if (ec) {
+        ec.clear();
+        base = std::filesystem::absolute(std::filesystem::path(library_path), ec);
+        if (ec) {
+            return false;
+        }
+    }
+
+    std::filesystem::path target = std::filesystem::weakly_canonical(base / std::filesystem::path(relative_path), ec);
+    if (ec) {
+        return false;
+    }
+
+    const std::filesystem::path relative = target.lexically_relative(base);
+    const std::string relative_str = relative.generic_string();
+    if (relative.empty() ||
+        relative_str == ".." ||
+        relative_str.rfind("../", 0) == 0) {
+        return false;
+    }
+
+    if (!std::filesystem::exists(target) || !std::filesystem::is_regular_file(target)) {
+        return false;
+    }
+
+    resolved_full_path = target.string();
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Graceful shutdown for headless / --silent mode.
 //
@@ -2589,8 +2659,13 @@ class ShaderLibrary {
         {
             std::string line;
             while (std::getline(file, line)) {
-                if (!line.empty() && std::filesystem::exists(text + "/" + line) && line.find("material") == std::string::npos) {
-                    shader_files.push_back(line);
+                auto shader_entry = normalizeShaderIndexEntry(line);
+                if (!shader_entry) {
+                    continue;
+                }
+                std::string full_path;
+                if (resolveShaderPathInLibrary(text, *shader_entry, full_path)) {
+                    shader_files.push_back(*shader_entry);
                 }
             }
             file.close();
@@ -2779,10 +2854,14 @@ class ShaderLibrary {
             while (std::getline(in, l)) {
                 Line entry;
                 entry.raw = l;
+                auto shader_entry = normalizeShaderIndexEntry(l);
+                std::string full_path;
                 bool is_shader_line =
-                    !l.empty() &&
-                    l.find("material") == std::string::npos &&
-                    std::filesystem::exists(library_path + "/" + l);
+                    shader_entry.has_value() &&
+                    resolveShaderPathInLibrary(library_path, *shader_entry, full_path);
+                if (shader_entry) {
+                    entry.raw = *shader_entry;
+                }
                 entry.is_shader = is_shader_line;
                 if (!is_shader_line && !l.empty() &&
                     l.find("material") == std::string::npos) {
@@ -2984,8 +3063,13 @@ class ShaderLibrary {
         std::vector<std::string> shader_files;
         std::string line;
         while (std::getline(file, line)) {
-            if (!line.empty() && std::filesystem::exists(library_path + "/" + line) && line.find("material") == std::string::npos) {
-                shader_files.push_back(line);
+            auto shader_entry = normalizeShaderIndexEntry(line);
+            if (!shader_entry) {
+                continue;
+            }
+            std::string full_path;
+            if (resolveShaderPathInLibrary(library_path, *shader_entry, full_path)) {
+                shader_files.push_back(*shader_entry);
             }
         }
         file.close();
@@ -3308,8 +3392,13 @@ class ShaderLibrary {
         std::vector<std::string> shader_files;
         std::string line;
         while (std::getline(file, line)) {
-            if (!line.empty() && std::filesystem::exists(library_path + "/" + line) && line.find("material") == std::string::npos) {
-                shader_files.push_back(line);
+            auto shader_entry = normalizeShaderIndexEntry(line);
+            if (!shader_entry) {
+                continue;
+            }
+            std::string full_path;
+            if (resolveShaderPathInLibrary(library_path, *shader_entry, full_path)) {
+                shader_files.push_back(*shader_entry);
             }
         }
         file.close();

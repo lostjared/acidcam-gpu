@@ -973,13 +973,14 @@ void MainWindow::fileOpenProp() {
 
         executable_path = exePath;
         prefix_path = prefix;
-        shader_path = shaderDir;
 
         Log("Executable Path: " + exePath);
         Log("Prefix Path: " + prefix);
         Log("Shader Directory: " + shaderDir);
 
-        if (loadShaders(shaderDir)) {
+        // Force a reload so the list reflects the newly selected library
+        // even if index timestamps happen to be unchanged.
+        if (loadShaders(shaderDir, true)) {
             Log("Successfully loaded shaders from new directory<br>");
         } else {
             Log("Warning: Could not load shaders from new directory<br>");
@@ -1019,16 +1020,21 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
         if (line.isEmpty()) {
             continue;
         }
-        QString fullPath = path + "/" + line;
-        QFileInfo fileInfo(fullPath);
-        if (!fileInfo.exists() || !fileInfo.isFile()) {
-            Log("Skipping non-existent file: " + line);
+        const QString shaderEntry = sanitizeShaderName(line);
+        if (shaderEntry.isEmpty()) {
+            Log("Skipping invalid shader path in index.txt: " + line);
             continue;
         }
-        if (!uniqueItems.contains(line, Qt::CaseInsensitive)) {
-            uniqueItems.append(line);
+        QString fullPath = path + "/" + shaderEntry;
+        QFileInfo fileInfo(fullPath);
+        if (!fileInfo.exists() || !fileInfo.isFile()) {
+            Log("Skipping non-existent file: " + shaderEntry);
+            continue;
+        }
+        if (!uniqueItems.contains(shaderEntry, Qt::CaseInsensitive)) {
+            uniqueItems.append(shaderEntry);
         } else {
-            Log("Skipping duplicate shader: " + line);
+            Log("Skipping duplicate shader: " + shaderEntry);
         }
     }
     file.close();
@@ -1920,13 +1926,26 @@ QString MainWindow::getShaderPassIndicesFromNames() {
 
 QString MainWindow::sanitizeShaderName(const QString &name) {
     QString sanitized = name.trimmed();
-    if (sanitized.contains("..") || sanitized.contains("/") || sanitized.contains("\\")) {
+    sanitized.replace('\\', '/');
+    sanitized = QDir::cleanPath(sanitized);
+
+    while (sanitized.startsWith("./")) {
+        sanitized = sanitized.mid(2);
+    }
+
+    if (sanitized.isEmpty() || sanitized == "." || sanitized == "..") {
+        Log("Warning: Invalid shader name detected: " + name);
+        return QString();
+    }
+
+    if (QDir::isAbsolutePath(sanitized) ||
+        sanitized.startsWith("../") ||
+        sanitized.contains("/../") ||
+        sanitized.endsWith("/..")) {
         Log("Warning: Invalid shader name detected (path traversal attempt): " + name);
         return QString();
     }
-    while (sanitized.startsWith('.')) {
-        sanitized = sanitized.mid(1);
-    }
+
     return sanitized;
 }
 
