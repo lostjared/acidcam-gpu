@@ -1341,7 +1341,7 @@ void SettingsWindow::detectInputHdr() {
     args << "-v" << "error"
          << "-select_streams" << "v:0"
          << "-show_entries" << "stream=color_transfer,color_primaries,color_space"
-         << "-of" << "default=noprint_wrappers=1:nokey=1"
+            << "-of" << "default=noprint_wrappers=1:nokey=0"
          << file;
     probe.start("ffprobe", args);
     if (!probe.waitForStarted(3000)) {
@@ -1364,12 +1364,29 @@ void SettingsWindow::detectInputHdr() {
     QString primaries;
     QString space;
     const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
-    if (lines.size() >= 1) transfer = lines.value(0).trimmed();
-    if (lines.size() >= 2) primaries = lines.value(1).trimmed();
-    if (lines.size() >= 3) space = lines.value(2).trimmed();
+    for (const QString &line : lines) {
+        const QString trimmed = line.trimmed();
+        const qsizetype eq = trimmed.indexOf('=');
+        if (eq <= 0) {
+            continue;
+        }
+        const QString key = trimmed.left(eq);
+        const QString value = trimmed.mid(eq + 1).trimmed();
+        if (key == "color_transfer") {
+            transfer = value;
+        } else if (key == "color_primaries") {
+            primaries = value;
+        } else if (key == "color_space") {
+            space = value;
+        }
+    }
 
-    const bool isHlg = transfer.contains("arib-std-b67");
-    const bool isPq = transfer.contains("smpte2084");
+    const bool isHlg = transfer.contains("arib-std-b67") ||
+                       transfer.contains("arib_std_b67") ||
+                       transfer.contains("hlg");
+    const bool isPq = transfer.contains("smpte2084") ||
+                      transfer.contains("smpte-2084") ||
+                      transfer.contains("pq");
     const bool isBt2020 = primaries.contains("bt2020") || space.contains("bt2020");
     inputHdrDetected = isHlg || isPq || isBt2020;
 
@@ -1377,7 +1394,7 @@ void SettingsWindow::detectInputHdr() {
     if (isPq) {
         label = "HDR: detected (PQ / SMPTE2084)";
     } else if (isHlg) {
-        label = "HDR: detected (HLG)";
+        label = "HDR: detected (HLG) - can convert to HDR10";
     } else if (isBt2020) {
         label = "HDR: detected (BT.2020)";
     } else {
@@ -1385,8 +1402,9 @@ void SettingsWindow::detectInputHdr() {
         label = "HDR: not detected (transfer=" + t + ")";
     }
     hdrStatusLabel->setText(label);
-    convertHdr10CheckBox->setEnabled(inputHdrDetected);
-    if (!inputHdrDetected) {
+    // Only enable HDR10 conversion checkbox for HLG sources
+    convertHdr10CheckBox->setEnabled(isHlg);
+    if (!isHlg) {
         convertHdr10CheckBox->setChecked(false);
     }
 }
