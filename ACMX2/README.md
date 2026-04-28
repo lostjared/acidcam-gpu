@@ -9,6 +9,8 @@
 
 [Full Documentation](https://lostsidedead.biz/acmx2/docs/)
 
+[YouTube Video Tutorial](https://youtu.be/-IDAF8MMmkg)
+
 To regenerate local docs in a versioned folder and refresh `docs/latest`:
 
 ```bash
