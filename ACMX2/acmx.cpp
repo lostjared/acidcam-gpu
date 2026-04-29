@@ -4397,6 +4397,11 @@ struct MXArguments {
     bool use_yuv = false;
     bool flip_output = false;          ///< Vertical flip output frames when set (e.g., for HDR correction).
     bool no_drop = false;              ///< In video mode, block when encoder queue is full instead of dropping.
+    bool display_filter = false;       ///< Display current shader/stack and GPU filter overlay in upper-left.
+    std::string watermark_text;        ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
+    int watermark_r = 255;             ///< Watermark red channel (0-255), default magenta-pink.
+    int watermark_g = 0;               ///< Watermark green channel (0-255).
+    int watermark_b = 150;             ///< Watermark blue channel (0-255).
     // User-configurable encoder quality (see EncodeOptions in mxwrite.hpp).
     EncodeOptions encode_opts{};
 };
@@ -5295,7 +5300,15 @@ class ACView : public gl::GLObject {
           silent_mode{args.silent},
           no_drop_mode{args.no_drop},
           use_shader_cache_flag{args.use_shader_cache},
-          flip_output{args.flip_output} {
+          flip_output{args.flip_output},
+          display_filter{args.display_filter} {
+        if (!args.watermark_text.empty()) {
+            enableWatermark = true;
+            watermark_text = args.watermark_text;
+        }
+        watermark_r = std::clamp(args.watermark_r, 0, 255);
+        watermark_g = std::clamp(args.watermark_g, 0, 255);
+        watermark_b = std::clamp(args.watermark_b, 0, 255);
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
@@ -6188,7 +6201,7 @@ class ACView : public gl::GLObject {
             win->text.init(win->w, win->h);
             win->text.setColor({255, 255, 255, 255});
         }
-        int waterFontSize = std::max(12, static_cast<int>(win->h / 40.0f));
+        waterFontSize = std::max(12, static_cast<int>(win->h / 40.0f));
         waterFont.tryLoadFont(win->util.getFilePath("data/font.ttf"), waterFontSize);
         mx::system_out << "acmx2: Watermark font loaded at size: " << waterFontSize << " for " << win->w << "x" << win->h << "\n";
         fflush(stdout);
@@ -6671,13 +6684,13 @@ class ACView : public gl::GLObject {
                 fflush(stdout);
             }
 
-            if(keystate[SDL_SCANCODE_J]) {
+            if(keystate[SDL_SCANCODE_PERIOD]) {
                 cameraRotationSpeed += 0.5f;
                 if (cameraRotationSpeed > 50.0f) cameraRotationSpeed = 50.0f;
                     mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
                     fflush(stdout);
             }
-            if(keystate[SDL_SCANCODE_K]) {
+            if(keystate[SDL_SCANCODE_COMMA]) {
                 cameraRotationSpeed -= 0.5f;
                 if (cameraRotationSpeed < 0.5f) cameraRotationSpeed = 0.5f;
                     mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
@@ -7083,13 +7096,51 @@ class ACView : public gl::GLObject {
         sprite.setShader(display_shader);
         sprite.draw(fboTexture, 0, 0, win->w, win->h);
 
+        int watermarkY = 10;
+        if (display_filter && waterFont.handle().has_value()) {
+            glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+            glViewport(0, 0, win->w, win->h);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            win->text.setColor({255, 0, 255, 255});
+            int dfY = 10;
+            const int lineH = waterFontSize + 4;
+            std::string shaderName = library.getShaderNameByIndex(library.index());
+            if (!shaderName.empty()) {
+                win->text.printText_Solid(waterFont, 10, dfY, "Shader: " + shaderName);
+                dfY += lineH;
+            }
+            if (shader_pass_enabled && !shader_pass_list.empty()) {
+                std::string mpLine = "Multipass: ";
+                for (size_t i = 0; i < shader_pass_list.size(); ++i) {
+                    if (i > 0) mpLine += ", ";
+                    std::string n = library.getShaderNameByIndex(shader_pass_list[i]);
+                    mpLine += n.empty() ? std::to_string(shader_pass_list[i]) : n;
+                }
+                win->text.printText_Solid(waterFont, 10, dfY, mpLine);
+                dfY += lineH;
+            }
+            if (gpu_filter_enabled && !gpu_filters.empty()) {
+                std::string gpuLine = "GPU: ";
+                for (size_t i = 0; i < gpu_filters.size(); ++i) {
+                    if (i > 0) gpuLine += ", ";
+                    gpuLine += gpu_filters[i].name;
+                }
+                win->text.printText_Solid(waterFont, 10, dfY, gpuLine);
+                dfY += lineH;
+            }
+            glDisable(GL_BLEND);
+            watermarkY = dfY;
+        }
         if (enableWatermark && writer.is_open() && waterFont.handle().has_value()) {
             glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
             glViewport(0, 0, win->w, win->h);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            win->text.setColor({255, 0, 150, 255});
-            win->text.printText_Blended(waterFont, 10, 10, "LostSideDead.biz");
+            win->text.setColor({static_cast<Uint8>(watermark_r),
+                                static_cast<Uint8>(watermark_g),
+                                static_cast<Uint8>(watermark_b), 255});
+            win->text.printText_Blended(waterFont, 10, watermarkY, watermark_text);
             glDisable(GL_BLEND);
         }
 
@@ -8069,6 +8120,12 @@ class ACView : public gl::GLObject {
     bool flip_output = false;
     int last_progress_percent = -1;
     bool enableWatermark = false;
+    bool display_filter = false;
+    int waterFontSize = 12;
+    std::string watermark_text = "LostSideDead.biz"; ///< Active watermark text (overridden by --use-watermark).
+    int watermark_r = 255;                            ///< Watermark color red.
+    int watermark_g = 0;                              ///< Watermark color green.
+    int watermark_b = 150;                            ///< Watermark color blue.
 
   private:
     std::atomic<uint64_t> frames_dropped{0};
@@ -9065,6 +9122,9 @@ namespace {
             {"--encode-codec <mode>", "Codec backend: auto, software, or nvenc.", "acmx2 --encode-codec nvenc"},
             {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"},
             {"--no-drop", "Never drop frames; block producer when encoder queue is full.", "acmx2 --no-drop"},
+            {"--display-filter", "Show current shader/stack and GPU filter in upper-left corner.", "acmx2 --display-filter"},
+            {"--use-watermark <text>", "Enable watermark with given text in recorded videos (upper-left).", "acmx2 --use-watermark \"My Channel\""},
+            {"--use-watermark-color <r,g,b>", "Watermark text color as 0-255 components.", "acmx2 --use-watermark-color 255,255,0"},
             {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"},
             {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}
         });
@@ -9147,7 +9207,9 @@ namespace {
             {"C", "Toggle object wave.", ""},
             {"E", "Enable/disable watermark.", ""},
             {"]", "Increase model scale.", ""},
-            {"[", "Decrease model scale.", ""}
+            {"[", "Decrease model scale.", ""},
+            {". (period)", "Increase camera rotation speed.", ""},
+            {", (comma)", "Decrease camera rotation speed.", ""}
         });
         printSection(out, c, "Environment Variables", {
             {"ACMX2_PATH", "Default assets root directory (equivalent to --path). Used when --path is not specified.", "export ACMX2_PATH=/usr/local/share/acmx2"},
@@ -9259,6 +9321,9 @@ int main(int argc, char **argv) {
         .addOptionDouble(604, "encode-realtime", "Enable low-latency realtime encoding flags")
         .addOptionDouble(605, "flip", "Vertical flip output frames")
         .addOptionDouble(606, "no-drop", "Video mode: never drop frames; block when encoder queue is full")
+        .addOptionDouble(607, "display-filter", "Display current shader/stack and GPU filter in upper-left corner")
+        .addOptionDoubleValue(608, "use-watermark", "Enable watermark with the given text in upper-left corner of recorded video")
+        .addOptionDoubleValue(609, "use-watermark-color", "Watermark color as r,g,b each 0-255 (default: 255,0,150)")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -9693,6 +9758,42 @@ int main(int argc, char **argv) {
                 args.no_drop = true;
                 mx::system_out << "acmx2: --no-drop enabled (video mode)\n";
                 break;
+            case 607:
+                args.display_filter = true;
+                mx::system_out << "acmx2: --display-filter enabled\n";
+                break;
+            case 608:
+                args.watermark_text = arg.arg_value;
+                mx::system_out << "acmx2: --use-watermark text: \"" << args.watermark_text << "\"\n";
+                break;
+            case 609: {
+                const std::string &v = arg.arg_value;
+                int r = 255, g = 0, b = 150;
+                size_t c1 = v.find(',');
+                size_t c2 = (c1 == std::string::npos) ? std::string::npos : v.find(',', c1 + 1);
+                if (c1 != std::string::npos && c2 != std::string::npos) {
+                    try {
+                        r = std::stoi(v.substr(0, c1));
+                        g = std::stoi(v.substr(c1 + 1, c2 - c1 - 1));
+                        b = std::stoi(v.substr(c2 + 1));
+                    } catch (...) {
+                        mx::system_err << "acmx2: --use-watermark-color: invalid value '"
+                                       << v << "'; expected r,g,b\n";
+                        break;
+                    }
+                    args.watermark_r = std::clamp(r, 0, 255);
+                    args.watermark_g = std::clamp(g, 0, 255);
+                    args.watermark_b = std::clamp(b, 0, 255);
+                    mx::system_out << "acmx2: --use-watermark-color: "
+                                   << args.watermark_r << ","
+                                   << args.watermark_g << ","
+                                   << args.watermark_b << "\n";
+                } else {
+                    mx::system_err << "acmx2: --use-watermark-color: invalid value '"
+                                   << v << "'; expected r,g,b\n";
+                }
+                break;
+            }
 #ifdef MIDI_ENABLED
             case 500:
                 args.midi_map_file = arg.arg_value;

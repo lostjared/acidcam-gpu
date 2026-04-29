@@ -83,6 +83,8 @@ class MainWindow : public QMainWindow {
     void menuRemoveBroken();
     void menuMidiSettings();
     void menuMetadataViewer();
+    void menuWatermarkSettings();
+    void menuToggleDisplayFilter(bool checked);
 
   protected:
     /// @brief Add shader to list if it is valid and not already present.
@@ -237,6 +239,14 @@ class MainWindow : public QMainWindow {
     double max_duration = 0.0;
     float cross_fade_duration = 0.5f;
     bool flip_enabled = false;
+    bool watermark_enabled = false;
+    QString watermark_text;
+    int watermark_r = 255;
+    int watermark_g = 0;
+    int watermark_b = 150;
+    bool display_filter_enabled = false;
+    QAction *watermarkAction = nullptr;
+    QAction *displayFilterAction = nullptr;
     bool midi_enabled = false;
     QString midi_config_file;
     int midi_device = -1;

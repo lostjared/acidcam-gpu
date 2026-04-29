@@ -3,8 +3,12 @@
 #include "metadata-viewer.hpp"
 #include "settings.hpp"
 #include <QApplication>
+#include <QCheckBox>
 #include <QClipboard>
+#include <QColorDialog>
 #include <QDateTime>
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -15,6 +19,10 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
+#include <QLabel>
+#include <QLineEdit>
+#include <QFormLayout>
+#include <QSpinBox>
 #include <QLayout>
 #include <QLocale>
 #include <QMessageBox>
@@ -70,7 +78,17 @@ QStringList defaultLinuxRunEnvAssignments() {
     QStringList envAssignments;
     QString uid = QString::number(getuid());
     QString userRunPath = "/run/user/" + uid;
-    envAssignments << "SDL_VIDEODRIVER=x11";
+    // Only force the X11 backend when an X server is actually reachable.
+    // On Wayland-only sessions (no XWayland) forcing x11 makes SDL fail with
+    // "'x11' not available". Leave SDL to auto-detect in that case.
+    QByteArray display = qgetenv("DISPLAY");
+    QByteArray waylandDisplay = qgetenv("WAYLAND_DISPLAY");
+    QByteArray sessionType = qgetenv("XDG_SESSION_TYPE");
+    if (!display.isEmpty()) {
+        envAssignments << "SDL_VIDEODRIVER=x11";
+    } else if (!waylandDisplay.isEmpty() || sessionType == "wayland") {
+        envAssignments << "SDL_VIDEODRIVER=wayland";
+    }
     if (QDir(userRunPath).exists()) {
         envAssignments << ("XDG_RUNTIME_DIR=" + userRunPath);
         envAssignments << ("PULSE_SERVER=unix:" + userRunPath + "/pulse/native");
@@ -434,6 +452,17 @@ void MainWindow::initControls() {
     connect(midiSettingsAction, &QAction::triggered, this, &MainWindow::menuMidiSettings);
     playbackMenu->addAction(midiSettingsAction);
 
+    playbackMenu->addSeparator();
+    watermarkAction = new QAction(tr("Watermark..."), this);
+    connect(watermarkAction, &QAction::triggered, this, &MainWindow::menuWatermarkSettings);
+    playbackMenu->addAction(watermarkAction);
+
+    displayFilterAction = new QAction(tr("Display"), this);
+    displayFilterAction->setCheckable(true);
+    displayFilterAction->setChecked(false);
+    connect(displayFilterAction, &QAction::toggled, this, &MainWindow::menuToggleDisplayFilter);
+    playbackMenu->addAction(displayFilterAction);
+
     // recompileShadersAction = new QAction(tr("Recompile All Shaders"), this);
     // connect(recompileShadersAction, &QAction::triggered, this, &MainWindow::menuRecompileShaders);
     // playbackMenu->addAction(recompileShadersAction);
@@ -544,6 +573,16 @@ void MainWindow::initControls() {
     midi_enabled = appSettings.value("midiEnabled", false).toBool();
     midi_config_file = appSettings.value("midiConfigFile", "").toString();
     midi_device = appSettings.value("midiDevice", -1).toInt();
+    watermark_enabled = appSettings.value("watermarkEnabled", false).toBool();
+    watermark_text = appSettings.value("watermarkText", "").toString();
+    watermark_r = appSettings.value("watermarkR", 255).toInt();
+    watermark_g = appSettings.value("watermarkG", 0).toInt();
+    watermark_b = appSettings.value("watermarkB", 150).toInt();
+    display_filter_enabled = appSettings.value("displayFilter", false).toBool();
+    if (displayFilterAction) {
+        QSignalBlocker blocker(displayFilterAction);
+        displayFilterAction->setChecked(display_filter_enabled);
+    }
     if (!path.isEmpty()) {
         QFileInfo pathInfo(path);
         QFileInfo indexInfo(path + "/index.txt");
@@ -1152,6 +1191,90 @@ void MainWindow::menuMidiSettings() {
     }
 }
 
+void MainWindow::menuToggleDisplayFilter(bool checked) {
+    display_filter_enabled = checked;
+    QSettings appSettings("LostSideDead");
+    appSettings.setValue("displayFilter", display_filter_enabled);
+    Log(QString("Display Filter Overlay: %1").arg(display_filter_enabled ? "Enabled" : "Disabled"));
+}
+
+void MainWindow::menuWatermarkSettings() {
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Watermark Settings"));
+
+    auto *enableCheck = new QCheckBox(tr("Enable watermark in recorded video"), &dlg);
+    enableCheck->setChecked(watermark_enabled);
+
+    auto *textEdit = new QLineEdit(watermark_text, &dlg);
+    textEdit->setPlaceholderText(tr("Watermark text (shown upper-left of recorded video)"));
+
+    auto *colorPreview = new QLabel(&dlg);
+    colorPreview->setAutoFillBackground(true);
+    colorPreview->setMinimumSize(80, 24);
+    colorPreview->setFrameStyle(QFrame::Box | QFrame::Plain);
+    colorPreview->setAlignment(Qt::AlignCenter);
+
+    int curR = watermark_r, curG = watermark_g, curB = watermark_b;
+    auto applyPreview = [colorPreview, &curR, &curG, &curB]() {
+        QPalette pal = colorPreview->palette();
+        pal.setColor(QPalette::Window, QColor(curR, curG, curB));
+        QColor fg = (curR * 0.299 + curG * 0.587 + curB * 0.114) > 140 ? Qt::black : Qt::white;
+        pal.setColor(QPalette::WindowText, fg);
+        colorPreview->setPalette(pal);
+        colorPreview->setText(QString(" %1, %2, %3 ").arg(curR).arg(curG).arg(curB));
+    };
+    applyPreview();
+
+    auto *colorBtn = new QPushButton(tr("Choose Color..."), &dlg);
+    QObject::connect(colorBtn, &QPushButton::clicked, &dlg, [&]() {
+        QColor chosen = QColorDialog::getColor(QColor(curR, curG, curB), &dlg, tr("Watermark Color"));
+        if (chosen.isValid()) {
+            curR = chosen.red();
+            curG = chosen.green();
+            curB = chosen.blue();
+            applyPreview();
+        }
+    });
+
+    auto *form = new QFormLayout();
+    form->addRow(enableCheck);
+    form->addRow(tr("Text:"), textEdit);
+    auto *colorRow = new QHBoxLayout();
+    colorRow->addWidget(colorPreview, 1);
+    colorRow->addWidget(colorBtn);
+    form->addRow(tr("Color:"), colorRow);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto *layout = new QVBoxLayout(&dlg);
+    layout->addLayout(form);
+    layout->addWidget(buttons);
+
+    if (dlg.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    watermark_enabled = enableCheck->isChecked();
+    watermark_text = textEdit->text();
+    watermark_r = curR;
+    watermark_g = curG;
+    watermark_b = curB;
+
+    QSettings appSettings("LostSideDead");
+    appSettings.setValue("watermarkEnabled", watermark_enabled);
+    appSettings.setValue("watermarkText", watermark_text);
+    appSettings.setValue("watermarkR", watermark_r);
+    appSettings.setValue("watermarkG", watermark_g);
+    appSettings.setValue("watermarkB", watermark_b);
+
+    Log(QString("Watermark %1: \"%2\" color=%3,%4,%5")
+            .arg(watermark_enabled ? "Enabled" : "Disabled")
+            .arg(watermark_text)
+            .arg(watermark_r).arg(watermark_g).arg(watermark_b));
+}
+
 void MainWindow::menuShaderPassSettings() {
     if (shader_path.isEmpty()) {
         QMessageBox::information(this, "Load Shaders First",
@@ -1304,7 +1427,16 @@ void MainWindow::runSelected() {
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid());
     QString user_run_path = "/run/user/" + uid;
-    env.insert("SDL_VIDEODRIVER", "x11");
+    // Only force x11 when DISPLAY is set; on Wayland-only sessions the x11
+    // SDL backend is not available and SDL would error out.
+    QByteArray display = qgetenv("DISPLAY");
+    QByteArray waylandDisplay = qgetenv("WAYLAND_DISPLAY");
+    QByteArray sessionType = qgetenv("XDG_SESSION_TYPE");
+    if (!display.isEmpty()) {
+        env.insert("SDL_VIDEODRIVER", "x11");
+    } else if (!waylandDisplay.isEmpty() || sessionType == "wayland") {
+        env.insert("SDL_VIDEODRIVER", "wayland");
+    }
     if (QDir(user_run_path).exists()) {
         env.insert("XDG_RUNTIME_DIR", user_run_path);
         env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
@@ -1459,6 +1591,16 @@ void MainWindow::runSelected() {
 
     if (flip_enabled) {
         arguments << "--flip";
+    }
+
+    if (watermark_enabled && !watermark_text.isEmpty()) {
+        arguments << "--use-watermark" << watermark_text;
+        arguments << "--use-watermark-color"
+                  << QString("%1,%2,%3").arg(watermark_r).arg(watermark_g).arg(watermark_b);
+    }
+
+    if (display_filter_enabled) {
+        arguments << "--display-filter";
     }
 
     if (shaderCacheMarkedStaleBySave || isShaderCacheStale()) {
@@ -1666,6 +1808,16 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     if (flip_enabled) {
         arguments << "--flip";
+    }
+
+    if (watermark_enabled && !watermark_text.isEmpty()) {
+        arguments << "--use-watermark" << watermark_text;
+        arguments << "--use-watermark-color"
+                  << QString("%1,%2,%3").arg(watermark_r).arg(watermark_g).arg(watermark_b);
+    }
+
+    if (display_filter_enabled) {
+        arguments << "--display-filter";
     }
 
     return true;
@@ -1878,7 +2030,7 @@ void MainWindow::copyCommand() {
                                  tr("Command copied to clipboard."));
     });
     connect(runButton, &QPushButton::clicked, &dialog, [this, textBox, &dialog]() {
-        if (process->state() == QProcess::Running) {
+        if (process->state() != QProcess::NotRunning) {
             QMessageBox::information(&dialog, tr("Process Running"),
                                      tr("A process is already running. Please stop it first."));
             return;
@@ -1888,37 +2040,22 @@ void MainWindow::copyCommand() {
             QMessageBox::warning(&dialog, tr("Empty Command"), tr("The command is empty."));
             return;
         }
-        QStringList tokens = QProcess::splitCommand(cmdText);
-        if (tokens.isEmpty()) {
-            QMessageBox::warning(&dialog, tr("Invalid Command"), tr("Could not parse the command."));
-            return;
-        }
 
-        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-        const QRegularExpression envKeyRegex("^[A-Za-z_][A-Za-z0-9_]*$");
-        while (!tokens.isEmpty()) {
-            const QString token = tokens.first();
-            const int eq = token.indexOf('=');
-            if (eq <= 0) {
-                break;
-            }
-            const QString key = token.left(eq);
-            if (!envKeyRegex.match(key).hasMatch()) {
-                break;
-            }
-            env.insert(key, token.mid(eq + 1));
-            tokens.removeFirst();
-        }
-        if (tokens.isEmpty()) {
-            QMessageBox::warning(&dialog, tr("Invalid Command"),
-                                 tr("No executable was found after environment assignments."));
-            return;
-        }
-
-        QString program = tokens.takeFirst();
-        process->setProcessEnvironment(env);
-        Log("shell: " + program + " " + concatList(tokens) + "<br>");
-        process->start(program, tokens);
+        // Run the command verbatim through a shell so that env-var prefixes,
+        // quoting, and PATH lookup behave exactly like pasting it into a
+        // terminal. This avoids any ambiguity from re-parsing the line into
+        // tokens and re-applying environment via QProcessEnvironment.
+        process->setProcessEnvironment(QProcessEnvironment::systemEnvironment());
+#ifdef Q_OS_WIN
+        QString shell = qEnvironmentVariable("COMSPEC");
+        if (shell.isEmpty()) shell = "cmd.exe";
+        QStringList shellArgs{"/C", cmdText};
+#else
+        QString shell = "/bin/sh";
+        QStringList shellArgs{"-c", cmdText};
+#endif
+        Log("shell: " + cmdText + "<br>");
+        process->start(shell, shellArgs);
         if (!process->waitForStarted()) {
             Log("<b style='color:red;'>Failed to start the program.</b>");
             QMessageBox::critical(&dialog, tr("Error"), tr("Failed to start the program."));
