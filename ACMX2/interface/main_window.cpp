@@ -881,8 +881,7 @@ void MainWindow::refreshShaderCacheStatus() {
     }
     shaderCacheMTime = cacheInfo.lastModified();
     shaderCacheStatus = parseShaderCacheStatus(cachePath);
-    Log("Shader cache: " + cachePath + " (" + QString::number(shaderCacheStatus.size()) +
-        " entries)");
+    //Log("Shader cache: " + cachePath + " (" + QString::number(shaderCacheStatus.size()) + " entries)");
 }
 
 bool MainWindow::isShaderCacheStale() const {
