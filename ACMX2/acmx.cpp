@@ -2689,6 +2689,47 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Compiling " << total_shaders << " shaders (" << (dual_mode ? "2D+3D" : "2D") << ")...\n";
         fflush(stdout);
 
+        static constexpr const char *kLogoVert =
+            "#version 330 core\n"
+            "layout(location = 0) in vec3 aPos;\n"
+            "layout(location = 1) in vec2 aTex;\n"
+            "out vec2 tc;\n"
+            "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
+        static constexpr const char *kLogoFrag =
+            "#version 330 core\n"
+            "in vec2 tc;\n"
+            "out vec4 color;\n"
+            "uniform sampler2D samp;\n"
+            "void main() { color = texture(samp, tc); }\n";
+
+        gl::ShaderProgram logo_shader;
+        auto logo_sprite = std::make_unique<gl::GLSprite>();
+        bool logo_loaded = false;
+        {
+            std::string logo_path = win->util.getFilePath("data/logo.png");
+            if (std::filesystem::exists(logo_path)) {
+                GLuint logo_tex = 0;
+                try {
+                    int lw = 0, lh = 0;
+                    logo_tex = gl::loadTexture(logo_path, lw, lh);
+                    if (logo_tex && logo_shader.loadProgramFromText(kLogoVert, kLogoFrag)) {
+                        logo_sprite->initSize(win->w, win->h);
+                        logo_sprite->setName("samp");
+                        logo_sprite->setShader(&logo_shader);
+                        float scale = std::min((float)win->w / lw, (float)win->h / lh);
+                        int dw = static_cast<int>(lw * scale);
+                        int dh = static_cast<int>(lh * scale);
+                        int lx = (win->w - dw) / 2;
+                        int ly = (win->h - dh) / 2;
+                        logo_sprite->initWithTexture(&logo_shader, logo_tex, lx, ly, dw, dh);
+                        logo_tex = 0;
+                        logo_loaded = true;
+                    }
+                } catch (...) {}
+                if (logo_tex) { glDeleteTextures(1, &logo_tex); }
+            }
+        }
+
         int last_percent_reported = -1;
         for (size_t shader_index = 0; shader_index < shader_files.size(); ++shader_index) {
             const std::string &line_data = shader_files[shader_index];
@@ -2770,6 +2811,9 @@ class ShaderLibrary {
 
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT);
+                if (logo_loaded) {
+                    logo_sprite->draw();
+                }
                 if (loadingFont.handle().has_value()) {
                     std::string loadingText = "Compiling Shader " + std::to_string(shader_index + 1) + "/" + std::to_string(total_shaders) + "...";
                     win->text.printText_Blended(loadingFont, 10, 10, loadingText);
@@ -3455,6 +3499,47 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Loading " << cache.entries.size() << " shaders from cache...\n";
         fflush(stdout);
 
+        static constexpr const char *kLogoVertC =
+            "#version 330 core\n"
+            "layout(location = 0) in vec3 aPos;\n"
+            "layout(location = 1) in vec2 aTex;\n"
+            "out vec2 tc;\n"
+            "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
+        static constexpr const char *kLogoFragC =
+            "#version 330 core\n"
+            "in vec2 tc;\n"
+            "out vec4 color;\n"
+            "uniform sampler2D samp;\n"
+            "void main() { color = texture(samp, tc); }\n";
+
+        gl::ShaderProgram logo_shader_c;
+        auto logo_sprite_c = std::make_unique<gl::GLSprite>();
+        bool logo_loaded_c = false;
+        {
+            std::string logo_path = win ? win->util.getFilePath("data/logo.png") : std::string();
+            if (!logo_path.empty() && std::filesystem::exists(logo_path)) {
+                GLuint logo_tex = 0;
+                try {
+                    int lw = 0, lh = 0;
+                    logo_tex = gl::loadTexture(logo_path, lw, lh);
+                    if (logo_tex && logo_shader_c.loadProgramFromText(kLogoVertC, kLogoFragC)) {
+                        logo_sprite_c->initSize(win->w, win->h);
+                        logo_sprite_c->setName("samp");
+                        logo_sprite_c->setShader(&logo_shader_c);
+                        float scale = std::min((float)win->w / lw, (float)win->h / lh);
+                        int dw = static_cast<int>(lw * scale);
+                        int dh = static_cast<int>(lh * scale);
+                        int lx = (win->w - dw) / 2;
+                        int ly = (win->h - dh) / 2;
+                        logo_sprite_c->initWithTexture(&logo_shader_c, logo_tex, lx, ly, dw, dh);
+                        logo_tex = 0;
+                        logo_loaded_c = true;
+                    }
+                } catch (...) {}
+                if (logo_tex) { glDeleteTextures(1, &logo_tex); }
+            }
+        }
+
         int last_percent_reported = -1;
         size_t binary_fail_count = 0;
 
@@ -3587,6 +3672,9 @@ class ShaderLibrary {
 
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT);
+                if (logo_loaded_c) {
+                    logo_sprite_c->draw();
+                }
                 if (loadingFont.handle().has_value()) {
                     std::string loadingText = "Loading Cached Shader " + std::to_string(i + 1) + "/" + std::to_string(cache.entries.size()) + "...";
                     win->text.printText_Blended(loadingFont, 10, 10, loadingText);
@@ -10199,6 +10287,46 @@ int main(int argc, char **argv) {
 
                     if (!build_done) {
                         build_done = true;
+
+                        // Display logo.png while the build runs
+                        static constexpr const char *kBldLogoVert =
+                            "#version 330 core\n"
+                            "layout(location = 0) in vec3 aPos;\n"
+                            "layout(location = 1) in vec2 aTex;\n"
+                            "out vec2 tc;\n"
+                            "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
+                        static constexpr const char *kBldLogoFrag =
+                            "#version 330 core\n"
+                            "in vec2 tc;\n"
+                            "out vec4 color;\n"
+                            "uniform sampler2D samp;\n"
+                            "void main() { color = texture(samp, tc); }\n";
+                        gl::ShaderProgram logo_sh;
+                        gl::GLSprite logo_sp;
+                        std::string logo_path = util.getFilePath("data/logo.png");
+                        if (std::filesystem::exists(logo_path)) {
+                            GLuint logo_tex = 0;
+                            try {
+                                int lw = 0, lh = 0;
+                                logo_tex = gl::loadTexture(logo_path, lw, lh);
+                                if (logo_tex && logo_sh.loadProgramFromText(kBldLogoVert, kBldLogoFrag)) {
+                                    logo_sp.initSize(w, h);
+                                    logo_sp.setName("samp");
+                                    logo_sp.setShader(&logo_sh);
+                                    float scale = std::min((float)w / lw, (float)h / lh);
+                                    int dw = static_cast<int>(lw * scale);
+                                    int dh = static_cast<int>(lh * scale);
+                                    int lx = (w - dw) / 2;
+                                    int ly = (h - dh) / 2;
+                                    logo_sp.initWithTexture(&logo_sh, logo_tex, lx, ly, dw, dh);
+                                    logo_tex = 0;
+                                    logo_sp.draw();
+                                }
+                            } catch (...) {}
+                            if (logo_tex) { glDeleteTextures(1, &logo_tex); }
+                        }
+                        swap();
+                        SDL_PumpEvents();
 
                         std::string vert_2d = util.getFilePath("data/vert.glsl");
                         std::string vert_3d = util.getFilePath("data/vertex.glsl");
