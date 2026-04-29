@@ -3455,6 +3455,7 @@ class ShaderLibrary {
         fflush(stdout);
 
         int last_percent_reported = -1;
+        size_t binary_fail_count = 0;
 
         // Helper: insert a passthrough program at the current slot to preserve
         // index alignment with index.txt when a cache entry cannot be used.
@@ -3534,6 +3535,7 @@ class ShaderLibrary {
                 fflush(stdout);
                 glDeleteProgram(prog_id_2d);
                 programs_2d.pop_back();
+                ++binary_fail_count;
                 // Substitute passthrough to keep slot index valid.
                 if (!push_passthrough_2d(i, "2D binary load failed")) {
                     return false;
@@ -3595,6 +3597,31 @@ class ShaderLibrary {
 
         mx::system_out << "acmx2: Loaded " << cache.entries.size() << " shaders from cache (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
+
+        // If more than 10% of the cached binaries failed to load (stale driver/GPU),
+        // automatically delete the cache file and rebuild from source.
+        if (binary_fail_count > 0 && cache.entries.size() > 0) {
+            size_t fail_pct = (binary_fail_count * 100) / cache.entries.size();
+            if (fail_pct >= 10) {
+                mx::system_out << "acmx2: ⚠ " << binary_fail_count << "/" << cache.entries.size()
+                               << " cached shaders failed to load (" << fail_pct << "%) — cache is stale.\n"
+                               << "acmx2: Deleting stale cache and rebuilding...\n";
+                fflush(stdout);
+                std::error_code rm_ec;
+                std::filesystem::remove(cache_file, rm_ec);
+                programs_2d.clear();
+                programs_3d.clear();
+                program_names_2d.clear();
+                program_names_3d.clear();
+                if (!vert_2d.empty() && !vert_3d.empty()) {
+                    buildShaderCache(win, library_path, vert_2d, vert_3d);
+                    mx::system_out << "acmx2: Cache rebuilt from source.\n";
+                    fflush(stdout);
+                }
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -4313,8 +4340,8 @@ struct MXArguments {
     int tw = 1280, th = 720;
     std::string crf = "23";
     int camera_device = 0;
-    std::string library = "./filters";
-    std::string fragment = "./frag.glsl";
+    std::string library;
+    std::string fragment;
     std::string prefix_path = ".";
     std::string model_file = "cube.mxmod.z";
     int mode = 0;
@@ -9700,8 +9727,28 @@ int main(int argc, char **argv) {
     }
     checkDevices();
     if (args.path.empty()) {
-        args.path = ".";
-        mx::system_out << "acmx2: Path name not provided, using current path...\n";
+        const char *env_path = std::getenv("ACMX2_PATH");
+        if (env_path && env_path[0] != '\0') {
+            args.path = env_path;
+            mx::system_out << "acmx2: Using ACMX2_PATH environment variable: " << args.path << "\n";
+        } else {
+            args.path = ".";
+            mx::system_out << "acmx2: Path name not provided, using current path...\n";
+        }
+    }
+    if (args.library.empty() && args.fragment.empty()) {
+        const char *env_shader_path = std::getenv("ACMX2_SHADER_PATH");
+        if (env_shader_path && env_shader_path[0] != '\0') {
+            args.library = env_shader_path;
+            args.mode = 1;
+            mx::system_out << "acmx2: Using ACMX2_SHADER_PATH environment variable: " << args.library << "\n";
+        }
+    }
+    if (args.library.empty() && args.fragment.empty()) {
+        args.fragment = args.path + "/frag.glsl";
+    }
+    if (args.library.empty() && args.mode == 1) {
+        args.library = args.path + "/filters";
     }
     if (args.remove_broken) {
         if (args.remove_broken_path.empty()) {
