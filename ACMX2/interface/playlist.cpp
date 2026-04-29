@@ -112,8 +112,11 @@ void PlaylistDialog::setupUI() {
     autopilotFramesSpinBox->setSingleStep(30);
     autopilotFramesSpinBox->setValue(0);
     autopilotFramesSpinBox->setSuffix(" frames");
+    autopilotRandomCheckBox = new QCheckBox("Random", this);
+    autopilotRandomCheckBox->setToolTip("Use --autopilot-random instead of --autopilot-frames");
     autopilotLayout->addWidget(autopilotLabel, 1);
     autopilotLayout->addWidget(autopilotFramesSpinBox);
+    autopilotLayout->addWidget(autopilotRandomCheckBox);
     shaderMainLayout->addLayout(autopilotLayout);
 
     mainLayout->addWidget(shaderGroup);
@@ -160,6 +163,8 @@ void PlaylistDialog::setupUI() {
         loadButton->setEnabled(checked);
         if (autopilotFramesSpinBox)
             autopilotFramesSpinBox->setEnabled(checked);
+        if (autopilotRandomCheckBox)
+            autopilotRandomCheckBox->setEnabled(checked);
     });
 
     enableCheckBox->setChecked(false);
@@ -179,6 +184,7 @@ void PlaylistDialog::setupUI() {
     saveButton->setEnabled(false);
     loadButton->setEnabled(false);
     autopilotFramesSpinBox->setEnabled(false);
+    autopilotRandomCheckBox->setEnabled(false);
 
     QString style = "QDialog { background-color: black; }"
                     "QGroupBox { color: cyan; border: 1px solid cyan; margin-top: 10px; padding-top: 10px; }"
@@ -606,10 +612,20 @@ int PlaylistDialog::getAutopilotFrames() const {
     return autopilotFramesSpinBox ? autopilotFramesSpinBox->value() : 0;
 }
 
+bool PlaylistDialog::isAutopilotRandom() const {
+    return autopilotRandomCheckBox ? autopilotRandomCheckBox->isChecked() : false;
+}
+
 void PlaylistDialog::setAutopilotFrames(int frames) {
     if (autopilotFramesSpinBox) {
         if (frames < 0) frames = 0;
         autopilotFramesSpinBox->setValue(frames);
+    }
+}
+
+void PlaylistDialog::setAutopilotRandom(bool enabled) {
+    if (autopilotRandomCheckBox) {
+        autopilotRandomCheckBox->setChecked(enabled);
     }
 }
 

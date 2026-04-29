@@ -39,6 +39,8 @@ class PlaylistDialog : public QDialog {
     QString getPlaylistFile() const;
     /// @brief Return frames-per-shader threshold for autopilot mode (0 = disabled).
     int getAutopilotFrames() const;
+    /// @brief Return true when random autopilot timeout mode is enabled.
+    bool isAutopilotRandom() const;
 
     void setEnabled(bool enabled);
     void setSelectedShaderNames(const QStringList &names);
@@ -46,6 +48,8 @@ class PlaylistDialog : public QDialog {
     void setPlaylistFile(const QString &path);
     /// @brief Set frames-per-shader threshold for autopilot mode.
     void setAutopilotFrames(int frames);
+    /// @brief Enable or disable random autopilot timeout mode.
+    void setAutopilotRandom(bool enabled);
     void updateShaderList(const QStringList &shaderNames);
 
   public slots:
@@ -88,6 +92,7 @@ class PlaylistDialog : public QDialog {
     QPushButton *cancelButton;
 
     QSpinBox *autopilotFramesSpinBox = nullptr;
+    QCheckBox *autopilotRandomCheckBox = nullptr;
 
     QStandardItemModel *shaderModel;
     QSortFilterProxyModel *proxyModel;

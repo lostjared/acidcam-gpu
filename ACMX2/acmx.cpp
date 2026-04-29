@@ -4488,6 +4488,8 @@ struct MXArguments {
     float time_speed = 1.0f;
     std::string playlist_file;
     int autopilot_frames = 0;            ///< Frames between random shader switches in autopilot mode (0 = disabled).
+    bool autopilot_random_interval = false; ///< When true, randomize autopilot frame interval after each switch.
+    int autopilot_random_timeout = 0;    ///< Upper bound (inclusive) for randomized autopilot interval.
     double duration = 0.0;
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
@@ -5477,6 +5479,9 @@ class ACView : public gl::GLObject {
         }
         playlist_file = args.playlist_file;
         autopilot_frames = args.autopilot_frames;
+        autopilot_random_interval = args.autopilot_random_interval;
+        autopilot_random_timeout = args.autopilot_random_timeout;
+        resetAutopilotInterval();
         duration_limit = args.duration;
         crossfadeDuration = args.cross_fade_duration;
 #ifdef MIDI_ENABLED
@@ -5521,10 +5526,24 @@ class ACView : public gl::GLObject {
     bool autopilot_enabled = false;       ///< Toggle autopilot via SDLK_j when playlist is enabled.
     bool autopilot_sequential = false;    ///< When true, autopilot advances through the playlist in order instead of randomly (toggle via SDLK_y).
     int autopilot_counter = 0;            ///< Frames elapsed since last autopilot switch.
+    bool autopilot_random_interval = false; ///< When true, choose a new interval from [4, autopilot_random_timeout] after each switch.
+    int autopilot_random_timeout = 0;     ///< Inclusive upper bound for random autopilot interval.
+    int autopilot_interval_frames = 0;    ///< Active interval currently used by autopilot tick.
     std::mt19937 autopilot_rng{std::random_device{}()};
     std::vector<int> saved_pass_list;
     bool saved_pass_enabled = false;
     double duration_limit = 0.0;
+
+    void resetAutopilotInterval() {
+        if (autopilot_random_interval) {
+            const int lower = 4;
+            const int upper = std::max(lower, autopilot_random_timeout);
+            std::uniform_int_distribution<int> dist(lower, upper);
+            autopilot_interval_frames = dist(autopilot_rng);
+        } else {
+            autopilot_interval_frames = autopilot_frames;
+        }
+    }
 
     bool random_multipass_mode = false;
     std::vector<int> saved_pass_list_before_random;
@@ -7597,6 +7616,26 @@ class ACView : public gl::GLObject {
                 win->text.printText_Blended(overlayFont, 10, overlayY, gpuLine);
                 overlayY += 30;
             }
+            if (autopilot_enabled) {
+                const int activeInterval = autopilot_random_interval ? autopilot_interval_frames : autopilot_frames;
+                const int remainingFrames = std::max(0, activeInterval - autopilot_counter);
+                std::ostringstream autopilotLine;
+                if (autopilot_random_interval) {
+                    autopilotLine << "Autopilot "
+                                  << (autopilot_sequential ? "seq" : "rnd")
+                                  << " [4-" << std::max(4, autopilot_random_timeout)
+                                  << "] cur=" << activeInterval
+                                  << " next=" << remainingFrames << "f";
+                } else {
+                    autopilotLine << "Autopilot "
+                                  << (autopilot_sequential ? "seq" : "rnd")
+                                  << " every " << activeInterval
+                                  << "f next=" << remainingFrames << "f";
+                }
+                win->text.setColor({0, 255, 255, 255});
+                win->text.printText_Blended(overlayFont, 10, overlayY, autopilotLine.str());
+                overlayY += 30;
+            }
             win->text.setColor({255, 255, 255, 255});
             win->text.printText_Blended(overlayFont, 10, overlayY, timerStr);
             win->text.printText_Blended(overlayFont, 10, overlayY + 30, fpsStr.str());
@@ -7722,13 +7761,18 @@ class ACView : public gl::GLObject {
                 lastUpdate = now;
             }
         }
-        if (playlist_enabled && autopilot_enabled && autopilot_frames > 0) {
-            if (++autopilot_counter >= autopilot_frames) {
+        const bool autopilotTickEnabled = autopilot_random_interval || autopilot_frames > 0;
+        if (playlist_enabled && autopilot_enabled && autopilotTickEnabled) {
+            const int interval = autopilot_random_interval ? autopilot_interval_frames : autopilot_frames;
+            if (++autopilot_counter >= interval) {
                 autopilot_counter = 0;
                 if (autopilot_sequential)
                     autopilotSequentialAdvance(win);
                 else
                     autopilotRandomSwitch(win);
+                if (autopilot_random_interval) {
+                    resetAutopilotInterval();
+                }
             }
         }
         frame_counter++;
@@ -7999,12 +8043,23 @@ class ACView : public gl::GLObject {
                 autopilot_counter = 0;
                 if (autopilot_enabled) {
                     autopilot_sequential = false;
-                    if (autopilot_frames <= 0) {
+                    if (!autopilot_random_interval && autopilot_frames <= 0) {
                         autopilot_frames = 300; // sensible default if user never set it
                     }
+                    resetAutopilotInterval();
                 }
-                mx::system_out << "acmx2: Autopilot " << (autopilot_enabled ? "enabled (random)" : "disabled")
-                               << " (every " << autopilot_frames << " frames)\n";
+                if (autopilot_enabled) {
+                    if (autopilot_random_interval) {
+                        mx::system_out << "acmx2: Autopilot enabled (random) (interval 4-"
+                                       << std::max(4, autopilot_random_timeout)
+                                       << " frames, current " << autopilot_interval_frames << ")\n";
+                    } else {
+                        mx::system_out << "acmx2: Autopilot enabled (random) (every "
+                                       << autopilot_frames << " frames)\n";
+                    }
+                } else {
+                    mx::system_out << "acmx2: Autopilot disabled\n";
+                }
                 fflush(stdout);
                 break;
             case SDLK_y:
@@ -8026,11 +8081,18 @@ class ACView : public gl::GLObject {
                     autopilot_enabled = true;
                     autopilot_sequential = true;
                     autopilot_counter = 0;
-                    if (autopilot_frames <= 0) {
+                    if (!autopilot_random_interval && autopilot_frames <= 0) {
                         autopilot_frames = 300;
                     }
-                    mx::system_out << "acmx2: Autopilot enabled (sequential) (every "
-                                   << autopilot_frames << " frames)\n";
+                    resetAutopilotInterval();
+                    if (autopilot_random_interval) {
+                        mx::system_out << "acmx2: Autopilot enabled (sequential) (interval 4-"
+                                       << std::max(4, autopilot_random_timeout)
+                                       << " frames, current " << autopilot_interval_frames << ")\n";
+                    } else {
+                        mx::system_out << "acmx2: Autopilot enabled (sequential) (every "
+                                       << autopilot_frames << " frames)\n";
+                    }
                 }
                 fflush(stdout);
                 break;
@@ -9326,6 +9388,7 @@ namespace {
             {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"},
             {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"},
             {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames.", "acmx2 --playlist live_set.txt --autopilot-frames 240"},
+            {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --playlist live_set.txt --autopilot-random 300"},
             {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"},
             {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"},
             {"--remove-broken <library-path>", "Compile-check each shader, remove failing entries from index.txt, then exit.", "acmx2 --remove-broken ./shaders"},
@@ -9546,6 +9609,8 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
         .addOptionDoubleValue(417, "autopilot-frames", "Autopilot frame interval; switch to a random playlist shader every N frames (J toggles)")
+        .addOptionDoubleValue(418, "autopilot-random", "Autopilot random interval upper bound; each J/Y switch picks 4..N frames")
+        .addOptionDoubleValue(419, "autiopilot-random", "Alias for --autopilot-random")
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
@@ -9879,6 +9944,15 @@ int main(int argc, char **argv) {
                 if (args.autopilot_frames < 0)
                     args.autopilot_frames = 0;
                 mx::system_out << "acmx2: Autopilot frames: " << args.autopilot_frames << "\n";
+                break;
+            case 418:
+            case 419:
+                args.autopilot_random_interval = true;
+                args.autopilot_random_timeout = atoi(arg.arg_value.c_str());
+                if (args.autopilot_random_timeout < 4)
+                    args.autopilot_random_timeout = 4;
+                mx::system_out << "acmx2: Autopilot random interval enabled (4-"
+                               << args.autopilot_random_timeout << " frames)\n";
                 break;
             case 411:
                 args.duration = atof(arg.arg_value.c_str());

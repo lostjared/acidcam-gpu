@@ -257,6 +257,7 @@ class MainWindow : public QMainWindow {
     QList<QPair<QString, QStringList>> playlist_tree_data;
     QString playlist_file_path;
     int autopilot_frames = 0;
+    bool autopilot_random = false;
     QAction *playlistAction;
     QString stderrBuffer;
     /// @brief When true, the next acmx2 process to finish is a shader cache

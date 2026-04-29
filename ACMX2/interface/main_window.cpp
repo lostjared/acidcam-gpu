@@ -579,6 +579,11 @@ void MainWindow::initControls() {
     watermark_g = appSettings.value("watermarkG", 0).toInt();
     watermark_b = appSettings.value("watermarkB", 150).toInt();
     display_filter_enabled = appSettings.value("displayFilter", false).toBool();
+    autopilot_frames = appSettings.value("playlistAutopilotFrames", 0).toInt();
+    if (autopilot_frames < 0) {
+        autopilot_frames = 0;
+    }
+    autopilot_random = appSettings.value("playlistAutopilotRandom", false).toBool();
     if (displayFilterAction) {
         QSignalBlocker blocker(displayFilterAction);
         displayFilterAction->setChecked(display_filter_enabled);
@@ -1332,6 +1337,7 @@ void MainWindow::menuPlaylistSettings() {
         playlistDialog.setPlaylistFile(playlist_file_path);
     }
     playlistDialog.setAutopilotFrames(autopilot_frames);
+    playlistDialog.setAutopilotRandom(autopilot_random);
 
     if (playlistDialog.exec() == QDialog::Accepted) {
         playlist_enabled = playlistDialog.isPlaylistEnabled();
@@ -1339,10 +1345,19 @@ void MainWindow::menuPlaylistSettings() {
         playlist_tree_data = playlistDialog.getPlaylistTree();
         playlist_file_path = playlistDialog.getPlaylistFile();
         autopilot_frames = playlistDialog.getAutopilotFrames();
+        autopilot_random = playlistDialog.isAutopilotRandom();
+        QSettings appSettings("LostSideDead");
+        appSettings.setValue("playlistAutopilotFrames", autopilot_frames);
+        appSettings.setValue("playlistAutopilotRandom", autopilot_random);
         if (playlist_enabled) {
             Log("Playlist Settings Saved: " + QString::number(playlist_names.size()) + " shaders");
             if (!playlist_file_path.isEmpty()) {
                 Log("Playlist file: " + playlist_file_path);
+            }
+            if (autopilot_frames > 0) {
+                Log(QString("Autopilot timeout mode: %1 (%2 frames)")
+                        .arg(autopilot_random ? "random" : "fixed")
+                        .arg(autopilot_frames));
             }
         } else {
             Log("Playlist Disabled");
@@ -1794,7 +1809,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
     }
 
     if (autopilot_frames > 0) {
-        arguments << "--autopilot-frames" << QString::number(autopilot_frames);
+        arguments << (autopilot_random ? "--autopilot-random" : "--autopilot-frames")
+                  << QString::number(autopilot_frames);
     }
 
     if (duration_limit_enabled && max_duration > 0.0) {
