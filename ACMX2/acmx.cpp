@@ -5423,6 +5423,7 @@ class ACView : public gl::GLObject {
     std::string playlist_file;
     int autopilot_frames = 0;            ///< Frames between random switches in autopilot mode (0 = unset).
     bool autopilot_enabled = false;       ///< Toggle autopilot via SDLK_j when playlist is enabled.
+    bool autopilot_sequential = false;    ///< When true, autopilot advances through the playlist in order instead of randomly (toggle via SDLK_y).
     int autopilot_counter = 0;            ///< Frames elapsed since last autopilot switch.
     std::mt19937 autopilot_rng{std::random_device{}()};
     std::vector<int> saved_pass_list;
@@ -5570,6 +5571,51 @@ class ACView : public gl::GLObject {
             sprite.setShader(library.shader());
             updateShaderNameCache();
             mx::system_out << "acmx2: Autopilot -> Playlist [" << (playlist_index + 1) << "/" << n << "]\n";
+            fflush(stdout);
+        }
+    }
+
+    /**
+     * @brief Advance to the next entry in the active playlist (wrapping).
+     *
+     * Used by sequential autopilot mode. Steps @c playlist_index forward by
+     * one and wraps to zero when the end is reached, applying the same
+     * crossfade and shader-pass updates as @ref autopilotRandomSwitch.
+     *
+     * @param win Active window (used for crossfade animation).
+     */
+    void autopilotSequentialAdvance(gl::GLWindow *win) {
+        if (!playlist_enabled)
+            return;
+        if (shaderLocked)
+            return;
+        if (!playlist_tree.empty()) {
+            const int n = static_cast<int>(playlist_tree.size());
+            if (n <= 0) return;
+            beginCrossfade(win);
+            playlist_index = (playlist_index + 1) % n;
+            const auto &node = playlist_tree[playlist_index];
+            shader_pass_list = node.shader_indices;
+            shader_pass_enabled = !shader_pass_list.empty();
+            if (is3d_enabled)
+                cube.setShaderProgram(library.shader());
+            sprite.setShader(library.shader());
+            updateShaderNameCache();
+            mx::system_out << "acmx2: Autopilot (sequential) -> Node: " << node.name
+                           << " [" << node.shader_indices.size() << " shaders] ("
+                           << (playlist_index + 1) << "/" << n << ")\n";
+            fflush(stdout);
+        } else if (!playlist_indices.empty()) {
+            const int n = static_cast<int>(playlist_indices.size());
+            beginCrossfade(win);
+            playlist_index = (playlist_index + 1) % n;
+            library.setIndex(playlist_indices[playlist_index]);
+            if (is3d_enabled)
+                cube.setShaderProgram(library.shader());
+            sprite.setShader(library.shader());
+            updateShaderNameCache();
+            mx::system_out << "acmx2: Autopilot (sequential) -> Playlist ["
+                           << (playlist_index + 1) << "/" << n << "]\n";
             fflush(stdout);
         }
     }
@@ -7583,7 +7629,10 @@ class ACView : public gl::GLObject {
         if (playlist_enabled && autopilot_enabled && autopilot_frames > 0) {
             if (++autopilot_counter >= autopilot_frames) {
                 autopilot_counter = 0;
-                autopilotRandomSwitch(win);
+                if (autopilot_sequential)
+                    autopilotSequentialAdvance(win);
+                else
+                    autopilotRandomSwitch(win);
             }
         }
         frame_counter++;
@@ -7852,11 +7901,41 @@ class ACView : public gl::GLObject {
                 }
                 autopilot_enabled = !autopilot_enabled;
                 autopilot_counter = 0;
-                if (autopilot_enabled && autopilot_frames <= 0) {
-                    autopilot_frames = 300; // sensible default if user never set it
+                if (autopilot_enabled) {
+                    autopilot_sequential = false;
+                    if (autopilot_frames <= 0) {
+                        autopilot_frames = 300; // sensible default if user never set it
+                    }
                 }
-                mx::system_out << "acmx2: Autopilot " << (autopilot_enabled ? "enabled" : "disabled")
+                mx::system_out << "acmx2: Autopilot " << (autopilot_enabled ? "enabled (random)" : "disabled")
                                << " (every " << autopilot_frames << " frames)\n";
+                fflush(stdout);
+                break;
+            case SDLK_y:
+                if (!playlist_enabled) {
+                    mx::system_out << "acmx2: Sequential autopilot requires playlist mode (press P first)\n";
+                    fflush(stdout);
+                    break;
+                }
+                if (playlist_tree.empty() && playlist_indices.empty()) {
+                    mx::system_out << "acmx2: Sequential autopilot has no playlist entries\n";
+                    fflush(stdout);
+                    break;
+                }
+                if (autopilot_enabled && autopilot_sequential) {
+                    autopilot_enabled = false;
+                    autopilot_sequential = false;
+                    mx::system_out << "acmx2: Autopilot disabled\n";
+                } else {
+                    autopilot_enabled = true;
+                    autopilot_sequential = true;
+                    autopilot_counter = 0;
+                    if (autopilot_frames <= 0) {
+                        autopilot_frames = 300;
+                    }
+                    mx::system_out << "acmx2: Autopilot enabled (sequential) (every "
+                                   << autopilot_frames << " frames)\n";
+                }
                 fflush(stdout);
                 break;
             case SDLK_z:
@@ -9236,6 +9315,7 @@ namespace {
             {"L", "Toggle video freeze (Video/Image modes).", ""},
             {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""},
             {"J", "Toggle autopilot mode (requires playlist).", ""},
+            {"Y", "Toggle sequential autopilot (cycles playlist in order, requires playlist).", ""},
             {"T", "Enable/disable time.", ""},
             {"U / I", "Step time when time is disabled.", ""},
             {"Page Up / Page Down", "Increase/decrease time speed.", ""},
