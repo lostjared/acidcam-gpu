@@ -255,6 +255,14 @@ class MainWindow : public QMainWindow {
     bool pendingLaunchAfterBuild = false;
     /// @brief Arguments queued for an automatic launch after a cache rebuild.
     QStringList pendingLaunchArguments;
+    /// @brief True until the first Run All invocation after startup.
+    bool firstRunAllPendingRebuild = true;
+    /// @brief Set when a shader file is saved from the editor so the next
+    ///        launch rebuilds cache even if file mtime granularity is coarse.
+    bool shaderCacheMarkedStaleBySave = false;
+    /// @brief True while a cache rebuild process started by menuBuildShaderCache
+    ///        is running.
+    bool cacheBuildInProgress = false;
 };
 
 #endif

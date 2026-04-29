@@ -238,6 +238,13 @@ void MainWindow::initControls() {
                 // the child process has (re)written the binary shader cache.
                 populateShaderTree();
 
+                if (cacheBuildInProgress) {
+                    if (exitCode == 0) {
+                        shaderCacheMarkedStaleBySave = false;
+                    }
+                    cacheBuildInProgress = false;
+                }
+
                 // If this exit was a shader cache rebuild triggered by a
                 // pending Run, launch the actual session now.
                 if (pendingLaunchAfterBuild) {
@@ -786,6 +793,7 @@ void MainWindow::listClicked(const QModelIndex &i) {
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
     connect(editor, &TextEditor::fileSaved, this, [this](const QString &) {
+        shaderCacheMarkedStaleBySave = true;
         populateShaderTree();
     });
     open_files.append(editor);
@@ -1453,7 +1461,7 @@ void MainWindow::runSelected() {
         arguments << "--flip";
     }
 
-    if (isShaderCacheStale()) {
+    if (shaderCacheMarkedStaleBySave || isShaderCacheStale()) {
         Log("Shader cache is out of date; rebuilding then launching automatically.");
         pendingLaunchArguments = arguments;
         pendingLaunchAfterBuild = true;
@@ -1787,8 +1795,16 @@ void MainWindow::runAll() {
     if (!buildRunArguments(arguments))
         return;
 
-    if (isShaderCacheStale()) {
-        Log("Shader cache is out of date; rebuilding then launching automatically.");
+    const bool firstRunAllInvocation = firstRunAllPendingRebuild;
+    firstRunAllPendingRebuild = false;
+    const bool shouldForceInitialRebuild = firstRunAllInvocation && use_shader_cache;
+
+    if (shouldForceInitialRebuild || shaderCacheMarkedStaleBySave || isShaderCacheStale()) {
+        if (shouldForceInitialRebuild) {
+            Log("First Run All after startup: rebuilding shader cache before launch.");
+        } else {
+            Log("Shader cache is out of date; rebuilding then launching automatically.");
+        }
         pendingLaunchArguments = arguments;
         pendingLaunchAfterBuild = true;
         menuBuildShaderCache();
@@ -1995,6 +2011,7 @@ void MainWindow::menuBuildShaderCache() {
 #ifdef Q_OS_MACOS
     // macOS does not support the persistent binary shader cache.
     Log("Rebuild Shader Cache is not available on macOS.");
+    cacheBuildInProgress = false;
     pendingLaunchAfterBuild = false;
     pendingLaunchArguments.clear();
     return;
@@ -2006,11 +2023,13 @@ void MainWindow::menuBuildShaderCache() {
     }
 
     if (build_path.isEmpty()) {
+        cacheBuildInProgress = false;
         QMessageBox::warning(this, "Error", "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
         return;
     }
 
     if (process->state() == QProcess::Running) {
+        cacheBuildInProgress = false;
         QMessageBox::warning(this, "Error", "A process is already running. Please wait for it to finish.");
         return;
     }
@@ -2034,10 +2053,12 @@ void MainWindow::menuBuildShaderCache() {
     Log("Command: " + executable_path + " " + args.join(" "));
 
     play_stop->setEnabled(true);
+    cacheBuildInProgress = true;
     process->start(executable_path, args);
 
     if (!process->waitForStarted()) {
         Log("<b style='color:red;'>Error:</b> Failed to start shader cache build process");
+        cacheBuildInProgress = false;
         play_stop->setEnabled(false);
     }
 #endif
