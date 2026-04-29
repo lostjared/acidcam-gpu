@@ -5810,6 +5810,14 @@ class ACView : public gl::GLObject {
             glDeleteTextures(1, &fboTexture);
             fboTexture = 0;
         }
+        if (preOverlayTexture) {
+            glDeleteTextures(1, &preOverlayTexture);
+            preOverlayTexture = 0;
+        }
+        if (preOverlayFBO) {
+            glDeleteFramebuffers(1, &preOverlayFBO);
+            preOverlayFBO = 0;
+        }
         for (int p = 0; p < 2; ++p) {
             if (passFBO[p]) {
                 glDeleteFramebuffers(1, &passFBO[p]);
@@ -7096,8 +7104,26 @@ class ACView : public gl::GLObject {
         sprite.setShader(display_shader);
         sprite.draw(fboTexture, 0, 0, win->w, win->h);
 
+        // Drawing the watermark / display-filter overlay into captureFBO would
+        // pollute fboTexture and bleed into the next frame's crossfade
+        // snapshot (beginCrossfade samples fboTexture). Save the un-watermarked
+        // image now and restore it after the writer/snapshot readback so
+        // recordings include the overlay but the on-screen / crossfade source
+        // does not.
+        const bool overlay_will_draw =
+            writer.is_open() && waterFont.handle().has_value() &&
+            (display_filter || enableWatermark);
+        if (overlay_will_draw && preOverlayFBO != 0) {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, captureFBO);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, preOverlayFBO);
+            glBlitFramebuffer(0, 0, win->w, win->h, 0, 0, win->w, win->h,
+                              GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        }
+
         int watermarkY = 10;
-        if (display_filter && waterFont.handle().has_value()) {
+        if (display_filter && writer.is_open() && waterFont.handle().has_value()) {
             glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
             glViewport(0, 0, win->w, win->h);
             glEnable(GL_BLEND);
@@ -7384,6 +7410,18 @@ class ACView : public gl::GLObject {
                 pboIndex = (pboIndex + 1) % 2;
                 pboNextIndex = (pboNextIndex + 1) % 2;
             }
+        }
+
+        // Restore fboTexture so the next frame (and any crossfade snapshot)
+        // sees the un-watermarked frame; the writer has already captured the
+        // overlaid pixels above.
+        if (overlay_will_draw && preOverlayFBO != 0) {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, preOverlayFBO);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, captureFBO);
+            glBlitFramebuffer(0, 0, win->w, win->h, 0, 0, win->w, win->h,
+                              GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -8040,6 +8078,8 @@ class ACView : public gl::GLObject {
     GLuint camera_texture = 0;
     GLuint captureFBO = 0;
     GLuint fboTexture = 0;
+    GLuint preOverlayFBO = 0;     ///< FBO whose color attachment is preOverlayTexture; used to save/restore fboTexture around the overlay+writer step.
+    GLuint preOverlayTexture = 0; ///< Snapshot of fboTexture taken before drawing the watermark/display-filter overlay, used to restore the un-watermarked image after the writer readback so the next frame's crossfade snapshot does not pick up the overlay.
     GLuint depthBuffer = 0;
     GLuint passFBO[2] = {0, 0};
     GLuint passTexture[2] = {0, 0};
@@ -8227,6 +8267,26 @@ class ACView : public gl::GLObject {
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             throw mx::Exception("FBO is not complete.");
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        if (preOverlayTexture == 0) {
+            glGenTextures(1, &preOverlayTexture);
+        }
+        glBindTexture(GL_TEXTURE_2D, preOverlayTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        if (preOverlayFBO == 0) {
+            glGenFramebuffers(1, &preOverlayFBO);
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, preOverlayFBO);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, preOverlayTexture, 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            throw mx::Exception("preOverlayFBO is not complete.");
         }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
