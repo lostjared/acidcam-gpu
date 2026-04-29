@@ -1,0 +1,50 @@
+[CRT Phosphor]
+game_phosphor.glsl
+[NES Palette]
+game_nes_palette.glsl
+[CGA DOS]
+game_cga.glsl
+[Amber Terminal]
+game_amber_mono.glsl
+[Green Terminal]
+game_green_mono.glsl
+[Sega Genesis]
+game_genesis.glsl
+[PSX Dither]
+game_psx_dither.glsl
+[Chunky Pixels]
+game_pixelate_4x.glsl
+[Sepia Warm]
+game_sepia_warm.glsl
+[Technicolor]
+game_technicolor.glsl
+[Bleach Bypass]
+game_bleach_bypass.glsl
+[Cross Process]
+game_cross_process.glsl
+[Polaroid]
+game_polaroid.glsl
+[Frostbite]
+game_frostbite.glsl
+[Desert Heat]
+game_desert_heat.glsl
+[Toxic Zone]
+game_toxic.glsl
+[Arcane]
+game_arcane.glsl
+[Comic Halftone]
+game_halftone.glsl
+[Pencil Sketch]
+game_pencil_lines.glsl
+[Motion Blur]
+game_motion_blur.glsl
+[Anamorphic Flare]
+game_anamorphic.glsl
+[Fog]
+game_fog.glsl
+[Rain]
+game_rain.glsl
+[Snow]
+game_snow.glsl
+[Fake SSAO]
+game_fake_ssao.glsl

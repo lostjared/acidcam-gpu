@@ -1,0 +1,43 @@
+[VHS Tape]
+vhs.glsl
+vhs2.glsl
+vhs_color.glsl
+vhs_lofi.glsl
+vhs_analog.glsl
+vhs-palette.glsl
+composite_vhs.glsl
+composite_vhs_flat.glsl
+[CRT and Composite]
+crt.glsl
+composite.glsl
+composite-static.glsl
+composite2.glsl
+composite3.glsl
+composite_crt.glsl
+analog.glsl
+old-film.glsl
+broadcast.glsl
+[Mild Glitch]
+glitch1.glsl
+glitch_jump.glsl
+glitch_effect.glsl
+single-glittch.glsl
+singleton-noise.glsl
+rand_blocks.glsl
+random_pixels_static.glsl
+tearing_single.glsl
+tear.glsl
+[Color Filter]
+sepia.glsl
+negative.glsl
+grayscale.glsl
+snes.glsl
+[RGB Shift]
+rgb.glsl
+rgb_blur.glsl
+rgb_time.glsl
+rgb_fade.glsl
+[Edge and Sketch]
+edge_pencil.glsl
+edge_face.glsl
+edge_rainbow.glsl

@@ -1,0 +1,45 @@
+[VHS Tape]
+vhs.glsl
+vhs-palette.glsl
+[Composite Video]
+composite.glsl
+composite_vhs_flat.glsl
+[CRT Monitor]
+crt.glsl
+composite_crt.glsl
+[Analog Film]
+analog.glsl
+old-film.glsl
+[PAL Broadcast]
+color_pal.glsl
+broadcast.glsl
+[Sepia and Negative]
+sepia.glsl
+negative.glsl
+[Grayscale and 8-bit]
+grayscale.glsl
+snes.glsl
+[Heat Haze]
+heat.glsl
+heat-wave.glsl
+[Pixelate]
+pixels.glsl
+smooth_pixel.glsl
+[Soft Blur]
+blurry.glsl
+smooth_gl.glsl
+[Ghost Echo]
+blur_offset.glsl
+average_pixels.glsl
+[RGB Shift]
+rgb_blur.glsl
+glitch_effect.glsl
+[Light Glitch]
+glitch1.glsl
+tearing_single.glsl
+[Hue Tint]
+chue.glsl
+dhue.glsl
+[Soft Bloom]
+color-bloom.glsl
+8bit-norm.glsl

@@ -1,0 +1,252 @@
+[Amber Mono]
+game_amber_mono.glsl
+[Anamorphic]
+game_anamorphic.glsl
+[Anime Cel]
+game_anime_cel.glsl
+[Ant Aurora Tunnel]
+game_ant_aurora_tunnel.glsl
+[Ant Chrome Wave]
+game_ant_chrome_wave.glsl
+[Ant Cosmic Web]
+game_ant_cosmic_web.glsl
+[Ant Crystal Pulse]
+game_ant_crystal_pulse.glsl
+[Ant Deep Bloom]
+game_ant_deep_bloom.glsl
+[Ant Diamond Storm]
+game_ant_diamond_storm.glsl
+[Ant Fire Spoke]
+game_ant_fire_spoke.glsl
+[Ant Frac Cosine]
+game_ant_frac_cosine.glsl
+[Ant Frac Neon]
+game_ant_frac_neon.glsl
+[Ant Frac Smooth]
+game_ant_frac_smooth.glsl
+[Ant Fractal Ocean]
+game_ant_fractal_ocean.glsl
+[Ant Gem Bump]
+game_ant_gem_bump.glsl
+[Ant Gem Glass]
+game_ant_gem_glass.glsl
+[Ant Gem Kaleido]
+game_ant_gem_kaleido.glsl
+[Ant Gem Pencil]
+game_ant_gem_pencil.glsl
+[Ant Gem Polar]
+game_ant_gem_polar.glsl
+[Ant Gem Rainbow]
+game_ant_gem_rainbow.glsl
+[Ant Gem Spectrum]
+game_ant_gem_spectrum.glsl
+[Ant Gem Spider]
+game_ant_gem_spider.glsl
+[Ant Glass Mandala]
+game_ant_glass_mandala.glsl
+[Ant Hypno Lens]
+game_ant_hypno_lens.glsl
+[Ant Ice Ripple]
+game_ant_ice_ripple.glsl
+[Ant Liquid Mirror]
+game_ant_liquid_mirror.glsl
+[Ant Mercury Bloom]
+game_ant_mercury_bloom.glsl
+[Ant Metal Aurora]
+game_ant_metal_aurora.glsl
+[Ant Metal Cascade]
+game_ant_metal_cascade.glsl
+[Ant Metal Chrome]
+game_ant_metal_chrome.glsl
+[Ant Metal Coil]
+game_ant_metal_coil.glsl
+[Ant Metal Crystal]
+game_ant_metal_crystal.glsl
+[Ant Metal Ember]
+game_ant_metal_ember.glsl
+[Ant Metal Flux]
+game_ant_metal_flux.glsl
+[Ant Metal Forge]
+game_ant_metal_forge.glsl
+[Ant Metal Fracture]
+game_ant_metal_fracture.glsl
+[Ant Metal Glacier]
+game_ant_metal_glacier.glsl
+[Ant Metal Helix]
+game_ant_metal_helix.glsl
+[Ant Metal Inferno]
+game_ant_metal_inferno.glsl
+[Ant Metal Lattice]
+game_ant_metal_lattice.glsl
+[Ant Metal Nebula]
+game_ant_metal_nebula.glsl
+[Ant Metal Opal]
+game_ant_metal_opal.glsl
+[Ant Metal Orbital]
+game_ant_metal_orbital.glsl
+[Ant Metal Prism]
+game_ant_metal_prism.glsl
+[Ant Metal Pulse]
+game_ant_metal_pulse.glsl
+[Ant Metal Ripple]
+game_ant_metal_ripple.glsl
+[Ant Metal Shard]
+game_ant_metal_shard.glsl
+[Ant Metal Storm]
+game_ant_metal_storm.glsl
+[Ant Metal Tessera]
+game_ant_metal_tessera.glsl
+[Ant Metal Vortex]
+game_ant_metal_vortex.glsl
+[Ant Metal Weave]
+game_ant_metal_weave.glsl
+[Ant Molten Web]
+game_ant_molten_web.glsl
+[Ant Nebula Fold]
+game_ant_nebula_fold.glsl
+[Arcade Marquee]
+game_arcade_marquee.glsl
+[Arcane]
+game_arcane.glsl
+[Ascii Art]
+game_ascii_art.glsl
+[Bleach Bypass]
+game_bleach_bypass.glsl
+[Boss Warning]
+game_boss_warning.glsl
+[Bullet Time]
+game_bullet_time.glsl
+[Cel Outline]
+game_cel_outline.glsl
+[Cga]
+game_cga.glsl
+[Chromatic Edges]
+game_chromatic_edges.glsl
+[Cinematic Cool]
+game_cinematic_cool.glsl
+[Cinematic Warm]
+game_cinematic_warm.glsl
+[Cross Process]
+game_cross_process.glsl
+[Crt Curve]
+game_crt_curve.glsl
+[Cyberpunk Neon]
+game_cyberpunk_neon.glsl
+[Damage Pulse]
+game_damage_pulse.glsl
+[Desert Heat]
+game_desert_heat.glsl
+[Disco Floor]
+game_disco_floor.glsl
+[Dither Bayer]
+game_dither_bayer.glsl
+[Dream Glow]
+game_dream_glow.glsl
+[Drunk Wobble]
+game_drunk_wobble.glsl
+[Dust Motes]
+game_dust_motes.glsl
+[Emp Blast]
+game_emp_blast.glsl
+[Fake Ssao]
+game_fake_ssao.glsl
+[Film Grain]
+game_film_grain.glsl
+[Fog]
+game_fog.glsl
+[Freeze Crystal]
+game_freeze_crystal.glsl
+[Frostbite]
+game_frostbite.glsl
+[Gameboy Dmg]
+game_gameboy_dmg.glsl
+[Gba Tint]
+game_gba_tint.glsl
+[Genesis]
+game_genesis.glsl
+[Ghost Trail]
+game_ghost_trail.glsl
+[Green Mono]
+game_green_mono.glsl
+[Hacker Terminal]
+game_hacker_terminal.glsl
+[Halftone]
+game_halftone.glsl
+[Hdr Punch]
+game_hdr_punch.glsl
+[Heart Beat]
+game_heart_beat.glsl
+[Hologram]
+game_hologram.glsl
+[Kaleido Combat]
+game_kaleido_combat.glsl
+[Lava World]
+game_lava_world.glsl
+[Lcd Grid]
+game_lcd_grid.glsl
+[Letterbox]
+game_letterbox.glsl
+[Low Battery]
+game_low_battery.glsl
+[Matrix Rain]
+game_matrix_rain.glsl
+[Minimap Glow]
+game_minimap_glow.glsl
+[Motion Blur]
+game_motion_blur.glsl
+[Mushroom Trip]
+game_mushroom_trip.glsl
+[Nes Palette]
+game_nes_palette.glsl
+[Night Vision]
+game_night_vision.glsl
+[Noir]
+game_noir.glsl
+[Oil Paint]
+game_oil_paint.glsl
+[Pencil Lines]
+game_pencil_lines.glsl
+[Phosphor]
+game_phosphor.glsl
+[Pixelate 4x]
+game_pixelate_4x.glsl
+[Pixelsort Glitch]
+game_pixelsort_glitch.glsl
+[Polaroid]
+game_polaroid.glsl
+[Psx Dither]
+game_psx_dither.glsl
+[Radial Focus]
+game_radial_focus.glsl
+[Radio Static]
+game_radio_static.glsl
+[Rage Mode]
+game_rage_mode.glsl
+[Rain]
+game_rain.glsl
+[Scanlines Hd]
+game_scanlines_hd.glsl
+[Sepia Warm]
+game_sepia_warm.glsl
+[Sharpen]
+game_sharpen.glsl
+[Snow]
+game_snow.glsl
+[Speedlines]
+game_speedlines.glsl
+[Subtle Bloom]
+game_subtle_bloom.glsl
+[Super Saiyan]
+game_super_saiyan.glsl
+[Technicolor]
+game_technicolor.glsl
+[Thermal]
+game_thermal.glsl
+[Toxic]
+game_toxic.glsl
+[Underwater]
+game_underwater.glsl
+[Vignette Breath]
+game_vignette_breath.glsl
+[Void Warp]
+game_void_warp.glsl
