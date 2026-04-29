@@ -2204,6 +2204,7 @@ class ShaderLibrary {
     };
     size_t library_index = 0;
     bool use_cache = false;
+    bool rebuild_attempted = false; ///< Set after the first stale-cache rebuild to prevent repeated re-builds in the same session.
 
     /**
      * @brief Resolve the on-disk path for the shader binary cache file.
@@ -3600,12 +3601,13 @@ class ShaderLibrary {
 
         // If more than 10% of the cached binaries failed to load (stale driver/GPU),
         // automatically delete the cache file and rebuild from source.
+        // The rebuild is attempted at most once per session to avoid re-entering this
+        // path repeatedly when many shaders have genuine compile errors.
         if (binary_fail_count > 0 && cache.entries.size() > 0) {
             size_t fail_pct = (binary_fail_count * 100) / cache.entries.size();
             if (fail_pct >= 10) {
                 mx::system_out << "acmx2: ⚠ " << binary_fail_count << "/" << cache.entries.size()
-                               << " cached shaders failed to load (" << fail_pct << "%) — cache is stale.\n"
-                               << "acmx2: Deleting stale cache and rebuilding...\n";
+                               << " cached shaders failed to load (" << fail_pct << "%) — cache is stale.\n";
                 fflush(stdout);
                 std::error_code rm_ec;
                 std::filesystem::remove(cache_file, rm_ec);
@@ -3613,9 +3615,15 @@ class ShaderLibrary {
                 programs_3d.clear();
                 program_names_2d.clear();
                 program_names_3d.clear();
-                if (!vert_2d.empty() && !vert_3d.empty()) {
+                if (!rebuild_attempted && !vert_2d.empty() && !vert_3d.empty()) {
+                    rebuild_attempted = true;
+                    mx::system_out << "acmx2: Deleting stale cache and rebuilding (first attempt)...\n";
+                    fflush(stdout);
                     buildShaderCache(win, library_path, vert_2d, vert_3d);
                     mx::system_out << "acmx2: Cache rebuilt from source.\n";
+                    fflush(stdout);
+                } else {
+                    mx::system_out << "acmx2: Rebuild already attempted once this session — skipping re-build, loading from source directly.\n";
                     fflush(stdout);
                 }
                 return false;
