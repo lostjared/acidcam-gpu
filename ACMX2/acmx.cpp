@@ -9149,6 +9149,10 @@ namespace {
             {"]", "Increase model scale.", ""},
             {"[", "Decrease model scale.", ""}
         });
+        printSection(out, c, "Environment Variables", {
+            {"ACMX2_PATH", "Default assets root directory (equivalent to --path). Used when --path is not specified.", "export ACMX2_PATH=/usr/local/share/acmx2"},
+            {"ACMX2_SHADER_PATH", "Default shader library index file or directory (equivalent to --shaders). Used when neither --shaders nor --fragment is specified.", "export ACMX2_SHADER_PATH=/usr/local/share/acmx2/filters"}
+        });
     }
 }
 

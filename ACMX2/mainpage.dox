@@ -439,6 +439,51 @@ appears in the dock while the application is running.
 | `--midi-device` | `<index>`   | MIDI input device index |
 | `--list-midi`   |             | List available MIDI input devices |
 
+@section env_vars Environment Variables
+
+ACMX2 reads two optional environment variables at startup to provide default
+values for the most commonly needed paths. These are applied only when the
+corresponding command-line argument has <b>not</b> been supplied, so explicit
+flags always take priority.
+
+| Variable | Equivalent flag | Description |
+|----------|-----------------|-------------|
+| `ACMX2_PATH` | `--path` / `-p` | Sets the default assets root directory (data files, fonts, shaders, models). Applied when `--path` is not specified on the command line. If neither is set, the current directory (`.`) is used as the fallback. |
+| `ACMX2_SHADER_PATH` | `--shaders` / `-s` | Sets the default shader library path (directory containing `index.txt` or the index file itself). Applied only when neither `--shaders` nor `--fragment` is specified. When set, shader-library mode (`mode = 1`) is activated automatically. |
+
+<b>Precedence rules:</b>
+-# Explicit CLI flags (`--path`, `--shaders`, `--fragment`) always win.
+-# If a CLI flag is absent, the matching environment variable is used.
+-# If neither is set, built-in defaults apply: path → `.`, fragment → `<path>/frag.glsl`.
+
+@subsection env_vars_example Example setup
+
+Add the following to your shell profile (<tt>~/.bashrc</tt>, <tt>~/.zshrc</tt>, etc.):
+
+@code{.sh}
+export ACMX2_PATH=/usr/local/share/acmx2
+export ACMX2_SHADER_PATH=/usr/local/share/acmx2/filters
+@endcode
+
+After sourcing the profile, calling `acmx2` without any path arguments will
+automatically use those locations:
+
+@code{.sh}
+# Equivalent to: acmx2 -p /usr/local/share/acmx2 -s /usr/local/share/acmx2/filters -d 0
+acmx2 -d 0
+@endcode
+
+Explicit flags still override the environment:
+
+@code{.sh}
+# Uses ~/dev/shaders instead of ACMX2_SHADER_PATH
+acmx2 -d 0 --shaders ~/dev/shaders/index.txt
+@endcode
+
+@note The `ACMX2_SHADER_PATH` variable is ignored when `--fragment` is
+passed, since those two modes are mutually exclusive (library vs.
+single-shader).
+
 @section uniforms Supported Shader Uniforms
 
 All fragment shaders receive the following uniforms automatically.
