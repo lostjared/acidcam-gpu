@@ -5545,6 +5545,16 @@ class ACView : public gl::GLObject {
         }
     }
 
+    int activePlaylistSize() const {
+        if (!playlist_tree.empty()) {
+            return static_cast<int>(playlist_tree.size());
+        }
+        if (!playlist_indices.empty()) {
+            return static_cast<int>(playlist_indices.size());
+        }
+        return 0;
+    }
+
     bool random_multipass_mode = false;
     std::vector<int> saved_pass_list_before_random;
     bool saved_pass_enabled_before_random = false;
@@ -7619,6 +7629,7 @@ class ACView : public gl::GLObject {
             if (autopilot_enabled) {
                 const int activeInterval = autopilot_random_interval ? autopilot_interval_frames : autopilot_frames;
                 const int remainingFrames = std::max(0, activeInterval - autopilot_counter);
+                const int playlistCount = activePlaylistSize();
                 std::ostringstream autopilotLine;
                 if (autopilot_random_interval) {
                     autopilotLine << "Autopilot "
@@ -7631,6 +7642,9 @@ class ACView : public gl::GLObject {
                                   << (autopilot_sequential ? "seq" : "rnd")
                                   << " every " << activeInterval
                                   << "f next=" << remainingFrames << "f";
+                }
+                if (playlistCount > 0) {
+                    autopilotLine << " idx=" << (playlist_index + 1) << "/" << playlistCount;
                 }
                 win->text.setColor({0, 255, 255, 255});
                 win->text.printText_Blended(overlayFont, 10, overlayY, autopilotLine.str());
@@ -7766,10 +7780,11 @@ class ACView : public gl::GLObject {
             const int interval = autopilot_random_interval ? autopilot_interval_frames : autopilot_frames;
             if (++autopilot_counter >= interval) {
                 autopilot_counter = 0;
-                if (autopilot_sequential)
+                if (autopilot_sequential && !autopilot_random_interval) {
                     autopilotSequentialAdvance(win);
-                else
+                } else {
                     autopilotRandomSwitch(win);
+                }
                 if (autopilot_random_interval) {
                     resetAutopilotInterval();
                 }
@@ -8086,7 +8101,7 @@ class ACView : public gl::GLObject {
                     }
                     resetAutopilotInterval();
                     if (autopilot_random_interval) {
-                        mx::system_out << "acmx2: Autopilot enabled (sequential) (interval 4-"
+                        mx::system_out << "acmx2: Autopilot enabled (sequential timing + random index) (interval 4-"
                                        << std::max(4, autopilot_random_timeout)
                                        << " frames, current " << autopilot_interval_frames << ")\n";
                     } else {
