@@ -6818,6 +6818,10 @@ class ACView : public gl::GLObject {
 
         if (filename.empty() && cap.isOpened()) {
             startCaptureThread();
+            // Give the camera ~2 seconds to stabilize after loading before
+            // pushing real content into the frame cache. This ensures that
+            // any loading-screen remnants are not captured into samp1-samp8.
+            cache_warmup_frames = 60;
         }
     }
 
@@ -7063,7 +7067,10 @@ class ACView : public gl::GLObject {
             if (texture_cache && library.isCache()) {
                 static int counter = 0;
                 if (++counter > cache_delay) {
-                    frame_cache.push(std::move(newFrame));
+                    // Only push frames into cache after the post-load warmup period
+                    if (cache_warmup_frames <= 0) {
+                        frame_cache.push(std::move(newFrame));
+                    }
                     counter = 0;
                 }
                 if (frame_cache.isFull()) {
@@ -7076,6 +7083,10 @@ class ACView : public gl::GLObject {
                 }
             }
         }
+        // Decrement warmup counter each frame (after cache check)
+        if (cache_warmup_frames > 0) {
+            cache_warmup_frames--;
+        }
         glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
         glViewport(0, 0, win->w, win->h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -7086,22 +7097,25 @@ class ACView : public gl::GLObject {
             if (audio_is_enabled) {
                 float audio_warmup = updateAudioWarmupEnvelope();
                 library.setAudioWarmupEnvelope(audio_warmup);
-                if (file_audio_mode) {
-                    file_audio_process_frame(fps);
-                    if (audio_trunc_mode && !file_audio_is_active()) {
-                        mx::system_out << "acmx2: Audio file finished, stopping (--audio-trunc).\n";
-                        fflush(stdout);
-                        running = false;
+                // Only process audio frames after the post-load warmup period to maintain A/V sync
+                if (cache_warmup_frames <= 0) {
+                    if (file_audio_mode) {
+                        file_audio_process_frame(fps);
+                        if (audio_trunc_mode && !file_audio_is_active()) {
+                            mx::system_out << "acmx2: Audio file finished, stopping (--audio-trunc).\n";
+                            fflush(stdout);
+                            running = false;
+                        }
                     }
-                }
-                float spectrum_scale = spectrum_scale_by_sense
-                    ? (get_sense() * audio_warmup)
-                    : audio_warmup;
-                spectrumTex.update(spectrum_scale);
-                spectrumTex.bind();
-                if (audio_buffer_count > 0) {
-                    spectrumHistory.update(spectrum_scale);
-                    spectrumHistory.bindAll();
+                    float spectrum_scale = spectrum_scale_by_sense
+                        ? (get_sense() * audio_warmup)
+                        : audio_warmup;
+                    spectrumTex.update(spectrum_scale);
+                    spectrumTex.bind();
+                    if (audio_buffer_count > 0) {
+                        spectrumHistory.update(spectrum_scale);
+                        spectrumHistory.bindAll();
+                    }
                 }
             }
 #endif
@@ -7598,7 +7612,7 @@ class ACView : public gl::GLObject {
             glDisable(GL_BLEND);
         }
 
-        bool needWriter = (writer.is_open() || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
+        bool needWriter = ((writer.is_open() && cache_warmup_frames <= 0) || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
 
         bool has_snapshot_request = (snapshot_state > 0);
         bool has_hdr_snapshot_request = (hdr_snapshot_state > 0);
@@ -8663,6 +8677,7 @@ class ACView : public gl::GLObject {
     bool texture_cache = false;
     GLuint cache_textures[8] = {0};
     int cache_delay = 1;
+    int cache_warmup_frames = 0;  // Frames to skip before pushing into cache after load
     std::atomic<bool> finished{false};
     std::atomic<bool> copy_audio{false};
     std::atomic<bool> skip_audio_mux_on_exit{false};
@@ -8935,6 +8950,17 @@ class ACView : public gl::GLObject {
         captureRunning = true;
         captureThread = std::thread([this]() {
             try {
+                // Drain any frames buffered by the OS/driver during shader
+                // loading.  Without this, frames captured while the loading
+                // screen was visible are the first ones pushed into the cache
+                // ring, making samp1-samp8 shaders show loading-screen content.
+                {
+                    cv::Mat drain;
+                    for (int i = 0; i < 8 && captureRunning; ++i) {
+                        if (!cap.read(drain) || drain.empty())
+                            break;
+                    }
+                }
 
                 while (captureRunning) {
                     cv::Mat localFrame;
