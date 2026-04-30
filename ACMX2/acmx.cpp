@@ -7054,7 +7054,7 @@ class ACView : public gl::GLObject {
                 updateTexture(camera_texture, newFrame);
             }
 #endif
-            if (texture_cache && library.isCache() && (!filename.empty() || !graphic.empty())) {
+            if (texture_cache && library.isCache()) {
                 static int counter = 0;
                 if (++counter > cache_delay) {
                     frame_cache.push(std::move(newFrame));
@@ -10787,9 +10787,7 @@ int main(int argc, char **argv) {
         args.slib = std::make_tuple(args.mode,
                                     (args.mode == 0) ? args.fragment : args.library,
                                     (args.mode == 0) ? 0 : args.shader_index);
-        if (args.filename.empty() && args.cache) {
-            throw mx::Exception("Texture cache only works in video mode\n");
-        }
+        // Texture cache works in video, graphics, and camera modes.
 
         if (args.silent) {
             if (args.filename.empty()) {
