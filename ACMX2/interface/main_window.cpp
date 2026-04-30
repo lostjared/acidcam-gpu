@@ -579,9 +579,9 @@ void MainWindow::initControls() {
     watermark_g = appSettings.value("watermarkG", 0).toInt();
     watermark_b = appSettings.value("watermarkB", 150).toInt();
     display_filter_enabled = appSettings.value("displayFilter", false).toBool();
-    autopilot_frames = appSettings.value("playlistAutopilotFrames", 0).toInt();
-    if (autopilot_frames < 0) {
-        autopilot_frames = 0;
+    autopilot_frames = appSettings.value("playlistAutopilotFrames", 4).toInt();
+    if (autopilot_frames < 4) {
+        autopilot_frames = 4;
     }
     autopilot_random = appSettings.value("playlistAutopilotRandom", false).toBool();
     if (displayFilterAction) {

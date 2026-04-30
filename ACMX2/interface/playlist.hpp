@@ -37,7 +37,7 @@ class PlaylistDialog : public QDialog {
     QList<QPair<QString, QStringList>> getPlaylistTree() const;
     /// @brief Return current playlist file path.
     QString getPlaylistFile() const;
-    /// @brief Return frames-per-shader threshold for autopilot mode (0 = disabled).
+    /// @brief Return frames-per-shader threshold for autopilot mode (minimum 4).
     int getAutopilotFrames() const;
     /// @brief Return true when random autopilot timeout mode is enabled.
     bool isAutopilotRandom() const;

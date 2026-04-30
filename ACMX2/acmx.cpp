@@ -9402,7 +9402,8 @@ namespace {
             {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"},
             {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"},
             {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"},
-            {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames.", "acmx2 --playlist live_set.txt --autopilot-frames 240"},
+            {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-frames 240"},
+            {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-timeout 240"},
             {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --playlist live_set.txt --autopilot-random 300"},
             {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"},
             {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"},
@@ -9623,7 +9624,8 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(416, "remove-broken", "Compile each shader in library path; remove shaders that fail to compile from index.txt, then exit")
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
-        .addOptionDoubleValue(417, "autopilot-frames", "Autopilot frame interval; switch to a random playlist shader every N frames (J toggles)")
+        .addOptionDoubleValue(417, "autopilot-frames", "Autopilot frame interval; switch to a random playlist shader every N frames (minimum 4, J toggles)")
+        .addOptionDoubleValue(420, "autopilot-timeout", "Alias for --autopilot-frames")
         .addOptionDoubleValue(418, "autopilot-random", "Autopilot random interval upper bound; each J/Y switch picks 4..N frames")
         .addOptionDoubleValue(419, "autiopilot-random", "Alias for --autopilot-random")
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
@@ -9955,9 +9957,10 @@ int main(int argc, char **argv) {
                 mx::system_out << "acmx2: Playlist file: " << args.playlist_file << "\n";
                 break;
             case 417:
+            case 420:
                 args.autopilot_frames = atoi(arg.arg_value.c_str());
-                if (args.autopilot_frames < 0)
-                    args.autopilot_frames = 0;
+                if (args.autopilot_frames < 4)
+                    args.autopilot_frames = 4;
                 mx::system_out << "acmx2: Autopilot frames: " << args.autopilot_frames << "\n";
                 break;
             case 418:

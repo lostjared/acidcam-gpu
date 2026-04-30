@@ -104,13 +104,13 @@ void PlaylistDialog::setupUI() {
 
     QHBoxLayout *autopilotLayout = new QHBoxLayout();
     QLabel *autopilotLabel = new QLabel(
-        "Autopilot frames (0 = off; switch to a random shader after this many frames, toggle with J):",
+        "Autopilot frames (minimum 4; switch to a random shader after this many frames, toggle with J):",
         this);
     autopilotLabel->setWordWrap(true);
     autopilotFramesSpinBox = new QSpinBox(this);
-    autopilotFramesSpinBox->setRange(0, 1000000);
+    autopilotFramesSpinBox->setRange(4, 1000000);
     autopilotFramesSpinBox->setSingleStep(30);
-    autopilotFramesSpinBox->setValue(0);
+    autopilotFramesSpinBox->setValue(4);
     autopilotFramesSpinBox->setSuffix(" frames");
     autopilotRandomCheckBox = new QCheckBox("Random", this);
     autopilotRandomCheckBox->setToolTip("Use --autopilot-random instead of --autopilot-frames");
@@ -618,7 +618,7 @@ bool PlaylistDialog::isAutopilotRandom() const {
 
 void PlaylistDialog::setAutopilotFrames(int frames) {
     if (autopilotFramesSpinBox) {
-        if (frames < 0) frames = 0;
+        if (frames < 4) frames = 4;
         autopilotFramesSpinBox->setValue(frames);
     }
 }
