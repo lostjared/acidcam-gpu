@@ -67,6 +67,15 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioFileBrowseButton->setEnabled(false);
     audioTruncCheckBox = new QCheckBox("Stop video when audio file completes", this);
     audioTruncCheckBox->setEnabled(false);
+    audioBuffersCheckBox = new QCheckBox("Enable Audio Spectrum History Buffers", this);
+    audioBuffersSpinBox = new QSpinBox(this);
+    audioBuffersSpinBox->setRange(1, 22);
+    audioBuffersSpinBox->setValue(8);
+    audioBuffersSpinBox->setEnabled(false);
+
+    connect(audioBuffersCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        audioBuffersSpinBox->setEnabled(checked);
+    });
 
     connect(audioFileCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         audioFileLineEdit->setEnabled(checked);
@@ -138,6 +147,13 @@ AudioSettings::AudioSettings(QWidget *parent)
     mainLayout->addLayout(audioFileLayout);
     mainLayout->addWidget(audioTruncCheckBox);
 
+    QHBoxLayout *audioBuffersLayout = new QHBoxLayout();
+    audioBuffersLayout->addWidget(audioBuffersCheckBox);
+    audioBuffersLayout->addWidget(new QLabel("Frames:", this));
+    audioBuffersLayout->addWidget(audioBuffersSpinBox);
+    audioBuffersLayout->addStretch();
+    mainLayout->addLayout(audioBuffersLayout);
+
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
@@ -171,6 +187,9 @@ void AudioSettings::loadUiState() {
     audioFileCheckBox->setChecked(appSettings.value("audio/file_enabled", false).toBool());
     audioFileLineEdit->setText(appSettings.value("audio/file_path", "").toString());
     audioTruncCheckBox->setChecked(appSettings.value("audio/file_trunc", false).toBool());
+    audioBuffersCheckBox->setChecked(appSettings.value("audio/buffers_enabled", false).toBool());
+    audioBuffersSpinBox->setValue(appSettings.value("audio/buffers_frames", 8).toInt());
+    audioBuffersSpinBox->setEnabled(audioBuffersCheckBox->isChecked());
 }
 
 void AudioSettings::saveUiState() {
@@ -186,6 +205,8 @@ void AudioSettings::saveUiState() {
     appSettings.setValue("audio/file_enabled", audioFileCheckBox->isChecked());
     appSettings.setValue("audio/file_path", audioFileLineEdit->text());
     appSettings.setValue("audio/file_trunc", audioTruncCheckBox->isChecked());
+    appSettings.setValue("audio/buffers_enabled", audioBuffersCheckBox->isChecked());
+    appSettings.setValue("audio/buffers_frames", audioBuffersSpinBox->value());
 }
 
 void AudioSettings::populateAudioDevices() {
@@ -335,4 +356,12 @@ QString AudioSettings::getAudioFilePath() const {
 
 bool AudioSettings::isAudioTruncEnabled() const {
     return audioTruncCheckBox->isChecked();
+}
+
+bool AudioSettings::isAudioBuffersEnabled() const {
+    return audioBuffersCheckBox->isChecked();
+}
+
+int AudioSettings::getAudioBufferFrames() const {
+    return audioBuffersSpinBox->value();
 }
