@@ -7848,6 +7848,8 @@ class ACView : public gl::GLObject {
      * Key bindings (SDL_KEYUP):
      * - Up/Down: Previous/next shader (or playlist entry if playlist enabled,
      *   or change main shader with crossfade while in random multipass mode).
+     * - Shift+Up/Down: In playlist or autopilot mode, change the post-multipass
+     *   shader without altering the current playlist position.
      * - Left/Right: Previous/next GPU CUDA filter.
      * - Space: Toggle shader bypass.
      * - P: Toggle playlist mode or pause video.
@@ -7879,6 +7881,18 @@ class ACView : public gl::GLObject {
             switch (e.key.keysym.sym) {
             case SDLK_UP:
                 if (shaderLocked) break;
+                if ((e.key.keysym.mod & KMOD_SHIFT) &&
+                    (playlist_enabled || autopilot_frames > 0)) {
+                    beginCrossfade(win);
+                    library.dec();
+                    mx::system_out << "acmx2: Post-shader (Shift+Up): " << library.getFullShaderName() << "\n";
+                    fflush(stdout);
+                    if (is3d_enabled)
+                        cube.setShaderProgram(library.shader());
+                    sprite.setShader(library.shader());
+                    updateShaderNameCache();
+                    break;
+                }
                 if (random_multipass_mode) {
                     beginCrossfade(win);
                     library.dec();
@@ -7914,6 +7928,18 @@ class ACView : public gl::GLObject {
                 break;
             case SDLK_DOWN:
                 if (shaderLocked) break;
+                if ((e.key.keysym.mod & KMOD_SHIFT) &&
+                    (playlist_enabled || autopilot_frames > 0)) {
+                    beginCrossfade(win);
+                    library.inc();
+                    mx::system_out << "acmx2: Post-shader (Shift+Down): " << library.getFullShaderName() << "\n";
+                    fflush(stdout);
+                    if (is3d_enabled)
+                        cube.setShaderProgram(library.shader());
+                    sprite.setShader(library.shader());
+                    updateShaderNameCache();
+                    break;
+                }
                 if (random_multipass_mode) {
                     beginCrossfade(win);
                     library.inc();
@@ -9482,8 +9508,10 @@ namespace {
         printSection(out, c, "Main", {
             {"Escape", "Quit.", ""},
             {"Ctrl+X", "Quit without audio mux.", ""},
-            {"Up Arrow", "Previous shader.", ""},
-            {"Down Arrow", "Next shader.", ""},
+            {"Up Arrow", "Previous shader (or previous playlist entry in playlist/autopilot mode).", ""},
+            {"Down Arrow", "Next shader (or next playlist entry in playlist/autopilot mode).", ""},
+            {"Shift+Up Arrow", "In playlist/autopilot mode: change post-multipass shader backward.", ""},
+            {"Shift+Down Arrow", "In playlist/autopilot mode: change post-multipass shader forward.", ""},
             {"Left Arrow", "Previous GPU filter (if enabled).", ""},
             {"Right Arrow", "Next GPU filter (if enabled).", ""},
             {"Space", "Enable/disable processing.", ""},

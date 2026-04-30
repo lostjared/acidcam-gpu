@@ -58,6 +58,13 @@ From the latest `acidcam-gpu` commits, current focus areas include:
 
 - **Headless and terminal workflow updates**: improved silent/headless processing behavior, terminal color-coded output, and related CLI flow refinements.
 - **HDR pipeline refinements**: recent HLG-to-HDR10 conversion work and continued HDR + silent mode stabilization.
+- **Startup logo splash**: `data/logo.png` is displayed on launch before the shader pipeline begins, with a smooth fade-out.
+- **Watermark overlay**: embed a custom text watermark (color-configurable via RGB) in recorded video using `--use-watermark` and `--use-watermark-color`; also accessible from the Qt Playback menu with a live color preview.
+- **Display-filter overlay**: `--display-filter` renders the active shader name, multipass stack, and GPU filter list in the upper-left corner of both the live window and the recorded output.
+- **Autopilot random interval mode**: `--autopilot-random <N>` randomizes the frame interval between auto-switches (range 4..N) for more organic live performance variation.
+- **Sequential autopilot mode**: Y key cycles the playlist in strict order rather than randomly when autopilot is active.
+- **Post-multipass shader navigation**: Shift+Up / Shift+Down changes the shader that runs after the multipass chain without altering the playlist position.
+- **Qt interface improvements**: Watermark Settings dialog with text input and color picker; Display Filter toggle in the Playback menu; autopilot random interval persisted in Qt session settings; YUV format options refresh automatically when the camera device changes.
 - **Editor and shader workflow improvements**: shader reload support, shader cache rebuild path, and safer editor close behavior with save prompts.
 - **Qt interface productivity features**: metadata viewer integration, settings text/scaling tweaks, and command edit/copy/run improvements.
 - **Playlist and live-control workflow**: shuffle/concat/clear playlist actions, combined playlist updates, and keyboard/autopilot navigation improvements.
@@ -160,6 +167,9 @@ sudo bash build-script/install-deps-arch.sh
 | | `--encode-codec` | `<mode>` | Encoder codec mode: `auto`, `software`, or `nvenc` |
 | | `--encode-realtime` | | Enable low-latency realtime encoding flags |
 | | `--no-drop` | | Video-file processing: never drop frames; block when the encoder queue is full |
+| | `--use-watermark` | `<text>` | Embed a text watermark (upper-left) into recorded video |
+| | `--use-watermark-color` | `<r,g,b>` | Watermark text color as 0-255 RGB components (default: `255,0,150`) |
+| | `--display-filter` | | Show active shader/stack/GPU filter in upper-left corner of window and recording |
 
 ### Shader Options
 
@@ -170,6 +180,9 @@ sudo bash build-script/install-deps-arch.sh
 | `-h` | `--shader` | `<index>` | Initial shader index in library |
 | | `--shader-pass` | `<indices>` | Shader pass indices (comma-separated, e.g. `0,1,2`) |
 | | `--playlist` | `<file>` | Shader playlist text file (one shader name per line) |
+| | `--autopilot-frames` | `<N>` | Auto-switch to a random playlist node every N rendered frames (minimum 4) |
+| | `--autopilot-timeout` | `<N>` | Alias for `--autopilot-frames` |
+| | `--autopilot-random` | `<N>` | Randomize autopilot interval to a value in the range 4..N frames for each auto-switch |
 | | `--build` | `<path>` | Build shader cache for specified library path and exit |
 | | `--no-cache` | | Disable shader caching (always recompile shaders) |
 | | `--time-speed` | `<float>` | Constant `time_f` speed multiplier (default: `1.0`) |
@@ -268,6 +281,10 @@ Because headless mode writes newline-delimited progress updates to stdout, it wo
 |-----|--------|
 | `Up` | Previous shader (or previous playlist tree node if playlist enabled) |
 | `Down` | Next shader (or next playlist tree node if playlist enabled) |
+| `Shift+Up` | In playlist/autopilot mode: step the post-multipass shader backward without moving the playlist position |
+| `Shift+Down` | In playlist/autopilot mode: step the post-multipass shader forward without moving the playlist position |
+| `J` | Toggle autopilot mode (requires playlist; randomly auto-advances through playlist nodes at the configured frame interval) |
+| `Y` | Toggle sequential autopilot (cycles playlist in order instead of randomly; requires playlist and autopilot active) |
 | `R` | Toggle random multipass mode (generates random 1–5 shader chain with crossfade; press again to restore previous state) |
 | `G` | Generate a new random shader chain (while in random multipass mode) |
 | `Left` | Previous GPU filter (if GPU filters enabled) |
@@ -346,6 +363,7 @@ ACMX2 now supports a random multipass mode for spontaneous creative exploration.
 - **R key** — Toggle random multipass mode. On entry, the current shader state is saved and a random chain of 1–5 shaders is generated with a crossfade transition. Press R again to crossfade back to the previous state.
 - **G key** — While in random mode, generate a new random shader chain with crossfade.
 - **Up/Down keys** — While in random mode, change the main (post-processing) shader with crossfade while keeping the random pass list intact.
+- **Shift+Up/Down keys** — In playlist or autopilot mode, cycle the post-multipass shader backward/forward independently of the playlist position, with crossfade.
 - **MIDI support** — R (code 82) and G (code 71) are available as MIDI-mappable actions in the MIDI Map Tool.
 
 ### Crossfade Transitions
@@ -438,6 +456,7 @@ ACMX2 now supports shader playlists organized into named tree nodes, allowing yo
 - **Runtime controls:**
   - **P** — Toggle playlist mode on/off (loads first node's shaders into multi-pass pipeline)
   - **Up/Down arrows** — Navigate to the previous/next tree node and load its shaders into multi-pass
+  - **Shift+Up/Down arrows** — Change the post-multipass shader (the shader that runs after the node's multi-pass chain) without altering the current playlist position
 - **Qt Interface:** The **Shader Playlist Settings** dialog features a tree widget with named nodes:
   - Add, rename, and remove node groups
   - Add shaders to specific nodes via search

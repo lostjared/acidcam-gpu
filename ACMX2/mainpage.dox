@@ -85,7 +85,14 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>MIDI Map Tool</b> — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 - <b>Crossfade transitions</b> — smooth linear blend between old and new frames when switching playlist shaders, with configurable duration
 - <b>Playlist workflow controls</b> — shuffle, concat, and clear actions are available for fast playlist construction
-- <b>Keyboard live-control additions</b> — includes autopilot-oriented navigation shortcuts for performance workflows
+- <b>Keyboard live-control additions</b> — includes autopilot-oriented navigation shortcuts for performance workflows; Shift+Up/Down changes the post-multipass shader in playlist or autopilot mode without moving the playlist position
+- <b>Autopilot random interval mode</b> — <tt>--autopilot-random &lt;N&gt;</tt> randomizes the frame interval between auto-switches in the range 4..N, for more organic live performance feel
+- <b>Sequential autopilot mode</b> — Y key cycles the playlist in strict order rather than randomly; works alongside the existing random autopilot
+- <b>Startup logo splash</b> — displays <tt>data/logo.png</tt> on launch before the shader pipeline begins, with a smooth fade-out
+- <b>Watermark overlay</b> — embed a custom text watermark (color-configurable) into recorded video via <tt>--use-watermark</tt> and <tt>--use-watermark-color</tt>; also available from the Qt Playback menu
+- <b>Display-filter overlay</b> — <tt>--display-filter</tt> renders the active shader name, multipass stack, and GPU filter list in the upper-left corner of both the live window and recorded output
+- <b>Qt Watermark Settings dialog</b> — configure watermark text and RGB color with a live color preview; persisted across sessions
+- <b>Qt Display Filter toggle</b> — Playback menu item enables/disables the display-filter overlay at runtime, state is persisted
 - <b>Camera device enumeration</b> — query V4L2 devices for supported resolutions and frame rates via <tt>--enumerate-device</tt>; the Qt Settings dialog dynamically populates resolution and FPS dropdowns from the selected camera
 - <b>Snapshot format refinements</b> — SDR TIFF/WebP save behavior improved for consistency across capture modes
 - <b>Distrobox export</b> — script to export applications to the host desktop with icons and `.desktop` files
@@ -392,6 +399,12 @@ appears in the dock while the application is running.
 | `-h`  | `--shader`       | `<index>`   | Initial shader index in library |
 |       | `--shader-pass`  | `<indices>` | Shader pass indices (comma-separated) |
 |       | `--playlist`     | `<file>`    | Shader playlist text file |
+|       | `--autopilot-frames` | `<N>`   | Auto-switch to a random playlist node every N rendered frames (minimum 4) |
+|       | `--autopilot-timeout` | `<N>`  | Alias for `--autopilot-frames` |
+|       | `--autopilot-random` | `<N>`   | Use a random autopilot interval in the range 4..N frames for each auto-switch |
+|       | `--use-watermark` | `<text>`   | Embed a text watermark (upper-left) in recorded video |
+|       | `--use-watermark-color` | `<r,g,b>` | Watermark text color as 0-255 RGB components |
+|       | `--display-filter` |            | Show current shader/stack and GPU filter in upper-left corner of window and recording |
 |       | `--build`        | `<path>`    | Build shader cache and exit |
 |       | `--no-cache`     |             | Disable shader caching |
 |       | `--time-speed`   | `<float>`   | time_f speed multiplier (default: 1.0) |
@@ -545,7 +558,10 @@ code to receive live 0.0–1.0 values.
 | Key           | Action |
 |---------------|--------|
 | Up/Down       | Previous/Next shader; when playlist enabled, navigates tree nodes and loads node shaders into multi-pass pipeline |
+| Shift+Up/Down | In playlist or autopilot mode: change the post-multipass shader backward/forward without moving the playlist position |
 | K             | Toggle shader lock (prevent Up/Down from switching shaders) |
+| J             | Toggle autopilot mode (requires playlist; randomly auto-advances through nodes at the configured frame interval) |
+| Y             | Toggle sequential autopilot (cycles the playlist in order instead of randomly; requires playlist and J/autopilot active) |
 | R             | Toggle random multipass mode (generates random 1–5 shader chain with crossfade; press again to restore previous state) |
 | G             | Generate a new random shader chain (while in random multipass mode) |
 | Left/Right    | Previous/Next GPU filter |
