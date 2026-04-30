@@ -996,6 +996,10 @@ void SettingsWindow::loadUiState() {
     durationLimitSpinBox->setValue(appSettings.value("interface/duration_seconds", 60.0).toDouble());
     crossFadeSpinBox->setValue(appSettings.value("interface/crossfade", 0.5).toDouble());
     flipCheckBox->setChecked(appSettings.value("interface/flip", false).toBool());
+
+    // Recompute YUV availability for the restored camera/resolution even when
+    // the combo-box index did not change (Qt won't emit change signals then).
+    onCameraResolutionChanged(cameraResolutionComboBox->currentIndex());
 }
 
 void SettingsWindow::saveUiState() {
