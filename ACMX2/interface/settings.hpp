@@ -206,6 +206,7 @@ class SettingsWindow : public QDialog {
     int selectedCudaDevice;
     double maxDuration;
     bool inputHdrDetected = false;
+    QString preferredFpsText = "30";
 };
 
 #endif

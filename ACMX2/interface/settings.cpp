@@ -764,6 +764,14 @@ void SettingsWindow::init() {
             this, &SettingsWindow::onCameraDeviceChanged);
     connect(cameraResolutionComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SettingsWindow::onCameraResolutionChanged);
+    connect(cameraFPSComboBox, &QComboBox::currentTextChanged, this, [this](const QString &fpsText) {
+        if (fpsText.isEmpty()) {
+            return;
+        }
+        preferredFpsText = fpsText;
+        QSettings appSettings("LostSideDead", "acmx2");
+        appSettings.setValue("interface/preferred_fps", preferredFpsText);
+    });
 
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheDelaySpinBox, &QSpinBox::setEnabled);
     connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
@@ -827,7 +835,12 @@ void SettingsWindow::init() {
             cacheDelaySpinBox->setEnabled(false);
             cameraFPSComboBox->clear();
             cameraFPSComboBox->addItems({"24", "30", "60"});
-            cameraFPSComboBox->setCurrentIndex(1);
+            int preferredIdx = cameraFPSComboBox->findText(preferredFpsText);
+            if (preferredIdx >= 0) {
+                cameraFPSComboBox->setCurrentIndex(preferredIdx);
+            } else {
+                cameraFPSComboBox->setCurrentIndex(1);
+            }
             useYuvCheckBox->setEnabled(false);
             useYuvCheckBox->setChecked(false);
         }
@@ -926,6 +939,13 @@ void SettingsWindow::resizeEvent(QResizeEvent *event) {
 void SettingsWindow::loadUiState() {
     QSettings appSettings("LostSideDead", "acmx2");
 
+    preferredFpsText = appSettings.value(
+        "interface/preferred_fps",
+        appSettings.value("interface/camera_fps", "30")).toString();
+    if (preferredFpsText.isEmpty()) {
+        preferredFpsText = "30";
+    }
+
     QString inputMode = appSettings.value("interface/input_mode", "camera").toString();
     if (inputMode == "video") {
         inputVideoOptionRadioButton->setChecked(true);
@@ -947,10 +967,11 @@ void SettingsWindow::loadUiState() {
         cameraResolutionComboBox->setCurrentIndex(camResIdx);
     }
 
-    QString cameraFps = appSettings.value("interface/camera_fps", "30").toString();
+    QString cameraFps = appSettings.value("interface/camera_fps", preferredFpsText).toString();
     int camFpsIdx = cameraFPSComboBox->findText(cameraFps);
     if (camFpsIdx >= 0) {
         cameraFPSComboBox->setCurrentIndex(camFpsIdx);
+        preferredFpsText = cameraFps;
     }
 
     QString screenRes = appSettings.value("interface/screen_resolution", "Default").toString();
@@ -1020,6 +1041,7 @@ void SettingsWindow::saveUiState() {
 #endif
     appSettings.setValue("interface/camera_resolution", cameraResolutionComboBox->currentText());
     appSettings.setValue("interface/camera_fps", cameraFPSComboBox->currentText());
+    appSettings.setValue("interface/preferred_fps", cameraFPSComboBox->currentText());
     appSettings.setValue("interface/screen_resolution", screenResolutionComboBox->currentText());
 
     appSettings.setValue("interface/input_video", inputVideoFileLineEdit->text());
@@ -1668,11 +1690,18 @@ void SettingsWindow::populateResolutions() {
 }
 
 void SettingsWindow::populateFPS() {
+    const QString previousSelection = cameraFPSComboBox->currentText();
     cameraFPSComboBox->clear();
 
     QString currentRes = cameraResolutionComboBox->currentText();
     if (currentRes == "Default" || !deviceCapabilities.contains(currentRes)) {
-        cameraFPSComboBox->addItem("30");
+        cameraFPSComboBox->addItems({"24", "30", "60"});
+        int preferredIdx = cameraFPSComboBox->findText(preferredFpsText);
+        if (preferredIdx >= 0) {
+            cameraFPSComboBox->setCurrentIndex(preferredIdx);
+        } else {
+            cameraFPSComboBox->setCurrentText("30");
+        }
         return;
     }
 
@@ -1688,8 +1717,14 @@ void SettingsWindow::populateFPS() {
         }
     }
 
-    // Select 30 fps if available
-    int idx = cameraFPSComboBox->findText("30");
+    // Keep previous/preferred FPS when available, otherwise fall back to 30.
+    int idx = cameraFPSComboBox->findText(previousSelection);
+    if (idx < 0) {
+        idx = cameraFPSComboBox->findText(preferredFpsText);
+    }
+    if (idx < 0) {
+        idx = cameraFPSComboBox->findText("30");
+    }
     if (idx >= 0) {
         cameraFPSComboBox->setCurrentIndex(idx);
     }
