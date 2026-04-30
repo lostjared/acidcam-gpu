@@ -1704,6 +1704,7 @@ void SettingsWindow::onCameraDeviceChanged(int comboIndex) {
     int deviceIndex = cameraIndexComboBox->currentData().toInt();
 #endif
     enumerateDevice(deviceIndex);
+    onCameraResolutionChanged(cameraResolutionComboBox->currentIndex());
 }
 
 void SettingsWindow::onCameraResolutionChanged(int comboIndex) {
