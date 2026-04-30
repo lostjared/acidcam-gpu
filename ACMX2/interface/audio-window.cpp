@@ -73,6 +73,13 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioBuffersSpinBox->setValue(8);
     audioBuffersSpinBox->setEnabled(false);
 
+    audioWarmRateSpinBox = new QDoubleSpinBox(this);
+    audioWarmRateSpinBox->setRange(0.0, 10.0);
+    audioWarmRateSpinBox->setSingleStep(0.05);
+    audioWarmRateSpinBox->setDecimals(2);
+    audioWarmRateSpinBox->setValue(0.5);
+    audioWarmRateSpinBox->setToolTip("Audio startup warmup rate (1/sec). 0.5 is about a 2 second fade-in; 0 disables warmup.");
+
     connect(audioBuffersCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         audioBuffersSpinBox->setEnabled(checked);
     });
@@ -154,6 +161,13 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioBuffersLayout->addStretch();
     mainLayout->addLayout(audioBuffersLayout);
 
+    QHBoxLayout *audioWarmLayout = new QHBoxLayout();
+    audioWarmLayout->addWidget(new QLabel("Audio Warm Rate:", this));
+    audioWarmLayout->addWidget(audioWarmRateSpinBox);
+    audioWarmLayout->addWidget(new QLabel("(1/sec)", this));
+    audioWarmLayout->addStretch();
+    mainLayout->addLayout(audioWarmLayout);
+
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
@@ -190,6 +204,7 @@ void AudioSettings::loadUiState() {
     audioBuffersCheckBox->setChecked(appSettings.value("audio/buffers_enabled", false).toBool());
     audioBuffersSpinBox->setValue(appSettings.value("audio/buffers_frames", 8).toInt());
     audioBuffersSpinBox->setEnabled(audioBuffersCheckBox->isChecked());
+    audioWarmRateSpinBox->setValue(appSettings.value("audio/warm_rate", 0.5).toDouble());
 }
 
 void AudioSettings::saveUiState() {
@@ -207,6 +222,7 @@ void AudioSettings::saveUiState() {
     appSettings.setValue("audio/file_trunc", audioTruncCheckBox->isChecked());
     appSettings.setValue("audio/buffers_enabled", audioBuffersCheckBox->isChecked());
     appSettings.setValue("audio/buffers_frames", audioBuffersSpinBox->value());
+    appSettings.setValue("audio/warm_rate", audioWarmRateSpinBox->value());
 }
 
 void AudioSettings::populateAudioDevices() {
@@ -364,4 +380,8 @@ bool AudioSettings::isAudioBuffersEnabled() const {
 
 int AudioSettings::getAudioBufferFrames() const {
     return audioBuffersSpinBox->value();
+}
+
+double AudioSettings::getAudioWarmRate() const {
+    return audioWarmRateSpinBox->value();
 }

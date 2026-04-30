@@ -533,7 +533,7 @@ void SettingsWindow::init() {
     copyAudioCheckBox->setEnabled(false);
 
     timeSpeedSpinBox = new QDoubleSpinBox(this);
-    timeSpeedSpinBox->setRange(0.0, 100.0);
+    timeSpeedSpinBox->setRange(-100.0, 100.0);
     timeSpeedSpinBox->setSingleStep(0.1);
     timeSpeedSpinBox->setDecimals(2);
     timeSpeedSpinBox->setValue(1.0);

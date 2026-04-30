@@ -1151,6 +1151,7 @@ void MainWindow::menuAudioSettings() {
         audio_trunc = audio_set.isAudioTruncEnabled();
         audio_buffers_enabled = audio_set.isAudioBuffersEnabled();
         audio_buffer_frames = audio_set.getAudioBufferFrames();
+        audio_warm_rate = audio_set.getAudioWarmRate();
         Log("Audio Settings Saved");
     }
 }
@@ -1573,6 +1574,10 @@ void MainWindow::runSelected() {
         arguments << "--enable-audio-buffers" << QString::number(audio_buffer_frames);
     }
 
+    if (audio_available && (audio_enabled || !audio_file.isEmpty())) {
+        arguments << "--audio-warm-rate" << QString::number(audio_warm_rate, 'f', 2);
+    }
+
     if (enable_3d) {
         arguments << "--enable-3d";
         arguments << "--model" << model_file;
@@ -1757,6 +1762,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     if (audio_available && audio_buffers_enabled) {
         arguments << "--enable-audio-buffers" << QString::number(audio_buffer_frames);
+    }
+
+    if (audio_available && (audio_enabled || !audio_file.isEmpty())) {
+        arguments << "--audio-warm-rate" << QString::number(audio_warm_rate, 'f', 2);
     }
 
     if (enable_3d) {

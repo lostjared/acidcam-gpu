@@ -2263,6 +2263,7 @@ class ShaderLibrary {
     double video_fps = 0.0;
 #ifdef AUDIO_ENABLED
     int audio_buffer_count_ = 0; ///< Count of `spectrumN` history textures (set via setAudioBufferCount, 0 = disabled).
+    float audio_warmup_envelope_ = 1.0f; ///< Startup ramp [0..1] used to soften initial audio-reactive intensity.
 #endif
 #ifdef MIDI_ENABLED
     float midi_slider[4] = {0.0f, 0.0f, 0.0f, 0.0f}; ///< MIDI CC slider values (0.0–1.0) for shader uniforms slider1–slider4.
@@ -2698,6 +2699,11 @@ class ShaderLibrary {
 
     /// @brief Number of `spectrumN` history textures currently configured.
     int audioBufferCount() const { return audio_buffer_count_; }
+
+    /// @brief Set startup audio warmup envelope in [0,1] for uniform scaling.
+    void setAudioWarmupEnvelope(float env) {
+        audio_warmup_envelope_ = std::clamp(env, 0.0f, 1.0f);
+    }
 #endif
 
     /// @brief Set the video FPS for constant time_f advancement in video mode.
@@ -2723,13 +2729,15 @@ class ShaderLibrary {
      * @brief Decrease the time_f speed multiplier by @p step, clamped to zero.
      * @param step Amount to subtract (e.g. 0.1).
      */
-    void decTimeSpeed(float step) {
-        if (time_speed - step > 0.0f) {
-            time_speed -= step;
-        } else {
+     void decTimeSpeed(float step) {
+        time_speed -= step;
+        
+        // Optional: Add a 'deadzone' to make it easier to stop the animation
+        if (std::abs(time_speed) < 0.01f) {
             time_speed = 0.0f;
         }
-        mx::system_out << "acmx2: Time speed: " << time_speed << "\n";
+
+        mx::system_out << "acmx2: Time speed (decelerating): " << time_speed << "\n";
         fflush(stdout);
     }
 
@@ -4080,7 +4088,7 @@ class ShaderLibrary {
         uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
         if (time_audio) {
-            glUniform1f(n.amp, get_amp());
+            glUniform1f(n.amp, get_amp() * audio_warmup_envelope_);
             glUniform1f(n.amp_untouched, get_sense());
         }
         if (n.iSampleRate != -1) {
@@ -4090,7 +4098,7 @@ class ShaderLibrary {
             glUniform1f(n.iamp, get_freq());
         }
         {
-            float sense = get_sense() * 4.0f;
+            float sense = get_sense() * 4.0f * audio_warmup_envelope_;
             if (n.amp_peak != -1) {
                 glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
             }
@@ -4209,7 +4217,7 @@ class ShaderLibrary {
         uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
         if (time_audio) {
-            glUniform1f(n.amp, get_amp());
+            glUniform1f(n.amp, get_amp() * audio_warmup_envelope_);
             glUniform1f(n.amp_untouched, get_sense());
         }
         if (n.iSampleRate != -1) {
@@ -4219,7 +4227,7 @@ class ShaderLibrary {
             glUniform1f(n.iamp, get_freq());
         }
         {
-            float sense = get_sense() * 4.0f;
+            float sense = get_sense() * 4.0f * audio_warmup_envelope_;
             if (n.amp_peak != -1) {
                 glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
             }
@@ -4397,7 +4405,7 @@ class ShaderLibrary {
         } else {
             amplitude = new_amp;
         }
-        glUniform1f(amp_i, amplitude);
+        glUniform1f(amp_i, amplitude * audio_warmup_envelope_);
         GLuint amp_u = names[index()].amp_untouched;
         glUniform1f(amp_u, get_amp());
         GLint iSampleRateLoc = names[index()].iSampleRate;
@@ -4408,7 +4416,7 @@ class ShaderLibrary {
             glUniform1f(names[index()].iamp, get_freq());
         }
         {
-            float sense = get_sense() * 4.0f;
+            float sense = get_sense() * 4.0f * audio_warmup_envelope_;
             auto &n = names[index()];
             if (n.amp_peak != -1) {
                 glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
@@ -4509,8 +4517,12 @@ class ShaderLibrary {
      */
     void incTime(float value) {
         if (!time_active) {
-            time_f += value;
-            mx::system_out << "acmx2: Time step forward: " << time_f << "\n";
+            constexpr float TWO_PI = 6.2831853f;       
+            // Accumulate and wrap immediately
+            time_f = std::fmod(time_f + value, TWO_PI);
+            // Safety for negative inputs (in case 'value' is negative)
+            if (time_f < 0.0f) time_f += TWO_PI;
+            mx::system_out << "acmx2: Time stepped forward (wrapped): " << time_f << "\n";
             fflush(stdout);
         }
     }
@@ -4524,13 +4536,16 @@ class ShaderLibrary {
      */
     void decTime(float value) {
         if (!time_active) {
-            if (time_f - value > 1.0) {
-                time_f -= value;
-                mx::system_out << "acmx2: Time step back: " << time_f << "\n";
-            } else {
-                time_f = 1.0f;
-                mx::system_out << "acmx2: Time reset to: " << time_f << "\n";
-            }
+            constexpr float TWO_PI = 6.2831853f;
+            
+            // Subtract the value and apply a true modulo wrap
+            // The double fmod + addition ensures the result is always positive
+            time_f = std::fmod(std::fmod(time_f - value, TWO_PI) + TWO_PI, TWO_PI);
+            
+            // If you specifically need to avoid 0.0 (e.g. to prevent division by zero in shaders)
+            if (time_f < 0.0001f) time_f = TWO_PI; 
+
+            mx::system_out << "acmx2: Time stepped back (wrapped): " << time_f << "\n";
             fflush(stdout);
         }
     }
@@ -4622,6 +4637,7 @@ struct MXArguments {
     bool audio_enabled = false;
     unsigned int audio_channels = 2;
     float audio_sensitivty = 0.25f;
+    float audio_warm_rate = 0.5f; ///< Startup warmup envelope rate (1/sec). 0.5 ~= 2s to full strength.
     std::string record_audio_file;
     float record_gain = 1.0f;
     std::string audio_file;
@@ -4801,10 +4817,38 @@ class ACView : public gl::GLObject {
     SpectrumTexture spectrumTex; ///< 1D texture holding the FFT magnitude spectrum for shaders.
     SpectrumHistory spectrumHistory; ///< Ring of `spectrumN` 1D textures (history buffer; --enable-audio-buffers).
     int audio_buffer_count = 0; ///< Number of history frames retained for `spectrumN` (0 = disabled).
+    float audio_warmup_envelope = 0.0f; ///< Startup fade for audio-driven uniforms/textures.
+    float audio_warmup_rate = 0.5f; ///< Warmup envelope slope in 1/sec (higher = faster ramp).
+    std::chrono::steady_clock::time_point audio_warmup_last_tick = std::chrono::steady_clock::now();
     bool spectrum_scale_by_sense = false; ///< When true, scale spectrum 1D buffer by audio sensitivity.
     bool file_audio_mode = false; ///< True when audio comes from a file instead of RtAudio.
     std::string audio_file_path; ///< Path to the audio file used for file_audio_mode.
     bool audio_trunc_mode = false; ///< When true, stop playback when file audio samples are exhausted.
+
+    /// Reset the startup envelope used to tame initial audio intensity.
+    void resetAudioWarmupEnvelope() {
+        audio_warmup_envelope = 0.0f;
+        audio_warmup_last_tick = std::chrono::steady_clock::now();
+    }
+
+    /// Advance and return the startup warmup envelope in [0,1].
+    float updateAudioWarmupEnvelope() {
+        if (!audio_is_enabled)
+            return 1.0f;
+        if (audio_warmup_rate <= 0.0f) {
+            audio_warmup_envelope = 1.0f;
+            return audio_warmup_envelope;
+        }
+        auto now = std::chrono::steady_clock::now();
+        float delta_time = std::chrono::duration<float>(now - audio_warmup_last_tick).count();
+        audio_warmup_last_tick = now;
+        if (delta_time < 0.0f)
+            delta_time = 0.0f;
+        audio_warmup_envelope += delta_time * audio_warmup_rate;
+        if (audio_warmup_envelope > 1.0f)
+            audio_warmup_envelope = 1.0f;
+        return audio_warmup_envelope;
+    }
 #endif
 #ifdef MIDI_ENABLED
     RtMidiIn *midiIn = nullptr;
@@ -5579,6 +5623,7 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
+    audio_warmup_rate = std::max(args.audio_warm_rate, 0.0f);
         audio_record_file = args.record_audio_file;
         if (!args.audio_file.empty()) {
             if (file_audio_open(args.audio_file)) {
@@ -5587,6 +5632,7 @@ class ACView : public gl::GLObject {
                 audio_file_path = args.audio_file;
                 audio_trunc_mode = args.audio_trunc;
                 set_sense(args.audio_sensitivty);
+                resetAudioWarmupEnvelope();
                 spectrumTex.init();
                 audio_buffer_count = std::min(std::max(args.audio_buffers, 0),
                                               SpectrumHistory::MAX_BUFFERS);
@@ -5615,6 +5661,7 @@ class ACView : public gl::GLObject {
             } else {
                 audio_is_enabled = true;
                 set_record_gain(args.record_gain);
+                resetAudioWarmupEnvelope();
                 spectrumTex.init();
                 audio_buffer_count = std::min(std::max(args.audio_buffers, 0),
                                               SpectrumHistory::MAX_BUFFERS);
@@ -7031,6 +7078,8 @@ class ACView : public gl::GLObject {
             library.useProgram();
 #ifdef AUDIO_ENABLED
             if (audio_is_enabled) {
+                float audio_warmup = updateAudioWarmupEnvelope();
+                library.setAudioWarmupEnvelope(audio_warmup);
                 if (file_audio_mode) {
                     file_audio_process_frame(fps);
                     if (audio_trunc_mode && !file_audio_is_active()) {
@@ -7039,13 +7088,13 @@ class ACView : public gl::GLObject {
                         running = false;
                     }
                 }
-                if (spectrum_scale_by_sense)
-                    spectrumTex.update(get_sense());
-                else
-                    spectrumTex.update();
+                float spectrum_scale = spectrum_scale_by_sense
+                    ? (get_sense() * audio_warmup)
+                    : audio_warmup;
+                spectrumTex.update(spectrum_scale);
                 spectrumTex.bind();
                 if (audio_buffer_count > 0) {
-                    spectrumHistory.update(spectrum_scale_by_sense ? get_sense() : 0.0f);
+                    spectrumHistory.update(spectrum_scale);
                     spectrumHistory.bindAll();
                 }
             }
@@ -9676,6 +9725,7 @@ namespace {
             {"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"},
             {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"},
             {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"},
+            {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"},
             {"-y, --pass-through", "Pass captured input audio directly to selected output device.", "acmx2 --pass-through"},
             {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""},
             {"--audio-output <device>", "Select output audio device name/id.", "acmx2 --audio-output \"Built-in Output\""},
@@ -9847,6 +9897,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(305, "audio-file", "Use audio from file (WAV/MP3/etc.) for reactivity instead of mic")
         .addOptionDouble(306, "audio-trunc", "Stop playback when the audio file reaches the end")
         .addOptionDoubleValue(307, "enable-audio-buffers", "Allocate N spectrumN history textures (1..22)")
+        .addOptionDoubleValue(308, "audio-warm-rate", "Startup audio warmup rate (1/sec, default: 0.5)")
 #endif
         .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
         .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
@@ -10146,6 +10197,15 @@ int main(int argc, char **argv) {
                     n = SpectrumHistory::MAX_BUFFERS;
                 }
                 args.audio_buffers = n;
+            } break;
+            case 308: {
+                float rate = static_cast<float>(atof(arg.arg_value.c_str()));
+                if (!std::isfinite(rate) || rate < 0.0f) {
+                    mx::system_err << "acmx2: --audio-warm-rate must be >= 0.0\n";
+                    mx::system_err.flush();
+                    exit(EXIT_FAILURE);
+                }
+                args.audio_warm_rate = rate;
             } break;
 #endif
             case 405:

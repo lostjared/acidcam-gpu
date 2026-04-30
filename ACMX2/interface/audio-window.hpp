@@ -13,6 +13,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -53,6 +54,9 @@ class AudioSettings : public QDialog {
     /// @brief Number of spectrum history frames requested.
     /// @return Frame count for --enable-audio-buffers.
     int getAudioBufferFrames() const;
+    /// @brief Audio startup warmup rate in 1/sec.
+    /// @return Warmup slope where 0.5 ~= 2 seconds to full intensity.
+    double getAudioWarmRate() const;
 
   private:
     void populateAudioDevices();
@@ -73,6 +77,7 @@ class AudioSettings : public QDialog {
     QCheckBox *audioTruncCheckBox;      ///< Stop playback when the audio file ends.
     QCheckBox *audioBuffersCheckBox;    ///< Enable spectrum history buffer CLI option.
     QSpinBox *audioBuffersSpinBox;      ///< Number of spectrum history frames.
+    QDoubleSpinBox *audioWarmRateSpinBox; ///< Startup warmup rate for audio intensity ramp.
     QPushButton *okButton;
     QPushButton *cancelButton;
 };

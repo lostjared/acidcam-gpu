@@ -213,6 +213,7 @@ class MainWindow : public QMainWindow {
     bool audio_trunc = false;
     bool audio_buffers_enabled = false;
     int audio_buffer_frames = 8;
+    double audio_warm_rate = 0.5;
     QString model_file;
     bool gpu_filter_enabled = false;
     QString gpu_filter_indices;
