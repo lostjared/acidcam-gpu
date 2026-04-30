@@ -4316,8 +4316,13 @@ class ShaderLibrary {
         #endif
         }
 
-        constexpr float TWO_PI = 6.2831853f;
-        time_f = std::fmod(time_f, TWO_PI);
+        // Wrap at a large multiple of 2*PI so cos/sin remain continuous across
+        // the wrap (any integer-multiple-of-2*PI bound preserves trig phase) and
+        // shaders using mod(time_f, N) with small N still see a freely-growing
+        // time_f. 65536 * 2*PI keeps float32 precision high (well under 2^20).
+        constexpr float TIME_F_WRAP = 65536.0f * 6.2831853f;
+        if (time_f >= TIME_F_WRAP) time_f -= TIME_F_WRAP;
+        else if (time_f < 0.0f)    time_f += TIME_F_WRAP;
 
         if (std::isnan(time_f) || std::isinf(time_f))
             time_f = 1.0;
@@ -4517,12 +4522,13 @@ class ShaderLibrary {
      */
     void incTime(float value) {
         if (!time_active) {
-            constexpr float TWO_PI = 6.2831853f;       
-            // Accumulate and wrap immediately
-            time_f = std::fmod(time_f + value, TWO_PI);
-            // Safety for negative inputs (in case 'value' is negative)
-            if (time_f < 0.0f) time_f += TWO_PI;
-            mx::system_out << "acmx2: Time stepped forward (wrapped): " << time_f << "\n";
+            // Wrap at a large 2*PI multiple to preserve trig continuity while
+            // letting time_f grow large enough for mod(time_f, N) shader usage.
+            constexpr float TIME_F_WRAP = 65536.0f * 6.2831853f;
+            time_f += value;
+            if (time_f >= TIME_F_WRAP) time_f = std::fmod(time_f, TIME_F_WRAP);
+            if (time_f < 0.0f)         time_f += TIME_F_WRAP;
+            mx::system_out << "acmx2: Time stepped forward: " << time_f << "\n";
             fflush(stdout);
         }
     }
