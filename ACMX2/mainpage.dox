@@ -63,6 +63,8 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Random multipass mode</b> — generate random 1–5 shader chains on the fly with crossfade transitions; navigate the main shader while in random mode
 - <b>Shader playlists with named nodes</b> — organize shaders into named tree nodes; each node loads its shaders into the multi-pass pipeline when selected at runtime
 - <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
+- <b>Audio startup warmup control</b> — <tt>--audio-warm-rate &lt;value&gt;</tt> controls startup fade-in rate for audio-reactive uniforms/textures (default <tt>0.5</tt> 1/sec)
+- <b>Audio spectrum history buffers</b> — <tt>--enable-audio-buffers &lt;N&gt;</tt> exposes rolling FFT history textures as <tt>spectrum0..spectrumN-1</tt> for temporal audio-reactive effects
 - <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; the audio track is automatically muxed into the output video
 - <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; file-mode recording/mux behavior uses explicit opt-in semantics
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
@@ -94,6 +96,10 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Qt Watermark Settings dialog</b> — configure watermark text and RGB color with a live color preview; persisted across sessions
 - <b>Qt Display Filter toggle</b> — Playback menu item enables/disables the display-filter overlay at runtime, state is persisted
 - <b>Camera device enumeration</b> — query V4L2 devices for supported resolutions and frame rates via <tt>--enumerate-device</tt>; the Qt Settings dialog dynamically populates resolution and FPS dropdowns from the selected camera
+- <b>Preferred camera FPS persistence</b> — Qt Settings stores the selected FPS and restores/reapplies it after device/resolution repopulation when available
+- <b>Startup cache/audio synchronization warmup</b> — initial frames are drained/skipped to avoid loading-screen content entering <tt>samp1..samp8</tt>, and early audio/writer activity waits for warmup completion
+- <b>Texture cache in all input modes</b> — <tt>--texture-cache</tt> applies to camera, video, and graphic input paths
+- <b>Long-run time phase stability</b> — <tt>time_f</tt> wrap/reset now uses a large <tt>2*PI</tt> multiple to preserve trig continuity across long sessions
 - <b>Snapshot format refinements</b> — SDR TIFF/WebP save behavior improved for consistency across capture modes
 - <b>Distrobox export</b> — script to export applications to the host desktop with icons and `.desktop` files
 
@@ -113,6 +119,9 @@ The main session dialog also exposes an <b>Encoding Quality</b> group with contr
 preset, tune, CRF, codec mode (<tt>auto</tt>, <tt>software</tt>, or <tt>nvenc</tt>), and a realtime
 low-latency toggle. These values are persisted across launches and translated directly into the
 matching command-line encode options.
+
+Camera FPS is persisted as a preferred value and re-selected after resolution/FPS capability
+re-enumeration when that FPS is supported by the selected device.
 
 The Qt editor flow also includes safer close behavior: if modified shader content is open,
 closing via Escape or window close prompts to save changes before exiting the editor.
@@ -424,7 +433,7 @@ appears in the dock while the application is running.
 @subsection cli_3d 3D / Model Options
 | Long              | Value       | Description |
 |-------------------|-------------|-------------|
-| `--texture-cache` |             | Enable texture cache |
+| `--texture-cache` |             | Enable texture cache (camera, video, and graphic modes) |
 | `--cache-delay`   | `<frames>`  | Texture cache delay in frames |
 | `--copy-audio`    |             | Copy audio track from input to output |
 | `--enable-3d`     |             | Enable 3D cube rendering |
@@ -444,6 +453,8 @@ appears in the dock while the application is running.
 |       | `--record-gain`  | `<float>`   | Recording volume gain (0.0–2.0) |
 |       | `--audio-file`   | `<file>`    | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
 |       | `--audio-trunc`  |             | Stop playback when the audio file reaches the end |
+|       | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in 1/sec (default: 0.5; 0 disables warmup) |
+|       | `--enable-audio-buffers` | `<N>` | Allocate N FFT history textures (`1..22`) exposed as `spectrum0..spectrumN-1` |
 
 @subsection cli_midi MIDI Options (requires MIDI_ENABLED build)
 | Long            | Value       | Description |
@@ -528,6 +539,7 @@ All fragment shaders receive the following uniforms automatically.
 | `amp_high`    | `float` | High-frequency energy (>3000 Hz) |
 | `iSampleRate` | `float` | Audio sample rate (`44100.0`) |
 | `spectrum`    | `sampler1D` | FFT frequency-magnitude spectrum (256 bins, GL_TEXTURE9) |
+| `spectrum0`–`spectrumN-1` | `sampler1D` | FFT history textures (newest to oldest), enabled by `--enable-audio-buffers <N>` |
 
 The `spectrum` uniform is a 1D texture (`GL_R32F`, 256 texels) holding
 the FFT magnitudes of the current audio frame.  Texel coordinate
@@ -539,6 +551,10 @@ filtering and `GL_CLAMP_TO_EDGE` wrapping.  Example usage:
 uniform sampler1D spectrum;           // bound to texture unit 9
 float energy = texture(spectrum, x).r; // x in [0,1]
 @endcode
+
+When <tt>--enable-audio-buffers &lt;N&gt;</tt> is active, shaders can also sample
+<tt>spectrum0</tt> (newest history frame) through <tt>spectrumN-1</tt> (oldest kept frame)
+for temporal spectrum effects.
 
 @subsection uniforms_midi MIDI Slider Uniforms (MIDI=ON)
 | Uniform       | Type    | Description |

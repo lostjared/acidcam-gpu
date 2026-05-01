@@ -50,6 +50,12 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 
 Recent commits in this repository focused on workflow and output quality improvements:
 
+- **Audio spectrum history buffers**: added `--enable-audio-buffers <N>` (1..22) to expose rolling FFT history as `spectrum0..spectrumN-1` in GLSL.
+- **Audio warmup control**: added `--audio-warm-rate <value>` to fade audio-reactive strength in at startup and reduce initial transients.
+- **Startup sync/warmup hardening**: camera/file startup now delays cache/audio/writer activity long enough to avoid loading-screen bleed into cache textures and keep early A/V processing aligned.
+- **Texture cache scope expanded**: `--texture-cache` now applies to camera and graphics input, not just file input.
+- **Time accumulator wrap fix**: `time_f` wrap/reset behavior now preserves long-run trig continuity for shaders using phase or modulo time logic.
+- **Qt settings update**: preferred camera FPS is persisted and restored across settings reload/re-enumeration.
 - **Headless/silent pipeline work** in `acmx.cpp`, including terminal-facing behavior refinements.
 - **Terminal readability improvements** with color-coded console status output.
 - **Shader workflow improvements**: reload support and cache rebuild wiring from the Qt editor.
@@ -68,6 +74,7 @@ Recent Qt interface updates focus on session usability and repeatability:
 - Dialog state is stored with `QSettings`, so the same values are also available again on the next launch.
 - If no saved settings exist yet, the **Settings** dialog starts with camera capture resolution set to `1280x720` and screen/output resolution set to `Default`.
 - Camera capability enumeration still dynamically fills the resolution/FPS lists, and the restored/default value is applied when available.
+- Camera FPS now persists as a preferred value and is re-selected after capability repopulation when that FPS is available.
 - The **Settings** dialog also includes an **Encoding Quality** section for preset, tune, CRF, codec selection (`auto` / `software` / `nvenc`), and realtime low-latency encoding.
 - Encoding controls map directly to the CLI flags `--encode-preset`, `--encode-tune`, `--encode-crf`, `--encode-codec`, and `--encode-realtime`.
 
@@ -320,7 +327,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 
 | Long | Value | Description |
 |------|-------|-------------|
-| `--texture-cache` | | Enable texture cache |
+| `--texture-cache` | | Enable texture cache (camera, video, and graphic modes) |
 | `--cache-delay` | `<frames>` | Texture cache delay in frames |
 | `--copy-audio` | | Copy audio track from input to output |
 | `--enable-3d` | | Enable 3D cube rendering |
@@ -341,6 +348,8 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
 | | `--audio-file` | `<file>` | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
 | | `--audio-trunc` | | Stop playback when the audio file reaches the end |
+| | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in `1/sec` (default: `0.5`; `0` disables warmup) |
+| | `--enable-audio-buffers` | `<N>` | Allocate `N` FFT history textures (`1..22`) exposed as `spectrum0..spectrumN-1` |
 
 ### MIDI Options (requires `MIDI_ENABLED` build)
 
@@ -507,6 +516,7 @@ All fragment shaders receive the following uniforms automatically. Uniforms that
 | `amp_high` | `float` | High-frequency energy (>3000 Hz) |
 | `iSampleRate` | `float` | Audio sample rate (`44100.0`) |
 | `spectrum` | `sampler1D` | FFT frequency-magnitude spectrum (256 bins, GL_TEXTURE9) |
+| `spectrum0`–`spectrumN-1` | `sampler1D` | FFT history textures (newest to oldest), enabled by `--enable-audio-buffers <N>` |
 
 The `spectrum` uniform is a 1D texture (`GL_R32F`, 256 texels) holding the FFT magnitudes of the current audio frame. Texel coordinate `x = 0.0` is the DC bin and `x = 1.0` is the Nyquist frequency (22 050 Hz at 44 100 Hz sample rate). Sampling uses `GL_LINEAR` filtering and `GL_CLAMP_TO_EDGE` wrapping. Example usage:
 
@@ -514,6 +524,8 @@ The `spectrum` uniform is a 1D texture (`GL_R32F`, 256 texels) holding the FFT m
 uniform sampler1D spectrum;           // bound to texture unit 9
 float energy = texture(spectrum, x).r; // x in [0,1]
 ```
+
+When `--enable-audio-buffers <N>` is enabled, shaders can also sample `spectrum0` (newest history frame) through `spectrumN-1` (oldest retained frame) for temporal FFT effects.
 
 ### MIDI Slider Uniforms (requires `MIDI=ON` build)
 

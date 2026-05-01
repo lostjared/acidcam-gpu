@@ -56,6 +56,12 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 
 From the latest `acidcam-gpu` commits, current focus areas include:
 
+- **Audio spectrum history buffers**: new `--enable-audio-buffers <N>` option (1..22) binds rolling FFT textures as `spectrum0..spectrumN-1` for temporal audio-reactive shaders.
+- **Audio startup warmup envelope**: new `--audio-warm-rate <value>` option fades audio-reactive uniforms/spectrum from 0 to full strength at startup (default `0.5` 1/sec, about 2 seconds).
+- **Camera/file A/V startup sync hardening**: cache and writer paths now include a startup warmup window so loading-screen frames are not pushed into `samp1..samp8`, and early audio/file processing is held until warmup completes.
+- **Texture cache behavior update**: `--texture-cache` now works in camera, video, and graphic input modes (not video-only).
+- **Shader time wrap stability fix**: `time_f` wrap/reset behavior now uses a large `2*PI` multiple to preserve long-running shader phase continuity.
+- **Qt camera FPS persistence improvement**: preferred camera FPS is now saved/restored and retained across resolution/device repopulation when supported.
 - **Headless and terminal workflow updates**: improved silent/headless processing behavior, terminal color-coded output, and related CLI flow refinements.
 - **HDR pipeline refinements**: recent HLG-to-HDR10 conversion work and continued HDR + silent mode stabilization.
 - **Startup logo splash**: `data/logo.png` is displayed on launch before the shader pipeline begins, with a smooth fade-out.
@@ -204,7 +210,7 @@ sudo bash build-script/install-deps-arch.sh
 
 | Long | Value | Description |
 |------|-------|-------------|
-| `--texture-cache` | | Enable texture cache |
+| `--texture-cache` | | Enable texture cache (camera, video, and graphic modes) |
 | `--cache-delay` | `<frames>` | Texture cache delay in frames |
 | `--copy-audio` | | Copy audio track from input to output |
 | `--enable-3d` | | Enable 3D cube rendering |
@@ -223,6 +229,8 @@ sudo bash build-script/install-deps-arch.sh
 | | `--list-devices` | | List audio devices and exit |
 | | `--record-audio` | `<file>` | Record captured audio to WAV file (used for mux, then removed after successful mux) |
 | | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
+| | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in `1/sec` (default: `0.5`; `0` disables warmup) |
+| | `--enable-audio-buffers` | `<N>` | Allocate `N` FFT history textures (`1..22`) exposed as `spectrum0..spectrumN-1` |
 
 ### MIDI Options (requires `MIDI_ENABLED` build)
 
@@ -490,6 +498,7 @@ The **Multipass Shader Settings** dialog now includes **Save List...** and **Loa
 
 - **Command line:** Use `--enumerate-device <index>` to list all supported resolutions and frame rates for a V4L2 camera device (Linux only).
 - **Qt Interface:** The **Settings** dialog now automatically queries the selected camera device for its supported resolutions and frame rates. The resolution and FPS dropdowns are dynamically populated based on the device capabilities. Changing the camera device re-enumerates, and changing the resolution updates the available frame rates. In graphics file mode the FPS options default to 24, 30, and 60.
+- **FPS preference persistence:** The selected camera FPS is now saved as a preferred value and restored when available after dialog reopen, app restart, or resolution list repopulation.
 
 ### GPU Filter Save/Load
 
@@ -882,6 +891,8 @@ All fragment shaders receive the following uniforms automatically. Uniforms that
 | `amp_mid` | `float` | Mid-frequency energy (300–3000 Hz) |
 | `amp_high` | `float` | High-frequency energy (>3000 Hz) |
 | `iSampleRate` | `float` | Audio sample rate (`44100.0`) |
+| `spectrum` | `sampler1D` | FFT frequency-magnitude spectrum for the current frame (256 bins, GL_TEXTURE9) |
+| `spectrum0`-`spectrumN-1` | `sampler1D` | Audio FFT history textures (newest to oldest) enabled by `--enable-audio-buffers <N>` |
 
 ---
 
