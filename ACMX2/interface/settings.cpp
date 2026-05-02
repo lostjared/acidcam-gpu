@@ -567,11 +567,11 @@ void SettingsWindow::init() {
     browseModelButton->setEnabled(false);
 
     textureCacheCheckBox = new QCheckBox("Texture Cache", this);
-    textureCacheCheckBox->setEnabled(false);
+    textureCacheCheckBox->setEnabled(true);
     cacheDelaySpinBox = new QSpinBox(this);
     cacheDelaySpinBox->setRange(1, 8);
     cacheDelaySpinBox->setValue(1);
-    cacheDelaySpinBox->setEnabled(false);
+    cacheDelaySpinBox->setEnabled(textureCacheCheckBox->isChecked());
 
     okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
@@ -792,8 +792,8 @@ void SettingsWindow::init() {
             browseInputVideoButton->setEnabled(false);
             graphicsFileLineEdit->setEnabled(false);
             browseGraphicsButton->setEnabled(false);
-            textureCacheCheckBox->setEnabled(false);
-            cacheDelaySpinBox->setEnabled(false);
+            textureCacheCheckBox->setEnabled(true);
+            cacheDelaySpinBox->setEnabled(textureCacheCheckBox->isChecked());
             populateFPS();
             QString currentRes = cameraResolutionComboBox->currentText();
             useYuvCheckBox->setEnabled(yuvResolutions.contains(currentRes));

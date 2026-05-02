@@ -1402,8 +1402,8 @@ void MainWindow::cameraSettings() {
             graphics_file = "";
             camera_res = cameraResolution;
             output_fps = settingsWindow.getCameraFPS();
-            cache_enabled = false;
-            cache_delay = 1;
+            cache_enabled = settingsWindow.isTextureCacheEnabled();
+            cache_delay = settingsWindow.getCacheDelay();
             use_yuv = settingsWindow.isUseYuvEnabled();
         }
         if (settingsWindow.isSavingToOutputVideoFile()) {
@@ -1504,6 +1504,10 @@ void MainWindow::runSelected() {
         arguments << "--fps" << QString::number(output_fps);
         if (use_yuv)
             arguments << "--use-yuv";
+        if (cache_enabled) {
+            arguments << "--texture-cache";
+            arguments << "--cache-delay" << QString::number(cache_delay);
+        }
     } else {
         arguments << "--input" << video_file;
         if (screen_res.width() != 0)
@@ -1693,6 +1697,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         arguments << "--fps" << QString::number(output_fps);
         if (use_yuv)
             arguments << "--use-yuv";
+        if (cache_enabled) {
+            arguments << "--texture-cache";
+            arguments << "--cache-delay" << QString::number(cache_delay);
+        }
     } else {
         arguments << "--input" << video_file;
         if (screen_res.width() != 0)
