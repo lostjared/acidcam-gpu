@@ -91,6 +91,7 @@ namespace ac_gpu {
 #include <libswscale/swscale.h>
 #ifdef __linux__
 #include <linux/videodev2.h>
+#include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -7944,9 +7945,7 @@ class ACView : public gl::GLObject {
                 stream << "ACMX2 - Graphics Mode - "
                        << timeStr
                        << " [" << currentFrames << " frames]";
-                if (writer.is_open()) {
-                    stream << " (Recording)";
-                }
+                appendRecordingTitleSuffix(stream);
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
             }
@@ -8024,9 +8023,7 @@ class ACView : public gl::GLObject {
                        << frame_counter << "/"
                        << static_cast<int>(totalFrames) << "] - "
                        << timeStr << " - Video Mode";
-                if (writer.is_open()) {
-                    stream << " (Recording)";
-                }
+                appendRecordingTitleSuffix(stream);
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
             }
@@ -8039,9 +8036,7 @@ class ACView : public gl::GLObject {
                 stream << "ACMX2 - Capture Mode - "
                        << timeStr
                        << " [" << currentFrames << " frames]";
-                if (writer.is_open()) {
-                    stream << " (Recording)";
-                }
+                appendRecordingTitleSuffix(stream);
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
             }
@@ -8101,6 +8096,40 @@ class ACView : public gl::GLObject {
                  << std::setfill('0') << std::setw(2) << seconds;
         return timerStr.str();
     }
+
+    void appendRecordingTitleSuffix(std::ostringstream &stream) {
+        if (!writer.is_open()) {
+            return;
+        }
+
+        stream << " (Recording)";
+#ifdef __linux__
+        if (const auto file_size_bytes = getOutputFileSizeBytes(); file_size_bytes.has_value()) {
+            constexpr double kBytesPerMB = 1024.0 * 1024.0;
+            const double file_size_mb = static_cast<double>(*file_size_bytes) / kBytesPerMB;
+            stream << " [File: " << std::fixed << std::setprecision(2)
+                   << file_size_mb << " MB]";
+        }
+#endif
+    }
+
+#ifdef __linux__
+    std::optional<uintmax_t> getOutputFileSizeBytes() const {
+        if (ofilename.empty()) {
+            return std::nullopt;
+        }
+
+        struct stat file_stat {};
+        if (::stat(ofilename.c_str(), &file_stat) != 0) {
+            return std::nullopt;
+        }
+        if (!S_ISREG(file_stat.st_mode)) {
+            return std::nullopt;
+        }
+
+        return static_cast<uintmax_t>(file_stat.st_size);
+    }
+#endif
 
     /**
      * @brief Return the current frame count (writer count or display count).
