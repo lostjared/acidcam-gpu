@@ -572,6 +572,11 @@ void SettingsWindow::init() {
     cacheDelaySpinBox->setRange(1, 8);
     cacheDelaySpinBox->setValue(1);
     cacheDelaySpinBox->setEnabled(textureCacheCheckBox->isChecked());
+    cacheSizeSpinBox = new QSpinBox(this);
+    cacheSizeSpinBox->setRange(1, 64);
+    cacheSizeSpinBox->setValue(8);
+    cacheSizeSpinBox->setToolTip("Number of frames to keep in the texture ring buffer (1-64, default 8)");
+    cacheSizeSpinBox->setEnabled(textureCacheCheckBox->isChecked());
 
     okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
@@ -692,6 +697,8 @@ void SettingsWindow::init() {
     cacheRow->addWidget(textureCacheCheckBox);
     cacheRow->addWidget(new QLabel("Delay:", this));
     cacheRow->addWidget(cacheDelaySpinBox);
+    cacheRow->addWidget(new QLabel("Size:", this));
+    cacheRow->addWidget(cacheSizeSpinBox);
     cacheRow->addStretch();
     playbackGrid->addLayout(cacheRow, ++r, 0, 1, 2);
 
@@ -774,6 +781,7 @@ void SettingsWindow::init() {
     });
 
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheDelaySpinBox, &QSpinBox::setEnabled);
+    connect(textureCacheCheckBox, &QCheckBox::toggled, cacheSizeSpinBox, &QSpinBox::setEnabled);
     connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
 
     connect(enable3dCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
@@ -794,6 +802,7 @@ void SettingsWindow::init() {
             browseGraphicsButton->setEnabled(false);
             textureCacheCheckBox->setEnabled(true);
             cacheDelaySpinBox->setEnabled(textureCacheCheckBox->isChecked());
+            cacheSizeSpinBox->setEnabled(textureCacheCheckBox->isChecked());
             populateFPS();
             QString currentRes = cameraResolutionComboBox->currentText();
             useYuvCheckBox->setEnabled(yuvResolutions.contains(currentRes));
@@ -813,6 +822,7 @@ void SettingsWindow::init() {
             browseGraphicsButton->setEnabled(false);
             textureCacheCheckBox->setEnabled(true);
             cacheDelaySpinBox->setEnabled(textureCacheCheckBox->isChecked());
+            cacheSizeSpinBox->setEnabled(textureCacheCheckBox->isChecked());
             useYuvCheckBox->setEnabled(false);
             useYuvCheckBox->setChecked(false);
         }
@@ -833,6 +843,7 @@ void SettingsWindow::init() {
             browseGraphicsButton->setEnabled(true);
             textureCacheCheckBox->setEnabled(false);
             cacheDelaySpinBox->setEnabled(false);
+            cacheSizeSpinBox->setEnabled(false);
             cameraFPSComboBox->clear();
             cameraFPSComboBox->addItems({"24", "30", "60"});
             int preferredIdx = cameraFPSComboBox->findText(preferredFpsText);
@@ -1004,6 +1015,7 @@ void SettingsWindow::loadUiState() {
 
     textureCacheCheckBox->setChecked(appSettings.value("interface/texture_cache", false).toBool());
     cacheDelaySpinBox->setValue(appSettings.value("interface/cache_delay", 1).toInt());
+    cacheSizeSpinBox->setValue(appSettings.value("interface/cache_size", 8).toInt());
     useYuvCheckBox->setChecked(appSettings.value("interface/use_yuv", false).toBool());
 
     int cudaDevice = appSettings.value("interface/cuda_device", 0).toInt();
@@ -1061,6 +1073,7 @@ void SettingsWindow::saveUiState() {
 
     appSettings.setValue("interface/texture_cache", textureCacheCheckBox->isChecked());
     appSettings.setValue("interface/cache_delay", cacheDelaySpinBox->value());
+    appSettings.setValue("interface/cache_size", cacheSizeSpinBox->value());
     appSettings.setValue("interface/use_yuv", useYuvCheckBox->isChecked());
 
     appSettings.setValue("interface/cuda_device", cudaDeviceComboBox->currentData().toInt());
@@ -1130,6 +1143,10 @@ bool SettingsWindow::isTextureCacheEnabled() const {
 
 int SettingsWindow::getCacheDelay() const {
     return cacheDelaySpinBox->value();
+}
+
+int SettingsWindow::getCacheSize() const {
+    return cacheSizeSpinBox->value();
 }
 
 bool SettingsWindow::isFullscreen() const {

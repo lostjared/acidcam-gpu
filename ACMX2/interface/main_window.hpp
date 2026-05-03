@@ -17,6 +17,7 @@
 #include "shaderlibrary.hpp"
 #include "shaderpass.hpp"
 #include "version_info.hpp" //defines VERSION_INFO
+#include <QDateTime>
 #include <QHash>
 #include <QMainWindow>
 #include <QMenuBar>
@@ -204,6 +205,7 @@ class MainWindow : public QMainWindow {
     double record_volume = 1.0;
     bool cache_enabled = false;
     int cache_delay = 1;
+    int cache_size = 8;
     bool full_screen_value = false;
     bool copy_audio = false;
     bool enable_3d = false;

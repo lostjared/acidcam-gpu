@@ -63,6 +63,8 @@ class SettingsWindow : public QDialog {
     bool isTextureCacheEnabled() const;
     /// @return Frame delay used by texture cache.
     int getCacheDelay() const;
+    /// @return Ring buffer size for texture cache.
+    int getCacheSize() const;
     /// @return True if fullscreen mode is enabled.
     bool isFullscreen() const;
     /// @return True if input audio should be copied to output.
@@ -156,6 +158,7 @@ class SettingsWindow : public QDialog {
     QCheckBox *saveOutputVideoCheckBox;
     QCheckBox *textureCacheCheckBox;
     QSpinBox *cacheDelaySpinBox;
+    QSpinBox *cacheSizeSpinBox;
     QCheckBox *fullscreenCheckBox;
     QCheckBox *copyAudioCheckBox;
     QCheckBox *enable3dCheckBox;

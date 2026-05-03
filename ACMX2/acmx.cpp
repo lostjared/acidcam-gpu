@@ -4741,6 +4741,7 @@ struct MXArguments {
     bool full = false;
     bool cache = false;
     int cache_delay = 1;
+    int cache_size = 8;
     bool copy_audio = false;
     bool is3d = false;
 #ifdef AUDIO_ENABLED
@@ -5713,7 +5714,7 @@ class ACView : public gl::GLObject {
           fps{args.fps_value},
           repeat{args.repeat},
           full{args.full},
-          frame_cache{8},
+          frame_cache{static_cast<std::size_t>(args.cache_size > 0 ? args.cache_size : 8)},
           texture_cache{args.cache},
           cache_delay{args.cache_delay},
           copy_audio{args.copy_audio},
@@ -9872,6 +9873,7 @@ namespace {
             {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"},
             {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"},
             {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"},
+            {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"},
             {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"},
             {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"},
             {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}
@@ -10052,6 +10054,7 @@ int main(int argc, char **argv) {
         .addOptionSingle('n', "fullscreen")
         .addOptionDouble(256, "texture-cache", "Enable texture cache")
         .addOptionDoubleValue(257, "cache-delay", "Cache delay in frames")
+        .addOptionDoubleValue(275, "texture-cache-size", "Ring buffer size for texture cache (default 8)")
         .addOptionDouble(258, "copy-audio", "Copy audio track")
         .addOptionDouble(259, "enable-3d", "Enable 3D cube")
         .addOptionDoubleValue(260, "model", "Model file")
@@ -10261,6 +10264,13 @@ int main(int argc, char **argv) {
                 args.cache_delay = atoi(arg.arg_value.c_str());
                 mx::system_out << "acmx2: Cache delay set to: " << args.cache_delay << "\n";
                 break;
+            case 275: {
+                int sz = atoi(arg.arg_value.c_str());
+                if (sz >= 1 && sz <= 64)
+                    args.cache_size = sz;
+                mx::system_out << "acmx2: Texture cache size set to: " << args.cache_size << "\n";
+                break;
+            }
             case 258:
                 args.copy_audio = true;
                 break;

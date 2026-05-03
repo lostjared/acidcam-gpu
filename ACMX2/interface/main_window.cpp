@@ -1381,6 +1381,7 @@ void MainWindow::cameraSettings() {
             graphics_file = "";
             cache_enabled = settingsWindow.isTextureCacheEnabled();
             cache_delay = settingsWindow.getCacheDelay();
+            cache_size = settingsWindow.getCacheSize();
             copy_audio = settingsWindow.isCopyAudioEnabled();
         } else if (settingsWindow.isUsingGraphicsFile()) {
             QString graphicsFile = settingsWindow.getGraphicsFile();
@@ -1391,6 +1392,7 @@ void MainWindow::cameraSettings() {
             output_fps = settingsWindow.getCameraFPS();
             cache_enabled = false;
             cache_delay = 1;
+            cache_size = 8;
             copy_audio = false;
         } else {
             int cameraIndex = settingsWindow.getSelectedCameraIndex();
@@ -1404,6 +1406,7 @@ void MainWindow::cameraSettings() {
             output_fps = settingsWindow.getCameraFPS();
             cache_enabled = settingsWindow.isTextureCacheEnabled();
             cache_delay = settingsWindow.getCacheDelay();
+            cache_size = settingsWindow.getCacheSize();
             use_yuv = settingsWindow.isUseYuvEnabled();
         }
         if (settingsWindow.isSavingToOutputVideoFile()) {
@@ -1507,6 +1510,7 @@ void MainWindow::runSelected() {
         if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
+            arguments << "--texture-cache-size" << QString::number(cache_size);
         }
     } else {
         arguments << "--input" << video_file;
@@ -1517,6 +1521,7 @@ void MainWindow::runSelected() {
         if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
+            arguments << "--texture-cache-size" << QString::number(cache_size);
         }
         if (copy_audio)
             arguments << "--copy-audio";
@@ -1700,6 +1705,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
+            arguments << "--texture-cache-size" << QString::number(cache_size);
         }
     } else {
         arguments << "--input" << video_file;
@@ -1710,6 +1716,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
+            arguments << "--texture-cache-size" << QString::number(cache_size);
         }
         if (copy_audio)
             arguments << "--copy-audio";
