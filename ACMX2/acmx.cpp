@@ -286,7 +286,7 @@ class ScopedStderrSilence {
 // bits per channel, little-endian host) with A = 0xFFFF — exactly the bytes
 // the GL @c uploadHdrFrame path expects.
 //
-// The transfer function (PQ or HLG) is *not* applied here: the bits stay in
+// The transfer function (PQ or `) is *not* applied here: the bits stay in
 // the non-linear BT.2020 RGB' encoding that the GL @c kHdrDecodeFrag shader
 // converts to scene-linear. Bit precision is preserved by keeping the math
 // in float and scaling to uint16_t only at the end.
@@ -1537,11 +1537,17 @@ class SnapshotThreadPool {
 
 /**
  * @class FrameCache
- * @brief Fixed-capacity ring buffer of cv::Mat frames for temporal shaders.
+ * @brief Fixed-capacity ring buffer of GL textures for temporal shaders.
  *
  * Shaders whose filename contains "cache" receive up to 8 previous frames
- * as additional sampler2D uniforms (samp1–samp8). This class stores those
- * frames in a std::deque, evicting the oldest when full.
+ * as additional sampler2D uniforms (samp1–samp8). Rather than holding
+ * cv::Mat copies and re-uploading every slot each frame, this class keeps
+ * a ring of @c num_frames pre-allocated GL textures and uploads only the
+ * newest frame into the next slot. The "oldest → newest" indexing used
+ * by callers is preserved via a logical-to-physical slot translation.
+ *
+ * This mirrors the texture-ring approach used by gl_compute_cv and
+ * eliminates 7 BGR→RGBA conversions plus 7 texture uploads per push.
  */
 class FrameCache {
   public:
@@ -1549,84 +1555,130 @@ class FrameCache {
     explicit FrameCache(std::size_t num)
         : num_frames(num) {
     }
-    ~FrameCache() = default;
+    ~FrameCache() { cleanup(); }
+
+    FrameCache(const FrameCache &) = delete;
+    FrameCache &operator=(const FrameCache &) = delete;
 
     /**
-     * @brief Push a frame into the ring buffer.
+     * @brief Allocate the ring of GL textures sized to @p w x @p h.
      *
-     * If the buffer has not yet reached capacity the frame is appended.
-     * Once full, the oldest frame (front of the deque) is evicted before
-     * the new frame is added at the back.  The frame is moved rather than
-     * copied to avoid expensive pixel-buffer duplication.
-     *
-     * @param frame An rvalue reference to the cv::Mat to store.
+     * Must be called once a GL context is current. Existing textures (if
+     * any) are released first. All slots are initialised to opaque black.
      */
-    void push(cv::Mat &&frame) {
-        if (frames.size() < num_frames) {
-            frames.emplace_back(std::move(frame));
+    void init(int w, int h) {
+        cleanup();
+        if (num_frames == 0) return;
+        width = w;
+        height = h;
+        textures.assign(num_frames, 0);
+        glGenTextures(static_cast<GLsizei>(num_frames), textures.data());
+        std::vector<unsigned char> zeros(static_cast<size_t>(w) * static_cast<size_t>(h) * 4u, 0);
+        for (std::size_t i = 0; i < num_frames; ++i) {
+            glBindTexture(GL_TEXTURE_2D, textures[i]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, zeros.data());
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
+        glBindTexture(GL_TEXTURE_2D, 0);
+        head = 0;
+        count = 0;
+    }
+
+    /// Release all GL textures and reset the ring state.
+    void cleanup() {
+        if (!textures.empty()) {
+            glDeleteTextures(static_cast<GLsizei>(textures.size()), textures.data());
+            textures.clear();
+        }
+        head = 0;
+        count = 0;
+        width = 0;
+        height = 0;
+    }
+
+    /**
+     * @brief Upload @p frame (BGR) into the next ring slot.
+     *
+     * When the ring is full this overwrites the oldest slot in place,
+     * which becomes the new "newest" frame. Only one BGR→RGBA conversion
+     * and one texture upload occur per call.
+     */
+    void push(const cv::Mat &frame) {
+        if (textures.empty()) return;
+        cv::Mat tmp;
+        cv::cvtColor(frame, tmp, cv::COLOR_BGR2RGBA);
+        glBindTexture(GL_TEXTURE_2D, textures[head]);
+        if (tmp.cols != width || tmp.rows != height) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tmp.cols, tmp.rows, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+            width = tmp.cols;
+            height = tmp.rows;
         } else {
-            frames.pop_front();
-            frames.emplace_back(std::move(frame));
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tmp.cols, tmp.rows,
+                            GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
         }
-    }
-    /**
-     * @brief Bounds-checked element access.
-     * @param index Zero-based frame index (0 = oldest retained frame).
-     * @return Reference to the cv::Mat at @p index.
-     * @throws std::out_of_range if @p index is out of bounds.
-     */
-    cv::Mat &at(std::size_t index) {
-        return frames.at(index);
-    }
-    /**
-     * @brief Subscript access with an explicit out-of-range check.
-     * @param index Zero-based frame index.
-     * @return Reference to the cv::Mat at @p index.
-     * @throws std::out_of_range if @p index >= size().
-     */
-    cv::Mat &operator[](std::size_t index) {
-        if (index >= frames.size()) {
-            throw std::out_of_range("FrameCache index out of range");
-        }
-        return frames[index];
-    }
-    /**
-     * @brief Return the number of frames currently stored.
-     * @return Frame count (0 ≤ n ≤ capacity).
-     */
-    std::size_t size() const {
-        return frames.size();
+        glBindTexture(GL_TEXTURE_2D, 0);
+        head = (head + 1) % num_frames;
+        if (count < num_frames) ++count;
     }
 
     /**
-     * @brief Check whether the buffer has reached its maximum capacity.
-     * @return True when exactly @c num_frames frames are stored.
+     * @brief Return the GL texture at logical index @p index.
+     * @param index 0 = oldest retained frame, @c size()-1 = newest.
      */
-    bool isFull() {
-        if (size() == num_frames)
-            return true;
-        return false;
+    GLuint textureAt(std::size_t index) const {
+        const std::size_t base = (count == num_frames) ? head : 0;
+        return textures[(base + index) % num_frames];
     }
 
+    /// Number of frames currently retained (0 ≤ n ≤ capacity).
+    std::size_t size() const { return count; }
+
+    /// True when the ring is fully populated.
+    bool isFull() const { return count == num_frames; }
+
     /**
-     * @brief Pre-fill the buffer with copies of a single frame.
+     * @brief Pre-fill every slot with copies of a single frame.
      *
-     * Used during initialisation to seed the cache with blank (black)
-     * textures so that "cache" shaders have valid sampler data from
-     * frame zero.
-     *
-     * @param frame The cv::Mat to replicate into every slot.
+     * Seeds the cache with blank (black) textures so "cache" shaders have
+     * valid sampler data before the first real frame arrives. Marks the
+     * ring as full.
      */
-    void fill(cv::Mat &frame) {
-        for (size_t i = 0; i < num_frames; ++i) {
-            if (frames.size() < num_frames)
-                frames.push_back(frame);
+    void fill(const cv::Mat &frame) {
+        if (textures.empty()) return;
+        cv::Mat tmp;
+        cv::cvtColor(frame, tmp, cv::COLOR_BGR2RGBA);
+        const bool size_matches = (tmp.cols == width && tmp.rows == height);
+        for (std::size_t i = 0; i < num_frames; ++i) {
+            glBindTexture(GL_TEXTURE_2D, textures[i]);
+            if (!size_matches) {
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tmp.cols, tmp.rows, 0,
+                             GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+            } else {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tmp.cols, tmp.rows,
+                                GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+            }
         }
+        glBindTexture(GL_TEXTURE_2D, 0);
+        if (!size_matches) {
+            width = tmp.cols;
+            height = tmp.rows;
+        }
+        head = 0;
+        count = num_frames;
     }
 
   private:
     std::size_t num_frames;
-    std::deque<cv::Mat> frames;
+    int width = 0;
+    int height = 0;
+    std::size_t head = 0;
+    std::size_t count = 0;
+    std::vector<GLuint> textures;
 };
 
 /**
@@ -6273,10 +6325,7 @@ class ACView : public gl::GLObject {
         }
 
         if (texture_cache) {
-            glDeleteTextures(8, cache_textures);
-            for (int i = 0; i < 8; i++) {
-                cache_textures[i] = 0;
-            }
+            frame_cache.cleanup();
         }
 
         if (cap.isOpened())
@@ -6751,9 +6800,7 @@ class ACView : public gl::GLObject {
         library.useProgram();
         if (texture_cache) {
             cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
-            for (int i = 0; i < 8; ++i) {
-                cache_textures[i] = loadTexture(blankMat);
-            }
+            frame_cache.init(frame_w, frame_h);
             frame_cache.fill(blankMat);
             mx::system_out << "acmx2: Texture cache initalized.\n";
             fflush(stdout);
@@ -7070,7 +7117,7 @@ class ACView : public gl::GLObject {
                 if (++counter > cache_delay) {
                     // Only push frames into cache after the post-load warmup period
                     if (cache_warmup_frames <= 0) {
-                        frame_cache.push(std::move(newFrame));
+                        frame_cache.push(newFrame);
                     }
                     counter = 0;
                 }
@@ -7078,8 +7125,7 @@ class ACView : public gl::GLObject {
                     for (int i = 0; i < 8; ++i) {
                         library.setUniform("samp" + std::to_string(i + 1), i);
                         glActiveTexture(GL_TEXTURE1 + i);
-                        updateTexture(cache_textures[i], frame_cache.at(i));
-                        glBindTexture(GL_TEXTURE_2D, cache_textures[i]);
+                        glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(i));
                     }
                 }
             }
@@ -8704,7 +8750,6 @@ class ACView : public gl::GLObject {
     std::chrono::steady_clock::time_point captureStartTime;
     FrameCache frame_cache;
     bool texture_cache = false;
-    GLuint cache_textures[8] = {0};
     int cache_delay = 1;
     int cache_warmup_frames = 0;  // Frames to skip before pushing into cache after load
     std::atomic<bool> finished{false};
