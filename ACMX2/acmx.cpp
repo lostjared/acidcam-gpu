@@ -1565,19 +1565,27 @@ class FrameCache {
      *
      * Must be called once a GL context is current. Existing textures (if
      * any) are released first. All slots are initialised to opaque black.
+     *
+     * @param hdr When true, allocate textures as @c GL_RGBA16F (matching
+     *            the HDR linear-light pipeline) instead of @c GL_RGBA.
      */
-    void init(int w, int h) {
+    void init(int w, int h, bool hdr = false) {
         cleanup();
         if (num_frames == 0) return;
         width = w;
         height = h;
+        is_hdr = hdr;
         textures.assign(num_frames, 0);
         glGenTextures(static_cast<GLsizei>(num_frames), textures.data());
-        std::vector<unsigned char> zeros(static_cast<size_t>(w) * static_cast<size_t>(h) * 4u, 0);
+        const GLint internal = hdr ? GL_RGBA16F : GL_RGBA;
+        const GLenum type = hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
+        const std::size_t bytes_per_pixel = hdr ? 8u : 4u;
+        std::vector<unsigned char> zeros(
+            static_cast<size_t>(w) * static_cast<size_t>(h) * bytes_per_pixel, 0);
         for (std::size_t i = 0; i < num_frames; ++i) {
             glBindTexture(GL_TEXTURE_2D, textures[i]);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
-                         GL_RGBA, GL_UNSIGNED_BYTE, zeros.data());
+            glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
+                         GL_RGBA, type, zeros.data());
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1598,6 +1606,48 @@ class FrameCache {
         count = 0;
         width = 0;
         height = 0;
+        is_hdr = false;
+    }
+
+    /**
+     * @brief GPU-side push from a source FBO into the next ring slot.
+     *
+     * Used by the HDR pipeline to copy the post-decode linear BT.2020
+     * texture into an @c RGBA16F ring without any CPU readback or pixel
+     * format conversion. The source FBO must have a colour attachment
+     * sized at least @p w x @p h and using a compatible internal format
+     * (e.g. @c GL_RGBA16F when the cache was initialised with @c hdr=true).
+     *
+     * @param src_fbo Read framebuffer object containing the new frame.
+     * @param w,h     Region to copy (typically the full FBO dimensions).
+     */
+    void pushFromFBO(GLuint src_fbo, int w, int h) {
+        if (textures.empty()) return;
+        GLint prev_read = 0;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, src_fbo);
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        glBindTexture(GL_TEXTURE_2D, textures[head]);
+        if (w != width || h != height) {
+            // Re-spec the head slot to match the new size; remaining slots
+            // keep their old size until they cycle through. Size changes
+            // are rare in practice (window/HDR resources are stable).
+            const GLint internal = is_hdr ? GL_RGBA16F : GL_RGBA;
+            const GLenum type = is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
+            glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
+                         GL_RGBA, type, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            width = w;
+            height = h;
+        }
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
+        head = (head + 1) % num_frames;
+        if (count < num_frames) ++count;
     }
 
     /**
@@ -1676,6 +1726,7 @@ class FrameCache {
     std::size_t num_frames;
     int width = 0;
     int height = 0;
+    bool is_hdr = false;
     std::size_t head = 0;
     std::size_t count = 0;
     std::vector<GLuint> textures;
@@ -6799,9 +6850,17 @@ class ACView : public gl::GLObject {
 
         library.useProgram();
         if (texture_cache) {
-            cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
-            frame_cache.init(frame_w, frame_h);
-            frame_cache.fill(blankMat);
+            if (input_is_hdr) {
+                // HDR cache rides on the post-decode linear BT.2020 RGBA16F
+                // texture, which is allocated at win->w x win->h by
+                // ensureHdrResources(). The ring uses the same dimensions
+                // and format so glCopyTexSubImage2D can copy GPU->GPU.
+                frame_cache.init(win->w, win->h, true);
+            } else {
+                cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
+                frame_cache.init(frame_w, frame_h);
+                frame_cache.fill(blankMat);
+            }
             mx::system_out << "acmx2: Texture cache initalized.\n";
             fflush(stdout);
         }
@@ -7040,6 +7099,25 @@ class ACView : public gl::GLObject {
                 glActiveTexture(GL_TEXTURE0);
                 uploadHdrFrame(hdr_frame_mat);
                 runHdrDecodePass(win->w, win->h);
+            }
+            if (texture_cache && library.isCache()) {
+                static int hdr_counter = 0;
+                if (++hdr_counter > cache_delay) {
+                    if (cache_warmup_frames <= 0) {
+                        // GPU->GPU copy of the freshly decoded linear-light
+                        // frame into the next ring slot. No CPU readback.
+                        frame_cache.pushFromFBO(hdr_linear_video_fbo,
+                                                win->w, win->h);
+                    }
+                    hdr_counter = 0;
+                }
+                if (frame_cache.isFull()) {
+                    for (int i = 0; i < 8; ++i) {
+                        library.setUniform("samp" + std::to_string(i + 1), i);
+                        glActiveTexture(GL_TEXTURE1 + i);
+                        glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(i));
+                    }
+                }
             }
         } else if (!isFrozen && !newFrame.empty()) {
 #ifdef ACMX2_WITH_CUDA
