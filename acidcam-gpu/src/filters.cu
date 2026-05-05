@@ -908,7 +908,9 @@ namespace ac_gpu {
         {901, "acgl_glitch_Plug1"},
         {902, "acgl_glitch_OppositeDir"},
         {903, "acgl_glitch_OffStuck"},
-        {904, "acgl_glitch_NewVarBlendLines"}};
+        {904, "acgl_glitch_NewVarBlendLines"},
+        {905, "Square_Block_Resize_Vertical"}
+    };
     struct FilterParams {
         float alpha;
         bool isNegative;
@@ -924,6 +926,7 @@ namespace ac_gpu {
         int frame_count;
         int sumR, sumG, sumB;
         int sw, sh;
+        int global_block_counter;
     };
     __device__ float gpu_rand(int x, int y, int seed) {
         size_t res = (x * 1597334677U) ^ (y * 3812015801U) ^ (seed * 354856327U);
@@ -10994,6 +10997,35 @@ namespace ac_gpu {
         }
     }
 
+    __device__ void Square_Block_Resize_Vertical(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
+        if (params.numFrames <= 0) {
+            return;
+        }
+        int sq = (params.square_size > 0) ? params.square_size : 1;
+        int block_y = y / sq;
+        int period = 2 * (params.numFrames - 1);
+        if (period <= 0) {
+            period = 1;
+        }
+        int start_pos = (params.start_dir == 1) ? params.start_index : period - params.start_index;
+        int pos = ((start_pos + block_y) % period + period) % period;
+        int frame_index = (pos < params.numFrames) ? pos : (period - pos);
+        if (frame_index < 0) {
+            frame_index = 0;
+        }
+        if (frame_index >= params.numFrames) {
+            frame_index = params.numFrames - 1;
+        }
+        unsigned char *hist_frame = allFrames[frame_index];
+        if (hist_frame == nullptr) {
+            return;
+        }
+        int idx = y * step + x * 4;
+        data[idx]     = (unsigned char)(0.5f * data[idx]     + 0.5f * hist_frame[idx]);
+        data[idx + 1] = (unsigned char)(0.5f * data[idx + 1] + 0.5f * hist_frame[idx + 1]);
+        data[idx + 2] = (unsigned char)(0.5f * data[idx + 2] + 0.5f * hist_frame[idx + 2]);
+    }
+
     __global__ void unifiedFilterKernel(GPUFilter *filters, size_t count, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, FilterParams params) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -13840,6 +13872,9 @@ namespace ac_gpu {
             case 904:
                 acgl_glitch_NewVarBlendLines(x, y, data, allFrames, width, height, step, params);
                 break;
+            case 905:
+                Square_Block_Resize_Vertical(x, y, data, allFrames, width, height, step, params);
+                break;
             }
         }
         setAlpha(data, y * step + x * 4, params.isNegative);
@@ -13877,6 +13912,9 @@ extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char *d
     params.float_param1 = (float)(rand() % 255);
     params.seed = rand();
     params.frame_count = frame_counter++;
+    int blocks_in_frame = (height + square_size - 1) / square_size;
+    params.global_block_counter += blocks_in_frame;
+    
     params.sumR = rand() % 255;
     params.sumG = rand() % 255;
     params.sumB = rand() % 255;
