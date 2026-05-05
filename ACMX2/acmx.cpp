@@ -9469,10 +9469,13 @@ class ACView : public gl::GLObject {
      * @brief Run ffmpeg synchronously to mux the audio file into the output video.
      *
      * Copies the video stream from the output file and encodes the audio
-     * file track as AAC 192 kbps.  If the video is shorter than the audio
-     * the audio track is truncated to match the video duration, except
-     * when @c audio_trunc_mode is active — in that case the full audio
-     * is preserved so it plays to the end.
+     * file track as AAC 192 kbps.  When the produced video is shorter
+     * than the audio, the audio track is truncated to the video duration
+     * so the file never has audio playing past the end of picture.  This
+     * cap is applied in camera mode (no input video file) and whenever
+     * an input video is played without @c --repeat.  When @c --repeat is
+     * active the input video loops to fill the audio length, so the
+     * full audio track is preserved instead of being clipped.
      * The result is written to a temporary file which replaces the
      * original on success.
      */
@@ -9490,10 +9493,18 @@ class ACView : public gl::GLObject {
         cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_file_path
             << "\" -map 0:v:0 -map 1:a:0"
             << " -c:v copy -c:a aac -b:a 192k";
-        // In audio-trunc mode the recording was already stopped at the end of
-        // the audio file, so let the full audio play out instead of clipping
-        // it to the (possibly slightly shorter) video duration.
-        if (video_duration > 0.0 && !audio_trunc_mode) {
+        // Cap output to the video's duration so the audio is truncated to
+        // match the recorded video whenever:
+        //   - we are in camera mode (no input video file), or
+        //   - we are playing an input video without --repeat (video plays
+        //     once and stops, so audio must not outlast it).
+        // When --repeat is active the input video loops to fill the audio
+        // length, so we let the full audio play out instead.
+        // This overrides the --audio-trunc preservation behavior because the
+        // user wants audio to never outlast the produced video.
+        const bool is_camera_mode = filename.empty() && graphic.empty();
+        const bool truncate_audio_to_video = is_camera_mode || !repeat;
+        if (video_duration > 0.0 && truncate_audio_to_video) {
             cmd << " -t " << std::fixed << std::setprecision(3) << video_duration;
         }
         if (is_mp4_like) {
