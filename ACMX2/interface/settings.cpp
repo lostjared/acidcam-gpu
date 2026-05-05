@@ -577,10 +577,8 @@ void SettingsWindow::init() {
     cacheSizeSpinBox->setValue(8);
     cacheSizeSpinBox->setToolTip("Number of frames to keep in the texture ring buffer (1-64, default 8)");
     cacheSizeSpinBox->setEnabled(textureCacheCheckBox->isChecked());
-
     okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
-
     // ── Encoding quality widgets ──────────────────────────────────────
     QSettings encSettings("LostSideDead", "acmx2");
     encodePresetComboBox = new QComboBox(this);

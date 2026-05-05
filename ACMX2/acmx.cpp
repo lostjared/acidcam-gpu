@@ -9470,7 +9470,9 @@ class ACView : public gl::GLObject {
      *
      * Copies the video stream from the output file and encodes the audio
      * file track as AAC 192 kbps.  If the video is shorter than the audio
-     * the audio track is truncated to match the video duration.
+     * the audio track is truncated to match the video duration, except
+     * when @c audio_trunc_mode is active — in that case the full audio
+     * is preserved so it plays to the end.
      * The result is written to a temporary file which replaces the
      * original on success.
      */
@@ -9488,7 +9490,10 @@ class ACView : public gl::GLObject {
         cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_file_path
             << "\" -map 0:v:0 -map 1:a:0"
             << " -c:v copy -c:a aac -b:a 192k";
-        if (video_duration > 0.0) {
+        // In audio-trunc mode the recording was already stopped at the end of
+        // the audio file, so let the full audio play out instead of clipping
+        // it to the (possibly slightly shorter) video duration.
+        if (video_duration > 0.0 && !audio_trunc_mode) {
             cmd << " -t " << std::fixed << std::setprecision(3) << video_duration;
         }
         if (is_mp4_like) {
