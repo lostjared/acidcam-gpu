@@ -10957,7 +10957,7 @@ int main(int argc, char **argv) {
                 // Make remove-broken use the same offscreen path as silent batch mode.
                 setenv("SDL_VIDEODRIVER", "offscreen", 0);
                 setenv("SDL_AUDIODRIVER", "dummy", 0);
-                SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+                SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
                 installHeadlessSignalHandlers();
                 mx::system_out << "acmx2: remove-broken headless mode enabled (Linux)\n";
             }
@@ -11069,7 +11069,7 @@ int main(int argc, char **argv) {
                 // Make build-cache use the same offscreen path as silent batch mode.
                 setenv("SDL_VIDEODRIVER", "offscreen", 0);
                 setenv("SDL_AUDIODRIVER", "dummy", 0);
-                SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+                SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
                 installHeadlessSignalHandlers();
                 mx::system_out << "acmx2: build headless mode enabled (Linux)\n";
             }
@@ -11281,7 +11281,7 @@ int main(int argc, char **argv) {
             // fail on a pure headless server.
             setenv("SDL_VIDEODRIVER", "offscreen", 0);
             setenv("SDL_AUDIODRIVER", "dummy", 0);
-            SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+            SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
             mx::system_out << "acmx2: Headless: SDL_VIDEODRIVER="
                            << (getenv("SDL_VIDEODRIVER") ? getenv("SDL_VIDEODRIVER") : "(unset)")
                            << ", SDL_AUDIODRIVER="
