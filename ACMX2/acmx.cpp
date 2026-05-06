@@ -4146,6 +4146,23 @@ class ShaderLibrary {
         if (loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
             return;
         }
+        // Cache miss (file absent / corrupt / source changed). Try to build the
+        // cache now and reload from it so subsequent runs hit the binary cache
+        // instead of recompiling 1700+ shaders every launch. If building or
+        // reloading fails for any reason, fall back to a plain source compile.
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), text, cache_size_);
+        mx::system_out << "acmx2: Building shader cache at: " << cache_file << "\n";
+        fflush(stdout);
+        programs_2d.clear();
+        programs_3d.clear();
+        program_names_2d.clear();
+        program_names_3d.clear();
+        if (buildShaderCache(win, text, vert_2d, vert_3d) &&
+            loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
+            return;
+        }
+        mx::system_out << "acmx2: Cache build/reload failed; compiling from source.\n";
+        fflush(stdout);
         loadPrograms(win, text, loadingFont);
     }
 
@@ -11024,22 +11041,24 @@ int main(int argc, char **argv) {
                  * @param is3d   Include 3-D shaders in the cache.
                  * @param assets Base asset path for vertex shader lookup.
                  */
-                BuildWindow(const std::string &path, bool is3d, const std::string &assets)
+                BuildWindow(const std::string &path, bool is3d, const std::string &assets, int tex_cache_size)
                     : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false),
                       lib_path(path), enable_3d(is3d), assets_path(assets) {
                     mx::system_out << "acmx2: Window created, setting up...\n";
                     fflush(stdout);
                     util.path = assets_path;
                     library.enableDualMode(enable_3d);
+                    library.setCacheSize(tex_cache_size > 0 ? tex_cache_size : 8);
                 }
 
-                                BuildWindow(const std::string &path, bool is3d, const std::string &assets, bool)
+                                BuildWindow(const std::string &path, bool is3d, const std::string &assets, int tex_cache_size, bool)
                                         : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
                                             lib_path(path), enable_3d(is3d), assets_path(assets) {
                                         mx::system_out << "acmx2: Window created, setting up...\n";
                                         fflush(stdout);
                                         util.path = assets_path;
                                         library.enableDualMode(enable_3d);
+                                        library.setCacheSize(tex_cache_size > 0 ? tex_cache_size : 8);
                                 }
 
                 /**
@@ -11136,12 +11155,12 @@ int main(int argc, char **argv) {
 
 #if defined(__linux__)
             if (args.silent) {
-                BuildWindow build_win(args.build_library_path, args.is3d, args.path, true);
+                BuildWindow build_win(args.build_library_path, args.is3d, args.path, args.cache_size, true);
                 build_win.buildLoop();
                 return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
             }
 #endif
-            BuildWindow build_win(args.build_library_path, args.is3d, args.path);
+            BuildWindow build_win(args.build_library_path, args.is3d, args.path, args.cache_size);
             build_win.buildLoop();
 
             return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -109,12 +109,13 @@ QString resolveAssetsPath() {
 #endif
 }
 
-QString resolveShaderCachePath(const QString &libraryPath) {
+QString resolveShaderCachePath(const QString &libraryPath, int cacheSize) {
     const QString assets = resolveAssetsPath();
     std::error_code ec;
     std::filesystem::path libFsPath(libraryPath.toStdString());
     std::filesystem::path absLib = std::filesystem::absolute(libFsPath, ec);
     std::string key = ec ? libraryPath.toStdString() : absLib.lexically_normal().string();
+    key += "|s=" + std::to_string(cacheSize);
     std::ostringstream nameStream;
     nameStream << ".shader_cache_" << std::hex << std::hash<std::string>{}(key);
     const QString filename = QString::fromStdString(nameStream.str());
@@ -878,7 +879,7 @@ void MainWindow::refreshShaderCacheStatus() {
     shaderCacheMTime = QDateTime();
     if (shader_path.isEmpty())
         return;
-    const QString cachePath = resolveShaderCachePath(shader_path);
+    const QString cachePath = resolveShaderCachePath(shader_path, cache_size);
     QFileInfo cacheInfo(cachePath);
     if (!cacheInfo.exists() || !cacheInfo.isFile()) {
         Log("Shader cache not found at: " + cachePath);
@@ -896,11 +897,11 @@ bool MainWindow::isShaderCacheStale() const {
     return false;
 #else
     if (!use_shader_cache || shader_path.isEmpty() || items.isEmpty())
-        return false;
-    const QString cachePath = resolveShaderCachePath(shader_path);
+           return false;
+    const QString cachePath = resolveShaderCachePath(shader_path, cache_size);
     QFileInfo cacheInfo(cachePath);
     if (!cacheInfo.exists() || !cacheInfo.isFile())
-        return false;
+        return true;
     const QDateTime cacheMTime = cacheInfo.lastModified();
     for (const QString &name : items) {
         QFileInfo src(shader_path + "/" + name);
@@ -1481,8 +1482,20 @@ void MainWindow::runSelected() {
 #endif
     if (!QFileInfo::exists(dirPath + "/data/win-icon.png"))
         dirPath = "/usr/local/share/acmx2";
-    QString shader_file = shader_path + "/" + data;
-    arguments << "--path" << dirPath << "--fragment" << shader_file;
+    const int selectedIndex = currentShaderRow();
+    if (selectedIndex < 0 || selectedIndex >= items.size()) {
+        Log("<b>No valid shader selection.</b>");
+        return;
+    }
+    // Use library mode for selected shader so binary cache participates.
+    arguments << "--path" << dirPath
+              << "--shaders" << shader_path
+              << "--shader" << QString::number(selectedIndex);
+    // Always pass texture cache size: it controls the `#define SIZE N`
+    // injected at compile time and the cache-file hash key. The size must
+    // match what was used when --build wrote the cache or every launch will
+    // miss the cache and recompile.
+    arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     QString res;
     QTextStream stream(&res);
     stream << camera_res.width() << "x" << camera_res.height();
@@ -1510,7 +1523,6 @@ void MainWindow::runSelected() {
         if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
-            arguments << "--texture-cache-size" << QString::number(cache_size);
         }
     } else {
         arguments << "--input" << video_file;
@@ -1521,7 +1533,6 @@ void MainWindow::runSelected() {
         if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
-            arguments << "--texture-cache-size" << QString::number(cache_size);
         }
         if (copy_audio)
             arguments << "--copy-audio";
@@ -1679,6 +1690,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     QString shader_file = shader_path;
     arguments << "--path" << dirPath << "--shaders" << shader_file;
+    // Always pass texture cache size so runtime SIZE matches the cache file.
+    arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     QString res;
     QTextStream stream(&res);
     stream << camera_res.width() << "x" << camera_res.height();
@@ -1705,7 +1718,6 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
-            arguments << "--texture-cache-size" << QString::number(cache_size);
         }
     } else {
         arguments << "--input" << video_file;
@@ -1716,7 +1728,6 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         if (cache_enabled) {
             arguments << "--texture-cache";
             arguments << "--cache-delay" << QString::number(cache_delay);
-            arguments << "--texture-cache-size" << QString::number(cache_size);
         }
         if (copy_audio)
             arguments << "--copy-audio";
@@ -2230,6 +2241,7 @@ void MainWindow::menuBuildShaderCache() {
     QStringList args;
     args << "--build" << build_path;
     args << "-p" << assets_path;
+    args << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
 
     if (enable_3d) {
         args << "--enable-3d";
