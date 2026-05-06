@@ -1487,14 +1487,14 @@ void MainWindow::runSelected() {
         Log("<b>No valid shader selection.</b>");
         return;
     }
-    // Use library mode for selected shader so binary cache participates.
+    // Single-shader run: use --fragment to bypass library load/compile entirely.
+    // Only the selected shader gets compiled; no binary cache lookup, no 1700+
+    // shader compile pass.
+    const QString fragmentPath = shader_path + "/" + data;
     arguments << "--path" << dirPath
-              << "--shaders" << shader_path
-              << "--shader" << QString::number(selectedIndex);
-    // Always pass texture cache size: it controls the `#define SIZE N`
-    // injected at compile time and the cache-file hash key. The size must
-    // match what was used when --build wrote the cache or every launch will
-    // miss the cache and recompile.
+              << "--fragment" << fragmentPath;
+    // Pass texture cache size so the SIZE macro injected into the fragment
+    // matches whatever the user has configured for cache shaders.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     QString res;
     QTextStream stream(&res);
@@ -1648,14 +1648,8 @@ void MainWindow::runSelected() {
         arguments << "--display-filter";
     }
 
-    if (shaderCacheMarkedStaleBySave || isShaderCacheStale()) {
-        Log("Shader cache is out of date; rebuilding then launching automatically.");
-        pendingLaunchArguments = arguments;
-        pendingLaunchAfterBuild = true;
-        menuBuildShaderCache();
-        return;
-    }
-
+    // Single-shader (--fragment) mode does not use the library binary cache,
+    // so skip the auto-rebuild gate that's needed for full library runs.
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
