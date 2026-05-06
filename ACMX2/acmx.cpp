@@ -6364,17 +6364,24 @@ class ACView : public gl::GLObject {
         glBindFramebuffer(GL_FRAMEBUFFER, crossfadeFBO);
         glViewport(0, 0, win->w, win->h);
         glClear(GL_COLOR_BUFFER_BIT);
-        crossfadeShader.useProgram();
-        crossfadeShader.setUniform("mv_matrix", glm::mat4(1.0f));
-        crossfadeShader.setUniform("proj_matrix", glm::mat4(1.0f));
-        crossfadeShader.setUniform("fade_alpha", crossfadeAlpha);
+        if (crossfadeShaders.empty()) {
+            crossfadeActive = false;
+            return;
+        }
+        if (crossfadeShaderIndex < 0 || crossfadeShaderIndex >= static_cast<int>(crossfadeShaders.size()))
+            crossfadeShaderIndex = 0;
+        gl::ShaderProgram &activeCrossfade = crossfadeShaders[crossfadeShaderIndex];
+        activeCrossfade.useProgram();
+        activeCrossfade.setUniform("mv_matrix", glm::mat4(1.0f));
+        activeCrossfade.setUniform("proj_matrix", glm::mat4(1.0f));
+        activeCrossfade.setUniform("fade_alpha", crossfadeAlpha);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, currentTexture);
-        crossfadeShader.setUniform("samp", 0);
+        activeCrossfade.setUniform("samp", 0);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, crossfadePrevTexture);
-        crossfadeShader.setUniform("prev_samp", 1);
-        sprite.setShader(&crossfadeShader);
+        activeCrossfade.setUniform("prev_samp", 1);
+        sprite.setShader(&activeCrossfade);
         sprite.setName("samp");
         sprite.draw(currentTexture, 0, 0, win->w, win->h);
         glActiveTexture(GL_TEXTURE0);
@@ -7023,8 +7030,37 @@ class ACView : public gl::GLObject {
         if (!fshader3d.loadProgram(win->util.getFilePath("data/vertex.glsl"), win->util.getFilePath("data/framebuffer.glsl"))) {
             throw mx::Exception("Error loading shader");
         }
-        if (!crossfadeShader.loadProgram(win->util.getFilePath("data/vert.glsl"), win->util.getFilePath("data/crossfade.glsl"))) {
-            throw mx::Exception("Error loading crossfade shader");
+        {
+            static const char *kCrossfadeFiles[] = {
+                "data/xfade_01_linear.glsl",
+                "data/xfade_02_block.glsl",
+                "data/xfade_03_wipe.glsl",
+                "data/xfade_04_radial.glsl",
+                "data/xfade_05_pixelate.glsl",
+                "data/xfade_06_dissolve.glsl",
+                "data/xfade_07_swirl.glsl",
+                "data/xfade_08_glitch.glsl",
+                "data/xfade_09_diamond.glsl",
+                "data/xfade_10_burn.glsl",
+            };
+            crossfadeShaders.clear();
+            crossfadeShaderNames.clear();
+            const std::string vertPath = win->util.getFilePath("data/vert.glsl");
+            for (const char *frag : kCrossfadeFiles) {
+                gl::ShaderProgram prog;
+                if (!prog.loadProgram(vertPath, win->util.getFilePath(frag))) {
+                    throw mx::Exception(std::string("Error loading crossfade shader: ") + frag);
+                }
+                crossfadeShaders.push_back(prog);
+                std::string nm = frag;
+                auto slash = nm.find_last_of('/');
+                if (slash != std::string::npos) nm = nm.substr(slash + 1);
+                auto dot = nm.find_last_of('.');
+                if (dot != std::string::npos) nm = nm.substr(0, dot);
+                crossfadeShaderNames.push_back(nm);
+            }
+            if (crossfadeShaderIndex < 0 || crossfadeShaderIndex >= static_cast<int>(crossfadeShaders.size()))
+                crossfadeShaderIndex = 0;
         }
         GLenum error = glGetError();
         if (error != GL_NO_ERROR) {
@@ -8248,6 +8284,15 @@ class ACView : public gl::GLObject {
                 win->text.printText_Blended(overlayFont, 10, overlayY, autopilotLine.str());
                 overlayY += 30;
             }
+            if (!crossfadeShaderNames.empty()) {
+                int n = static_cast<int>(crossfadeShaderNames.size());
+                std::string xfadeLine = "XFade [" + std::to_string(crossfadeShaderIndex + 1) + "/" +
+                                        std::to_string(n) + "]: " +
+                                        crossfadeShaderNames[crossfadeShaderIndex];
+                win->text.setColor({255, 200, 0, 255});
+                win->text.printText_Blended(overlayFont, 10, overlayY, xfadeLine);
+                overlayY += 30;
+            }
             win->text.setColor({255, 255, 255, 255});
             win->text.printText_Blended(overlayFont, 10, overlayY, timerStr);
             win->text.printText_Blended(overlayFont, 10, overlayY + 30, fpsStr.str());
@@ -8948,6 +8993,24 @@ class ACView : public gl::GLObject {
                 mx::system_out << "acmx2: Overlay " << (counter_disabled ? "hidden" : "shown") << " (F9)\n";
                 fflush(stdout);
                 break;
+            case SDLK_LEFTBRACKET:
+                if (!crossfadeShaders.empty()) {
+                    int n = static_cast<int>(crossfadeShaders.size());
+                    crossfadeShaderIndex = (crossfadeShaderIndex - 1 + n) % n;
+                    mx::system_out << "acmx2: Crossfade shader: " << crossfadeShaderNames[crossfadeShaderIndex]
+                                   << " (" << (crossfadeShaderIndex + 1) << "/" << n << ")\n";
+                    fflush(stdout);
+                }
+                break;
+            case SDLK_RIGHTBRACKET:
+                if (!crossfadeShaders.empty()) {
+                    int n = static_cast<int>(crossfadeShaders.size());
+                    crossfadeShaderIndex = (crossfadeShaderIndex + 1) % n;
+                    mx::system_out << "acmx2: Crossfade shader: " << crossfadeShaderNames[crossfadeShaderIndex]
+                                   << " (" << (crossfadeShaderIndex + 1) << "/" << n << ")\n";
+                    fflush(stdout);
+                }
+                break;
             }
             break;
         }
@@ -9010,7 +9073,9 @@ class ACView : public gl::GLObject {
     gl::ShaderProgram hdr_encode_shader;                       ///< Linear BT.2020 -> PQ (or HLG) fullscreen pass.
     gl::ShaderProgram display_flip_shader;                     ///< Display shader with optional Y-flip for windowed output.
     cv::Mat hdr_frame_mat;                                     ///< Scratch CV_16UC4 RGBA frame for HDR decode.
-    gl::ShaderProgram crossfadeShader;                         ///< Shader that mixes prev_samp and samp via fade_alpha.
+    std::vector<gl::ShaderProgram> crossfadeShaders;           ///< Available crossfade transition shaders (cycle with [ and ]).
+    std::vector<std::string> crossfadeShaderNames;             ///< Display names matching @ref crossfadeShaders by index.
+    int crossfadeShaderIndex = 0;                              ///< Active index into @ref crossfadeShaders.
     float crossfadeAlpha = 1.0f;                               ///< Current blend factor (0 = old frame, 1 = new frame).
     bool crossfadeActive = false;                              ///< True while a crossfade transition is in progress.
     float crossfadeDuration = 0.5f;                            ///< Duration of the crossfade transition in seconds.
