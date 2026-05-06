@@ -24,7 +24,7 @@ void GPUFilterDialog::setupUI() {
     QHBoxLayout *bufferLayout = new QHBoxLayout(bufferGroup);
     QLabel *bufferLabel = new QLabel("Buffer Size (4-32):", this);
     bufferSizeSpinBox = new QSpinBox(this);
-    bufferSizeSpinBox->setRange(4, 32);
+    bufferSizeSpinBox->setRange(4, 128);
     bufferSizeSpinBox->setValue(8);
     bufferLayout->addWidget(bufferLabel);
     bufferLayout->addWidget(bufferSizeSpinBox);

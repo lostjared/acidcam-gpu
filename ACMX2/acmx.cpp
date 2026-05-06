@@ -2405,6 +2405,13 @@ class ShaderLibrary {
         std::vector<GLint> spectrum_history_locs; ///< Locations of `spectrum0..spectrumN-1` (-1 entries if unused).
 #endif
         GLint texture_cache_loc[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+        // Array-form alias of texture_cache_loc: locations of `textures[0]..textures[N-1]`
+        // for shaders that declare `uniform sampler2D textures[SIZE];`. Aliases the same
+        // texture units as samp1..samp8 (for the first 8 entries) — no extra binds or
+        // copies needed. Sized at runtime to match the active --texture-cache-size so
+        // shaders can scale beyond the legacy 8-frame ceiling.
+        std::vector<GLint> texture_array_loc;
+        GLint texture_array_base_loc = -1; ///< Base location of `textures[0]` for bulk glUniform1iv assignment.
         GLint iFrame = -1;
         GLint iTimeDelta = -1;
         GLint iDate = -1;
@@ -2449,11 +2456,17 @@ class ShaderLibrary {
      * @return Absolute or relative path to the shader cache file.
      */
     static std::string shaderCacheFilePath(const std::string &assets_path,
-                                           const std::string &library_path) {
+                                           const std::string &library_path,
+                                           int cache_size = 8) {
         std::error_code ec;
         std::filesystem::path lib(library_path);
         std::filesystem::path abs_lib = std::filesystem::absolute(lib, ec);
         std::string key = ec ? library_path : abs_lib.lexically_normal().string();
+        // Append cache_size to the hash key so each --texture-cache-size value
+        // gets its own cache file. Shader binaries compiled with `#define SIZE N`
+        // for one N must not be reused for a different N — the sampler array
+        // declaration would mismatch the linked program.
+        key += "|s=" + std::to_string(cache_size);
         std::hash<std::string> hasher;
         std::ostringstream name_stream;
         name_stream << ".shader_cache_" << std::hex << hasher(key);
@@ -2500,6 +2513,84 @@ class ShaderLibrary {
         // Last resort: return assets path even if it isn't writable so the
         // caller can surface a meaningful error.
         return assets.empty() ? lib_cache.string() : assets_cache.string();
+    }
+
+    /**
+     * @brief Active runtime size of the texture-cache ring buffer.
+     *
+     * Set via setCacheSize() before any program load; defaults to 8 to
+     * preserve the legacy samp1..samp8 binding behaviour. Used to:
+     *  - inject `#define SIZE N` into fragment sources at compile time
+     *    so `uniform sampler2D textures[SIZE];` declarations resolve to
+     *    the right array length;
+     *  - size the per-program `texture_array_loc` lookup vector;
+     *  - bound the runtime binding loop in the cache-render path.
+     */
+    int cache_size_ = 8;
+
+    /**
+     * @brief Read a fragment shader file and inject `#define SIZE N`
+     *        immediately after its `#version` directive.
+     *
+     * GLSL sampler array sizes must be compile-time constants, so the
+     * cache-frame count has to be baked into the source string before
+     * `glShaderSource`. This helper preserves the original source line
+     * numbering as best it can: the inserted line replaces no existing
+     * line, only shifts everything after `#version` down by one.
+     *
+     * If the file cannot be opened the returned string is empty (the
+     * caller falls through to the file-based loader, which surfaces the
+     * proper error).
+     *
+     * @param frag_path  Filesystem path to the fragment .glsl source.
+     * @param size       Cache ring length to bake as `SIZE`.
+     * @return Modified fragment source, or empty string on read failure.
+     */
+    static std::string injectShaderSize(const std::string &frag_path, int size) {
+        std::ifstream in(frag_path);
+        if (!in.is_open())
+            return {};
+        std::ostringstream ss;
+        ss << in.rdbuf();
+        std::string src = ss.str();
+        // Locate the first `#version` directive and insert after its newline.
+        std::size_t v_pos = src.find("#version");
+        std::size_t insert_pos = 0;
+        if (v_pos != std::string::npos) {
+            std::size_t nl = src.find('\n', v_pos);
+            insert_pos = (nl == std::string::npos) ? src.size() : nl + 1;
+        }
+        std::string define = "#define SIZE " + std::to_string(size) + "\n";
+        src.insert(insert_pos, define);
+        return src;
+    }
+
+    /**
+     * @brief Compile a shader from file pair, injecting `#define SIZE N`
+     *        into the fragment source. Falls back to the plain file-based
+     *        loader if the fragment cannot be read in-process.
+     *
+     * The vertex source is not modified — SIZE is only meaningful for
+     * fragment-side cache shaders.
+     *
+     * @return true if the program compiled and linked successfully.
+     */
+    bool loadProgramWithSize(gl::ShaderProgram *prog,
+                             const std::string &vert_path,
+                             const std::string &frag_path) const {
+        std::string frag_src = injectShaderSize(frag_path, cache_size_);
+        if (frag_src.empty()) {
+            // Could not read the fragment file; fall back so the loader can
+            // produce its own diagnostic.
+            return prog->loadProgram(vert_path, frag_path);
+        }
+        std::ifstream vin(vert_path);
+        if (!vin.is_open()) {
+            return prog->loadProgram(vert_path, frag_path);
+        }
+        std::ostringstream vss;
+        vss << vin.rdbuf();
+        return prog->loadProgramFromText(vss.str(), frag_src);
     }
 
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_2d;
@@ -2584,6 +2675,29 @@ class ShaderLibrary {
      * @param enable True to use the caching wrapper.
      */
     void enableCache(bool enable) { use_cache = enable; }
+
+    /**
+     * @brief Set the active texture-cache ring length.
+     *
+     * Must be called before loadPrograms / loadProgramsWithCache so the
+     * value is in effect when shaders are compiled (it is baked into the
+     * fragment source as `#define SIZE N`) and when uniform locations are
+     * queried (it sizes the per-program `texture_array_loc` lookup).
+     *
+     * Values outside [1, 64] are clamped silently to keep us under any
+     * reasonable `GL_MAX_TEXTURE_IMAGE_UNITS` minimum (driver minimum for
+     * GL 3.3 core is 16; the runtime caller already clamps to 1..64).
+     *
+     * @param size Ring buffer size in frames.
+     */
+    void setCacheSize(int size) {
+        if (size < 1) size = 1;
+        if (size > 64) size = 64;
+        cache_size_ = size;
+    }
+
+    /// @brief Active cache ring size as seen by the shader-compile path.
+    int cacheSize() const { return cache_size_; }
 
     /**
      * @brief Remove all compiled shader programs and reset the library index.
@@ -2691,8 +2805,31 @@ class ShaderLibrary {
             }
 
             if (name.find("cache") != std::string::npos) {
+                // samp1..samp8 are the legacy slot-named samplers (capped
+                // at 8 because the engine only ever declared that many).
                 for (int i = 0; i < 8; ++i) {
                     names[pos].texture_cache_loc[i] = glGetUniformLocation(prog->id(), std::string("samp" + std::to_string(i + 1)).c_str());
+                }
+                // Prefer assigning the whole sampler array through its base
+                // location; some drivers do not reliably expose locations for
+                // every `textures[i]` element queried individually.
+                names[pos].texture_array_base_loc = glGetUniformLocation(prog->id(), "textures[0]");
+                if (names[pos].texture_array_base_loc != -1) {
+                    std::vector<GLint> units(static_cast<std::size_t>(cache_size_), 0);
+                    for (int i = 0; i < cache_size_; ++i) {
+                        units[static_cast<std::size_t>(i)] = i + 1;
+                    }
+                    glUniform1iv(names[pos].texture_array_base_loc, cache_size_, units.data());
+                }
+                // textures[0..N-1] is the array-form alias and scales with
+                // the runtime --texture-cache-size. glGetUniformLocation
+                // returns -1 for any element the shader doesn't actually
+                // declare/reference; glUniform1i on -1 is a silent no-op.
+                names[pos].texture_array_loc.assign(static_cast<std::size_t>(cache_size_), -1);
+                for (int i = 0; i < cache_size_; ++i) {
+                    names[pos].texture_array_loc[i] = glGetUniformLocation(
+                        prog->id(),
+                        std::string("textures[" + std::to_string(i) + "]").c_str());
                 }
             }
 
@@ -2764,14 +2901,29 @@ class ShaderLibrary {
      * @param value Zero-based cache texture slot (0–7).
      */
     void setUniform(const std::string &name, int value) {
-        if (value < 0 || value >= 8) {
+        if (value < 0 || value >= cache_size_) {
             return;
         }
         auto &names = is3d ? program_names_3d : program_names_2d;
         if (names.find(index()) == names.end()) {
             return;
         }
-        glUniform1i(names[index()].texture_cache_loc[value], value + 1);
+        // samp1..samp8 only exist for the first 8 slots (legacy ceiling).
+        if (value < 8) {
+            glUniform1i(names[index()].texture_cache_loc[value], value + 1);
+        }
+        // If a base location exists, the whole array was assigned in
+        // setupProgramUniforms() via glUniform1iv, so no per-element update
+        // is needed here.
+        if (names[index()].texture_array_base_loc != -1) {
+            return;
+        }
+        // Array-form `textures[value]` scales to whatever cache_size_ is
+        // active. glUniform1i on -1 (uniform absent or optimized out) is
+        // a no-op, so the bounds check above is the only guard needed.
+        if (value < static_cast<int>(names[index()].texture_array_loc.size())) {
+            glUniform1i(names[index()].texture_array_loc[value], value + 1);
+        }
     }
 
     /**
@@ -2997,7 +3149,7 @@ class ShaderLibrary {
             bool ok_2d = false;
             programs_2d.push_back(makeProgram());
             try {
-                if (programs_2d.back()->loadProgram(vert_2d, full_path)) {
+                if (loadProgramWithSize(programs_2d.back().get(), vert_2d, full_path)) {
                     ok_2d = true;
                 } else {
                     mx::system_out << "acmx2: ⚠ Failed to compile 2D shader: " << line_data
@@ -3030,7 +3182,7 @@ class ShaderLibrary {
                 bool ok_3d = false;
                 programs_3d.push_back(makeProgram());
                 try {
-                    if (programs_3d.back()->loadProgram(vert_3d, full_path)) {
+                    if (loadProgramWithSize(programs_3d.back().get(), vert_3d, full_path)) {
                         ok_3d = true;
                     } else {
                         mx::system_out << "acmx2: ⚠ Failed to compile 3D shader: " << line_data
@@ -3240,7 +3392,7 @@ class ShaderLibrary {
 #endif
                 gl::ShaderProgram prog_2d;
                 prog_2d.setSilent(true);
-                if (!prog_2d.loadProgram(vert_2d, full_path)) {
+                if (!loadProgramWithSize(&prog_2d, vert_2d, full_path)) {
                     compiled = false;
                 } else {
                     GLint link_status = 0;
@@ -3250,7 +3402,7 @@ class ShaderLibrary {
                 if (compiled && dual_mode) {
                     gl::ShaderProgram prog_3d;
                     prog_3d.setSilent(true);
-                    if (!prog_3d.loadProgram(vert_3d, full_path)) {
+                    if (!loadProgramWithSize(&prog_3d, vert_3d, full_path)) {
                         compiled = false;
                     } else {
                         GLint link_status = 0;
@@ -3304,7 +3456,7 @@ class ShaderLibrary {
         out.close();
 
         // Invalidate the on-disk cache since the library composition changed.
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size_);
         if (std::filesystem::exists(cache_file)) {
             std::filesystem::remove(cache_file, ec);
             if (!ec) {
@@ -3350,7 +3502,7 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Program binary functions loaded successfully\n";
         fflush(stdout);
 
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size_);
         std::fstream file;
         file.open(library_path + "/index.txt", std::ios::in);
         if (!file.is_open()) {
@@ -3426,7 +3578,7 @@ class ShaderLibrary {
 
                 gl::ShaderProgram prog_2d;
                 prog_2d.setSilent(true);
-                if (!prog_2d.loadProgram(vert_2d, full_path)) {
+                if (!loadProgramWithSize(&prog_2d, vert_2d, full_path)) {
                     mx::system_out << " ❌ (2D compile failed)\n";
                     fflush(stdout);
                     mark_failed("2D compile failed");
@@ -3515,7 +3667,7 @@ class ShaderLibrary {
 
                     gl::ShaderProgram prog_3d;
                     prog_3d.setSilent(true);
-                    if (!prog_3d.loadProgram(vert_3d, full_path)) {
+                    if (!loadProgramWithSize(&prog_3d, vert_3d, full_path)) {
                         mx::system_out << " ❌ (3D compile failed)\n";
                         fflush(stdout);
                         mark_failed("3D compile failed");
@@ -3643,7 +3795,7 @@ class ShaderLibrary {
     /// @brief Attempt to load all shader programs from the binary cache file.
     bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont,
                        const std::string &vert_2d = "", const std::string &vert_3d = "") {
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size_);
 
         mx::system_out << "acmx2: Checking for shader cache at: " << cache_file << "\n";
         fflush(stdout);
@@ -6739,6 +6891,12 @@ class ACView : public gl::GLObject {
         fflush(stdout);
 
         library.enableCache(use_shader_cache_flag);
+        // Tell the library how many cache textures we'll bind so it can
+        // (a) inject `#define SIZE N` into fragment sources before compile,
+        // (b) size the per-program `texture_array_loc` lookup vector,
+        // (c) keep the on-disk binary cache keyed per-size to avoid
+        //     reusing a binary compiled for a different SIZE.
+        library.setCacheSize(static_cast<int>(frame_cache.size()));
         if (std::get<0>(flib) == 1) {
             if (use_shader_cache_flag)
                 library.loadProgramsWithCache(win, std::get<1>(flib), overlayFont);
@@ -7113,7 +7271,11 @@ class ACView : public gl::GLObject {
                     hdr_counter = 0;
                 }
                 if (frame_cache.isFull()) {
-                    for (int i = 0; i < 8; ++i) {
+                    const int n_bind = library.cacheSize();
+                    for (int i = 0; i < n_bind; ++i) {
+                        // setUniform(name, slot) routes through ProgramData
+                        // and assigns BOTH `samp(i+1)` (for i<8) and
+                        // `textures[i]` to texture unit i+1.
                         library.setUniform("samp" + std::to_string(i + 1), i);
                         glActiveTexture(GL_TEXTURE1 + i);
                         glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(i));
@@ -7201,7 +7363,8 @@ class ACView : public gl::GLObject {
                     counter = 0;
                 }
                 if (frame_cache.isFull()) {
-                    for (int i = 0; i < 8; ++i) {
+                    const int n_bind = library.cacheSize();
+                    for (int i = 0; i < n_bind; ++i) {
                         library.setUniform("samp" + std::to_string(i + 1), i);
                         glActiveTexture(GL_TEXTURE1 + i);
                         glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(i));
