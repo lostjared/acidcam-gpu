@@ -83,6 +83,10 @@ class SettingsWindow : public QDialog {
     bool isDurationLimitEnabled() const;
     /// @brief Return configured max run duration in seconds.
     double getDurationLimit() const;
+    /// @brief Return whether maximum output-size limiting is enabled.
+    bool isMaxSizeLimitEnabled() const;
+    /// @brief Return configured maximum output size in MB.
+    double getMaxSizeLimit() const;
     /// @brief Return crossfade duration between shader transitions.
     float getCrossFadeDuration() const;
     /// @brief Return whether flip mode is enabled.
@@ -170,6 +174,8 @@ class SettingsWindow : public QDialog {
     QDoubleSpinBox *timeSpeedSpinBox;
     QCheckBox *durationLimitCheckBox;
     QDoubleSpinBox *durationLimitSpinBox;
+    QCheckBox *maxSizeLimitCheckBox;
+    QDoubleSpinBox *maxSizeLimitSpinBox;
     QDoubleSpinBox *crossFadeSpinBox;
     QCheckBox *flipCheckBox;
 
@@ -208,6 +214,7 @@ class SettingsWindow : public QDialog {
     QString modelFile;
     int selectedCudaDevice;
     double maxDuration;
+    double maxSizeLimit;
     bool inputHdrDetected = false;
     QString preferredFpsText = "30";
 };

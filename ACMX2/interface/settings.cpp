@@ -385,6 +385,7 @@ SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
       modelFile("data/cube.mxmod.z"),
       selectedCudaDevice(0),
       maxDuration(0.0),
+            maxSizeLimit(0.0),
       executablePath(execPath) {
     init();
 }
@@ -546,6 +547,14 @@ void SettingsWindow::init() {
     durationLimitSpinBox->setValue(60.0);
     durationLimitSpinBox->setEnabled(false);
 
+    maxSizeLimitCheckBox = new QCheckBox("Max Size: MB", this);
+    maxSizeLimitSpinBox = new QDoubleSpinBox(this);
+    maxSizeLimitSpinBox->setRange(0.1, 1048576.0);
+    maxSizeLimitSpinBox->setSingleStep(10.0);
+    maxSizeLimitSpinBox->setDecimals(2);
+    maxSizeLimitSpinBox->setValue(500.0);
+    maxSizeLimitSpinBox->setEnabled(false);
+
     crossFadeSpinBox = new QDoubleSpinBox(this);
     crossFadeSpinBox->setRange(0.0, 10.0);
     crossFadeSpinBox->setSingleStep(0.1);
@@ -691,6 +700,10 @@ void SettingsWindow::init() {
     durationRow->addWidget(durationLimitCheckBox);
     durationRow->addWidget(durationLimitSpinBox);
     playbackGrid->addLayout(durationRow, ++r, 0, 1, 2);
+    auto *maxSizeRow = new QHBoxLayout;
+    maxSizeRow->addWidget(maxSizeLimitCheckBox);
+    maxSizeRow->addWidget(maxSizeLimitSpinBox);
+    playbackGrid->addLayout(maxSizeRow, ++r, 0, 1, 2);
     auto *cacheRow = new QHBoxLayout;
     cacheRow->addWidget(textureCacheCheckBox);
     cacheRow->addWidget(new QLabel("Delay:", this));
@@ -781,6 +794,7 @@ void SettingsWindow::init() {
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheDelaySpinBox, &QSpinBox::setEnabled);
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheSizeSpinBox, &QSpinBox::setEnabled);
     connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
+    connect(maxSizeLimitCheckBox, &QCheckBox::toggled, maxSizeLimitSpinBox, &QDoubleSpinBox::setEnabled);
 
     connect(enable3dCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         modelFileLineEdit->setEnabled(checked);
@@ -1025,6 +1039,8 @@ void SettingsWindow::loadUiState() {
     timeSpeedSpinBox->setValue(appSettings.value("interface/time_speed", 1.0).toDouble());
     durationLimitCheckBox->setChecked(appSettings.value("interface/duration_enabled", false).toBool());
     durationLimitSpinBox->setValue(appSettings.value("interface/duration_seconds", 60.0).toDouble());
+    maxSizeLimitCheckBox->setChecked(appSettings.value("interface/max_size_enabled", false).toBool());
+    maxSizeLimitSpinBox->setValue(appSettings.value("interface/max_size_mb", 500.0).toDouble());
     crossFadeSpinBox->setValue(appSettings.value("interface/crossfade", 0.5).toDouble());
     flipCheckBox->setChecked(appSettings.value("interface/flip", false).toBool());
 
@@ -1078,6 +1094,8 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/time_speed", timeSpeedSpinBox->value());
     appSettings.setValue("interface/duration_enabled", durationLimitCheckBox->isChecked());
     appSettings.setValue("interface/duration_seconds", durationLimitSpinBox->value());
+    appSettings.setValue("interface/max_size_enabled", maxSizeLimitCheckBox->isChecked());
+    appSettings.setValue("interface/max_size_mb", maxSizeLimitSpinBox->value());
     appSettings.setValue("interface/crossfade", crossFadeSpinBox->value());
     appSettings.setValue("interface/flip", flipCheckBox->isChecked());
 }
@@ -1191,6 +1209,14 @@ bool SettingsWindow::isDurationLimitEnabled() const {
 
 double SettingsWindow::getDurationLimit() const {
     return durationLimitSpinBox->value();
+}
+
+bool SettingsWindow::isMaxSizeLimitEnabled() const {
+    return maxSizeLimitCheckBox->isChecked();
+}
+
+double SettingsWindow::getMaxSizeLimit() const {
+    return maxSizeLimitSpinBox->value();
 }
 
 float SettingsWindow::getCrossFadeDuration() const {

@@ -1428,6 +1428,8 @@ void MainWindow::cameraSettings() {
     time_speed = settingsWindow.getTimeSpeed();
     duration_limit_enabled = settingsWindow.isDurationLimitEnabled();
     max_duration = settingsWindow.getDurationLimit();
+    max_size_limit_enabled = settingsWindow.isMaxSizeLimitEnabled();
+    max_size_mb = settingsWindow.getMaxSizeLimit();
     cross_fade_duration = settingsWindow.getCrossFadeDuration();
     flip_enabled = settingsWindow.isFlipEnabled();
     encode_preset = settingsWindow.getEncodePreset();
@@ -1628,6 +1630,10 @@ void MainWindow::runSelected() {
 
     if (duration_limit_enabled && max_duration > 0.0) {
         arguments << "--duration" << QString::number(max_duration, 'f', 1);
+    }
+
+    if (max_size_limit_enabled && max_size_mb > 0.0 && !output_file.isEmpty()) {
+        arguments << "--max-size" << QString::number(max_size_mb, 'f', 2);
     }
 
     if (cross_fade_duration != 0.5f) {
@@ -1854,6 +1860,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     if (duration_limit_enabled && max_duration > 0.0) {
         arguments << "--duration" << QString::number(max_duration, 'f', 1);
+    }
+
+    if (max_size_limit_enabled && max_size_mb > 0.0 && !output_file.isEmpty()) {
+        arguments << "--max-size" << QString::number(max_size_mb, 'f', 2);
     }
 
     if (cross_fade_duration != 0.5f) {

@@ -4954,6 +4954,7 @@ struct MXArguments {
     bool autopilot_random_interval = false; ///< When true, randomize autopilot frame interval after each switch.
     int autopilot_random_timeout = 0;    ///< Upper bound (inclusive) for randomized autopilot interval.
     double duration = 0.0;
+    double max_size_mb = 0.0;
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
     bool flip_output = false;          ///< Vertical flip output frames when set (e.g., for HDR correction).
@@ -6007,6 +6008,10 @@ class ACView : public gl::GLObject {
         autopilot_random_timeout = args.autopilot_random_timeout;
         resetAutopilotInterval();
         duration_limit = args.duration;
+        max_size_limit_mb = args.max_size_mb;
+        if (max_size_limit_mb > 0.0) {
+            max_size_limit_bytes = max_size_limit_mb * 1024.0 * 1024.0;
+        }
         crossfadeDuration = args.cross_fade_duration;
 #ifdef MIDI_ENABLED
         if (!args.midi_map_file.empty()) {
@@ -6057,6 +6062,8 @@ class ACView : public gl::GLObject {
     std::vector<int> saved_pass_list;
     bool saved_pass_enabled = false;
     double duration_limit = 0.0;
+    double max_size_limit_mb = 0.0;
+    double max_size_limit_bytes = 0.0;
 
     void resetAutopilotInterval() {
         if (autopilot_random_interval) {
@@ -7178,6 +7185,20 @@ class ACView : public gl::GLObject {
                 mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
                 fflush(stdout);
                 running = false;
+            }
+        }
+
+        if (max_size_limit_bytes > 0.0 && writer.is_open() && writerRunning && !ofilename.empty()) {
+            struct stat out_stat {};
+            if (::stat(ofilename.c_str(), &out_stat) == 0) {
+                const double current_size = static_cast<double>(out_stat.st_size);
+                if (current_size > max_size_limit_bytes) {
+                    mx::system_out << "acmx2: Max size reached ("
+                                   << std::fixed << std::setprecision(2) << max_size_limit_mb
+                                   << " MB), stopping recording...\n";
+                    fflush(stdout);
+                    running = false;
+                }
             }
         }
 
@@ -10042,6 +10063,7 @@ namespace {
             {"-N, --fullscreen", "Start in fullscreen mode (Escape to exit fullscreen).", "acmx2 --fullscreen"},
             {"--silent", "Run headless (no preview window). Intended for file-to-file rendering.", "acmx2 -i in.mp4 -o out.mp4 --silent"},
             {"--duration <seconds>", "Auto-stop recording/output after elapsed seconds.", "acmx2 -i in.mp4 -o out.mp4 --duration 30"}
+            ,{"--max-size <MB>", "Auto-stop when output file size exceeds MB.", "acmx2 -i in.mp4 -o out.mp4 --max-size 500.0"}
         });
 
         printSection(out, c, "Input Source", {
@@ -10295,6 +10317,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(418, "autopilot-random", "Autopilot random interval upper bound; each J/Y switch picks 4..N frames")
         .addOptionDoubleValue(419, "autiopilot-random", "Alias for --autopilot-random")
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
+        .addOptionDoubleValue(610, "max-size", "Stop recording when output file exceeds size in MB (float)")
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
         .addOptionDouble(414, "use-yuv", "Use YUV (YUYV) camera format instead of MJPG")
@@ -10669,6 +10692,16 @@ int main(int argc, char **argv) {
                 args.duration = atof(arg.arg_value.c_str());
                 if (args.duration > 0.0) {
                     mx::system_out << "acmx2: Duration set to: " << args.duration << " seconds\n";
+                }
+                break;
+            case 610:
+                args.max_size_mb = atof(arg.arg_value.c_str());
+                if (args.max_size_mb > 0.0) {
+                    mx::system_out << "acmx2: Max output size set to: "
+                                   << std::fixed << std::setprecision(2) << args.max_size_mb
+                                   << " MB\n";
+                } else {
+                    args.max_size_mb = 0.0;
                 }
                 break;
             case 412:
