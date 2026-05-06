@@ -9634,18 +9634,49 @@ class ACView : public gl::GLObject {
         bool is_mp4_like = (out_ext == ".mp4" || out_ext == ".MP4" || out_ext == ".mov" || out_ext == ".MOV" || out_ext == ".m4v" || out_ext == ".M4V");
         int64_t fc = writer.get_frame_count();
         double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
+        // Correct A/V drift caused by the webcam delivering fewer frames per
+        // second than the configured encoder FPS.  The video stream is
+        // written with fixed-FPS PTS (frame_count / fps), so it plays back
+        // faster than it was captured whenever the camera couldn't keep up.
+        // The audio WAV is recorded in real (wall-clock) time, so its
+        // duration reflects the true capture length.  Computing
+        // itsscale = audio_duration / video_duration and applying it as
+        // an input option to ffmpeg rescales the video container PTS to
+        // match audio without re-encoding.  Clamped to a sane range so
+        // a corrupt or zero-length WAV never produces a wild scale.
+        const double audio_duration = get_audio_recorded_duration_seconds();
+        double itsscale = 1.0;
+        if (video_duration > 0.0 && audio_duration > 0.0) {
+            const double s = audio_duration / video_duration;
+            if (s >= 0.5 && s <= 2.0) {
+                itsscale = s;
+            }
+        }
+        const bool apply_itsscale = std::abs(itsscale - 1.0) > 0.001;
         std::ostringstream cmd;
-        cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_record_file
+        cmd << "ffmpeg -y";
+        if (apply_itsscale) {
+            cmd << " -itsscale " << std::fixed << std::setprecision(6) << itsscale;
+        }
+        cmd << " -i \"" << ofilename << "\" -i \"" << audio_record_file
             << "\" -map 0:v:0 -map 1:a:0"
             << " -c:v copy -c:a aac -b:a 192k";
-        if (video_duration > 0.0) {
+        if (!apply_itsscale && video_duration > 0.0) {
+            // Without itsscale the original video duration is correct,
+            // so cap audio to it to avoid trailing audio past picture.
             cmd << " -t " << std::fixed << std::setprecision(3) << video_duration;
         }
         if (is_mp4_like) {
             cmd << " -movflags +faststart";
         }
         cmd << " \"" << tmp_out << "\" 2>&1";
-        mx::system_out << "acmx2: muxing recorded audio into video...\n";
+        mx::system_out << "acmx2: muxing recorded audio into video";
+        if (apply_itsscale) {
+            mx::system_out << " (A/V resync itsscale=" << std::fixed << std::setprecision(4)
+                           << itsscale << ", video=" << std::setprecision(3) << video_duration
+                           << "s, audio=" << audio_duration << "s)";
+        }
+        mx::system_out << "...\n";
         fflush(stdout);
         int ret = std::system(cmd.str().c_str());
         if (ret == 0) {

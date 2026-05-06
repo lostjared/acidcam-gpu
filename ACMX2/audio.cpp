@@ -250,6 +250,13 @@ bool is_audio_recording() {
     return gRecording.load(std::memory_order_relaxed);
 }
 
+double get_audio_recorded_duration_seconds() {
+    const uint32_t bytes = gRecordDataSize;
+    const uint32_t bps = gSampleRate * input_channels * static_cast<uint32_t>(sizeof(int16_t));
+    if (bps == 0) return 0.0;
+    return static_cast<double>(bytes) / static_cast<double>(bps);
+}
+
 void set_record_gain(float gain) {
     gRecordGain.store(std::clamp(gain, 0.0f, 2.0f), std::memory_order_relaxed);
 }

@@ -23,6 +23,15 @@ void set_output(bool o);
 bool start_audio_recording(const std::string &filepath);
 void stop_audio_recording();
 bool is_audio_recording();
+/**
+ * @brief Duration in seconds of the most recent (or in-progress) WAV recording.
+ *
+ * Computed from the bytes already written to the recording file divided by
+ * `sample_rate * channels * sizeof(int16_t)`.  Returns 0 if no recording
+ * has been started.  Used by the muxer to correct A/V drift when the
+ * webcam capture rate is lower than the configured encoder FPS.
+ */
+double get_audio_recorded_duration_seconds();
 void set_record_gain(float gain);
 float get_record_gain();
 
