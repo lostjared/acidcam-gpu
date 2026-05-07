@@ -6111,6 +6111,7 @@ class ACView : public gl::GLObject {
     bool autopilot_random_interval = false; ///< When true, choose a new interval from [4, autopilot_random_timeout] after each switch.
     int autopilot_random_timeout = 0;     ///< Inclusive upper bound for random autopilot interval.
     int autopilot_interval_frames = 0;    ///< Active interval currently used by autopilot tick.
+    bool autopilot_random_crossfade = false; ///< When true, autopilot picks a random crossfade shader on each switch.
     std::mt19937 autopilot_rng{std::random_device{}()};
     std::vector<int> saved_pass_list;
     bool saved_pass_enabled = false;
@@ -6137,6 +6138,17 @@ class ACView : public gl::GLObject {
             return static_cast<int>(playlist_indices.size());
         }
         return 0;
+    }
+
+    void maybeRandomizeAutopilotCrossfade() {
+        if (!autopilot_random_crossfade || crossfadeShaders.empty())
+            return;
+        const int n = static_cast<int>(crossfadeShaders.size());
+        std::uniform_int_distribution<int> dist(0, n - 1);
+        int next = dist(autopilot_rng);
+        if (n > 1 && next == crossfadeShaderIndex)
+            next = (next + 1) % n;
+        crossfadeShaderIndex = next;
     }
 
     bool random_multipass_mode = false;
@@ -6253,6 +6265,7 @@ class ACView : public gl::GLObject {
             int r = dist(autopilot_rng);
             if (n > 1 && r == playlist_index)
                 r = (r + 1) % n;
+            maybeRandomizeAutopilotCrossfade();
             beginCrossfade(win);
             playlist_index = r;
             const auto &node = playlist_tree[playlist_index];
@@ -6272,6 +6285,7 @@ class ACView : public gl::GLObject {
             int r = dist(autopilot_rng);
             if (n > 1 && r == playlist_index)
                 r = (r + 1) % n;
+            maybeRandomizeAutopilotCrossfade();
             beginCrossfade(win);
             playlist_index = r;
             library.setIndex(playlist_indices[playlist_index]);
@@ -6301,6 +6315,7 @@ class ACView : public gl::GLObject {
         if (!playlist_tree.empty()) {
             const int n = static_cast<int>(playlist_tree.size());
             if (n <= 0) return;
+            maybeRandomizeAutopilotCrossfade();
             beginCrossfade(win);
             playlist_index = (playlist_index + 1) % n;
             const auto &node = playlist_tree[playlist_index];
@@ -6316,6 +6331,7 @@ class ACView : public gl::GLObject {
             fflush(stdout);
         } else if (!playlist_indices.empty()) {
             const int n = static_cast<int>(playlist_indices.size());
+            maybeRandomizeAutopilotCrossfade();
             beginCrossfade(win);
             playlist_index = (playlist_index + 1) % n;
             library.setIndex(playlist_indices[playlist_index]);
@@ -8924,6 +8940,12 @@ class ACView : public gl::GLObject {
                 }
                 fflush(stdout);
                 break;
+            case SDLK_n:
+                autopilot_random_crossfade = !autopilot_random_crossfade;
+                mx::system_out << "acmx2: Random autopilot crossfade "
+                               << (autopilot_random_crossfade ? "enabled" : "disabled") << "\n";
+                fflush(stdout);
+                break;
             case SDLK_z:
                 if (snapshot_state == 0) {
                     snapshot_state = 1;
@@ -10388,6 +10410,7 @@ namespace {
             {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""},
             {"J", "Toggle autopilot mode (requires playlist).", ""},
             {"Y", "Toggle sequential autopilot (cycles playlist in order, requires playlist).", ""},
+            {"N", "Toggle random crossfade selection for autopilot shader switches.", ""},
             {"T", "Enable/disable time.", ""},
             {"U / I", "Step time when time is disabled.", ""},
             {"Page Up / Page Down", "Increase/decrease time speed.", ""},
@@ -10415,7 +10438,7 @@ namespace {
             {"X", "Reset camera distance.", ""},
             {"+ / -", "Increase/decrease camera distance.", ""},
             {"B", "Increase movement speed.", ""},
-            {"N", "Decrease movement speed.", ""},
+            {"N (held in 3D)", "Decrease movement speed.", ""},
             {"C", "Toggle object wave.", ""},
             {"E", "Enable/disable watermark.", ""},
             {"]", "Increase model scale.", ""},
