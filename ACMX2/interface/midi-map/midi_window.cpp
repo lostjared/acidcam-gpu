@@ -189,6 +189,19 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"H", "Generate long random chain (up to 10)", 72, 0, false, 0, 0, 0});
     mappings.push_back({"F", "Generate short random pair (2 shaders)", 70, 0, false, 0, 0, 0});
     mappings.push_back({"End", "Toggle spectrum sensitivity scaling", 269, 0, false, 0, 0, 0});
+    mappings.push_back({"J", "Toggle autopilot (random)", 74, 0, false, 0, 0, 0});
+    mappings.push_back({"Y", "Toggle sequential autopilot", 89, 0, false, 0, 0, 0});
+    mappings.push_back({"4", "Take TIFF snapshot", 52, 0, false, 0, 0, 0});
+    mappings.push_back({"5", "Take HDR snapshot", 53, 0, false, 0, 0, 0});
+    mappings.push_back({"6", "Take RAW snapshot", 54, 0, false, 0, 0, 0});
+    mappings.push_back({"T", "Toggle active time", 84, 0, false, 0, 0, 0});
+    mappings.push_back({"Q", "Toggle audio time", 81, 0, false, 0, 0, 0});
+    mappings.push_back({"Home", "Toggle audio delta", 268, 0, false, 0, 0, 0});
+    mappings.push_back({"Insert", "Audio sensitivity increase", 260, 0, false, 0, 0, 0});
+    mappings.push_back({"Delete", "Audio sensitivity decrease", 261, 0, false, 0, 0, 0});
+    mappings.push_back({"F9", "Toggle HUD overlay visibility", 298, 0, false, 0, 0, 0});
+    mappings.push_back({"Left Bracket", "Crossfade shader previous", 91, 0, false, 0, 0, 0});
+    mappings.push_back({"Right Bracket", "Crossfade shader next", 93, 0, false, 0, 0, 0});
 }
 
 void MidiMapWindow::updateTable() {
