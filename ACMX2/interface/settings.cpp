@@ -1023,7 +1023,7 @@ void SettingsWindow::loadUiState() {
 
     fullscreenCheckBox->setChecked(appSettings.value("interface/fullscreen", false).toBool());
     enable3dCheckBox->setChecked(appSettings.value("interface/enable_3d", false).toBool());
-    modelFileLineEdit->setText(appSettings.value("interface/model_file", "data/cube.mxmod.z").toString());
+    modelFileLineEdit->setText(appSettings.value("interface/model_file", "cube.mxmod.z").toString());
 
     textureCacheCheckBox->setChecked(appSettings.value("interface/texture_cache", false).toBool());
     cacheDelaySpinBox->setValue(appSettings.value("interface/cache_delay", 1).toInt());

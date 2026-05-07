@@ -7685,15 +7685,15 @@ class ACView : public gl::GLObject {
             const Uint8 *keystate = SDL_GetKeyboardState(NULL);
             if (!oscillateScale) {
 
-                if (keystate[SDL_SCANCODE_B]) {
+                if (keystate[SDL_SCANCODE_1]) {
                     movementSpeed += 0.1f * dt * 30.0f;
-                    mx::system_out << "acmx2: movement increased: " << movementSpeed << "\n";
+                    mx::system_out << "acmx2: camera movement speed increased: " << movementSpeed << "\n";
                     fflush(stdout);
                 }
 
-                if (keystate[SDL_SCANCODE_N]) {
+                if (keystate[SDL_SCANCODE_2]) {
                     movementSpeed -= 0.1f * dt * 30.0f;
-                    mx::system_out << "acmx2: movement decreased: " << movementSpeed << "\n";
+                    mx::system_out << "acmx2: camera movement speed decreased: " << movementSpeed << "\n";
                     fflush(stdout);
                 }
 
@@ -8707,8 +8707,9 @@ class ACView : public gl::GLObject {
     * - Z: Take a PNG snapshot (8-bit non-HDR readback when HDR input is active).
     * - 5: Take an HDR PNG snapshot (HDR mode only).
      * - T: Toggle active time.  Q: Toggle audio time.  Home: Toggle audio delta.
-    * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.
-    * - X: Reset camera.  Ctrl+X: Quit immediately without audio mux/transfer.
+     * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.
+     * - X: Reset camera.  Ctrl+X: Quit immediately without audio mux/transfer.
+     * - N: Toggle random autopilot crossfade.  1: Camera movement speed up (3D).  2: Camera movement speed down (3D).
      * - 3: Toggle 2D/3D mode.  M: Toggle multi-pass.  E: Watermark.
      * - R: Toggle random multipass mode (generates 1-5 random shader chain).
      * - G: Generate new random shader chain (while in random multipass mode).

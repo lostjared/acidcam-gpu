@@ -175,14 +175,16 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"3", "Toggle 2D/3D mode", 51, 0, false, 0, 0, 0});
     mappings.push_back({"Plus/Equal", "Camera distance increase (3D)", 61, 0, false, 0, 0, 0});
     mappings.push_back({"Minus", "Camera distance decrease (3D)", 45, 0, false, 0, 0, 0});
-    mappings.push_back({"N", "Decrease movement speed (3D)", 78, 0, false, 0, 0, 0});
+    mappings.push_back({"N", "Toggle random autopilot crossfade", 78, 0, false, 0, 0, 0});
     mappings.push_back({"Page Up", "Time speed increase", 266, 0, false, 0, 0, 0});
     mappings.push_back({"Page Down", "Time speed decrease", 267, 0, false, 0, 0, 0});
     mappings.push_back({"W", "Camera pitch up (3D)", 87, 0, false, 0, 0, 0});
     mappings.push_back({"S", "Camera pitch down (3D)", 83, 0, false, 0, 0, 0});
     mappings.push_back({"A", "Camera yaw left (3D)", 65, 0, false, 0, 0, 0});
     mappings.push_back({"D", "Camera yaw right (3D)", 68, 0, false, 0, 0, 0});
-    mappings.push_back({"B", "Increase movement speed (3D)", 66, 0, false, 0, 0, 0});
+    mappings.push_back({"1", "Camera movement speed increase (3D)", 49, 0, false, 0, 0, 0});
+    mappings.push_back({"2", "Camera movement speed decrease (3D)", 50, 0, false, 0, 0, 0});
+    mappings.push_back({"B", "(3D) unused / available", 66, 0, false, 0, 0, 0});
     mappings.push_back({"K", "Toggle shader lock", 75, 0, false, 0, 0, 0});
     mappings.push_back({"R", "Toggle random multipass mode", 82, 0, false, 0, 0, 0});
     mappings.push_back({"G", "Generate new random shader chain", 71, 0, false, 0, 0, 0});
