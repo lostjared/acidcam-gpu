@@ -4182,6 +4182,20 @@ class ShaderLibrary {
     }
 
     /**
+     * @brief Check whether the 2D shader at @p idx is a texture-cache shader.
+     *
+     * Used by the multipass pipeline (which always renders pass shaders
+     * out of the 2D set) to decide per-pass whether to bind the cache
+     * texture units.
+     */
+    bool isCache2D(size_t idx) const {
+        auto it = program_names_2d.find(static_cast<int>(idx));
+        if (it == program_names_2d.end())
+            return false;
+        return it->second.name.find("cache") != std::string::npos;
+    }
+
+    /**
      * @brief Set the active shader by index.
      *
      * Bounds-checked against the current program vector (2D or 3D).
@@ -4400,6 +4414,27 @@ class ShaderLibrary {
                 glUniform1i(n.spectrum_history_locs[i], SpectrumHistory::BASE_UNIT + i);
         }
 #endif
+        // Re-assert texture-cache sampler bindings (samp1..samp8 and
+        // textures[0..N-1]) so multipass passes that declare these
+        // uniforms point at units 1..N regardless of when their program
+        // was last used. Sampler uniforms are program state, but binding
+        // them here keeps the multipass path self-sufficient.
+        if (n.texture_array_base_loc != -1) {
+            std::vector<GLint> units(static_cast<std::size_t>(cache_size_), 0);
+            for (int i = 0; i < cache_size_; ++i) {
+                units[static_cast<std::size_t>(i)] = i + 1;
+            }
+            glUniform1iv(n.texture_array_base_loc, cache_size_, units.data());
+        } else {
+            for (int i = 0; i < static_cast<int>(n.texture_array_loc.size()); ++i) {
+                if (n.texture_array_loc[i] != -1)
+                    glUniform1i(n.texture_array_loc[i], i + 1);
+            }
+        }
+        for (int i = 0; i < 8 && i < cache_size_; ++i) {
+            if (n.texture_cache_loc[i] != -1)
+                glUniform1i(n.texture_cache_loc[i], i + 1);
+        }
 #ifdef MIDI_ENABLED
         for (int i = 0; i < 4; ++i) {
             if (n.slider_loc[i] != -1)
@@ -4528,6 +4563,24 @@ class ShaderLibrary {
                 glUniform1i(n.spectrum_history_locs[i], SpectrumHistory::BASE_UNIT + i);
         }
 #endif
+        // Re-assert texture-cache sampler bindings (samp1..samp8 and
+        // textures[0..N-1]) for multipass passes targeting cache shaders.
+        if (n.texture_array_base_loc != -1) {
+            std::vector<GLint> units(static_cast<std::size_t>(cache_size_), 0);
+            for (int i = 0; i < cache_size_; ++i) {
+                units[static_cast<std::size_t>(i)] = i + 1;
+            }
+            glUniform1iv(n.texture_array_base_loc, cache_size_, units.data());
+        } else {
+            for (int i = 0; i < static_cast<int>(n.texture_array_loc.size()); ++i) {
+                if (n.texture_array_loc[i] != -1)
+                    glUniform1i(n.texture_array_loc[i], i + 1);
+            }
+        }
+        for (int i = 0; i < 8 && i < cache_size_; ++i) {
+            if (n.texture_cache_loc[i] != -1)
+                glUniform1i(n.texture_cache_loc[i], i + 1);
+        }
 #ifdef MIDI_ENABLED
         for (int i = 0; i < 4; ++i) {
             if (n.slider_loc[i] != -1)
@@ -7333,7 +7386,14 @@ class ACView : public gl::GLObject {
                 uploadHdrFrame(hdr_frame_mat);
                 runHdrDecodePass(win->w, win->h);
             }
-            if (texture_cache && library.isCache()) {
+            const bool multipass_uses_cache = shader_pass_enabled && [&]() {
+                for (int idx : shader_pass_list) {
+                    if (idx >= 0 && library.isCache2D(static_cast<size_t>(idx)))
+                        return true;
+                }
+                return false;
+            }();
+            if (texture_cache && (library.isCache() || multipass_uses_cache)) {
                 static int hdr_counter = 0;
                 if (++hdr_counter > cache_delay) {
                     if (cache_warmup_frames <= 0) {
@@ -7427,7 +7487,14 @@ class ACView : public gl::GLObject {
                 updateTexture(camera_texture, newFrame);
             }
 #endif
-            if (texture_cache && library.isCache()) {
+            if (texture_cache && (library.isCache() || ([&]() {
+                if (!shader_pass_enabled) return false;
+                for (int idx : shader_pass_list) {
+                    if (idx >= 0 && library.isCache2D(static_cast<size_t>(idx)))
+                        return true;
+                }
+                return false;
+            }()))) {
                 static int counter = 0;
                 if (++counter > cache_delay) {
                     // Only push frames into cache after the post-load warmup period
@@ -7675,6 +7742,18 @@ class ACView : public gl::GLObject {
                             glActiveTexture(GL_TEXTURE0);
                             glBindTexture(GL_TEXTURE_2D, inputTex);
                             glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
+                            // If this pass is a texture-cache shader, bind the
+                            // cache ring to units 1..N. The main render path only
+                            // does this when the active library shader is a cache
+                            // shader; multipass passes need their own bindings.
+                            if (texture_cache && frame_cache.isFull() && library.isCache2D(static_cast<size_t>(shader_idx))) {
+                                const int n_bind = library.cacheSize();
+                                for (int ci = 0; ci < n_bind; ++ci) {
+                                    glActiveTexture(GL_TEXTURE1 + ci);
+                                    glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(ci));
+                                }
+                                glActiveTexture(GL_TEXTURE0);
+                            }
                             sprite.setShader(pass_shader);
                             sprite.setName("samp");
                             sprite.draw(inputTex, 0, 0, win->w, win->h);
@@ -7831,6 +7910,18 @@ class ACView : public gl::GLObject {
                             glActiveTexture(GL_TEXTURE0);
                             glBindTexture(GL_TEXTURE_2D, inputTex);
                             glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
+                            // If this pass is a texture-cache shader, bind the
+                            // cache ring to units 1..N. The main render path only
+                            // does this when the active library shader is a cache
+                            // shader; multipass passes need their own bindings.
+                            if (texture_cache && frame_cache.isFull() && library.isCache2D(static_cast<size_t>(shader_idx))) {
+                                const int n_bind = library.cacheSize();
+                                for (int ci = 0; ci < n_bind; ++ci) {
+                                    glActiveTexture(GL_TEXTURE1 + ci);
+                                    glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(ci));
+                                }
+                                glActiveTexture(GL_TEXTURE0);
+                            }
                             sprite.setShader(pass_shader);
                             sprite.setName("samp");
                             sprite.draw(inputTex, 0, 0, win->w, win->h);
