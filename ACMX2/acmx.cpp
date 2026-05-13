@@ -58,6 +58,10 @@
 #include <rtmidi/RtMidi.h>
 #endif
 #include "program.hpp"
+#ifdef ACMX2_WITH_DNN
+#include "dnn.hpp"
+#include <memory>
+#endif
 #ifdef ACMX2_WITH_WEBP
 #include <webp/encode.h>
 #endif
@@ -4953,6 +4957,8 @@ struct MXArguments {
     std::string fragment;
     std::string prefix_path = ".";
     std::string model_file = "cube.mxmod.z";
+    std::string human_model; ///< PPHS human-segmentation ONNX model path (--human). Empty when disabled.
+    bool human_background_only = false; ///< When true (with --human), shaders apply only to the background; person composited on top.
     int mode = 0;
     int shader_index = 0;
     std::optional<cv::Size> sizev = std::nullopt;
@@ -6070,6 +6076,37 @@ class ACView : public gl::GLObject {
         is3d_enabled = args.is3d;
         m_file = args.model_file;
 
+#ifdef ACMX2_WITH_DNN
+        if (!args.human_model.empty()) {
+            try {
+                human_model_path = args.human_model;
+                human_background_only = args.human_background_only;
+                human_seg_model = std::make_unique<ac_dnn::PPHS>(
+                    human_model_path,
+                    cv::dnn::DNN_BACKEND_CUDA,
+                    cv::dnn::DNN_TARGET_CUDA);
+                mx::system_out << "acmx2: Human segmentation (PPHS) enabled with model: "
+                               << human_model_path
+                               << " [DNN_BACKEND_CUDA / DNN_TARGET_CUDA]"
+                               << (human_background_only ? " [background-only shader mode]" : "")
+                               << "\n";
+            } catch (const cv::Exception &e) {
+                mx::system_err << "acmx2: Failed to load human segmentation model '"
+                               << args.human_model << "': " << e.what() << "\n";
+                human_seg_model.reset();
+            }
+        } else if (args.human_background_only) {
+            mx::system_err << "acmx2: --background was specified without --human; ignoring.\n";
+        }
+#else
+        if (!args.human_model.empty()) {
+            mx::system_err << "acmx2: --human requested but this build has no OpenCV DNN support (configure with -DWITH_OPENCV_DNN=ON).\n";
+        }
+        if (args.human_background_only) {
+            mx::system_err << "acmx2: --background requested but this build has no OpenCV DNN support.\n";
+        }
+#endif
+
         gpu_filter_enabled = args.gpu_filter_enabled;
 #ifdef ACMX2_WITH_CUDA
         if (gpu_filter_enabled && !args.gpu_filter_indices.empty()) {
@@ -6121,6 +6158,16 @@ class ACView : public gl::GLObject {
     }
 
     bool is3d_enabled = false;
+
+#ifdef ACMX2_WITH_DNN
+    std::unique_ptr<ac_dnn::PPHS> human_seg_model;
+    std::string human_model_path;
+    bool human_background_only = false;
+    GLuint human_overlay_tex = 0;
+    int human_overlay_w = 0;
+    int human_overlay_h = 0;
+    bool human_overlay_ready = false; ///< True once a mask has been produced for the current frame.
+#endif
 
     bool gpu_filter_enabled = false;
     std::vector<ac_gpu::Filter> gpu_filters;
@@ -6530,6 +6577,12 @@ class ACView : public gl::GLObject {
     ~ACView() override {
 #ifdef MIDI_ENABLED
         cleanupMidi();
+#endif
+#ifdef ACMX2_WITH_DNN
+        if (human_overlay_tex != 0) {
+            glDeleteTextures(1, &human_overlay_tex);
+            human_overlay_tex = 0;
+        }
 #endif
         tex_uploader.cleanup();
 #ifdef ACMX2_WITH_CUDA
@@ -7456,6 +7509,65 @@ class ACView : public gl::GLObject {
                 // to deliver top-down rows to the HEVC encoder.
             }
         }
+#ifdef ACMX2_WITH_DNN
+        // Human segmentation pass (PPHS):
+        //  * Default (--human only): isolate the person, blacken background,
+        //    then run the entire shader pipeline on the cutout.
+        //  * --human --background: leave @c newFrame untouched so shaders
+        //    process the full frame; build an RGBA overlay (original frame
+        //    + hardened alpha mask) and composite it on top of the shader
+        //    output via a final GL blend pass below.
+        human_overlay_ready = false;
+        if (human_seg_model && !isFrozen && !input_is_hdr && !newFrame.empty()) {
+            try {
+                cv::Mat mask = human_seg_model->infer(newFrame);
+                if (human_background_only) {
+                    cv::Mat alpha8 = ac_dnn::hardenedAlphaMask(newFrame, mask);
+                    if (!alpha8.empty() && alpha8.size() == newFrame.size()) {
+                        cv::Mat rgb;
+                        cv::cvtColor(newFrame, rgb, cv::COLOR_BGR2RGB);
+                        cv::Mat ch[3];
+                        cv::split(rgb, ch);
+                        cv::Mat rgba_channels[4] = { ch[0], ch[1], ch[2], alpha8 };
+                        cv::Mat rgba;
+                        cv::merge(rgba_channels, 4, rgba);
+
+                        // Lazy-allocate / resize the overlay GL texture.
+                        if (human_overlay_tex == 0) {
+                            glGenTextures(1, &human_overlay_tex);
+                            glBindTexture(GL_TEXTURE_2D, human_overlay_tex);
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                            human_overlay_w = 0;
+                            human_overlay_h = 0;
+                        }
+                        glBindTexture(GL_TEXTURE_2D, human_overlay_tex);
+                        if (human_overlay_w != rgba.cols || human_overlay_h != rgba.rows) {
+                            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba.cols, rgba.rows,
+                                         0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.ptr());
+                            human_overlay_w = rgba.cols;
+                            human_overlay_h = rgba.rows;
+                        } else {
+                            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                            rgba.cols, rgba.rows,
+                                            GL_RGBA, GL_UNSIGNED_BYTE, rgba.ptr());
+                        }
+                        glBindTexture(GL_TEXTURE_2D, 0);
+                        human_overlay_ready = true;
+                    }
+                } else {
+                    cv::Mat isolated = ac_dnn::isolateBody(newFrame, mask);
+                    if (!isolated.empty()) {
+                        newFrame = isolated;
+                    }
+                }
+            } catch (const cv::Exception &e) {
+                mx::system_err << "acmx2: PPHS inference error: " << e.what() << "\n";
+            }
+        }
+#endif
         if (library.isBypassed()) {
             if (is3d_enabled) {
                 fshader3d.useProgram();
@@ -8061,6 +8173,30 @@ class ACView : public gl::GLObject {
                 sprite.draw(crossfadeTexture, 0, 0, win->w, win->h);
             }
         }
+
+#ifdef ACMX2_WITH_DNN
+        // --human --background : composite the original person on top of the
+        // shaded captureFBO using the hardened alpha mask. The overlay
+        // texture stores the original frame in RGB and the cleaned mask in
+        // its alpha channel, so a single straight-alpha blend reproduces the
+        // person over whatever the shader chain just rendered to captureFBO.
+        if (human_seg_model && human_background_only && human_overlay_ready &&
+            human_overlay_tex != 0 && !input_is_hdr) {
+            glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+            glViewport(0, 0, win->w, win->h);
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
+                                GL_ONE,       GL_ONE_MINUS_SRC_ALPHA);
+            fshader.useProgram();
+            fshader.setUniform("mv_matrix", glm::mat4(1.0f));
+            fshader.setUniform("proj_matrix", glm::mat4(1.0f));
+            sprite.setShader(&fshader);
+            sprite.setName("samp");
+            sprite.draw(human_overlay_tex, 0, 0, win->w, win->h);
+            glDisable(GL_BLEND);
+        }
+#endif
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, win->w, win->h);
@@ -10559,6 +10695,8 @@ int main(int argc, char **argv) {
         .addOptionDouble(258, "copy-audio", "Copy audio track")
         .addOptionDouble(259, "enable-3d", "Enable 3D cube")
         .addOptionDoubleValue(260, "model", "Model file")
+        .addOptionDoubleValue(700, "human", "Human segmentation model (PPHS .onnx) -- isolate person via DNN")
+        .addOptionDouble(701, "background", "With --human: apply shaders only to the background; composite person on top")
         .addOptionDouble(261, "help", "print help info")
         .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
         .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
@@ -10782,6 +10920,12 @@ int main(int argc, char **argv) {
                 break;
             case 260:
                 args.model_file = arg.arg_value;
+                break;
+            case 700:
+                args.human_model = arg.arg_value;
+                break;
+            case 701:
+                args.human_background_only = true;
                 break;
             case 400: {
                 args.gpu_filter_enabled = true;
