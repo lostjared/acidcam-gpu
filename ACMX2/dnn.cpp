@@ -1,11 +1,11 @@
 #include"dnn.hpp"
 
 namespace ac_dnn {
-    // Internal: produces a CV_32F alpha mask in [0,1] from the raw PPHS
-    // soft probability mask, shared by isolateBody() and hardenedAlphaMask().
+    
+    
     static Mat buildHardenedFloatAlpha(const Mat& image, const Mat& mask)
     {
-        // ----- 1. Normalise mask to CV_32F single channel ---------------
+        
         Mat soft;
         if (mask.type() == CV_32FC1) {
             soft = mask;
@@ -24,7 +24,7 @@ namespace ac_dnn {
         threshold(soft, soft, 1.0, 1.0, THRESH_TRUNC);
         threshold(soft, soft, 0.0, 0.0, THRESH_TOZERO);
 
-        // ----- 2. Binary silhouette + morphological cleanup --------------
+        
         Mat binary;
         threshold(soft, binary, 0.5f, 1.0f, THRESH_BINARY);
         binary.convertTo(binary, CV_8U, 255.0);
@@ -34,7 +34,7 @@ namespace ac_dnn {
         morphologyEx(binary, binary, MORPH_OPEN,  kOpen);
         morphologyEx(binary, binary, MORPH_CLOSE, kClose);
 
-        // ----- 3. Largest connected component only -----------------------
+        
         Mat labels, stats, centroids;
         const int nLabels = connectedComponentsWithStats(binary, labels, stats,
                                                          centroids, 8, CV_32S);
@@ -54,22 +54,20 @@ namespace ac_dnn {
             }
         }
 
-        // ----- 4. Slight erosion to kill the halo ------------------------
+        
         const Mat kErode = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
         erode(binary, binary, kErode);
 
         Mat silhouette;
         binary.convertTo(silhouette, CV_32F, 1.0 / 255.0);
-
-        // ----- 5. Combine silhouette with soft probability + feather -----
+  
         Mat gated;
         multiply(soft, silhouette, gated);
 
         Mat feathered;
         GaussianBlur(gated, feathered, Size(0, 0), 1.2);
-
-        // ----- 6. Black/white point + gamma remap ------------------------
-        constexpr float blackPoint = 0.30f;
+        
+        constexpr float blackPoint = 0.20f;
         constexpr float whitePoint = 0.75f;
         Mat hardenedMask = (feathered - blackPoint) / (whitePoint - blackPoint);
         threshold(hardenedMask, hardenedMask, 1.0, 1.0, THRESH_TRUNC);
@@ -95,7 +93,7 @@ namespace ac_dnn {
 
         Mat hardenedMask = buildHardenedFloatAlpha(image, mask);
 
-        // ----- 7. Alpha composite over a black background ----------------
+        
         Mat alpha;
         cvtColor(hardenedMask, alpha, COLOR_GRAY2BGR);
 
