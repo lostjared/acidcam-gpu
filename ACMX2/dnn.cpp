@@ -71,6 +71,7 @@ namespace ac_dnn {
         return alpha8;
     }
 
+    
 
     Mat isolateBody(const Mat& image, const Mat& mask, float blackPoint, float whitePoint)
     {

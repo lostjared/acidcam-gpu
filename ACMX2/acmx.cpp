@@ -4961,6 +4961,7 @@ struct MXArguments {
     bool human_background_only = false; ///< When true (with --human), shaders apply only to the background; person composited on top.
     float human_black = 0.35f; ///< --black: mask black point (shadow crush threshold).
     float human_white = 0.75f; ///< --white: mask white point (opacity saturation threshold).
+    std::string edge_model; ///< Dexined edge-detection ONNX model path (--edge). Empty when disabled.
     int mode = 0;
     int shader_index = 0;
     std::optional<cv::Size> sizev = std::nullopt;
@@ -6102,12 +6103,27 @@ class ACView : public gl::GLObject {
         } else if (args.human_background_only) {
             mx::system_err << "acmx2: --background was specified without --human; ignoring.\n";
         }
+        if (!args.edge_model.empty()) {
+            try {
+                edge_det_model = std::make_unique<ac_dnn::Dexined>(args.edge_model);
+                mx::system_out << "acmx2: Edge detection (Dexined) enabled with model: "
+                               << args.edge_model
+                               << " [DNN_BACKEND_CUDA / DNN_TARGET_CUDA]\n";
+            } catch (const cv::Exception &e) {
+                mx::system_err << "acmx2: Failed to load edge detection model '"
+                               << args.edge_model << "': " << e.what() << "\n";
+                edge_det_model.reset();
+            }
+        }
 #else
         if (!args.human_model.empty()) {
             mx::system_err << "acmx2: --human requested but this build has no OpenCV DNN support (configure with -DWITH_OPENCV_DNN=ON).\n";
         }
         if (args.human_background_only) {
             mx::system_err << "acmx2: --background requested but this build has no OpenCV DNN support.\n";
+        }
+        if (!args.edge_model.empty()) {
+            mx::system_err << "acmx2: --edge requested but this build has no OpenCV DNN support (configure with -DWITH_OPENCV_DNN=ON).\n";
         }
 #endif
 
@@ -6169,6 +6185,7 @@ class ACView : public gl::GLObject {
     bool human_background_only = false;
     float human_black_point = 0.35f;
     float human_white_point = 0.75f;
+    std::unique_ptr<ac_dnn::Dexined> edge_det_model;
     GLuint human_overlay_tex = 0;
     int human_overlay_w = 0;
     int human_overlay_h = 0;
@@ -7562,6 +7579,21 @@ class ACView : public gl::GLObject {
                         }
                         glBindTexture(GL_TEXTURE_2D, 0);
                         human_overlay_ready = true;
+
+                        // Remove the person from newFrame so the shader chain
+                        // processes only the background.  The GL blend pass
+                        // below composites the original person back on top
+                        // using straight-alpha blending.
+                        cv::Mat alpha_f;
+                        alpha8.convertTo(alpha_f, CV_32F, 1.0 / 255.0);
+                        cv::Mat inv_alpha_f = 1.0f - alpha_f;
+                        cv::Mat inv_bgr;
+                        cv::cvtColor(inv_alpha_f, inv_bgr, cv::COLOR_GRAY2BGR);
+                        cv::Mat frame_f;
+                        newFrame.convertTo(frame_f, CV_32FC3, 1.0 / 255.0);
+                        cv::Mat bg_f;
+                        cv::multiply(frame_f, inv_bgr, bg_f);
+                        bg_f.convertTo(newFrame, CV_8UC3, 255.0);
                     }
                 } else {
                     cv::Mat isolated = ac_dnn::isolateBody(newFrame, mask, human_black_point, human_white_point);
@@ -7571,6 +7603,22 @@ class ACView : public gl::GLObject {
                 }
             } catch (const cv::Exception &e) {
                 mx::system_err << "acmx2: PPHS inference error: " << e.what() << "\n";
+            }
+        }
+        // Edge detection pass (Dexined): replaces newFrame with a 3-channel
+        // edge map so the shader chain renders on top of the edge output.
+        if (edge_det_model && !isFrozen && !input_is_hdr && !newFrame.empty()) {
+            try {
+                cv::Mat edges;
+                edge_det_model->processFrame(newFrame, edges);
+                if (!edges.empty()) {
+                    if (edges.channels() == 1)
+                        cv::cvtColor(edges, newFrame, cv::COLOR_GRAY2BGR);
+                    else
+                        newFrame = edges;
+                }
+            } catch (const cv::Exception &e) {
+                mx::system_err << "acmx2: Dexined inference error: " << e.what() << "\n";
             }
         }
 #endif
@@ -10705,6 +10753,7 @@ int main(int argc, char **argv) {
         .addOptionDouble(701, "background", "With --human: apply shaders only to the background; composite person on top")
         .addOptionDoubleValue(702, "black", "Mask black point / shadow crush threshold (default 0.35)")
         .addOptionDoubleValue(703, "white", "Mask white point / opacity saturation threshold (default 0.75)")
+        .addOptionDoubleValue(704, "edge", "Edge detection model (Dexined .onnx) -- replace frame with edge map")
         .addOptionDouble(261, "help", "print help info")
         .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
         .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
@@ -10940,6 +10989,9 @@ int main(int argc, char **argv) {
                 break;
             case 703:
                 args.human_white = static_cast<float>(std::stod(arg.arg_value));
+                break;
+            case 704:
+                args.edge_model = arg.arg_value;
                 break;
             case 400: {
                 args.gpu_filter_enabled = true;

@@ -12,6 +12,71 @@ namespace ac_dnn {
     using namespace std;
     using namespace cv;
     using namespace dnn;
+
+    class Dexined {
+    public:
+        Dexined(const string& modelPath) {
+            loadModel(modelPath);
+        }
+
+        void processFrame(const Mat& image, Mat& result) {
+            Mat blob = blobFromImage(image, 1.0, Size(512, 512), Scalar(103.5, 116.2, 123.6), false, false, CV_32F);
+            net.setInput(blob);
+            applyDexined(image, result);
+        }
+
+    private:
+        Net net;
+
+        void loadModel(const string modelPath) {
+            net = readNetFromONNX(modelPath);
+            net.setPreferableBackend(DNN_BACKEND_CUDA);
+            net.setPreferableTarget(DNN_TARGET_CUDA);
+        }
+
+        static void sigmoid(Mat& input) {
+            exp(-input, input);          // e^-input
+            input = 1.0 / (1.0 + input); // 1 / (1 + e^-input)
+        }
+
+        static pair<Mat, Mat> postProcess(const vector<Mat>& output, int height, int width) {
+            vector<Mat> preds;
+            preds.reserve(output.size());
+            for (const Mat &p : output) {
+                Mat img;
+                Mat processed;
+                if (p.dims == 4 && p.size[0] == 1 && p.size[1] == 1) {
+                    processed = p.reshape(0, {p.size[2], p.size[3]});
+                } else {
+                    processed = p.clone();
+                }
+                sigmoid(processed);
+                normalize(processed, img, 0, 255, NORM_MINMAX, CV_8U);
+                resize(img, img, Size(width, height));
+                preds.push_back(img);
+            }
+            Mat fuse = preds.back();
+            Mat ave = Mat::zeros(height, width, CV_32F);
+            for (Mat &pred : preds) {
+                Mat temp;
+                pred.convertTo(temp, CV_32F);
+                ave += temp;
+            }
+            ave /= static_cast<float>(preds.size());
+            ave.convertTo(ave, CV_8U);
+            return {fuse, ave};
+        }
+
+        void applyDexined(const Mat& image, Mat& result) {
+            int originalWidth = image.cols;
+            int originalHeight = image.rows;
+            vector<Mat> outputs;
+            net.forward(outputs);
+            pair<Mat, Mat> res = postProcess(outputs, originalHeight, originalWidth);
+            result = res.first; 
+        }
+    };
+
     class PPHS
     {
     private:
