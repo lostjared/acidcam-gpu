@@ -3,7 +3,7 @@
 namespace ac_dnn {
     
     
-    static Mat buildHardenedFloatAlpha(const Mat& image, const Mat& mask)
+    static Mat buildHardenedFloatAlpha(const Mat& image, const Mat& mask, float blackPoint, float whitePoint)
     {
         Mat soft;
         if (mask.type() == CV_32FC1) {
@@ -54,8 +54,6 @@ namespace ac_dnn {
         multiply(soft, silhouette, gated);
         Mat feathered;
         GaussianBlur(gated, feathered, Size(0, 0), 1.2);
-        constexpr float blackPoint = 0.15f;
-        constexpr float whitePoint = 0.85f;
         Mat hardenedMask = (feathered - blackPoint) / (whitePoint - blackPoint);
         threshold(hardenedMask, hardenedMask, 1.0, 1.0, THRESH_TRUNC);
         threshold(hardenedMask, hardenedMask, 0.0, 0.0, THRESH_TOZERO);
@@ -63,33 +61,28 @@ namespace ac_dnn {
         return hardenedMask;
     }
 
-    Mat hardenedAlphaMask(const Mat& image, const Mat& mask)
+    Mat hardenedAlphaMask(const Mat& image, const Mat& mask, float blackPoint, float whitePoint)
     {
         if (image.empty() || mask.empty())
             return Mat();
-        Mat alphaFloat = buildHardenedFloatAlpha(image, mask);
+        Mat alphaFloat = buildHardenedFloatAlpha(image, mask, blackPoint, whitePoint);
         Mat alpha8;
         alphaFloat.convertTo(alpha8, CV_8U, 255.0);
         return alpha8;
     }
 
-    Mat isolateBody(const Mat& image, const Mat& mask)
+
+    Mat isolateBody(const Mat& image, const Mat& mask, float blackPoint, float whitePoint)
     {
         if (image.empty() || mask.empty())
             return image.clone();
-
-        Mat hardenedMask = buildHardenedFloatAlpha(image, mask);
-
-        
+        Mat hardenedMask = buildHardenedFloatAlpha(image, mask, blackPoint, whitePoint);
         Mat alpha;
         cvtColor(hardenedMask, alpha, COLOR_GRAY2BGR);
-
         Mat foreground;
         image.convertTo(foreground, CV_32FC3, 1.0 / 255.0);
-
         Mat finalFloat;
         multiply(foreground, alpha, finalFloat);
-
         Mat output_image;
         finalFloat.convertTo(output_image, CV_8UC3, 255.0);
         return output_image;

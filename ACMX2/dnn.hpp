@@ -82,8 +82,10 @@ namespace ac_dnn {
             return fullSizeMask;
         }
     };
-    Mat isolateBody(const Mat& image, const Mat& mask);
-    Mat hardenedAlphaMask(const Mat& image, const Mat& mask);
+    Mat isolateBody(const Mat& image, const Mat& mask,
+                    float blackPoint = 0.35f, float whitePoint = 0.75f);
+    Mat hardenedAlphaMask(const Mat& image, const Mat& mask,
+                         float blackPoint = 0.35f, float whitePoint = 0.75f);
 }
 
 #endif // ACMX2_DNN_HPP

@@ -4959,6 +4959,8 @@ struct MXArguments {
     std::string model_file = "cube.mxmod.z";
     std::string human_model; ///< PPHS human-segmentation ONNX model path (--human). Empty when disabled.
     bool human_background_only = false; ///< When true (with --human), shaders apply only to the background; person composited on top.
+    float human_black = 0.35f; ///< --black: mask black point (shadow crush threshold).
+    float human_white = 0.75f; ///< --white: mask white point (opacity saturation threshold).
     int mode = 0;
     int shader_index = 0;
     std::optional<cv::Size> sizev = std::nullopt;
@@ -6081,6 +6083,8 @@ class ACView : public gl::GLObject {
             try {
                 human_model_path = args.human_model;
                 human_background_only = args.human_background_only;
+                human_black_point = args.human_black;
+                human_white_point = args.human_white;
                 human_seg_model = std::make_unique<ac_dnn::PPHS>(
                     human_model_path,
                     cv::dnn::DNN_BACKEND_CUDA,
@@ -6163,6 +6167,8 @@ class ACView : public gl::GLObject {
     std::unique_ptr<ac_dnn::PPHS> human_seg_model;
     std::string human_model_path;
     bool human_background_only = false;
+    float human_black_point = 0.35f;
+    float human_white_point = 0.75f;
     GLuint human_overlay_tex = 0;
     int human_overlay_w = 0;
     int human_overlay_h = 0;
@@ -7522,7 +7528,7 @@ class ACView : public gl::GLObject {
             try {
                 cv::Mat mask = human_seg_model->infer(newFrame);
                 if (human_background_only) {
-                    cv::Mat alpha8 = ac_dnn::hardenedAlphaMask(newFrame, mask);
+                    cv::Mat alpha8 = ac_dnn::hardenedAlphaMask(newFrame, mask, human_black_point, human_white_point);
                     if (!alpha8.empty() && alpha8.size() == newFrame.size()) {
                         cv::Mat rgb;
                         cv::cvtColor(newFrame, rgb, cv::COLOR_BGR2RGB);
@@ -7558,7 +7564,7 @@ class ACView : public gl::GLObject {
                         human_overlay_ready = true;
                     }
                 } else {
-                    cv::Mat isolated = ac_dnn::isolateBody(newFrame, mask);
+                    cv::Mat isolated = ac_dnn::isolateBody(newFrame, mask, human_black_point, human_white_point);
                     if (!isolated.empty()) {
                         newFrame = isolated;
                     }
@@ -10697,6 +10703,8 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(260, "model", "Model file")
         .addOptionDoubleValue(700, "human", "Human segmentation model (PPHS .onnx) -- isolate person via DNN")
         .addOptionDouble(701, "background", "With --human: apply shaders only to the background; composite person on top")
+        .addOptionDoubleValue(702, "black", "Mask black point / shadow crush threshold (default 0.35)")
+        .addOptionDoubleValue(703, "white", "Mask white point / opacity saturation threshold (default 0.75)")
         .addOptionDouble(261, "help", "print help info")
         .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
         .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
@@ -10926,6 +10934,12 @@ int main(int argc, char **argv) {
                 break;
             case 701:
                 args.human_background_only = true;
+                break;
+            case 702:
+                args.human_black = static_cast<float>(std::stod(arg.arg_value));
+                break;
+            case 703:
+                args.human_white = static_cast<float>(std::stod(arg.arg_value));
                 break;
             case 400: {
                 args.gpu_filter_enabled = true;
