@@ -12,15 +12,6 @@ namespace ac_dnn {
     using namespace std;
     using namespace cv;
     using namespace dnn;
-
-    inline const std::vector<std::pair<int, int>> backend_target_pairs = {
-        {DNN_BACKEND_OPENCV, DNN_TARGET_CPU},
-        {DNN_BACKEND_CUDA, DNN_TARGET_CUDA},
-        {DNN_BACKEND_CUDA, DNN_TARGET_CUDA_FP16},
-        {DNN_BACKEND_TIMVX, DNN_TARGET_NPU},
-        {DNN_BACKEND_CANN, DNN_TARGET_NPU}
-    };
-
     class PPHS
     {
     private:
@@ -81,10 +72,8 @@ namespace ac_dnn {
             exp(fg, fg_exp);
             add(bg_exp, fg_exp, sum_exp);
             divide(fg_exp, sum_exp, fg_prob);
-
             Mat fullSizeMask;
             resize(fg_prob, fullSizeMask, this->currentSize, 0, 0, INTER_CUBIC);
-
             if (this->prevMask.empty()) {
                 this->prevMask = fullSizeMask.clone();
             }
@@ -93,13 +82,7 @@ namespace ac_dnn {
             return fullSizeMask;
         }
     };
-
     Mat isolateBody(const Mat& image, const Mat& mask);
-
-    // Returns an 8-bit single-channel alpha mask (255 = person, 0 = background)
-    // produced by the same cleanup / hardening pipeline used by isolateBody().
-    // @p image is only used for sizing; @p mask is the raw soft probability
-    // mask from PPHS (any single channel format).
     Mat hardenedAlphaMask(const Mat& image, const Mat& mask);
 }
 

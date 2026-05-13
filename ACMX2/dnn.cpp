@@ -5,7 +5,6 @@ namespace ac_dnn {
     
     static Mat buildHardenedFloatAlpha(const Mat& image, const Mat& mask)
     {
-        
         Mat soft;
         if (mask.type() == CV_32FC1) {
             soft = mask;
@@ -20,21 +19,15 @@ namespace ac_dnn {
         }
         if (soft.size() != image.size())
             resize(soft, soft, image.size(), 0, 0, INTER_LINEAR);
-
         threshold(soft, soft, 1.0, 1.0, THRESH_TRUNC);
         threshold(soft, soft, 0.0, 0.0, THRESH_TOZERO);
-
-        
         Mat binary;
         threshold(soft, binary, 0.5f, 1.0f, THRESH_BINARY);
         binary.convertTo(binary, CV_8U, 255.0);
-
         const Mat kOpen  = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
         const Mat kClose = getStructuringElement(MORPH_ELLIPSE, Size(7, 7));
         morphologyEx(binary, binary, MORPH_OPEN,  kOpen);
         morphologyEx(binary, binary, MORPH_CLOSE, kClose);
-
-        
         Mat labels, stats, centroids;
         const int nLabels = connectedComponentsWithStats(binary, labels, stats,
                                                          centroids, 8, CV_32S);
@@ -53,22 +46,16 @@ namespace ac_dnn {
                 binary = (labels == bestLabel);
             }
         }
-
-        
         const Mat kErode = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
         erode(binary, binary, kErode);
-
         Mat silhouette;
         binary.convertTo(silhouette, CV_32F, 1.0 / 255.0);
-  
         Mat gated;
         multiply(soft, silhouette, gated);
-
         Mat feathered;
         GaussianBlur(gated, feathered, Size(0, 0), 1.2);
-        
-        constexpr float blackPoint = 0.20f;
-        constexpr float whitePoint = 0.75f;
+        constexpr float blackPoint = 0.15f;
+        constexpr float whitePoint = 0.85f;
         Mat hardenedMask = (feathered - blackPoint) / (whitePoint - blackPoint);
         threshold(hardenedMask, hardenedMask, 1.0, 1.0, THRESH_TRUNC);
         threshold(hardenedMask, hardenedMask, 0.0, 0.0, THRESH_TOZERO);
