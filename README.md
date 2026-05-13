@@ -206,7 +206,7 @@ sudo bash build-script/install-deps-arch.sh
 | `--disable-counter` | | Disable timer and FPS counter overlay |
 | `--silent` | | Process video without window. Only valid with `-i/--input` video files and requires `-o/--output`; camera and image input are rejected. |
 
-### 3D / Model Options
+### 3D / DNN Model Options
 
 | Long | Value | Description |
 |------|-------|-------------|
@@ -215,6 +215,9 @@ sudo bash build-script/install-deps-arch.sh
 | `--copy-audio` | | Copy audio track from input to output |
 | `--enable-3d` | | Enable 3D cube rendering |
 | `--model` | `<file>` | 3D model file (`.mxmod`) |
+| `--edge` | `<file>` | DNN Model for edge detection file you want is: edge_detection_dexined_2024sep.onnx |
+| `--human` | `<file>` | DNN Model for human detection file you want is: human_segmentation_pphumanseg_2023mar.onnx |
+| `--background` | | Enable background processing on --human |
 
 ### Audio Options (requires `AUDIO_ENABLED` build)
 
@@ -239,6 +242,7 @@ sudo bash build-script/install-deps-arch.sh
 | `--midi-map` | `<file>` | MIDI config file (`.midi_cfg`) |
 | `--midi-device` | `<index>` | MIDI input device index |
 | `--list-midi` | | List available MIDI input devices and exit |
+
 
 ---
 
