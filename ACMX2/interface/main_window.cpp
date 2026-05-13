@@ -1424,6 +1424,8 @@ void MainWindow::cameraSettings() {
     }
     enable_3d = settingsWindow.is3dEnabled();
     model_file = settingsWindow.getModelFile();
+    onnx_model_enabled = settingsWindow.isOnnxModelEnabled();
+    onnx_model = settingsWindow.getOnnxModelFile();
     cuda_device = settingsWindow.getSelectedCudaDevice();
     time_speed = settingsWindow.getTimeSpeed();
     duration_limit_enabled = settingsWindow.isDurationLimitEnabled();
@@ -1603,6 +1605,10 @@ void MainWindow::runSelected() {
     if (enable_3d) {
         arguments << "--enable-3d";
         arguments << "--model" << model_file;
+    }
+
+    if (onnx_model_enabled && !onnx_model.isEmpty()) {
+        arguments << "--onnx" << onnx_model;
     }
 
     if (cuda_available && gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
@@ -1797,6 +1803,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
     if (enable_3d) {
         arguments << "--enable-3d";
         arguments << "--model" << model_file;
+    }
+
+    if (onnx_model_enabled && !onnx_model.isEmpty()) {
+        arguments << "--onnx" << onnx_model;
     }
 
     if (cuda_available && gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {

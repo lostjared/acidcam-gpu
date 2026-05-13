@@ -75,6 +75,10 @@ class SettingsWindow : public QDialog {
     bool isUseYuvEnabled() const;
     /// @return Selected 3D model file path.
     QString getModelFile() const;
+    /// @return True if the ONNX model pass is enabled.
+    bool isOnnxModelEnabled() const;
+    /// @return Selected ONNX model YAML config path.
+    QString getOnnxModelFile() const;
     /// @return Selected CUDA device index.
     int getSelectedCudaDevice() const;
     /// @return Time speed multiplier applied at runtime.
@@ -115,6 +119,7 @@ class SettingsWindow : public QDialog {
     void browseOutputVideoFile();
     void browseGraphicsFile();
     void browseModelFile();
+    void browseOnnxModelFile();
     /// @brief Probe the currently selected input video file with ffprobe and
     ///        update HDR-related UI state (status label, HDR10 checkbox).
     void detectInputHdr();
@@ -169,6 +174,9 @@ class SettingsWindow : public QDialog {
     QCheckBox *useYuvCheckBox;
     QLineEdit *modelFileLineEdit;
     QPushButton *browseModelButton;
+    QCheckBox *useOnnxModelCheckBox;
+    QLineEdit *onnxModelFileLineEdit;
+    QPushButton *browseOnnxModelButton;
     QComboBox *cudaDeviceComboBox;
     QLabel *cudaDeviceLabel = nullptr;
     QDoubleSpinBox *timeSpeedSpinBox;
@@ -212,6 +220,7 @@ class SettingsWindow : public QDialog {
     QString graphicsFile;
     int graphicsDuration;
     QString modelFile;
+    QString onnxModelFile;
     int selectedCudaDevice;
     double maxDuration;
     double maxSizeLimit;

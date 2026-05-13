@@ -209,6 +209,8 @@ class MainWindow : public QMainWindow {
     bool full_screen_value = false;
     bool copy_audio = false;
     bool enable_3d = false;
+    bool onnx_model_enabled = false;
+    QString onnx_model;
     int audio_input = -1;
     int audio_output = -1;
     QString audio_file;

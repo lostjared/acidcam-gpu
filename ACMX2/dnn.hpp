@@ -3,6 +3,8 @@
 
 #include "opencv2/opencv.hpp"
 #include "opencv2/dnn.hpp"
+#include <yaml-cpp/yaml.h>
+#include <filesystem>
 #include <map>
 #include <vector>
 #include <string>
@@ -12,6 +14,124 @@ namespace ac_dnn {
     using namespace std;
     using namespace cv;
     using namespace dnn;
+
+  class OnnxWrapper {
+  private:
+        cv::dnn::Net net;
+        bool is_loaded = false;
+        bool inference_failed = false;
+        cv::Size input_size = {224, 224};
+        double scale = 1.0 / 255.0;
+        cv::Scalar mean = {0.0, 0.0, 0.0};
+        bool swap_rb = true;
+
+        void loadFromYaml(const std::string &yaml_path) {
+            if (!std::filesystem::exists(yaml_path)) {
+                std::cerr << "acmx2: YAML config not found: " << yaml_path << '\n';
+                return;
+            }
+            try {
+                YAML::Node cfg = YAML::LoadFile(yaml_path);
+                std::string model_path = cfg["model"]["path"].as<std::string>();
+                if (!std::filesystem::exists(model_path)) {
+                    std::cerr << "acmx2: ONNX model not found: " << model_path << '\n';
+                    return;
+                }
+                net = cv::dnn::readNetFromONNX(model_path);
+                if (net.empty()) return;
+                if (cfg["preprocessing"]) {
+                    const YAML::Node &pre = cfg["preprocessing"];
+                    input_size.width  = pre["width"].as<int>(224);
+                    input_size.height = pre["height"].as<int>(224);
+                    scale    = pre["scale"].as<double>(1.0 / 255.0);
+                    swap_rb  = pre["swap_rb"].as<bool>(true);
+                    if (pre["mean"]) {
+                        auto v = pre["mean"].as<std::vector<double>>();
+                        if (v.size() >= 3)
+                            mean = cv::Scalar(v[0], v[1], v[2]);
+                    }
+                }
+                net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                is_loaded = true;
+            } catch (const YAML::Exception &e) {
+                std::cerr << "acmx2: YAML parse error: " << e.what() << '\n';
+            } catch (const cv::Exception &e) {
+                std::cerr << "acmx2: Failed to load ONNX model: " << e.what() << '\n';
+            }
+        }
+
+  public:
+        /// Construct from a YAML config file that specifies model path and preprocessing.
+        explicit OnnxWrapper(std::string_view yaml_path) {
+            loadFromYaml(std::string(yaml_path));
+        }
+
+        void proc(const cv::Mat &image, cv::Mat &output) {
+            if (!is_loaded || inference_failed) return;
+            if (image.empty()) return;
+            try {
+                cv::Mat blob = cv::dnn::blobFromImage(image, scale, input_size, mean, swap_rb, false);
+                net.setInput(blob);
+
+                std::vector<cv::Mat> outputs;
+                net.forward(outputs);
+                if (outputs.empty()) return;
+
+                const int orig_h = image.rows;
+                const int orig_w = image.cols;
+
+                if (outputs.size() > 1) {
+                    // Multi-output path (e.g. Dexined): sigmoid + normalize each head, use fused last.
+                    std::vector<cv::Mat> preds;
+                    preds.reserve(outputs.size());
+                    for (const cv::Mat &p : outputs) {
+                        cv::Mat processed;
+                        if (p.dims == 4 && p.size[0] == 1 && p.size[1] == 1)
+                            processed = p.reshape(0, {p.size[2], p.size[3]});
+                        else
+                            processed = p.clone();
+                        cv::exp(-processed, processed);
+                        processed = 1.0 / (1.0 + processed);
+                        cv::Mat img;
+                        cv::normalize(processed, img, 0, 255, cv::NORM_MINMAX, CV_8U);
+                        cv::resize(img, img, cv::Size(orig_w, orig_h));
+                        preds.push_back(img);
+                    }
+                    cv::Mat result = preds.back();
+                    cv::cvtColor(result, output, cv::COLOR_GRAY2BGR);
+                } else {
+                    // Single-output path: normalize spatial blob and convert to BGR.
+                    const cv::Mat &raw = outputs[0];
+                    if (raw.dims != 4) return;
+                    const int c = raw.size[1];
+                    const int h = raw.size[2];
+                    const int w = raw.size[3];
+                    cv::Mat result;
+                    if (c == 1) {
+                        cv::Mat img(h, w, CV_32F, const_cast<float *>(raw.ptr<float>(0, 0)));
+                        cv::normalize(img, img, 0, 255, cv::NORM_MINMAX);
+                        img.convertTo(result, CV_8U);
+                        cv::cvtColor(result, result, cv::COLOR_GRAY2BGR);
+                    } else {
+                        const int use_c = std::min(c, 3);
+                        std::vector<cv::Mat> chs(use_c);
+                        for (int i = 0; i < use_c; ++i)
+                            chs[i] = cv::Mat(h, w, CV_32F, const_cast<float *>(raw.ptr<float>(0, i))).clone();
+                        cv::Mat merged;
+                        cv::merge(chs, merged);
+                        cv::normalize(merged, merged, 0, 255, cv::NORM_MINMAX);
+                        merged.convertTo(result, CV_8UC3);
+                        cv::cvtColor(result, result, use_c == 3 ? cv::COLOR_RGB2BGR : cv::COLOR_GRAY2BGR);
+                    }
+                    cv::resize(result, output, cv::Size(orig_w, orig_h));
+                }
+            } catch (const cv::Exception &e) {
+                inference_failed = true;
+                std::cerr << "acmx2: OnnxWrapper inference failed (model disabled): " << e.what() << '\n';
+            }
+        }
+    };
 
     class Dexined {
     public:
@@ -151,6 +271,8 @@ namespace ac_dnn {
                     float blackPoint = 0.35f, float whitePoint = 0.75f);
     Mat hardenedAlphaMask(const Mat& image, const Mat& mask,
                          float blackPoint = 0.35f, float whitePoint = 0.75f);
+
+
 }
 
 #endif // ACMX2_DNN_HPP

@@ -4962,6 +4962,7 @@ struct MXArguments {
     float human_black = 0.35f; ///< --black: mask black point (shadow crush threshold).
     float human_white = 0.75f; ///< --white: mask white point (opacity saturation threshold).
     std::string edge_model; ///< Dexined edge-detection ONNX model path (--edge). Empty when disabled.
+    std::string onnx_model;  ///< Generic OnnxWrapper YAML config path (--onnx). Empty when disabled.
     int mode = 0;
     int shader_index = 0;
     std::optional<cv::Size> sizev = std::nullopt;
@@ -6115,6 +6116,15 @@ class ACView : public gl::GLObject {
                 edge_det_model.reset();
             }
         }
+        if (!args.onnx_model.empty()) {
+            try {
+                onnx_proc_model = std::make_unique<ac_dnn::OnnxWrapper>(args.onnx_model);
+                mx::system_out << "acmx2: Generic ONNX model enabled from YAML: " << args.onnx_model << "\n";
+            } catch (const cv::Exception &e) {
+                mx::system_err << "acmx2: Failed to load ONNX model '" << args.onnx_model << "': " << e.what() << "\n";
+                onnx_proc_model.reset();
+            }
+        }
 #else
         if (!args.human_model.empty()) {
             mx::system_err << "acmx2: --human requested but this build has no OpenCV DNN support (configure with -DWITH_OPENCV_DNN=ON).\n";
@@ -6124,6 +6134,9 @@ class ACView : public gl::GLObject {
         }
         if (!args.edge_model.empty()) {
             mx::system_err << "acmx2: --edge requested but this build has no OpenCV DNN support (configure with -DWITH_OPENCV_DNN=ON).\n";
+        }
+        if (!args.onnx_model.empty()) {
+            mx::system_err << "acmx2: --onnx requested but this build has no OpenCV DNN support (configure with -DWITH_OPENCV_DNN=ON).\n";
         }
 #endif
 
@@ -6186,6 +6199,7 @@ class ACView : public gl::GLObject {
     float human_black_point = 0.35f;
     float human_white_point = 0.75f;
     std::unique_ptr<ac_dnn::Dexined> edge_det_model;
+    std::unique_ptr<ac_dnn::OnnxWrapper> onnx_proc_model;
     GLuint human_overlay_tex = 0;
     int human_overlay_w = 0;
     int human_overlay_h = 0;
@@ -7619,6 +7633,17 @@ class ACView : public gl::GLObject {
                 }
             } catch (const cv::Exception &e) {
                 mx::system_err << "acmx2: Dexined inference error: " << e.what() << "\n";
+            }
+        }
+        // Generic ONNX pass: OnnxWrapper::proc() returns a ready-to-use BGR frame.
+        if (onnx_proc_model && !isFrozen && !input_is_hdr && !newFrame.empty()) {
+            try {
+                cv::Mat onnx_out;
+                onnx_proc_model->proc(newFrame, onnx_out);
+                if (!onnx_out.empty())
+                    newFrame = onnx_out;
+            } catch (const cv::Exception &e) {
+                mx::system_err << "acmx2: OnnxWrapper inference error: " << e.what() << "\n";
             }
         }
 #endif
@@ -10754,6 +10779,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(702, "black", "Mask black point / shadow crush threshold (default 0.35)")
         .addOptionDoubleValue(703, "white", "Mask white point / opacity saturation threshold (default 0.75)")
         .addOptionDoubleValue(704, "edge", "Edge detection model (Dexined .onnx) -- replace frame with edge map")
+        .addOptionDoubleValue(705, "onnx", "Generic ONNX model YAML config -- replace frame with DNN output")
         .addOptionDouble(261, "help", "print help info")
         .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
         .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
@@ -10992,6 +11018,9 @@ int main(int argc, char **argv) {
                 break;
             case 704:
                 args.edge_model = arg.arg_value;
+                break;
+            case 705:
+                args.onnx_model = arg.arg_value;
                 break;
             case 400: {
                 args.gpu_filter_enabled = true;

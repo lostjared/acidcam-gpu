@@ -575,6 +575,15 @@ void SettingsWindow::init() {
     browseModelButton = new QPushButton("Model", this);
     browseModelButton->setEnabled(false);
 
+    useOnnxModelCheckBox = new QCheckBox("Use ONNX Model", this);
+    useOnnxModelCheckBox->setChecked(false);
+    onnxModelFileLineEdit = new QLineEdit(this);
+    onnxModelFileLineEdit->setReadOnly(true);
+    onnxModelFileLineEdit->setEnabled(false);
+    onnxModelFileLineEdit->setPlaceholderText("Select YAML config file...");
+    browseOnnxModelButton = new QPushButton("YAML", this);
+    browseOnnxModelButton->setEnabled(false);
+
     textureCacheCheckBox = new QCheckBox("Texture Cache", this);
     textureCacheCheckBox->setEnabled(true);
     cacheDelaySpinBox = new QSpinBox(this);
@@ -726,6 +735,13 @@ void SettingsWindow::init() {
     modelRow->addWidget(modelFileLineEdit);
     modelRow->addWidget(browseModelButton);
     displayGrid->addLayout(modelRow, r, 1);
+    displayGrid->addWidget(useOnnxModelCheckBox, ++r, 0, 1, 2);
+    displayGrid->addWidget(new QLabel("ONNX Model:", this), ++r, 0);
+    auto *onnxModelRow = new QHBoxLayout;
+    onnxModelRow->setSpacing(4);
+    onnxModelRow->addWidget(onnxModelFileLineEdit);
+    onnxModelRow->addWidget(browseOnnxModelButton);
+    displayGrid->addLayout(onnxModelRow, r, 1);
 
     // ── Assemble responsive group layout ──────────────────────────────
     // Groups are organised into independent left/right column VBoxes so
@@ -802,6 +818,13 @@ void SettingsWindow::init() {
         if (!checked)
             modelFileLineEdit->clear();
     });
+
+    connect(useOnnxModelCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        onnxModelFileLineEdit->setEnabled(checked);
+        browseOnnxModelButton->setEnabled(checked);
+    });
+
+    connect(browseOnnxModelButton, &QPushButton::clicked, this, &SettingsWindow::browseOnnxModelFile);
 
     connect(cameraOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
         if (checked) {
@@ -1024,6 +1047,10 @@ void SettingsWindow::loadUiState() {
     fullscreenCheckBox->setChecked(appSettings.value("interface/fullscreen", false).toBool());
     enable3dCheckBox->setChecked(appSettings.value("interface/enable_3d", false).toBool());
     modelFileLineEdit->setText(appSettings.value("interface/model_file", "cube.mxmod.z").toString());
+    useOnnxModelCheckBox->setChecked(appSettings.value("interface/use_onnx_model", false).toBool());
+    onnxModelFileLineEdit->setText(appSettings.value("interface/onnx_model_file", "").toString());
+    onnxModelFileLineEdit->setEnabled(useOnnxModelCheckBox->isChecked());
+    browseOnnxModelButton->setEnabled(useOnnxModelCheckBox->isChecked());
 
     textureCacheCheckBox->setChecked(appSettings.value("interface/texture_cache", false).toBool());
     cacheDelaySpinBox->setValue(appSettings.value("interface/cache_delay", 1).toInt());
@@ -1084,6 +1111,8 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/fullscreen", fullscreenCheckBox->isChecked());
     appSettings.setValue("interface/enable_3d", enable3dCheckBox->isChecked());
     appSettings.setValue("interface/model_file", modelFileLineEdit->text());
+    appSettings.setValue("interface/use_onnx_model", useOnnxModelCheckBox->isChecked());
+    appSettings.setValue("interface/onnx_model_file", onnxModelFileLineEdit->text());
 
     appSettings.setValue("interface/texture_cache", textureCacheCheckBox->isChecked());
     appSettings.setValue("interface/cache_delay", cacheDelaySpinBox->value());
@@ -1179,6 +1208,14 @@ bool SettingsWindow::isUseYuvEnabled() const {
 
 QString SettingsWindow::getModelFile() const {
     return modelFile;
+}
+
+bool SettingsWindow::isOnnxModelEnabled() const {
+    return useOnnxModelCheckBox->isChecked();
+}
+
+QString SettingsWindow::getOnnxModelFile() const {
+    return onnxModelFile;
 }
 
 int SettingsWindow::getSelectedCudaDevice() const {
@@ -1349,6 +1386,12 @@ void SettingsWindow::acceptSettings() {
 
     if (enable3dCheckBox->isChecked()) {
         modelFile = modelFileLineEdit->text();
+    }
+
+    if (useOnnxModelCheckBox->isChecked()) {
+        onnxModelFile = onnxModelFileLineEdit->text();
+    } else {
+        onnxModelFile.clear();
     }
 
     selectedCudaDevice = cudaDeviceComboBox->currentData().toInt();
@@ -1523,6 +1566,18 @@ void SettingsWindow::browseModelFile() {
     if (!fileName.isEmpty()) {
         appSettings.setValue("lastModelDir", QFileInfo(fileName).absolutePath());
         modelFileLineEdit->setText(fileName);
+    }
+}
+
+void SettingsWindow::browseOnnxModelFile() {
+    QSettings appSettings("LostSideDead");
+    QString lastDir = appSettings.value("lastOnnxModelDir", "").toString();
+    if (lastDir.isEmpty())
+        lastDir = QDir::homePath();
+    QString fileName = QFileDialog::getOpenFileName(this, "Select ONNX Model YAML Config", lastDir, "YAML Config Files (*.yaml *.yml)");
+    if (!fileName.isEmpty()) {
+        appSettings.setValue("lastOnnxModelDir", QFileInfo(fileName).absolutePath());
+        onnxModelFileLineEdit->setText(fileName);
     }
 }
 
