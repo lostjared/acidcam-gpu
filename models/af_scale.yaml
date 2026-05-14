@@ -6,4 +6,5 @@ preprocessing:
   height: 512
   scale: 1.0
   swap_rb: true
-  mean: [0.0:, 0.0, 0.0]
+  mean: [0.0, 0.0, 0.0]
+
