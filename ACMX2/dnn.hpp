@@ -32,12 +32,15 @@ namespace ac_dnn {
             }
             try {
                 YAML::Node cfg = YAML::LoadFile(yaml_path);
-                std::string model_path = cfg["model"]["path"].as<std::string>();
-                if (!std::filesystem::exists(model_path)) {
-                    std::cerr << "acmx2: ONNX model not found: " << model_path << '\n';
-                    return;
-                }
-                net = cv::dnn::readNetFromONNX(model_path);
+		std::string model_rel_path = cfg["model"]["path"].as<std::string>();
+		std::filesystem::path base_dir = std::filesystem::path(yaml_path).parent_path();
+		std::filesystem::path full_path = base_dir / model_rel_path;
+		if (!std::filesystem::exists(full_path)) {
+		    std::cerr << "acmx2: ONNX model not found: " << full_path << '\n';
+		    return;
+		}
+		std::string model_path_str = full_path.string();
+                net = cv::dnn::readNetFromONNX(model_path_str);
                 if (net.empty()) return;
                 if (cfg["preprocessing"]) {
                     const YAML::Node &pre = cfg["preprocessing"];
