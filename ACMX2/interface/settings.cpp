@@ -783,7 +783,7 @@ void SettingsWindow::init() {
     // against availableSize() keeps the dialog inside the screen.
     setSizeGripEnabled(true);
     setMinimumSize(420, 320);
-    QSize preferred(820, 680);
+    QSize preferred(820, 730);
     if (QScreen *scr = QGuiApplication::primaryScreen()) {
         const QSize avail = scr->availableSize();
         preferred.setWidth(std::min(preferred.width(), avail.width() - 40));
