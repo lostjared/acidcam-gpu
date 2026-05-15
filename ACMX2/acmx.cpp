@@ -5057,6 +5057,7 @@ struct MXArguments {
     bool use_yuv = false;
     bool flip_output = false;          ///< Vertical flip output frames when set (e.g., for HDR correction).
     bool png_output = false;           ///< Video-file mode only: write PNG frames to a subdirectory instead of encoding video.
+    int generate_interval = 0;         ///< Save a PNG frame every N frames to a subdirectory (video or camera mode, 0 = disabled).
     bool no_drop = false;              ///< In video mode, block when encoder queue is full instead of dropping.
     bool display_filter = false;       ///< Display current shader/stack and GPU filter overlay in upper-left.
     std::string watermark_text;        ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
@@ -6040,6 +6041,8 @@ class ACView : public gl::GLObject {
           use_shader_cache_flag{args.use_shader_cache},
           flip_output{args.flip_output},
           png_video_mode{args.png_output && !args.filename.empty()},
+          generate_mode{args.generate_interval > 0},
+          generate_interval{args.generate_interval},
           display_filter{args.display_filter} {
         if (!args.watermark_text.empty()) {
             enableWatermark = true;
@@ -7176,6 +7179,36 @@ class ACView : public gl::GLObject {
             }
         } else if (graphic.empty() && filename.empty()) {
             throw mx::Exception("Requires input from a file, or camera.");
+        }
+
+        if (generate_mode) {
+            std::filesystem::path gen_dir;
+            if (!ofilename.empty()) {
+                std::filesystem::path out_path(ofilename);
+                std::filesystem::path out_parent = out_path.parent_path();
+                if (out_parent.empty()) out_parent = ".";
+                std::string out_name = out_path.filename().string();
+                if (out_name.empty()) out_name = "output";
+                gen_dir = out_parent / ("video_file-" + out_name + "-generate");
+            } else if (!filename.empty()) {
+                std::filesystem::path in_path(filename);
+                std::filesystem::path in_parent = in_path.parent_path();
+                if (in_parent.empty()) in_parent = ".";
+                std::string in_name = in_path.filename().string();
+                if (in_name.empty()) in_name = "input";
+                gen_dir = in_parent / ("video_file-" + in_name + "-generate");
+            } else {
+                gen_dir = std::filesystem::path("camera-generate");
+            }
+            std::error_code mk_err;
+            if (!std::filesystem::exists(gen_dir, mk_err) && !std::filesystem::create_directories(gen_dir, mk_err)) {
+                throw mx::Exception("Could not create generate output directory: " + gen_dir.string());
+            }
+            generate_dir = gen_dir.string();
+            mx::system_out << "acmx2: --generate " << generate_interval
+                           << ": saving PNG frames every " << generate_interval
+                           << " frames to " << generate_dir << "\n";
+            fflush(stdout);
         }
 
         library.is3D(is3d_enabled);
@@ -8457,14 +8490,14 @@ class ACView : public gl::GLObject {
             glDisable(GL_BLEND);
         }
 
-        bool needWriter = (((writer.is_open() || png_video_mode) && cache_warmup_frames <= 0) || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
+        bool needWriter = (((writer.is_open() || png_video_mode || generate_mode) && cache_warmup_frames <= 0) || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
 
         bool has_snapshot_request = (snapshot_state > 0);
         bool has_hdr_snapshot_request = (hdr_snapshot_state > 0);
         bool has_raw_snapshot_request = (raw_snapshot_state > 0);
         bool has_tiff_snapshot_request = (tiff_snapshot_state > 0);
         if (needWriter && input_is_hdr
-            && (writer.is_open() || png_video_mode || has_snapshot_request || has_hdr_snapshot_request || has_raw_snapshot_request || has_tiff_snapshot_request)) {
+            && (writer.is_open() || png_video_mode || generate_mode || has_snapshot_request || has_hdr_snapshot_request || has_raw_snapshot_request || has_tiff_snapshot_request)) {
             // HDR writer readback path. Bypasses the 8-bit PBO ring entirely
             // and reads 16-bit PQ-encoded BT.2020 RGBA from
             // @c hdr_encoded_texture via a synchronous glGetTexImage. The
@@ -8492,7 +8525,7 @@ class ACView : public gl::GLObject {
                 pixels = std::move(flipped_pixels);
             }
 
-            if (writer.is_open() || png_video_mode || has_hdr_snapshot_request || has_raw_snapshot_request) {
+            if (writer.is_open() || png_video_mode || generate_mode || has_hdr_snapshot_request || has_raw_snapshot_request) {
                 FrameData fd;
                 fd.pixels = pixels;
                 fd.width = win->w;
@@ -8606,11 +8639,11 @@ class ACView : public gl::GLObject {
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-                if (writer.is_open() || png_video_mode || is_snapshot_frame || is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
+                if (writer.is_open() || png_video_mode || generate_mode || is_snapshot_frame || is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
                     bool used_zero_copy = false;
 
 #ifdef ACMX2_WITH_CUDA
-                    if (writer.is_open() && !is_snapshot_frame && !is_webp_snapshot_frame && !is_raw_snapshot_frame && !is_tiff_snapshot_frame && recordCudaPboResources[pboNextIndex]) {
+                    if (writer.is_open() && !generate_mode && !is_snapshot_frame && !is_webp_snapshot_frame && !is_raw_snapshot_frame && !is_tiff_snapshot_frame && recordCudaPboResources[pboNextIndex]) {
                         cudaGraphicsResource *resource = recordCudaPboResources[pboNextIndex];
                         void *devPtr = nullptr;
                         size_t mappedBytes = 0;
@@ -9634,6 +9667,11 @@ class ACView : public gl::GLObject {
     bool png_video_mode = false;
     std::string png_video_dir;
     std::atomic<uint64_t> png_video_frame_counter{0};
+    bool generate_mode = false;
+    int generate_interval = 0;
+    std::string generate_dir;
+    std::atomic<uint64_t> generate_all_frames{0};
+    std::atomic<uint64_t> generate_saved_counter{0};
     int last_progress_percent = -1;
     bool enableWatermark = false;
     bool display_filter = false;
@@ -10130,6 +10168,24 @@ class ACView : public gl::GLObject {
                         else
                             writer.write_ts(fd.pixels.data());
                     }
+                    if (generate_mode && !fd.isSnapshot && !fd.isTiffSnapshot) {
+                        uint64_t all_idx = generate_all_frames.fetch_add(1);
+                        if (generate_interval > 0 && all_idx % static_cast<uint64_t>(generate_interval) == 0) {
+                            uint64_t saved_idx = generate_saved_counter.fetch_add(1);
+                            std::ostringstream frame_name;
+                            frame_name << generate_dir << "/frame-"
+                                       << std::setfill('0') << std::setw(8) << saved_idx
+                                       << ".png";
+                            std::string frame_path = frame_name.str();
+                            if (fd.isHdr) {
+                                png::SavePNG_RGBA16(frame_path.c_str(), fd.pixels.data(), fd.width, fd.height);
+                            } else {
+                                png::SavePNG_RGBA(frame_path.c_str(),
+                                                  const_cast<unsigned char *>(fd.pixels.data()),
+                                                  fd.width, fd.height);
+                            }
+                        }
+                    }
                 }
             } catch (const std::exception &e) {
                 mx::system_err << "acmx2: writer thread exception: " << e.what() << "\n";
@@ -10456,6 +10512,11 @@ class ACView : public gl::GLObject {
                            << " PNG frames to directory: " << png_video_dir << "\n";
             fflush(stdout);
         }
+        if (generate_mode) {
+            mx::system_out << "acmx2: --generate: saved " << generate_saved_counter.load()
+                           << " PNG frames to directory: " << generate_dir << "\n";
+            fflush(stdout);
+        }
     }
 };
 
@@ -10734,6 +10795,7 @@ namespace {
         printSection(out, c, "Recording And Encoding", {
             {"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"},
             {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"},
+            {"--generate <N>", "Save a PNG frame every N frames to an output subdirectory (video or camera mode).", "acmx2 -i in.mp4 --generate 30"},
             {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"},
             {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"},
             {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"},
@@ -10952,6 +11014,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
         .addOptionDoubleValue(610, "max-size", "Stop recording when output file exceeds size in MB (float)")
         .addOptionDouble(611, "png", "Video file mode: write PNG frames to output subdirectory instead of encoding video")
+        .addOptionDoubleValue(612, "generate", "Save a PNG frame every N frames to an output subdirectory (video or camera mode)")
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
         .addOptionDouble(414, "use-yuv", "Use YUV (YUYV) camera format instead of MJPG")
@@ -11360,6 +11423,16 @@ int main(int argc, char **argv) {
                 args.png_output = true;
                 mx::system_out << "acmx2: --png enabled (video-file mode only; ignored for camera mode)\n";
                 break;
+            case 612: {
+                int n = atoi(arg.arg_value.c_str());
+                if (n < 1) {
+                    mx::system_err << "acmx2: --generate requires a positive integer frame interval\n";
+                    exit(EXIT_FAILURE);
+                }
+                args.generate_interval = n;
+                mx::system_out << "acmx2: --generate " << n << ": will save a PNG frame every " << n << " frames\n";
+                break;
+            }
             case 412:
                 args.cross_fade_duration = static_cast<float>(atof(arg.arg_value.c_str()));
                 mx::system_out << "acmx2: Crossfade duration set to: " << args.cross_fade_duration << " seconds\n";
