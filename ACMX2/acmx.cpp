@@ -908,6 +908,41 @@ constexpr const char *kDisplayFragPassthrough =
     "    color = texture(samp, tc);\n"
     "}\n";
 
+constexpr const char *kMuxOverlayFrag =
+    "#version 330 core\n"
+    "out vec4 color;\n"
+    "in vec2 tc;\n"
+    "uniform sampler2D samp;\n"
+    "uniform float time_f;\n"
+    "uniform vec2 iResolution;\n"
+    "uniform float alpha;\n"
+    "void main(void) {\n"
+    "    vec2 uv = (tc * 2.0 - 1.0);\n"
+    "    float aspect = iResolution.x / iResolution.y;\n"
+    "    uv.x *= aspect;\n"
+    "    float d = length(uv);\n"
+    "    float lensStrength = 1.5;\n"
+    "    vec3 normal = normalize(vec3(uv, 1.0 / lensStrength));\n"
+    "    float fisheyeRadius = atan(d, 1.0);\n"
+    "    vec2 distortedUV = normalize(uv + 1e-6) * fisheyeRadius;\n"
+    "    float t = time_f * 0.8;\n"
+    "    float r_dist = length(distortedUV);\n"
+    "    float angle = atan(distortedUV.y, distortedUV.x);\n"
+    "    float spiral = angle + (log(r_dist + 0.1) * 3.0) - t * 1.5;\n"
+    "    float r = sin(spiral * 3.0 + t);\n"
+    "    float g = sin(spiral * 3.0 + t + 2.094);\n"
+    "    float b = sin(spiral * 3.0 + t + 4.188);\n"
+    "    vec3 spiralCol = vec3(r, g, b) * 0.5 + 0.5;\n"
+    "    vec3 lightDir = normalize(vec3(sin(time_f), cos(time_f), 1.0));\n"
+    "    float diff = max(dot(normal, lightDir), 0.0);\n"
+    "    float spec = pow(max(dot(reflect(-lightDir, normal), vec3(0,0,1)), 0.0), 16.0);\n"
+    "    vec4 texColor = texture(samp, tc);\n"
+    "    vec3 finalCol = mix(texColor.rgb, spiralCol * (diff + 0.5) + spec, 0.7);\n"
+    "    finalCol *= smoothstep(2.0, 0.5, d);\n"
+    "    float finalAlpha = texColor.a * alpha;\n"
+    "    color = vec4(finalCol, finalAlpha);\n"
+    "}\n";
+
 class FFMpegVideoReader {
   public:
     ~FFMpegVideoReader() {
@@ -6591,6 +6626,10 @@ class ACView : public gl::GLObject {
 
     mx::Font overlayFont;
     mx::Font waterFont;
+    gl::ShaderProgram muxOverlayShader;
+    gl::GLSprite muxOverlaySprite;
+    GLuint muxDummyTex = 0;
+    float mux_time_f = 0.0f;
     std::chrono::steady_clock::time_point sessionStartTime;
     double displayFPS = 0.0;
     int fpsFrameCount = 0;
@@ -7150,6 +7189,19 @@ class ACView : public gl::GLObject {
         mx::system_out << "acmx2: Watermark font loaded at size: " << waterFontSize << " for " << win->w << "x" << win->h << "\n";
         fflush(stdout);
 
+        if (muxOverlayShader.loadProgramFromText(kHdrVertPassthrough, kMuxOverlayFrag)) {
+            static constexpr unsigned char kWhite[4] = {255, 255, 255, 255};
+            glGenTextures(1, &muxDummyTex);
+            glBindTexture(GL_TEXTURE_2D, muxDummyTex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, kWhite);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            muxOverlaySprite.initSize(win->w, win->h);
+            muxOverlaySprite.setName("samp");
+            muxOverlaySprite.initWithTexture(&muxOverlayShader, muxDummyTex, 0.0f, 0.0f, win->w, win->h);
+        }
+
         library.enableCache(use_shader_cache_flag);
         // Tell the library how many cache textures we'll bind so it can
         // (a) inject `#define SIZE N` into fragment sources before compile,
@@ -7459,6 +7511,19 @@ class ACView : public gl::GLObject {
                 return;
             }
             glViewport(0, 0, win->w, win->h);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            if (muxDummyTex) {
+                muxOverlayShader.useProgram();
+                muxOverlayShader.setUniform("mv_matrix", glm::mat4(1.0f));
+                muxOverlayShader.setUniform("proj_matrix", glm::mat4(1.0f));
+                glUniform1f(glGetUniformLocation(muxOverlayShader.id(), "time_f"), mux_time_f);
+                glUniform2f(glGetUniformLocation(muxOverlayShader.id(), "iResolution"),
+                            static_cast<float>(win->w), static_cast<float>(win->h));
+                glUniform1f(glGetUniformLocation(muxOverlayShader.id(), "alpha"), 1.0f);
+                muxOverlaySprite.draw(muxDummyTex, 0, 0, win->w, win->h);
+                mux_time_f += 0.016f;
+            }
             if (overlayFont.handle().has_value()) {
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
