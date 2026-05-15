@@ -71,6 +71,10 @@ class SettingsWindow : public QDialog {
     bool isCopyAudioEnabled() const;
     /// @brief Return whether Write PNG mode is enabled.
     bool isPngOutputEnabled() const;
+    /// @return True if --generate <N> mode is enabled.
+    bool isGenerateEnabled() const;
+    /// @return Frame interval to pass with --generate.
+    int getGenerateInterval() const;
     /// @return True if 3D rendering mode is enabled.
     bool is3dEnabled() const;
     /// @return True if YUV mode is enabled for selected resolution.
@@ -196,6 +200,8 @@ class SettingsWindow : public QDialog {
     QCheckBox *encodeRealtimeCheckBox = nullptr;
     QCheckBox *encodeNoDropCheckBox = nullptr;
     QCheckBox *writePngCheckBox = nullptr;
+    QCheckBox *generateCheckBox = nullptr;
+    QSpinBox *generateIntervalSpinBox = nullptr;
 
     // Responsive layout: groups are reflowed between 1 and 2 columns
     // depending on the dialog width when the user resizes the window.

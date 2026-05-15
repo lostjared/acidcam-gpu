@@ -1435,6 +1435,8 @@ void MainWindow::cameraSettings() {
     cross_fade_duration = settingsWindow.getCrossFadeDuration();
     flip_enabled = settingsWindow.isFlipEnabled();
     png_output = settingsWindow.isPngOutputEnabled();
+    generate_enabled = settingsWindow.isGenerateEnabled();
+    generate_interval = settingsWindow.getGenerateInterval();
     encode_preset = settingsWindow.getEncodePreset();
     encode_tune = settingsWindow.getEncodeTune();
     encode_crf = settingsWindow.getEncodeCrf();
@@ -1653,6 +1655,10 @@ void MainWindow::runSelected() {
 
     if (png_output && !output_file.isEmpty()) {
         arguments << "--png";
+    }
+
+    if (generate_enabled && generate_interval > 0) {
+        arguments << "--generate" << QString::number(generate_interval);
     }
 
     if (watermark_enabled && !watermark_text.isEmpty()) {
@@ -1891,6 +1897,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     if (png_output && !output_file.isEmpty()) {
         arguments << "--png";
+    }
+
+    if (generate_enabled && generate_interval > 0) {
+        arguments << "--generate" << QString::number(generate_interval);
     }
 
     if (watermark_enabled && !watermark_text.isEmpty()) {

@@ -535,6 +535,15 @@ void SettingsWindow::init() {
 
     writePngCheckBox = new QCheckBox("Write PNG", this);
 
+    generateCheckBox = new QCheckBox("Generate every", this);
+    generateCheckBox->setToolTip("Save a PNG frame every N frames to an output subdirectory (passes --generate <N>).");
+    generateIntervalSpinBox = new QSpinBox(this);
+    generateIntervalSpinBox->setRange(1, 100000);
+    generateIntervalSpinBox->setValue(30);
+    generateIntervalSpinBox->setSuffix(" frames");
+    generateIntervalSpinBox->setEnabled(false);
+    connect(generateCheckBox, &QCheckBox::toggled, generateIntervalSpinBox, &QWidget::setEnabled);
+
     timeSpeedSpinBox = new QDoubleSpinBox(this);
     timeSpeedSpinBox->setRange(-100.0, 100.0);
     timeSpeedSpinBox->setSingleStep(0.1);
@@ -676,6 +685,8 @@ void SettingsWindow::init() {
     outputGrid->addLayout(outputRow, r, 1);
     outputGrid->addWidget(copyAudioCheckBox, ++r, 0, 1, 2);
     outputGrid->addWidget(writePngCheckBox, ++r, 0, 1, 2);
+    outputGrid->addWidget(generateCheckBox, ++r, 0);
+    outputGrid->addWidget(generateIntervalSpinBox, r, 1);
 
     // ── Encoding group ────────────────────────────────────────────────
     auto *encodingGroup = new QGroupBox("Encoding Quality", this);
@@ -786,7 +797,7 @@ void SettingsWindow::init() {
     // against availableSize() keeps the dialog inside the screen.
     setSizeGripEnabled(true);
     setMinimumSize(420, 320);
-    QSize preferred(820, 730);
+    QSize preferred(820, 790);
     if (QScreen *scr = QGuiApplication::primaryScreen()) {
         const QSize avail = scr->availableSize();
         preferred.setWidth(std::min(preferred.width(), avail.width() - 40));
@@ -1036,6 +1047,9 @@ void SettingsWindow::loadUiState() {
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
     writePngCheckBox->setChecked(appSettings.value("interface/write_png", false).toBool());
+    generateCheckBox->setChecked(appSettings.value("interface/generate_enabled", false).toBool());
+    generateIntervalSpinBox->setValue(appSettings.value("interface/generate_interval", 30).toInt());
+    generateIntervalSpinBox->setEnabled(generateCheckBox->isChecked());
 
     // Re-probe HDR for whatever video file we just restored so the checkbox
     // reflects the actual capabilities of the cached path.
@@ -1108,6 +1122,8 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
     appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
     appSettings.setValue("interface/write_png", writePngCheckBox->isChecked());
+    appSettings.setValue("interface/generate_enabled", generateCheckBox->isChecked());
+    appSettings.setValue("interface/generate_interval", generateIntervalSpinBox->value());
     if (convertHdr10CheckBox) {
         appSettings.setValue("interface/convert_to_hdr10",
                              convertHdr10CheckBox->isChecked());
@@ -1209,6 +1225,14 @@ bool SettingsWindow::isCopyAudioEnabled() const {
 
 bool SettingsWindow::isPngOutputEnabled() const {
     return writePngCheckBox->isChecked();
+}
+
+bool SettingsWindow::isGenerateEnabled() const {
+    return generateCheckBox && generateCheckBox->isChecked();
+}
+
+int SettingsWindow::getGenerateInterval() const {
+    return generateIntervalSpinBox ? generateIntervalSpinBox->value() : 0;
 }
 
 bool SettingsWindow::isUseYuvEnabled() const {
