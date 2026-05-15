@@ -69,6 +69,8 @@ class SettingsWindow : public QDialog {
     bool isFullscreen() const;
     /// @return True if input audio should be copied to output.
     bool isCopyAudioEnabled() const;
+    /// @brief Return whether Write PNG mode is enabled.
+    bool isPngOutputEnabled() const;
     /// @return True if 3D rendering mode is enabled.
     bool is3dEnabled() const;
     /// @return True if YUV mode is enabled for selected resolution.
@@ -193,6 +195,7 @@ class SettingsWindow : public QDialog {
     QComboBox *encodeCodecComboBox = nullptr;
     QCheckBox *encodeRealtimeCheckBox = nullptr;
     QCheckBox *encodeNoDropCheckBox = nullptr;
+    QCheckBox *writePngCheckBox = nullptr;
 
     // Responsive layout: groups are reflowed between 1 and 2 columns
     // depending on the dialog width when the user resizes the window.

@@ -248,6 +248,7 @@ class MainWindow : public QMainWindow {
     double max_size_mb = 0.0;
     float cross_fade_duration = 0.5f;
     bool flip_enabled = false;
+    bool png_output = false;
     bool watermark_enabled = false;
     QString watermark_text;
     int watermark_r = 255;

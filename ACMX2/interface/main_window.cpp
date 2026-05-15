@@ -1434,6 +1434,7 @@ void MainWindow::cameraSettings() {
     max_size_mb = settingsWindow.getMaxSizeLimit();
     cross_fade_duration = settingsWindow.getCrossFadeDuration();
     flip_enabled = settingsWindow.isFlipEnabled();
+    png_output = settingsWindow.isPngOutputEnabled();
     encode_preset = settingsWindow.getEncodePreset();
     encode_tune = settingsWindow.getEncodeTune();
     encode_crf = settingsWindow.getEncodeCrf();
@@ -1648,6 +1649,10 @@ void MainWindow::runSelected() {
 
     if (flip_enabled) {
         arguments << "--flip";
+    }
+
+    if (png_output && !output_file.isEmpty()) {
+        arguments << "--png";
     }
 
     if (watermark_enabled && !watermark_text.isEmpty()) {
@@ -1882,6 +1887,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     if (flip_enabled) {
         arguments << "--flip";
+    }
+
+    if (png_output && !output_file.isEmpty()) {
+        arguments << "--png";
     }
 
     if (watermark_enabled && !watermark_text.isEmpty()) {

@@ -533,6 +533,8 @@ void SettingsWindow::init() {
     copyAudioCheckBox->setChecked(false);
     copyAudioCheckBox->setEnabled(false);
 
+    writePngCheckBox = new QCheckBox("Write PNG", this);
+
     timeSpeedSpinBox = new QDoubleSpinBox(this);
     timeSpeedSpinBox->setRange(-100.0, 100.0);
     timeSpeedSpinBox->setSingleStep(0.1);
@@ -673,6 +675,7 @@ void SettingsWindow::init() {
     outputRow->addWidget(browseOutputVideoButton);
     outputGrid->addLayout(outputRow, r, 1);
     outputGrid->addWidget(copyAudioCheckBox, ++r, 0, 1, 2);
+    outputGrid->addWidget(writePngCheckBox, ++r, 0, 1, 2);
 
     // ── Encoding group ────────────────────────────────────────────────
     auto *encodingGroup = new QGroupBox("Encoding Quality", this);
@@ -1032,6 +1035,7 @@ void SettingsWindow::loadUiState() {
     saveOutputVideoCheckBox->setChecked(appSettings.value("interface/save_output", false).toBool());
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
+    writePngCheckBox->setChecked(appSettings.value("interface/write_png", false).toBool());
 
     // Re-probe HDR for whatever video file we just restored so the checkbox
     // reflects the actual capabilities of the cached path.
@@ -1103,6 +1107,7 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/save_output", saveOutputVideoCheckBox->isChecked());
     appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
     appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
+    appSettings.setValue("interface/write_png", writePngCheckBox->isChecked());
     if (convertHdr10CheckBox) {
         appSettings.setValue("interface/convert_to_hdr10",
                              convertHdr10CheckBox->isChecked());
@@ -1200,6 +1205,10 @@ bool SettingsWindow::isFullscreen() const {
 
 bool SettingsWindow::isCopyAudioEnabled() const {
     return copyAudioCheckBox->isChecked();
+}
+
+bool SettingsWindow::isPngOutputEnabled() const {
+    return writePngCheckBox->isChecked();
 }
 
 bool SettingsWindow::isUseYuvEnabled() const {
