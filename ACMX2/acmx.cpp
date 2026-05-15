@@ -5021,6 +5021,7 @@ struct MXArguments {
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
     bool flip_output = false;          ///< Vertical flip output frames when set (e.g., for HDR correction).
+    bool png_output = false;           ///< Video-file mode only: write PNG frames to a subdirectory instead of encoding video.
     bool no_drop = false;              ///< In video mode, block when encoder queue is full instead of dropping.
     bool display_filter = false;       ///< Display current shader/stack and GPU filter overlay in upper-left.
     std::string watermark_text;        ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
@@ -6003,6 +6004,7 @@ class ACView : public gl::GLObject {
           no_drop_mode{args.no_drop},
           use_shader_cache_flag{args.use_shader_cache},
           flip_output{args.flip_output},
+          png_video_mode{args.png_output && !args.filename.empty()},
           display_filter{args.display_filter} {
         if (!args.watermark_text.empty()) {
             enableWatermark = true;
@@ -6866,7 +6868,9 @@ class ACView : public gl::GLObject {
                                    << (encode_opts.realtime ? " [realtime]" : "")
                                    << " FPS: " << fps << "\n";
 #ifdef AUDIO_ENABLED
-                    startAudioRecordingIfNeeded();
+                    if (!png_video_mode) {
+                        startAudioRecordingIfNeeded();
+                    }
 #endif
                     mx::system_out << "acmx2: Pipeline mode => decode: graphic/image, encode: "
                                    << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
@@ -7078,38 +7082,57 @@ class ACView : public gl::GLObject {
             SDL_SetWindowPosition(win->getWindow(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
             if (!ofilename.empty()) {
-                if (writer.open(ofilename, w, h, fps, encode_opts)) {
-                    if (silent_mode || no_drop_mode) {
-                        // Batch transcoding or --no-drop: block the producer
-                        // when the encoder queue fills instead of dropping
-                        // frames.
-                        writer.set_block_when_full(true);
+                if (png_video_mode) {
+                    std::filesystem::path out_path(ofilename);
+                    std::filesystem::path out_parent = out_path.parent_path();
+                    if (out_parent.empty()) {
+                        out_parent = ".";
                     }
-                    mx::system_out << "acmx2: Opened: " << ofilename
-                                   << " for writing at: CRF: " << encode_opts.crf
-                                   << " preset: " << encode_opts.preset
-                                   << " tune: " << (encode_opts.tune.empty() ? "none" : encode_opts.tune)
-                                   << " codec: " << encode_opts.codec
-                                   << (encode_opts.realtime ? " [realtime]" : "")
-                                   << "\n";
-                    if (no_drop_mode) {
-                        mx::system_out << "acmx2: --no-drop active (video mode): producer blocks when encoder queue is full\n";
+                    std::string out_name = out_path.filename().string();
+                    if (out_name.empty()) {
+                        out_name = "output";
                     }
-                    if (encode_opts.hdr.enabled) {
-                        mx::system_out << "acmx2: *** HDR OUTPUT ENABLED: writing HEVC Main10 + BT.2020 "
-                                       << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
-                                       << " ***\n";
+                    std::filesystem::path frame_dir = out_parent / ("video_file-" + out_name + "-png");
+                    std::error_code mk_err;
+                    if (!std::filesystem::exists(frame_dir, mk_err) && !std::filesystem::create_directories(frame_dir, mk_err)) {
+                        throw mx::Exception("Could not create PNG output directory: " + frame_dir.string());
                     }
-#ifdef AUDIO_ENABLED
-                    startAudioRecordingIfNeeded();
-#endif
-                    mx::system_out << "acmx2: Pipeline mode => decode: " << decode_mode
-                                   << ", encode: "
-                                   << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
-                    fflush(stdout);
-                    fflush(stderr);
+                    png_video_dir = frame_dir.string();
+                    mx::system_out << "acmx2: --png enabled: writing video frames to " << png_video_dir << "\n";
                 } else {
-                    throw mx::Exception("Could not open output video file: " + ofilename);
+                    if (writer.open(ofilename, w, h, fps, encode_opts)) {
+                        if (silent_mode || no_drop_mode) {
+                            // Batch transcoding or --no-drop: block the producer
+                            // when the encoder queue fills instead of dropping
+                            // frames.
+                            writer.set_block_when_full(true);
+                        }
+                        mx::system_out << "acmx2: Opened: " << ofilename
+                                       << " for writing at: CRF: " << encode_opts.crf
+                                       << " preset: " << encode_opts.preset
+                                       << " tune: " << (encode_opts.tune.empty() ? "none" : encode_opts.tune)
+                                       << " codec: " << encode_opts.codec
+                                       << (encode_opts.realtime ? " [realtime]" : "")
+                                       << "\n";
+                        if (no_drop_mode) {
+                            mx::system_out << "acmx2: --no-drop active (video mode): producer blocks when encoder queue is full\n";
+                        }
+                        if (encode_opts.hdr.enabled) {
+                            mx::system_out << "acmx2: *** HDR OUTPUT ENABLED: writing HEVC Main10 + BT.2020 "
+                                           << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
+                                           << " ***\n";
+                        }
+#ifdef AUDIO_ENABLED
+                        startAudioRecordingIfNeeded();
+#endif
+                        mx::system_out << "acmx2: Pipeline mode => decode: " << decode_mode
+                                       << ", encode: "
+                                       << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
+                        fflush(stdout);
+                        fflush(stderr);
+                    } else {
+                        throw mx::Exception("Could not open output video file: " + ofilename);
+                    }
                 }
             }
         } else if (graphic.empty() && filename.empty()) {
@@ -8322,7 +8345,7 @@ class ACView : public gl::GLObject {
         }
 
         int watermarkY = 10;
-        if (display_filter && writer.is_open() && waterFont.handle().has_value()) {
+        if (display_filter && (writer.is_open() || png_video_mode) && waterFont.handle().has_value()) {
             glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
             glViewport(0, 0, win->w, win->h);
             glEnable(GL_BLEND);
@@ -8357,7 +8380,7 @@ class ACView : public gl::GLObject {
             glDisable(GL_BLEND);
             watermarkY = dfY;
         }
-        if (enableWatermark && writer.is_open() && waterFont.handle().has_value()) {
+        if (enableWatermark && (writer.is_open() || png_video_mode) && waterFont.handle().has_value()) {
             glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
             glViewport(0, 0, win->w, win->h);
             glEnable(GL_BLEND);
@@ -8369,14 +8392,14 @@ class ACView : public gl::GLObject {
             glDisable(GL_BLEND);
         }
 
-        bool needWriter = ((writer.is_open() && cache_warmup_frames <= 0) || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
+        bool needWriter = (((writer.is_open() || png_video_mode) && cache_warmup_frames <= 0) || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
 
         bool has_snapshot_request = (snapshot_state > 0);
         bool has_hdr_snapshot_request = (hdr_snapshot_state > 0);
         bool has_raw_snapshot_request = (raw_snapshot_state > 0);
         bool has_tiff_snapshot_request = (tiff_snapshot_state > 0);
         if (needWriter && input_is_hdr
-            && (writer.is_open() || has_snapshot_request || has_hdr_snapshot_request || has_raw_snapshot_request || has_tiff_snapshot_request)) {
+            && (writer.is_open() || png_video_mode || has_snapshot_request || has_hdr_snapshot_request || has_raw_snapshot_request || has_tiff_snapshot_request)) {
             // HDR writer readback path. Bypasses the 8-bit PBO ring entirely
             // and reads 16-bit PQ-encoded BT.2020 RGBA from
             // @c hdr_encoded_texture via a synchronous glGetTexImage. The
@@ -8404,7 +8427,7 @@ class ACView : public gl::GLObject {
                 pixels = std::move(flipped_pixels);
             }
 
-            if (writer.is_open() || has_hdr_snapshot_request || has_raw_snapshot_request) {
+            if (writer.is_open() || png_video_mode || has_hdr_snapshot_request || has_raw_snapshot_request) {
                 FrameData fd;
                 fd.pixels = pixels;
                 fd.width = win->w;
@@ -8518,7 +8541,7 @@ class ACView : public gl::GLObject {
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-                if (writer.is_open() || is_snapshot_frame || is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
+                if (writer.is_open() || png_video_mode || is_snapshot_frame || is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
                     bool used_zero_copy = false;
 
 #ifdef ACMX2_WITH_CUDA
@@ -8739,7 +8762,7 @@ class ACView : public gl::GLObject {
                         last_progress_percent = current_percent;
                     }
                     lastProgressEmit = now;
-                    int64_t frames_written = writer.is_open() ? writer.get_frame_count() : 0;
+                    int64_t frames_written = png_video_mode ? static_cast<int64_t>(png_video_frame_counter.load()) : (writer.is_open() ? writer.get_frame_count() : 0);
                     double elapsed_secs = static_cast<double>(frame_counter) / fps;
                     uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600);
                     uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60) % 60;
@@ -8752,6 +8775,18 @@ class ACView : public gl::GLObject {
                               << std::setfill('0') << std::setw(2) << minutes << ":"
                               << std::setfill('0') << std::setw(2) << seconds
                               << std::setfill(' ') << "\n" << std::flush;
+                    if (current_percent >= 100 && png_video_mode) {
+                        // Drain the writer queue so all frames land on disk
+                        // before the window tears down, then confirm the total.
+                        {
+                            std::unique_lock<std::mutex> lock(queueMutex);
+                            queueCondVar.wait(lock, [this] { return frameQueue.empty() || !writerRunning; });
+                        }
+                        mx::system_out << "acmx2: complete — wrote "
+                                       << png_video_frame_counter.load()
+                                       << " PNG frames to: " << png_video_dir << "\n";
+                        fflush(stdout);
+                    }
                 }
             } else if (silent_mode) {
                 // Fallback: input reports unknown frame count (e.g. some MKV
@@ -8762,7 +8797,7 @@ class ACView : public gl::GLObject {
                 static auto lastProgressEmitUnk = std::chrono::steady_clock::now();
                 if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastProgressEmitUnk).count() >= 500) {
                     lastProgressEmitUnk = now;
-                    int64_t frames_written = writer.is_open() ? writer.get_frame_count() : 0;
+                    int64_t frames_written = png_video_mode ? static_cast<int64_t>(png_video_frame_counter.load()) : (writer.is_open() ? writer.get_frame_count() : 0);
                     double elapsed_secs = (fps > 0.0) ? static_cast<double>(frame_counter) / fps : 0.0;
                     uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600);
                     uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60) % 60;
@@ -8863,7 +8898,7 @@ class ACView : public gl::GLObject {
     }
 
     void appendRecordingTitleSuffix(std::ostringstream &stream) {
-        if (!writer.is_open()) {
+        if (!writer.is_open() && !png_video_mode) {
             return;
         }
 
@@ -8901,6 +8936,9 @@ class ACView : public gl::GLObject {
      * @return Number of frames written if recording, else the display counter.
      */
     int64_t getFrameCount() {
+        if (png_video_mode) {
+            return static_cast<int64_t>(png_video_frame_counter.load());
+        }
         if (writer.is_open()) {
             return writer.get_frame_count();
         }
@@ -9528,6 +9566,9 @@ class ACView : public gl::GLObject {
 #endif
     bool use_yuv = false;
     bool flip_output = false;
+    bool png_video_mode = false;
+    std::string png_video_dir;
+    std::atomic<uint64_t> png_video_frame_counter{0};
     int last_progress_percent = -1;
     bool enableWatermark = false;
     bool display_filter = false;
@@ -9991,7 +10032,7 @@ class ACView : public gl::GLObject {
                         });
                     }
 #endif
-                    if (writer.is_open() && (!filename.empty() || !graphic.empty()) && written_frame_counter == 0) {
+                    if ((writer.is_open() || png_video_mode) && (!filename.empty() || !graphic.empty()) && written_frame_counter == 0) {
                         written_frame_counter++;
                         continue;
                     } else if (writer.is_open() && written_frame_counter <= 30 && filename.empty() && graphic.empty()) {
@@ -10002,8 +10043,22 @@ class ACView : public gl::GLObject {
                     startAudioRecordingIfNeeded();
 #endif
 
-                    if (writer.is_open() && !fd.isSnapshot && !fd.isTiffSnapshot) {
-                        if (fd.isHdr) {
+                    if ((writer.is_open() || png_video_mode) && !fd.isSnapshot && !fd.isTiffSnapshot) {
+                        if (png_video_mode) {
+                            uint64_t frame_index = png_video_frame_counter.fetch_add(1);
+                            std::ostringstream frame_name;
+                            frame_name << png_video_dir << "/frame-"
+                                       << std::setfill('0') << std::setw(8) << frame_index
+                                       << ".png";
+                            std::string frame_path = frame_name.str();
+                            if (fd.isHdr) {
+                                png::SavePNG_RGBA16(frame_path.c_str(), fd.pixels.data(), fd.width, fd.height);
+                            } else {
+                                png::SavePNG_RGBA(frame_path.c_str(),
+                                                  const_cast<unsigned char *>(fd.pixels.data()),
+                                                  fd.width, fd.height);
+                            }
+                        } else if (fd.isHdr) {
                             writer.write_hdr_rgba16(fd.pixels.data());
                         } else if (!filename.empty() || !graphic.empty())
                             writer.write(fd.pixels.data());
@@ -10249,11 +10304,11 @@ class ACView : public gl::GLObject {
         isMuxing = true;
         muxComplete = false;
         muxThread = std::thread([this]() {
-            const bool shouldTransferAudio = !filename.empty() && !repeat && copy_audio;
+            const bool shouldTransferAudio = !png_video_mode && !filename.empty() && !repeat && copy_audio;
 #ifdef AUDIO_ENABLED
-            const bool shouldRecordedMux = audio_is_enabled && !file_audio_mode && !audio_record_file.empty() &&
+            const bool shouldRecordedMux = !png_video_mode && audio_is_enabled && !file_audio_mode && !audio_record_file.empty() &&
                                            (is_audio_recording() || std::filesystem::exists(audio_record_file));
-            const bool shouldFileAudioMux = file_audio_mode && !audio_file_path.empty() && !audio_record_file.empty() && !ofilename.empty();
+            const bool shouldFileAudioMux = !png_video_mode && file_audio_mode && !audio_file_path.empty() && !audio_record_file.empty() && !ofilename.empty();
 #else
             const bool shouldRecordedMux = false;
             const bool shouldFileAudioMux = false;
@@ -10271,6 +10326,10 @@ class ACView : public gl::GLObject {
                                << static_cast<int>(ts / 3600) << ":"
                                << static_cast<int>(ts / 60) % 60 << ":"
                                << static_cast<int>(ts) % 60 << ") to file: " << ofilename << "\n";
+                fflush(stdout);
+            } else if (png_video_mode) {
+                mx::system_out << "acmx2: wrote " << png_video_frame_counter.load()
+                               << " PNG frames to directory: " << png_video_dir << "\n";
                 fflush(stdout);
             }
             if (shouldTransferAudio) {
@@ -10327,6 +10386,10 @@ class ACView : public gl::GLObject {
 #endif
             fflush(stdout);
             fflush(stderr);
+        } else if (png_video_mode) {
+            mx::system_out << "acmx2: wrote " << png_video_frame_counter.load()
+                           << " PNG frames to directory: " << png_video_dir << "\n";
+            fflush(stdout);
         }
     }
 };
@@ -10605,6 +10668,7 @@ namespace {
 
         printSection(out, c, "Recording And Encoding", {
             {"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"},
+            {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"},
             {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"},
             {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"},
             {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"},
@@ -10822,6 +10886,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(419, "autiopilot-random", "Alias for --autopilot-random")
         .addOptionDoubleValue(411, "duration", "Recording duration in seconds (float); stop recording and exit after elapsed")
         .addOptionDoubleValue(610, "max-size", "Stop recording when output file exceeds size in MB (float)")
+        .addOptionDouble(611, "png", "Video file mode: write PNG frames to output subdirectory instead of encoding video")
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
         .addOptionDouble(414, "use-yuv", "Use YUV (YUYV) camera format instead of MJPG")
@@ -11225,6 +11290,10 @@ int main(int argc, char **argv) {
                 } else {
                     args.max_size_mb = 0.0;
                 }
+                break;
+            case 611:
+                args.png_output = true;
+                mx::system_out << "acmx2: --png enabled (video-file mode only; ignored for camera mode)\n";
                 break;
             case 412:
                 args.cross_fade_duration = static_cast<float>(atof(arg.arg_value.c_str()));
@@ -11785,6 +11854,12 @@ int main(int argc, char **argv) {
             mx::system_out << "acmx2: Headless: signal handlers installed (SIGINT, SIGTERM, SIGHUP)\n";
 #endif
         }
+
+    if (args.png_output && !args.filename.empty() && args.ofilename.empty()) {
+        mx::system_err << "acmx2: Error: --png in video-file mode requires -o/--output to derive the PNG frame directory\n";
+        mx::system_err.flush();
+        return EXIT_FAILURE;
+    }
 
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
         SDL_SetHint("SDL_VIDEO_WAYLAND_WMCLASS", "acmx2");
