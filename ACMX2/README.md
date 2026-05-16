@@ -66,6 +66,41 @@ Recent commits in this repository focused on workflow and output quality improve
 - **Output path updates**: MKV support, additional format handling, and SDR TIFF/WebP snapshot behavior changes.
 - **Audio-file mode behavior**: recording/mux path tightened so file-mode recording is explicitly opt-in.
 
+## Latest Features – May 2026
+
+The past week has brought significant expansions to the ONNX/DNN model system and output capabilities:
+
+### ONNX Model Library Expansion
+
+- **FP16 Optimization**: DNN inference now uses half-precision floating-point for faster computation on hardware that supports it, maintaining visual quality while improving performance.
+- **New Pre-Trained Models**:
+  - **Bubble Effect** — Creative bubble distortion effect for surreal imagery
+  - **Cartoon Effect** — Stylizes video/images into a cartoon aesthetic
+  - **Color Splash** — Selective color desaturation while preserving target color channels
+  - **Pencil Sketch** — Real-time pencil sketch rendering from video input
+  - **Custom Style Transfer** — Neural style transfer for artistic transformations
+  - **Edge Detection** — Advanced DNN-based edge detection superior to traditional methods
+- **Generic ONNX/YAML Loading**: Load any ONNX model using `--onnx-yaml <file>` without recompilation. YAML files specify:
+  - Model path (absolute or relative to YAML file)
+  - Input preprocessing parameters (size, scale, BGR/RGB swap)
+  - Enables rapid model integration and experimentation
+
+### Generate Mode & Random Effects
+
+- **Generate Mode** (`--generate`): New algorithmic effect generation mode that creates random shader chains and effect combinations, enabling procedural art creation.
+- **Random Generate in Interface**: Qt interface now includes a "Generate" button that randomizes effect parameters and creates new artistic variations on demand.
+
+### Output & Recording Enhancements
+
+- **PNG Frame Export** (`--png`): Save processed frames as individual PNG files instead of video encoding, enabling frame-by-frame workflows and high-quality archival.
+- **Audio Animation Mux**: Embedded audio track animation during file processing provides visual progress feedback that the application is working on long-running jobs.
+
+### Color & Tone Controls
+
+- **Black Point Control** (`--black <point>`): Shadow crush and black level threshold adjustment (default: 0.35)
+- **White Point Control** (`--white <point>`): Opacity saturation and white level threshold adjustment (default: 0.75)
+- **Settings Window Scaling**: Increased height of Settings dialog to accommodate expanded model lists and improved UI organization.
+
 ## Qt Interface Notes
 
 Recent Qt interface updates focus on session usability and repeatability:

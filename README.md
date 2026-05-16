@@ -77,6 +77,47 @@ From the latest `acidcam-gpu` commits, current focus areas include:
 - **Output and recording path updates**: MKV output support, additional format handling, no-drop frame path work, and SDR TIFF/WebP snapshot behavior updates.
 - **Audio-file recording behavior hardening**: explicit opt-in handling for file-mode audio recording/mux behavior.
 
+## Latest Features – May 2026
+
+### DNN & ONNX Model Expansion
+
+The ONNX/DNN system has been significantly expanded with new pre-trained models and improved inference performance:
+
+- **FP16 Optimization**: DNN inference now uses FP16 (half-precision floating-point) for faster computation on supported hardware while maintaining visual quality.
+- **New ONNX Models**:
+  - **Bubble Effect** (`bubble.yaml` / `bubble.onnx`) — Creates bubble distortion effects for surreal imagery
+  - **Cartoon Effect** — Converts video/images to a cartoon-like aesthetic with edge enhancement
+  - **Color Splash** — Selectively desaturates the image while preserving selected color channels
+  - **Pencil Sketch** — Generates pencil sketch-like renderings from video input
+  - **Custom Style Transfer** — First custom neural-style-transfer model for artistic transformation
+  - **Edge Detection** — Deep neural network-based edge detection (superior to traditional methods)
+- **Generic ONNX/YAML File Support**: Load any ONNX model via YAML configuration file without recompilation. The YAML format specifies:
+  - Model path and preprocessing parameters (input size, scale, swap RGB/BGR)
+  - Integration with the `--edge` and `--human` options for extensibility
+- **Settings Window Improvements**: Settings dialog now has increased height for better visibility of longer model lists.
+
+### Generate Mode & Randomization
+
+New features for spontaneous creative generation:
+
+- **Generate Mode** (`--generate`): New processing mode that generates random effects and shader combinations from a seed or random state, enabling algorithmic art creation without manual control.
+- **Random Generate in Interface**: The Qt interface now includes a "Generate" button that randomizes effect parameters and creates new artistic variations in real-time.
+- **Audio Animation Mux**: Embeds an animated audio track during file processing so you know the application is still processing and not frozen. Useful for long batch operations.
+
+### Output Format Enhancements
+
+Expanded output format support for modern workflows:
+
+- **PNG Frame Writing**: Write individual frames as PNG files instead of video, enabling frame-by-frame processing and archival. Use `--png` in video mode to enable PNG frame output instead of video encoding.
+- **PNG Snapshot Mode**: Save snapshots and output directly as PNG images with lossless quality.
+
+### Color & Tone Adjustment
+
+Fine-grained color control additions:
+
+- **Black Point Control** (`--black <point>`): Precise shadow crush and black level correction (default: 0.35)
+- **White Point Control** (`--white <point>`): Precise opacity saturation and white level adjustment (default: 0.75)
+
 ## 📦 Installation & Environment
 This project is developed and tested on **Bazzite Linux** using **Arch Linux** containers via **Distrobox**, but it builds on any modern Linux distribution as well as macOS.
 
@@ -218,6 +259,16 @@ sudo bash build-script/install-deps-arch.sh
 | `--edge` | `<file>` | DNN Model for edge detection file you want is: edge_detection_dexined_2024sep.onnx |
 | `--human` | `<file>` | DNN Model for human detection file you want is: human_segmentation_pphumanseg_2023mar.onnx |
 | `--background` | | Enable background processing on --human |
+| `--png` | | Save output frames as PNG files instead of video encoding (use with `-o/--output`) |
+| `--generate` | | Generate mode: create random effects and shader combinations algorithmically |
+
+### ONNX Model Options
+
+| Long | Value | Description |
+|------|-------|-------------|
+| `--onnx` | `<file>` | Load ONNX model from YAML configuration file (specifies model path and preprocessing parameters) |
+| `--black` | `<point>` | Mask black point / shadow crush threshold for color adjustment (default: 0.35) |
+| `--white` | `<point>` | Mask white point / opacity saturation threshold for color adjustment (default: 0.75) |
 
 ### Audio Options (requires `AUDIO_ENABLED` build)
 

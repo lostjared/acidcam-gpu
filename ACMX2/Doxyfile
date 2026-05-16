@@ -1,6 +1,11 @@
 # Doxyfile for ACMX2 — Delphi / Borland–themed documentation
 #
 # Generate with:   doxygen Doxyfile
+#
+# Version 2.19.0 (May 2026)
+# Recent additions: ONNX model expansion (Bubble, Cartoon, Color Splash, Pencil Sketch, 
+# Custom Style Transfer, Edge Detection), FP16 optimization, Generic ONNX loading (--onnx),
+# Generate mode, PNG frame output, Audio animation mux, --black/--white point controls
 
 #---------------------------------------------------------------------------
 # Project
@@ -62,7 +67,7 @@ REFERENCES_RELATION    = YES
 # HTML output — light Delphi/Borland theme
 #---------------------------------------------------------------------------
 GENERATE_HTML          = YES
-HTML_OUTPUT            = versions/2.13.0
+HTML_OUTPUT            = versions/2.19.0
 HTML_EXTRA_STYLESHEET  = doxygen-custom.css
 HTML_COLORSTYLE        = LIGHT
 HTML_COLORSTYLE_HUE    = 220
