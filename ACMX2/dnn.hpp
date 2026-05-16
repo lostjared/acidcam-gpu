@@ -55,7 +55,7 @@ namespace ac_dnn {
                     }
                 }
                 net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
-                net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA_FP16);
                 is_loaded = true;
             } catch (const YAML::Exception &e) {
                 std::cerr << "acmx2: YAML parse error: " << e.what() << '\n';
