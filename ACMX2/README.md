@@ -216,6 +216,14 @@ You can combine the flags freely — for example an OpenGL-only build with audio
 cmake .. -DWITH_CUDA=OFF -DAUDIO=ON
 ```
 
+Or to enable ONNX/DNN model loading:
+
+```bash
+cmake .. -DWITH_OPENCV_DNN=ON
+```
+
+Note: `-DWITH_OPENCV_DNN=ON` requires the `yaml-cpp` package to be installed for YAML configuration file parsing.
+
 At startup, the Qt6 interface probes the installed `acmx2` binary with
 `--check-cuda`, `--check-audio`, and `--check-midi` and automatically disables
 menu entries (GPU Filter Settings, Audio Settings, MIDI Settings) and CLI

@@ -155,6 +155,11 @@ sudo pacman -S --needed sdl2 sdl2_ttf sdl2_mixer sdl2_image qt6-base qt6-tools q
 sudo pacman -S --needed glm mesa libglvnd ffmpeg rtaudio pulseaudio libpulse libjpeg-turbo libpng
 ```
 
+**ONNX/DNN Support (optional — only needed for `-DWITH_OPENCV_DNN=ON`):**
+```bash
+sudo pacman -S --needed yaml-cpp
+```
+
 **libmx2 (built from source):**
 ```bash
 git clone https://github.com/lostjared/libmx2.git
@@ -717,6 +722,7 @@ Each of the major optional subsystems is toggled by a CMake flag on ACMX2:
 | Flag | Default | Effect when `OFF` |
 |------|---------|-------------------|
 | `-DWITH_CUDA=ON/OFF` | `ON`  | Skips all CUDA GPU-filter paths and CUDA/OpenGL zero-copy interop; OpenCV `cudaimgproc` is no longer required; FFmpeg CUDA hw-decode is disabled; `--gpu-filter`, `--gpu-buffer`, `--cuda-device`, `--list-cuda-devices` are not available |
+| `-DWITH_OPENCV_DNN=ON/OFF` | `OFF` | Disables ONNX/DNN model loading via YAML config files; requires `yaml-cpp` package; enables `--onnx`, `--edge`, `--human`, `--background`, `--black`, `--white` options |
 | `-DAUDIO=ON/OFF`     | `OFF` | No RtAudio / audio reactivity |
 | `-DMIDI=ON/OFF`      | `OFF` | No RtMidi / MIDI control |
 
