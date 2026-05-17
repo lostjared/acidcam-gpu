@@ -222,19 +222,23 @@ void MainWindow::initControls() {
     });
 
     connect(process, &QProcess::readyReadStandardError, this, [this]() {
+        auto writeStderrLine = [this](const QString &line) {
+            if (line.contains("GStreamer")) return;
+            if (line.contains("[ WARN:"))
+                this->Write("<b style='color:#ccaa00;'>Warning:</b> " + line + "<br>");
+            else
+                this->Write("<b style='color:red;'>Error:</b> " + line + "<br>");
+        };
+
         stderrBuffer += process->readAllStandardError();
         int idx;
         while ((idx = stderrBuffer.indexOf('\n')) != -1) {
             QString line = stderrBuffer.left(idx);
             stderrBuffer.remove(0, idx + 1);
-            if (!line.contains("GStreamer")) {
-                this->Write("<b style='color:red;'>Error:</b> " + line + "<br>");
-            }
+            writeStderrLine(line);
         }
         if (stderrBuffer.size() > 4096) {
-            if (!stderrBuffer.contains("GStreamer")) {
-                this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
-            }
+            writeStderrLine(stderrBuffer);
             stderrBuffer.clear();
         }
     });
@@ -244,7 +248,10 @@ void MainWindow::initControls() {
             this,
             [this](int exitCode, QProcess::ExitStatus) {
                 if (!stderrBuffer.isEmpty() && !stderrBuffer.contains("GStreamer")) {
-                    this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
+                    if (stderrBuffer.contains("[ WARN:"))
+                        this->Write("<b style='color:#ccaa00;'>Warning:</b> " + stderrBuffer + "<br>");
+                    else
+                        this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
                     stderrBuffer.clear();
                 }
                 QString text;

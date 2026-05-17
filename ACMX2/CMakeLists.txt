@@ -345,6 +345,9 @@ if(WITH_CUDA)
     target_link_libraries(acmx2 PRIVATE
         acidcam-gpu::acidcam-gpu
         CUDA::cudart
+        opencv_cudawarping
+        opencv_cudaimgproc
+        opencv_cudaarithm
     )
 endif()
 install(TARGETS acmx2 DESTINATION bin)
