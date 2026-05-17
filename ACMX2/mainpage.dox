@@ -105,18 +105,18 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>ONNX model expansion (May 2026)</b> — new pre-trained models including Bubble, Cartoon, Color Splash, Pencil Sketch, Custom Style Transfer, and Edge Detection effects
 - <b>FP16 optimization</b> — DNN inference now uses half-precision floating-point for faster computation on supported hardware
 - <b>Generic ONNX/YAML configuration</b> — load any ONNX model via <tt>--onnx &lt;file&gt;</tt> without recompilation; YAML specifies model path and preprocessing parameters
-- <b>Generate mode</b> — <tt>--generate</tt> flag enables algorithmic random effect generation for creative exploration
+- <b>Generate mode</b> — <tt>--generate</tt> flag enables automatic saving of image as PNG at specified intervals
 - <b>PNG frame output</b> — <tt>--png</tt> option saves individual frames as PNG files instead of video encoding
 - <b>Audio animation mux</b> — embedded animated audio track during file processing to indicate progress
 - <b>Black/White Points adjustment</b> — <tt>--black &lt;point&gt;</tt> and <tt>--white &lt;point&gt;</tt> provide fine-grained control for shadow crush and opacity saturation thresholds
 
 @section version_history Version History
 
-@subsection v2_19_0 Version 2.19.0 (May 2026)
+@subsection v2_20_0 Version 2.20.0 (May 2026)
 - <b>ONNX Model Suite:</b> Added Bubble, Cartoon, Color Splash, Pencil Sketch, Custom Style Transfer, and Edge Detection models
-- <b>FP16 Inference:</b> Optimized DNN inference with half-precision floating-point for improved performance
+- <b>FP16 Inferensce:</b> Optimized DNN inference with half-precision floating-point for improved performance
 - <b>Generic ONNX Loading:</b> Load any ONNX model from YAML configuration files
-- <b>Generate Mode:</b> New algorithmic random effect generation mode
+- <b>Generate Mode:</b> Generate image files at specified intervals
 - <b>PNG Frame Export:</b> Save processed frames as individual PNG files
 - <b>Color Adjustments:</b> Added <tt>--black</tt> and <tt>--white</tt> point controls
 - <b>UI/UX Improvements:</b> Increased Settings window height, added Random Generate button to interface
