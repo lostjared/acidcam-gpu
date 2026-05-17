@@ -85,10 +85,10 @@ The past week has brought significant expansions to the ONNX/DNN model system an
   - Input preprocessing parameters (size, scale, BGR/RGB swap)
   - Enables rapid model integration and experimentation
 
-### Generate Mode & Random Effects
+### Generate Mode 
 
-- **Generate Mode** (`--generate`): New algorithmic effect generation mode that creates random shader chains and effect combinations, enabling procedural art creation.
-- **Random Generate in Interface**: Qt interface now includes a "Generate" button that randomizes effect parameters and creates new artistic variations on demand.
+- **Generate Mode** (`--generate`): New automatic image generation mode that creates image files at a given frame interval.
+- **Random Generate in Interface**: Qt interface now includes a "Generate" button that generates images at a given interval.
 
 ### Output & Recording Enhancements
 
