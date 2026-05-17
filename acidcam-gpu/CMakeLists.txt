@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.18)
 
 find_program(GCC15_CXX g++-15)
+find_program(GCC15_CC gcc-15)
 if(GCC15_CXX)
     set(CMAKE_CXX_COMPILER "${GCC15_CXX}" CACHE FILEPATH "C++ compiler" FORCE)
     message(STATUS "Found g++-15, using it as C++ compiler")
+endif()
+if(GCC15_CC)
+    set(CMAKE_CUDA_HOST_COMPILER "${GCC15_CC}" CACHE FILEPATH "CUDA host compiler" FORCE)
+    message(STATUS "Found gcc-15, using it as CUDA host compiler")
 endif()
 
 project(acidcam-gpu 
