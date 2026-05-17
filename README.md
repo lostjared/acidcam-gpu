@@ -265,7 +265,7 @@ sudo bash build-script/install-deps-arch.sh
 | `--human` | `<file>` | DNN Model for human detection file you want is: human_segmentation_pphumanseg_2023mar.onnx |
 | `--background` | | Enable background processing on --human |
 | `--png` | | Save output frames as PNG files instead of video encoding (use with `-o/--output`) |
-| `--generate` | | Generate mode: create random effects and shader combinations algorithmically |
+| `--generate` | `<interval>` | Generate mode: create images at specifided interavals |
 
 ### ONNX Model Options
 
