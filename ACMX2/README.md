@@ -80,7 +80,7 @@ The past week has brought significant expansions to the ONNX/DNN model system an
   - **Pencil Sketch** — Real-time pencil sketch rendering from video input
   - **Custom Style Transfer** — Neural style transfer for artistic transformations
   - **Edge Detection** — Advanced DNN-based edge detection superior to traditional methods
-- **Generic ONNX/YAML Loading**: Load any ONNX model using `--onnx-yaml <file>` without recompilation. YAML files specify:
+- **Generic ONNX/YAML Loading**: Load any ONNX model using `--onnx <file>` without recompilation. YAML files specify:
   - Model path (absolute or relative to YAML file)
   - Input preprocessing parameters (size, scale, BGR/RGB swap)
   - Enables rapid model integration and experimentation
