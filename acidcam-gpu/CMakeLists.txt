@@ -1,4 +1,11 @@
 cmake_minimum_required(VERSION 3.18)
+
+find_program(GCC15_CXX g++-15)
+if(GCC15_CXX)
+    set(CMAKE_CXX_COMPILER "${GCC15_CXX}" CACHE FILEPATH "C++ compiler" FORCE)
+    message(STATUS "Found g++-15, using it as C++ compiler")
+endif()
+
 project(acidcam-gpu 
     VERSION 1.1.0
     DESCRIPTION "GPU-accelerated video filter library using CUDA"
