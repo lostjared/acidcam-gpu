@@ -1643,6 +1643,10 @@ class FrameCache {
             glDeleteTextures(static_cast<GLsizei>(textures.size()), textures.data());
             textures.clear();
         }
+        if (scratch_fbo != 0) {
+            glDeleteFramebuffers(1, &scratch_fbo);
+            scratch_fbo = 0;
+        }
         head = 0;
         count = 0;
         width = 0;
@@ -1718,6 +1722,53 @@ class FrameCache {
     }
 
     /**
+     * @brief GPU-side push from an existing GL texture into the next ring slot.
+     *
+     * Uses a small scratch FBO so the per-frame BGR->RGBA conversion and
+     * second host->GPU upload that @ref push() performs can be avoided
+     * entirely once the camera texture has already been populated for
+     * the shader chain. This is the path that keeps zero-copy interop
+     * intact when expensive CPU passes (e.g. ONNX) run earlier in the
+     * frame and the redundant cv::Mat upload starts dropping frames.
+     *
+     * @param src_tex GL texture currently containing the new frame.
+     * @param w,h     Region to copy (typically the full texture size).
+     */
+    void pushFromTexture(GLuint src_tex, int w, int h) {
+        if (textures.empty() || src_tex == 0) return;
+        if (scratch_fbo == 0) {
+            glGenFramebuffers(1, &scratch_fbo);
+        }
+        GLint prev_read = 0;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, scratch_fbo);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, src_tex, 0);
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        glBindTexture(GL_TEXTURE_2D, textures[head]);
+        if (w != width || h != height) {
+            const GLint internal = is_hdr ? GL_RGBA16F : GL_RGBA;
+            const GLenum type = is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
+            glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
+                         GL_RGBA, type, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            width = w;
+            height = h;
+        }
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        // Detach to avoid keeping a stale reference to the source texture.
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, 0, 0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
+        head = (head + 1) % num_frames;
+        if (count < num_frames) ++count;
+    }
+
+    /**
      * @brief Return the GL texture at logical index @p index.
      * @param index 0 = oldest retained frame, @c size()-1 = newest.
      */
@@ -1771,6 +1822,7 @@ class FrameCache {
     std::size_t head = 0;
     std::size_t count = 0;
     std::vector<GLuint> textures;
+    GLuint scratch_fbo = 0; ///< Scratch FBO used by pushFromTexture().
 };
 
 /**
@@ -7905,7 +7957,12 @@ class ACView : public gl::GLObject {
                 if (++counter > cache_delay) {
                     // Only push frames into cache after the post-load warmup period
                     if (cache_warmup_frames <= 0) {
-                        frame_cache.push(newFrame);
+                        // GPU->GPU copy from the camera texture that was just
+                        // updated above. Avoids a second BGR->RGBA conversion
+                        // and host upload per frame, which became a major
+                        // bottleneck once CPU ONNX passes were added.
+                        frame_cache.pushFromTexture(camera_texture,
+                                                    newFrame.cols, newFrame.rows);
                     }
                     counter = 0;
                 }
