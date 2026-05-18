@@ -7293,7 +7293,10 @@ class ACView : public gl::GLObject {
         if (std::filesystem::exists(m_file)) {
             m_file_path = m_file;
         } else {
-            m_file_path = win->util.getFilePath("data/" + m_file);
+            std::string m_file_base = m_file;
+            if (m_file_base.size() > 5 && m_file_base.substr(0, 5) == "data/")
+                m_file_base = m_file_base.substr(5);
+            m_file_path = win->util.getFilePath("data/" + m_file_base);
         }
 
         if (is3d_enabled && !cube.openModel(m_file_path)) {
