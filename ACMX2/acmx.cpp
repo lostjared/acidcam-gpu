@@ -8,7 +8,7 @@
  * MIDI controller input, and video recording into a single real-time pipeline.
  *
  * @section arch Architecture Overview
- * - **TextureUploader** — Zero-copy CUDA↔OpenGL PBO interop for GPU frames.
+ * - **TextureUploader** — True zero-copy CUDA↔OpenGL image interop (direct cudaArray binding) for GPU frames.
  * - **ShaderCache / ShaderLibrary** — Compile, cache, and manage GLSL shader programs.
  * - **FrameCache** — Ring-buffer of recent frames for temporal ("cache") shaders.
  * - **SnapshotThreadPool** — Async PNG snapshot writer.
@@ -1827,36 +1827,42 @@ class FrameCache {
 
 /**
  * @class TextureUploader
- * @brief Zero-copy CUDA-to-OpenGL texture transfer via Pixel Buffer Object (PBO).
+ * @brief True zero-copy CUDA-to-OpenGL texture transfer via direct image interop.
  *
- * Registers an OpenGL PBO with CUDA so that a cv::cuda::GpuMat can be copied
- * directly into an OpenGL texture without passing through host memory.
- * This is the fastest path for getting GPU-filtered frames onto the screen.
+ * Registers the OpenGL texture directly with CUDA (cudaGraphicsGLRegisterImage)
+ * so that a cv::cuda::GpuMat can be copied straight into the texture's backing
+ * cudaArray with a single device-to-device cudaMemcpy2DToArrayAsync. This
+ * removes the intermediate PBO and the per-frame glTexSubImage2D DMA that the
+ * old PBO path required, halving the per-frame interop cost.
+ *
+ * The copy is issued on a dedicated CUDA stream so it does not serialise with
+ * other default-stream work (e.g. the GPU filter chain that produced the
+ * GpuMat); cudaGraphicsUnmapResources provides the GL↔CUDA synchronisation
+ * that subsequent OpenGL draws need.
  */
 class TextureUploader {
   public:
     GLuint textureID = 0;           ///< OpenGL texture receiving the frame data.
-    GLuint pboID = 0;               ///< PBO shared between CUDA and OpenGL.
 #ifdef ACMX2_WITH_CUDA
-    cudaGraphicsResource *cudaPboResource = nullptr; ///< CUDA handle to the mapped PBO.
+    cudaGraphicsResource *cudaTexResource = nullptr; ///< CUDA handle to the mapped GL texture.
+    cudaStream_t uploadStream = nullptr;             ///< Dedicated stream for the device→array copy.
 #endif
     int width = 0;                  ///< Current texture width in pixels.
     int height = 0;                 ///< Current texture height in pixels.
 
     /**
-     * @brief Create (or recreate) the GL texture, PBO, and CUDA registration.
+     * @brief Create (or recreate) the GL texture and CUDA image registration.
      *
-     * Allocates an RGBA OpenGL texture of the requested dimensions, creates a
-     * matching Pixel Buffer Object sized to `w * h * 4` bytes, and registers
-     * the PBO with the CUDA runtime via cudaGraphicsGLRegisterBuffer so that
-     * subsequent update() calls can write GPU memory directly into the PBO
-     * without a device-to-host round-trip.
+     * Allocates an RGBA8 OpenGL texture of the requested dimensions and
+     * registers it with the CUDA runtime via cudaGraphicsGLRegisterImage,
+     * which exposes the texture's backing storage as a cudaArray that
+     * subsequent update() calls write into directly.
      *
      * If the uploader was previously initialised, cleanup() is called first
      * so that old resources are released before new ones are created.
      *
-     * @param w Texture / PBO width in pixels.
-     * @param h Texture / PBO height in pixels.
+     * @param w Texture width in pixels.
+     * @param h Texture height in pixels.
      */
     void init(int w, int h) {
         if (textureID != 0)
@@ -1865,31 +1871,37 @@ class TextureUploader {
         height = h;
         glGenTextures(1, &textureID);
         glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        // Use a sized internal format so cudaGraphicsGLRegisterImage can match
+        // it deterministically across drivers.
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, 0);
-
-        glGenBuffers(1, &pboID);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboID);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, NULL, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 #ifdef ACMX2_WITH_CUDA
-        CHECK_CUDA(cudaGraphicsGLRegisterBuffer(&cudaPboResource, pboID, cudaGraphicsMapFlagsWriteDiscard));
+        // WriteDiscard: tell the driver we don't need the previous texture
+        // contents preserved on map — that is true for streaming frames and
+        // lets the driver skip a possible read-back.
+        CHECK_CUDA(cudaGraphicsGLRegisterImage(&cudaTexResource, textureID, GL_TEXTURE_2D,
+                                               cudaGraphicsRegisterFlagsWriteDiscard));
+        if (!uploadStream) {
+            CHECK_CUDA(cudaStreamCreateWithFlags(&uploadStream, cudaStreamNonBlocking));
+        }
 #endif
     }
 
 #ifdef ACMX2_WITH_CUDA
     /**
-     * @brief Upload a CUDA GpuMat into the OpenGL texture via the shared PBO.
+     * @brief Upload a CUDA GpuMat into the OpenGL texture (true zero-copy).
      *
-     * The transfer is performed entirely on the GPU:
-     *  1. Map the PBO into CUDA address space (cudaGraphicsMapResources).
-     *  2. Copy the GpuMat rows into the mapped pointer with cudaMemcpy2D
-     *     (device-to-device, respecting the GpuMat stride).
-     *  3. Unmap the resource so OpenGL can read it.
-     *  4. Bind the PBO as GL_PIXEL_UNPACK_BUFFER and call glTexSubImage2D
-     *     with a NULL pointer offset to DMA the data into the texture.
+     * Steps:
+     *  1. Map the GL texture as a cudaArray (cudaGraphicsMapResources).
+     *  2. cudaMemcpy2DToArrayAsync the GpuMat rows into that array on the
+     *     uploader's dedicated stream — a single device-to-device DMA into
+     *     the texture's own storage, no PBO intermediate.
+     *  3. Unmap the resource so OpenGL can sample it.  cudaGraphicsUnmapResources
+     *     inserts the GL↔CUDA dependency needed before the next draw.
      *
      * If the incoming frame dimensions differ from the current texture,
      * init() is called automatically to reallocate.
@@ -1900,39 +1912,37 @@ class TextureUploader {
         if (gpuFrame.cols != width || gpuFrame.rows != height) {
             init(gpuFrame.cols, gpuFrame.rows);
         }
-        void *pboPointer = nullptr;
-        size_t numBytes = 0;
-        CHECK_CUDA(cudaGraphicsMapResources(1, &cudaPboResource, 0));
-        CHECK_CUDA(cudaGraphicsResourceGetMappedPointer(&pboPointer, &numBytes, cudaPboResource));
-        CHECK_CUDA(cudaMemcpy2D(pboPointer, width * 4, gpuFrame.data, gpuFrame.step, width * 4, height, cudaMemcpyDeviceToDevice));
-        CHECK_CUDA(cudaGraphicsUnmapResources(1, &cudaPboResource, 0));
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboID);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        cudaArray_t texArray = nullptr;
+        CHECK_CUDA(cudaGraphicsMapResources(1, &cudaTexResource, uploadStream));
+        CHECK_CUDA(cudaGraphicsSubResourceGetMappedArray(&texArray, cudaTexResource, 0, 0));
+        CHECK_CUDA(cudaMemcpy2DToArrayAsync(texArray, 0, 0,
+                                            gpuFrame.data, gpuFrame.step,
+                                            static_cast<size_t>(width) * 4,
+                                            static_cast<size_t>(height),
+                                            cudaMemcpyDeviceToDevice, uploadStream));
+        CHECK_CUDA(cudaGraphicsUnmapResources(1, &cudaTexResource, uploadStream));
     }
 #endif
 
     /**
-     * @brief Release all GPU resources (CUDA registration, PBO, texture).
+     * @brief Release all GPU resources (CUDA registration, stream, texture).
      *
-     * Unregisters the PBO from CUDA, deletes the OpenGL buffer, and
+     * Unregisters the texture from CUDA, destroys the upload stream, and
      * deletes the OpenGL texture.  Safe to call multiple times—each
      * resource handle is tested for non-zero before deletion and
      * reset to zero / nullptr afterwards.
      */
     void cleanup() {
 #ifdef ACMX2_WITH_CUDA
-        if (cudaPboResource) {
-            CHECK_CUDA(cudaGraphicsUnregisterResource(cudaPboResource));
-            cudaPboResource = nullptr;
+        if (cudaTexResource) {
+            CHECK_CUDA(cudaGraphicsUnregisterResource(cudaTexResource));
+            cudaTexResource = nullptr;
+        }
+        if (uploadStream) {
+            cudaStreamDestroy(uploadStream);
+            uploadStream = nullptr;
         }
 #endif
-        if (pboID) {
-            glDeleteBuffers(1, &pboID);
-            pboID = 0;
-        }
         if (textureID) {
             glDeleteTextures(1, &textureID);
             textureID = 0;
