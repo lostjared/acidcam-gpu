@@ -14,9 +14,6 @@
 #include <iostream>
 
 namespace ac_dnn {
-    using namespace std;
-    using namespace cv;
-    using namespace dnn;
 
   class OnnxWrapper {
   private:
@@ -262,34 +259,34 @@ namespace ac_dnn {
 
     class Dexined {
     public:
-        Dexined(const string& modelPath) {
+        Dexined(const std::string& modelPath) {
             loadModel(modelPath);
         }
 
-        void processFrame(const Mat& image, Mat& result) {
-            Mat blob = blobFromImage(image, 1.0, Size(512, 512), Scalar(103.5, 116.2, 123.6), false, false, CV_32F);
+        void processFrame(const cv::Mat& image, cv::Mat& result) {
+            cv::Mat blob = cv::dnn::blobFromImage(image, 1.0, cv::Size(512, 512), cv::Scalar(103.5, 116.2, 123.6), false, false, CV_32F);
             net.setInput(blob);
             applyDexined(image, result);
         }
 
     private:
-        Net net;
+        cv::dnn::Net net;
 
-        void loadModel(const string modelPath) {
-            net = readNetFromONNX(modelPath);
-            net.setPreferableBackend(DNN_BACKEND_CUDA);
-            net.setPreferableTarget(DNN_TARGET_CUDA);
+        void loadModel(const std::string modelPath) {
+            net = cv::dnn::readNetFromONNX(modelPath);
+            net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+            net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
         }
 
-        static void sigmoid(Mat& input) {
-            exp(-input, input);          // e^-input
+        static void sigmoid(cv::Mat& input) {
+            cv::exp(-input, input);          // e^-input
             input = 1.0 / (1.0 + input); // 1 / (1 + e^-input)
         }
 
-        static pair<Mat, Mat> postProcess(const vector<Mat>& output, int height, int width) {
+        static std::pair<cv::Mat, cv::Mat> postProcess(const std::vector<cv::Mat>& output, int height, int width) {
             std::vector<cv::cuda::GpuMat> g_preds;
             g_preds.reserve(output.size());
-            for (const Mat &p : output) {
+            for (const cv::Mat &p : output) {
                 cv::Mat processed;
                 if (p.dims == 4 && p.size[0] == 1 && p.size[1] == 1)
                     processed = p.reshape(0, {p.size[2], p.size[3]});
@@ -301,8 +298,8 @@ namespace ac_dnn {
                 cv::cuda::exp(g_proc, g_proc);
                 cv::cuda::add(g_proc, cv::Scalar(1.0), g_proc);
                 cv::cuda::divide(1.0, g_proc, g_proc);
-                cv::cuda::normalize(g_proc, g_img, 0, 255, NORM_MINMAX, CV_8U);
-                cv::cuda::resize(g_img, g_img, Size(width, height));
+                cv::cuda::normalize(g_proc, g_img, 0, 255, cv::NORM_MINMAX, CV_8U);
+                cv::cuda::resize(g_img, g_img, cv::Size(width, height));
                 g_preds.push_back(std::move(g_img));
             }
             cv::cuda::GpuMat g_fuse = g_preds.back();
@@ -316,18 +313,18 @@ namespace ac_dnn {
             cv::cuda::multiply(g_ave, cv::Scalar(1.0 / static_cast<double>(g_preds.size())), g_ave);
             cv::cuda::GpuMat g_ave_u8;
             g_ave.convertTo(g_ave_u8, CV_8U);
-            Mat fuse, ave;
+            cv::Mat fuse, ave;
             g_fuse.download(fuse);
             g_ave_u8.download(ave);
             return {fuse, ave};
         }
 
-        void applyDexined(const Mat& image, Mat& result) {
+        void applyDexined(const cv::Mat& image, cv::Mat& result) {
             int originalWidth = image.cols;
             int originalHeight = image.rows;
-            vector<Mat> outputs;
+            std::vector<cv::Mat> outputs;
             net.forward(outputs);
-            pair<Mat, Mat> res = postProcess(outputs, originalHeight, originalWidth);
+            std::pair<cv::Mat, cv::Mat> res = postProcess(outputs, originalHeight, originalWidth);
             result = res.first; 
         }
     };
@@ -335,58 +332,58 @@ namespace ac_dnn {
     class PPHS
     {
     private:
-        Net model;
-        string modelPath;
-        Scalar imageMean = Scalar(0.5, 0.5, 0.5);
-        Scalar imageStd = Scalar(0.5, 0.5, 0.5);
-        Size modelInputSize = Size(192, 192);
-        Size currentSize;
-        const String inputNames = "x";
-        const String outputNames = "save_infer_model/scale_0.tmp_1";
+        cv::dnn::Net model;
+        std::string modelPath;
+        cv::Scalar imageMean = cv::Scalar(0.5, 0.5, 0.5);
+        cv::Scalar imageStd = cv::Scalar(0.5, 0.5, 0.5);
+        cv::Size modelInputSize = cv::Size(192, 192);
+        cv::Size currentSize;
+        const cv::String inputNames = "x";
+        const cv::String outputNames = "save_infer_model/scale_0.tmp_1";
         int backend_id [[maybe_unused]];
         int target_id [[maybe_unused]];
         cv::cuda::GpuMat prevMask;
 
     public:
-        PPHS(const string& modelPath,
-             int backend_id = DNN_BACKEND_CUDA,
-             int target_id = DNN_TARGET_CUDA)
+        PPHS(const std::string& modelPath,
+             int backend_id = cv::dnn::DNN_BACKEND_CUDA,
+             int target_id = cv::dnn::DNN_TARGET_CUDA)
             : modelPath(modelPath), backend_id(backend_id), target_id(target_id)
         {
-            this->model = readNet(modelPath);
+            this->model = cv::dnn::readNet(modelPath);
             this->model.setPreferableBackend(backend_id);
             this->model.setPreferableTarget(target_id);
         }
 
-        Mat preprocess(const Mat image)
+        cv::Mat preprocess(const cv::Mat image)
         {
             this->currentSize = image.size();
             cv::cuda::GpuMat g_image, g_resized, g_float;
             g_image.upload(image);
             cv::cuda::resize(g_image, g_resized, this->modelInputSize);
             g_resized.convertTo(g_float, CV_32F, 1.0 / 255.0);
-            Mat preprocessed;
+            cv::Mat preprocessed;
             g_float.download(preprocessed);
             preprocessed -= imageMean;
             preprocessed /= imageStd;
-            return blobFromImage(preprocessed);
+            return cv::dnn::blobFromImage(preprocessed);
         }
 
-        Mat infer(const Mat image)
+        cv::Mat infer(const cv::Mat image)
         {
-            Mat inputBlob = preprocess(image);
+            cv::Mat inputBlob = preprocess(image);
             this->model.setInput(inputBlob, this->inputNames);
-            Mat outputBlob = this->model.forward(this->outputNames);
+            cv::Mat outputBlob = this->model.forward(this->outputNames);
             return postprocess(outputBlob);
         }
 
-        Mat postprocess(Mat image)
+        cv::Mat postprocess(cv::Mat image)
         {
             int H = image.size[2];
             int W = image.size[3];
 
-            Mat bg_cpu(H, W, CV_32F, image.ptr<float>(0, 0));
-            Mat fg_cpu(H, W, CV_32F, image.ptr<float>(0, 1));
+            cv::Mat bg_cpu(H, W, CV_32F, image.ptr<float>(0, 0));
+            cv::Mat fg_cpu(H, W, CV_32F, image.ptr<float>(0, 1));
 
             cv::cuda::GpuMat g_bg, g_fg, g_bg_exp, g_fg_exp, g_sum, g_fg_prob, g_mask;
             g_bg.upload(bg_cpu);
@@ -395,20 +392,20 @@ namespace ac_dnn {
             cv::cuda::exp(g_fg, g_fg_exp);
             cv::cuda::add(g_bg_exp, g_fg_exp, g_sum);
             cv::cuda::divide(g_fg_exp, g_sum, g_fg_prob);
-            cv::cuda::resize(g_fg_prob, g_mask, this->currentSize, 0, 0, INTER_CUBIC);
+            cv::cuda::resize(g_fg_prob, g_mask, this->currentSize, 0, 0, cv::INTER_CUBIC);
             if (this->prevMask.empty()) {
                 this->prevMask = g_mask.clone();
             }
             cv::cuda::addWeighted(g_mask, 0.6, this->prevMask, 0.4, 0.0, g_mask);
             this->prevMask = g_mask.clone();
-            Mat result;
+            cv::Mat result;
             g_mask.download(result);
             return result;
         }
     };
-    Mat isolateBody(const Mat& image, const Mat& mask,
+    cv::Mat isolateBody(const cv::Mat& image, const cv::Mat& mask,
                     float blackPoint = 0.35f, float whitePoint = 0.75f);
-    Mat hardenedAlphaMask(const Mat& image, const Mat& mask,
+    cv::Mat hardenedAlphaMask(const cv::Mat& image, const cv::Mat& mask,
                          float blackPoint = 0.35f, float whitePoint = 0.75f);
 
 
