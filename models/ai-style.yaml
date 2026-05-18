@@ -1,0 +1,10 @@
+model:
+  path: ai-style.onnx
+
+preprocessing:
+  width: 512 
+  height: 512
+  scale: 1.0
+  swap_rb: true
+  mean: [0.0, 0.0, 0.0]
+
