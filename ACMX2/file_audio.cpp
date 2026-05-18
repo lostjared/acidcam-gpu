@@ -115,7 +115,7 @@ static bool decodeAllSamples() {
     return true;
 }
 
-/// @copydoc file_audio_open
+/// @brief Open and fully decode an audio file to mono float PCM at 44.1 kHz.
 bool file_audio_open(const std::string &filepath) {
     file_audio_close();
 
@@ -197,7 +197,7 @@ bool file_audio_open(const std::string &filepath) {
     return true;
 }
 
-/// @copydoc file_audio_process_frame
+/// @brief Advance one video-frame worth of samples and update audio-reactive globals.
 void file_audio_process_frame(double video_fps) {
     if (!fileAudioActive || decodedSamples.empty())
         return;
@@ -271,12 +271,12 @@ void file_audio_process_frame(double video_fps) {
     playbackPos += available;
 }
 
-/// @copydoc file_audio_is_active
+/// @brief Return true while decoded file-audio samples remain.
 bool file_audio_is_active() {
     return fileAudioActive.load(std::memory_order_relaxed);
 }
 
-/// @copydoc file_audio_close
+/// @brief Stop file-audio playback and release decoder/sample resources.
 void file_audio_close() {
     fileAudioActive = false;
     if (swrCtx) swr_free(&swrCtx);

@@ -78,6 +78,7 @@ HTML_INDEX_NUM_ENTRIES = 100
 DISABLE_INDEX          = NO
 GENERATE_TREEVIEW      = YES
 TREEVIEW_WIDTH         = 280
+USE_MATHJAX            = YES
 
 #---------------------------------------------------------------------------
 # LaTeX / other output (disabled)
@@ -91,7 +92,6 @@ GENERATE_MAN           = NO
 # Diagrams
 #---------------------------------------------------------------------------
 HAVE_DOT               = NO
-CLASS_DIAGRAMS         = YES
 
 #---------------------------------------------------------------------------
 # Warnings

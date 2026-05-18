@@ -1605,6 +1605,8 @@ class FrameCache {
      * Must be called once a GL context is current. Existing textures (if
      * any) are released first. All slots are initialised to opaque black.
      *
+        * @param w   Texture width in pixels.
+        * @param h   Texture height in pixels.
      * @param hdr When true, allocate textures as @c GL_RGBA16F (matching
      *            the HDR linear-light pipeline) instead of @c GL_RGBA.
      */
@@ -1825,6 +1827,7 @@ class TextureUploader {
 #endif
     }
 
+#ifdef ACMX2_WITH_CUDA
     /**
      * @brief Upload a CUDA GpuMat into the OpenGL texture via the shared PBO.
      *
@@ -1841,7 +1844,6 @@ class TextureUploader {
      *
      * @param gpuFrame The CUDA GpuMat (CV_8UC4 / RGBA) to upload.
      */
-#ifdef ACMX2_WITH_CUDA
     void update(const cv::cuda::GpuMat &gpuFrame) {
         if (gpuFrame.cols != width || gpuFrame.rows != height) {
             init(gpuFrame.cols, gpuFrame.rows);
@@ -2492,6 +2494,7 @@ class ShaderLibrary {
      *
      * @param assets_path  Assets directory passed via `--path` (may be empty).
      * @param library_path Shader library directory (containing index.txt).
+    * @param cache_size   Active texture-cache size used to key binary-cache compatibility.
      * @return Absolute or relative path to the shader cache file.
      */
     static std::string shaderCacheFilePath(const std::string &assets_path,
@@ -9058,8 +9061,8 @@ class ACView : public gl::GLObject {
      * - Space: Toggle shader bypass.
      * - P: Toggle playlist mode or pause video.
      * - L: Freeze frame (stop updating texture but keep time advancing).
-    * - Z: Take a PNG snapshot (8-bit non-HDR readback when HDR input is active).
-    * - 5: Take an HDR PNG snapshot (HDR mode only).
+        * - Z: Take a PNG snapshot (8-bit non-HDR readback when HDR input is active).
+        * - 5: Take an HDR PNG snapshot (HDR mode only).
      * - T: Toggle active time.  Q: Toggle audio time.  Home: Toggle audio delta.
      * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.
      * - X: Reset camera.  Ctrl+X: Quit immediately without audio mux/transfer.
@@ -11809,7 +11812,7 @@ int main(int argc, char **argv) {
                 bool build_done = false; ///< Guard: ensures draw() builds only once.
                 bool active = true;      ///< Controls the buildLoop() pump.
 
-                /**
+                /*
                  * @brief Construct a build window and configure the shader library.
                  * @param path   Path to the shader source directory.
                  * @param is3d   Include 3-D shaders in the cache.

@@ -71,7 +71,7 @@ class SettingsWindow : public QDialog {
     bool isCopyAudioEnabled() const;
     /// @brief Return whether Write PNG mode is enabled.
     bool isPngOutputEnabled() const;
-    /// @return True if --generate <N> mode is enabled.
+    /// @return True if --generate &lt;N&gt; mode is enabled.
     bool isGenerateEnabled() const;
     /// @return Frame interval to pass with --generate.
     int getGenerateInterval() const;
