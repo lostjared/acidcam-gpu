@@ -10348,6 +10348,11 @@ class ACView : public gl::GLObject {
         std::string tmp_out = ofilename + ".tmp" + out_ext;
         bool is_mp4_like = (out_ext == ".mp4" || out_ext == ".MP4" || out_ext == ".mov" || out_ext == ".MOV" || out_ext == ".m4v" || out_ext == ".M4V");
         int64_t fc = writer.get_frame_count();
+        if (fc <= 0) {
+            mx::system_err << "acmx2: no encoded video frames; skipping recorded-audio mux for: " << ofilename << "\n";
+            fflush(stderr);
+            return;
+        }
         double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
         // Correct A/V drift caused by the webcam delivering fewer frames per
         // second than the configured encoder FPS.  The video stream is
@@ -10374,7 +10379,7 @@ class ACView : public gl::GLObject {
             cmd << " -itsscale " << std::fixed << std::setprecision(6) << itsscale;
         }
         cmd << " -i \"" << ofilename << "\" -i \"" << audio_record_file
-            << "\" -map 0:v:0 -map 1:a:0"
+            << "\" -map 0:v:0? -map 1:a:0?"
             << " -c:v copy -c:a aac -b:a 192k";
         if (!apply_itsscale && video_duration > 0.0) {
             // Without itsscale the original video duration is correct,
@@ -10435,10 +10440,15 @@ class ACView : public gl::GLObject {
         std::string tmp_out = ofilename + ".tmp" + out_ext;
         bool is_mp4_like = (out_ext == ".mp4" || out_ext == ".MP4" || out_ext == ".mov" || out_ext == ".MOV" || out_ext == ".m4v" || out_ext == ".M4V");
         int64_t fc = writer.get_frame_count();
+        if (fc <= 0) {
+            mx::system_err << "acmx2: no encoded video frames; skipping file-audio mux for: " << ofilename << "\n";
+            fflush(stderr);
+            return;
+        }
         double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
         std::ostringstream cmd;
         cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_file_path
-            << "\" -map 0:v:0 -map 1:a:0"
+            << "\" -map 0:v:0? -map 1:a:0?"
             << " -c:v copy -c:a aac -b:a 192k";
         // Cap output to the video's duration so the audio is truncated to
         // match the recorded video whenever:
