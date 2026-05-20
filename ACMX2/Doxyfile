@@ -11,7 +11,7 @@
 # Project
 #---------------------------------------------------------------------------
 PROJECT_NAME           = "ACMX2"
-PROJECT_NUMBER         = "2.20.0"
+PROJECT_NUMBER         = "2.21.0"
 PROJECT_BRIEF          = "Real-Time GPU-Accelerated Video Glitch Engine"
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = docs
