@@ -7491,7 +7491,20 @@ class ACView : public gl::GLObject {
             fflush(stdout);
         }
         sprite.initSize(win->w, win->h);
-        tex_uploader.init(win->w, win->h);
+        // Initialise the uploader at the SOURCE frame dimensions, not the
+        // output (win->w/h) dimensions. When --resolution differs from the
+        // camera/video source size, the per-frame TextureUploader::update()
+        // would otherwise hit its size-mismatch branch on the very first
+        // frame, call init() again, delete the original GL texture and
+        // create a new textureID. `camera_texture` (captured below) would
+        // then point at a deleted name and every subsequent sample would
+        // produce black. Initialising at the source size keeps the
+        // CUDA<->GL registration stable for the common case.
+        {
+            const int up_w = (frame_w > 0) ? frame_w : win->w;
+            const int up_h = (frame_h > 0) ? frame_h : win->h;
+            tex_uploader.init(up_w, up_h);
+        }
         camera_texture = tex_uploader.textureID;
         if (input_is_hdr) {
             // HDR path uploads decoded frames directly via glTex(Sub)Image2D.
@@ -7945,6 +7958,14 @@ class ACView : public gl::GLObject {
                     gpu_filtersChanged);
                 gpu_filtersChanged = false;
                 tex_uploader.update(gpuWorkingBuffer);
+                // If the incoming GpuMat size ever differs from the
+                // uploader's current size, update() calls init() which
+                // deletes the old GL texture and allocates a new one with
+                // a fresh textureID. Re-sync our cached camera_texture so
+                // it never dangles at a deleted name (would render black).
+                if (camera_texture != tex_uploader.textureID) {
+                    camera_texture = tex_uploader.textureID;
+                }
             } else {
                 glActiveTexture(GL_TEXTURE0);
                 updateTexture(camera_texture, newFrame);
