@@ -67,7 +67,7 @@ REFERENCES_RELATION    = YES
 # HTML output — light Delphi/Borland theme
 #---------------------------------------------------------------------------
 GENERATE_HTML          = YES
-HTML_OUTPUT            = versions/2.19.0
+HTML_OUTPUT            = versions/2.21.0
 HTML_EXTRA_STYLESHEET  = doxygen-custom.css
 HTML_COLORSTYLE        = LIGHT
 HTML_COLORSTYLE_HUE    = 220
