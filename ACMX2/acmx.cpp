@@ -9756,8 +9756,7 @@ class ACView : public gl::GLObject {
     std::atomic<uint64_t> snapshotOffset{0};
     [[maybe_unused]] int gpu_cuda_device = 0;
     bool silent_mode = false;
-    bool no_drop_mode = false;
-    size_t frames = 0;
+    bool no_drop_mode = false;  
 #ifdef __APPLE__
     bool use_shader_cache_flag = false;
 #else
