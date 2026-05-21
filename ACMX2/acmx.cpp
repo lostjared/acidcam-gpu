@@ -6352,6 +6352,7 @@ class ACView : public gl::GLObject {
     std::vector<int> saved_pass_list;
     bool saved_pass_enabled = false;
     double duration_limit = 0.0;
+    size_t frames_proc = 0;
     double max_size_limit_mb = 0.0;
     double max_size_limit_bytes = 0.0;
 
@@ -7649,12 +7650,17 @@ class ACView : public gl::GLObject {
         }
 
         if (duration_limit > 0.0 && writer.is_open() && writerRunning) {
-            auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - captureStartTime).count();
-            if (elapsed >= duration_limit) {
-                mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
-                fflush(stdout);
-                running = false;
-            }
+            //auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - captureStartTime).count();
+            frames_proc++;
+	    if(fps != 0) {
+		    double time_passed = static_cast<double>(frames_proc) / fps;
+		    //if (elapsed >= duration_limit) {
+		    if(time_passed >= duration_limit) {
+        	        mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
+	                fflush(stdout);
+                	running = false;
+            	}
+	    }
         }
 
         if (max_size_limit_bytes > 0.0 && writer.is_open() && writerRunning && !ofilename.empty()) {
@@ -9751,6 +9757,7 @@ class ACView : public gl::GLObject {
     [[maybe_unused]] int gpu_cuda_device = 0;
     bool silent_mode = false;
     bool no_drop_mode = false;
+    size_t frames = 0;
 #ifdef __APPLE__
     bool use_shader_cache_flag = false;
 #else
