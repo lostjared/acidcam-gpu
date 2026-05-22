@@ -34,8 +34,8 @@ static std::atomic<float> gRecordGain{1.0f};
 // Lock-free SPSC ring buffer for audio recording
 static constexpr size_t RING_CAPACITY = 1 << 20; // ~1M int16 samples
 static int16_t gRingBuffer[RING_CAPACITY];
-static std::atomic<size_t> gRingHead{0};  // written by callback
-static std::atomic<size_t> gRingTail{0};  // read by disk thread
+static std::atomic<size_t> gRingHead{0}; // written by callback
+static std::atomic<size_t> gRingTail{0}; // read by disk thread
 static std::thread gDiskThread;
 static std::atomic<bool> gDiskRunning{false};
 
@@ -77,7 +77,8 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFra
     float sumSq = 0.0f;
     for (unsigned int i = 0; i < nBufferFrames; ++i) {
         float s = std::abs(in[i * input_channels]);
-        if (s > peak) peak = s;
+        if (s > peak)
+            peak = s;
         sumSq += s * s;
     }
     gPeak = peak;
@@ -253,7 +254,8 @@ bool is_audio_recording() {
 double get_audio_recorded_duration_seconds() {
     const uint32_t bytes = gRecordDataSize;
     const uint32_t bps = gSampleRate * input_channels * static_cast<uint32_t>(sizeof(int16_t));
-    if (bps == 0) return 0.0;
+    if (bps == 0)
+        return 0.0;
     return static_cast<double>(bytes) / static_cast<double>(bps);
 }
 
@@ -518,8 +520,8 @@ void compute_audio_fft() {
         // Apply Hann window to reduce spectral leakage:
         //   w(n) = 0.5 * (1 - cos(2π n / (N-1)))
         float hann = 0.5f * (1.0f - std::cos(2.0f * 3.14159265358979f * i / (FFT_SIZE - 1)));
-        complex[2 * i] = gFftBuffer[front][i] * hann;  // real part
-        complex[2 * i + 1] = 0.0f;                      // imaginary part
+        complex[2 * i] = gFftBuffer[front][i] * hann; // real part
+        complex[2 * i + 1] = 0.0f;                    // imaginary part
     }
 
     fft_radix2(complex, FFT_SIZE);

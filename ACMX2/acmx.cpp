@@ -19,6 +19,7 @@
  * @see https://lostsidedead.biz
  */
 
+#include "../MXWrite/mxwrite.hpp"
 #include "version_info.hpp"
 #include <algorithm>
 #include <argz.hpp>
@@ -27,28 +28,27 @@
 #include <cmath>
 #include <condition_variable>
 #include <csignal>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <deque>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <gl.hpp>
 #include <iomanip>
+#include <map>
 #include <mutex>
 #include <mx.hpp>
-#include "../MXWrite/mxwrite.hpp"
 #include <opencv2/opencv.hpp>
 #include <optional>
 #include <queue>
-#include <sstream>
 #include <random>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <tuple>
 #include <unordered_map>
-#include <map>
 #include <vector>
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
@@ -74,19 +74,27 @@
 #else
 // Stubs so code compiled without CUDA still has the symbols it references.
 #ifndef CHECK_CUDA
-#define CHECK_CUDA(call) do { (void)(call); } while (0)
+#define CHECK_CUDA(call) \
+    do {                 \
+        (void)(call);    \
+    } while (0)
 #endif
 namespace ac_gpu {
     inline constexpr int AC_FILTER_MAX = 0;
-    struct Filter { int index; std::string name; };
-    struct GPUFilter { int index; };
+    struct Filter {
+        int index;
+        std::string name;
+    };
+    struct GPUFilter {
+        int index;
+    };
     struct DynamicFrameBuffer {
         int arraySize = 0;
     };
     // Empty filter table so code referencing ac_gpu::filters still compiles.
     // (Never indexed in no-CUDA builds because AC_FILTER_MAX == 0 guards all uses.)
     inline Filter filters[1] = {{0, ""}};
-}
+} // namespace ac_gpu
 #endif
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -94,10 +102,10 @@ namespace ac_gpu {
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 #ifdef __linux__
-#include <linux/videodev2.h>
-#include <sys/stat.h>
-#include <sys/ioctl.h>
 #include <fcntl.h>
+#include <linux/videodev2.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 #if defined(__APPLE__)
@@ -229,7 +237,7 @@ namespace {
 #else
     void installHeadlessSignalHandlers() {}
 #endif
-}
+} // namespace
 
 #if defined(__APPLE__)
 class ScopedStderrSilence {
@@ -307,7 +315,7 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
 
     const bool is_p010 = (src->format == AV_PIX_FMT_P010LE);
     if (!is_p010 && !src->data[2]) {
-        return false;  // planar formats need all three planes.
+        return false; // planar formats need all three planes.
     }
 
     // Detect 10-bit sample position within a 16-bit container:
@@ -319,13 +327,13 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
     }
 
     const int y_stride_b = src->linesize[0];
-    const int uv_stride_b = src->linesize[1];   // UV interleaved (p010) or Cb (planar).
+    const int uv_stride_b = src->linesize[1]; // UV interleaved (p010) or Cb (planar).
     const int v_stride_b = is_p010 ? 0 : src->linesize[2];
 
     // BT.2020 non-constant-luminance inverse matrix (per ITU-R BT.2020 §4).
     constexpr float kCrR = 1.4746f;
-    constexpr float kCbG = -0.16455312684366f;   // -2*(1-0.2627)*0.2627/0.6780
-    constexpr float kCrG = -0.57135313725490f;   // -2*(1-0.0593)*0.0593/0.6780
+    constexpr float kCbG = -0.16455312684366f; // -2*(1-0.2627)*0.2627/0.6780
+    constexpr float kCrG = -0.57135313725490f; // -2*(1-0.0593)*0.0593/0.6780
     constexpr float kCbB = 1.8814f;
 
     out.create(h, w, CV_16UC4);
@@ -337,7 +345,7 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
     };
 
     const uint8_t *yp = src->data[0];
-    const uint8_t *up = src->data[1];  // planar: Cb plane | p010: interleaved Cb,Cr.
+    const uint8_t *up = src->data[1]; // planar: Cb plane | p010: interleaved Cb,Cr.
     const uint8_t *vp = is_p010 ? nullptr : src->data[2];
 
     // 10-bit limited-range BT.2020 scaling:
@@ -348,7 +356,7 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
     constexpr float kInvC = 1.0f / 896.0f;
 
     for (int y = 0; y < h; ++y) {
-        const int cy = y >> 1;  // 4:2:0 vertical subsampling, nearest.
+        const int cy = y >> 1; // 4:2:0 vertical subsampling, nearest.
         uint16_t *dst = out.ptr<uint16_t>(y);
         for (int x = 0; x < w; ++x) {
             const int cx = x >> 1;
@@ -367,7 +375,7 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
                 Crs = sample10(vp, v_stride_b, cx, cy);
             }
 
-            const float Y  = (Ys  - 64)  * kInvY;
+            const float Y = (Ys - 64) * kInvY;
             const float Cb = (Cbs - 512) * kInvC;
             const float Cr = (Crs - 512) * kInvC;
 
@@ -448,9 +456,9 @@ inline uint16_t linearToSrgb16(float v) {
 }
 
 inline std::vector<unsigned char> toneMapHdrRgba16ToSdrRgba8(const std::vector<unsigned char> &hdr_pixels,
-                                                              int w,
-                                                              int h,
-                                                              int hdr_trc) {
+                                                             int w,
+                                                             int h,
+                                                             int hdr_trc) {
     std::vector<unsigned char> sdr_pixels(static_cast<size_t>(w) * static_cast<size_t>(h) * 4, 0);
     const bool is_hlg = (hdr_trc == AVCOL_TRC_ARIB_STD_B67);
 
@@ -646,7 +654,7 @@ inline bool saveHdrWebPFromRgba16(const char *filename,
     WebPFree(output);
     return ok;
 }
-#endif  // ACMX2_WITH_WEBP
+#endif // ACMX2_WITH_WEBP
 
 #ifdef ACMX2_WITH_TIFF
 inline bool saveSdrTiffFromRgba8(const char *filename,
@@ -673,7 +681,7 @@ inline bool saveSdrTiffFromRgba8(const char *filename,
     TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
     TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(tif, 0));
 
-    const uint16_t extra[1] = { EXTRASAMPLE_UNASSALPHA };
+    const uint16_t extra[1] = {EXTRASAMPLE_UNASSALPHA};
     TIFFSetField(tif, TIFFTAG_EXTRASAMPLES, 1, extra);
     TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION,
                  "ACMX2 SDR snapshot: 8-bit RGBA TIFF");
@@ -726,7 +734,7 @@ inline bool saveHdrTiffFromRgba16(const char *filename,
     TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
     TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(tif, 0));
 
-    const uint16_t extra[1] = { EXTRASAMPLE_UNASSALPHA };
+    const uint16_t extra[1] = {EXTRASAMPLE_UNASSALPHA};
     TIFFSetField(tif, TIFFTAG_EXTRASAMPLES, 1, extra);
     TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION,
                  "ACMX2 HDR snapshot: 16-bit RGBA, sRGB tone-mapped from BT.2020 PQ/HLG");
@@ -745,7 +753,7 @@ inline bool saveHdrTiffFromRgba16(const char *filename,
     TIFFClose(tif);
     return ok;
 }
-#endif  // ACMX2_WITH_TIFF
+#endif // ACMX2_WITH_TIFF
 
 // ---------------------------------------------------------------------------
 // HDR pipeline shader sources.
@@ -1280,7 +1288,7 @@ class FFMpegVideoReader {
                     src_space = SWS_CS_ITU601;
                     break;
                 default:
-                    src_space = SWS_CS_BT2020;  // HDR default.
+                    src_space = SWS_CS_BT2020; // HDR default.
                     break;
                 }
                 const int src_range = (src->color_range == AVCOL_RANGE_JPEG) ? 1 : 0;
@@ -1567,11 +1575,11 @@ class SnapshotThreadPool {
     }
 
   private:
-    std::vector<std::thread> workers;              ///< Persistent worker threads.
-    std::queue<std::function<void()>> tasks;        ///< FIFO of pending PNG-write tasks.
-    std::mutex queue_mutex;                         ///< Protects @c tasks and @c stop.
-    std::condition_variable condition;              ///< Signalled when a task is enqueued or pool stops.
-    bool stop = false;                             ///< When true, workers exit after draining the queue.
+    std::vector<std::thread> workers;        ///< Persistent worker threads.
+    std::queue<std::function<void()>> tasks; ///< FIFO of pending PNG-write tasks.
+    std::mutex queue_mutex;                  ///< Protects @c tasks and @c stop.
+    std::condition_variable condition;       ///< Signalled when a task is enqueued or pool stops.
+    bool stop = false;                       ///< When true, workers exit after draining the queue.
 };
 
 /**
@@ -1605,14 +1613,15 @@ class FrameCache {
      * Must be called once a GL context is current. Existing textures (if
      * any) are released first. All slots are initialised to opaque black.
      *
-        * @param w   Texture width in pixels.
-        * @param h   Texture height in pixels.
+     * @param w   Texture width in pixels.
+     * @param h   Texture height in pixels.
      * @param hdr When true, allocate textures as @c GL_RGBA16F (matching
      *            the HDR linear-light pipeline) instead of @c GL_RGBA.
      */
     void init(int w, int h, bool hdr = false) {
         cleanup();
-        if (num_frames == 0) return;
+        if (num_frames == 0)
+            return;
         width = w;
         height = h;
         is_hdr = hdr;
@@ -1667,7 +1676,8 @@ class FrameCache {
      * @param w,h     Region to copy (typically the full FBO dimensions).
      */
     void pushFromFBO(GLuint src_fbo, int w, int h) {
-        if (textures.empty()) return;
+        if (textures.empty())
+            return;
         GLint prev_read = 0;
         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, src_fbo);
@@ -1692,7 +1702,8 @@ class FrameCache {
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
         head = (head + 1) % num_frames;
-        if (count < num_frames) ++count;
+        if (count < num_frames)
+            ++count;
     }
 
     /**
@@ -1703,7 +1714,8 @@ class FrameCache {
      * and one texture upload occur per call.
      */
     void push(const cv::Mat &frame) {
-        if (textures.empty()) return;
+        if (textures.empty())
+            return;
         cv::Mat tmp;
         cv::cvtColor(frame, tmp, cv::COLOR_BGR2RGBA);
         glBindTexture(GL_TEXTURE_2D, textures[head]);
@@ -1718,7 +1730,8 @@ class FrameCache {
         }
         glBindTexture(GL_TEXTURE_2D, 0);
         head = (head + 1) % num_frames;
-        if (count < num_frames) ++count;
+        if (count < num_frames)
+            ++count;
     }
 
     /**
@@ -1735,7 +1748,8 @@ class FrameCache {
      * @param w,h     Region to copy (typically the full texture size).
      */
     void pushFromTexture(GLuint src_tex, int w, int h) {
-        if (textures.empty() || src_tex == 0) return;
+        if (textures.empty() || src_tex == 0)
+            return;
         if (scratch_fbo == 0) {
             glGenFramebuffers(1, &scratch_fbo);
         }
@@ -1765,7 +1779,8 @@ class FrameCache {
                                GL_TEXTURE_2D, 0, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
         head = (head + 1) % num_frames;
-        if (count < num_frames) ++count;
+        if (count < num_frames)
+            ++count;
     }
 
     /**
@@ -1791,7 +1806,8 @@ class FrameCache {
      * ring as full.
      */
     void fill(const cv::Mat &frame) {
-        if (textures.empty()) return;
+        if (textures.empty())
+            return;
         cv::Mat tmp;
         cv::cvtColor(frame, tmp, cv::COLOR_BGR2RGBA);
         const bool size_matches = (tmp.cols == width && tmp.rows == height);
@@ -1842,13 +1858,13 @@ class FrameCache {
  */
 class TextureUploader {
   public:
-    GLuint textureID = 0;           ///< OpenGL texture receiving the frame data.
+    GLuint textureID = 0; ///< OpenGL texture receiving the frame data.
 #ifdef ACMX2_WITH_CUDA
     cudaGraphicsResource *cudaTexResource = nullptr; ///< CUDA handle to the mapped GL texture.
     cudaStream_t uploadStream = nullptr;             ///< Dedicated stream for the device→array copy.
 #endif
-    int width = 0;                  ///< Current texture width in pixels.
-    int height = 0;                 ///< Current texture height in pixels.
+    int width = 0;  ///< Current texture width in pixels.
+    int height = 0; ///< Current texture height in pixels.
 
     /**
      * @brief Create (or recreate) the GL texture and CUDA image registration.
@@ -1958,15 +1974,15 @@ class TextureUploader {
  * FNV-1a hash of the source file so stale entries are detected on load.
  */
 struct ShaderCacheEntry {
-    std::string shader_name;       ///< Stem of the .glsl filename.
-    std::vector<char> binary_2d;   ///< GL program binary (2D vertex shader).
-    GLenum format_2d = 0;          ///< GL binary format token for 2D.
-    std::vector<char> binary_3d;   ///< GL program binary (3D vertex shader).
-    GLenum format_3d = 0;          ///< GL binary format token for 3D.
-    uint64_t source_hash = 0;      ///< FNV-1a-64 hash of the fragment source.
-    bool failed = false;           ///< True if this shader failed to compile;
-                                   ///< a passthrough program is substituted at load time
-                                   ///< to preserve the user-visible shader index.
+    std::string shader_name;     ///< Stem of the .glsl filename.
+    std::vector<char> binary_2d; ///< GL program binary (2D vertex shader).
+    GLenum format_2d = 0;        ///< GL binary format token for 2D.
+    std::vector<char> binary_3d; ///< GL program binary (3D vertex shader).
+    GLenum format_3d = 0;        ///< GL binary format token for 3D.
+    uint64_t source_hash = 0;    ///< FNV-1a-64 hash of the fragment source.
+    bool failed = false;         ///< True if this shader failed to compile;
+                                 ///< a passthrough program is substituted at load time
+                                 ///< to preserve the user-visible shader index.
 };
 
 /**
@@ -1979,8 +1995,8 @@ struct ShaderCacheEntry {
  * If the GL renderer or driver version changes, the cache is invalidated.
  */
 struct ShaderCache {
-    static constexpr uint32_t CACHE_MAGIC = 0x53484452;   ///< File magic: "SHDR".
-    static constexpr uint32_t CACHE_VERSION = 3;           ///< Current format version.
+    static constexpr uint32_t CACHE_MAGIC = 0x53484452; ///< File magic: "SHDR".
+    static constexpr uint32_t CACHE_VERSION = 3;        ///< Current format version.
     std::string gl_renderer;
     std::string gl_version;
     bool dual_mode = false;
@@ -2219,7 +2235,7 @@ bool loadProgramBinaryFunctions() {
  * @see push_audio_buffer(), compute_audio_fft(), get_fft_magnitudes()
  */
 class SpectrumTexture {
-public:
+  public:
     /**
      * @brief Create the 1D texture and set its sampling parameters.
      *
@@ -2234,7 +2250,8 @@ public:
      * around artefacts if a shader accidentally samples outside [0,1].
      */
     void init() {
-        if (textureID != 0) return;
+        if (textureID != 0)
+            return;
         bins = FFT_SIZE / 2;
 
         glGenTextures(1, &textureID);
@@ -2271,7 +2288,8 @@ public:
      * texture for shader use.
      */
     void update() {
-        if (textureID == 0) return;
+        if (textureID == 0)
+            return;
         compute_audio_fft();
         const auto &mags = get_fft_magnitudes();
         glBindTexture(GL_TEXTURE_1D, textureID);
@@ -2280,7 +2298,8 @@ public:
     }
 
     void update(float scale) {
-        if (textureID == 0) return;
+        if (textureID == 0)
+            return;
         compute_audio_fft();
         const auto &mags = get_fft_magnitudes();
         scaled_buf.resize(mags.size());
@@ -2324,9 +2343,9 @@ public:
     /// Texture unit reserved for the spectrum (units 0–8 are taken).
     static constexpr int SPECTRUM_TEXTURE_UNIT = 9;
 
-private:
-    GLuint textureID = 0;  ///< OpenGL name for the 1D texture.
-    int bins = 0;          ///< Number of texels (== FFT_SIZE / 2).
+  private:
+    GLuint textureID = 0;          ///< OpenGL name for the 1D texture.
+    int bins = 0;                  ///< Number of texels (== FFT_SIZE / 2).
     std::vector<float> scaled_buf; ///< Scratch buffer for sensitivity-scaled magnitudes.
 };
 
@@ -2349,7 +2368,7 @@ private:
  * unit 9 is the live `spectrum` texture.
  */
 class SpectrumHistory {
-public:
+  public:
     /// First texture unit assigned to spectrum0 (units 0–9 already taken).
     static constexpr int BASE_UNIT = 10;
     /// Maximum supported buffer depth (clamped to keep texture units in range).
@@ -2440,10 +2459,10 @@ public:
 
     ~SpectrumHistory() { cleanup(); }
 
-private:
-    std::vector<GLuint> textures; ///< Ring of `GL_TEXTURE_1D` names.
-    int bins = 0;                 ///< Texels per texture (== FFT_SIZE / 2).
-    int write_idx = 0;            ///< Next slot to overwrite.
+  private:
+    std::vector<GLuint> textures;  ///< Ring of `GL_TEXTURE_1D` names.
+    int bins = 0;                  ///< Texels per texture (== FFT_SIZE / 2).
+    int write_idx = 0;             ///< Next slot to overwrite.
     std::vector<float> scaled_buf; ///< Scratch for sensitivity-scaled magnitudes.
 };
 #endif // AUDIO_ENABLED
@@ -2469,7 +2488,7 @@ class ShaderLibrary {
     float time_speed = 1.0f;
     double video_fps = 0.0;
 #ifdef AUDIO_ENABLED
-    int audio_buffer_count_ = 0; ///< Count of `spectrumN` history textures (set via setAudioBufferCount, 0 = disabled).
+    int audio_buffer_count_ = 0;         ///< Count of `spectrumN` history textures (set via setAudioBufferCount, 0 = disabled).
     float audio_warmup_envelope_ = 1.0f; ///< Startup ramp [0..1] used to soften initial audio-reactive intensity.
 #endif
 #ifdef MIDI_ENABLED
@@ -2504,7 +2523,7 @@ class ShaderLibrary {
         GLint iamp = -1;
         GLint amp_peak = -1, amp_rms = -1, amp_smooth = -1;
         GLint amp_low = -1, amp_mid = -1, amp_high = -1;
-        GLint spectrum_loc = -1; ///< Location of `uniform sampler1D spectrum;` (-1 if unused).
+        GLint spectrum_loc = -1;                  ///< Location of `uniform sampler1D spectrum;` (-1 if unused).
         std::vector<GLint> spectrum_history_locs; ///< Locations of `spectrum0..spectrumN-1` (-1 entries if unused).
 #endif
         GLint texture_cache_loc[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
@@ -2556,7 +2575,7 @@ class ShaderLibrary {
      *
      * @param assets_path  Assets directory passed via `--path` (may be empty).
      * @param library_path Shader library directory (containing index.txt).
-    * @param cache_size   Active texture-cache size used to key binary-cache compatibility.
+     * @param cache_size   Active texture-cache size used to key binary-cache compatibility.
      * @return Absolute or relative path to the shader cache file.
      */
     static std::string shaderCacheFilePath(const std::string &assets_path,
@@ -2766,7 +2785,10 @@ class ShaderLibrary {
 
 #ifdef MIDI_ENABLED
     /// Set a MIDI slider value (index 0–3, value 0.0–1.0).
-    void setMidiSlider(int idx, float val) { if (idx >= 0 && idx < 4) midi_slider[idx] = val; }
+    void setMidiSlider(int idx, float val) {
+        if (idx >= 0 && idx < 4)
+            midi_slider[idx] = val;
+    }
 #endif
 
     /**
@@ -2795,8 +2817,10 @@ class ShaderLibrary {
      * @param size Ring buffer size in frames.
      */
     void setCacheSize(int size) {
-        if (size < 1) size = 1;
-        if (size > 64) size = 64;
+        if (size < 1)
+            size = 1;
+        if (size > 64)
+            size = 64;
         cache_size_ = size;
     }
 
@@ -3052,8 +3076,10 @@ class ShaderLibrary {
      * of 0 disables the feature.
      */
     void setAudioBufferCount(int n) {
-        if (n < 0) n = 0;
-        if (n > SpectrumHistory::MAX_BUFFERS) n = SpectrumHistory::MAX_BUFFERS;
+        if (n < 0)
+            n = 0;
+        if (n > SpectrumHistory::MAX_BUFFERS)
+            n = SpectrumHistory::MAX_BUFFERS;
         audio_buffer_count_ = n;
     }
 
@@ -3089,9 +3115,9 @@ class ShaderLibrary {
      * @brief Decrease the time_f speed multiplier by @p step, clamped to zero.
      * @param step Amount to subtract (e.g. 0.1).
      */
-     void decTimeSpeed(float step) {
+    void decTimeSpeed(float step) {
         time_speed -= step;
-        
+
         // Optional: Add a 'deadzone' to make it easier to stop the animation
         if (std::abs(time_speed) < 0.01f) {
             time_speed = 0.0f;
@@ -3238,8 +3264,11 @@ class ShaderLibrary {
                         logo_tex = 0;
                         logo_loaded = true;
                     }
-                } catch (...) {}
-                if (logo_tex) { glDeleteTextures(1, &logo_tex); }
+                } catch (...) {
+                }
+                if (logo_tex) {
+                    glDeleteTextures(1, &logo_tex);
+                }
             }
         }
 
@@ -3403,9 +3432,9 @@ class ShaderLibrary {
 
         // Preserve ordering and non-shader lines (blank / "material" lines).
         struct Line {
-            std::string raw;    ///< Original line text.
-            bool is_shader;     ///< True if this line references a fragment shader file.
-            bool keep = true;   ///< False if the shader failed to compile.
+            std::string raw;  ///< Original line text.
+            bool is_shader;   ///< True if this line references a fragment shader file.
+            bool keep = true; ///< False if the shader failed to compile.
         };
         std::vector<Line> lines;
         {
@@ -3453,7 +3482,8 @@ class ShaderLibrary {
 
         size_t total_shaders = 0;
         for (const auto &e : lines) {
-            if (e.is_shader) ++total_shaders;
+            if (e.is_shader)
+                ++total_shaders;
         }
 
         mx::system_out << "acmx2: Scanning " << total_shaders
@@ -3466,7 +3496,8 @@ class ShaderLibrary {
         size_t kept = 0;
         size_t scanned = 0;
         for (auto &entry : lines) {
-            if (!entry.is_shader || !entry.keep) continue;
+            if (!entry.is_shader || !entry.keep)
+                continue;
             ++scanned;
             std::string full_path = library_path + "/" + entry.raw;
 
@@ -3501,7 +3532,8 @@ class ShaderLibrary {
                 } else {
                     GLint link_status = 0;
                     glGetProgramiv(prog_2d.id(), GL_LINK_STATUS, &link_status);
-                    if (link_status != GL_TRUE) compiled = false;
+                    if (link_status != GL_TRUE)
+                        compiled = false;
                 }
                 if (compiled && dual_mode) {
                     gl::ShaderProgram prog_3d;
@@ -3511,7 +3543,8 @@ class ShaderLibrary {
                     } else {
                         GLint link_status = 0;
                         glGetProgramiv(prog_3d.id(), GL_LINK_STATUS, &link_status);
-                        if (link_status != GL_TRUE) compiled = false;
+                        if (link_status != GL_TRUE)
+                            compiled = false;
                     }
                 }
             } catch (const std::exception &e) {
@@ -3554,7 +3587,8 @@ class ShaderLibrary {
             return false;
         }
         for (const auto &entry : lines) {
-            if (!entry.keep) continue;
+            if (!entry.keep)
+                continue;
             out << entry.raw << "\n";
         }
         out.close();
@@ -3820,7 +3854,10 @@ class ShaderLibrary {
             size_t ok_count = 0;
             size_t failed_count = 0;
             for (const auto &e : cache.entries) {
-                if (e.failed) ++failed_count; else ++ok_count;
+                if (e.failed)
+                    ++failed_count;
+                else
+                    ++ok_count;
             }
             mx::system_out << "acmx2: Shader cache saved to: " << cache_file << "\n";
             mx::system_out << "acmx2: Cached " << ok_count << " shaders ("
@@ -4048,8 +4085,11 @@ class ShaderLibrary {
                         logo_tex = 0;
                         logo_loaded_c = true;
                     }
-                } catch (...) {}
-                if (logo_tex) { glDeleteTextures(1, &logo_tex); }
+                } catch (...) {
+                }
+                if (logo_tex) {
+                    glDeleteTextures(1, &logo_tex);
+                }
             }
         }
 
@@ -4719,7 +4759,7 @@ class ShaderLibrary {
         static double last_good_delta = 1.0 / 60.0;
 
         Uint64 now_time = SDL_GetPerformanceCounter();
-//        double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
+        //        double elapsed_time = static_cast<double>(now_time - start_time) / SDL_GetPerformanceFrequency();
         double delta_time = static_cast<double>(now_time - last_frame_time) / SDL_GetPerformanceFrequency();
         if (delta_time <= 0.0)
             delta_time = last_good_delta;
@@ -4737,13 +4777,13 @@ class ShaderLibrary {
             }
             time_f += step;
         } else {
-        #ifdef AUDIO_ENABLED
+#ifdef AUDIO_ENABLED
             if (time_audio) {
                 float dt_scalex = audio_delta ? static_cast<float>(delta_time) : 1.0f;
                 float new_ampx = ((get_amp() * get_sense()) * (time_speed * dt_scalex));
                 time_f += new_ampx;
             }
-        #endif
+#endif
         }
 
         // Wrap at a large multiple of 2*PI so cos/sin remain continuous across
@@ -4751,8 +4791,10 @@ class ShaderLibrary {
         // shaders using mod(time_f, N) with small N still see a freely-growing
         // time_f. 65536 * 2*PI keeps float32 precision high (well under 2^20).
         constexpr float TIME_F_WRAP = 65536.0f * 6.2831853f;
-        if (time_f >= TIME_F_WRAP) time_f -= TIME_F_WRAP;
-        else if (time_f < 0.0f)    time_f += TIME_F_WRAP;
+        if (time_f >= TIME_F_WRAP)
+            time_f -= TIME_F_WRAP;
+        else if (time_f < 0.0f)
+            time_f += TIME_F_WRAP;
 
         if (std::isnan(time_f) || std::isinf(time_f))
             time_f = 1.0;
@@ -4904,16 +4946,21 @@ class ShaderLibrary {
         color_alpha_r += (rand() % 100) * 0.01f;
         color_alpha_g += (rand() % 100) * 0.01f;
         color_alpha_b += (rand() % 100) * 0.01f;
-        if (color_alpha_r > 1.5f) color_alpha_r = 0.1f;
-        if (color_alpha_g > 1.5f) color_alpha_g = 0.1f;
-        if (color_alpha_b > 1.5f) color_alpha_b = 0.1f;
+        if (color_alpha_r > 1.5f)
+            color_alpha_r = 0.1f;
+        if (color_alpha_g > 1.5f)
+            color_alpha_g = 0.1f;
+        if (color_alpha_b > 1.5f)
+            color_alpha_b = 0.1f;
 
         if (alpha_dir) {
             alpha += 0.1f;
-            if (alpha >= 6.0f) alpha_dir = false;
+            if (alpha >= 6.0f)
+                alpha_dir = false;
         } else {
             alpha -= 0.1f;
-            if (alpha <= 1.0f) alpha_dir = true;
+            if (alpha <= 1.0f)
+                alpha_dir = true;
         }
 
         random_var = glm::vec4(rand() % 255, rand() % 255, rand() % 255, rand() % 255);
@@ -4931,19 +4978,32 @@ class ShaderLibrary {
      * @param idx Shader index (passed to index_value uniform).
      */
     void uploadAcidCamUniforms(const ProgramData &n, size_t idx) {
-        if (n.value_alpha_r != -1) glUniform1f(n.value_alpha_r, color_alpha_r);
-        if (n.value_alpha_g != -1) glUniform1f(n.value_alpha_g, color_alpha_g);
-        if (n.value_alpha_b != -1) glUniform1f(n.value_alpha_b, color_alpha_b);
-        if (n.alpha_r_loc != -1) glUniform1f(n.alpha_r_loc, color_alpha_r);
-        if (n.alpha_g_loc != -1) glUniform1f(n.alpha_g_loc, color_alpha_g);
-        if (n.alpha_b_loc != -1) glUniform1f(n.alpha_b_loc, color_alpha_b);
-        if (n.alpha_value != -1) glUniform1f(n.alpha_value, alpha);
-        if (n.index_value != -1) glUniform1f(n.index_value, static_cast<float>(idx));
-        if (n.optx_loc != -1) glUniform4fv(n.optx_loc, 1, glm::value_ptr(optx));
-        if (n.random_var_loc != -1) glUniform4fv(n.random_var_loc, 1, glm::value_ptr(random_var));
-        if (n.restore_black_loc != -1) glUniform1f(n.restore_black_loc, restore_black ? 1.0f : 0.0f);
-        if (n.inc_value_loc != -1) glUniform4fv(n.inc_value_loc, 1, glm::value_ptr(inc_value));
-        if (n.inc_valuex_loc != -1) glUniform4fv(n.inc_valuex_loc, 1, glm::value_ptr(inc_valuex));
+        if (n.value_alpha_r != -1)
+            glUniform1f(n.value_alpha_r, color_alpha_r);
+        if (n.value_alpha_g != -1)
+            glUniform1f(n.value_alpha_g, color_alpha_g);
+        if (n.value_alpha_b != -1)
+            glUniform1f(n.value_alpha_b, color_alpha_b);
+        if (n.alpha_r_loc != -1)
+            glUniform1f(n.alpha_r_loc, color_alpha_r);
+        if (n.alpha_g_loc != -1)
+            glUniform1f(n.alpha_g_loc, color_alpha_g);
+        if (n.alpha_b_loc != -1)
+            glUniform1f(n.alpha_b_loc, color_alpha_b);
+        if (n.alpha_value != -1)
+            glUniform1f(n.alpha_value, alpha);
+        if (n.index_value != -1)
+            glUniform1f(n.index_value, static_cast<float>(idx));
+        if (n.optx_loc != -1)
+            glUniform4fv(n.optx_loc, 1, glm::value_ptr(optx));
+        if (n.random_var_loc != -1)
+            glUniform4fv(n.random_var_loc, 1, glm::value_ptr(random_var));
+        if (n.restore_black_loc != -1)
+            glUniform1f(n.restore_black_loc, restore_black ? 1.0f : 0.0f);
+        if (n.inc_value_loc != -1)
+            glUniform4fv(n.inc_value_loc, 1, glm::value_ptr(inc_value));
+        if (n.inc_valuex_loc != -1)
+            glUniform4fv(n.inc_valuex_loc, 1, glm::value_ptr(inc_valuex));
     }
 
     /**
@@ -4956,8 +5016,10 @@ class ShaderLibrary {
             // letting time_f grow large enough for mod(time_f, N) shader usage.
             constexpr float TIME_F_WRAP = 65536.0f * 6.2831853f;
             time_f += value;
-            if (time_f >= TIME_F_WRAP) time_f = std::fmod(time_f, TIME_F_WRAP);
-            if (time_f < 0.0f)         time_f += TIME_F_WRAP;
+            if (time_f >= TIME_F_WRAP)
+                time_f = std::fmod(time_f, TIME_F_WRAP);
+            if (time_f < 0.0f)
+                time_f += TIME_F_WRAP;
             mx::system_out << "acmx2: Time stepped forward: " << time_f << "\n";
             fflush(stdout);
         }
@@ -4973,13 +5035,14 @@ class ShaderLibrary {
     void decTime(float value) {
         if (!time_active) {
             constexpr float TWO_PI = 6.2831853f;
-            
+
             // Subtract the value and apply a true modulo wrap
             // The double fmod + addition ensures the result is always positive
             time_f = std::fmod(std::fmod(time_f - value, TWO_PI) + TWO_PI, TWO_PI);
-            
+
             // If you specifically need to avoid 0.0 (e.g. to prevent division by zero in shaders)
-            if (time_f < 0.0001f) time_f = TWO_PI; 
+            if (time_f < 0.0001f)
+                time_f = TWO_PI;
 
             mx::system_out << "acmx2: Time stepped back (wrapped): " << time_f << "\n";
             fflush(stdout);
@@ -5057,12 +5120,12 @@ struct MXArguments {
     std::string fragment;
     std::string prefix_path = ".";
     std::string model_file = "cube.mxmod.z";
-    std::string human_model; ///< PPHS human-segmentation ONNX model path (--human). Empty when disabled.
+    std::string human_model;            ///< PPHS human-segmentation ONNX model path (--human). Empty when disabled.
     bool human_background_only = false; ///< When true (with --human), shaders apply only to the background; person composited on top.
-    float human_black = 0.35f; ///< --black: mask black point (shadow crush threshold).
-    float human_white = 0.75f; ///< --white: mask white point (opacity saturation threshold).
-    std::string edge_model; ///< Dexined edge-detection ONNX model path (--edge). Empty when disabled.
-    std::string onnx_model;  ///< Generic OnnxWrapper YAML config path (--onnx). Empty when disabled.
+    float human_black = 0.35f;          ///< --black: mask black point (shadow crush threshold).
+    float human_white = 0.75f;          ///< --white: mask white point (opacity saturation threshold).
+    std::string edge_model;             ///< Dexined edge-detection ONNX model path (--edge). Empty when disabled.
+    std::string onnx_model;             ///< Generic OnnxWrapper YAML config path (--onnx). Empty when disabled.
     int mode = 0;
     int shader_index = 0;
     std::optional<cv::Size> sizev = std::nullopt;
@@ -5101,8 +5164,8 @@ struct MXArguments {
     bool shader_pass_enabled = false;
     bool build_cache = false;
     std::string build_library_path;
-    bool remove_broken = false;        ///< True when `--remove-broken <path>` was specified.
-    std::string remove_broken_path;    ///< Library path passed to `--remove-broken`.
+    bool remove_broken = false;     ///< True when `--remove-broken <path>` was specified.
+    std::string remove_broken_path; ///< Library path passed to `--remove-broken`.
 #ifdef __APPLE__
     // The shader binary cache is unsupported on macOS (no usable
     // glProgramBinary path under the system OpenGL framework), so it
@@ -5113,22 +5176,22 @@ struct MXArguments {
 #endif
     float time_speed = 1.0f;
     std::string playlist_file;
-    int autopilot_frames = 0;            ///< Frames between random shader switches in autopilot mode (0 = disabled).
+    int autopilot_frames = 0;               ///< Frames between random shader switches in autopilot mode (0 = disabled).
     bool autopilot_random_interval = false; ///< When true, randomize autopilot frame interval after each switch.
-    int autopilot_random_timeout = 0;    ///< Upper bound (inclusive) for randomized autopilot interval.
+    int autopilot_random_timeout = 0;       ///< Upper bound (inclusive) for randomized autopilot interval.
     double duration = 0.0;
     double max_size_mb = 0.0;
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
-    bool flip_output = false;          ///< Vertical flip output frames when set (e.g., for HDR correction).
-    bool png_output = false;           ///< Video-file mode only: write PNG frames to a subdirectory instead of encoding video.
-    int generate_interval = 0;         ///< Save a PNG frame every N frames to a subdirectory (video or camera mode, 0 = disabled).
-    bool no_drop = false;              ///< In video mode, block when encoder queue is full instead of dropping.
-    bool display_filter = false;       ///< Display current shader/stack and GPU filter overlay in upper-left.
-    std::string watermark_text;        ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
-    int watermark_r = 255;             ///< Watermark red channel (0-255), default magenta-pink.
-    int watermark_g = 0;               ///< Watermark green channel (0-255).
-    int watermark_b = 150;             ///< Watermark blue channel (0-255).
+    bool flip_output = false;    ///< Vertical flip output frames when set (e.g., for HDR correction).
+    bool png_output = false;     ///< Video-file mode only: write PNG frames to a subdirectory instead of encoding video.
+    int generate_interval = 0;   ///< Save a PNG frame every N frames to a subdirectory (video or camera mode, 0 = disabled).
+    bool no_drop = false;        ///< In video mode, block when encoder queue is full instead of dropping.
+    bool display_filter = false; ///< Display current shader/stack and GPU filter overlay in upper-left.
+    std::string watermark_text;  ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
+    int watermark_r = 255;       ///< Watermark red channel (0-255), default magenta-pink.
+    int watermark_g = 0;         ///< Watermark green channel (0-255).
+    int watermark_b = 150;       ///< Watermark blue channel (0-255).
     // User-configurable encoder quality (see EncodeOptions in mxwrite.hpp).
     EncodeOptions encode_opts{};
 };
@@ -5260,16 +5323,16 @@ class ACView : public gl::GLObject {
     int audio_input_device;
     int audio_output_device;
     std::string audio_record_file;
-    SpectrumTexture spectrumTex; ///< 1D texture holding the FFT magnitude spectrum for shaders.
-    SpectrumHistory spectrumHistory; ///< Ring of `spectrumN` 1D textures (history buffer; --enable-audio-buffers).
-    int audio_buffer_count = 0; ///< Number of history frames retained for `spectrumN` (0 = disabled).
+    SpectrumTexture spectrumTex;        ///< 1D texture holding the FFT magnitude spectrum for shaders.
+    SpectrumHistory spectrumHistory;    ///< Ring of `spectrumN` 1D textures (history buffer; --enable-audio-buffers).
+    int audio_buffer_count = 0;         ///< Number of history frames retained for `spectrumN` (0 = disabled).
     float audio_warmup_envelope = 0.0f; ///< Startup fade for audio-driven uniforms/textures.
-    float audio_warmup_rate = 0.5f; ///< Warmup envelope slope in 1/sec (higher = faster ramp).
+    float audio_warmup_rate = 0.5f;     ///< Warmup envelope slope in 1/sec (higher = faster ramp).
     std::chrono::steady_clock::time_point audio_warmup_last_tick = std::chrono::steady_clock::now();
     bool spectrum_scale_by_sense = false; ///< When true, scale spectrum 1D buffer by audio sensitivity.
-    bool file_audio_mode = false; ///< True when audio comes from a file instead of RtAudio.
-    std::string audio_file_path; ///< Path to the audio file used for file_audio_mode.
-    bool audio_trunc_mode = false; ///< When true, stop playback when file audio samples are exhausted.
+    bool file_audio_mode = false;         ///< True when audio comes from a file instead of RtAudio.
+    std::string audio_file_path;          ///< Path to the audio file used for file_audio_mode.
+    bool audio_trunc_mode = false;        ///< When true, stop playback when file audio samples are exhausted.
 
     /// Reset the startup envelope used to tame initial audio intensity.
     void resetAudioWarmupEnvelope() {
@@ -5325,82 +5388,156 @@ class ACView : public gl::GLObject {
      * @param code Virtual key code from the MIDI map file.
      * @return Short label string (e.g. "Right", "SpdUp", "PitchDn").
      */
-    static const char* midiKeyName(int code) {
+    static const char *midiKeyName(int code) {
         switch (code) {
-        case 262: return "Right";
-        case 263: return "Left";
-        case 264: return "Down";
-        case 265: return "Up";
-        case 266: return "PgUp";
-        case 267: return "PgDn";
-        case 269: return "End";
-        case 268: return "Home";
-        case 260: return "Insert";
-        case 261: return "Delete";
-        case 298: return "F9";
-        case 32:  return "Space";
-        case 44:  return "Comma";
-        case 45:  return "Minus";
-        case 46:  return "Period";
-        case 47:  return "Slash";
-        case 61:  return "Plus/Eq";
-        case 91:  return "[";
-        case 93:  return "]";
-        case 51:  return "3";
-        case 52:  return "4";
-        case 53:  return "5";
-        case 54:  return "6";
-        case 65:  return "A";
-        case 66:  return "B";
-        case 67:  return "C";
-        case 68:  return "D";
-        case 69:  return "E";
-        case 71:  return "G";
-        case 70:  return "F";
-        case 72:  return "H";
-        case 73:  return "I";
-        case 74:  return "J";
-        case 75:  return "K";
-        case 76:  return "L";
-        case 77:  return "M";
-        case 78:  return "N";
-        case 79:  return "O";
-        case 80:  return "P";
-        case 81:  return "Q";
-        case 82:  return "R";
-        case 83:  return "S";
-        case 84:  return "T";
-        case 85:  return "U";
-        case 86:  return "V";
-        case 87:  return "W";
-        case 88:  return "X";
-        case 89:  return "Y";
-        case 90:  return "Z";
-        case 500: return "TimeFwd";
-        case 501: return "TimeBack";
-        case 502: return "TimePause";
-        case 503: return "TimeToggle";
-        case 504: return "SpdUp";
-        case 505: return "SpdDn";
-        case 506: return "PitchUp";
-        case 507: return "PitchDn";
-        case 508: return "YawR";
-        case 509: return "YawL";
-        case 510: return "RotSpdUp";
-        case 511: return "RotSpdDn";
-        case 512: return "RollR";
-        case 513: return "RollL";
-        case 514: return "ScaleUp";
-        case 515: return "ScaleDn";
-        case 600: return "Slider1";
-        case 601: return "Slider1";
-        case 602: return "Slider2";
-        case 603: return "Slider2";
-        case 604: return "Slider3";
-        case 605: return "Slider3";
-        case 606: return "Slider4";
-        case 607: return "Slider4";
-        default:  return "?";
+        case 262:
+            return "Right";
+        case 263:
+            return "Left";
+        case 264:
+            return "Down";
+        case 265:
+            return "Up";
+        case 266:
+            return "PgUp";
+        case 267:
+            return "PgDn";
+        case 269:
+            return "End";
+        case 268:
+            return "Home";
+        case 260:
+            return "Insert";
+        case 261:
+            return "Delete";
+        case 298:
+            return "F9";
+        case 32:
+            return "Space";
+        case 44:
+            return "Comma";
+        case 45:
+            return "Minus";
+        case 46:
+            return "Period";
+        case 47:
+            return "Slash";
+        case 61:
+            return "Plus/Eq";
+        case 91:
+            return "[";
+        case 93:
+            return "]";
+        case 51:
+            return "3";
+        case 52:
+            return "4";
+        case 53:
+            return "5";
+        case 54:
+            return "6";
+        case 65:
+            return "A";
+        case 66:
+            return "B";
+        case 67:
+            return "C";
+        case 68:
+            return "D";
+        case 69:
+            return "E";
+        case 71:
+            return "G";
+        case 70:
+            return "F";
+        case 72:
+            return "H";
+        case 73:
+            return "I";
+        case 74:
+            return "J";
+        case 75:
+            return "K";
+        case 76:
+            return "L";
+        case 77:
+            return "M";
+        case 78:
+            return "N";
+        case 79:
+            return "O";
+        case 80:
+            return "P";
+        case 81:
+            return "Q";
+        case 82:
+            return "R";
+        case 83:
+            return "S";
+        case 84:
+            return "T";
+        case 85:
+            return "U";
+        case 86:
+            return "V";
+        case 87:
+            return "W";
+        case 88:
+            return "X";
+        case 89:
+            return "Y";
+        case 90:
+            return "Z";
+        case 500:
+            return "TimeFwd";
+        case 501:
+            return "TimeBack";
+        case 502:
+            return "TimePause";
+        case 503:
+            return "TimeToggle";
+        case 504:
+            return "SpdUp";
+        case 505:
+            return "SpdDn";
+        case 506:
+            return "PitchUp";
+        case 507:
+            return "PitchDn";
+        case 508:
+            return "YawR";
+        case 509:
+            return "YawL";
+        case 510:
+            return "RotSpdUp";
+        case 511:
+            return "RotSpdDn";
+        case 512:
+            return "RollR";
+        case 513:
+            return "RollL";
+        case 514:
+            return "ScaleUp";
+        case 515:
+            return "ScaleDn";
+        case 600:
+            return "Slider1";
+        case 601:
+            return "Slider1";
+        case 602:
+            return "Slider2";
+        case 603:
+            return "Slider2";
+        case 604:
+            return "Slider3";
+        case 605:
+            return "Slider3";
+        case 606:
+            return "Slider4";
+        case 607:
+            return "Slider4";
+        default:
+            return "?";
         }
     }
 
@@ -5428,7 +5565,8 @@ class ACView : public gl::GLObject {
                 return;
             }
             unsigned int port = (deviceIndex >= 0 && deviceIndex < static_cast<int>(ports))
-                                    ? static_cast<unsigned int>(deviceIndex) : 0;
+                                    ? static_cast<unsigned int>(deviceIndex)
+                                    : 0;
             mx::system_out << "acmx2: Opening MIDI port " << port << ": " << midiIn->getPortName(port) << "\n";
             midiIn->openPort(port);
             midiOpen = true;
@@ -5442,25 +5580,32 @@ class ACView : public gl::GLObject {
             while (std::getline(file, line)) {
                 std::istringstream iss(line);
                 std::string keyPair;
-                if (!(iss >> keyPair)) continue;
+                if (!(iss >> keyPair))
+                    continue;
                 auto colonPos = keyPair.find(':');
-                if (colonPos == std::string::npos) continue;
+                if (colonPos == std::string::npos)
+                    continue;
                 int k1 = std::stoi(keyPair.substr(0, colonPos));
                 int k2 = std::stoi(keyPair.substr(colonPos + 1));
                 char brace;
-                if (!(iss >> brace) || brace != '{') continue;
+                if (!(iss >> brace) || brace != '{')
+                    continue;
                 int b0, b1, b2;
-                if (!(iss >> b0 >> b1 >> b2)) continue;
+                if (!(iss >> b0 >> b1 >> b2))
+                    continue;
                 midiCodes.push_back({k1, k2,
-                    static_cast<unsigned char>(b0),
-                    static_cast<unsigned char>(b1),
-                    static_cast<unsigned char>(b2)});
+                                     static_cast<unsigned char>(b0),
+                                     static_cast<unsigned char>(b1),
+                                     static_cast<unsigned char>(b2)});
             }
             mx::system_out << "acmx2: Loaded " << midiCodes.size() << " MIDI mapping(s)\n";
             fflush(stdout);
         } catch (RtMidiError &e) {
             mx::system_err << "acmx2: MIDI error: " << e.getMessage() << "\n";
-            if (midiIn) { delete midiIn; midiIn = nullptr; }
+            if (midiIn) {
+                delete midiIn;
+                midiIn = nullptr;
+            }
         }
     }
 
@@ -5476,60 +5621,118 @@ class ACView : public gl::GLObject {
      */
     SDL_Keycode midiKeyToSDL(int code) {
         switch (code) {
-        case 262: return SDLK_RIGHT;
-        case 263: return SDLK_LEFT;
-        case 264: return SDLK_DOWN;
-        case 265: return SDLK_UP;
-        case 266: return SDLK_PAGEUP;
-        case 267: return SDLK_PAGEDOWN;
-        case 268: return SDLK_HOME;
-        case 269: return SDLK_END;
-        case 260: return SDLK_INSERT;
-        case 261: return SDLK_DELETE;
-        case 298: return SDLK_F9;
-        case 32:  return SDLK_SPACE;
-        case 44:  return SDLK_COMMA;
-        case 45:  return SDLK_MINUS;
-        case 46:  return SDLK_PERIOD;
-        case 47:  return SDLK_SLASH;
-        case 61:  return SDLK_EQUALS;
-        case 91:  return SDLK_LEFTBRACKET;
-        case 93:  return SDLK_RIGHTBRACKET;
-        case 51:  return SDLK_3;
-        case 52:  return SDLK_4;
-        case 53:  return SDLK_5;
-        case 54:  return SDLK_6;
-        case 65:  return SDLK_a;
-        case 66:  return SDLK_b;
-        case 67:  return SDLK_c;
-        case 68:  return SDLK_d;
-        case 69:  return SDLK_e;
-        case 71:  return SDLK_g;
-        case 70:  return SDLK_f;
-        case 72:  return SDLK_h;
-        case 73:  return SDLK_i;
-        case 74:  return SDLK_j;
-        case 76:  return SDLK_l;
-        case 77:  return SDLK_m;
-        case 78:  return SDLK_n;
-        case 79:  return SDLK_o;
-        case 80:  return SDLK_p;
-        case 81:  return SDLK_q;
-        case 82:  return SDLK_r;
-        case 83:  return SDLK_s;
-        case 84:  return SDLK_t;
-        case 85:  return SDLK_u;
-        case 75:  return SDLK_k;
-        case 86:  return SDLK_v;
-        case 87:  return SDLK_w;
-        case 88:  return SDLK_x;
-        case 89:  return SDLK_y;
-        case 90:  return SDLK_z;
+        case 262:
+            return SDLK_RIGHT;
+        case 263:
+            return SDLK_LEFT;
+        case 264:
+            return SDLK_DOWN;
+        case 265:
+            return SDLK_UP;
+        case 266:
+            return SDLK_PAGEUP;
+        case 267:
+            return SDLK_PAGEDOWN;
+        case 268:
+            return SDLK_HOME;
+        case 269:
+            return SDLK_END;
+        case 260:
+            return SDLK_INSERT;
+        case 261:
+            return SDLK_DELETE;
+        case 298:
+            return SDLK_F9;
+        case 32:
+            return SDLK_SPACE;
+        case 44:
+            return SDLK_COMMA;
+        case 45:
+            return SDLK_MINUS;
+        case 46:
+            return SDLK_PERIOD;
+        case 47:
+            return SDLK_SLASH;
+        case 61:
+            return SDLK_EQUALS;
+        case 91:
+            return SDLK_LEFTBRACKET;
+        case 93:
+            return SDLK_RIGHTBRACKET;
+        case 51:
+            return SDLK_3;
+        case 52:
+            return SDLK_4;
+        case 53:
+            return SDLK_5;
+        case 54:
+            return SDLK_6;
+        case 65:
+            return SDLK_a;
+        case 66:
+            return SDLK_b;
+        case 67:
+            return SDLK_c;
+        case 68:
+            return SDLK_d;
+        case 69:
+            return SDLK_e;
+        case 71:
+            return SDLK_g;
+        case 70:
+            return SDLK_f;
+        case 72:
+            return SDLK_h;
+        case 73:
+            return SDLK_i;
+        case 74:
+            return SDLK_j;
+        case 76:
+            return SDLK_l;
+        case 77:
+            return SDLK_m;
+        case 78:
+            return SDLK_n;
+        case 79:
+            return SDLK_o;
+        case 80:
+            return SDLK_p;
+        case 81:
+            return SDLK_q;
+        case 82:
+            return SDLK_r;
+        case 83:
+            return SDLK_s;
+        case 84:
+            return SDLK_t;
+        case 85:
+            return SDLK_u;
+        case 75:
+            return SDLK_k;
+        case 86:
+            return SDLK_v;
+        case 87:
+            return SDLK_w;
+        case 88:
+            return SDLK_x;
+        case 89:
+            return SDLK_y;
+        case 90:
+            return SDLK_z;
         // Virtual codes 504-513 handled directly in pollMidi
-        case 504: case 505: case 506: case 507: case 508: case 509:
-        case 510: case 511: case 512: case 513:
+        case 504:
+        case 505:
+        case 506:
+        case 507:
+        case 508:
+        case 509:
+        case 510:
+        case 511:
+        case 512:
+        case 513:
             return SDLK_UNKNOWN;
-        default:  return SDLK_UNKNOWN;
+        default:
+            return SDLK_UNKNOWN;
         }
     }
 
@@ -5559,12 +5762,14 @@ class ACView : public gl::GLObject {
      * @param win GL window for injecting key events.
      */
     void pollMidi(gl::GLWindow *win) {
-        if (!midiIn || !midiOpen) return;
+        if (!midiIn || !midiOpen)
+            return;
         // Drain all pending MIDI messages and update knob state
         std::vector<unsigned char> msg;
         while (true) {
             midiIn->getMessage(&msg);
-            if (msg.size() < 3) break;
+            if (msg.size() < 3)
+                break;
             for (const auto &mc : midiCodes) {
                 if (msg[0] == mc.b0 && msg[1] == mc.b1) {
                     if (mc.key2 != 0) {
@@ -5579,14 +5784,16 @@ class ACView : public gl::GLObject {
                             lastMidiButtonTime = std::chrono::steady_clock::now();
                         } else if (mc.key1 == 510) {
                             cameraRotationSpeed += 0.5f;
-                            if (cameraRotationSpeed > 50.0f) cameraRotationSpeed = 50.0f;
+                            if (cameraRotationSpeed > 50.0f)
+                                cameraRotationSpeed = 50.0f;
                             mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
                             fflush(stdout);
                             lastMidiButton = "RotSpdUp";
                             lastMidiButtonTime = std::chrono::steady_clock::now();
                         } else if (mc.key1 == 511) {
                             cameraRotationSpeed -= 0.5f;
-                            if (cameraRotationSpeed < 0.5f) cameraRotationSpeed = 0.5f;
+                            if (cameraRotationSpeed < 0.5f)
+                                cameraRotationSpeed = 0.5f;
                             mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
                             fflush(stdout);
                             lastMidiButton = "RotSpdDn";
@@ -5601,10 +5808,12 @@ class ACView : public gl::GLObject {
         //   dist 1-5  -> fire every 16 frames (slowest)
         //   dist 63   -> fire every frame (fastest)
         for (const auto &mc : midiCodes) {
-            if (mc.key2 == 0) continue;
+            if (mc.key2 == 0)
+                continue;
             auto key = std::make_pair(mc.b0, mc.b1);
             auto it = knobState.find(key);
-            if (it == knobState.end()) continue;
+            if (it == knobState.end())
+                continue;
             unsigned char val = it->second;
             // Slider knobs: map CC value (0-127) directly to 0.0-1.0
             if (mc.key1 >= 600 && mc.key1 <= 606 && (mc.key1 % 2 == 0)) {
@@ -5612,7 +5821,8 @@ class ACView : public gl::GLObject {
                 library.setMidiSlider(idx, static_cast<float>(val) / 127.0f);
                 continue;
             }
-            if (val == 64) continue; // dead zone at center
+            if (val == 64)
+                continue;                                    // dead zone at center
             int dist = (val > 64) ? (val - 64) : (64 - val); // 1..64
             // Map distance to frame skip: max dist (63-64) = 1 (every frame),
             // min dist (1) = 16 (every 16th frame)
@@ -5674,14 +5884,16 @@ class ACView : public gl::GLObject {
                     fflush(stdout);
                 } else if (activeKey == 515) {
                     modelRenderScale -= 0.05f;
-                    if (modelRenderScale < 0.05f) modelRenderScale = 0.05f;
+                    if (modelRenderScale < 0.05f)
+                        modelRenderScale = 0.05f;
                     mx::system_out << "acmx2: Model scale decreased to " << modelRenderScale << "\n";
                     fflush(stdout);
                 } else {
                     SDL_Keycode k = (val > 64)
-                        ? midiKeyToSDL(mc.key1)
-                        : midiKeyToSDL(mc.key2);
-                    if (k != SDLK_UNKNOWN) injectKey(k, win);
+                                        ? midiKeyToSDL(mc.key1)
+                                        : midiKeyToSDL(mc.key2);
+                    if (k != SDLK_UNKNOWN)
+                        injectKey(k, win);
                 }
             }
         }
@@ -5690,7 +5902,8 @@ class ACView : public gl::GLObject {
     /// @brief Close the MIDI input port and free the RtMidiIn instance.
     void cleanupMidi() {
         if (midiIn) {
-            if (midiOpen) midiIn->closePort();
+            if (midiOpen)
+                midiIn->closePort();
             delete midiIn;
             midiIn = nullptr;
             midiOpen = false;
@@ -5709,7 +5922,8 @@ class ACView : public gl::GLObject {
      * @param startY Y-coordinate to begin drawing.
      */
     void drawMidiOverlay(gl::GLWindow *win, mx::Font &font, int startY) {
-        if (!midiOpen || midiCodes.empty()) return;
+        if (!midiOpen || midiCodes.empty())
+            return;
         int y = startY;
         win->text.setColor({0, 255, 0, 255});
         win->text.printText_Blended(font, 10, y, "MIDI Active");
@@ -5717,25 +5931,31 @@ class ACView : public gl::GLObject {
         // Find max label width for alignment
         size_t maxLabelLen = 0;
         for (const auto &mc : midiCodes) {
-            if (mc.key2 == 0) continue;
+            if (mc.key2 == 0)
+                continue;
             size_t len = std::string(midiKeyName(mc.key1)).size() + 1 + std::string(midiKeyName(mc.key2)).size();
-            if (len > maxLabelLen) maxLabelLen = len;
+            if (len > maxLabelLen)
+                maxLabelLen = len;
         }
         // Show knob states
         win->text.setColor({0, 255, 0, 255});
         for (const auto &mc : midiCodes) {
-            if (mc.key2 == 0) continue;
+            if (mc.key2 == 0)
+                continue;
             auto it = knobState.find({mc.b0, mc.b1});
             unsigned char val = (it != knobState.end()) ? it->second : 64;
-            const char *dir = (val == 64) ? "--" : (val > 64) ? midiKeyName(mc.key1) : midiKeyName(mc.key2);
+            const char *dir = (val == 64) ? "--" : (val > 64) ? midiKeyName(mc.key1)
+                                                              : midiKeyName(mc.key2);
             int barLen = 20;
             int pos = (val * barLen) / 127;
             std::string bar(barLen, '-');
             bar[barLen / 2] = '|';
-            if (pos < barLen) bar[pos] = '#';
+            if (pos < barLen)
+                bar[pos] = '#';
             std::string label = std::string(midiKeyName(mc.key1)) + "/" + midiKeyName(mc.key2);
             // Pad label to align bars
-            while (label.size() < maxLabelLen) label += ' ';
+            while (label.size() < maxLabelLen)
+                label += ' ';
             std::ostringstream oss;
             oss << label << " [" << bar << "] " << std::setw(3) << static_cast<int>(val) << " " << dir;
             win->text.printText_Blended(font, 10, y, oss.str());
@@ -5743,7 +5963,8 @@ class ACView : public gl::GLObject {
         }
         // Show last button press (fade after 2 seconds)
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - lastMidiButtonTime).count();
+                           std::chrono::steady_clock::now() - lastMidiButtonTime)
+                           .count();
         if (!lastMidiButton.empty() && elapsed < 2000) {
             int alpha = (elapsed < 1500) ? 255 : 255 - static_cast<int>((elapsed - 1500) * 255 / 500);
             win->text.setColor({0, 255, 0, static_cast<unsigned char>(std::max(0, alpha))});
@@ -5951,7 +6172,8 @@ class ACView : public gl::GLObject {
      *        GL_RGBA16 (done during HDR resource init).
      */
     void uploadHdrFrame(const cv::Mat &rgba16) {
-        if (rgba16.empty()) return;
+        if (rgba16.empty())
+            return;
         glBindTexture(GL_TEXTURE_2D, camera_texture);
         if (hdr_upload_tex_w != rgba16.cols || hdr_upload_tex_h != rgba16.rows) {
             // The decoded HDR frame can differ from the output resolution
@@ -5999,7 +6221,8 @@ class ACView : public gl::GLObject {
      *    via @ref ensureHdrResources().
      */
     void convertResourcesToHdr(int w, int h) {
-        if (!input_is_hdr) return;
+        if (!input_is_hdr)
+            return;
 
         // Re-spec camera_texture as 16-bit normalised. Keep the same GL
         // name so callers/sprites that already cached the ID stay valid.
@@ -6028,7 +6251,8 @@ class ACView : public gl::GLObject {
 
         // crossfade textures may or may not have been allocated yet.
         auto respecFloat = [&](GLuint tex) {
-            if (tex == 0) return;
+            if (tex == 0)
+                return;
             glBindTexture(GL_TEXTURE_2D, tex);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
                          GL_RGBA, GL_HALF_FLOAT, nullptr);
@@ -6119,7 +6343,7 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
         audio_input_device = args.audio_input;
         audio_output_device = args.audio_output;
-    audio_warmup_rate = std::max(args.audio_warm_rate, 0.0f);
+        audio_warmup_rate = std::max(args.audio_warm_rate, 0.0f);
         audio_record_file = args.record_audio_file;
         if (!args.audio_file.empty()) {
             if (file_audio_open(args.audio_file)) {
@@ -6340,13 +6564,13 @@ class ACView : public gl::GLObject {
     int playlist_index = 0;
     bool playlist_enabled = false;
     std::string playlist_file;
-    int autopilot_frames = 0;            ///< Frames between random switches in autopilot mode (0 = unset).
-    bool autopilot_enabled = false;       ///< Toggle autopilot via SDLK_j when playlist is enabled.
-    bool autopilot_sequential = false;    ///< When true, autopilot advances through the playlist in order instead of randomly (toggle via SDLK_y).
-    int autopilot_counter = 0;            ///< Frames elapsed since last autopilot switch.
-    bool autopilot_random_interval = false; ///< When true, choose a new interval from [4, autopilot_random_timeout] after each switch.
-    int autopilot_random_timeout = 0;     ///< Inclusive upper bound for random autopilot interval.
-    int autopilot_interval_frames = 0;    ///< Active interval currently used by autopilot tick.
+    int autopilot_frames = 0;                ///< Frames between random switches in autopilot mode (0 = unset).
+    bool autopilot_enabled = false;          ///< Toggle autopilot via SDLK_j when playlist is enabled.
+    bool autopilot_sequential = false;       ///< When true, autopilot advances through the playlist in order instead of randomly (toggle via SDLK_y).
+    int autopilot_counter = 0;               ///< Frames elapsed since last autopilot switch.
+    bool autopilot_random_interval = false;  ///< When true, choose a new interval from [4, autopilot_random_timeout] after each switch.
+    int autopilot_random_timeout = 0;        ///< Inclusive upper bound for random autopilot interval.
+    int autopilot_interval_frames = 0;       ///< Active interval currently used by autopilot tick.
     bool autopilot_random_crossfade = false; ///< When true, autopilot picks a random crossfade shader on each switch.
     std::mt19937 autopilot_rng{std::random_device{}()};
     std::vector<int> saved_pass_list;
@@ -6396,7 +6620,8 @@ class ACView : public gl::GLObject {
     void generateRandomMultipass(gl::GLWindow *win) {
         static std::mt19937 rng(std::random_device{}());
         size_t shader_count = library.size();
-        if (shader_count == 0) return;
+        if (shader_count == 0)
+            return;
         std::uniform_int_distribution<int> count_dist(1, 5);
         std::uniform_int_distribution<int> shader_dist(0, static_cast<int>(shader_count) - 1);
         int chain_len = count_dist(rng);
@@ -6413,7 +6638,8 @@ class ACView : public gl::GLObject {
         mx::system_out << "acmx2: Random multipass [";
         for (size_t i = 0; i < shader_pass_list.size(); ++i) {
             mx::system_out << library.getShaderNameByIndex(shader_pass_list[i]);
-            if (i + 1 < shader_pass_list.size()) mx::system_out << ", ";
+            if (i + 1 < shader_pass_list.size())
+                mx::system_out << ", ";
         }
         mx::system_out << "]\n";
         fflush(stdout);
@@ -6422,7 +6648,8 @@ class ACView : public gl::GLObject {
     void generateRandomMultipassShort(gl::GLWindow *win) {
         static std::mt19937 rng(std::random_device{}());
         size_t shader_count = library.size();
-        if (shader_count == 0) return;
+        if (shader_count == 0)
+            return;
         std::uniform_int_distribution<int> shader_dist(0, static_cast<int>(shader_count) - 1);
         beginCrossfade(win);
         shader_pass_list.clear();
@@ -6437,7 +6664,8 @@ class ACView : public gl::GLObject {
         mx::system_out << "acmx2: Short random multipass [";
         for (size_t i = 0; i < shader_pass_list.size(); ++i) {
             mx::system_out << library.getShaderNameByIndex(shader_pass_list[i]);
-            if (i + 1 < shader_pass_list.size()) mx::system_out << ", ";
+            if (i + 1 < shader_pass_list.size())
+                mx::system_out << ", ";
         }
         mx::system_out << "]\n";
         fflush(stdout);
@@ -6446,7 +6674,8 @@ class ACView : public gl::GLObject {
     void generateRandomMultipassLong(gl::GLWindow *win) {
         static std::mt19937 rng(std::random_device{}());
         size_t shader_count = library.size();
-        if (shader_count == 0) return;
+        if (shader_count == 0)
+            return;
         std::uniform_int_distribution<int> count_dist(1, 10);
         std::uniform_int_distribution<int> shader_dist(0, static_cast<int>(shader_count) - 1);
         int chain_len = count_dist(rng);
@@ -6463,7 +6692,8 @@ class ACView : public gl::GLObject {
         mx::system_out << "acmx2: Long random multipass [";
         for (size_t i = 0; i < shader_pass_list.size(); ++i) {
             mx::system_out << library.getShaderNameByIndex(shader_pass_list[i]);
-            if (i + 1 < shader_pass_list.size()) mx::system_out << ", ";
+            if (i + 1 < shader_pass_list.size())
+                mx::system_out << ", ";
         }
         mx::system_out << "]\n";
         fflush(stdout);
@@ -6497,7 +6727,8 @@ class ACView : public gl::GLObject {
             return;
         if (!playlist_tree.empty()) {
             const int n = static_cast<int>(playlist_tree.size());
-            if (n <= 0) return;
+            if (n <= 0)
+                return;
             std::uniform_int_distribution<int> dist(0, n - 1);
             int r = dist(autopilot_rng);
             if (n > 1 && r == playlist_index)
@@ -6551,7 +6782,8 @@ class ACView : public gl::GLObject {
             return;
         if (!playlist_tree.empty()) {
             const int n = static_cast<int>(playlist_tree.size());
-            if (n <= 0) return;
+            if (n <= 0)
+                return;
             maybeRandomizeAutopilotCrossfade();
             beginCrossfade(win);
             playlist_index = (playlist_index + 1) % n;
@@ -6602,7 +6834,7 @@ class ACView : public gl::GLObject {
         // here would clamp HDR highlights to 1.0 and crush the crossfade
         // result. Match the rest of the HDR intermediate chain.
         const GLint cf_internal = input_is_hdr ? GL_RGBA16F : GL_RGBA;
-        const GLenum cf_type    = input_is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
+        const GLenum cf_type = input_is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
         glGenFramebuffers(1, &crossfadeFBO);
         glGenTextures(1, &crossfadeTexture);
         glBindTexture(GL_TEXTURE_2D, crossfadeTexture);
@@ -7088,10 +7320,10 @@ class ACView : public gl::GLObject {
                     input_hdr_trc = ffmpeg_reader.getHdrTransfer();
                     const int trc = input_hdr_trc;
                     const char *trc_label =
-                        (trc == AVCOL_TRC_SMPTE2084)    ? "PQ (SMPTE2084)" :
-                        (trc == AVCOL_TRC_ARIB_STD_B67) ? "HLG (ARIB STD-B67)" :
-                        (trc == AVCOL_TRC_BT2020_10)    ? "BT.2020 10-bit" :
-                        (trc == AVCOL_TRC_BT2020_12)    ? "BT.2020 12-bit" : "unknown";
+                        (trc == AVCOL_TRC_SMPTE2084) ? "PQ (SMPTE2084)" : (trc == AVCOL_TRC_ARIB_STD_B67) ? "HLG (ARIB STD-B67)"
+                                                                      : (trc == AVCOL_TRC_BT2020_10)      ? "BT.2020 10-bit"
+                                                                      : (trc == AVCOL_TRC_BT2020_12)      ? "BT.2020 12-bit"
+                                                                                                          : "unknown";
                     mx::system_out << "acmx2: ============================================================\n"
                                    << "acmx2: *** PROCESSING IN HDR MODE ***\n"
                                    << "acmx2:   Source is HDR: " << trc_label
@@ -7252,16 +7484,20 @@ class ACView : public gl::GLObject {
             if (!ofilename.empty()) {
                 std::filesystem::path out_path(ofilename);
                 std::filesystem::path out_parent = out_path.parent_path();
-                if (out_parent.empty()) out_parent = ".";
+                if (out_parent.empty())
+                    out_parent = ".";
                 std::string out_name = out_path.filename().string();
-                if (out_name.empty()) out_name = "output";
+                if (out_name.empty())
+                    out_name = "output";
                 gen_dir = out_parent / ("video_file-" + out_name + "-generate");
             } else if (!filename.empty()) {
                 std::filesystem::path in_path(filename);
                 std::filesystem::path in_parent = in_path.parent_path();
-                if (in_parent.empty()) in_parent = ".";
+                if (in_parent.empty())
+                    in_parent = ".";
                 std::string in_name = in_path.filename().string();
-                if (in_name.empty()) in_name = "input";
+                if (in_name.empty())
+                    in_name = "input";
                 gen_dir = in_parent / ("video_file-" + in_name + "-generate");
             } else {
                 gen_dir = std::filesystem::path("camera-generate");
@@ -7325,7 +7561,8 @@ class ACView : public gl::GLObject {
                 std::string line;
                 PlaylistNode *currentNode = nullptr;
                 while (std::getline(pfile, line)) {
-                    if (line.empty()) continue;
+                    if (line.empty())
+                        continue;
                     if (line.front() == '[' && line.back() == ']') {
                         playlist_tree.push_back({line.substr(1, line.size() - 2), {}});
                         currentNode = &playlist_tree.back();
@@ -7462,9 +7699,11 @@ class ACView : public gl::GLObject {
                 crossfadeShaders.push_back(prog);
                 std::string nm = frag;
                 auto slash = nm.find_last_of('/');
-                if (slash != std::string::npos) nm = nm.substr(slash + 1);
+                if (slash != std::string::npos)
+                    nm = nm.substr(slash + 1);
                 auto dot = nm.find_last_of('.');
-                if (dot != std::string::npos) nm = nm.substr(0, dot);
+                if (dot != std::string::npos)
+                    nm = nm.substr(0, dot);
                 crossfadeShaderNames.push_back(nm);
             }
             if (crossfadeShaderIndex < 0 || crossfadeShaderIndex >= static_cast<int>(crossfadeShaders.size()))
@@ -7650,21 +7889,21 @@ class ACView : public gl::GLObject {
         }
 
         if (duration_limit > 0.0 && writer.is_open() && writerRunning) {
-            //auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - captureStartTime).count();
+            // auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - captureStartTime).count();
             frames_proc++;
-            if(fps != 0) {
+            if (fps != 0) {
                 double time_passed = static_cast<double>(frames_proc) / fps;
-                //if (elapsed >= duration_limit) {
-                if(time_passed >= duration_limit) {
-                        mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
-                        fflush(stdout);
-                        running = false;
-                    }
+                // if (elapsed >= duration_limit) {
+                if (time_passed >= duration_limit) {
+                    mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
+                    fflush(stdout);
+                    running = false;
+                }
             }
         }
 
         if (max_size_limit_bytes > 0.0 && writer.is_open() && writerRunning && !ofilename.empty()) {
-            struct stat out_stat {};
+            struct stat out_stat{};
             if (::stat(ofilename.c_str(), &out_stat) == 0) {
                 const double current_size = static_cast<double>(out_stat.st_size);
                 if (current_size > max_size_limit_bytes) {
@@ -7773,7 +8012,7 @@ class ACView : public gl::GLObject {
                         cv::cvtColor(newFrame, rgb, cv::COLOR_BGR2RGB);
                         cv::Mat ch[3];
                         cv::split(rgb, ch);
-                        cv::Mat rgba_channels[4] = { ch[0], ch[1], ch[2], alpha8 };
+                        cv::Mat rgba_channels[4] = {ch[0], ch[1], ch[2], alpha8};
                         cv::Mat rgba;
                         cv::merge(rgba_channels, 4, rgba);
 
@@ -7983,13 +8222,14 @@ class ACView : public gl::GLObject {
             }
 #endif
             if (texture_cache && (library.isCache() || ([&]() {
-                if (!shader_pass_enabled) return false;
-                for (int idx : shader_pass_list) {
-                    if (idx >= 0 && library.isCache2D(static_cast<size_t>(idx)))
-                        return true;
-                }
-                return false;
-            }()))) {
+                                      if (!shader_pass_enabled)
+                                          return false;
+                                      for (int idx : shader_pass_list) {
+                                          if (idx >= 0 && library.isCache2D(static_cast<size_t>(idx)))
+                                              return true;
+                                      }
+                                      return false;
+                                  }()))) {
                 static int counter = 0;
                 if (++counter > cache_delay) {
                     // Only push frames into cache after the post-load warmup period
@@ -8038,8 +8278,8 @@ class ACView : public gl::GLObject {
                         }
                     }
                     float spectrum_scale = spectrum_scale_by_sense
-                        ? (get_sense() * audio_warmup)
-                        : audio_warmup;
+                                               ? (get_sense() * audio_warmup)
+                                               : audio_warmup;
                     spectrumTex.update(spectrum_scale);
                     spectrumTex.bind();
                     if (audio_buffer_count > 0) {
@@ -8064,19 +8304,20 @@ class ACView : public gl::GLObject {
                 fflush(stdout);
             }
 
-            if(keystate[SDL_SCANCODE_PERIOD]) {
+            if (keystate[SDL_SCANCODE_PERIOD]) {
                 cameraRotationSpeed += 0.5f;
-                if (cameraRotationSpeed > 50.0f) cameraRotationSpeed = 50.0f;
-                    mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
-                    fflush(stdout);
-            }
-            if(keystate[SDL_SCANCODE_COMMA]) {
-                cameraRotationSpeed -= 0.5f;
-                if (cameraRotationSpeed < 0.5f) cameraRotationSpeed = 0.5f;
-                    mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                if (cameraRotationSpeed > 50.0f)
+                    cameraRotationSpeed = 50.0f;
+                mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
                 fflush(stdout);
             }
-
+            if (keystate[SDL_SCANCODE_COMMA]) {
+                cameraRotationSpeed -= 0.5f;
+                if (cameraRotationSpeed < 0.5f)
+                    cameraRotationSpeed = 0.5f;
+                mx::system_out << "acmx2: Camera rotation speed: " << cameraRotationSpeed << "\n";
+                fflush(stdout);
+            }
         }
 
         if (is3d_enabled) {
@@ -8088,7 +8329,8 @@ class ACView : public gl::GLObject {
             static auto last3DTime = std::chrono::steady_clock::now();
             auto now3D = std::chrono::steady_clock::now();
             float dt = std::chrono::duration<float>(now3D - last3DTime).count();
-            if (dt > 0.1f) dt = 0.1f;
+            if (dt > 0.1f)
+                dt = 0.1f;
             last3DTime = now3D;
 
             static float rotation = 0.0f;
@@ -8126,7 +8368,8 @@ class ACView : public gl::GLObject {
                 }
                 if (keystate[SDL_SCANCODE_LEFTBRACKET]) {
                     modelRenderScale -= 0.5f * dt;
-                    if (modelRenderScale < 0.05f) modelRenderScale = 0.05f;
+                    if (modelRenderScale < 0.05f)
+                        modelRenderScale = 0.05f;
                     mx::system_out << "acmx2: Model scale decreased to " << modelRenderScale << "\n";
                     fflush(stdout);
                 }
@@ -8487,7 +8730,7 @@ class ACView : public gl::GLObject {
             glDisable(GL_DEPTH_TEST);
             glEnable(GL_BLEND);
             glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
-                                GL_ONE,       GL_ONE_MINUS_SRC_ALPHA);
+                                GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
             fshader.useProgram();
             fshader.setUniform("mv_matrix", glm::mat4(1.0f));
             fshader.setUniform("proj_matrix", glm::mat4(1.0f));
@@ -8559,7 +8802,8 @@ class ACView : public gl::GLObject {
             if (shader_pass_enabled && !shader_pass_list.empty()) {
                 std::string mpLine = "Multipass: ";
                 for (size_t i = 0; i < shader_pass_list.size(); ++i) {
-                    if (i > 0) mpLine += ", ";
+                    if (i > 0)
+                        mpLine += ", ";
                     std::string n = library.getShaderNameByIndex(shader_pass_list[i]);
                     mpLine += n.empty() ? std::to_string(shader_pass_list[i]) : n;
                 }
@@ -8569,7 +8813,8 @@ class ACView : public gl::GLObject {
             if (gpu_filter_enabled && !gpu_filters.empty()) {
                 std::string gpuLine = "GPU: ";
                 for (size_t i = 0; i < gpu_filters.size(); ++i) {
-                    if (i > 0) gpuLine += ", ";
+                    if (i > 0)
+                        gpuLine += ", ";
                     gpuLine += gpu_filters[i].name;
                 }
                 win->text.printText_Solid(waterFont, 10, dfY, gpuLine);
@@ -8596,8 +8841,7 @@ class ACView : public gl::GLObject {
         bool has_hdr_snapshot_request = (hdr_snapshot_state > 0);
         bool has_raw_snapshot_request = (raw_snapshot_state > 0);
         bool has_tiff_snapshot_request = (tiff_snapshot_state > 0);
-        if (needWriter && input_is_hdr
-            && (writer.is_open() || png_video_mode || generate_mode || has_snapshot_request || has_hdr_snapshot_request || has_raw_snapshot_request || has_tiff_snapshot_request)) {
+        if (needWriter && input_is_hdr && (writer.is_open() || png_video_mode || generate_mode || has_snapshot_request || has_hdr_snapshot_request || has_raw_snapshot_request || has_tiff_snapshot_request)) {
             // HDR writer readback path. Bypasses the 8-bit PBO ring entirely
             // and reads 16-bit PQ-encoded BT.2020 RGBA from
             // @c hdr_encoded_texture via a synchronous glGetTexImage. The
@@ -8725,10 +8969,14 @@ class ACView : public gl::GLObject {
 
                 pboIndex = (pboIndex + 1) % 2;
                 pboNextIndex = (pboNextIndex + 1) % 2;
-                if (snapshot_state == 1) snapshot_state = 2;
-                if (hdr_snapshot_state == 1) hdr_snapshot_state = 2;
-                if (raw_snapshot_state == 1) raw_snapshot_state = 2;
-                if (tiff_snapshot_state == 1) tiff_snapshot_state = 2;
+                if (snapshot_state == 1)
+                    snapshot_state = 2;
+                if (hdr_snapshot_state == 1)
+                    hdr_snapshot_state = 2;
+                if (raw_snapshot_state == 1)
+                    raw_snapshot_state = 2;
+                if (tiff_snapshot_state == 1)
+                    tiff_snapshot_state = 2;
             } else {
                 bool is_snapshot_frame = (snapshot_state == 2);
                 bool is_webp_snapshot_frame = (hdr_snapshot_state == 2);
@@ -8869,7 +9117,8 @@ class ACView : public gl::GLObject {
                 win->text.setColor({255, 0, 255, 255});
                 std::string gpuLine = "GPU: ";
                 for (size_t i = 0; i < gpu_filters.size(); ++i) {
-                    if (i > 0) gpuLine += ", ";
+                    if (i > 0)
+                        gpuLine += ", ";
                     gpuLine += gpu_filters[i].name;
                 }
                 win->text.printText_Blended(overlayFont, 10, overlayY, gpuLine);
@@ -8972,7 +9221,8 @@ class ACView : public gl::GLObject {
                               << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
                               << std::setfill('0') << std::setw(2) << minutes << ":"
                               << std::setfill('0') << std::setw(2) << seconds
-                              << std::setfill(' ') << "\n" << std::flush;
+                              << std::setfill(' ') << "\n"
+                              << std::flush;
                     if (current_percent >= 100 && png_video_mode) {
                         // Drain the writer queue so all frames land on disk
                         // before the window tears down, then confirm the total.
@@ -9007,7 +9257,8 @@ class ACView : public gl::GLObject {
                               << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
                               << std::setfill('0') << std::setw(2) << minutes << ":"
                               << std::setfill('0') << std::setw(2) << seconds
-                              << std::setfill(' ') << "\n" << std::flush;
+                              << std::setfill(' ') << "\n"
+                              << std::flush;
                 }
             }
 
@@ -9117,7 +9368,7 @@ class ACView : public gl::GLObject {
             return std::nullopt;
         }
 
-        struct stat file_stat {};
+        struct stat file_stat{};
         if (::stat(ofilename.c_str(), &file_stat) != 0) {
             return std::nullopt;
         }
@@ -9155,8 +9406,8 @@ class ACView : public gl::GLObject {
      * - Space: Toggle shader bypass.
      * - P: Toggle playlist mode or pause video.
      * - L: Freeze frame (stop updating texture but keep time advancing).
-        * - Z: Take a PNG snapshot (8-bit non-HDR readback when HDR input is active).
-        * - 5: Take an HDR PNG snapshot (HDR mode only).
+     * - Z: Take a PNG snapshot (8-bit non-HDR readback when HDR input is active).
+     * - 5: Take an HDR PNG snapshot (HDR mode only).
      * - T: Toggle active time.  Q: Toggle audio time.  Home: Toggle audio delta.
      * - V: Toggle view rotation (3D).  O: Oscillation.  C: Wave.
      * - X: Reset camera.  Ctrl+X: Quit immediately without audio mux/transfer.
@@ -9182,7 +9433,8 @@ class ACView : public gl::GLObject {
         case SDL_KEYUP:
             switch (e.key.keysym.sym) {
             case SDLK_UP:
-                if (shaderLocked) break;
+                if (shaderLocked)
+                    break;
                 if ((e.key.keysym.mod & KMOD_SHIFT) &&
                     (playlist_enabled || autopilot_frames > 0)) {
                     beginCrossfade(win);
@@ -9229,7 +9481,8 @@ class ACView : public gl::GLObject {
                 updateShaderNameCache();
                 break;
             case SDLK_DOWN:
-                if (shaderLocked) break;
+                if (shaderLocked)
+                    break;
                 if ((e.key.keysym.mod & KMOD_SHIFT) &&
                     (playlist_enabled || autopilot_frames > 0)) {
                     beginCrossfade(win);
@@ -9604,7 +9857,8 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
             case SDLK_INSERT: {
                 float s = get_sense() + 0.1f;
-                if (s > 5.0f) s = 5.0f;
+                if (s > 5.0f)
+                    s = 5.0f;
                 set_sense(s);
                 mx::system_out << "acmx2: Audio sensitivity increased to " << s << "\n";
                 fflush(stdout);
@@ -9612,7 +9866,8 @@ class ACView : public gl::GLObject {
             }
             case SDLK_DELETE: {
                 float s = get_sense() - 0.1f;
-                if (s < 0.1f) s = 0.1f;
+                if (s < 0.1f)
+                    s = 0.1f;
                 set_sense(s);
                 mx::system_out << "acmx2: Audio sensitivity decreased to " << s << "\n";
                 fflush(stdout);
@@ -9687,36 +9942,36 @@ class ACView : public gl::GLObject {
     GLuint depthBuffer = 0;
     GLuint passFBO[2] = {0, 0};
     GLuint passTexture[2] = {0, 0};
-    GLuint crossfadeFBO = 0;                                  ///< FBO used for the crossfade compositing pass.
-    GLuint crossfadeTexture = 0;                               ///< Colour attachment of @c crossfadeFBO (blended output).
-    GLuint crossfadePrevTexture = 0;                           ///< Snapshot of the previous frame used as the blend source.
+    GLuint crossfadeFBO = 0;         ///< FBO used for the crossfade compositing pass.
+    GLuint crossfadeTexture = 0;     ///< Colour attachment of @c crossfadeFBO (blended output).
+    GLuint crossfadePrevTexture = 0; ///< Snapshot of the previous frame used as the blend source.
 
     // --- HDR-mode GL resources ----------------------------------------------
     // Only allocated / used when @ref input_is_hdr is true. SDR path is
     // entirely unchanged. Internal formats: GL_RGBA16 for textures that
     // hold PQ/HLG-encoded normalised values (source upload + pre-encode
     // readback target), GL_RGBA16F for linear-BT.2020 intermediates.
-    bool input_is_hdr = false;                                 ///< Active HDR pipeline for this input.
-    int input_hdr_trc = 0;                                     ///< AVColorTransferCharacteristic (PQ/HLG/BT2020).
-    int hdr_upload_tex_w = 0;                                  ///< Current GL size of @ref camera_texture in HDR upload mode.
-    int hdr_upload_tex_h = 0;                                  ///< Current GL size of @ref camera_texture in HDR upload mode.
-    int hdr_resource_w = 0;                                    ///< Width of HDR intermediate/encoded textures.
-    int hdr_resource_h = 0;                                    ///< Height of HDR intermediate/encoded textures.
-    GLuint hdr_linear_video_texture = 0;                       ///< GL_RGBA16F: PQ/HLG-decoded linear BT.2020 video.
-    GLuint hdr_linear_video_fbo = 0;                           ///< FBO writing into @ref hdr_linear_video_texture.
-    GLuint hdr_encoded_texture = 0;                            ///< GL_RGBA16: final PQ-re-encoded output for readback.
-    GLuint hdr_encoded_fbo = 0;                                ///< FBO writing into @ref hdr_encoded_texture.
-    gl::ShaderProgram hdr_decode_shader;                       ///< PQ/HLG -> linear BT.2020 fullscreen pass.
-    gl::ShaderProgram hdr_encode_shader;                       ///< Linear BT.2020 -> PQ (or HLG) fullscreen pass.
-    gl::ShaderProgram display_flip_shader;                     ///< Display shader with optional Y-flip for windowed output.
-    cv::Mat hdr_frame_mat;                                     ///< Scratch CV_16UC4 RGBA frame for HDR decode.
-    std::vector<gl::ShaderProgram> crossfadeShaders;           ///< Available crossfade transition shaders (cycle with [ and ]).
-    std::vector<std::string> crossfadeShaderNames;             ///< Display names matching @ref crossfadeShaders by index.
-    int crossfadeShaderIndex = 0;                              ///< Active index into @ref crossfadeShaders.
-    float crossfadeAlpha = 1.0f;                               ///< Current blend factor (0 = old frame, 1 = new frame).
-    bool crossfadeActive = false;                              ///< True while a crossfade transition is in progress.
-    float crossfadeDuration = 0.5f;                            ///< Duration of the crossfade transition in seconds.
-    std::chrono::steady_clock::time_point crossfadeStartTime;  ///< Wall-clock time the current crossfade began.
+    bool input_is_hdr = false;                                ///< Active HDR pipeline for this input.
+    int input_hdr_trc = 0;                                    ///< AVColorTransferCharacteristic (PQ/HLG/BT2020).
+    int hdr_upload_tex_w = 0;                                 ///< Current GL size of @ref camera_texture in HDR upload mode.
+    int hdr_upload_tex_h = 0;                                 ///< Current GL size of @ref camera_texture in HDR upload mode.
+    int hdr_resource_w = 0;                                   ///< Width of HDR intermediate/encoded textures.
+    int hdr_resource_h = 0;                                   ///< Height of HDR intermediate/encoded textures.
+    GLuint hdr_linear_video_texture = 0;                      ///< GL_RGBA16F: PQ/HLG-decoded linear BT.2020 video.
+    GLuint hdr_linear_video_fbo = 0;                          ///< FBO writing into @ref hdr_linear_video_texture.
+    GLuint hdr_encoded_texture = 0;                           ///< GL_RGBA16: final PQ-re-encoded output for readback.
+    GLuint hdr_encoded_fbo = 0;                               ///< FBO writing into @ref hdr_encoded_texture.
+    gl::ShaderProgram hdr_decode_shader;                      ///< PQ/HLG -> linear BT.2020 fullscreen pass.
+    gl::ShaderProgram hdr_encode_shader;                      ///< Linear BT.2020 -> PQ (or HLG) fullscreen pass.
+    gl::ShaderProgram display_flip_shader;                    ///< Display shader with optional Y-flip for windowed output.
+    cv::Mat hdr_frame_mat;                                    ///< Scratch CV_16UC4 RGBA frame for HDR decode.
+    std::vector<gl::ShaderProgram> crossfadeShaders;          ///< Available crossfade transition shaders (cycle with [ and ]).
+    std::vector<std::string> crossfadeShaderNames;            ///< Display names matching @ref crossfadeShaders by index.
+    int crossfadeShaderIndex = 0;                             ///< Active index into @ref crossfadeShaders.
+    float crossfadeAlpha = 1.0f;                              ///< Current blend factor (0 = old frame, 1 = new frame).
+    bool crossfadeActive = false;                             ///< True while a crossfade transition is in progress.
+    float crossfadeDuration = 0.5f;                           ///< Duration of the crossfade transition in seconds.
+    std::chrono::steady_clock::time_point crossfadeStartTime; ///< Wall-clock time the current crossfade began.
     std::thread writerThread;
     std::atomic<bool> running{false};
     std::atomic<bool> captureRunning{false};
@@ -9733,7 +9988,7 @@ class ACView : public gl::GLObject {
     FrameCache frame_cache;
     bool texture_cache = false;
     int cache_delay = 1;
-    int cache_warmup_frames = 0;  // Frames to skip before pushing into cache after load
+    int cache_warmup_frames = 0; // Frames to skip before pushing into cache after load
     std::atomic<bool> finished{false};
     std::atomic<bool> copy_audio{false};
     std::atomic<bool> skip_audio_mux_on_exit{false};
@@ -9756,7 +10011,7 @@ class ACView : public gl::GLObject {
     std::atomic<uint64_t> snapshotOffset{0};
     [[maybe_unused]] int gpu_cuda_device = 0;
     bool silent_mode = false;
-    bool no_drop_mode = false;  
+    bool no_drop_mode = false;
 #ifdef __APPLE__
     bool use_shader_cache_flag = false;
 #else
@@ -9777,9 +10032,9 @@ class ACView : public gl::GLObject {
     bool display_filter = false;
     int waterFontSize = 12;
     std::string watermark_text = "LostSideDead.biz"; ///< Active watermark text (overridden by --use-watermark).
-    int watermark_r = 255;                            ///< Watermark color red.
-    int watermark_g = 0;                              ///< Watermark color green.
-    int watermark_b = 150;                            ///< Watermark color blue.
+    int watermark_r = 255;                           ///< Watermark color red.
+    int watermark_g = 0;                             ///< Watermark color green.
+    int watermark_b = 150;                           ///< Watermark color blue.
 
   private:
     std::atomic<uint64_t> frames_dropped{0};
@@ -10371,7 +10626,8 @@ class ACView : public gl::GLObject {
             stop_audio_recording();
         }
         std::string out_ext = std::filesystem::path(ofilename).extension().string();
-        if (out_ext.empty()) out_ext = ".mp4";
+        if (out_ext.empty())
+            out_ext = ".mp4";
         std::string tmp_out = ofilename + ".tmp" + out_ext;
         bool is_mp4_like = (out_ext == ".mp4" || out_ext == ".MP4" || out_ext == ".mov" || out_ext == ".MOV" || out_ext == ".m4v" || out_ext == ".M4V");
         int64_t fc = writer.get_frame_count();
@@ -10463,7 +10719,8 @@ class ACView : public gl::GLObject {
         if (!file_audio_mode || audio_file_path.empty() || ofilename.empty())
             return;
         std::string out_ext = std::filesystem::path(ofilename).extension().string();
-        if (out_ext.empty()) out_ext = ".mp4";
+        if (out_ext.empty())
+            out_ext = ".mp4";
         std::string tmp_out = ofilename + ".tmp" + out_ext;
         bool is_mp4_like = (out_ext == ".mp4" || out_ext == ".MP4" || out_ext == ".mov" || out_ext == ".MOV" || out_ext == ".m4v" || out_ext == ".M4V");
         int64_t fc = writer.get_frame_count();
@@ -10836,7 +11093,8 @@ namespace {
 
     template <typename Stream>
     void printSection(Stream &out, const CliColors &c, std::string_view name, const std::vector<HelpEntry> &entries) {
-        out << c.section << "\n" << name << c.reset << "\n";
+        out << c.section << "\n"
+            << name << c.reset << "\n";
         for (const auto &entry : entries) {
             out << "  " << c.flag << entry.flags << c.reset << "\n";
             out << "    " << c.desc << entry.description << c.reset << "\n";
@@ -10852,116 +11110,27 @@ namespace {
         out << c.title << "\nArguments" << c.reset << "\n";
         out << c.example << "Short and long forms are equivalent; values shown in <> are required." << c.reset << "\n";
 
-        printSection(out, c, "General", {
-            {"-v, --help", "Show this help screen and keyboard controls.", "acmx2 --help"},
-            {"-p <path>, --path <path>", "Set assets root directory (shaders, data files, defaults).", "acmx2 --path ./data"},
-            {"-r <WxH>, --resolution <WxH>", "Set output/window resolution (for display and recording).", "acmx2 --resolution 1920x1080"},
-            {"-N, --fullscreen", "Start in fullscreen mode (Escape to exit fullscreen).", "acmx2 --fullscreen"},
-            {"--silent", "Run headless (no preview window). Intended for file-to-file rendering.", "acmx2 -i in.mp4 -o out.mp4 --silent"},
-            {"--duration <seconds>", "Auto-stop recording/output after elapsed seconds.", "acmx2 -i in.mp4 -o out.mp4 --duration 30"}
-            ,{"--max-size <MB>", "Auto-stop when output file size exceeds MB.", "acmx2 -i in.mp4 -o out.mp4 --max-size 500.0"}
-        });
+        printSection(out, c, "General", {{"-v, --help", "Show this help screen and keyboard controls.", "acmx2 --help"}, {"-p <path>, --path <path>", "Set assets root directory (shaders, data files, defaults).", "acmx2 --path ./data"}, {"-r <WxH>, --resolution <WxH>", "Set output/window resolution (for display and recording).", "acmx2 --resolution 1920x1080"}, {"-N, --fullscreen", "Start in fullscreen mode (Escape to exit fullscreen).", "acmx2 --fullscreen"}, {"--silent", "Run headless (no preview window). Intended for file-to-file rendering.", "acmx2 -i in.mp4 -o out.mp4 --silent"}, {"--duration <seconds>", "Auto-stop recording/output after elapsed seconds.", "acmx2 -i in.mp4 -o out.mp4 --duration 30"}, {"--max-size <MB>", "Auto-stop when output file size exceeds MB.", "acmx2 -i in.mp4 -o out.mp4 --max-size 500.0"}});
 
-        printSection(out, c, "Input Source", {
-            {"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"},
-            {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"},
-            {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"},
-            {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"},
-            {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"},
-            {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}
-        });
+        printSection(out, c, "Input Source", {{"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"}, {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"}, {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"}, {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"}, {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"}, {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}});
 
-        printSection(out, c, "Shaders And Visual Pipeline", {
-            {"-s <index.txt>, --shaders <index.txt>", "Use shader library index file (playlist-able shader set).", "acmx2 --shaders ./shaders/index.txt"},
-            {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"},
-            {"-h <index>, --shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders index.txt --shader 3"},
-            {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"},
-            {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"},
-            {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"},
-            {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-frames 240"},
-            {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-timeout 240"},
-            {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --playlist live_set.txt --autopilot-random 300"},
-            {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"},
-            {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"},
-            {"--remove-broken <library-path>", "Compile-check each shader, remove failing entries from index.txt, then exit.", "acmx2 --remove-broken ./shaders"},
-            {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"},
-            {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"},
-            {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"},
-            {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"},
-            {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"},
-            {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"},
-            {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}
-        });
+        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <index.txt>, --shaders <index.txt>", "Use shader library index file (playlist-able shader set).", "acmx2 --shaders ./shaders/index.txt"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"-h <index>, --shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders index.txt --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --playlist live_set.txt --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader, remove failing entries from index.txt, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}});
 
-        printSection(out, c, "DNN And ONNX Models", {
-            {"--human <file>", "Load ONNX human segmentation model (e.g., pphumanseg .onnx) to isolate foreground person.", "acmx2 --human human_seg.onnx -i input.mp4 -o output.mp4"},
-            {"--background", "When --human is used, apply shaders only to background; composite person on top.", "acmx2 --human model.onnx --background"},
-            {"--black <threshold>", "Set mask black point / shadow crush threshold for color/segmentation masks (default: 0.35).", "acmx2 --human seg.onnx --black 0.25"},
-            {"--white <threshold>", "Set mask white point / opacity saturation threshold for color/segmentation masks (default: 0.75).", "acmx2 --human seg.onnx --white 0.85"},
-            {"--edge <file>", "Load ONNX edge detection model (e.g., Dexined .onnx) to replace frame with edge map.", "acmx2 --edge edges.onnx -i video.mp4 -o edges.mp4"},
-            {"--onnx <file>", "Load generic ONNX model from YAML config file; replaces frame with model output.", "acmx2 --onnx bubble.yaml -i input.mp4 -o output.mp4"}
-        });
+        printSection(out, c, "DNN And ONNX Models", {{"--human <file>", "Load ONNX human segmentation model (e.g., pphumanseg .onnx) to isolate foreground person.", "acmx2 --human human_seg.onnx -i input.mp4 -o output.mp4"}, {"--background", "When --human is used, apply shaders only to background; composite person on top.", "acmx2 --human model.onnx --background"}, {"--black <threshold>", "Set mask black point / shadow crush threshold for color/segmentation masks (default: 0.35).", "acmx2 --human seg.onnx --black 0.25"}, {"--white <threshold>", "Set mask white point / opacity saturation threshold for color/segmentation masks (default: 0.75).", "acmx2 --human seg.onnx --white 0.85"}, {"--edge <file>", "Load ONNX edge detection model (e.g., Dexined .onnx) to replace frame with edge map.", "acmx2 --edge edges.onnx -i video.mp4 -o edges.mp4"}, {"--onnx <file>", "Load generic ONNX model from YAML config file; replaces frame with model output.", "acmx2 --onnx bubble.yaml -i input.mp4 -o output.mp4"}});
 
-        printSection(out, c, "GPU And CUDA", {
-            {"--gpu-filter <list>", "Apply CUDA filter chain by index list (comma-separated).", "acmx2 --gpu-filter 1,12,18"},
-            {"--gpu-buffer <N>", "Set GPU temporal frame buffer size (4..32).", "acmx2 --gpu-buffer 12"},
-            {"--list-filters", "List all built-in GPU filters and their indices.", "acmx2 --list-filters"},
-            {"-m <idx>, --cuda-device <idx>", "Select CUDA device index to run processing on.", "acmx2 --cuda-device 0"},
-            {"--list-cuda-devices", "List CUDA devices visible to the runtime.", "acmx2 --list-cuda-devices"},
-            {"--check-cuda", "Report whether this build has CUDA support enabled.", "acmx2 --check-cuda"}
-        });
+        printSection(out, c, "GPU And CUDA", {{"--gpu-filter <list>", "Apply CUDA filter chain by index list (comma-separated).", "acmx2 --gpu-filter 1,12,18"}, {"--gpu-buffer <N>", "Set GPU temporal frame buffer size (4..32).", "acmx2 --gpu-buffer 12"}, {"--list-filters", "List all built-in GPU filters and their indices.", "acmx2 --list-filters"}, {"-m <idx>, --cuda-device <idx>", "Select CUDA device index to run processing on.", "acmx2 --cuda-device 0"}, {"--list-cuda-devices", "List CUDA devices visible to the runtime.", "acmx2 --list-cuda-devices"}, {"--check-cuda", "Report whether this build has CUDA support enabled.", "acmx2 --check-cuda"}});
 
-        printSection(out, c, "Recording And Encoding", {
-            {"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"},
-            {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"},
-            {"--generate <N>", "Save a PNG frame every N frames to an output subdirectory (video or camera mode).", "acmx2 -i in.mp4 --generate 30"},
-            {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"},
-            {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"},
-            {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"},
-            {"--encode-preset <name>", "Encoder speed/quality preset (ultrafast .. veryslow).", "acmx2 --encode-preset fast"},
-            {"--encode-tune <name>", "Tune encoder for content type or low latency.", "acmx2 --encode-tune film"},
-            {"--encode-crf <0-51>", "Set encoder quality directly (lower = better quality/larger file).", "acmx2 --encode-crf 18"},
-            {"--encode-codec <mode>", "Codec backend: auto, software, or nvenc.", "acmx2 --encode-codec nvenc"},
-            {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"},
-            {"--no-drop", "Never drop frames; block producer when encoder queue is full.", "acmx2 --no-drop"},
-            {"--display-filter", "Show current shader/stack and GPU filter in upper-left corner.", "acmx2 --display-filter"},
-            {"--use-watermark <text>", "Enable watermark with given text in recorded videos (upper-left).", "acmx2 --use-watermark \"My Channel\""},
-            {"--use-watermark-color <r,g,b>", "Watermark text color as 0-255 components.", "acmx2 --use-watermark-color 255,255,0"},
-            {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"},
-            {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}
-        });
+        printSection(out, c, "Recording And Encoding", {{"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"}, {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"}, {"--generate <N>", "Save a PNG frame every N frames to an output subdirectory (video or camera mode).", "acmx2 -i in.mp4 --generate 30"}, {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"}, {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"}, {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"}, {"--encode-preset <name>", "Encoder speed/quality preset (ultrafast .. veryslow).", "acmx2 --encode-preset fast"}, {"--encode-tune <name>", "Tune encoder for content type or low latency.", "acmx2 --encode-tune film"}, {"--encode-crf <0-51>", "Set encoder quality directly (lower = better quality/larger file).", "acmx2 --encode-crf 18"}, {"--encode-codec <mode>", "Codec backend: auto, software, or nvenc.", "acmx2 --encode-codec nvenc"}, {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"}, {"--no-drop", "Never drop frames; block producer when encoder queue is full.", "acmx2 --no-drop"}, {"--display-filter", "Show current shader/stack and GPU filter in upper-left corner.", "acmx2 --display-filter"}, {"--use-watermark <text>", "Enable watermark with given text in recorded videos (upper-left).", "acmx2 --use-watermark \"My Channel\""}, {"--use-watermark-color <r,g,b>", "Watermark text color as 0-255 components.", "acmx2 --use-watermark-color 255,255,0"}, {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"}, {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}});
 
 #ifdef AUDIO_ENABLED
-        printSection(out, c, "Audio Reactivity", {
-            {"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"},
-            {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"},
-            {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"},
-            {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"},
-            {"-y, --pass-through", "Pass captured input audio directly to selected output device.", "acmx2 --pass-through"},
-            {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""},
-            {"--audio-output <device>", "Select output audio device name/id.", "acmx2 --audio-output \"Built-in Output\""},
-            {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"},
-            {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"},
-            {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"},
-            {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"},
-            {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"},
-            {"--enable-audio-buffers <N>", "Allocate N sampler1D spectrumN history textures (1..22, spectrum0=newest).", "acmx2 --enable-audio --enable-audio-buffers 8"},
-            {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}
-        });
+        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Pass captured input audio directly to selected output device.", "acmx2 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select output audio device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--enable-audio-buffers <N>", "Allocate N sampler1D spectrumN history textures (1..22, spectrum0=newest).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
 #endif
 
 #ifdef MIDI_ENABLED
-        printSection(out, c, "MIDI Control", {
-            {"--midi-map <file>", "Load MIDI mapping configuration file.", "acmx2 --midi-map midi.midi_cfg"},
-            {"--midi-device <idx>", "Select MIDI input device index.", "acmx2 --midi-device 0"},
-            {"--list-midi", "List available MIDI input devices.", "acmx2 --list-midi"},
-            {"--check-midi", "Report whether this build has MIDI support enabled.", "acmx2 --check-midi"}
-        });
+        printSection(out, c, "MIDI Control", {{"--midi-map <file>", "Load MIDI mapping configuration file.", "acmx2 --midi-map midi.midi_cfg"}, {"--midi-device <idx>", "Select MIDI input device index.", "acmx2 --midi-device 0"}, {"--list-midi", "List available MIDI input devices.", "acmx2 --list-midi"}, {"--check-midi", "Report whether this build has MIDI support enabled.", "acmx2 --check-midi"}});
 #endif
 
-        printSection(out, c, "Runtime Overlay", {
-            {"--disable-counter", "Hide timer and FPS overlay text.", "acmx2 --disable-counter"}
-        });
+        printSection(out, c, "Runtime Overlay", {{"--disable-counter", "Hide timer and FPS overlay text.", "acmx2 --disable-counter"}});
     }
 
     template <typename Stream>
@@ -10969,62 +11138,14 @@ namespace {
         const CliColors c = makeCliColors();
         out << c.title << "\nKeyboard Controls" << c.reset << "\n";
 
-        printSection(out, c, "Main", {
-            {"Escape", "Quit.", ""},
-            {"Ctrl+X", "Quit without audio mux.", ""},
-            {"Up Arrow", "Previous shader (or previous playlist entry in playlist/autopilot mode).", ""},
-            {"Down Arrow", "Next shader (or next playlist entry in playlist/autopilot mode).", ""},
-            {"Shift+Up Arrow", "In playlist/autopilot mode: change post-multipass shader backward.", ""},
-            {"Shift+Down Arrow", "In playlist/autopilot mode: change post-multipass shader forward.", ""},
-            {"Left Arrow", "Previous GPU filter (if enabled).", ""},
-            {"Right Arrow", "Next GPU filter (if enabled).", ""},
-            {"Space", "Enable/disable processing.", ""},
-            {"L", "Toggle video freeze (Video/Image modes).", ""},
-            {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""},
-            {"J", "Toggle autopilot mode (requires playlist).", ""},
-            {"Y", "Toggle sequential autopilot (cycles playlist in order, requires playlist).", ""},
-            {"N", "Toggle random crossfade selection for autopilot shader switches.", ""},
-            {"T", "Enable/disable time.", ""},
-            {"U / I", "Step time when time is disabled.", ""},
-            {"Page Up / Page Down", "Increase/decrease time speed.", ""},
-            {"M", "Toggle multi-pass / multi-shader pass.", ""},
-            {"F", "Toggle fullscreen.", ""},
-            {"Q", "Toggle reactive time (if AUDIO_ENABLED).", ""},
-            {"Insert", "Increase audio sensitivity.", ""},
-            {"Delete", "Decrease audio sensitivity.", ""},
-            {"End", "Toggle spectrum sensitivity scaling.", ""},
-            {"Home", "Toggle audio delta time scaling.", ""},
-            {"3", "Toggle 2D/3D mode.", ""}
-        });
+        printSection(out, c, "Main", {{"Escape", "Quit.", ""}, {"Ctrl+X", "Quit without audio mux.", ""}, {"Up Arrow", "Previous shader (or previous playlist entry in playlist/autopilot mode).", ""}, {"Down Arrow", "Next shader (or next playlist entry in playlist/autopilot mode).", ""}, {"Shift+Up Arrow", "In playlist/autopilot mode: change post-multipass shader backward.", ""}, {"Shift+Down Arrow", "In playlist/autopilot mode: change post-multipass shader forward.", ""}, {"Left Arrow", "Previous GPU filter (if enabled).", ""}, {"Right Arrow", "Next GPU filter (if enabled).", ""}, {"Space", "Enable/disable processing.", ""}, {"L", "Toggle video freeze (Video/Image modes).", ""}, {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""}, {"J", "Toggle autopilot mode (requires playlist).", ""}, {"Y", "Toggle sequential autopilot (cycles playlist in order, requires playlist).", ""}, {"N", "Toggle random crossfade selection for autopilot shader switches.", ""}, {"T", "Enable/disable time.", ""}, {"U / I", "Step time when time is disabled.", ""}, {"Page Up / Page Down", "Increase/decrease time speed.", ""}, {"M", "Toggle multi-pass / multi-shader pass.", ""}, {"F", "Toggle fullscreen.", ""}, {"Q", "Toggle reactive time (if AUDIO_ENABLED).", ""}, {"Insert", "Increase audio sensitivity.", ""}, {"Delete", "Decrease audio sensitivity.", ""}, {"End", "Toggle spectrum sensitivity scaling.", ""}, {"Home", "Toggle audio delta time scaling.", ""}, {"3", "Toggle 2D/3D mode.", ""}});
 
-        printSection(out, c, "Snapshots", {
-            {"Z", "Save PNG snapshot (SDR 8-bit; HDR mode still outputs SDR PNG).", ""},
-            {"4", "Save TIFF snapshot (SDR: 8-bit RGBA; HDR: 16-bit RGBA; requires ACMX2_WITH_TIFF).", ""},
-            {"5", "Save lossless WebP snapshot (HDR is tone-mapped; requires ACMX2_WITH_WEBP).", ""},
-            {"6", "Save raw RGBA snapshot (HDR: 16-bit RGBA, otherwise 8-bit RGBA).", "ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw"}
-        });
+        printSection(out, c, "Snapshots", {{"Z", "Save PNG snapshot (SDR 8-bit; HDR mode still outputs SDR PNG).", ""}, {"4", "Save TIFF snapshot (SDR: 8-bit RGBA; HDR: 16-bit RGBA; requires ACMX2_WITH_TIFF).", ""}, {"5", "Save lossless WebP snapshot (HDR is tone-mapped; requires ACMX2_WITH_WEBP).", ""}, {"6", "Save raw RGBA snapshot (HDR: 16-bit RGBA, otherwise 8-bit RGBA).", "ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw"}});
 
-        printSection(out, c, "3D Mode", {
-            {"W / A / S / D", "Look around.", ""},
-            {"V", "Toggle view rotation.", ""},
-            {"O", "Toggle oscillation.", ""},
-            {"X", "Reset camera distance.", ""},
-            {"+ / -", "Increase/decrease camera distance.", ""},
-            {"B", "Increase movement speed.", ""},
-            {"N (held in 3D)", "Decrease movement speed.", ""},
-            {"C", "Toggle object wave.", ""},
-            {"E", "Enable/disable watermark.", ""},
-            {"]", "Increase model scale.", ""},
-            {"[", "Decrease model scale.", ""},
-            {". (period)", "Increase camera rotation speed.", ""},
-            {", (comma)", "Decrease camera rotation speed.", ""}
-        });
-        printSection(out, c, "Environment Variables", {
-            {"ACMX2_PATH", "Default assets root directory (equivalent to --path). Used when --path is not specified.", "export ACMX2_PATH=/usr/local/share/acmx2"},
-            {"ACMX2_SHADER_PATH", "Default shader library index file or directory (equivalent to --shaders). Used when neither --shaders nor --fragment is specified.", "export ACMX2_SHADER_PATH=/usr/local/share/acmx2/filters"}
-        });
+        printSection(out, c, "3D Mode", {{"W / A / S / D", "Look around.", ""}, {"V", "Toggle view rotation.", ""}, {"O", "Toggle oscillation.", ""}, {"X", "Reset camera distance.", ""}, {"+ / -", "Increase/decrease camera distance.", ""}, {"B", "Increase movement speed.", ""}, {"N (held in 3D)", "Decrease movement speed.", ""}, {"C", "Toggle object wave.", ""}, {"E", "Enable/disable watermark.", ""}, {"]", "Increase model scale.", ""}, {"[", "Decrease model scale.", ""}, {". (period)", "Increase camera rotation speed.", ""}, {", (comma)", "Decrease camera rotation speed.", ""}});
+        printSection(out, c, "Environment Variables", {{"ACMX2_PATH", "Default assets root directory (equivalent to --path). Used when --path is not specified.", "export ACMX2_PATH=/usr/local/share/acmx2"}, {"ACMX2_SHADER_PATH", "Default shader library index file or directory (equivalent to --shaders). Used when neither --shaders nor --fragment is specified.", "export ACMX2_SHADER_PATH=/usr/local/share/acmx2/filters"}});
     }
-}
+} // namespace
 
 /// @brief Print program version, author, arguments, and keyboard controls.
 void printAbout() {
@@ -11152,7 +11273,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
         .addOptionDouble(502, "list-midi", "List available MIDI input devices")
 #endif
-    ;
+        ;
 
     if (argc == 1) {
         printAbout();
@@ -11274,10 +11395,13 @@ int main(int argc, char **argv) {
                 args.crf = arg.arg_value;
                 try {
                     int v = std::stoi(arg.arg_value);
-                    if (v < 0) v = 0;
-                    if (v > 51) v = 51;
+                    if (v < 0)
+                        v = 0;
+                    if (v > 51)
+                        v = 51;
                     args.encode_opts.crf = v;
-                } catch (...) {}
+                } catch (...) {
+                }
                 break;
             case 'u':
             case 'U':
@@ -11436,7 +11560,8 @@ int main(int argc, char **argv) {
                 break;
             case 307: {
                 int n = atoi(arg.arg_value.c_str());
-                if (n < 0) n = 0;
+                if (n < 0)
+                    n = 0;
                 if (n > SpectrumHistory::MAX_BUFFERS) {
                     mx::system_err << "acmx2: --enable-audio-buffers clamped to "
                                    << SpectrumHistory::MAX_BUFFERS << " (was "
@@ -11581,8 +11706,7 @@ int main(int argc, char **argv) {
                         static_cast<char>((fmt.pixelformat >> 8) & 0xFF),
                         static_cast<char>((fmt.pixelformat >> 16) & 0xFF),
                         static_cast<char>((fmt.pixelformat >> 24) & 0xFF),
-                        '\0'
-                    };
+                        '\0'};
                     mx::system_out << "\n  Format: " << fourcc << " (" << fmt.description << ")\n";
                     v4l2_frmsizeenum fsize{};
                     fsize.pixel_format = fmt.pixelformat;
@@ -11637,8 +11761,10 @@ int main(int argc, char **argv) {
                 break;
             case 602: {
                 int v = atoi(arg.arg_value.c_str());
-                if (v < 0) v = 0;
-                if (v > 51) v = 51;
+                if (v < 0)
+                    v = 0;
+                if (v > 51)
+                    v = 51;
                 args.encode_opts.crf = v;
                 args.crf = std::to_string(v);
                 mx::system_out << "acmx2: Encoder CRF: " << v << "\n";
@@ -11807,12 +11933,12 @@ int main(int argc, char **argv) {
                     library.enableDualMode(enable_3d);
                 }
 
-                                RemoveBrokenWindow(const std::string &path, bool is3d, const std::string &assets, bool)
-                                        : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
-                                            lib_path(path), enable_3d(is3d), assets_path(assets) {
-                                        util.path = assets_path;
-                                        library.enableDualMode(enable_3d);
-                                }
+                RemoveBrokenWindow(const std::string &path, bool is3d, const std::string &assets, bool)
+                    : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
+                      lib_path(path), enable_3d(is3d), assets_path(assets) {
+                    util.path = assets_path;
+                    library.enableDualMode(enable_3d);
+                }
 
                 void draw() override {
                     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -11839,7 +11965,8 @@ int main(int argc, char **argv) {
                     SDL_Event ev;
                     while (active) {
                         while (SDL_PollEvent(&ev)) {
-                            if (ev.type == SDL_QUIT) active = false;
+                            if (ev.type == SDL_QUIT)
+                                active = false;
                             event(ev);
                         }
                         draw();
@@ -11932,15 +12059,15 @@ int main(int argc, char **argv) {
                     library.setCacheSize(tex_cache_size > 0 ? tex_cache_size : 8);
                 }
 
-                                BuildWindow(const std::string &path, bool is3d, const std::string &assets, int tex_cache_size, bool)
-                                        : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
-                                            lib_path(path), enable_3d(is3d), assets_path(assets) {
-                                        mx::system_out << "acmx2: Window created, setting up...\n";
-                                        fflush(stdout);
-                                        util.path = assets_path;
-                                        library.enableDualMode(enable_3d);
-                                        library.setCacheSize(tex_cache_size > 0 ? tex_cache_size : 8);
-                                }
+                BuildWindow(const std::string &path, bool is3d, const std::string &assets, int tex_cache_size, bool)
+                    : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
+                      lib_path(path), enable_3d(is3d), assets_path(assets) {
+                    mx::system_out << "acmx2: Window created, setting up...\n";
+                    fflush(stdout);
+                    util.path = assets_path;
+                    library.enableDualMode(enable_3d);
+                    library.setCacheSize(tex_cache_size > 0 ? tex_cache_size : 8);
+                }
 
                 /**
                  * @brief Single-shot draw: compile all shaders, write cache, then signal exit.
@@ -11990,8 +12117,11 @@ int main(int argc, char **argv) {
                                     logo_tex = 0;
                                     logo_sp.draw();
                                 }
-                            } catch (...) {}
-                            if (logo_tex) { glDeleteTextures(1, &logo_tex); }
+                            } catch (...) {
+                            }
+                            if (logo_tex) {
+                                glDeleteTextures(1, &logo_tex);
+                            }
                         }
                         swap();
                         SDL_PumpEvents();
@@ -12112,11 +12242,11 @@ int main(int argc, char **argv) {
 #endif
         }
 
-    if (args.png_output && !args.filename.empty() && args.ofilename.empty()) {
-        mx::system_err << "acmx2: Error: --png in video-file mode requires -o/--output to derive the PNG frame directory\n";
-        mx::system_err.flush();
-        return EXIT_FAILURE;
-    }
+        if (args.png_output && !args.filename.empty() && args.ofilename.empty()) {
+            mx::system_err << "acmx2: Error: --png in video-file mode requires -o/--output to derive the PNG frame directory\n";
+            mx::system_err.flush();
+            return EXIT_FAILURE;
+        }
 
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
         SDL_SetHint("SDL_VIDEO_WAYLAND_WMCLASS", "acmx2");

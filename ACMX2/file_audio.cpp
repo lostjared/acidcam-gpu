@@ -43,7 +43,7 @@ static AVFormatContext *fmtCtx = nullptr;
 static AVCodecContext *codecCtx = nullptr;
 static SwrContext *swrCtx = nullptr;
 static int audioStreamIndex = -1;
-static std::vector<float> decodedSamples;  // all decoded mono float samples at 44100 Hz
+static std::vector<float> decodedSamples; // all decoded mono float samples at 44100 Hz
 static size_t playbackPos = 0;
 static std::atomic<bool> fileAudioActive{false};
 
@@ -66,8 +66,10 @@ static bool decodeAllSamples() {
     AVPacket *pkt = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
     if (!pkt || !frame) {
-        if (pkt) av_packet_free(&pkt);
-        if (frame) av_frame_free(&frame);
+        if (pkt)
+            av_packet_free(&pkt);
+        if (frame)
+            av_frame_free(&frame);
         return false;
     }
 
@@ -226,7 +228,8 @@ void file_audio_process_frame(double video_fps) {
     float sumSq = 0.0f;
     for (unsigned int i = 0; i < available; ++i) {
         float s = std::abs(samples[i]);
-        if (s > peak) peak = s;
+        if (s > peak)
+            peak = s;
         sumSq += s * s;
     }
     gPeak = peak;
@@ -279,9 +282,12 @@ bool file_audio_is_active() {
 /// @brief Stop file-audio playback and release decoder/sample resources.
 void file_audio_close() {
     fileAudioActive = false;
-    if (swrCtx) swr_free(&swrCtx);
-    if (codecCtx) avcodec_free_context(&codecCtx);
-    if (fmtCtx) avformat_close_input(&fmtCtx);
+    if (swrCtx)
+        swr_free(&swrCtx);
+    if (codecCtx)
+        avcodec_free_context(&codecCtx);
+    if (fmtCtx)
+        avformat_close_input(&fmtCtx);
     decodedSamples.clear();
     decodedSamples.shrink_to_fit();
     playbackPos = 0;

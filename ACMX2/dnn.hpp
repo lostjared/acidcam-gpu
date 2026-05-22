@@ -1,22 +1,22 @@
 #ifndef ACMX2_DNN_HPP
 #define ACMX2_DNN_HPP
 
-#include "opencv2/opencv.hpp"
-#include "opencv2/dnn.hpp"
-#include "opencv2/cudawarping.hpp"
-#include "opencv2/cudaimgproc.hpp"
 #include "opencv2/cudaarithm.hpp"
-#include <yaml-cpp/yaml.h>
+#include "opencv2/cudaimgproc.hpp"
+#include "opencv2/cudawarping.hpp"
+#include "opencv2/dnn.hpp"
+#include "opencv2/opencv.hpp"
 #include <filesystem>
-#include <map>
-#include <vector>
-#include <string>
 #include <iostream>
+#include <map>
+#include <string>
+#include <vector>
+#include <yaml-cpp/yaml.h>
 
 namespace ac_dnn {
 
-  class OnnxWrapper {
-  private:
+    class OnnxWrapper {
+      private:
         cv::dnn::Net net;
         bool is_loaded = false;
         bool inference_failed = false;
@@ -42,13 +42,14 @@ namespace ac_dnn {
                 }
                 std::string model_path_str = full_path.string();
                 net = cv::dnn::readNetFromONNX(model_path_str);
-                if (net.empty()) return;
+                if (net.empty())
+                    return;
                 if (cfg["preprocessing"]) {
                     const YAML::Node &pre = cfg["preprocessing"];
-                    input_size.width  = pre["width"].as<int>(224);
+                    input_size.width = pre["width"].as<int>(224);
                     input_size.height = pre["height"].as<int>(224);
-                    scale    = pre["scale"].as<double>(1.0 / 255.0);
-                    swap_rb  = pre["swap_rb"].as<bool>(true);
+                    scale = pre["scale"].as<double>(1.0 / 255.0);
+                    swap_rb = pre["swap_rb"].as<bool>(true);
                     if (pre["mean"]) {
                         auto v = pre["mean"].as<std::vector<double>>();
                         if (v.size() >= 3)
@@ -67,10 +68,10 @@ namespace ac_dnn {
         }
 
         void optimizeNeuralNet() {
-           auto available_backends = cv::dnn::getAvailableBackends();
-           auto is_supported = [&available_backends](cv::dnn::Backend backend, cv::dnn::Target target) {
-                return std::find(available_backends.begin(), available_backends.end(), 
-                                std::make_pair(backend, target)) != available_backends.end();
+            auto available_backends = cv::dnn::getAvailableBackends();
+            auto is_supported = [&available_backends](cv::dnn::Backend backend, cv::dnn::Target target) {
+                return std::find(available_backends.begin(), available_backends.end(),
+                                 std::make_pair(backend, target)) != available_backends.end();
             };
 
             if (is_supported(cv::dnn::DNN_BACKEND_CUDA, cv::dnn::DNN_TARGET_CUDA_FP16)) {
@@ -112,15 +113,17 @@ namespace ac_dnn {
             net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
         }
 
-  public:
+      public:
         /// Construct from a YAML config file that specifies model path and preprocessing.
         explicit OnnxWrapper(std::string_view yaml_path) {
             loadFromYaml(std::string(yaml_path));
         }
 
         void proc(const cv::Mat &image, cv::Mat &output) {
-            if (!is_loaded || inference_failed) return;
-            if (image.empty()) return;
+            if (!is_loaded || inference_failed)
+                return;
+            if (image.empty())
+                return;
             try {
                 const int orig_h = image.rows;
                 const int orig_w = image.cols;
@@ -142,7 +145,8 @@ namespace ac_dnn {
 
                 std::vector<cv::Mat> outputs;
                 net.forward(outputs);
-                if (outputs.empty()) return;
+                if (outputs.empty())
+                    return;
 
                 if (outputs.size() > 1) {
                     if (use_cuda_) {
@@ -188,7 +192,8 @@ namespace ac_dnn {
                 } else {
                     // Single-output path: normalize spatial blob and convert to BGR.
                     const cv::Mat &raw = outputs[0];
-                    if (raw.dims != 4) return;
+                    if (raw.dims != 4)
+                        return;
                     const int c = raw.size[1];
                     const int h = raw.size[2];
                     const int w = raw.size[3];
@@ -218,14 +223,14 @@ namespace ac_dnn {
                             }
                             const double range = std::max(g_max - g_min, 1e-9);
                             const double alpha = 255.0 / range;
-                            const double beta  = -g_min * alpha;
+                            const double beta = -g_min * alpha;
                             std::vector<cv::cuda::GpuMat> g_chs_u8(use_c);
                             for (int i = 0; i < use_c; ++i)
                                 g_chs[i].convertTo(g_chs_u8[i], CV_8U, alpha, beta);
                             cv::cuda::GpuMat g_merged, g_bgr, g_out;
                             cv::cuda::merge(g_chs_u8, g_merged);
                             cv::cuda::cvtColor(g_merged, g_bgr,
-                                use_c == 3 ? cv::COLOR_RGB2BGR : cv::COLOR_GRAY2BGR);
+                                               use_c == 3 ? cv::COLOR_RGB2BGR : cv::COLOR_GRAY2BGR);
                             cv::cuda::resize(g_bgr, g_out, cv::Size(orig_w, orig_h));
                             g_out.download(output);
                         }
@@ -258,18 +263,18 @@ namespace ac_dnn {
     };
 
     class Dexined {
-    public:
-        Dexined(const std::string& modelPath) {
+      public:
+        Dexined(const std::string &modelPath) {
             loadModel(modelPath);
         }
 
-        void processFrame(const cv::Mat& image, cv::Mat& result) {
+        void processFrame(const cv::Mat &image, cv::Mat &result) {
             cv::Mat blob = cv::dnn::blobFromImage(image, 1.0, cv::Size(512, 512), cv::Scalar(103.5, 116.2, 123.6), false, false, CV_32F);
             net.setInput(blob);
             applyDexined(image, result);
         }
 
-    private:
+      private:
         cv::dnn::Net net;
 
         void loadModel(const std::string modelPath) {
@@ -278,12 +283,12 @@ namespace ac_dnn {
             net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
         }
 
-        static void sigmoid(cv::Mat& input) {
-            cv::exp(-input, input);          // e^-input
+        static void sigmoid(cv::Mat &input) {
+            cv::exp(-input, input);      // e^-input
             input = 1.0 / (1.0 + input); // 1 / (1 + e^-input)
         }
 
-        static std::pair<cv::Mat, cv::Mat> postProcess(const std::vector<cv::Mat>& output, int height, int width) {
+        static std::pair<cv::Mat, cv::Mat> postProcess(const std::vector<cv::Mat> &output, int height, int width) {
             std::vector<cv::cuda::GpuMat> g_preds;
             g_preds.reserve(output.size());
             for (const cv::Mat &p : output) {
@@ -319,19 +324,18 @@ namespace ac_dnn {
             return {fuse, ave};
         }
 
-        void applyDexined(const cv::Mat& image, cv::Mat& result) {
+        void applyDexined(const cv::Mat &image, cv::Mat &result) {
             int originalWidth = image.cols;
             int originalHeight = image.rows;
             std::vector<cv::Mat> outputs;
             net.forward(outputs);
             std::pair<cv::Mat, cv::Mat> res = postProcess(outputs, originalHeight, originalWidth);
-            result = res.first; 
+            result = res.first;
         }
     };
 
-    class PPHS
-    {
-    private:
+    class PPHS {
+      private:
         cv::dnn::Net model;
         std::string modelPath;
         cv::Scalar imageMean = cv::Scalar(0.5, 0.5, 0.5);
@@ -344,19 +348,17 @@ namespace ac_dnn {
         int target_id [[maybe_unused]];
         cv::cuda::GpuMat prevMask;
 
-    public:
-        PPHS(const std::string& modelPath,
+      public:
+        PPHS(const std::string &modelPath,
              int backend_id = cv::dnn::DNN_BACKEND_CUDA,
              int target_id = cv::dnn::DNN_TARGET_CUDA)
-            : modelPath(modelPath), backend_id(backend_id), target_id(target_id)
-        {
+            : modelPath(modelPath), backend_id(backend_id), target_id(target_id) {
             this->model = cv::dnn::readNet(modelPath);
             this->model.setPreferableBackend(backend_id);
             this->model.setPreferableTarget(target_id);
         }
 
-        cv::Mat preprocess(const cv::Mat image)
-        {
+        cv::Mat preprocess(const cv::Mat image) {
             this->currentSize = image.size();
             cv::cuda::GpuMat g_image, g_resized, g_float;
             g_image.upload(image);
@@ -369,16 +371,14 @@ namespace ac_dnn {
             return cv::dnn::blobFromImage(preprocessed);
         }
 
-        cv::Mat infer(const cv::Mat image)
-        {
+        cv::Mat infer(const cv::Mat image) {
             cv::Mat inputBlob = preprocess(image);
             this->model.setInput(inputBlob, this->inputNames);
             cv::Mat outputBlob = this->model.forward(this->outputNames);
             return postprocess(outputBlob);
         }
 
-        cv::Mat postprocess(cv::Mat image)
-        {
+        cv::Mat postprocess(cv::Mat image) {
             int H = image.size[2];
             int W = image.size[3];
 
@@ -403,12 +403,11 @@ namespace ac_dnn {
             return result;
         }
     };
-    cv::Mat isolateBody(const cv::Mat& image, const cv::Mat& mask,
-                    float blackPoint = 0.35f, float whitePoint = 0.75f);
-    cv::Mat hardenedAlphaMask(const cv::Mat& image, const cv::Mat& mask,
-                         float blackPoint = 0.35f, float whitePoint = 0.75f);
+    cv::Mat isolateBody(const cv::Mat &image, const cv::Mat &mask,
+                        float blackPoint = 0.35f, float whitePoint = 0.75f);
+    cv::Mat hardenedAlphaMask(const cv::Mat &image, const cv::Mat &mask,
+                              float blackPoint = 0.35f, float whitePoint = 0.75f);
 
-
-}
+} // namespace ac_dnn
 
 #endif // ACMX2_DNN_HPP

@@ -1,10 +1,8 @@
-#include"dnn.hpp"
+#include "dnn.hpp"
 
 namespace ac_dnn {
-    
-    
-    static cv::Mat buildHardenedFloatAlpha(const cv::Mat& image, const cv::Mat& mask, float blackPoint, float whitePoint)
-    {
+
+    static cv::Mat buildHardenedFloatAlpha(const cv::Mat &image, const cv::Mat &mask, float blackPoint, float whitePoint) {
         cv::Mat soft;
         if (mask.type() == CV_32FC1) {
             soft = mask;
@@ -24,13 +22,13 @@ namespace ac_dnn {
         cv::Mat binary;
         cv::threshold(soft, binary, 0.5f, 1.0f, cv::THRESH_BINARY);
         binary.convertTo(binary, CV_8U, 255.0);
-        const cv::Mat kOpen  = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+        const cv::Mat kOpen = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
         const cv::Mat kClose = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(7, 7));
-        cv::morphologyEx(binary, binary, cv::MORPH_OPEN,  kOpen);
+        cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kOpen);
         cv::morphologyEx(binary, binary, cv::MORPH_CLOSE, kClose);
         cv::Mat labels, stats, centroids;
         const int nLabels = cv::connectedComponentsWithStats(binary, labels, stats,
-                                                         centroids, 8, CV_32S);
+                                                             centroids, 8, CV_32S);
         if (nLabels > 1) {
             int bestLabel = -1;
             int bestArea = 0;
@@ -61,8 +59,7 @@ namespace ac_dnn {
         return hardenedMask;
     }
 
-    cv::Mat hardenedAlphaMask(const cv::Mat& image, const cv::Mat& mask, float blackPoint, float whitePoint)
-    {
+    cv::Mat hardenedAlphaMask(const cv::Mat &image, const cv::Mat &mask, float blackPoint, float whitePoint) {
         if (image.empty() || mask.empty())
             return cv::Mat();
         cv::Mat alphaFloat = buildHardenedFloatAlpha(image, mask, blackPoint, whitePoint);
@@ -71,10 +68,7 @@ namespace ac_dnn {
         return alpha8;
     }
 
-    
-
-    cv::Mat isolateBody(const cv::Mat& image, const cv::Mat& mask, float blackPoint, float whitePoint)
-    {
+    cv::Mat isolateBody(const cv::Mat &image, const cv::Mat &mask, float blackPoint, float whitePoint) {
         if (image.empty() || mask.empty())
             return image.clone();
         cv::Mat hardenedMask = buildHardenedFloatAlpha(image, mask, blackPoint, whitePoint);
@@ -88,4 +82,4 @@ namespace ac_dnn {
         finalFloat.convertTo(output_image, CV_8UC3, 255.0);
         return output_image;
     }
-}
+} // namespace ac_dnn
