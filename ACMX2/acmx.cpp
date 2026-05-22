@@ -7652,15 +7652,15 @@ class ACView : public gl::GLObject {
         if (duration_limit > 0.0 && writer.is_open() && writerRunning) {
             //auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - captureStartTime).count();
             frames_proc++;
-	    if(fps != 0) {
-		    double time_passed = static_cast<double>(frames_proc) / fps;
-		    //if (elapsed >= duration_limit) {
-		    if(time_passed >= duration_limit) {
-        	        mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
-	                fflush(stdout);
-                	running = false;
-            	}
-	    }
+            if(fps != 0) {
+                double time_passed = static_cast<double>(frames_proc) / fps;
+                //if (elapsed >= duration_limit) {
+                if(time_passed >= duration_limit) {
+                        mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
+                        fflush(stdout);
+                        running = false;
+                    }
+            }
         }
 
         if (max_size_limit_bytes > 0.0 && writer.is_open() && writerRunning && !ofilename.empty()) {
