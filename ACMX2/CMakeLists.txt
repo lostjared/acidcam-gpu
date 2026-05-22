@@ -360,3 +360,14 @@ install(TARGETS audio_transfer DESTINATION bin)
 # installs a .desktop file into share/applications.
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/data/win-icon.png DESTINATION share/acmx2 RENAME acmx2.png)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data DESTINATION share/acmx2)
+
+if(NOT TARGET uninstall)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+        IMMEDIATE @ONLY
+    )
+    add_custom_target(uninstall
+        COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+    )
+endif()
