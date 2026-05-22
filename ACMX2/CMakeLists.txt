@@ -60,6 +60,9 @@ else()
         message(FATAL_ERROR "MXWrite not found. Please ensure MXWrite is installed and CMAKE_PREFIX_PATH is set correctly.")
     endif()
     set(ACMX2_MXWRITE_TARGET MXWrite::mxwrite)
+    if(NOT MXWrite_INCLUDE_DIRS)
+        get_target_property(MXWrite_INCLUDE_DIRS ${ACMX2_MXWRITE_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+    endif()
     message(STATUS "MXWrite found: ${MXWrite_INCLUDE_DIRS}")
 endif()
 if(WITH_CUDA)
@@ -243,6 +246,7 @@ target_include_directories(audio_transfer PRIVATE
     ${libmx2_INCLUDE_DIRS}
     ${SDL2_INCLUDE_DIRS} 
     ${SDL2_TTF_INCLUDE_DIRS}
+    ${MXWrite_INCLUDE_DIRS}
 )
 target_link_libraries(audio_transfer PRIVATE 
     ${ACMX2_MXWRITE_TARGET}

@@ -19,7 +19,7 @@
  * @see https://lostsidedead.biz
  */
 
-#include "../MXWrite/mxwrite.hpp"
+#include "mxwrite.hpp"
 #include "version_info.hpp"
 #include <algorithm>
 #include <argz.hpp>
