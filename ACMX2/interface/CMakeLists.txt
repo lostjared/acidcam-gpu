@@ -162,6 +162,18 @@ endif()
 install(TARGETS acmx2_interface DESTINATION bin)
 install(FILES acmx2-interface.desktop DESTINATION share/applications)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../data/win-icon.png DESTINATION share/acmx2 RENAME acmx2.png)
+
+if(NOT TARGET uninstall)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+        IMMEDIATE @ONLY
+    )
+    add_custom_target(uninstall
+        COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+    )
+endif()
+
 message(STATUS "")
 message(STATUS "============================================")
 message(STATUS "Configuration Summary:")
