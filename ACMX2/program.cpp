@@ -14,7 +14,7 @@
 
 namespace {
     static uint64_t fnv1a64_bytes(const void *data, size_t n) {
-        const uint8_t *p = (const uint8_t *)data;
+        const uint8_t *p = static_cast<const uint8_t *>(data);
         uint64_t h = 1469598103934665603ull;
         for (size_t i = 0; i < n; ++i) {
             h ^= p[i];
@@ -38,7 +38,7 @@ namespace {
         while (f.read(buf, sizeof(buf)) || f.gcount()) {
             std::streamsize n = f.gcount();
             for (std::streamsize i = 0; i < n; ++i) {
-                h ^= (uint8_t)buf[i];
+                h ^= static_cast<uint8_t>(buf[i]);
                 h *= 1099511628211ull;
             }
         }
@@ -59,7 +59,7 @@ namespace {
         const GLubyte *p = glGetString(e);
         if (!p)
             return {};
-        return std::string((const char *)p);
+        return std::string(reinterpret_cast<const char *>(p));
     }
 
     struct CacheHeader {
@@ -83,8 +83,8 @@ namespace {
         if (sz <= 0)
             return false;
         f.seekg(0, std::ios::beg);
-        out.resize((size_t)sz);
-        f.read((char *)out.data(), (std::streamsize)out.size());
+        out.resize(static_cast<size_t>(sz));
+        f.read(reinterpret_cast<char *>(out.data()), static_cast<std::streamsize>(out.size()));
         return f.good();
     }
 
@@ -97,7 +97,7 @@ namespace {
             std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
             if (!out)
                 return false;
-            out.write((const char *)data, (std::streamsize)size);
+            out.write(static_cast<const char *>(data), static_cast<std::streamsize>(size));
             if (!out.good())
                 return false;
         }
@@ -122,7 +122,7 @@ namespace {
 
     static std::string cacheFilePath(uint64_t key) {
         char name[64];
-        std::snprintf(name, sizeof(name), "%016llx.bin", (unsigned long long)key);
+        std::snprintf(name, sizeof(name), "%016llx.bin", static_cast<unsigned long long>(key));
         std::filesystem::path p(cacheDirDefault());
         p /= name;
         return p.string();
@@ -183,12 +183,12 @@ namespace {
         if (hdr.binaryLength == 0)
             return false;
 
-        size_t need = sizeof(CacheHeader) + (size_t)hdr.binaryLength;
+        size_t need = sizeof(CacheHeader) + static_cast<size_t>(hdr.binaryLength);
         if (data.size() != need)
             return false;
 
         GLuint prog = glCreateProgram();
-        glProgramBinary(prog, (GLenum)hdr.binaryFormat, data.data() + sizeof(CacheHeader), (GLsizei)hdr.binaryLength);
+        glProgramBinary(prog, static_cast<GLenum>(hdr.binaryFormat), data.data() + sizeof(CacheHeader), static_cast<GLsizei>(hdr.binaryLength));
 
         GLint ok = 0;
         glGetProgramiv(prog, GL_LINK_STATUS, &ok);
@@ -208,7 +208,7 @@ namespace {
             return false;
 
         std::vector<uint8_t> blob;
-        blob.resize(sizeof(CacheHeader) + (size_t)binLen);
+        blob.resize(sizeof(CacheHeader) + static_cast<size_t>(binLen));
 
         CacheHeader hdr{};
         hdr.magic = kMagic;
@@ -217,12 +217,12 @@ namespace {
 
         GLenum fmt = 0;
         GLsizei got = 0;
-        glGetProgramBinary(prog, (GLsizei)binLen, &got, &fmt, blob.data() + sizeof(CacheHeader));
+        glGetProgramBinary(prog, static_cast<GLsizei>(binLen), &got, &fmt, blob.data() + sizeof(CacheHeader));
         if (got <= 0)
             return false;
 
-        hdr.binaryFormat = (uint32_t)fmt;
-        hdr.binaryLength = (uint32_t)got;
+        hdr.binaryFormat = static_cast<uint32_t>(fmt);
+        hdr.binaryLength = static_cast<uint32_t>(got);
 
         std::memcpy(blob.data(), &hdr, sizeof(CacheHeader));
 

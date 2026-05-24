@@ -76,7 +76,7 @@
 #ifndef CHECK_CUDA
 #define CHECK_CUDA(call) \
     do {                 \
-        (void)(call);    \
+        static_cast<void>(call); \
     } while (0)
 #endif
 namespace ac_gpu {
@@ -994,7 +994,7 @@ class FFMpegVideoReader {
             enableCudaHwDecode(codec);
         }
 #else
-        (void)prefer_cuda;
+    static_cast<void>(prefer_cuda);
 #endif
 
         if (avcodec_open2(codec_ctx, codec, nullptr) < 0) {
@@ -1392,7 +1392,7 @@ class FFMpegVideoReader {
         codec_ctx->get_format = &FFMpegVideoReader::getHwFormat;
         hw_decode_enabled = (codec_ctx->hw_device_ctx != nullptr);
 #else
-        (void)codec;
+        static_cast<void>(codec);
 #endif
     }
 
@@ -2158,7 +2158,7 @@ static uint64_t fnv1a64_file(const std::string &filepath) {
         f.read(buf, sizeof(buf));
         std::streamsize n = f.gcount();
         for (std::streamsize i = 0; i < n; ++i) {
-            h ^= (uint8_t)buf[i];
+            h ^= static_cast<uint8_t>(buf[i]);
             h *= 1099511628211ull;
         }
     }
@@ -3255,7 +3255,7 @@ class ShaderLibrary {
                         logo_sprite->initSize(win->w, win->h);
                         logo_sprite->setName("samp");
                         logo_sprite->setShader(&logo_shader);
-                        float scale = std::min((float)win->w / lw, (float)win->h / lh);
+                        float scale = std::min(static_cast<float>(win->w) / lw, static_cast<float>(win->h) / lh);
                         int dw = static_cast<int>(lw * scale);
                         int dh = static_cast<int>(lh * scale);
                         int lx = (win->w - dw) / 2;
@@ -3394,7 +3394,7 @@ class ShaderLibrary {
                              const std::string &library_path,
                              const std::string &vert_2d,
                              const std::string &vert_3d) {
-        (void)win;
+        static_cast<void>(win);
         if (glGetString(GL_VERSION) == nullptr) {
             mx::system_err << "acmx2: remove-broken requires a valid OpenGL context\n";
             return false;
@@ -3618,7 +3618,7 @@ class ShaderLibrary {
      * @return true on success.
      */
     bool buildShaderCache(gl::GLWindow *win, const std::string &library_path, const std::string &vert_2d, const std::string &vert_3d) {
-        (void)win;
+        static_cast<void>(win);
         if (glGetString(GL_VERSION) == nullptr) {
             mx::system_err << "acmx2: build-cache requires a valid OpenGL context\n";
             return false;
@@ -4076,7 +4076,7 @@ class ShaderLibrary {
                         logo_sprite_c->initSize(win->w, win->h);
                         logo_sprite_c->setName("samp");
                         logo_sprite_c->setShader(&logo_shader_c);
-                        float scale = std::min((float)win->w / lw, (float)win->h / lh);
+                        float scale = std::min(static_cast<float>(win->w) / lw, static_cast<float>(win->h) / lh);
                         int dw = static_cast<int>(lw * scale);
                         int dh = static_cast<int>(lh * scale);
                         int lx = (win->w - dw) / 2;
@@ -7051,7 +7051,7 @@ class ACView : public gl::GLObject {
                 recordCudaPboResources[i] = nullptr;
             }
 #else
-            (void)i;
+        static_cast<void>(i);
 #endif
         }
 
@@ -11027,7 +11027,7 @@ void checkDevices(bool list_only = false) {
         }
     }
 #else
-    (void)list_only;
+    static_cast<void>(list_only);
     std::cerr << "acmx2: CUDA support was disabled at build time (ACMX2_WITH_CUDA not defined).\n";
 #endif
 }
@@ -12108,7 +12108,7 @@ int main(int argc, char **argv) {
                                     logo_sp.initSize(w, h);
                                     logo_sp.setName("samp");
                                     logo_sp.setShader(&logo_sh);
-                                    float scale = std::min((float)w / lw, (float)h / lh);
+                                    float scale = std::min(static_cast<float>(w) / lw, static_cast<float>(h) / lh);
                                     int dw = static_cast<int>(lw * scale);
                                     int dh = static_cast<int>(lh * scale);
                                     int lx = (w - dw) / 2;
