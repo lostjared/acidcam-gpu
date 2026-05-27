@@ -86,9 +86,11 @@ void ShaderPassDialog::setupUI() {
 
     QHBoxLayout *dialogButtonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
+    applyButton = new QPushButton("Apply", this);
     cancelButton = new QPushButton("Cancel", this);
     dialogButtonLayout->addStretch();
     dialogButtonLayout->addWidget(okButton);
+    dialogButtonLayout->addWidget(applyButton);
     dialogButtonLayout->addWidget(cancelButton);
     mainLayout->addLayout(dialogButtonLayout);
 
@@ -99,6 +101,7 @@ void ShaderPassDialog::setupUI() {
     connect(clearButton, &QPushButton::clicked, this, &ShaderPassDialog::clearAll);
     connect(saveButton, &QPushButton::clicked, this, &ShaderPassDialog::saveShaderPass);
     connect(loadButton, &QPushButton::clicked, this, &ShaderPassDialog::loadShaderPass);
+    connect(applyButton, &QPushButton::clicked, this, &ShaderPassDialog::applyChanges);
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(searchLineEdit, &QLineEdit::textChanged, this, &ShaderPassDialog::filterSearchChanged);
@@ -279,6 +282,10 @@ void ShaderPassDialog::setSelectedShaderNames(const QStringList &names) {
 
 void ShaderPassDialog::updateShaderList(const QStringList &shaderNames) {
     loadShaders(shaderNames);
+}
+
+void ShaderPassDialog::applyChanges() {
+    emit settingsApplied(isShaderPassEnabled(), getSelectedShaderNames());
 }
 
 void ShaderPassDialog::saveShaderPass() {

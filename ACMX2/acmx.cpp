@@ -5194,6 +5194,7 @@ struct MXArguments {
     int watermark_r = 255;       ///< Watermark red channel (0-255), default magenta-pink.
     int watermark_g = 0;         ///< Watermark green channel (0-255).
     int watermark_b = 150;       ///< Watermark blue channel (0-255).
+    bool interface_shm = false;  ///< Enable interface shared-memory control channel (Qt launcher use).
     // User-configurable encoder quality (see EncodeOptions in mxwrite.hpp).
     EncodeOptions encode_opts{};
 };
@@ -6520,7 +6521,9 @@ class ACView : public gl::GLObject {
         }
 #endif
 #ifdef __linux__
-    initShaderSelectionSharedMemory();
+    if (args.interface_shm) {
+        initShaderSelectionSharedMemory();
+    }
 #endif
     }
 
@@ -11366,6 +11369,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(610, "max-size", "Stop recording when output file exceeds size in MB (float)")
         .addOptionDouble(611, "png", "Video file mode: write PNG frames to output subdirectory instead of encoding video")
         .addOptionDoubleValue(612, "generate", "Save a PNG frame every N frames to an output subdirectory (video or camera mode)")
+        .addOptionDouble(613, "interface-shm", "Enable Qt interface shared-memory control channel")
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
         .addOptionDouble(414, "use-yuv", "Use YUV (YUYV) camera format instead of MJPG")
@@ -11788,6 +11792,10 @@ int main(int argc, char **argv) {
                 mx::system_out << "acmx2: --generate " << n << ": will save a PNG frame every " << n << " frames\n";
                 break;
             }
+            case 613:
+                args.interface_shm = true;
+                mx::system_out << "acmx2: Qt shared-memory control channel enabled\n";
+                break;
             case 412:
                 args.cross_fade_duration = static_cast<float>(atof(arg.arg_value.c_str()));
                 mx::system_out << "acmx2: Crossfade duration set to: " << args.cross_fade_duration << " seconds\n";

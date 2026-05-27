@@ -1476,7 +1476,7 @@ void MainWindow::menuShaderPassSettings() {
         passDialog.setSelectedShaderNames(shader_pass_names);
     }
 
-    if (passDialog.exec() == QDialog::Accepted) {
+    auto applyMultipassSettings = [&]() {
         shader_pass_enabled = passDialog.isShaderPassEnabled();
         shader_pass_names = passDialog.getSelectedShaderNames();
         publishMultipassShadersToRunningProcess();
@@ -1485,6 +1485,22 @@ void MainWindow::menuShaderPassSettings() {
         } else {
             Log("Multi-Pass Shader Disabled");
         }
+    };
+
+    connect(&passDialog, &ShaderPassDialog::settingsApplied, this,
+            [&](bool enabled, const QStringList &selectedShaderNames) {
+                shader_pass_enabled = enabled;
+                shader_pass_names = selectedShaderNames;
+                publishMultipassShadersToRunningProcess();
+                if (shader_pass_enabled) {
+                    Log("Multi-Pass Shader Settings Saved: " + QString::number(shader_pass_names.size()) + " passes");
+                } else {
+                    Log("Multi-Pass Shader Disabled");
+                }
+            });
+
+    if (passDialog.exec() == QDialog::Accepted) {
+        applyMultipassSettings();
     }
 }
 
@@ -1674,6 +1690,7 @@ void MainWindow::runSelected() {
     const QString fragmentPath = shader_path + "/" + data;
     arguments << "--path" << dirPath
               << "--fragment" << fragmentPath;
+    arguments << "--interface-shm";
     // Pass texture cache size so the SIZE macro injected into the fragment
     // matches whatever the user has configured for cache shaders.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
@@ -1881,6 +1898,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     QString shader_file = shader_path;
     arguments << "--path" << dirPath << "--shaders" << shader_file;
+    arguments << "--interface-shm";
     // Always pass texture cache size so runtime SIZE matches the cache file.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     QString res;

@@ -334,6 +334,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | `-a` | `--repeat` | | Loop/repeat video playback |
 | `-n` / `-N` | `--fullscreen` | | Fullscreen window (Escape to quit) |
 | `-m` | `--cuda-device` | `<index>` | CUDA device index |
+| | `--interface-shm` | | Enable Qt interface shared-memory control channel (off by default for normal CLI runs) |
 | | `--duration` | `<seconds>` | Recording duration limit in seconds (float); stop recording and exit after elapsed |
 | | `--encode-preset` | `<name>` | Encoder preset: `ultrafast`..`veryslow` |
 | | `--encode-tune` | `<name>` | Encoder tune: `none`, `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, `zerolatency` |

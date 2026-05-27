@@ -412,6 +412,7 @@ appears in the dock while the application is running.
 | `-a`  | `--repeat`     |             | Loop/repeat video playback |
 | `-n`  | `--fullscreen` |             | Fullscreen window (Escape to quit) |
 | `-m`  | `--cuda-device`| `<index>`   | CUDA device index |
+|       | `--interface-shm` |         | Enable Qt interface shared-memory control channel (off by default for normal CLI runs) |
 |       | `--duration`   | `<seconds>` | Recording duration limit (float) |
 |       | `--encode-preset` | `<name>`  | Encoder preset: <tt>ultrafast</tt>..<tt>veryslow</tt> |
 |       | `--encode-tune`   | `<name>`  | Encoder tune: <tt>none</tt>, <tt>film</tt>, <tt>animation</tt>, <tt>grain</tt>, <tt>stillimage</tt>, <tt>psnr</tt>, <tt>ssim</tt>, <tt>fastdecode</tt>, <tt>zerolatency</tt> |

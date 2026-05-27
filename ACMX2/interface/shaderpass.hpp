@@ -43,6 +43,9 @@ class ShaderPassDialog : public QDialog {
     void setSelectedShaderNames(const QStringList &names);
     void updateShaderList(const QStringList &shaderNames);
 
+  signals:
+    void settingsApplied(bool enabled, const QStringList &selectedShaderNames);
+
   public slots:
     void addShader();
     void removeShader();
@@ -52,6 +55,7 @@ class ShaderPassDialog : public QDialog {
     void filterSearchChanged(const QString &text);
     void saveShaderPass();
     void loadShaderPass();
+    void applyChanges();
 
   private:
     void setupUI();
@@ -69,6 +73,7 @@ class ShaderPassDialog : public QDialog {
     QPushButton *saveButton;
     QPushButton *loadButton;
     QPushButton *okButton;
+    QPushButton *applyButton;
     QPushButton *cancelButton;
 
     QStandardItemModel *shaderModel;
