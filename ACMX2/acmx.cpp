@@ -6705,6 +6705,8 @@ class ACView : public gl::GLObject {
             updateShaderNameCache();
         }
 
+        repeat = (shaderSelectionShm->repeat_enabled != 0);
+
         const int requestedIndex = shaderSelectionShm->selected_index;
         if (requestedIndex < 0)
             return;

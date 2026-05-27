@@ -7,7 +7,7 @@ namespace acmx2::ipc {
 
 inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection";
 inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
-inline constexpr std::uint32_t kShaderSelectionVersion = 2;
+inline constexpr std::uint32_t kShaderSelectionVersion = 3;
 inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
 
 struct ShaderSelectionShmData {
@@ -16,7 +16,8 @@ struct ShaderSelectionShmData {
     std::int32_t selected_index = -1;
     std::uint32_t shader_pass_count = 0;
     std::uint8_t shader_pass_enabled = 0;
-    std::uint8_t reserved[3] = {0, 0, 0};
+    std::uint8_t repeat_enabled = 0;
+    std::uint8_t reserved[2] = {0, 0};
     std::int32_t shader_pass_indices[kShaderSelectionMaxPassCount] = {};
     std::uint32_t sequence = 0;
 };

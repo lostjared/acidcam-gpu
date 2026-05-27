@@ -293,6 +293,7 @@ class MainWindow : public QMainWindow {
     void initShaderSelectionSharedMemory();
     void publishSelectedShaderIndexToRunningProcess();
     void publishMultipassShadersToRunningProcess();
+    void publishRepeatStateToRunningProcess();
     void cleanupShaderSelectionSharedMemory();
   #ifdef __linux__
     int shaderSelectionShmFd = -1;

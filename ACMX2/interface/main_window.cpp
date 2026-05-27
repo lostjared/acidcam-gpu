@@ -438,6 +438,9 @@ void MainWindow::initControls() {
     play_repeat = new QAction(tr("Repeat"), this);
     play_repeat->setCheckable(true);
     play_repeat->setChecked(false);
+    connect(play_repeat, &QAction::toggled, this, [this](bool) {
+        publishRepeatStateToRunningProcess();
+    });
     playbackMenu->addAction(play_repeat);
     play_stop = new QAction(tr("Stop"), this);
     play_stop->setEnabled(false);
@@ -975,6 +978,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->selected_index = -1;
         shaderSelectionShm->shader_pass_count = 0;
         shaderSelectionShm->shader_pass_enabled = 0;
+        shaderSelectionShm->repeat_enabled = 0;
         std::fill(std::begin(shaderSelectionShm->reserved), std::end(shaderSelectionShm->reserved), 0);
         std::fill(std::begin(shaderSelectionShm->shader_pass_indices), std::end(shaderSelectionShm->shader_pass_indices), -1);
         shaderSelectionShm->sequence = 0;
@@ -1019,6 +1023,15 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
     shaderSelectionShm->shader_pass_enabled = (shader_pass_enabled && passCount > 0) ? 1 : 0;
     shaderSelectionShm->shader_pass_count = passCount;
     std::copy(passIndices.begin(), passIndices.end(), std::begin(shaderSelectionShm->shader_pass_indices));
+    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+#endif
+}
+
+void MainWindow::publishRepeatStateToRunningProcess() {
+#ifdef __linux__
+    if (!shaderSelectionShm)
+        return;
+    shaderSelectionShm->repeat_enabled = (play_repeat && play_repeat->isChecked()) ? 1 : 0;
     shaderSelectionShm->sequence = ++shaderSelectionSequence;
 #endif
 }
