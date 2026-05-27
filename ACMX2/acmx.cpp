@@ -6678,6 +6678,30 @@ class ACView : public gl::GLObject {
             return;
 
         shaderSelectionLastSequence = shaderSelectionShm->sequence;
+        std::vector<int> requestedPassList;
+        requestedPassList.reserve(shaderSelectionShm->shader_pass_count);
+        const uint32_t clampedPassCount = std::min<uint32_t>(
+            shaderSelectionShm->shader_pass_count,
+            acmx2::ipc::kShaderSelectionMaxPassCount);
+        for (uint32_t i = 0; i < clampedPassCount; ++i) {
+            const int passIndex = shaderSelectionShm->shader_pass_indices[i];
+            if (passIndex < 0)
+                continue;
+            if (static_cast<size_t>(passIndex) >= library.size())
+                continue;
+            requestedPassList.push_back(passIndex);
+        }
+        const bool requestedPassEnabled = shaderSelectionShm->shader_pass_enabled != 0 && !requestedPassList.empty();
+        const bool multipassChanged = (shader_pass_enabled != requestedPassEnabled) ||
+                                      (shader_pass_list != requestedPassList);
+        if (!random_multipass_mode) {
+            if (multipassChanged && requestedPassEnabled)
+                beginCrossfade(win);
+            shader_pass_list = requestedPassList;
+            shader_pass_enabled = requestedPassEnabled;
+            updateShaderNameCache();
+        }
+
         const int requestedIndex = shaderSelectionShm->selected_index;
         if (requestedIndex < 0)
             return;

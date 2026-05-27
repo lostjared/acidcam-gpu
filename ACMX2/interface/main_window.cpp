@@ -34,6 +34,7 @@
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <random>
@@ -972,6 +973,10 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->magic = acmx2::ipc::kShaderSelectionMagic;
         shaderSelectionShm->version = acmx2::ipc::kShaderSelectionVersion;
         shaderSelectionShm->selected_index = -1;
+        shaderSelectionShm->shader_pass_count = 0;
+        shaderSelectionShm->shader_pass_enabled = 0;
+        std::fill(std::begin(shaderSelectionShm->reserved), std::end(shaderSelectionShm->reserved), 0);
+        std::fill(std::begin(shaderSelectionShm->shader_pass_indices), std::end(shaderSelectionShm->shader_pass_indices), -1);
         shaderSelectionShm->sequence = 0;
     }
     shaderSelectionSequence = shaderSelectionShm->sequence;
@@ -986,6 +991,34 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
     if (row < 0 || row >= items.size())
         return;
     shaderSelectionShm->selected_index = row;
+    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+#endif
+}
+
+void MainWindow::publishMultipassShadersToRunningProcess() {
+#ifdef __linux__
+    if (!shaderSelectionShm)
+        return;
+
+    std::array<qint32, acmx2::ipc::kShaderSelectionMaxPassCount> passIndices;
+    passIndices.fill(-1);
+
+    quint32 passCount = 0;
+    if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
+        loadShaders(shader_path, true);
+        for (const QString &name : shader_pass_names) {
+            if (passCount >= acmx2::ipc::kShaderSelectionMaxPassCount)
+                break;
+            const int idx = items.indexOf(name);
+            if (idx < 0)
+                continue;
+            passIndices[passCount++] = idx;
+        }
+    }
+
+    shaderSelectionShm->shader_pass_enabled = (shader_pass_enabled && passCount > 0) ? 1 : 0;
+    shaderSelectionShm->shader_pass_count = passCount;
+    std::copy(passIndices.begin(), passIndices.end(), std::begin(shaderSelectionShm->shader_pass_indices));
     shaderSelectionShm->sequence = ++shaderSelectionSequence;
 #endif
 }
@@ -1446,6 +1479,7 @@ void MainWindow::menuShaderPassSettings() {
     if (passDialog.exec() == QDialog::Accepted) {
         shader_pass_enabled = passDialog.isShaderPassEnabled();
         shader_pass_names = passDialog.getSelectedShaderNames();
+        publishMultipassShadersToRunningProcess();
         if (shader_pass_enabled) {
             Log("Multi-Pass Shader Settings Saved: " + QString::number(shader_pass_names.size()) + " passes");
         } else {
@@ -2179,6 +2213,7 @@ void MainWindow::runAll() {
     QStringList arguments;
     if (!buildRunArguments(arguments))
         return;
+    publishMultipassShadersToRunningProcess();
     publishSelectedShaderIndexToRunningProcess();
 
     const bool firstRunAllInvocation = firstRunAllPendingRebuild;
