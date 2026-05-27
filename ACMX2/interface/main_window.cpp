@@ -219,11 +219,35 @@ void MainWindow::initControls() {
     lastSearchText = QString();
     process = new QProcess(this);
     initShaderSelectionSharedMemory();
-    connect(process, &QProcess::stateChanged, this, [this](QProcess::ProcessState state) {
-        if (listMenu_set_current) {
-            listMenu_set_current->setEnabled(state == QProcess::Running);
+    auto updateShaderMenuState = [this](QProcess::ProcessState state) {
+        const bool running = (state == QProcess::Running);
+        if (listMenu_new) {
+            listMenu_new->setEnabled(!running);
         }
-    });
+        if (listMenu_shader) {
+            listMenu_shader->setEnabled(!running);
+        }
+        if (listMenu_remove) {
+            listMenu_remove->setEnabled(!running);
+        }
+        if (listMenu_up) {
+            listMenu_up->setEnabled(!running);
+        }
+        if (listMenu_down) {
+            listMenu_down->setEnabled(!running);
+        }
+        if (listMenu_shuffle) {
+            listMenu_shuffle->setEnabled(!running);
+        }
+        if (listMenu_sort) {
+            listMenu_sort->setEnabled(!running);
+        }
+        if (listMenu_set_current) {
+            listMenu_set_current->setEnabled(running);
+        }
+    };
+    connect(process, &QProcess::stateChanged, this, updateShaderMenuState);
+    updateShaderMenuState(process->state());
     connect(process, &QProcess::readyReadStandardOutput, this, [this]() {
         QString output = process->readAllStandardOutput();
         output.replace("\n", "<br>");
@@ -794,11 +818,10 @@ void MainWindow::menuSetCurrentShader() {
         return;
     const int row = currentShaderRow();
     if (row < 0 || row >= items.size()) {
-        Log("No shader selected.");
+        Log("\nNo shader selected.\n");
         return;
     }
     publishSelectedShaderIndexToRunningProcess();
-    Log("Set current shader to index " + QString::number(row) + ".");
 }
 
 void MainWindow::updateIndex() {
