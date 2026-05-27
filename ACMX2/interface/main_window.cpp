@@ -39,6 +39,9 @@
 #include <random>
 #include <sstream>
 #ifdef __linux__
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
@@ -215,6 +218,12 @@ void MainWindow::initControls() {
     lastFoundIndex = -1;
     lastSearchText = QString();
     process = new QProcess(this);
+    initShaderSelectionSharedMemory();
+    connect(process, &QProcess::stateChanged, this, [this](QProcess::ProcessState state) {
+        if (listMenu_set_current) {
+            listMenu_set_current->setEnabled(state == QProcess::Running);
+        }
+    });
     connect(process, &QProcess::readyReadStandardOutput, this, [this]() {
         QString output = process->readAllStandardOutput();
         output.replace("\n", "<br>");
@@ -485,6 +494,10 @@ void MainWindow::initControls() {
     listMenu_remove = new QAction(tr("Remove Shader"), this);
     connect(listMenu_remove, &QAction::triggered, this, &MainWindow::menuRemove);
     listMenu->addAction(listMenu_remove);
+    listMenu_set_current = new QAction(tr("Set Current Shader"), this);
+    listMenu_set_current->setEnabled(false);
+    connect(listMenu_set_current, &QAction::triggered, this, &MainWindow::menuSetCurrentShader);
+    listMenu->addAction(listMenu_set_current);
     listMenu->addSeparator();
     listMenu_up = new QAction(tr("Shift Shader Up"), this);
     connect(listMenu_up, &QAction::triggered, this, &MainWindow::menuUp);
@@ -535,6 +548,7 @@ void MainWindow::initControls() {
     list_view->setAlternatingRowColors(false);
     list_view->setSelectionMode(QAbstractItemView::SingleSelection);
     list_view->setSelectionBehavior(QAbstractItemView::SelectRows);
+    list_view->setContextMenuPolicy(Qt::CustomContextMenu);
     list_view->setSortingEnabled(false);
     list_view->setAllColumnsShowFocus(true);
     list_view->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -551,12 +565,28 @@ void MainWindow::initControls() {
         "QHeaderView::section { background-color: #110000; color: lime;"
         " font-family: 'Courier New', Courier, monospace; padding: 4px;"
         " border: 1px solid #330000; }");
+    list_view->setToolTip(tr("Right click while running to change the active shader."));
     bottomTextBox = new QTextEdit(this);
     bottomTextBox->setHtml("<b style='color:red;'>ACMX2</b> - Interface: Loaded.");
     bottomTextBox->setStyleSheet("QTextEdit { background-color: black; color: lime; font-size: 24px; font-family: 'Courier New', Courier, monospace;; }");
     bottomTextBox->setReadOnly(true);
     connect(list_view, &QTreeWidget::doubleClicked,
             this, &MainWindow::listClicked);
+    connect(list_view, &QTreeWidget::customContextMenuRequested,
+            this, [this](const QPoint &pos) {
+                if (!list_view)
+                    return;
+                if (QTreeWidgetItem *item = list_view->itemAt(pos)) {
+                    list_view->setCurrentItem(item);
+                    publishSelectedShaderIndexToRunningProcess();
+                    if (process && process->state() == QProcess::Running) {
+                        return;
+                    }
+                }
+                if (listMenu) {
+                    listMenu->exec(list_view->viewport()->mapToGlobal(pos));
+                }
+            });
     QWidget *centralWidget = new QWidget(this);
     QVBoxLayout *layout = new QVBoxLayout(centralWidget);
     layout->addWidget(list_view, 3);
@@ -759,6 +789,18 @@ void MainWindow::menuRemove() {
     loadShaders(shader_path, true);
 }
 
+void MainWindow::menuSetCurrentShader() {
+    if (!process || process->state() != QProcess::Running)
+        return;
+    const int row = currentShaderRow();
+    if (row < 0 || row >= items.size()) {
+        Log("No shader selected.");
+        return;
+    }
+    publishSelectedShaderIndexToRunningProcess();
+    Log("Set current shader to index " + QString::number(row) + ".");
+}
+
 void MainWindow::updateIndex() {
     QFile file(shader_path + "/index.txt");
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
@@ -869,6 +911,73 @@ int MainWindow::currentShaderRow() const {
     if (!it)
         return -1;
     return list_view->indexOfTopLevelItem(it);
+}
+
+void MainWindow::initShaderSelectionSharedMemory() {
+#ifdef __linux__
+    if (shaderSelectionShm)
+        return;
+
+    shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName,
+                                      O_CREAT | O_RDWR,
+                                      0666);
+    if (shaderSelectionShmFd < 0) {
+        return;
+    }
+
+    if (::ftruncate(shaderSelectionShmFd, sizeof(acmx2::ipc::ShaderSelectionShmData)) != 0) {
+        ::close(shaderSelectionShmFd);
+        shaderSelectionShmFd = -1;
+        return;
+    }
+
+    void *mapped = ::mmap(nullptr,
+                          sizeof(acmx2::ipc::ShaderSelectionShmData),
+                          PROT_READ | PROT_WRITE,
+                          MAP_SHARED,
+                          shaderSelectionShmFd,
+                          0);
+    if (mapped == MAP_FAILED) {
+        ::close(shaderSelectionShmFd);
+        shaderSelectionShmFd = -1;
+        return;
+    }
+
+    shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+    if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
+        shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
+        shaderSelectionShm->magic = acmx2::ipc::kShaderSelectionMagic;
+        shaderSelectionShm->version = acmx2::ipc::kShaderSelectionVersion;
+        shaderSelectionShm->selected_index = -1;
+        shaderSelectionShm->sequence = 0;
+    }
+    shaderSelectionSequence = shaderSelectionShm->sequence;
+#endif
+}
+
+void MainWindow::publishSelectedShaderIndexToRunningProcess() {
+#ifdef __linux__
+    if (!shaderSelectionShm)
+        return;
+    const int row = currentShaderRow();
+    if (row < 0 || row >= items.size())
+        return;
+    shaderSelectionShm->selected_index = row;
+    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+#endif
+}
+
+void MainWindow::cleanupShaderSelectionSharedMemory() {
+#ifdef __linux__
+    if (shaderSelectionShm) {
+        ::munmap(shaderSelectionShm, sizeof(acmx2::ipc::ShaderSelectionShmData));
+        shaderSelectionShm = nullptr;
+    }
+    if (shaderSelectionShmFd >= 0) {
+        ::close(shaderSelectionShmFd);
+        shaderSelectionShmFd = -1;
+    }
+#endif
 }
 
 void MainWindow::selectShaderRow(int row) {
@@ -1484,6 +1593,7 @@ void MainWindow::runSelected() {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
     }
+    publishSelectedShaderIndexToRunningProcess();
     const QString data = currentShaderName();
     if (data.isEmpty()) {
         Log("<b>No item selected.</b>");
@@ -2046,6 +2156,7 @@ void MainWindow::runAll() {
     QStringList arguments;
     if (!buildRunArguments(arguments))
         return;
+    publishSelectedShaderIndexToRunningProcess();
 
     const bool firstRunAllInvocation = firstRunAllPendingRebuild;
     firstRunAllPendingRebuild = false;

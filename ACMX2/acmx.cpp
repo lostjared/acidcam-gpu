@@ -20,6 +20,7 @@
  */
 
 #include "mxwrite.hpp"
+#include "shader_selection_shm.hpp"
 #include "version_info.hpp"
 #include <algorithm>
 #include <argz.hpp>
@@ -104,6 +105,7 @@ namespace ac_gpu {
 #ifdef __linux__
 #include <fcntl.h>
 #include <linux/videodev2.h>
+#include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -6517,6 +6519,9 @@ class ACView : public gl::GLObject {
             initMidi(args.midi_map_file, args.midi_device);
         }
 #endif
+#ifdef __linux__
+    initShaderSelectionSharedMemory();
+#endif
     }
 
     bool is3d_enabled = false;
@@ -6616,6 +6621,81 @@ class ACView : public gl::GLObject {
     std::vector<int> saved_pass_list_before_random;
     bool saved_pass_enabled_before_random = false;
     size_t saved_shader_index_before_random = 0;
+
+#ifdef __linux__
+    int shaderSelectionShmFd = -1;
+    acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
+    uint32_t shaderSelectionLastSequence = 0;
+
+    void initShaderSelectionSharedMemory() {
+        if (shaderSelectionShm)
+            return;
+        shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName, O_RDWR, 0666);
+        if (shaderSelectionShmFd < 0)
+            return;
+
+        void *mapped = ::mmap(nullptr,
+                              sizeof(acmx2::ipc::ShaderSelectionShmData),
+                              PROT_READ | PROT_WRITE,
+                              MAP_SHARED,
+                              shaderSelectionShmFd,
+                              0);
+        if (mapped == MAP_FAILED) {
+            ::close(shaderSelectionShmFd);
+            shaderSelectionShmFd = -1;
+            return;
+        }
+
+        shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+        if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
+            shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
+            cleanupShaderSelectionSharedMemory();
+            return;
+        }
+
+        shaderSelectionLastSequence = shaderSelectionShm->sequence;
+    }
+
+    void cleanupShaderSelectionSharedMemory() {
+        if (shaderSelectionShm) {
+            ::munmap(shaderSelectionShm, sizeof(acmx2::ipc::ShaderSelectionShmData));
+            shaderSelectionShm = nullptr;
+        }
+        if (shaderSelectionShmFd >= 0) {
+            ::close(shaderSelectionShmFd);
+            shaderSelectionShmFd = -1;
+        }
+    }
+
+    void syncShaderSelectionFromInterface(gl::GLWindow *win) {
+        if (!shaderSelectionShm)
+            return;
+        if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
+            shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
+            return;
+        }
+        if (shaderSelectionShm->sequence == shaderSelectionLastSequence)
+            return;
+
+        shaderSelectionLastSequence = shaderSelectionShm->sequence;
+        const int requestedIndex = shaderSelectionShm->selected_index;
+        if (requestedIndex < 0)
+            return;
+        if (static_cast<size_t>(requestedIndex) >= library.size())
+            return;
+        if (shaderLocked || playlist_enabled || random_multipass_mode)
+            return;
+        if (static_cast<size_t>(requestedIndex) == library.index())
+            return;
+
+        beginCrossfade(win);
+        library.setIndex(static_cast<size_t>(requestedIndex));
+        if (is3d_enabled)
+            cube.setShaderProgram(library.shader());
+        sprite.setShader(library.shader());
+        updateShaderNameCache();
+    }
+#endif
 
     void generateRandomMultipass(gl::GLWindow *win) {
         static std::mt19937 rng(std::random_device{}());
@@ -6954,6 +7034,9 @@ class ACView : public gl::GLObject {
      * 10.Release the VideoCapture.
      */
     ~ACView() override {
+    #ifdef __linux__
+        cleanupShaderSelectionSharedMemory();
+    #endif
 #ifdef MIDI_ENABLED
         cleanupMidi();
 #endif
@@ -7854,6 +7937,10 @@ class ACView : public gl::GLObject {
 
 #ifdef MIDI_ENABLED
         pollMidi(win);
+#endif
+
+#ifdef __linux__
+    syncShaderSelectionFromInterface(win);
 #endif
 
         if (isMuxing.load()) {

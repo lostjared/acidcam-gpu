@@ -16,6 +16,7 @@
 #include "shader.hpp"
 #include "shaderlibrary.hpp"
 #include "shaderpass.hpp"
+#include "../shader_selection_shm.hpp"
 #include "version_info.hpp" //defines VERSION_INFO
 #include <QDateTime>
 #include <QHash>
@@ -70,6 +71,7 @@ class MainWindow : public QMainWindow {
     void menuUp();
     void menuDown();
     void menuRemove();
+    void menuSetCurrentShader();
     void menuAudioSettings();
     void menuSort();
     void menuShuffle();
@@ -106,6 +108,7 @@ class MainWindow : public QMainWindow {
                 hdr10Process->kill();
             }
         }
+            cleanupShaderSelectionSharedMemory();
         QMainWindow::closeEvent(event);
     }
 
@@ -146,7 +149,7 @@ class MainWindow : public QMainWindow {
     QAction *runMenu_select, *runMenu_all;
     QAction *runMenu_copyCommand = nullptr;
     QAction *play_repeat, *play_stop;
-    QAction *listMenu_new, *listMenu_shader, *listMenu_remove, *listMenu_up, *listMenu_down, *listMenu_shuffle, *listMenu_sort;
+    QAction *listMenu_new, *listMenu_shader, *listMenu_remove, *listMenu_set_current, *listMenu_up, *listMenu_down, *listMenu_shuffle, *listMenu_sort;
     QAction *helpMenu_about;
     QAction *listMenu_findNext;
     QString lastSearchText;
@@ -286,6 +289,15 @@ class MainWindow : public QMainWindow {
     /// @brief True while a cache rebuild process started by menuBuildShaderCache
     ///        is running.
     bool cacheBuildInProgress = false;
+
+    void initShaderSelectionSharedMemory();
+    void publishSelectedShaderIndexToRunningProcess();
+    void cleanupShaderSelectionSharedMemory();
+  #ifdef __linux__
+    int shaderSelectionShmFd = -1;
+    acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
+    quint32 shaderSelectionSequence = 0;
+  #endif
 };
 
 #endif
