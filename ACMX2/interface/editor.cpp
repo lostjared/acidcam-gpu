@@ -1,4 +1,5 @@
 #include "editor.hpp"
+#include "custom_style.hpp"
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
@@ -587,6 +588,7 @@ void TextEditor::updateWindowTitle() {
 void TextEditor::init() {
     m_modified = false;
     m_fontSize = 24;
+    acmx2::applyCustomStyleIfEnabled(this);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
 

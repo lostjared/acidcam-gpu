@@ -4,6 +4,7 @@
  */
 
 #include "metadata-viewer.hpp"
+#include "custom_style.hpp"
 
 #include <QApplication>
 #include <QClipboard>
@@ -172,6 +173,7 @@ HdrInfo collectHdr(const QJsonArray &frames) {
 MetadataViewer::MetadataViewer(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Media Metadata Viewer"));
     resize(900, 700);
+    acmx2::applyCustomStyleIfEnabled(this);
 
     auto *root = new QVBoxLayout(this);
 

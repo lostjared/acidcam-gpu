@@ -1,4 +1,5 @@
 #include "audio-window.hpp"
+#include "custom_style.hpp"
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QProcess>
@@ -38,15 +39,7 @@ AudioSettings::AudioSettings(QWidget *parent)
         sensitivityValueLabel->setText(QString::number(floatValue, 'f', 1));
     });
 
-    QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
-                    "* { color: red; font-weight: bold; } "
-                    "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
-                    "QPushButton:hover { background-color: red; color: black; }";
-
-    QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", true).toBool()) {
-        setStyleSheet(style);
-    }
+    acmx2::applyCustomStyleIfEnabled(this);
 
     QLabel *inputDeviceLabel = new QLabel("Input Device:", this);
     inputDeviceComboBox = new QComboBox(this);

@@ -1,4 +1,5 @@
 #include "playlist.hpp"
+#include "custom_style.hpp"
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
@@ -186,27 +187,7 @@ void PlaylistDialog::setupUI() {
     autopilotFramesSpinBox->setEnabled(false);
     autopilotRandomCheckBox->setEnabled(false);
 
-    QString style = "QDialog { background-color: black; }"
-                    "QGroupBox { color: cyan; border: 1px solid cyan; margin-top: 10px; padding-top: 10px; }"
-                    "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
-                    "QLabel { color: cyan; }"
-                    "QCheckBox { color: cyan; }"
-                    "QLineEdit { background-color: #001111; color: cyan; border: 1px solid cyan; padding: 3px; }"
-                    "QComboBox { background-color: #001111; color: cyan; border: 1px solid cyan; }"
-                    "QTreeWidget { background-color: #001111; color: lime; border: 1px solid cyan; }"
-                    "QTreeWidget::item { padding: 4px; }"
-                    "QTreeWidget::item:hover { background-color: #002222; }"
-                    "QTreeWidget::item:selected { background-color: #003333; color: lime; }"
-                    "QTreeWidget::branch { background-color: #001111; }"
-                    "QTreeWidget::branch:has-children:closed { image: none; }"
-                    "QTreeWidget::branch:has-children:open { image: none; }"
-                    "QHeaderView::section { background-color: #001111; color: cyan; border: 1px solid cyan; padding: 4px; }"
-                    "QPushButton { border: 1px solid cyan; background-color: #001111; color: cyan; padding: 5px; }"
-                    "QPushButton:hover { background-color: cyan; color: black; }";
-    QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", false).toBool()) {
-        setStyleSheet(style);
-    }
+    acmx2::applyCustomStyleIfEnabled(this);
 }
 
 void PlaylistDialog::loadShaders(const QStringList &shaderNames) {

@@ -1,4 +1,5 @@
 #include "settings.hpp"
+#include "custom_style.hpp"
 #include <QApplication>
 #include <QFile>
 #include <QFileInfo>
@@ -467,6 +468,7 @@ void SettingsWindow::populateCudaDevices() {
 
 void SettingsWindow::init() {
     setStyleSheet(qApp->styleSheet());
+    acmx2::applyCustomStyleIfEnabled(this);
 
     // ── Create all widgets ────────────────────────────────────────────
     cameraOptionRadioButton = new QRadioButton("Use Camera", this);

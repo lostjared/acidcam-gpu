@@ -1,4 +1,5 @@
 #include "shaderpass.hpp"
+#include "custom_style.hpp"
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -131,20 +132,7 @@ void ShaderPassDialog::setupUI() {
     saveButton->setEnabled(false);
     loadButton->setEnabled(false);
 
-    QString style = "QDialog { background-color: black; }"
-                    "QGroupBox { color: cyan; border: 1px solid cyan; margin-top: 10px; padding-top: 10px; }"
-                    "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
-                    "QLabel { color: cyan; }"
-                    "QCheckBox { color: cyan; }"
-                    "QLineEdit { background-color: #001111; color: cyan; border: 1px solid cyan; padding: 3px; }"
-                    "QComboBox { background-color: #001111; color: cyan; border: 1px solid cyan; }"
-                    "QListWidget { background-color: #001111; color: lime; border: 1px solid cyan; }"
-                    "QPushButton { border: 1px solid cyan; background-color: #001111; color: cyan; padding: 5px; }"
-                    "QPushButton:hover { background-color: cyan; color: black; }";
-    QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", false).toBool()) {
-        setStyleSheet(style);
-    }
+    acmx2::applyCustomStyleIfEnabled(this);
 }
 
 void ShaderPassDialog::loadShaders(const QStringList &shaderNames) {

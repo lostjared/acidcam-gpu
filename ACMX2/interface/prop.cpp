@@ -1,4 +1,5 @@
 #include "prop.hpp"
+#include "custom_style.hpp"
 #include <QFileInfo>
 #include <QMainWindow>
 #include <QSettings>
@@ -99,14 +100,7 @@ void PropWindow::init() {
     okButton->setMinimumHeight(30);
     cancelButton->setMinimumHeight(30);
     restoreDefaultsButton->setMinimumHeight(30);
-    QString style = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
-                    "* { color: red; font-weight: bold; } "
-                    "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
-                    "QPushButton:hover { background-color: red; color: black; }";
-
-    if (appSettings.value("useCustomStyle", false).toBool()) {
-        setStyleSheet(style);
-    }
+    acmx2::applyCustomStyleIfEnabled(this);
 }
 
 QString PropWindow::getDefaultPicturesDirectory() {

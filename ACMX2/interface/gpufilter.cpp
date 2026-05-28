@@ -1,4 +1,5 @@
 #include "gpufilter.hpp"
+#include "custom_style.hpp"
 #include <QCompleter>
 #include <QFileInfo>
 #include <QMessageBox>
@@ -141,21 +142,7 @@ void GPUFilterDialog::setupUI() {
     saveButton->setEnabled(false);
     loadButton->setEnabled(false);
 
-    QString style = "QDialog { background-color: black; }"
-                    "QGroupBox { color: red; border: 1px solid red; margin-top: 10px; padding-top: 10px; }"
-                    "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
-                    "QLabel { color: red; }"
-                    "QCheckBox { color: red; }"
-                    "QLineEdit { background-color: #110000; color: red; border: 1px solid red; padding: 3px; }"
-                    "QComboBox { background-color: #110000; color: red; border: 1px solid red; }"
-                    "QSpinBox { background-color: #110000; color: red; border: 1px solid red; }"
-                    "QListWidget { background-color: #110000; color: lime; border: 1px solid red; }"
-                    "QPushButton { border: 1px solid red; background-color: #110000; color: red; padding: 5px; }"
-                    "QPushButton:hover { background-color: red; color: black; }";
-    QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", false).toBool()) {
-        setStyleSheet(style);
-    }
+    acmx2::applyCustomStyleIfEnabled(this);
 }
 
 void GPUFilterDialog::loadUiState() {

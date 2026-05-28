@@ -1,5 +1,6 @@
 #include "main_window.hpp"
 #include "audio-window.hpp"
+#include "custom_style.hpp"
 #include "metadata-viewer.hpp"
 #include "settings.hpp"
 #include <QApplication>
@@ -761,6 +762,7 @@ void MainWindow::openCustomStyleEditor() {
     QDialog dialog(this);
     dialog.setWindowTitle(tr("Custom Style Editor"));
     dialog.resize(900, 640);
+    acmx2::applyCustomStyleIfEnabled(&dialog);
 
     auto *layout = new QVBoxLayout(&dialog);
     auto *topRow = new QHBoxLayout();
@@ -1600,6 +1602,7 @@ void MainWindow::menuToggleDisplayFilter(bool checked) {
 void MainWindow::menuWatermarkSettings() {
     QDialog dlg(this);
     dlg.setWindowTitle(tr("Watermark Settings"));
+    acmx2::applyCustomStyleIfEnabled(&dlg);
 
     auto *enableCheck = new QCheckBox(tr("Enable watermark in recorded video"), &dlg);
     enableCheck->setChecked(watermark_enabled);
@@ -2499,6 +2502,7 @@ void MainWindow::copyCommand() {
     QDialog dialog(this);
     dialog.setWindowTitle(tr("Copy Command"));
     dialog.resize(720, 320);
+    acmx2::applyCustomStyleIfEnabled(&dialog);
 
     QVBoxLayout *layout = new QVBoxLayout(&dialog);
     QPlainTextEdit *textBox = new QPlainTextEdit(&dialog);
@@ -2515,15 +2519,6 @@ void MainWindow::copyCommand() {
     QPushButton *runButton = buttonBox->addButton(tr("Run"), QDialogButtonBox::ActionRole);
     QPushButton *okButton = buttonBox->addButton(QDialogButtonBox::Ok);
     layout->addWidget(buttonBox);
-
-    QString style = "QDialog { background-color: black; border: 3px solid red; }"
-                    "QLabel { color: red; }"
-                    "QPushButton { border: 1px solid red; background-color: #110000; color: red; padding: 5px; }"
-                    "QPushButton:hover { background-color: red; color: black; }";
-    QSettings appSettings("LostSideDead");
-    if (appSettings.value("useCustomStyle", false).toBool()) {
-        dialog.setStyleSheet(style);
-    }
 
     connect(copyButton, &QPushButton::clicked, &dialog, [textBox, &dialog]() {
         const QString copiedText = textBox->toPlainText();
