@@ -802,7 +802,8 @@ void MainWindow::openCustomStyleEditor() {
     QDialog dialog(this);
     dialog.setWindowTitle(tr("Custom Style Editor"));
     dialog.resize(900, 640);
-    acmx2::applyCustomStyleIfEnabled(&dialog);
+    // Keep the editor dialog on the application stylesheet so Apply updates it live.
+    dialog.setStyleSheet("");
 
     auto *layout = new QVBoxLayout(&dialog);
     auto *topRow = new QHBoxLayout();
@@ -857,13 +858,15 @@ void MainWindow::openCustomStyleEditor() {
                 }
             });
 
-    auto applyEditorStyle = [this, enableCheck, editor, presetCombo]() {
+    auto applyEditorStyle = [this, &dialog, enableCheck, editor, presetCombo]() {
         customStyleSheet = editor->toPlainText();
         QSettings styleSettings("LostSideDead");
         styleSettings.setValue("customStyleSheet", customStyleSheet);
         styleSettings.setValue("customStylePreset", presetCombo->currentText());
         styleSettings.setValue("useCustomStyle", enableCheck->isChecked());
         applyCustomStyleSheet(enableCheck->isChecked());
+        // Ensure no local override remains so the dialog always follows qApp style.
+        dialog.setStyleSheet("");
         if (styleSheetAction) {
             QSignalBlocker blocker(styleSheetAction);
             styleSheetAction->setChecked(enableCheck->isChecked());
