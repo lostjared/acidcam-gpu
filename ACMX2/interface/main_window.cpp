@@ -589,16 +589,9 @@ void MainWindow::initControls() {
     // macOS does not support the persistent shader cache; hide the column.
     list_view->setColumnHidden(3, true);
 #endif
-    list_view->setStyleSheet(
-        "QTreeWidget { background-color: black; color: white; font-size: 18px;"
-        " font-family: 'Courier New', Courier, monospace; }"
-        "QHeaderView::section { background-color: #110000; color: lime;"
-        " font-family: 'Courier New', Courier, monospace; padding: 4px;"
-        " border: 1px solid #330000; }");
     list_view->setToolTip(tr("Right click while running to change the active shader."));
     bottomTextBox = new QTextEdit(this);
     bottomTextBox->setHtml("<b style='color:red;'>ACMX2</b> - Interface: Loaded.");
-    bottomTextBox->setStyleSheet("QTextEdit { background-color: black; color: lime; font-size: 24px; font-family: 'Courier New', Courier, monospace;; }");
     bottomTextBox->setReadOnly(true);
     connect(list_view, &QTreeWidget::doubleClicked,
             this, &MainWindow::listClicked);
@@ -624,6 +617,7 @@ void MainWindow::initControls() {
     centralWidget->setLayout(layout);
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
+    baseAppStyleSheet = qApp->styleSheet();
     QString path = appSettings.value("shaders", "").toString();
     path = path.trimmed();
     while (path.endsWith("/") || path.endsWith("\\")) {
@@ -676,23 +670,64 @@ void MainWindow::initControls() {
             Log(errorMsg);
         }
     }
-    const QString defaultCustomStyleSheet = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
-                       "* { color: red; font-weight: bold; } "
-                       "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
-                       "QPushButton:hover { background-color: red; color: black; }";
+    const QString defaultCustomStyleSheet = acmx2::defaultCustomStyleSheet();
     customStyleSheet = appSettings.value("customStyleSheet", defaultCustomStyleSheet).toString();
 
     applyCustomStyleSheet(useCustomStyle);
 }
 
+void MainWindow::applyMainViewStyles(bool customStyleEnabled) {
+    if (list_view) {
+        QFont listFont("Courier New");
+        listFont.setStyleHint(QFont::Monospace);
+        listFont.setPointSize(12);
+        list_view->setFont(listFont);
+
+        if (customStyleEnabled) {
+            list_view->setStyleSheet("");
+        } else {
+            list_view->setStyleSheet(
+                "QTreeWidget { background-color: black; color: white; font-size: 13px;"
+                " font-family: 'Courier New', Courier, monospace; }"
+                "QHeaderView::section { background-color: #110000; color: lime;"
+                " font-family: 'Courier New', Courier, monospace; padding: 4px;"
+                " border: 1px solid #330000; }");
+        }
+    }
+
+    if (bottomTextBox) {
+        QFont logFont("Courier New");
+        logFont.setStyleHint(QFont::Monospace);
+        logFont.setPointSize(11);
+        bottomTextBox->setFont(logFont);
+
+        if (customStyleEnabled) {
+            bottomTextBox->setStyleSheet("");
+        } else {
+            bottomTextBox->setStyleSheet(
+                "QTextEdit { background-color: black; color: lime; font-size: 13px;"
+                " font-family: 'Courier New', Courier, monospace; }");
+        }
+    }
+}
+
 void MainWindow::applyCustomStyleSheet(bool enable) {
     QSettings appSettings("LostSideDead");
     appSettings.setValue("useCustomStyle", enable);
-    if (enable) {
-        setStyleSheet(customStyleSheet);
-    } else {
-        setStyleSheet("");
+
+    if (baseAppStyleSheet.isEmpty()) {
+        baseAppStyleSheet = qApp->styleSheet();
     }
+
+    if (enable) {
+        qApp->setStyleSheet(customStyleSheet);
+    } else {
+        qApp->setStyleSheet(baseAppStyleSheet);
+    }
+
+    // Keep this window clean so it follows the global app style consistently.
+    setStyleSheet("");
+    applyMainViewStyles(enable);
 }
 
 void MainWindow::openCustomStyleEditor() {
@@ -700,58 +735,63 @@ void MainWindow::openCustomStyleEditor() {
     const bool currentlyEnabled = appSettings.value("useCustomStyle", false).toBool();
     const QString lastPresetName = appSettings.value("customStylePreset", "Current Style").toString();
 
+    auto makePalette = [](const char *winBg, const char *winFg, const char *accent,
+                          const char *fieldBg, const char *fieldFg, const char *fieldBorder,
+                          const char *btnBg, const char *btnHover, const char *btnFg,
+                          const char *menuBg, const char *menuFg,
+                          const char *menuSelBg, const char *menuSelFg,
+                          const char *selBg, const char *border) {
+        acmx2::CustomStylePalette p;
+        p.windowBg = winBg;
+        p.windowFg = winFg;
+        p.accent = accent;
+        p.fieldBg = fieldBg;
+        p.fieldFg = fieldFg;
+        p.fieldBorder = fieldBorder;
+        p.buttonBg = btnBg;
+        p.buttonHover = btnHover;
+        p.buttonFg = btnFg;
+        p.menuBg = menuBg;
+        p.menuFg = menuFg;
+        p.menuSelBg = menuSelBg;
+        p.menuSelFg = menuSelFg;
+        p.selectionBg = selBg;
+        p.border = border;
+        return acmx2::buildStyleSheet(p);
+    };
+
     const std::array<QPair<QString, QString>, 6> presetStyles = {{
         {"Current Style", customStyleSheet},
         {"Light: Blue & White",
-         "QMainWindow, QDialog { background: #f6fbff; color: #143a5c; }"
-         "QMenuBar, QMenu { background: #eaf5ff; color: #143a5c; }"
-         "QMenu::item:selected { background: #cfe6ff; color: #0b2e4d; }"
-         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
-         " background: white; color: #123b61; border: 1px solid #9cc6ea; }"
-         "QHeaderView::section { background: #dcedff; color: #123b61; border: 1px solid #9cc6ea; }"
-         "QPushButton { background: #2d7cc4; color: white; border: 1px solid #20639e; padding: 5px; }"
-         "QPushButton:hover { background: #2368a6; }"
-         "QCheckBox, QLabel { color: #123b61; }"},
+         makePalette("#f6fbff", "#143a5c", "#2d7cc4",
+                     "#ffffff", "#123b61", "#9cc6ea",
+                     "#2d7cc4", "#2368a6", "#ffffff",
+                     "#eaf5ff", "#143a5c", "#cfe6ff", "#0b2e4d",
+                     "#bcdcff", "1px solid #9cc6ea")},
         {"Light: Slate",
-         "QMainWindow, QDialog { background: #f5f7fa; color: #1f2a37; }"
-         "QMenuBar, QMenu { background: #e8edf4; color: #1f2a37; }"
-         "QMenu::item:selected { background: #d2dbe7; color: #111827; }"
-         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
-         " background: #ffffff; color: #1f2937; border: 1px solid #b6c3d4; }"
-         "QHeaderView::section { background: #e2e8f0; color: #1f2937; border: 1px solid #b6c3d4; }"
-         "QPushButton { background: #4b5563; color: #ffffff; border: 1px solid #374151; padding: 5px; }"
-         "QPushButton:hover { background: #374151; }"
-         "QCheckBox, QLabel { color: #1f2937; }"},
+         makePalette("#f5f7fa", "#1f2a37", "#4b5563",
+                     "#ffffff", "#1f2937", "#b6c3d4",
+                     "#4b5563", "#374151", "#ffffff",
+                     "#e8edf4", "#1f2a37", "#d2dbe7", "#111827",
+                     "#cdd5e0", "1px solid #b6c3d4")},
         {"Dark: Crimson",
-         "QMainWindow, QDialog { background: #0f0608; color: #ff637d; }"
-         "QMenuBar, QMenu { background: #16090d; color: #ff637d; }"
-         "QMenu::item:selected { background: #52111f; color: #ffd5dc; }"
-         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
-         " background: #1b0b10; color: #ff8fa3; border: 1px solid #7f2036; }"
-         "QHeaderView::section { background: #2a0d16; color: #ff8fa3; border: 1px solid #7f2036; }"
-         "QPushButton { background: #6f1630; color: #ffdfe6; border: 1px solid #a02949; padding: 5px; }"
-         "QPushButton:hover { background: #8a1f3d; }"
-         "QCheckBox, QLabel { color: #ff8fa3; }"},
+         makePalette("#0f0608", "#ff637d", "#a02949",
+                     "#1b0b10", "#ff8fa3", "#7f2036",
+                     "#6f1630", "#8a1f3d", "#ffdfe6",
+                     "#16090d", "#ff637d", "#52111f", "#ffd5dc",
+                     "#52111f", "2px solid #a02949")},
         {"Dark: Emerald",
-         "QMainWindow, QDialog { background: #06110c; color: #7af7c2; }"
-         "QMenuBar, QMenu { background: #08160f; color: #7af7c2; }"
-         "QMenu::item:selected { background: #12402d; color: #d9fff0; }"
-         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
-         " background: #0d1e16; color: #95ffd0; border: 1px solid #2c8e68; }"
-         "QHeaderView::section { background: #103022; color: #95ffd0; border: 1px solid #2c8e68; }"
-         "QPushButton { background: #1c6a4d; color: #dcfff2; border: 1px solid #2c8e68; padding: 5px; }"
-         "QPushButton:hover { background: #258961; }"
-         "QCheckBox, QLabel { color: #95ffd0; }"},
+         makePalette("#06110c", "#7af7c2", "#2c8e68",
+                     "#0d1e16", "#95ffd0", "#2c8e68",
+                     "#1c6a4d", "#258961", "#dcfff2",
+                     "#08160f", "#7af7c2", "#12402d", "#d9fff0",
+                     "#12402d", "2px solid #2c8e68")},
         {"Dark: Indigo",
-         "QMainWindow, QDialog { background: #070713; color: #c6c8ff; }"
-         "QMenuBar, QMenu { background: #0d1022; color: #c6c8ff; }"
-         "QMenu::item:selected { background: #232a5a; color: #eef0ff; }"
-         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
-         " background: #121634; color: #d8daff; border: 1px solid #4956a5; }"
-         "QHeaderView::section { background: #1b2150; color: #d8daff; border: 1px solid #4956a5; }"
-         "QPushButton { background: #36439a; color: #eef0ff; border: 1px solid #5362ba; padding: 5px; }"
-         "QPushButton:hover { background: #4453b4; }"
-         "QCheckBox, QLabel { color: #d8daff; }"}
+         makePalette("#070713", "#c6c8ff", "#5362ba",
+                     "#121634", "#d8daff", "#4956a5",
+                     "#36439a", "#4453b4", "#eef0ff",
+                     "#0d1022", "#c6c8ff", "#232a5a", "#eef0ff",
+                     "#232a5a", "2px solid #5362ba")}
     }};
 
     if (styleSheetAction) {
@@ -786,7 +826,12 @@ void MainWindow::openCustomStyleEditor() {
     editor->setPlainText(customStyleSheet);
     editor->setLineWrapMode(QPlainTextEdit::NoWrap);
     editor->setPlaceholderText(tr("Enter a Qt stylesheet (QSS) for ACMX2 interface..."));
-    editor->setStyleSheet("QPlainTextEdit { font-family: 'Courier New', Courier, monospace; font-size: 13px; }");
+    {
+        QFont qssFont("Courier New");
+        qssFont.setStyleHint(QFont::Monospace);
+        qssFont.setPointSize(10);
+        editor->setFont(qssFont);
+    }
 
     auto *buttonBox = new QDialogButtonBox(&dialog);
     auto *applyButton = buttonBox->addButton(tr("Apply"), QDialogButtonBox::ApplyRole);
@@ -2509,9 +2554,16 @@ void MainWindow::copyCommand() {
     textBox->setPlainText(commandText);
     textBox->setReadOnly(false);
     textBox->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-    textBox->setStyleSheet("QPlainTextEdit { background-color: black; color: lime; "
-                           "font-size: 14px; font-family: 'Courier New', Courier, monospace; "
-                           "border: 1px solid red; }");
+    if (!acmx2::isCustomStyleEnabled()) {
+        textBox->setStyleSheet("QPlainTextEdit { background-color: black; color: lime; "
+                               "font-size: 14px; font-family: 'Courier New', Courier, monospace; "
+                               "border: 1px solid red; }");
+    } else {
+        QFont commandFont("Courier New");
+        commandFont.setStyleHint(QFont::Monospace);
+        commandFont.setPointSize(14);
+        textBox->setFont(commandFont);
+    }
     layout->addWidget(textBox);
 
     QDialogButtonBox *buttonBox = new QDialogButtonBox(&dialog);

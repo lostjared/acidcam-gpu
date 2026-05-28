@@ -902,14 +902,24 @@ void TextEditor::resetFontSize() {
 }
 
 void TextEditor::updateFontSize() {
-    QString styleSheet = QString(
-                             "QPlainTextEdit { "
-                             "color: white; "
-                             "font-size: %1px; "
-                             "font-family: 'Courier New', Courier, monospace; "
-                             "background-color: black; "
-                             "}")
-                             .arg(m_fontSize);
+    QString styleSheet;
+    if (acmx2::isCustomStyleEnabled()) {
+        styleSheet = QString(
+                         "QPlainTextEdit { "
+                         "font-size: %1px; "
+                         "font-family: 'Courier New', Courier, monospace; "
+                         "}")
+                         .arg(m_fontSize);
+    } else {
+        styleSheet = QString(
+                         "QPlainTextEdit { "
+                         "color: white; "
+                         "font-size: %1px; "
+                         "font-family: 'Courier New', Courier, monospace; "
+                         "background-color: black; "
+                         "}")
+                         .arg(m_fontSize);
+    }
 
     m_textEdit->setStyleSheet(styleSheet);
     m_textEdit->setTabStopDistance(4 * m_textEdit->fontMetrics().horizontalAdvance(' '));

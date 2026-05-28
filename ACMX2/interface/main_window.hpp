@@ -233,7 +233,9 @@ class MainWindow : public QMainWindow {
     QAction *runFromCacheAction;
     QAction *recompileShadersAction;
     QAction *removeBrokenAction;
+    QString baseAppStyleSheet;
     QString customStyleSheet;
+    void applyMainViewStyles(bool customStyleEnabled);
     /// @brief Apply or remove the custom stylesheet override.
     /// @param enable True to apply, false to revert.
     void applyCustomStyleSheet(bool enable);
