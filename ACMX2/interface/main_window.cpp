@@ -1011,7 +1011,7 @@ void MainWindow::menuSetCurrentShader() {
         return;
     const int row = currentShaderRow();
     if (row < 0 || row >= items.size()) {
-        Log("\nNo shader selected.\n");
+        Log("No shader selected.");
         return;
     }
     publishSelectedShaderIndexToRunningProcess();
@@ -1400,7 +1400,12 @@ void MainWindow::populateShaderTree() {
 }
 
 void MainWindow::Log(const QString &message) {
-    bottomTextBox->append(message);
+    QString normalized = message;
+    while (normalized.endsWith('\n') || normalized.endsWith('\r')) {
+        normalized.chop(1);
+    }
+
+    bottomTextBox->append(normalized);
     QTextCursor cursor = bottomTextBox->textCursor();
     cursor.movePosition(QTextCursor::End);
     bottomTextBox->setTextCursor(cursor);
