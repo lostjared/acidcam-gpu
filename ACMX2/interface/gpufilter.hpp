@@ -42,6 +42,10 @@ class GPUFilterDialog : public QDialog {
     /// @brief Build CLI argument payload for the selected filter state.
     QString getFilterArgument() const;
 
+  signals:
+    /// @brief Emitted when settings should be applied without closing the dialog.
+    void settingsApplied(bool enabled, const QString &filterArgument, int bufferSize);
+
   public slots:
     void addFilter();
     void removeFilter();
@@ -70,6 +74,7 @@ class GPUFilterDialog : public QDialog {
     QPushButton *downButton;
     QPushButton *clearButton;
     QPushButton *okButton;
+    QPushButton *applyButton;
     QPushButton *cancelButton;
     QPushButton *saveButton;
     QPushButton *loadButton;

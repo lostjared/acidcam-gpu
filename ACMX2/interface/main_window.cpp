@@ -1403,16 +1403,28 @@ void MainWindow::menuGPUFilterSettings() {
         return;
     }
     GPUFilterDialog gpuDialog(executable_path, this);
-    if (gpuDialog.exec() == QDialog::Accepted) {
-        gpu_filter_enabled = gpuDialog.isGPUFilterEnabled();
-        gpu_filter_indices = gpuDialog.getFilterArgument();
-        gpu_buffer_size = gpuDialog.getBufferSize();
+
+    auto applyGpuDialogSettings = [&](bool enabled, const QString &filters, int bufferSize) {
+        gpu_filter_enabled = enabled;
+        gpu_filter_indices = filters;
+        gpu_buffer_size = bufferSize;
         if (gpu_filter_enabled) {
             Log("GPU Filter Settings Saved: Filters=" + gpu_filter_indices + ", Buffer=" + QString::number(gpu_buffer_size));
         } else {
             Log("GPU Filtering Disabled");
         }
         publishRuntimeSettingsToRunningProcess();
+    };
+
+    connect(&gpuDialog, &GPUFilterDialog::settingsApplied, this,
+            [&](bool enabled, const QString &filterArgument, int bufferSize) {
+                applyGpuDialogSettings(enabled, filterArgument, bufferSize);
+            });
+
+    if (gpuDialog.exec() == QDialog::Accepted) {
+        applyGpuDialogSettings(gpuDialog.isGPUFilterEnabled(),
+                               gpuDialog.getFilterArgument(),
+                               gpuDialog.getBufferSize());
     }
 }
 

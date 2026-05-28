@@ -87,9 +87,11 @@ void GPUFilterDialog::setupUI() {
     mainLayout->addWidget(filterGroup);
     QHBoxLayout *dialogButtonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
+    applyButton = new QPushButton("Apply", this);
     cancelButton = new QPushButton("Cancel", this);
     dialogButtonLayout->addStretch();
     dialogButtonLayout->addWidget(okButton);
+    dialogButtonLayout->addWidget(applyButton);
     dialogButtonLayout->addWidget(cancelButton);
     mainLayout->addLayout(dialogButtonLayout);
     connect(addButton, &QPushButton::clicked, this, &GPUFilterDialog::addFilter);
@@ -102,6 +104,10 @@ void GPUFilterDialog::setupUI() {
     connect(okButton, &QPushButton::clicked, this, [this]() {
         saveUiState();
         accept();
+    });
+    connect(applyButton, &QPushButton::clicked, this, [this]() {
+        saveUiState();
+        emit settingsApplied(isGPUFilterEnabled(), getFilterArgument(), getBufferSize());
     });
     connect(cancelButton, &QPushButton::clicked, this, [this]() {
         saveUiState();
