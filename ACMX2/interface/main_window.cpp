@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
+#include <QComboBox>
 #include <QColorDialog>
 #include <QDateTime>
 #include <QFrame>
@@ -414,7 +415,7 @@ void MainWindow::initControls() {
     styleSheetAction = new QAction(tr("Use Custom Style"), this);
     styleSheetAction->setCheckable(true);
     styleSheetAction->setChecked(false);
-    connect(styleSheetAction, &QAction::toggled, this, &MainWindow::applyCustomStyleSheet);
+    connect(styleSheetAction, &QAction::triggered, this, &MainWindow::openCustomStyleEditor);
     cameraMenu->addAction(styleSheetAction);
     runMenu_select = new QAction(tr("Run Selected"), this);
     runMenu_select->setShortcut(QKeySequence("F5"));
@@ -674,10 +675,11 @@ void MainWindow::initControls() {
             Log(errorMsg);
         }
     }
-    customStyleSheet = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
+    const QString defaultCustomStyleSheet = "QMainWindow, QDialog { background-color: black; border: 3px solid red; }"
                        "* { color: red; font-weight: bold; } "
                        "QPushButton { border: 1px solid red; background-color: #110000; padding: 5px; }"
                        "QPushButton:hover { background-color: red; color: black; }";
+    customStyleSheet = appSettings.value("customStyleSheet", defaultCustomStyleSheet).toString();
 
     applyCustomStyleSheet(useCustomStyle);
 }
@@ -690,6 +692,142 @@ void MainWindow::applyCustomStyleSheet(bool enable) {
     } else {
         setStyleSheet("");
     }
+}
+
+void MainWindow::openCustomStyleEditor() {
+    QSettings appSettings("LostSideDead");
+    const bool currentlyEnabled = appSettings.value("useCustomStyle", false).toBool();
+    const QString lastPresetName = appSettings.value("customStylePreset", "Current Style").toString();
+
+    const std::array<QPair<QString, QString>, 6> presetStyles = {{
+        {"Current Style", customStyleSheet},
+        {"Light: Blue & White",
+         "QMainWindow, QDialog { background: #f6fbff; color: #143a5c; }"
+         "QMenuBar, QMenu { background: #eaf5ff; color: #143a5c; }"
+         "QMenu::item:selected { background: #cfe6ff; color: #0b2e4d; }"
+         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
+         " background: white; color: #123b61; border: 1px solid #9cc6ea; }"
+         "QHeaderView::section { background: #dcedff; color: #123b61; border: 1px solid #9cc6ea; }"
+         "QPushButton { background: #2d7cc4; color: white; border: 1px solid #20639e; padding: 5px; }"
+         "QPushButton:hover { background: #2368a6; }"
+         "QCheckBox, QLabel { color: #123b61; }"},
+        {"Light: Slate",
+         "QMainWindow, QDialog { background: #f5f7fa; color: #1f2a37; }"
+         "QMenuBar, QMenu { background: #e8edf4; color: #1f2a37; }"
+         "QMenu::item:selected { background: #d2dbe7; color: #111827; }"
+         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
+         " background: #ffffff; color: #1f2937; border: 1px solid #b6c3d4; }"
+         "QHeaderView::section { background: #e2e8f0; color: #1f2937; border: 1px solid #b6c3d4; }"
+         "QPushButton { background: #4b5563; color: #ffffff; border: 1px solid #374151; padding: 5px; }"
+         "QPushButton:hover { background: #374151; }"
+         "QCheckBox, QLabel { color: #1f2937; }"},
+        {"Dark: Crimson",
+         "QMainWindow, QDialog { background: #0f0608; color: #ff637d; }"
+         "QMenuBar, QMenu { background: #16090d; color: #ff637d; }"
+         "QMenu::item:selected { background: #52111f; color: #ffd5dc; }"
+         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
+         " background: #1b0b10; color: #ff8fa3; border: 1px solid #7f2036; }"
+         "QHeaderView::section { background: #2a0d16; color: #ff8fa3; border: 1px solid #7f2036; }"
+         "QPushButton { background: #6f1630; color: #ffdfe6; border: 1px solid #a02949; padding: 5px; }"
+         "QPushButton:hover { background: #8a1f3d; }"
+         "QCheckBox, QLabel { color: #ff8fa3; }"},
+        {"Dark: Emerald",
+         "QMainWindow, QDialog { background: #06110c; color: #7af7c2; }"
+         "QMenuBar, QMenu { background: #08160f; color: #7af7c2; }"
+         "QMenu::item:selected { background: #12402d; color: #d9fff0; }"
+         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
+         " background: #0d1e16; color: #95ffd0; border: 1px solid #2c8e68; }"
+         "QHeaderView::section { background: #103022; color: #95ffd0; border: 1px solid #2c8e68; }"
+         "QPushButton { background: #1c6a4d; color: #dcfff2; border: 1px solid #2c8e68; padding: 5px; }"
+         "QPushButton:hover { background: #258961; }"
+         "QCheckBox, QLabel { color: #95ffd0; }"},
+        {"Dark: Indigo",
+         "QMainWindow, QDialog { background: #070713; color: #c6c8ff; }"
+         "QMenuBar, QMenu { background: #0d1022; color: #c6c8ff; }"
+         "QMenu::item:selected { background: #232a5a; color: #eef0ff; }"
+         "QTreeWidget, QTextEdit, QPlainTextEdit, QListWidget, QLineEdit, QComboBox, QSpinBox {"
+         " background: #121634; color: #d8daff; border: 1px solid #4956a5; }"
+         "QHeaderView::section { background: #1b2150; color: #d8daff; border: 1px solid #4956a5; }"
+         "QPushButton { background: #36439a; color: #eef0ff; border: 1px solid #5362ba; padding: 5px; }"
+         "QPushButton:hover { background: #4453b4; }"
+         "QCheckBox, QLabel { color: #d8daff; }"}
+    }};
+
+    if (styleSheetAction) {
+        QSignalBlocker blocker(styleSheetAction);
+        styleSheetAction->setChecked(currentlyEnabled);
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Custom Style Editor"));
+    dialog.resize(900, 640);
+
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *topRow = new QHBoxLayout();
+    auto *enableCheck = new QCheckBox(tr("Use custom style"), &dialog);
+    enableCheck->setChecked(currentlyEnabled);
+    auto *presetLabel = new QLabel(tr("Preset:"), &dialog);
+    auto *presetCombo = new QComboBox(&dialog);
+    for (const auto &preset : presetStyles) {
+        presetCombo->addItem(preset.first);
+    }
+    int presetIndex = 0;
+    for (int i = 0; i < static_cast<int>(presetStyles.size()); ++i) {
+        if (presetStyles[static_cast<std::size_t>(i)].first == lastPresetName) {
+            presetIndex = i;
+            break;
+        }
+    }
+    presetCombo->setCurrentIndex(presetIndex);
+
+    auto *editor = new QPlainTextEdit(&dialog);
+    editor->setPlainText(customStyleSheet);
+    editor->setLineWrapMode(QPlainTextEdit::NoWrap);
+    editor->setPlaceholderText(tr("Enter a Qt stylesheet (QSS) for ACMX2 interface..."));
+    editor->setStyleSheet("QPlainTextEdit { font-family: 'Courier New', Courier, monospace; font-size: 13px; }");
+
+    auto *buttonBox = new QDialogButtonBox(&dialog);
+    auto *applyButton = buttonBox->addButton(tr("Apply"), QDialogButtonBox::ApplyRole);
+    auto *saveButton = buttonBox->addButton(tr("Save"), QDialogButtonBox::ActionRole);
+    auto *closeButton = buttonBox->addButton(QDialogButtonBox::Close);
+
+    topRow->addWidget(enableCheck);
+    topRow->addSpacing(12);
+    topRow->addWidget(presetLabel);
+    topRow->addWidget(presetCombo, 1);
+    layout->addLayout(topRow);
+    layout->addWidget(editor, 1);
+    layout->addWidget(buttonBox);
+
+    connect(presetCombo, &QComboBox::currentTextChanged, &dialog,
+            [editor, &presetStyles, &appSettings](const QString &name) {
+                for (const auto &preset : presetStyles) {
+                    if (preset.first == name) {
+                        editor->setPlainText(preset.second);
+                        appSettings.setValue("customStylePreset", name);
+                        break;
+                    }
+                }
+            });
+
+    auto applyEditorStyle = [this, enableCheck, editor, presetCombo]() {
+        customStyleSheet = editor->toPlainText();
+        QSettings styleSettings("LostSideDead");
+        styleSettings.setValue("customStyleSheet", customStyleSheet);
+        styleSettings.setValue("customStylePreset", presetCombo->currentText());
+        styleSettings.setValue("useCustomStyle", enableCheck->isChecked());
+        applyCustomStyleSheet(enableCheck->isChecked());
+        if (styleSheetAction) {
+            QSignalBlocker blocker(styleSheetAction);
+            styleSheetAction->setChecked(enableCheck->isChecked());
+        }
+    };
+
+    connect(applyButton, &QPushButton::clicked, &dialog, applyEditorStyle);
+    connect(saveButton, &QPushButton::clicked, &dialog, applyEditorStyle);
+    connect(closeButton, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+    dialog.exec();
 }
 
 void MainWindow::newList() {

@@ -88,6 +88,7 @@ class MainWindow : public QMainWindow {
     void menuMetadataViewer();
     void menuWatermarkSettings();
     void menuToggleDisplayFilter(bool checked);
+    void openCustomStyleEditor();
 
   protected:
     /// @brief Add shader to list if it is valid and not already present.
