@@ -6706,6 +6706,90 @@ class ACView : public gl::GLObject {
         }
 
         repeat = (shaderSelectionShm->repeat_enabled != 0);
+        display_filter = (shaderSelectionShm->display_filter_enabled != 0);
+
+        const auto readBoundedText = [](const char *buf, std::size_t cap) {
+            std::size_t len = 0;
+            while (len < cap && buf[len] != '\0') {
+                ++len;
+            }
+            return std::string(buf, len);
+        };
+
+        const std::string requestedWatermark = readBoundedText(
+            shaderSelectionShm->watermark_text,
+            acmx2::ipc::kShaderSelectionMaxWatermarkText);
+        const bool requestedWatermarkEnabled =
+            (shaderSelectionShm->watermark_enabled != 0) && !requestedWatermark.empty();
+        enableWatermark = requestedWatermarkEnabled;
+        watermark_text = requestedWatermark;
+        watermark_r = std::clamp<int>(shaderSelectionShm->watermark_r, 0, 255);
+        watermark_g = std::clamp<int>(shaderSelectionShm->watermark_g, 0, 255);
+        watermark_b = std::clamp<int>(shaderSelectionShm->watermark_b, 0, 255);
+
+#ifdef ACMX2_WITH_CUDA
+        std::vector<int> requestedGpuFilters;
+        const uint32_t clampedGpuCount = std::min<uint32_t>(
+            shaderSelectionShm->gpu_filter_count,
+            acmx2::ipc::kShaderSelectionMaxGpuFilterCount);
+        requestedGpuFilters.reserve(clampedGpuCount);
+        for (uint32_t i = 0; i < clampedGpuCount; ++i) {
+            const int idx = shaderSelectionShm->gpu_filter_indices[i];
+            if (idx < 0 || idx >= ac_gpu::AC_FILTER_MAX)
+                continue;
+            requestedGpuFilters.push_back(idx);
+        }
+
+        const bool requestedGpuEnabled =
+            (shaderSelectionShm->gpu_filter_enabled != 0) && !requestedGpuFilters.empty();
+        const int requestedGpuBufferSize =
+            std::clamp<int>(static_cast<int>(shaderSelectionShm->gpu_buffer_size), 4, 32);
+
+        std::vector<int> currentGpuFilters;
+        currentGpuFilters.reserve(gpu_filters.size());
+        for (const auto &f : gpu_filters) {
+            currentGpuFilters.push_back(f.index);
+        }
+
+        const bool gpuBufferChanged =
+            requestedGpuEnabled &&
+            (!gpu_frame_buffer || gpu_frame_buffer->arraySize != requestedGpuBufferSize);
+        const bool gpuConfigChanged =
+            (gpu_filter_enabled != requestedGpuEnabled) ||
+            (currentGpuFilters != requestedGpuFilters) ||
+            gpuBufferChanged;
+
+        if (gpuConfigChanged) {
+            if (requestedGpuEnabled) {
+                gpu_filters.clear();
+                for (int idx : requestedGpuFilters) {
+                    gpu_filters.push_back({idx, ac_gpu::filters[idx].name});
+                }
+                gpu_filter_enabled = !gpu_filters.empty();
+                if (gpu_filter_enabled) {
+                    gpu_current_filter_index = gpu_filters.front().index;
+                    if (!gpu_frame_buffer || gpu_frame_buffer->arraySize != requestedGpuBufferSize) {
+                        gpu_frame_buffer = std::make_unique<ac_gpu::DynamicFrameBuffer>(requestedGpuBufferSize);
+                        if (d_ptrList) {
+                            CHECK_CUDA(cudaFree(d_ptrList));
+                            d_ptrList = nullptr;
+                        }
+                        CHECK_CUDA(cudaMalloc(&d_ptrList, requestedGpuBufferSize * sizeof(unsigned char *)));
+                        gpu_frame_index = 0;
+                        gpu_frame_dir = 1;
+                    }
+                    gpu_filtersChanged = true;
+                } else {
+                    gpu_filter_enabled = false;
+                }
+            } else {
+                gpu_filter_enabled = false;
+                gpu_filters.clear();
+                gpu_current_filter_index = 0;
+                gpu_filtersChanged = true;
+            }
+        }
+#endif
 
         const int requestedIndex = shaderSelectionShm->selected_index;
         if (requestedIndex < 0)

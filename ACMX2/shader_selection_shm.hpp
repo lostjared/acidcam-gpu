@@ -7,8 +7,10 @@ namespace acmx2::ipc {
 
 inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection";
 inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
-inline constexpr std::uint32_t kShaderSelectionVersion = 3;
+inline constexpr std::uint32_t kShaderSelectionVersion = 4;
 inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
+inline constexpr std::uint32_t kShaderSelectionMaxGpuFilterCount = 64;
+inline constexpr std::uint32_t kShaderSelectionMaxWatermarkText = 256;
 
 struct ShaderSelectionShmData {
     std::uint32_t magic = kShaderSelectionMagic;
@@ -17,8 +19,18 @@ struct ShaderSelectionShmData {
     std::uint32_t shader_pass_count = 0;
     std::uint8_t shader_pass_enabled = 0;
     std::uint8_t repeat_enabled = 0;
-    std::uint8_t reserved[2] = {0, 0};
+    std::uint8_t display_filter_enabled = 0;
+    std::uint8_t watermark_enabled = 0;
     std::int32_t shader_pass_indices[kShaderSelectionMaxPassCount] = {};
+    std::uint32_t gpu_filter_count = 0;
+    std::uint8_t gpu_filter_enabled = 0;
+    std::uint8_t gpu_buffer_size = 8;
+    std::uint8_t watermark_r = 255;
+    std::uint8_t watermark_g = 0;
+    std::uint8_t watermark_b = 150;
+    std::uint8_t reserved[3] = {0, 0, 0};
+    std::int32_t gpu_filter_indices[kShaderSelectionMaxGpuFilterCount] = {};
+    char watermark_text[kShaderSelectionMaxWatermarkText] = {};
     std::uint32_t sequence = 0;
 };
 

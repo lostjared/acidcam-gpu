@@ -654,6 +654,7 @@ void MainWindow::initControls() {
         QSignalBlocker blocker(displayFilterAction);
         displayFilterAction->setChecked(display_filter_enabled);
     }
+    publishRuntimeSettingsToRunningProcess();
     if (!path.isEmpty()) {
         QFileInfo pathInfo(path);
         QFileInfo indexInfo(path + "/index.txt");
@@ -979,8 +980,18 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->shader_pass_count = 0;
         shaderSelectionShm->shader_pass_enabled = 0;
         shaderSelectionShm->repeat_enabled = 0;
-        std::fill(std::begin(shaderSelectionShm->reserved), std::end(shaderSelectionShm->reserved), 0);
+        shaderSelectionShm->display_filter_enabled = 0;
+        shaderSelectionShm->watermark_enabled = 0;
         std::fill(std::begin(shaderSelectionShm->shader_pass_indices), std::end(shaderSelectionShm->shader_pass_indices), -1);
+        shaderSelectionShm->gpu_filter_count = 0;
+        shaderSelectionShm->gpu_filter_enabled = 0;
+        shaderSelectionShm->gpu_buffer_size = 8;
+        shaderSelectionShm->watermark_r = 255;
+        shaderSelectionShm->watermark_g = 0;
+        shaderSelectionShm->watermark_b = 150;
+        std::fill(std::begin(shaderSelectionShm->reserved), std::end(shaderSelectionShm->reserved), 0);
+        std::fill(std::begin(shaderSelectionShm->gpu_filter_indices), std::end(shaderSelectionShm->gpu_filter_indices), -1);
+        std::fill(std::begin(shaderSelectionShm->watermark_text), std::end(shaderSelectionShm->watermark_text), '\0');
         shaderSelectionShm->sequence = 0;
     }
     shaderSelectionSequence = shaderSelectionShm->sequence;
@@ -1032,6 +1043,49 @@ void MainWindow::publishRepeatStateToRunningProcess() {
     if (!shaderSelectionShm)
         return;
     shaderSelectionShm->repeat_enabled = (play_repeat && play_repeat->isChecked()) ? 1 : 0;
+    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+#endif
+}
+
+void MainWindow::publishRuntimeSettingsToRunningProcess() {
+#ifdef __linux__
+    if (!shaderSelectionShm)
+        return;
+
+    shaderSelectionShm->display_filter_enabled = display_filter_enabled ? 1 : 0;
+
+    const bool watermarkActive = watermark_enabled && !watermark_text.isEmpty();
+    shaderSelectionShm->watermark_enabled = watermarkActive ? 1 : 0;
+    shaderSelectionShm->watermark_r = static_cast<uint8_t>(std::clamp(watermark_r, 0, 255));
+    shaderSelectionShm->watermark_g = static_cast<uint8_t>(std::clamp(watermark_g, 0, 255));
+    shaderSelectionShm->watermark_b = static_cast<uint8_t>(std::clamp(watermark_b, 0, 255));
+    std::fill(std::begin(shaderSelectionShm->watermark_text), std::end(shaderSelectionShm->watermark_text), '\0');
+    const QByteArray wmUtf8 = watermark_text.toUtf8();
+    const std::size_t wmCap = static_cast<std::size_t>(acmx2::ipc::kShaderSelectionMaxWatermarkText - 1);
+    const std::size_t wmLen = std::min<std::size_t>(wmCap, static_cast<std::size_t>(wmUtf8.size()));
+    std::copy_n(wmUtf8.constData(), static_cast<int>(wmLen), shaderSelectionShm->watermark_text);
+
+    std::array<qint32, acmx2::ipc::kShaderSelectionMaxGpuFilterCount> gpuIndices;
+    gpuIndices.fill(-1);
+    quint32 gpuCount = 0;
+    if (cuda_available && gpu_filter_enabled && !gpu_filter_indices.isEmpty()) {
+        const QStringList parts = gpu_filter_indices.split(',', Qt::SkipEmptyParts);
+        for (const QString &part : parts) {
+            if (gpuCount >= acmx2::ipc::kShaderSelectionMaxGpuFilterCount)
+                break;
+            bool ok = false;
+            const int idx = part.trimmed().toInt(&ok);
+            if (!ok || idx < 0)
+                continue;
+            gpuIndices[gpuCount++] = idx;
+        }
+    }
+
+    shaderSelectionShm->gpu_filter_enabled = (gpuCount > 0) ? 1 : 0;
+    shaderSelectionShm->gpu_filter_count = gpuCount;
+    shaderSelectionShm->gpu_buffer_size = static_cast<uint8_t>(std::clamp(gpu_buffer_size, 4, 32));
+    std::copy(gpuIndices.begin(), gpuIndices.end(), std::begin(shaderSelectionShm->gpu_filter_indices));
+
     shaderSelectionShm->sequence = ++shaderSelectionSequence;
 #endif
 }
@@ -1358,6 +1412,7 @@ void MainWindow::menuGPUFilterSettings() {
         } else {
             Log("GPU Filtering Disabled");
         }
+        publishRuntimeSettingsToRunningProcess();
     }
 }
 
@@ -1389,6 +1444,7 @@ void MainWindow::menuToggleDisplayFilter(bool checked) {
     QSettings appSettings("LostSideDead");
     appSettings.setValue("displayFilter", display_filter_enabled);
     Log(QString("Display Filter Overlay: %1").arg(display_filter_enabled ? "Enabled" : "Disabled"));
+    publishRuntimeSettingsToRunningProcess();
 }
 
 void MainWindow::menuWatermarkSettings() {
@@ -1466,6 +1522,7 @@ void MainWindow::menuWatermarkSettings() {
             .arg(watermark_enabled ? "Enabled" : "Disabled")
             .arg(watermark_text)
             .arg(watermark_r).arg(watermark_g).arg(watermark_b));
+    publishRuntimeSettingsToRunningProcess();
 }
 
 void MainWindow::menuShaderPassSettings() {
@@ -1680,6 +1737,7 @@ void MainWindow::runSelected() {
         return;
     }
     publishSelectedShaderIndexToRunningProcess();
+    publishRuntimeSettingsToRunningProcess();
     const QString data = currentShaderName();
     if (data.isEmpty()) {
         Log("<b>No item selected.</b>");
@@ -2246,6 +2304,7 @@ void MainWindow::runAll() {
         return;
     publishMultipassShadersToRunningProcess();
     publishSelectedShaderIndexToRunningProcess();
+    publishRuntimeSettingsToRunningProcess();
 
     const bool firstRunAllInvocation = firstRunAllPendingRebuild;
     firstRunAllPendingRebuild = false;
