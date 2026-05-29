@@ -760,7 +760,7 @@ void MainWindow::openCustomStyleEditor() {
         return acmx2::buildStyleSheet(p);
     };
 
-    const std::array<QPair<QString, QString>, 6> presetStyles = {{
+    const std::array<QPair<QString, QString>, 11> presetStyles = {{
         {"Current Style", customStyleSheet},
         {"Light: Blue & White",
          makePalette("#f6fbff", "#143a5c", "#2d7cc4",
@@ -791,7 +791,37 @@ void MainWindow::openCustomStyleEditor() {
                      "#121634", "#d8daff", "#4956a5",
                      "#36439a", "#4453b4", "#eef0ff",
                      "#0d1022", "#c6c8ff", "#232a5a", "#eef0ff",
-                     "#232a5a", "2px solid #5362ba")}
+                     "#232a5a", "2px solid #5362ba")},
+        {"Dark: Black & Red",
+         makePalette("#050505", "#ff4d4d", "#d90000",
+                     "#120808", "#ff7b7b", "#b50000",
+                     "#2a0c0c", "#3a1010", "#ffd6d6",
+                     "#0b0707", "#ff5a5a", "#6b1111", "#ffe9e9",
+                     "#5a0c0c", "2px solid #d90000")},
+        {"Dark: Black & Green",
+         makePalette("#040704", "#6dfb88", "#22b44a",
+                     "#0a140b", "#a8ffbe", "#1d9a3e",
+                     "#12331b", "#164425", "#e1ffe8",
+                     "#08100a", "#74ff95", "#12331b", "#e7ffed",
+                     "#10381d", "2px solid #22b44a")},
+        {"Dark: Black & Blue",
+         makePalette("#04060a", "#81b9ff", "#2f6ed7",
+                     "#0a1222", "#b4d4ff", "#2a5eb7",
+                     "#132749", "#1a3260", "#e7f1ff",
+                     "#070d1a", "#8cc0ff", "#1a3260", "#eef5ff",
+                     "#17335f", "2px solid #2f6ed7")},
+        {"Dark: Black & Cyan",
+         makePalette("#030809", "#7defff", "#1ba8c3",
+                     "#09161a", "#b8f7ff", "#1990a7",
+                     "#10323a", "#14414b", "#e7fbff",
+                     "#071015", "#89f3ff", "#0f3943", "#e8fcff",
+                     "#0f3943", "2px solid #1ba8c3")},
+        {"Dark: Black & Amber",
+         makePalette("#090704", "#ffd77a", "#d88c1d",
+                     "#1a1308", "#ffe7b4", "#bf7a19",
+                     "#3d2810", "#523618", "#fff3db",
+                     "#130e07", "#ffdf8a", "#5a3a16", "#fff4df",
+                     "#5a3a16", "2px solid #d88c1d")}
     }};
 
     if (styleSheetAction) {
