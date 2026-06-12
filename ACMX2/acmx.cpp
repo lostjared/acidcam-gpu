@@ -113,6 +113,7 @@ namespace ac_gpu {
 #if defined(__APPLE__)
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #endif
 #include <deque>
 #include <glm/gtc/matrix_transform.hpp>
