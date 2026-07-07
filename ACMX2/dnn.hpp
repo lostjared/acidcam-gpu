@@ -6,6 +6,7 @@
 #include "opencv2/cudawarping.hpp"
 #include "opencv2/dnn.hpp"
 #include "opencv2/opencv.hpp"
+#include "opencv2/core/version.hpp"
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -41,7 +42,11 @@ namespace ac_dnn {
                     return;
                 }
                 std::string model_path_str = full_path.string();
+#if defined(CV_VERSION_MAJOR) && (CV_VERSION_MAJOR >= 5)
+    		net = cv::dnn::readNetFromONNX(model_path_str, cv::dnn::ENGINE_CLASSIC);
+#else
                 net = cv::dnn::readNetFromONNX(model_path_str);
+#endif
                 if (net.empty())
                     return;
                 if (cfg["preprocessing"]) {
@@ -58,7 +63,7 @@ namespace ac_dnn {
                 }
                 //    net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
                 //    net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA_FP16);
-                optimizeNeuralNet();
+		optimizeNeuralNet();
                 is_loaded = true;
             } catch (const YAML::Exception &e) {
                 std::cerr << "acmx2: YAML parse error: " << e.what() << '\n';
