@@ -7482,7 +7482,7 @@ class ACView : public gl::GLObject {
                     startAudioRecordingIfNeeded();
 #endif
                     mx::system_out << "acmx2: Pipeline mode => decode: camera, encode: "
-                                   << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
+                                   << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
                 } else {
                     throw mx::Exception("Could not open output video file: " + ofilename);
                 }
@@ -7664,7 +7664,7 @@ class ACView : public gl::GLObject {
 #endif
                         mx::system_out << "acmx2: Pipeline mode => decode: " << decode_mode
                                        << ", encode: "
-                                       << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
+                                       << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
                         fflush(stdout);
                         fflush(stderr);
                     } else {
