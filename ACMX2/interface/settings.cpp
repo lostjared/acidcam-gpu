@@ -628,7 +628,7 @@ void SettingsWindow::init() {
     encodeCrfSpinBox->setToolTip("Constant Rate Factor: 0 = lossless, 18 = visually lossless, 23 = default, 28 = small file");
 
     encodeCodecComboBox = new QComboBox(this);
-    encodeCodecComboBox->addItems({"auto", "software", "nvenc"});
+    encodeCodecComboBox->addItems({"auto", "software", "nvenc", "hevc_nvenc"});
     encodeCodecComboBox->setCurrentText(encSettings.value("recording/codec", "auto").toString());
 
     encodeRealtimeCheckBox = new QCheckBox("Realtime (low-latency)", this);

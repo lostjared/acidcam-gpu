@@ -1,23 +1,368 @@
 ACMX2 v2.22.0
 (C) 2026 LostSideDead
 https://lostsidedead.biz
-Device 1: /dev/video1
-  Driver : uvcvideo
-  Card   : EMEET SmartCam S600: EMEET Smar
-  Bus    : usb-0000:00:14.0-9.3
-
-  Format: MJPG (Motion-JPEG)
-    3840x2160 @ 30.0 fps
-    2560x1440 @ 30.0 fps
-    1920x1080 @ 60.0 fps, 30.0 fps
-    1280x960 @ 30.0 fps
-    1280x720 @ 60.0 fps, 30.0 fps
-    1024x576 @ 60.0 fps, 30.0 fps
-    960x720 @ 30.0 fps
-    800x600 @ 30.0 fps
-    640x480 @ 30.0 fps
-    640x360 @ 60.0 fps, 30.0 fps
-
-  Format: YUYV (YUYV 4:2:2)
-    640x480 @ 30.0 fps
-    640x360 @ 30.0 fps
+ACMX2: v2.22.0
+(C) 2026 LostSideDead
+https://lostsidedead.biz
+[1;96m
+Arguments[0m
+[95mShort and long forms are equivalent; values shown in <> are required.[0m
+[1;93m
+General[0m
+  [1;92m-v, --help[0m
+    [0;97mShow this help screen and keyboard controls.[0m
+    [95mexample: acmx2 --help[0m
+  [1;92m-p <path>, --path <path>[0m
+    [0;97mSet assets root directory (shaders, data files, defaults).[0m
+    [95mexample: acmx2 --path ./data[0m
+  [1;92m-r <WxH>, --resolution <WxH>[0m
+    [0;97mSet output/window resolution (for display and recording).[0m
+    [95mexample: acmx2 --resolution 1920x1080[0m
+  [1;92m-N, --fullscreen[0m
+    [0;97mStart in fullscreen mode (Escape to exit fullscreen).[0m
+    [95mexample: acmx2 --fullscreen[0m
+  [1;92m--silent[0m
+    [0;97mRun headless (no preview window). Intended for file-to-file rendering.[0m
+    [95mexample: acmx2 -i in.mp4 -o out.mp4 --silent[0m
+  [1;92m--duration <seconds>[0m
+    [0;97mAuto-stop recording/output after elapsed seconds.[0m
+    [95mexample: acmx2 -i in.mp4 -o out.mp4 --duration 30[0m
+  [1;92m--max-size <MB>[0m
+    [0;97mAuto-stop when output file size exceeds MB.[0m
+    [95mexample: acmx2 -i in.mp4 -o out.mp4 --max-size 500.0[0m
+[1;93m
+Input Source[0m
+  [1;92m-i <file>, --input <file>[0m
+    [0;97mInput video file.[0m
+    [95mexample: acmx2 --input clip.mp4[0m
+  [1;92m-g <file>, --graphic <file>[0m
+    [0;97mInput still image instead of camera/video.[0m
+    [95mexample: acmx2 --graphic frame.png[0m
+  [1;92m-d <idx>, --device <idx>[0m
+    [0;97mCamera device index to open.[0m
+    [95mexample: acmx2 --device 0[0m
+  [1;92m-c <WxH>, --camera-res <WxH>[0m
+    [0;97mRequest camera capture resolution.[0m
+    [95mexample: acmx2 --camera-res 1280x720[0m
+  [1;92m--enumerate-device <idx>[0m
+    [0;97mPrint camera resolutions/formats supported by device and exit.[0m
+    [95mexample: acmx2 --enumerate-device 0[0m
+  [1;92m--use-yuv[0m
+    [0;97mPrefer YUYV camera capture over MJPG for compatible devices.[0m
+    [95mexample: acmx2 --device 0 --use-yuv[0m
+[1;93m
+Shaders And Visual Pipeline[0m
+  [1;92m-s <index.txt>, --shaders <index.txt>[0m
+    [0;97mUse shader library index file (playlist-able shader set).[0m
+    [95mexample: acmx2 --shaders ./shaders/index.txt[0m
+  [1;92m-f <frag.glsl>, --fragment <frag.glsl>[0m
+    [0;97mUse a single fragment shader file directly.[0m
+    [95mexample: acmx2 --fragment ./shaders/wave.glsl[0m
+  [1;92m-h <index>, --shader <index>[0m
+    [0;97mSelect initial shader index from the active library.[0m
+    [95mexample: acmx2 --shaders index.txt --shader 3[0m
+  [1;92m--shader-pass <list>[0m
+    [0;97mRun multiple shader indices per frame (comma-separated).[0m
+    [95mexample: acmx2 --shader-pass 0,4,7[0m
+  [1;92m--playlist <file>[0m
+    [0;97mLoad shader playlist text file (one shader name per line).[0m
+    [95mexample: acmx2 --playlist live_set.txt[0m
+  [1;92m--cross-fade <seconds>[0m
+    [0;97mSet smooth transition time between playlist shader switches.[0m
+    [95mexample: acmx2 --playlist live_set.txt --cross-fade 1.25[0m
+  [1;92m--autopilot-frames <N>[0m
+    [0;97mAuto-switch to random playlist shader every N rendered frames (minimum 4).[0m
+    [95mexample: acmx2 --playlist live_set.txt --autopilot-frames 240[0m
+  [1;92m--autopilot-timeout <N>[0m
+    [0;97mAlias for --autopilot-frames (minimum 4).[0m
+    [95mexample: acmx2 --playlist live_set.txt --autopilot-timeout 240[0m
+  [1;92m--autopilot-random <N>[0m
+    [0;97mUse random autopilot interval 4..N frames for each J/Y autoplay switch.[0m
+    [95mexample: acmx2 --playlist live_set.txt --autopilot-random 300[0m
+  [1;92m--time-speed <mult>[0m
+    [0;97mScale shader time uniform speed (1.0 = normal).[0m
+    [95mexample: acmx2 --time-speed 0.5[0m
+  [1;92m--build <library-path>[0m
+    [0;97mCompile shader library into cache, then exit.[0m
+    [95mexample: acmx2 --build ./shaders[0m
+  [1;92m--remove-broken <library-path>[0m
+    [0;97mCompile-check each shader, remove failing entries from index.txt, then exit.[0m
+    [95mexample: acmx2 --remove-broken ./shaders[0m
+  [1;92m--no-cache[0m
+    [0;97mDisable shader binary cache and always compile at startup.[0m
+    [95mexample: acmx2 --no-cache[0m
+  [1;92m--texture-cache[0m
+    [0;97mEnable texture/frame cache for cache-aware shader effects.[0m
+    [95mexample: acmx2 --texture-cache[0m
+  [1;92m--cache-delay <frames>[0m
+    [0;97mDelay frame cache feed by N frames for temporal effects.[0m
+    [95mexample: acmx2 --texture-cache --cache-delay 6[0m
+  [1;92m--texture-cache-size <N>[0m
+    [0;97mSet texture cache ring buffer size (1-64, default 8).[0m
+    [95mexample: acmx2 --texture-cache --texture-cache-size 16[0m
+  [1;92m--enable-3d[0m
+    [0;97mEnable 3D object rendering pipeline.[0m
+    [95mexample: acmx2 --enable-3d[0m
+  [1;92m--model <file>[0m
+    [0;97mLoad a custom 3D model file for the 3D scene.[0m
+    [95mexample: acmx2 --enable-3d --model scene.obj[0m
+  [1;92m--flip[0m
+    [0;97mFlip final output vertically before display/encode.[0m
+    [95mexample: acmx2 --flip[0m
+[1;93m
+DNN And ONNX Models[0m
+  [1;92m--human <file>[0m
+    [0;97mLoad ONNX human segmentation model (e.g., pphumanseg .onnx) to isolate foreground person.[0m
+    [95mexample: acmx2 --human human_seg.onnx -i input.mp4 -o output.mp4[0m
+  [1;92m--background[0m
+    [0;97mWhen --human is used, apply shaders only to background; composite person on top.[0m
+    [95mexample: acmx2 --human model.onnx --background[0m
+  [1;92m--black <threshold>[0m
+    [0;97mSet mask black point / shadow crush threshold for color/segmentation masks (default: 0.35).[0m
+    [95mexample: acmx2 --human seg.onnx --black 0.25[0m
+  [1;92m--white <threshold>[0m
+    [0;97mSet mask white point / opacity saturation threshold for color/segmentation masks (default: 0.75).[0m
+    [95mexample: acmx2 --human seg.onnx --white 0.85[0m
+  [1;92m--edge <file>[0m
+    [0;97mLoad ONNX edge detection model (e.g., Dexined .onnx) to replace frame with edge map.[0m
+    [95mexample: acmx2 --edge edges.onnx -i video.mp4 -o edges.mp4[0m
+  [1;92m--onnx <file>[0m
+    [0;97mLoad generic ONNX model from YAML config file; replaces frame with model output.[0m
+    [95mexample: acmx2 --onnx bubble.yaml -i input.mp4 -o output.mp4[0m
+[1;93m
+GPU And CUDA[0m
+  [1;92m--gpu-filter <list>[0m
+    [0;97mApply CUDA filter chain by index list (comma-separated).[0m
+    [95mexample: acmx2 --gpu-filter 1,12,18[0m
+  [1;92m--gpu-buffer <N>[0m
+    [0;97mSet GPU temporal frame buffer size (4..32).[0m
+    [95mexample: acmx2 --gpu-buffer 12[0m
+  [1;92m--list-filters[0m
+    [0;97mList all built-in GPU filters and their indices.[0m
+    [95mexample: acmx2 --list-filters[0m
+  [1;92m-m <idx>, --cuda-device <idx>[0m
+    [0;97mSelect CUDA device index to run processing on.[0m
+    [95mexample: acmx2 --cuda-device 0[0m
+  [1;92m--list-cuda-devices[0m
+    [0;97mList CUDA devices visible to the runtime.[0m
+    [95mexample: acmx2 --list-cuda-devices[0m
+  [1;92m--check-cuda[0m
+    [0;97mReport whether this build has CUDA support enabled.[0m
+    [95mexample: acmx2 --check-cuda[0m
+[1;93m
+Recording And Encoding[0m
+  [1;92m-o <file>, --output <file>[0m
+    [0;97mWrite processed video to output file.[0m
+    [95mexample: acmx2 -i in.mp4 -o out.mp4[0m
+  [1;92m--png[0m
+    [0;97mVideo file mode: write output as PNG frame sequence in an output subdirectory.[0m
+    [95mexample: acmx2 -i in.mp4 -o out.mp4 --png[0m
+  [1;92m--generate <N>[0m
+    [0;97mSave a PNG frame every N frames to an output subdirectory (video or camera mode).[0m
+    [95mexample: acmx2 -i in.mp4 --generate 30[0m
+  [1;92m-e <prefix>, --prefix <prefix>[0m
+    [0;97mSnapshot filename prefix for captured frames.[0m
+    [95mexample: acmx2 --prefix snap/frame_[0m
+  [1;92m-u <fps>, --fps <fps>[0m
+    [0;97mSet output frame rate for recording.[0m
+    [95mexample: acmx2 --fps 60[0m
+  [1;92m-b <crf>, --bitrate <crf>[0m
+    [0;97mLegacy CRF quality option for encoder.[0m
+    [95mexample: acmx2 --bitrate 20[0m
+  [1;92m--encode-preset <name>[0m
+    [0;97mEncoder speed/quality preset (ultrafast .. veryslow).[0m
+    [95mexample: acmx2 --encode-preset fast[0m
+  [1;92m--encode-tune <name>[0m
+    [0;97mTune encoder for content type or low latency.[0m
+    [95mexample: acmx2 --encode-tune film[0m
+  [1;92m--encode-crf <0-51>[0m
+    [0;97mSet encoder quality directly (lower = better quality/larger file).[0m
+    [95mexample: acmx2 --encode-crf 18[0m
+  [1;92m--encode-codec <mode>[0m
+    [0;97mCodec backend: auto, software, or nvenc.[0m
+    [95mexample: acmx2 --encode-codec nvenc[0m
+  [1;92m--encode-realtime[0m
+    [0;97mEnable low-latency encoder settings for live pipelines.[0m
+    [95mexample: acmx2 --encode-realtime[0m
+  [1;92m--no-drop[0m
+    [0;97mNever drop frames; block producer when encoder queue is full.[0m
+    [95mexample: acmx2 --no-drop[0m
+  [1;92m--display-filter[0m
+    [0;97mShow current shader/stack and GPU filter in upper-left corner.[0m
+    [95mexample: acmx2 --display-filter[0m
+  [1;92m--use-watermark <text>[0m
+    [0;97mEnable watermark with given text in recorded videos (upper-left).[0m
+    [95mexample: acmx2 --use-watermark "My Channel"[0m
+  [1;92m--use-watermark-color <r,g,b>[0m
+    [0;97mWatermark text color as 0-255 components.[0m
+    [95mexample: acmx2 --use-watermark-color 255,255,0[0m
+  [1;92m--copy-audio[0m
+    [0;97mMux input audio track into encoded output when possible.[0m
+    [95mexample: acmx2 -i in.mp4 -o out.mp4 --copy-audio[0m
+  [1;92m-a, --repeat[0m
+    [0;97mLoop video input source continuously.[0m
+    [95mexample: acmx2 -i loop.mp4 --repeat[0m
+[1;93m
+Audio Reactivity[0m
+  [1;92m-w, --enable-audio[0m
+    [0;97mEnable audio-reactive shader modulation.[0m
+    [95mexample: acmx2 --enable-audio[0m
+  [1;92m-l <N>, --channels <N>[0m
+    [0;97mNumber of audio channels to capture/process.[0m
+    [95mexample: acmx2 --channels 2[0m
+  [1;92m-q <value>, --sense <value>[0m
+    [0;97mSet audio sensitivity multiplier for visual response.[0m
+    [95mexample: acmx2 --sense 1.4[0m
+  [1;92m--audio-warm-rate <value>[0m
+    [0;97mStartup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).[0m
+    [95mexample: acmx2 --enable-audio --audio-warm-rate 0.35[0m
+  [1;92m-y, --pass-through[0m
+    [0;97mPass captured input audio directly to selected output device.[0m
+    [95mexample: acmx2 --pass-through[0m
+  [1;92m--audio-input <device>[0m
+    [0;97mSelect input audio device name/id.[0m
+    [95mexample: acmx2 --audio-input "USB Audio"[0m
+  [1;92m--audio-output <device>[0m
+    [0;97mSelect output audio device name/id.[0m
+    [95mexample: acmx2 --audio-output "Built-in Output"[0m
+  [1;92m--list-devices[0m
+    [0;97mList available audio input/output devices.[0m
+    [95mexample: acmx2 --list-devices[0m
+  [1;92m--record-audio <wav-file>[0m
+    [0;97mRecord captured audio stream to a WAV file.[0m
+    [95mexample: acmx2 --record-audio take.wav[0m
+  [1;92m--record-gain <0.0-2.0>[0m
+    [0;97mSet recording gain multiplier (1.0 = unity).[0m
+    [95mexample: acmx2 --record-gain 1.2[0m
+  [1;92m--audio-file <file>[0m
+    [0;97mUse an audio file as reactivity source instead of microphone input.[0m
+    [95mexample: acmx2 --audio-file soundtrack.mp3[0m
+  [1;92m--audio-trunc[0m
+    [0;97mStop playback/output when the audio file reaches EOF.[0m
+    [95mexample: acmx2 --audio-file soundtrack.mp3 --audio-trunc[0m
+  [1;92m--enable-audio-buffers <N>[0m
+    [0;97mAllocate N sampler1D spectrumN history textures (1..22, spectrum0=newest).[0m
+    [95mexample: acmx2 --enable-audio --enable-audio-buffers 8[0m
+  [1;92m--check-audio[0m
+    [0;97mReport whether this build has audio support enabled.[0m
+    [95mexample: acmx2 --check-audio[0m
+[1;93m
+MIDI Control[0m
+  [1;92m--midi-map <file>[0m
+    [0;97mLoad MIDI mapping configuration file.[0m
+    [95mexample: acmx2 --midi-map midi.midi_cfg[0m
+  [1;92m--midi-device <idx>[0m
+    [0;97mSelect MIDI input device index.[0m
+    [95mexample: acmx2 --midi-device 0[0m
+  [1;92m--list-midi[0m
+    [0;97mList available MIDI input devices.[0m
+    [95mexample: acmx2 --list-midi[0m
+  [1;92m--check-midi[0m
+    [0;97mReport whether this build has MIDI support enabled.[0m
+    [95mexample: acmx2 --check-midi[0m
+[1;93m
+Runtime Overlay[0m
+  [1;92m--disable-counter[0m
+    [0;97mHide timer and FPS overlay text.[0m
+    [95mexample: acmx2 --disable-counter[0m
+[1;96m
+Keyboard Controls[0m
+[1;93m
+Main[0m
+  [1;92mEscape[0m
+    [0;97mQuit.[0m
+  [1;92mCtrl+X[0m
+    [0;97mQuit without audio mux.[0m
+  [1;92mUp Arrow[0m
+    [0;97mPrevious shader (or previous playlist entry in playlist/autopilot mode).[0m
+  [1;92mDown Arrow[0m
+    [0;97mNext shader (or next playlist entry in playlist/autopilot mode).[0m
+  [1;92mShift+Up Arrow[0m
+    [0;97mIn playlist/autopilot mode: change post-multipass shader backward.[0m
+  [1;92mShift+Down Arrow[0m
+    [0;97mIn playlist/autopilot mode: change post-multipass shader forward.[0m
+  [1;92mLeft Arrow[0m
+    [0;97mPrevious GPU filter (if enabled).[0m
+  [1;92mRight Arrow[0m
+    [0;97mNext GPU filter (if enabled).[0m
+  [1;92mSpace[0m
+    [0;97mEnable/disable processing.[0m
+  [1;92mL[0m
+    [0;97mToggle video freeze (Video/Image modes).[0m
+  [1;92mP[0m
+    [0;97mToggle pause (Video/Image) or toggle shader playlist.[0m
+  [1;92mJ[0m
+    [0;97mToggle autopilot mode (requires playlist).[0m
+  [1;92mY[0m
+    [0;97mToggle sequential autopilot (cycles playlist in order, requires playlist).[0m
+  [1;92mN[0m
+    [0;97mToggle random crossfade selection for autopilot shader switches.[0m
+  [1;92mT[0m
+    [0;97mEnable/disable time.[0m
+  [1;92mU / I[0m
+    [0;97mStep time when time is disabled.[0m
+  [1;92mPage Up / Page Down[0m
+    [0;97mIncrease/decrease time speed.[0m
+  [1;92mM[0m
+    [0;97mToggle multi-pass / multi-shader pass.[0m
+  [1;92mF[0m
+    [0;97mToggle fullscreen.[0m
+  [1;92mQ[0m
+    [0;97mToggle reactive time (if AUDIO_ENABLED).[0m
+  [1;92mInsert[0m
+    [0;97mIncrease audio sensitivity.[0m
+  [1;92mDelete[0m
+    [0;97mDecrease audio sensitivity.[0m
+  [1;92mEnd[0m
+    [0;97mToggle spectrum sensitivity scaling.[0m
+  [1;92mHome[0m
+    [0;97mToggle audio delta time scaling.[0m
+  [1;92m3[0m
+    [0;97mToggle 2D/3D mode.[0m
+[1;93m
+Snapshots[0m
+  [1;92mZ[0m
+    [0;97mSave PNG snapshot (SDR 8-bit; HDR mode still outputs SDR PNG).[0m
+  [1;92m4[0m
+    [0;97mSave TIFF snapshot (SDR: 8-bit RGBA; HDR: 16-bit RGBA; requires ACMX2_WITH_TIFF).[0m
+  [1;92m5[0m
+    [0;97mSave lossless WebP snapshot (HDR is tone-mapped; requires ACMX2_WITH_WEBP).[0m
+  [1;92m6[0m
+    [0;97mSave raw RGBA snapshot (HDR: 16-bit RGBA, otherwise 8-bit RGBA).[0m
+    [95mexample: ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw[0m
+[1;93m
+3D Mode[0m
+  [1;92mW / A / S / D[0m
+    [0;97mLook around.[0m
+  [1;92mV[0m
+    [0;97mToggle view rotation.[0m
+  [1;92mO[0m
+    [0;97mToggle oscillation.[0m
+  [1;92mX[0m
+    [0;97mReset camera distance.[0m
+  [1;92m+ / -[0m
+    [0;97mIncrease/decrease camera distance.[0m
+  [1;92mB[0m
+    [0;97mIncrease movement speed.[0m
+  [1;92mN (held in 3D)[0m
+    [0;97mDecrease movement speed.[0m
+  [1;92mC[0m
+    [0;97mToggle object wave.[0m
+  [1;92mE[0m
+    [0;97mEnable/disable watermark.[0m
+  [1;92m][0m
+    [0;97mIncrease model scale.[0m
+  [1;92m[[0m
+    [0;97mDecrease model scale.[0m
+  [1;92m. (period)[0m
+    [0;97mIncrease camera rotation speed.[0m
+  [1;92m, (comma)[0m
+    [0;97mDecrease camera rotation speed.[0m
+[1;93m
+Environment Variables[0m
+  [1;92mACMX2_PATH[0m
+    [0;97mDefault assets root directory (equivalent to --path). Used when --path is not specified.[0m
+    [95mexample: export ACMX2_PATH=/usr/local/share/acmx2[0m
+  [1;92mACMX2_SHADER_PATH[0m
+    [0;97mDefault shader library index file or directory (equivalent to --shaders). Used when neither --shaders nor --fragment is specified.[0m
+    [95mexample: export ACMX2_SHADER_PATH=/usr/local/share/acmx2/filters[0m
