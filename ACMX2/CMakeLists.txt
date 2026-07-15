@@ -53,7 +53,13 @@ if(NOT EXISTS "${ACMX2_LOCAL_MXWRITE_DIR}/CMakeLists.txt")
     )
 endif()
 
-add_subdirectory("${ACMX2_LOCAL_MXWRITE_DIR}" "${CMAKE_BINARY_DIR}/acmx2_mxwrite_build")
+# Build MXWrite as a private dependency. EXCLUDE_FROM_ALL keeps its install and
+# export rules out of ACMX2's install target; linking mxwrite below still builds it.
+add_subdirectory(
+    "${ACMX2_LOCAL_MXWRITE_DIR}"
+    "${CMAKE_BINARY_DIR}/acmx2_mxwrite_build"
+    EXCLUDE_FROM_ALL
+)
 if(NOT TARGET mxwrite)
     message(FATAL_ERROR "The local MXWrite project did not define the expected mxwrite target.")
 endif()
