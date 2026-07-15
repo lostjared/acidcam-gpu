@@ -1,0 +1,4345 @@
+[Cyber Codex Nebula]
+codex_grad_fractal_nebula_gate.glsl
+codex_grad_fractal_solar_crown.glsl
+game_codex_arcane_runes.glsl
+game_codex_low_ammo_warning.glsl
+game_codex_toxic_cloud.glsl
+[Glitch Atan Dream]
+atan-glitch.glsl
+composite-static.glsl
+distortf4.glsl
+glitch-no-noise-mouse.glsl
+glitch-noise.glsl
+[Chromatic Gradient Dream]
+gradient_shift.glsl
+moving_gradient.glsl
+[Mirrored Mirror3 Dream]
+mirror3.glsl
+mirror3_op.glsl
+mirror3_s.glsl
+reverse_xy.glsl
+[Chromatic Broadcast Dream]
+broadcast_sync_lost.glsl
+dark.glsl
+game_low_battery.glsl
+[Chromatic Green Pulse]
+twist_audio_ex_color_split.glsl
+fat-green.glsl
+green_gradient.glsl
+gradient_color.glsl
+[Chromatic Composite Dream]
+bend2.glsl
+composite.glsl
+composite2.glsl
+composite_crt.glsl
+[Chromatic Move Dream]
+green_move.glsl
+move.glsl
+[Chromatic Game Dream]
+deepseek4.glsl
+expand_contract_.glsl
+game_anime_cel.glsl
+game_fake_ssao.glsl
+huei_af2.glsl
+[Electric Ant Dream]
+ant_light_color_warp_cathedral.glsl
+remove_flicker.glsl
+ant_light_color_flicker_gem.glsl
+[Chromatic Scale3 Circuit]
+af_scale3.glsl
+vhs-color-mode.glsl
+[Chromatic Sin Dream]
+alpha_sin_os.glsl
+rgb.glsl
+game_technicolor.glsl
+self_alphablend_scale.glsl
+[Chromatic Pencil Dream]
+darkb.glsl
+edge_pencil.glsl
+pencil_draw_lines.glsl
+[Chromatic Chromatic Circuit]
+code-mirror-chromatic-monolith.glsl
+rainbow_metal_code_kaleido_chrome.glsl
+lucy.glsl
+xor_code_chromatic_weave.glsl
+[Cyber Pixels Shatter]
+block_pixels.glsl
+random_pixels_static.glsl
+[Chromatic Mono Dream]
+game_green_mono.glsl
+random_rgb.glsl
+shift_dark.glsl
+color_infinity_loop_single.glsl
+rhue.glsl
+[Temporal Shift Recursion]
+fractal_mirror_echo_fold.glsl
+echo_shift.glsl
+Temporal.glsl
+[Prismatic Pilot Tide]
+ripple_prism.glsl
+crystal-3.glsl
+[Cyber Chromatic Dream]
+twist-code-chromatic-vortex.glsl
+twist-code-spiral-shockwave.glsl
+disk.glsl
+[Chromatic Rgb Tide]
+cyclone.glsl
+tornado.glsl
+rainbow_x_xor_beat.glsl
+xor_rgb_rainbow_1.glsl
+xor_rgb_rainbow_mouse.glsl
+[Warped Pos Dream]
+swirl_by_mouse_pos.glsl
+color_swirl_o1_mouse.glsl
+rainbow_color_swirl.glsl
+[Temporal Spectrum8 Hall]
+ant_cache_spectrum8_echo_quad_mirror.glsl
+code-mirror-echo-temple.glsl
+mirror_8.glsl
+echo_cf.glsl
+[Chromatic Shadow Dream]
+dmd_gpt.glsl
+open_shadow.glsl
+open_shadow_jump.glsl
+[Chromatic Chromatic Pulse]
+twist_audio_ex_chromatic.glsl
+gsupercool.glsl
+[Chromatic Geo Dream]
+comb3_geo_mouse.glsl
+fat-slow.glsl
+sac-geo.glsl
+slither.glsl
+color-f.glsl
+[Chromatic Game Dream 0026]
+game_hacker_terminal.glsl
+game_technicolor.glsl
+[Velvet Smooth Circuit]
+rainbow-code-spectral-bloom.glsl
+xor_code_prismatic_bloom.glsl
+xor_code_rgb_smooth_velvet_prism.glsl
+halluc_ink_bloom.glsl
+xor_code_rgb_smooth_spectral_mist.glsl
+[Chromatic Random Burst]
+random_x_audio_zoom_strobe.glsl
+game_disco_floor.glsl
+sine1.glsl
+strobe_colors.glsl
+strobe.glsl
+[Cyber Smooth Silk]
+code-frac-x-aurora-sanctum.glsl
+game_scanlines_hd.glsl
+xor_code_bitplane_aurora.glsl
+xor_code_rgb_smooth_aurora_blend.glsl
+xor_code_rgb_smooth_silk_gradient.glsl
+[Aurora Aura3 Pulse]
+aura3.glsl
+aura5.glsl
+random_x_audio_aurora.glsl
+[Mirrored Wrap Tide]
+mirror-atan.glsl
+mirror-bubble-zoom-mouse.glsl
+mirror-ufo-wrap.glsl
+mirror-wrap-edge.glsl
+mirror-wrap.glsl
+[Chromatic Pebble Dream]
+game_bleach_bypass.glsl
+pebble.glsl
+pebble_fast.glsl
+[Chromatic Huri3 Dream]
+huri3.glsl
+smooth_gl.glsl
+[Chromatic Game Dream 0034]
+game_amber_mono.glsl
+game_green_mono.glsl
+green_gradient.glsl
+game_chromatic_edges.glsl
+[Warped Gvortex Dream]
+gvortex.glsl
+HyperVortex.glsl
+twarp.glsl
+DispersionRotate.glsl
+gptswirl.glsl
+[Chromatic Beat Tide]
+rainbow_x_spiral_beat.glsl
+kale.glsl
+srainbow.glsl
+[Cyber Maelstrom Silk]
+code-frac-x-aurora-maelstrom.glsl
+codex_vhs_midnight_dub.glsl
+vhs-code-ghosting.glsl
+[Prismatic Singularity Circuit]
+twist-code-prism-singularity.glsl
+twist-code-radial-overdrive.glsl
+prism.glsl
+[Mirrored Mirror3 Cipher]
+mirror3.glsl
+mirror3_op.glsl
+mirror3_s.glsl
+reverse_xor.glsl
+[Chromatic Dark Tide]
+dark_square.glsl
+echo_xor.glsl
+rainbow_bright.glsl
+rainbow_expand_noise_xor_light.glsl
+xor_rgb_dark_rainbow.glsl
+[Temporal Ant Crystal]
+code-frac-diamond-echo.glsl
+ant_spectrum_diamond_echo.glsl
+ant_spectrum_echo_prism.glsl
+ant_texture_cache_spectrum_scale_holo_grid.glsl
+echo_s.glsl
+[Chromatic Blackhole Tide]
+blackhole.glsl
+dark_psych_wave.glsl
+edge_rainbow.glsl
+rainbow_expand.glsl
+[Liquid Cycle Dream]
+color_peak_inversion_cache_spectrum_time.glsl
+ripple_cycle.glsl
+ripple_cycle_circle.glsl
+rainbow_cd.glsl
+[Warped Turbine Circuit]
+twist-code-turbine-rift.glsl
+twist_directions.glsl
+[Chromatic Night Dream]
+game_night_vision.glsl
+rhue.glsl
+smooth_var.glsl
+[Storm Tremor3 Dream]
+tremor3.glsl
+tremor4.glsl
+[Chromatic Rgbt Tide]
+rgbt.glsl
+rainbow_x_chromatic_storm.glsl
+[Chromatic Inflate Tide]
+inflate.glsl
+putty.glsl
+xor_rgb_rainbow_swirl_limit.glsl
+[Cyber Datam1 Radiance]
+datam1.glsl
+xor_code_neon_topology.glsl
+[Chromatic Ant Tide]
+ant_spectrum_rainbow_vortex.glsl
+expand_spot.glsl
+ant_spectrum_rainbow_pulse.glsl
+ant_spectrum_rainbow_shatter.glsl
+rainbow_expand_noise_xor.glsl
+[Temporal Shader04 Recursion]
+frac_shader04_echo.glsl
+echo_x6.glsl
+[Prismatic Cont2 Vortex]
+gem-spiral-cont2.glsl
+gem_p.glsl
+[Chromatic Paint Dream]
+game_oil_paint.glsl
+random_soul.glsl
+snake_updown.glsl
+ant_time_f_color_spectrogram_paint.glsl
+[Chromatic Blue Dream]
+blue.glsl
+pencil_draw.glsl
+gradient_color.glsl
+[Mirrored Comb Recursion]
+frac_mouse_z2.glsl
+fractal_mirror_spiral_pulse.glsl
+mirror-bubble-zoom-mouse.glsl
+mirror-comb-mouse.glsl
+mirror-frac-mouse-z2.glsl
+[Warped Hypervortex Dream]
+HyperVortex.glsl
+warp-atan.glsl
+warp_tunnel.glsl
+[Chromatic Disk2 Dream]
+disk2.glsl
+grad3.glsl
+mb.glsl
+smooth_var.glsl
+[Storm Time Echo]
+ant_peak_inversion_cache_spectrum_time_strobe_void.glsl
+flash.glsl
+random_rgb_strobe.glsl
+random_strobe_time.glsl
+red_strobe.glsl
+[Chromatic Create Hall]
+mirror-color-mouse.glsl
+huri_create_mouse.glsl
+[Chromatic Air Dream]
+air.glsl
+air_full.glsl
+[Chromatic Elastic Dream]
+elastic_mouse.glsl
+kscopic_3d_mouse.glsl
+random_soul_by_mouse.glsl
+color_w_mouse.glsl
+hue-mouse.glsl
+[Chromatic Shadow Dream 0062]
+open_shadow_multi_x2.glsl
+color_l.glsl
+[Velvet Rgb Tide]
+rainbow_x_pulse_blur.glsl
+rgb_blur.glsl
+rgb_blur_time.glsl
+[Aurora Aura5 Vortex]
+fractal_mirror_spiral_flip.glsl
+spiral-aura.glsl
+aura5.glsl
+auraXi3.glsl
+gem-aura.glsl
+[Fractal Shader01 Radiance]
+frac_shader01_dark.glsl
+frac_shader01_smooth_neon.glsl
+[Warped Out Dream]
+zoom_in_out_mouse.glsl
+swirl_by_mouse.glsl
+color_swirl_sin_mouse.glsl
+[Chromatic Sweb Circuit]
+sweb.glsl
+vhs_color.glsl
+[Temporal Loop Dream]
+echo.glsl
+echo_loop.glsl
+echo_x5.glsl
+gtrail.glsl
+HyperFocusTrails.glsl
+[Chromatic Beat Tide 0069]
+ant_spectrum_rainbow_fractal.glsl
+breathe.glsl
+game_heart_beat.glsl
+react_x_rainbow_beat.glsl
+self_alphablend_scale.glsl
+[Liquid Underwater Recursion]
+fractal_mirror_wave_fold.glsl
+ocean.glsl
+ripple.glsl
+underwater.glsl
+underwaterenchanced.glsl
+[Chromatic Loose Tide]
+rainbow_metal_code_opal_vortex.glsl
+rainbow_spiral_loose.glsl
+expand_mul.glsl
+rainbow_metal_code_prismatic_tide.glsl
+rainbow_x_swirl_freq.glsl
+[Mirrored Mirror1 Crystal]
+mirror-bowl.glsl
+mirror-prism.glsl
+mirror1.glsl
+mirror1_s.glsl
+mirror2_s.glsl
+[Chromatic Ant Tide 0073]
+ant_spectrum_rainbow_fold.glsl
+rainbow_spiral_rev2.glsl
+ant_peak_inversion_cache_spectrum_time_acid_rain_flood.glsl
+rgbchecker.glsl
+react_x_rainbow_flow.glsl
+[Chromatic Air Dream 0074]
+air-bowl.glsl
+air.glsl
+[Chromatic Trails Pulse]
+color_trails_cache_spectrum_orbit_vortex.glsl
+color_trails_cache_spectrum_knot_spindle.glsl
+gsupercool2.glsl
+random_x_audio_color_orbit.glsl
+shader1.glsl
+[Fractal Shader02 Burst]
+codex_grad_fractal_prism_storm.glsl
+frac_shader02_dmd4.glsl
+frac_shader02_octo_strobe2.glsl
+[Plasma Mandella1 Dream]
+mandella1.glsl
+react_x_wave_distort.glsl
+random_x_audio_chromatic_pulse.glsl
+[Chromatic Faster Pulse]
+faster.glsl
+react_x_chromatic_split.glsl
+[Cyber Collapse Radiance]
+twist-code-feedback-spiral.glsl
+twist-code-neon-collapse.glsl
+twist-code-octave-wormhole.glsl
+wlight.glsl
+brightness_increase.glsl
+[Chromatic Random Tide]
+PI_x1.mp4.glsl
+random_soul.glsl
+random_square.glsl
+dark_rainbow_rubber_soul.glsl
+random_colors.glsl
+[Mirrored Pong Pulse]
+mirror-pong.glsl
+mirror_x_audio22.glsl
+[Chromatic Trails Pulse 0082]
+color_trails_cache_spectrum_jet_storm.glsl
+color_trails_cache_spectrum_ribbon_serpent.glsl
+green.glsl
+random_x_audio_strobe_color.glsl
+[Prismatic Game Dream]
+game_freeze_crystal.glsl
+prism_glass.glsl
+[Chromatic Cursormove Tide]
+rainbow_metal_fractal.glsl
+CursorMove.glsl
+gem_rainbow_metal_audio.glsl
+rainbow_x_light_bass.glsl
+rainbow_x_prism_pulse.glsl
+[Chromatic Scale Echo]
+ant_texture_cache_spectrum_scale_chromatic.glsl
+color_trails_cache_spectrum_shear_razor.glsl
+texture_scale.glsl
+[Storm Pilot Recursion]
+[Chromatic Darkred Dream]
+darkred.glsl
+game_boss_warning.glsl
+[Temporal Echo2 Recursion]
+frac_shader04_echo2.glsl
+frac_shader04_echo3_spin.glsl
+frac_shader_echo4_spin_frac.glsl
+echo2.glsl
+gkale_echo2.glsl
+[Warped Gpt Recursion]
+fractal_mirror_swirl_mirror.glsl
+twist.glsl
+twist_gpt.glsl
+gt_rotate.glsl
+[Chromatic Empty Tide]
+empty.glsl
+rainbow_metal_code_plasma_chalice.glsl
+rainbow_metal_code_solar_mercury.glsl
+rainbow_x_metal_react.glsl
+[Chromatic Game Dream 0091]
+game_drunk_wobble.glsl
+game_chromatic_edges.glsl
+[Fractal Shader04 Dream]
+frac_shader04_julia.glsl
+fractal_color_wave.glsl
+rainbow_fractal.glsl
+rainbow_x_fractal_bass.glsl
+cyclone.glsl
+[Plasma Vert Vortex]
+react_x_vert_warp.glsl
+react_x_phase_stretch.glsl
+[Fractal Shader05 Crystal]
+code-frac-prism-wormhole.glsl
+frac_shader05.glsl
+gem-spiral-frac.glsl
+gem_frac_spir.glsl
+time_frac.glsl
+[Fractal New Pulse]
+fractal_audio.glsl
+new_fractal.glsl
+random_x_audio_fractal_bloom.glsl
+bloom.glsl
+[Chromatic Spaz Tide]
+spaz.glsl
+rainbow_metal_code_nebula_spectrum.glsl
+rainbow_metal_code_solar_mercury.glsl
+rainbow_x_metal_react.glsl
+react_x_multi_rainbow.glsl
+[Warped Rect Pulse]
+rect_spiral.glsl
+twist_audio_ex_spectrum_spiral.glsl
+[Chromatic Ant Vortex]
+ant_time_f_color_ringbuffer_spiral.glsl
+geo-pi.glsl
+color_swirl-o1.glsl
+[Chromatic Analog Dream]
+analog.glsl
+composite2.glsl
+edge_fill.glsl
+sheet.glsl
+[Cyber Hypercube Vortex]
+twist-code-hypercube-vortex.glsl
+twist-code-orbital-rip.glsl
+twist-code-tidal-twister.glsl
+starX3.glsl
+[Plasma Beat Vortex]
+twist_audio_ex_zoom_beat.glsl
+DispersionX_Audio.glsl
+[Fractal Wrap Crystal]
+ant_gem_rainbow_fracture.glsl
+frac-wrap.glsl
+frac_shader02_dmd6i_transparent.glsl
+frac_shader02_dmd6i_wrap.glsl
+fractal_diamond_rainbow_overflow_const.glsl
+[Mercury Ant Pulse]
+ant_peak_inversion_cache_spectrum_time_vortex_singularity.glsl
+random_spectrum_mercury_vortex.glsl
+halluc_mercury_pop.glsl
+[Prismatic Crystalball Dream]
+glass_PI.glsl
+crystal-2.glsl
+crystalball.glsl
+crystalprism.glsl
+[Cyber Game Dream]
+game_codex_target_lock.glsl
+game_codex_toxic_cloud.glsl
+[Plasma Pilot Crystal]
+ant_gem_crystal_pulse.glsl
+ant_gem_void_pulse.glsl
+[XOR Game Burst]
+game_rage_mode.glsl
+new_xor_scale_strobe.glsl
+xorstrobe.glsl
+[Prismatic Random Pulse]
+random_spectrum_glass_vortex.glsl
+glass_mouse.glsl
+[Chromatic Darkg Tide]
+darkg.glsl
+rainbow_swirl_limit_discard.glsl
+[Chromatic Tearing Dream]
+tearing.glsl
+tearing_max.glsl
+[Temporal Ant Pulse]
+ant_spectrum_echo_vortex.glsl
+ant_texture_cache_spectrum_scale_vortex.glsl
+ant_texture_cache_spectrum_scale_wave_warp.glsl
+ant_texture_cache_spectrum_scale_swirl.glsl
+echo_x3.glsl
+[Chromatic Purple Dream]
+index_purple.glsl
+[Warped Psyche Radiance]
+ant_light_color_psyche_tunnel.glsl
+cyclone_zoom.glsl
+[Cosmic Stardust Radiance]
+ant_light_color_stardust_spiral.glsl
+star5.glsl
+stardust.glsl
+starX2.glsl
+starX4.glsl
+[Temporal Inthesky Nebula]
+inthesky_cache_nebula_mirrors.glsl
+color_trails_cache_spectrum_jet_nebula.glsl
+inthesky_cache_horizon_implosion.glsl
+[Chromatic Dispersion Tide]
+rainbow_spiral_rev.glsl
+Dispersion.glsl
+[Mercury Ant Vortex]
+ant_gem_metal_vortex.glsl
+game_ant_metal_vortex.glsl
+ant_gem_metal_chrome.glsl
+game_ant_metal_weave.glsl
+[Chromatic Optxtime Circuit]
+optxtime_cos.glsl
+rainbow_metal_code_diamond_liquid.glsl
+rainbow_metal_code_chromatic_cascade.glsl
+[Liquid Cursor Crystal]
+ocean.glsl
+water-cursor.glsl
+water_full.glsl
+water_rgb.glsl
+water_prism.glsl
+[Chromatic Kale Dream]
+kale.glsl
+kale2.glsl
+kale3.glsl
+kale4.glsl
+[Liquid Cripple Vortex]
+wave_spiral.glsl
+cripple.glsl
+[Cyber Game Radiance]
+code-frac-neon-petals.glsl
+code-mirror-neon-reliquary.glsl
+codex_glitch_neon_escape.glsl
+game_frostbite.glsl
+game_cyberpunk_neon.glsl
+[Chromatic Compo Circuit]
+compo.glsl
+vhs-code-chroma-bleed.glsl
+[Molten Spectrum8 Pulse]
+ant_cache_spectrum8_tunnel.glsl
+ant_cache_spectrum8_lava_flow.glsl
+halluc_lava_crack.glsl
+halluc_plasma_flame.glsl
+[Chromatic Gradient Dream 0125]
+gradient.glsl
+gradient_position.glsl
+gradient_shift.glsl
+moving_gradient.glsl
+[Cyber 8Bit Dream]
+8bit-norm.glsl
+8bit.glsl
+pixels.glsl
+[Cyber Basilica Hall]
+code-mirror-spectral-basilica.glsl
+twist-code-kaleido-throat.glsl
+xor_code_kaleido_spectrum.glsl
+vhs-code-home-movie.glsl
+[Chromatic Limit Tide]
+rainbow-code-opal-vortex.glsl
+ds1.glsl
+rainbow_swirl_limit.glsl
+rainbow_swirl_limit_discard.glsl
+rainbow_x_swirl_freq.glsl
+[Chromatic Overflow Tide]
+fractal_diamond_rainbow_overflow.glsl
+pinch.glsl
+rainbow_pi_neoin.glsl
+[Mercury Game Tide]
+rainbow_metal_code_liquid_mandala.glsl
+game_ant_metal_ripple.glsl
+game_ant_metal_cascade.glsl
+rainbow_metal_code_supernova_metal.glsl
+[Liquid Stained Dream]
+code-mirror-ocean-origami.glsl
+rainbow-code-stained-kaleidoscope.glsl
+sine_grad6.glsl
+rainbow_prisim.glsl
+[Cyber Codex Tide]
+codex_grad_fractal_oceanic_void.glsl
+rainbow_metal_code_fractal_rainbow.glsl
+game_codex_rage_meter.glsl
+game_codex_underwater_depth.glsl
+[Warped Center Tide]
+rainbow_spiral.glsl
+spiral-center.glsl
+spiral_edge.glsl
+[Liquid Game Radiance]
+game_matrix_rain.glsl
+ant_light_color_neon_rain.glsl
+[Chromatic Inthesky Tide]
+inthesky.glsl
+rainbow-code-liquid-pearl.glsl
+rainbow_top.glsl
+[Storm Source Tide]
+rainbow_cd_strobe.glsl
+source_strobe.glsl
+[Temporal Mix Dream]
+echo1.glsl
+echo_4_mix.glsl
+echo_mix.glsl
+echo_x4.glsl
+gtrail2.glsl
+[Cyber Composite Dream]
+composite_vhs.glsl
+datam2.glsl
+vhs2.glsl
+vhs_lofi.glsl
+[Mirrored Bowl Crystal]
+mirror-air-bowl.glsl
+mirror-airshader1.glsl
+mirror-bowl.glsl
+mirror-geometric.glsl
+mirror-prism.glsl
+[Fractal Shader02 Echo]
+comb3-frac-mouse.glsl
+frac_shader02_dmd6i1.glsl
+frac_shader02_dmdXi.glsl
+frac_shader_echo4_spin_frac.glsl
+[Aurora Ant Pulse]
+ant_spectrum_aurora_fold.glsl
+aura3.glsl
+gaura.glsl
+green_aura.glsl
+random_x_audio_aurora.glsl
+[Chromatic Film Dream]
+old-film.glsl
+sepia.glsl
+[Fractal Shader04 Crystal]
+code-frac-x-diamond-supernova.glsl
+code-frac-x-stained-glass-julia.glsl
+frac_shader04_grid.glsl
+fracl_shader04_tri.glsl
+[Chromatic Scale Tide]
+scale.glsl
+shrink_texture_4.glsl
+texture_scale.glsl
+rainbow_mouse_x1.glsl
+[Chromatic Time Shatter]
+ant_time_f_color_glitch_archive.glsl
+bowl-by_time.glsl
+[Chromatic Ant Crystal]
+ant_light_color_shockwave_prism.glsl
+obj_stretch.glsl
+rainbow_rip_prism.glsl
+[Chromatic Offset Mist]
+plasma_rainbow.glsl
+blur_offset_color_fade.glsl
+rainbow_x_pulse_blur.glsl
+blur_offset.glsl
+[Cosmic Star5 Dream]
+star5.glsl
+stardust.glsl
+starX2.glsl
+starX4.glsl
+[Chromatic Game Dream 0149]
+game_cinematic_cool.glsl
+game_thermal.glsl
+game_toxic.glsl
+game_vignette_breath.glsl
+[Cyber Game Dream 0150]
+game_codex_magic_barrier.glsl
+game_codex_speed_boost.glsl
+game_codex_stealth_cloak.glsl
+game_codex_target_lock.glsl
+[Mirrored Grad Dream]
+mirror-grad.glsl
+mirror-mandella.glsl
+mirror_dir.glsl
+mirrorg.glsl
+[Prismatic Ant Recursion]
+ant_gem_fractal_ocean.glsl
+fractal_diamond_rainbow_overflow_const.glsl
+gem_fractal_bump.glsl
+Liquid_Light_Rainbow_Blend.glsl
+gem-image.glsl
+[Prismatic Quad Dream]
+prisim_glass_triangle.glsl
+halluc_gem2.glsl
+prism_quad_by_time.glsl
+prism_quad_strong.glsl
+[Chromatic Purple Dream 0154]
+index_purple.glsl
+[Chromatic Broadcast Circuit]
+rainbow_metal_code_liquid_mandala.glsl
+broadcast_sync_lost.glsl
+tear.glsl
+rainbow_metal_code_infinity_mercury.glsl
+rainbow_metal_code_psychedelic_foundry.glsl
+[Storm Rand Lattice]
+grid_rand_strobe.glsl
+grid_strobe.glsl
+ant_gem_diamond_storm.glsl
+green_strobe.glsl
+[Chromatic Timeval Tide]
+psych_wave_rainbow.glsl
+timeval_alpha.glsl
+rainbow_pi01.glsl
+[Chromatic Yang Circuit]
+yin-yang.glsl
+rainbow_metal_code_quantum_forge.glsl
+[Liquid Bubblegl Mandala]
+water-fold-ex..glsl
+bubbleGL.glsl
+[Warped Bend Recursion]
+bend_twist.glsl
+fractal_mirror_swirl_mirror.glsl
+twist.glsl
+twist_gpt.glsl
+[Temporal Shader04 Recursion 0161]
+frac_shader04_echo.glsl
+echo.glsl
+echo_alpha.glsl
+echo_div4_rainbow.glsl
+game_ghost_trail.glsl
+[Glitch New Vortex]
+fractal_mirror_warp_glitch.glsl
+glitch-zoom.glsl
+new_glitch.glsl
+[Liquid Pilot Vortex]
+spiral_wave.glsl
+ripple_out.glsl
+ripple_rainbow.glsl
+[Mirrored Wrap Echo]
+ant_cache_spectrum8_mirror_tile_rotor.glsl
+mirror-wrap-edge.glsl
+mirror-wrap-rotate.glsl
+mirror-wrap-sphere2.glsl
+mirror-wrap.glsl
+[Liquid Helix Circuit]
+liquid_code_molten_helix.glsl
+[Chromatic Splash Dream]
+splash.glsl
+color_timeval.glsl
+[Chromatic Blue Dream 0167]
+abc123.glsl
+fat-blue.glsl
+random_uneven_square.glsl
+blue_shade.glsl
+smooth_gl.glsl
+[Mirrored Wrap Recursion]
+mirror-comb-mouse.glsl
+mirror-frac-mouse-z2.glsl
+mirror-wrap-dmd6i.glsl
+[Mirrored Atan Tide]
+mirror-atan.glsl
+mirror-pebble.glsl
+mirror-psyce-wave-all.glsl
+mirror-ufo-wrap.glsl
+[Liquid Ant Pulse]
+ant_texture_cache_spectrum_scale_tunnel.glsl
+ant_texture_cache_spectrum_scale_wave_warp.glsl
+twist_audio_ex_wave_collapse.glsl
+ant_peak_inversion_cache_spectrum_time_caustic_drowning.glsl
+tripple.glsl
+[Mirrored Wrap Vortex]
+mirror-wrap-rotate90.glsl
+mirror_half_dir.glsl
+[Fractal Ant Shatter]
+ant_light_color_strobe_fracture.glsl
+ant_texture_cache_spectrum_scale_fracture.glsl
+game_ant_metal_fracture.glsl
+game_ant_metal_shard.glsl
+[Cyber Tape Vortex]
+vhs-code-tape-warp.glsl
+datam3.glsl
+datam5.glsl
+[Fractal Shader02 Burst 0174]
+frac_shader02_dmd3.glsl
+frac_shader02_octo_strobe.glsl
+frac_shader02_octo_strobe2.glsl
+frac_shader02_prisim.glsl
+[Temporal Orig Recursion]
+inthesky_cache_fractal_firmament.glsl
+blend_orig_25_cache.glsl
+blend_orig_50_cache.glsl
+blend_orig_75_cache.glsl
+[Molten Halluc Pulse]
+ant_cache_spectrum8_lava_flow.glsl
+game_lava_world.glsl
+halluc_lava_crack.glsl
+halluc_plasma_flame.glsl
+[Prismatic Quad Dream 0177]
+prism_quad.glsl
+prism_quad_by_time_fast.glsl
+[Plasma Sine Vortex]
+react_x_spiral_twist.glsl
+twist_audio_ex_sine_audio.glsl
+react.glsl
+[Prismatic Ant Pulse]
+ant_spectrum_prism_fold.glsl
+ant_spectrum_prismatic_tunnel.glsl
+game_ant_gem_spectrum.glsl
+game_ant_gem_spider.glsl
+[Liquid Blue Vortex]
+spiral_wave_1.glsl
+blue_wave.glsl
+Light_Rainbow_Swirl.glsl
+[XOR Dark Dream]
+xor_rgb_dark.glsl
+xor_rgb_dark_4.glsl
+[Mirrored Bowl Vortex]
+mirror-air-bowl.glsl
+mirror-twist-gpt.glsl
+spiral_mirror.glsl
+[Chromatic Resize Dream]
+random_resize.glsl
+splash-y.glsl
+gptsmooth.glsl
+[Fractal Shader02 Pulse]
+frac_shader02_dmd2.glsl
+frac_shader02_dmd2_amp.glsl
+frac_shader02_dmd8i.glsl
+frac_shader02_octo.glsl
+frac_shader02_octo_amp.glsl
+[Mirrored Sin Echo]
+ant_cache_spectrum8_kaleido_sin_osc.glsl
+mirror-c.glsl
+mirror-sin-osc.glsl
+[Liquid Time Radiance]
+Liquid_Light_Time.glsl
+water.glsl
+[Mirrored Random Pulse]
+mirror_r4.glsl
+random_x_audio_mirror_fold.glsl
+twist_audio_ex_mirror_audio.glsl
+[Warped Pilot Pulse]
+twist_audio_ex_quad_freq.glsl
+twist_audio_ex_vortex_pump.glsl
+[Cyber Pixels Shatter 0189]
+codex_vhs_head_switch.glsl
+pixels.glsl
+random_pixels_static.glsl
+smooth_pixel.glsl
+[Chromatic Today Circuit]
+today.glsl
+rainbow_metal_code_cosmic_alloy.glsl
+rainbow_metal_code_electric_iridescence.glsl
+rainbow_metal_code_neon_mercury.glsl
+rainbow_metal_code_radiant_helix.glsl
+[Chromatic Broadcast Dream 0191]
+broadcast.glsl
+composite_crt.glsl
+halluc_oil_slick.glsl
+color_pal.glsl
+[Chromatic Game Dream 0192]
+game_amber_mono.glsl
+game_cinematic_warm.glsl
+game_sepia_warm.glsl
+sine_grad.glsl
+[Chromatic Sine Circuit]
+rainbow_metal_code_iridescent_ripple.glsl
+sine_grad7.glsl
+rainbow_metal_code_chrome_bloom.glsl
+[Storm Scale Echo]
+ant_texture_cache_spectrum_scale_shockwave.glsl
+echo_strobe_x1.glsl
+blue_strobe.glsl
+[Chromatic Mirdmdt Circuit]
+mirdmdt.glsl
+rainbow-code-diamond-wave.glsl
+rainbow_metal_code_aurora_forge.glsl
+rainbow_metal_code_magnetic_opal.glsl
+[Prismatic Bump Dream]
+game_ant_gem_bump.glsl
+gem_bump.glsl
+gem_pencil_sketch.glsl
+gem_plas.glsl
+[Mirrored Random Pulse 0197]
+mirror-bubble-zoom-mouse-audio.glsl
+mirror-twist.glsl
+random_x_audio_twist_mirror.glsl
+random_x_audio_fisheye_throb.glsl
+[Cyber Codex Dream]
+code-update-spectral-wormhole.glsl
+codex_cartoon_saturday.glsl
+codex_cartoon_color.glsl
+codex_vhs_chroma_bleed.glsl
+[Mercury Pilot Vortex]
+[Chromatic Pong Circuit]
+pong-ataan-ex.glsl
+rainbow_metal_code_holographic_metal.glsl
+rainbow_metal_code_spectral_coil.glsl
+[Chromatic Mul2 Dream]
+matrix_mul2.glsl
+airshader1.glsl
+[Chromatic Deeps3 Circuit]
+deeps3.glsl
+dseek.glsl
+rainbow_metal_code_hypercolor_alloy.glsl
+[Chromatic Ant Echo]
+ant_spectrum_rainbow_echo.glsl
+echo_alpha_three_rgb.glsl
+echo_rainbow_swirl.glsl
+o3-01.glsl
+rainbow_color2.glsl
+[XOR Dark Dream 0204]
+xor_rgb_dark.glsl
+xor_rgb_dark_2.glsl
+xor_rgb_dark_3.glsl
+xor_rgb_dark_4.glsl
+[Liquid Freq Pulse]
+twist_audio_ex_freq_layers.glsl
+twist_audio_ex_ripple_freq.glsl
+cwave.glsl
+[Chromatic Deform Shatter]
+ant_light_color_glitch_rainbow.glsl
+deform.glsl
+deform_tan.glsl
+rainbow_expand_noise.glsl
+rainbow_expand_noise_xor_light.glsl
+[Chromatic Dye Tide]
+gradient.glsl
+ripple_rainbow.glsl
+color_grad_rainbow.glsl
+[Storm Tremor2 Dream]
+tremor2.glsl
+xcordstrobe.glsl
+[Fractal Shader02 Pulse 0209]
+frac_shader02_dmd.glsl
+frac_shader02_dmdi6i_zoom_xor_amp.glsl
+[Cyber Cathedral Recursion]
+code-frac-glitch-cathedral.glsl
+vhs-code-tracking-roll.glsl
+[Prismatic Pilot Tide 0211]
+ant_gem_metal_ripple.glsl
+[Chromatic Scale Radiance]
+ant_light_color_vortex_bloom.glsl
+af_scale.glsl
+[Plasma Spectrum8 Burst]
+ant_cache_spectrum8_strobe_tunnel.glsl
+ant_cache_spectrum8_caustic_storm.glsl
+ant_cache_spectrum8_starburst.glsl
+rainbow_x_light_bass.glsl
+strobe_x1.glsl
+[Plasma Pulse3 Vortex]
+zoom_pulse.glsl
+zoom_pulse3.glsl
+react11.glsl
+[Chromatic Ant Tide 0215]
+glitchy-rainbow.glsl
+test.glsl
+ant_spectrum_rainbow_shatter.glsl
+ant_time_f_color_spectrum_waterfall.glsl
+rainbow_color1.glsl
+[Chromatic Cos Dream]
+cos.glsl
+cos_sin.glsl
+[Cyber Empty1 Radiance]
+empty1.glsl
+rainbow-code-neon-topography.glsl
+xor_code_neon_topology.glsl
+[Liquid Underwater Dream]
+ocean.glsl
+underwater.glsl
+underwaterenchanced.glsl
+[Fractal Spin Echo]
+frac_shader02_dmdXi5.glsl
+frac_shader04_echo3_spin.glsl
+frac_shader_echo4_spin_full.glsl
+[Chromatic Cos Dream 0220]
+deform_cos.glsl
+fisheye.glsl
+mirdmdrspeed.glsl
+purple_fade.glsl
+color-max.glsl
+[Chromatic Quality Tide]
+rainbow_metal_fractal.glsl
+comp_quality.glsl
+gem_rainbow_metal_movement.glsl
+rainbow_cd_spin.glsl
+[Warped Random Hall]
+mirror-twist.glsl
+random_x_audio_cyclone_twist.glsl
+twist_full.glsl
+[Chromatic Apart Dream]
+apart.glsl
+deepseek3.glsl
+slither_vert.glsl
+snake.glsl
+[Chromatic Rgb Dream]
+fat-blue.glsl
+fat-rgb.glsl
+random_rgb.glsl
+rgb.glsl
+[Cyber Roll Dream]
+codex_vhs_tracking_roll.glsl
+vhs-code-head-switch.glsl
+[Storm Timeflash Pulse]
+twist_audio_ex_bass_quake.glsl
+timeflash.glsl
+[Chromatic Trip Dream]
+elastic2.glsl
+g_ufo_3d.glsl
+game_mushroom_trip.glsl
+gpt_trip.glsl
+kale4.glsl
+[Chromatic Game Tide]
+game_toxic.glsl
+rainbow_blur.glsl
+[Fractal Spin Echo 0229]
+frac_shader02_dmd6i_neon.glsl
+frac_shader04_echo3_spin.glsl
+frac_shader_echo4_spin_full.glsl
+time_frac.glsl
+[Temporal Pingpong Dream]
+echo-pingpong.glsl
+echo3.glsl
+echo_3.glsl
+echo_g.glsl
+echo_rgb_mouse.glsl
+[Chromatic Ink Tide]
+cd.glsl
+rainbow_x_ink_wave.glsl
+rainbow_expand.glsl
+rainbow_ink.glsl
+rainbow_ink_t.glsl
+[Chromatic Tex Tide]
+fractal_diamond_rainbow_no_tex.glsl
+rand_blocks.glsl
+rainbow_color3.glsl
+[Liquid Pilot Mandala]
+ripple_prisim.glsl
+[Warped Ppong Dream]
+warp-ppong-time.glsl
+warp_ppong_by_mouse.glsl
+warp_ppong_mouse.glsl
+swirl_by_mouse_full.glsl
+swirl_by_mouse_pos.glsl
+[Cyber Composite Dream 0235]
+composite_vhs_flat.glsl
+vhs.glsl
+vhs_analog.glsl
+vhs_color.glsl
+[Plasma Mid Vortex]
+twist_audio_ex_mid_swirl.glsl
+twist_audio_ex_polar_freq.glsl
+twist_audio_ex_radial_bands.glsl
+twist_audio_ex_treble_static.glsl
+react4.glsl
+[Chromatic 8Huri Dream]
+8huri.glsl
+dmdc.glsl
+g_ufo_movement.glsl
+page_turn3.glsl
+coord_color.glsl
+[Liquid Drain Dream]
+drain_mandella.glsl
+drain_rainbow.glsl
+[Chromatic Chue Dream]
+chue.glsl
+dhue.glsl
+[Temporal Test Recursion]
+ghost_fracture_cache.glsl
+test_cache.glsl
+[Chromatic Comb3 Radiance]
+comb3.glsl
+rainbow_light_swirl.glsl
+[Fractal Shader02 Dream]
+frac_shader02_dmd8i.glsl
+frac_shader02_octo.glsl
+[Fractal Cosine Dream]
+frac_cosine.glsl
+frac_shade02_dmdXi3_rot.glsl
+frac_shader02_dmdXi4.glsl
+game_ant_frac_cosine.glsl
+[Prismatic Wall Dream]
+prism_glass_size.glsl
+prism_glass_wall.glsl
+prism_glass_wall_noedge.glsl
+[Chromatic Scale2 Circuit]
+af_scale2.glsl
+bit_rainbow.glsl
+rainbow-code-aurora-silk.glsl
+[Mirrored Grad Silk]
+mirror-grad.glsl
+mirror-mandella.glsl
+mirror-self.glsl
+mirror-spiral-aura.glsl
+aura2.glsl
+[Chromatic Gkale Dream]
+gkale.glsl
+tdye.glsl
+tdye2.glsl
+[Fractal Shader02 Mandala]
+frac_shader02_dmd7i.glsl
+frac_shader02_dmdi_radial.glsl
+[Chromatic Ant Tide 0249]
+ant_spectrum_rainbow_fractal.glsl
+rainbow_fractal_random.glsl
+magic.glsl
+ant_spectrum_rainbow_helix.glsl
+rainbow-touch.glsl
+[Chromatic Focus Tide]
+focus.glsl
+Liquid_Rainbow_Wave.glsl
+list_rainbow_enter.glsl
+rainbow_left.glsl
+[XOR Rgb Dream]
+XorKern.glsl
+xor_rgb_smooth.glsl
+xor_rgb_smoother.glsl
+xor_rgb_smoother_mouse.glsl
+[Plasma Pulse2 Vortex]
+zoom_pulse2.glsl
+react18.glsl
+[Chromatic Hdr Tide]
+game_hdr_punch.glsl
+glitch_rainbow.glsl
+rainbow.banding.glsl
+[Cyber Chromatic Dream 0254]
+code-frac-chromatic-rift.glsl
+code-frac-crystal-tunnel.glsl
+4rand.glsl
+rainbow-code-prismatic-caustics.glsl
+rainbow_metal_code_magnetic_opal.glsl
+[Glitch Random Pulse]
+distortf.glsl
+random_x_audio_glitch_tear.glsl
+random_x_audio_prism_shatter.glsl
+[Chromatic Dark Cipher]
+effect.glsl
+color-mod-dark.glsl
+color_effect_xor.glsl
+[Fractal Shader02 Vortex]
+frac_shader02_dmd5.glsl
+frac_shader02_dmdi6i_zoom_xor.glsl
+frac_shader02_dmdi6i_zoom_xor_amp.glsl
+fractal_mirror_bass_zoom.glsl
+fractal_mirror_zoom_pulse.glsl
+[Prismatic Ant Tide]
+ant_gem_liquid_mirror.glsl
+ant_gem_chrome_wave.glsl
+gem-ripple.glsl
+gem_rainbow_metal.glsl
+halluc_gem.glsl
+[Temporal Ant Pulse 0259]
+ant_peak_inversion_cache_spectrum_time_hyperspace_tunnel.glsl
+ant_spectrum_echo_spiral.glsl
+echo_rand.glsl
+echo_rand_2.glsl
+[Chromatic Game Crystal]
+game_cga.glsl
+game_ant_gem_rainbow.glsl
+[Chromatic Ant Crystal 0261]
+gem-color-spiral.glsl
+ant_light_color_liquid_prism.glsl
+elastic.glsl
+gem-color-spsiral.glsl
+o1-hue.glsl
+[Mirrored Wrap Vortex 0262]
+mirror-spiral.glsl
+mirror-wrap-edge.glsl
+mirror-wrap-rotate.glsl
+mirror_c.glsl
+[Molten Vision Tide]
+heat-wave.glsl
+heat.glsl
+[Chromatic Sine2 Tide]
+sine2.glsl
+gem-rainbow-metal3-slider.glsl
+rainbow_cd_curtain.glsl
+rainbow_cd_strobe.glsl
+[Plasma Spectrum8 Echo]
+ant_cache_spectrum8_chromatic_pulse.glsl
+color_trails_cache_spectrum_shear_magnet.glsl
+plasma3.glsl
+plasma_prism.glsl
+random_x_audio_plasma_storm.glsl
+[Chromatic Blue Dream 0266]
+blue.glsl
+blue_2.glsl
+blue_shade.glsl
+gptsmooth.glsl
+[Geometric Game Dream]
+game_lcd_grid.glsl
+geometric2.glsl
+grid_by_mouse.glsl
+square_grid.glsl
+[Prismatic Pilot Vortex]
+ant_gem_aurora_tunnel.glsl
+[Velvet Game Mandala]
+game_motion_blur.glsl
+game_subtle_bloom.glsl
+gblur.glsl
+random_x_audio_radial_blur.glsl
+[Prismatic Thick Dream]
+thick_glass.glsl
+crystal-4.glsl
+crystalball.glsl
+crystalbend.glsl
+gem-spoke.glsl
+[Chromatic Pong Crystal]
+pong-atan2.glsl
+pong-atan3.glsl
+pong_pi.mp4.glsl
+recep.glsl
+rainbow-code-holographic-facets.glsl
+[Chromatic Position Dream]
+gradient_position.glsl
+matrix_mul.glsl
+seek.glsl
+color_pool.glsl
+[Mirrored Wrap Vortex 0273]
+mirror-atan.glsl
+mirror-wrap-edge.glsl
+mirror-wrap-rotate.glsl
+mirror-wrap.glsl
+mirror_c.glsl
+[Fractal Shader04 Hall]
+frac_shader04_julia.glsl
+fractal_mirror_julia_warp.glsl
+[Electric Pilot Vortex]
+ant_light_color_galaxy_swirl.glsl
+[Chromatic Game Circuit]
+game_dust_motes.glsl
+metal-code-iridescent-foundry.glsl
+[Cyber Singularity Vortex]
+twist-code-singularity-maelstrom.glsl
+datam3.glsl
+datam5.glsl
+[Chromatic Pong Dream]
+pong-atan.glsl
+pong-atan2.glsl
+pong_tex.glsl
+grad_color.glsl
+[Chromatic Inc Dream]
+comp_inc.glsl
+game_cross_process.glsl
+game_heart_beat.glsl
+rgbvar_inc.glsl
+[Prismatic Rad Dream]
+glass_mouse_rad.glsl
+prism_glass_wall_noedge.glsl
+[XOR Rgb Dream 0281]
+cmod.glsl
+rgb_fade_xor.glsl
+xor_rgb.glsl
+xor_rgb_dark_2.glsl
+xor_rgb_new.glsl
+[Chromatic Huri2 Circuit]
+huri2.glsl
+rainbow_metal_code_plasma_chalice.glsl
+rainbow-code-chromatic-ribbons.glsl
+[Chromatic Anamorphic Hall]
+mirror-color-mouse.glsl
+mirror-color-swirl.glsl
+game_anamorphic.glsl
+huei_af2.glsl
+[Cyber Ant Lattice]
+ant_light_color_cyber_grid.glsl
+codex_glitch_psychic_tiles.glsl
+kale_code_infinite_filigree.glsl
+[Temporal Vision Dream]
+echo_cache.glsl
+ghost_echo_cache.glsl
+[Plasma Jitter Vortex]
+twist_audio_ex_treble_jitter.glsl
+react2.glsl
+[Fractal New Mandala]
+fractal_mirror_chromatic_fold.glsl
+fractal_mirror_tri_fold.glsl
+ice.glsl
+picolor.glsl
+[Mercury Helix Crystal]
+ant_gem_metal_helix.glsl
+game_ant_metal_helix.glsl
+[Cosmic Auger Circuit]
+twist-code-cosmic-auger.glsl
+twist-code-serpent-tunnel.glsl
+starX.glsl
+[XOR Rgb Dream 0290]
+time_xor.glsl
+xor_rgb_smooth.glsl
+xor_rgb_smoother.glsl
+[Temporal Pingpong Hall]
+echo_mirror_2.glsl
+ElectricMirror.glsl
+echo-pingpong.glsl
+echo-pingpong_c.glsl
+gpt_echo.glsl
+[Cyber Chromatic Dream 0292]
+code-frac-x-chromatic-constellation.glsl
+fill_black.glsl
+inv_cache_code_phosphene_swarm.glsl
+liquid_code_iridescent_whirlpool.glsl
+kale_code_chromatic_shrine.glsl
+[Glitch Disp Tide]
+distort-disp.glsl
+glitch1.glsl
+glitch_effect.glsl
+glitch_wave.glsl
+[Chromatic Pull Tide]
+fractal_mirror_chromatic_wave.glsl
+fractal_mirror_depth_wave.glsl
+pull.glsl
+pull_out.glsl
+grainbow.glsl
+[Plasma Random Vortex]
+random_x_audio_cyclone_twist.glsl
+random_x_audio_spiral_zoom.glsl
+twist_audio_ex_spiral_zoom.glsl
+react19.glsl
+[Cyber Quantum Vortex]
+twist-code-quantum-tunnel.glsl
+datam4.glsl
+[Chromatic Vertex Dream]
+mirdmdrcolor.glsl
+[Plasma Radius Vortex]
+twist_audio.glsl
+twist_audio_ex_inverse_radius.glsl
+twist_audio_ex_kaleido_freq.glsl
+react8.glsl
+wormhole_audio.glsl
+[Chromatic Optxtime Dream]
+optxtime.glsl
+optxtime_cos.glsl
+[Chromatic Dither Dream]
+game_dither_bayer.glsl
+game_psx_dither.glsl
+whirlx.glsl
+[Temporal Pingpong Hall 0301]
+echo_mirror_2.glsl
+echo-pingpong_c.glsl
+echo_rand_2.glsl
+[Fractal Shader02 Dream 0302]
+frac_shader02_dmdXi3.glsl
+frac_shader02_dmdXi5.glsl
+[Molten Web Crystal]
+game_ant_molten_web.glsl
+ant_gem_molten_web.glsl
+[Chromatic Icefield Circuit]
+code-frac-x-spectral-icefield.glsl
+huri1.glsl
+mirdmdrcolor.glsl
+[Chromatic Ant Hall]
+ant_time_f_color_mirror_corridor.glsl
+ant_time_f_color_acid_smear.glsl
+[Liquid Pilot Recursion]
+fractal_mirror_ripple_fold.glsl
+ripple_a.glsl
+[Chromatic Crt Dream]
+composite2.glsl
+crt.glsl
+game_crt_curve.glsl
+gptsmooth2.glsl
+[Aurora Vision Crystal]
+aura.glsl
+gem-aura.glsl
+[XOR Time Recursion]
+time_frac_xor.glsl
+dark_addup_xor.glsl
+[Chromatic Movegl Tide]
+rainbow_metal_fractal.glsl
+moveGL.glsl
+gem-rainbow-metal3.glsl
+gem_rainbow_spectrum.glsl
+rainbow_cd_spin.glsl
+[Cyber Game Dream 0311]
+game_codex_radar_ping.glsl
+game_codex_shadow_realm.glsl
+game_codex_shield_hit.glsl
+game_codex_stealth_cloak.glsl
+[Cyber Ribbon Dream]
+code-update-quantum-ribbon-vault.glsl
+xor_code_chromatic_weave.glsl
+[Prismatic Pencil Dream]
+game_ant_gem_pencil.glsl
+gem_pencil_sketch2.glsl
+[Chromatic Composite Hall]
+mirror-color-o1.glsl
+composite.glsl
+crt.glsl
+[Chromatic Fast Dream]
+pebble_fast.glsl
+putty.glsl
+[Chromatic Particle Dream]
+particle_1.glsl
+squares.glsl
+shader1.glsl
+[Mirrored Goofy Vortex]
+mirror-goofy.glsl
+mirror-gpt.glsl
+mirror-twist-sin.glsl
+mirror-twisted.glsl
+reverse_vert.glsl
+[Temporal Bgr Dream]
+echo_bgr.glsl
+echo_loop2.glsl
+echo_or.glsl
+echo_sin_particle.glsl
+[Chromatic Grad2 Dream]
+grad2.glsl
+hurixyz.glsl
+kscopic.glsl
+sine_grad2.glsl
+[Chromatic Eyes Dream]
+eyes.glsl
+fat.glsl
+game_letterbox.glsl
+color_bars.glsl
+[Temporal Orig Dream]
+blend_orig_50_cache.glsl
+blend_orig_75_cache.glsl
+[Chromatic Deepseek3 Dream]
+deepseek3.glsl
+deepseek4.glsl
+dseek.glsl
+[Chromatic Spectrum16 Crystal]
+gem-hue-frac-spectrum16.glsl
+4ac_rand.glsl
+[Temporal Vision Hall]
+echo_mirror_1.glsl
+echo_mirror_3.glsl
+echo_x2.glsl
+[Chromatic Tearing Crystal]
+tearing_single.glsl
+gem-rainbow-metal3-spectrum.glsl
+[Chromatic Logpolar Recursion]
+fractal_mirror_logpolar_chromatic.glsl
+composite3.glsl
+composite_crt.glsl
+[Warped Pilot Crystal]
+ant_gem_spiral_shatter.glsl
+gem-spiral-full-audio.glsl
+[Chromatic Hive Recursion]
+code-frac-spectral-hive.glsl
+fractal_diamond_rainbow_overflow.glsl
+gem-hue-frac.glsl
+bend2mouse.glsl
+[Warped Cyclone Dream]
+cyclone_zoom_mouse.glsl
+zoom_in_out_mouse.glsl
+[Plasma Spectrum8 Echo 0330]
+ant_cache_spectrum8_kaleidoscope.glsl
+ant_cache_spectrum8_plasma.glsl
+color_peak_inversion_cache_spectrum_time.glsl
+plasma.glsl
+[Warped Random Pulse]
+random_x_audio_cyclone_twist.glsl
+twarp2.glsl
+twist_full.glsl
+[Mirrored Bowl Dream]
+mirror-bowl-by-time.glsl
+mirror-center.glsl
+mirrorg.glsl
+[Chromatic Ant Vortex 0333]
+ant_time_f_color_ringbuffer_spiral.glsl
+greenblue.glsl
+coord_color.glsl
+[Liquid Game Hall]
+game_ant_liquid_mirror.glsl
+rainbow_spiral.glsl
+spiral_mirror_wave.glsl
+game_underwater.glsl
+[Mirrored Pilot Burst]
+[Temporal Loop2 Dream]
+echo_loop2.glsl
+echo_sin_particle.glsl
+gghost.glsl
+[Chromatic Blend Crystal]
+fractal_diamond_rainbow.glsl
+fractal_diamond_rainbow_blend.glsl
+open_up.glsl
+[Liquid Chromatic Recursion]
+fractal_mirror_chromatic_wave.glsl
+fractal_mirror_kaleidoscope_pulse.glsl
+fractal_mirror_wave_fold.glsl
+Liquid_Censorship.glsl
+Liquid_Rainbow.glsl
+[Chromatic Recall Vortex]
+ant_time_f_color_tunnel_recall.glsl
+geo-pi.glsl
+mirdmdrmatch.glsl
+color_swirl-o1.glsl
+dhue.glsl
+[Fractal Dmd6I Hall]
+frac_shader02_dmd6i_spectrum16.glsl
+frac_shader02_dmd6i_wrap.glsl
+fractal_mirror_stripe_kaleidoscope.glsl
+mirror_audio.glsl
+random_spectrum_fractal_kaleidoscope.glsl
+[Fractal Gen Circuit]
+fracal-gen.glsl
+fractal-gen.glsl
+twist-code-deep-space-drill.glsl
+twist-code-fractal-conduit.glsl
+[Warped Out Dream 0342]
+cd_zoom_out.glsl
+zoom_fish.glsl
+[Chromatic Ant Radiance]
+ant_light_color_mirror_inferno.glsl
+game_arcane.glsl
+deepcolor.glsl
+[Chromatic Blank Dream]
+blank.glsl
+gmir.glsl
+minimize.glsl
+addup_blend.glsl
+[Cyber Parallel Vortex]
+twist-code-parallel-helix.glsl
+twist-code-phase-cyclone.glsl
+average_pixels.glsl
+[Temporal Ant Pulse 0346]
+ant_spectrum_echo_diamond.glsl
+echo_div2.glsl
+random_x_audio_echo_cascade.glsl
+[Mercury Ant Silk]
+ant_gem_metal_fracture.glsl
+game_ant_metal_fracture.glsl
+aura8.glsl
+ant_gem_metal_aurora.glsl
+game_ant_metal_aurora.glsl
+[Chromatic Addup Radiance]
+ant_light_color_tesseract_fold.glsl
+addup_cos.glsl
+color_pool.glsl
+addup_blend.glsl
+[Fractal Zero Vortex]
+fractal_no_zero.glsl
+fractal_zoom_e.glsl
+Liquid_Fractal_Tunnel.glsl
+[Chromatic Broadcast Dream 0350]
+broadcast_sync_lost.glsl
+dark.glsl
+[Chromatic Tex Vortex]
+mirror-color-swirl.glsl
+twirl_tex.glsl
+ant_time_f_color_timeline_swirl.glsl
+color_swirl_beautiful.glsl
+color_swirl_sin.glsl
+[Temporal Div4 Dream]
+echo_div4.glsl
+green_echo.glsl
+[Liquid Full Crystal]
+Liquid_Rainbow.glsl
+water_full.glsl
+water_rgb.glsl
+water_prism.glsl
+[Prismatic Spiderweb Vortex]
+gem_spiderweb_tunnel.glsl
+gem-af.glsl
+[Mirrored Rev2 Dream]
+mirror_rev.glsl
+mirror_rev2.glsl
+[Prismatic Quantum Circuit]
+code-frac-x-quantum-crystal.glsl
+kale_code_diamond_tempest.glsl
+crystalblend2.glsl
+[Chromatic Snes Tide]
+snes.glsl
+dark_rainbow2.glsl
+[Chromatic Abc Dream]
+abc.glsl
+gkalei.glsl
+huri_af.glsl
+color_w_mouse.glsl
+gptsmooth2.glsl
+[Chromatic Dark Tide 0359]
+dark_psych_wave.glsl
+darkb.glsl
+surround.glsl
+dark_rainbow.glsl
+[Glitch Royal Recursion]
+codex_grad_fractal_royal_shatter.glsl
+distortf3.glsl
+[Mirrored Funnymirror2 Dream]
+funnymirror2.glsl
+mirror-l.glsl
+mirror-putty.glsl
+mirror1_s.glsl
+mirror_offset_rev.glsl
+[Chromatic Glittch Dream]
+single-glittch.glsl
+tear.glsl
+[Chromatic Dispersionx Tide]
+DispersionX.glsl
+DispersionY.glsl
+dark_rainbow_limit.glsl
+edge_rainbow.glsl
+[Chromatic Lantern Radiance]
+ant_light_color_fractal_lantern.glsl
+tan.glsl
+color_timeval.glsl
+[Mirrored Wrap2 Circuit]
+mirror-wrap2.glsl
+twist-code-mirror-abyss.glsl
+[Chromatic Air Dream 0366]
+air_full_mouse.glsl
+air_mouse.glsl
+random_square.glsl
+sing.glsl
+tv_show.glsl
+[Chromatic Ant Radiance 0367]
+ant_light_color_quantum_fold.glsl
+game_nes_palette.glsl
+color_w.glsl
+[Chromatic Deform Dream]
+addup_cos.glsl
+deform.glsl
+deform_cos.glsl
+deform_tan.glsl
+tan.glsl
+[Fractal Mir Hall]
+frac_mir.glsl
+mirror-frac-mouse-z2.glsl
+[Chromatic Sine Dream]
+sine_grad4.glsl
+sine_grad7.glsl
+[Chromatic Game Dream 0371]
+game_genesis.glsl
+color_w2.glsl
+[Chromatic Bowl Dream]
+atan-bowl.glsl
+g_ufo.glsl
+obj_stretch2.glsl
+chue.glsl
+random_colors.glsl
+[Plasma Observatory Hall]
+code-mirror-bass-observatory.glsl
+code-mirror-plasma-catacombs.glsl
+mirror_x_audio8.glsl
+react10.glsl
+[Mirrored Wrap Dream]
+mirror-wrap-sphere.glsl
+mirror-wrap-spin.glsl
+[Liquid Psyche Dream]
+psyche_wave.glsl
+water_full.glsl
+water_rgb.glsl
+waterbend.glsl
+[XOR Rgb Dream 0376]
+rgb_time_xor.glsl
+xor_rgb_dark_3.glsl
+xor_rgb_new.glsl
+[Storm Red Dream]
+flash.glsl
+red_strobe.glsl
+source_strobe.glsl
+strobe_in_out.glsl
+[Chromatic Onoffsep Dream]
+onoffsep.glsl
+color_increase.glsl
+grad_color.glsl
+[Prismatic Quad Echo]
+temporal_prism_cache.glsl
+prism_quad_by_time_fast.glsl
+[Mirrored New Vortex]
+mirror-in.glsl
+mirror-sin-osc.glsl
+mirror-spiral-f.glsl
+mirror_rev2y.glsl
+[Glitch Boil2 Recursion]
+fractal_mirror_glitch_fractal.glsl
+glitch_boil2.glsl
+[Chromatic Fisheye Dream]
+fisheye_mouse.glsl
+mirdmdr.glsl
+nothing.glsl
+random_soul_by_mouse.glsl
+all_colors.glsl
+[Mirrored Atan Vortex]
+mirror-atan.glsl
+mirror-bubble-zoom-mouse.glsl
+mirror-pebble.glsl
+mirror-zoom.glsl
+[Liquid Psychedelic Dream]
+rainbow_metal_code_iridescent_ripple.glsl
+bright_rainbow.glsl
+rainbow_metal_code_neon_mercury.glsl
+rainbow_metal_code_psychedelic_foundry.glsl
+bright.glsl
+[Mirrored Blur2 Mist]
+mirror_blur2.glsl
+mirror_blur3.glsl
+mirror_offset.glsl
+[Warped Fisheye Dream]
+fisheye_warp.glsl
+game_void_warp.glsl
+radwarp.glsl
+warp_ppong_by_mouse.glsl
+wspiral.glsl
+[Chromatic Memory Mandala]
+ant_time_f_color_memory_kaleidoscope.glsl
+ggrad.glsl
+color_increase.glsl
+[Geometric Black Dream]
+black_rings.glsl
+pigrid.glsl
+square_grid2.glsl
+[Aurora Game Vortex]
+game_ant_aurora_tunnel.glsl
+aura4.glsl
+[Fractal Iris Nebula]
+code-frac-cosmic-iris.glsl
+code-frac-x-cosmic-filigree.glsl
+code-frac-x-orbital-julia.glsl
+julia.glsl
+[Fractal Large Pulse]
+fractal_texture_large.glsl
+fractal_texture_large_audio.glsl
+[Chromatic Ant Radiance 0392]
+ant_light_color_kaleidoscope_blaze.glsl
+ant_light_color_molten_mirror.glsl
+ant_light_color_tesseract_fold.glsl
+gmir2.glsl
+[Temporal Sin Dream]
+echo_sin.glsl
+gpt_echo.glsl
+[Fractal Texture Tide]
+frac_texture.glsl
+fractal3.glsl
+fractal_color_wave.glsl
+fractal_texture_no_wrap.glsl
+[Chromatic Ant Vortex 0395]
+ant_light_color_spiral_nebula.glsl
+comb.glsl
+color_swirl_c.glsl
+[Warped Ppong Dream 0396]
+warp-ppong-time.glsl
+warp_ppong.glsl
+warp_ppong_mouse.glsl
+[Chromatic Halluc Dream]
+gpt_halluc.glsl
+halluc_pop.glsl
+[Temporal Ant Hall]
+ant_texture_cache_spectrum_scale_mirror_drift.glsl
+[Warped Cursorwarp2 Dream]
+cd_zoom.glsl
+CursorWarp2.glsl
+zoom_fish.glsl
+cosine_swirl.glsl
+[Chromatic Ant Radiance 0400]
+ant_light_color_neon_mandala.glsl
+huriz.glsl
+colorsheet.glsl
+[Chromatic Ant Radiance 0401]
+ant_light_color_fractal_fire.glsl
+matrix_mul4.glsl
+color_peak_inversion.glsl
+[Prismatic Large Mandala]
+gem_glass.glsl
+gem_kale_large.glsl
+gem_polar.glsl
+[Warped Pos Dream 0403]
+set_swirl_pos_mosue.glsl
+color_swirl_g.glsl
+color_swirl_sin_mouse.glsl
+[Chromatic Animation Burst]
+animation.glsl
+ant_peak_inversion_cache_spectrum_time_chromatic_quake.glsl
+colordivflash.glsl
+[Chromatic Game Cipher]
+game_noir.glsl
+psych_xor.glsl
+color_xor.glsl
+[Mirrored Self Dream]
+mirror-self.glsl
+mirror1_op.glsl
+mirror2_op.glsl
+[Chromatic Dir Dream]
+bend_dir.glsl
+sine_grad3.glsl
+snake_dir.glsl
+hue-mouse.glsl
+[Chromatic Pos Dream]
+apart_mouse.glsl
+fish_pos_mouse.glsl
+g5.glsl
+halluc_pop2.glsl
+random_pos_fish.glsl
+[Chromatic Ant Radiance 0409]
+ant_light_color_deep_fractal_glow.glsl
+huri.glsl
+ant_light_color_pulse_matrix.glsl
+ant_light_color_spectral_drain.glsl
+color_bars.glsl
+[Chromatic Shadow Echo]
+ant_time_f_color_echo_chamber.glsl
+open_shadow.glsl
+open_shadow_multi.glsl
+color_pal.glsl
+[Mirrored Spectrum8 Echo]
+ant_cache_spectrum8_mirror_tile_rotor.glsl
+mirror_r8.glsl
+[Chromatic Game Dream 0412]
+game_ascii_art.glsl
+matrix.glsl
+[Chromatic Zigzag Dream]
+zigzag.glsl
+deepcolor.glsl
+[Temporal Rgb Dream]
+echo_rgb.glsl
+echo_rgb1.glsl
+green_echo.glsl
+[Liquid Spectrum8 Vortex]
+spiral_mirror_wave.glsl
+wave_spiral.glsl
+ant_cache_spectrum8_zebra_wave.glsl
+ocean_fast.glsl
+wave_diag.glsl
+[Chromatic Ant Dream]
+ant_time_f_color_parallax_layers.glsl
+ant_time_f_color_quantum_freeze.glsl
+[Plasma Random Vortex 0417]
+HyperVortex.glsl
+random_x_audio_warp_tunnel.glsl
+random_x_audio_blackhole_pull.glsl
+[Chromatic Splash Dream 0418]
+splash-x.glsl
+splash-y.glsl
+color_grad1.glsl
+[Plasma Dual Vortex]
+twist_audio_ex_dual_axis.glsl
+twist_audio_ex_octave_stack.glsl
+react7.glsl
+[Chromatic Ribbon Echo]
+color_trails_cache_spectrum_ribbon_comet.glsl
+echo_color.glsl
+gfs.glsl
+color_l.glsl
+[Warped Beat Tide]
+rainbow_x_spiral_beat.glsl
+spiral_mirror.glsl
+spiral_square.glsl
+tearing_spiral.glsl
+[Liquid Ant Crystal]
+fractal_mirror_diamond_wave.glsl
+ant_gem_ice_ripple.glsl
+game_ant_ice_ripple.glsl
+ripple_outMouse.glsl
+[Chromatic Lineinlineout Dream]
+lineinlineout.glsl
+mirdmd1.glsl
+acidcolorrand.glsl
+[Mirrored Funny Dream]
+funny_mirror.glsl
+mirror-fish-mouse.glsl
+mirror_8.glsl
+mirror_p.glsl
+mirror_rad.glsl
+[Cyber Codex Shatter]
+codex_glitch_fractal_datamosh.glsl
+codex_vhs_tape_warp.glsl
+codex_cartoon.glsl
+codex_glitch_bloom_wormhole.glsl
+[Chromatic Ant Burst]
+bend.glsl
+ant_time_f_color_shutter_burst.glsl
+color_effect.glsl
+[Chromatic Trip2 Dream]
+gpt_trip2.glsl
+color_infinity_loop_single.glsl
+[Chromatic Dispersionx Dream]
+DispersionX.glsl
+DispersionY.glsl
+color-f.glsl
+[Kaleidoscopic Game Hall]
+game_kaleido_combat.glsl
+game_polaroid.glsl
+[Prismatic Ant Mandala]
+fractal_mirror_crystal_fold.glsl
+fractal_mirror_polar_reflect.glsl
+game_ant_gem_kaleido.glsl
+ant_gem_hypno_lens.glsl
+[Plasma Random Vortex 0431]
+random_spectrum_tunnel_rings.glsl
+twist_audio_ex_concentric_rings.glsl
+twist_audio_ex_fbm_audio.glsl
+react15.glsl
+[Cyber Magnetic Dream]
+codex_vhs_magnetic_dropouts.glsl
+vhs-palette.glsl
+vhs.glsl
+vhs_analog.glsl
+[Chromatic Darkred Cipher]
+darkred.glsl
+game_boss_warning.glsl
+color-mod.glsl
+xor_rgb_rainbow_swirl_limit.glsl
+[Temporal Ant Mandala]
+ant_cache_spectrum8_fractal_xor_fold.glsl
+ant_peak_inversion_cache_spectrum_time_kaleidoscope_storm.glsl
+ant_texture_cache_spectrum_scale_kaleido.glsl
+ant_texture_cache_spectrum_scale_polar_echo.glsl
+echo_cache.glsl
+[Aurora Aura7 Dream]
+aura7.glsl
+aura9.glsl
+auraXi1.glsl
+auraXi2.glsl
+green_aura.glsl
+[Geometric Geometric3 Dream]
+geometric.glsl
+geometric3.glsl
+geometric4.glsl
+geometric5.glsl
+grid_sin.glsl
+[Warped Sine Hall]
+mirror-swirly.glsl
+cosine_swirl_two.glsl
+sine_swirl.glsl
+xor_sine_swirl.glsl
+[Cyber Horizon Vortex]
+twist-code-event-horizon.glsl
+data.glsl
+datam3.glsl
+datam5.glsl
+datam_a.glsl
+[Chromatic Ant Echo 0439]
+ant_light_color_prism_bloom_echo.glsl
+rgb_control.glsl
+ant_light_color_hologram_pulse.glsl
+ant_time_f_color_ghost_train.glsl
+ant_time_f_color_polar_history.glsl
+[Chromatic Time Dream]
+sine_time.glsl
+ant_time_f_color_spectrogram_paint.glsl
+[Chromatic Tridim Tide]
+tridim.glsl
+color_effect_xor.glsl
+color_grad_rainbow.glsl
+xor_rgb_rainbow_1.glsl
+[Chromatic Rgb Dream 0442]
+rgb_fade.glsl
+rgb_time.glsl
+[Chromatic Nofilter Vortex]
+nofilter.glsl
+color_flux_whirl.glsl
+color_swirl_beautiful.glsl
+Light_Rainbow_Swirl.glsl
+rainbow_color_swirl.glsl
+[Plasma Sine Mandala]
+random_x_audio_sine_fold.glsl
+audio_mouse.glsl
+[Chromatic Scramble Dream]
+scramble-2.glsl
+scramble.glsl
+[Storm Tremor1 Dream]
+tremor1.glsl
+tremor4.glsl
+[Storm Purple Dream]
+purple_strobe.glsl
+strobe_x1.glsl
+[Chromatic Ant Mandala]
+ant_light_color_kaleidovoid.glsl
+ant_light_color_neon_mandala.glsl
+ant_time_f_color_memory_kaleidoscope.glsl
+color_g.glsl
+[Electric Wlight Burst]
+wlight.glsl
+strobe_light.glsl
+[Chromatic Scale Pulse]
+af_scale_puple.glsl
+audiocolor.glsl
+[Chromatic Rect1 Dream]
+rect1.glsl
+color-o.glsl
+[Mercury Ant Crystal]
+ant_gem_metal_glacier.glsl
+game_ant_metal_glacier.glsl
+[Liquid Bubblemouse Hall]
+mirror-bubble.glsl
+bubble_amp.glsl
+BubbleMouse.glsl
+[Mirrored Alpha Dream]
+reverse.glsl
+reverse_alpha.glsl
+[Chromatic Pong Dream 0455]
+fisheye_pi.mp4.glsl
+pong-atan.glsl
+pong-atan3.glsl
+pong_pi.mp4.glsl
+color-max.glsl
+[Aurora Aura6 Recursion]
+fractal_mirror_aurora_mirror.glsl
+aura6.glsl
+[Cyber Forge Tide]
+rainbow_metal_code_opal_vortex.glsl
+code-update-oceanic-star-forge.glsl
+star.glsl
+rainbow_metal_code_aurora_forge.glsl
+rainbow_metal_code_supernova_metal.glsl
+[Cyber Well Vortex]
+twist-code-gravity-well.glsl
+twist-code-infinite-bore.glsl
+game_pixelate_4x.glsl
+[Cyber 8Bit Chrome]
+8bit-norm.glsl
+8bit.glsl
+metal-code-silver-maelstrom.glsl
+[Prismatic Pilot Burst]
+[Warped Deep Pulse]
+react_x_swirl_deep.glsl
+swirl_by_mouse2.glsl
+[Temporal Ant Recursion]
+ant_cache_spectrum8_fractal.glsl
+ant_texture_cache_spectrum_scale_fracture.glsl
+frac_cache.glsl
+ant_cache_spectrum8_spectrum_rings.glsl
+phantom_drift_cache.glsl
+[Aurora Aura7 Dream 0463]
+aura7.glsl
+aura9.glsl
+auraXi2.glsl
+[Chromatic Ant Pulse]
+ant_light_color_plasma_ocean.glsl
+nl.glsl
+ant_spectrum_rainbow_cathedral.glsl
+color_flux.glsl
+[Mirrored Rad Lattice]
+mirror-geometric.glsl
+mirror-l.glsl
+mirror_b.glsl
+mirror_p.glsl
+mirror_rad.glsl
+[Mirrored Mirror2 Mist]
+mirror2.glsl
+mirror_blur1.glsl
+mirror_blur2.glsl
+mirror_blur3.glsl
+[Temporal Spectrum8 Pulse]
+ant_cache_spectrum8_glitch_boil.glsl
+color_peak_inversion_cache_spectrum_time.glsl
+color_trails_cache_spectrum.glsl
+glitchy.glsl
+[Chromatic Trails Echo]
+color_trails_cache_spectrum_jet_photon.glsl
+color_trails_cache_spectrum_shear_delta.glsl
+psych_pattern.glsl
+blur_offset_color_fade.glsl
+color-bloom.glsl
+[Chromatic Game Shatter]
+game_super_saiyan.glsl
+glitch-react-color.glsl
+tearing.glsl
+color-f-diag.glsl
+[XOR Rgb Circuit]
+code-frac-x-orbital-julia.glsl
+rgb_time_xor.glsl
+xor_code_cosmic_halftone.glsl
+xor_code_rgb_smooth_liquid_pastel.glsl
+xor_rgb.glsl
+[Fractal Shader02 Vortex 0471]
+frac_mirror_mouse_zoom.glsl
+frac_shader02_dmdi6i_zoom.glsl
+frac_shader02_prisim.glsl
+[XOR Subtle Recursion]
+frac_shader_xor.glsl
+subtle_xor.glsl
+self_alphablend_scale_xor.glsl
+[Chromatic Chromatic Circuit 0473]
+twist-code-chromatic-vortex.glsl
+pond.glsl
+code-update-chromatic-gravity-lens.glsl
+[Chromatic Halluc Tide]
+halluc_liquid_fractal.glsl
+color_peak_inversion_cache_spectrum_time.glsl
+color_trails_cache_spectrum_ribbon_comet.glsl
+Liquid_Rainbow_Wave.glsl
+rainbow_cd.glsl
+[Warped Zoom3 Recursion]
+frac_zoom3.glsl
+frac_zoom5.glsl
+frac_zoom7.glsl
+gptswirl2.glsl
+[Cyber Codex Radiance]
+codex_glitch_neon_escape.glsl
+DigitalLight.glsl
+game_codex_powerup_glow.glsl
+glitch_light.glsl
+vhs-code-rf-noise.glsl
+[Fractal Chrono Circuit]
+code-frac-x-chrono-tunnel.glsl
+code-frac-x-cosmic-filigree.glsl
+code-frac-x-nebula-vortex.glsl
+frac_shader02_dmdXi3_warp.glsl
+[Plasma Spin Vortex]
+react_x_double_spin.glsl
+react_x_spin_amp.glsl
+react_x_swirl_deep.glsl
+[Chromatic Sin Vortex]
+page_turn2.glsl
+color_swirl_sin.glsl
+color_swirl_sin_mouse.glsl
+[Liquid Ferrofluid Chrome]
+code-update-opal-ferrofluid.glsl
+game_ant_chrome_wave.glsl
+metal-code-magnetic-ferrofluid.glsl
+rainbow_metal_code_holographic_metal.glsl
+[Mirrored Pebble Tide]
+mirror-pebble.glsl
+mirror-psyce-wave-all.glsl
+mirror-swirly.glsl
+[Chromatic Es1 Cipher]
+es1.glsl
+game_cel_outline.glsl
+color-mod.glsl
+[Warped Random Pulse 0483]
+frac_shader03_wormhole.glsl
+random_x_audio_bass_tunnel.glsl
+random_x_audio_vortex_spin.glsl
+twist_audio_ex_bass_pulse.glsl
+[Cyber Inversion Echo]
+inv_cache_code_lucid_field.glsl
+inversion_code_cache_hex_current.glsl
+inversion_code_cache_ion_veil.glsl
+inversion_code_cache_moire_tensor.glsl
+inversion_code_cache_reaction_front.glsl
+[Warped Pilot Lattice]
+grid-spiral.glsl
+[Kaleidoscopic Ant Crystal]
+ant_cache_spectrum8_kaleido_sin_osc.glsl
+ant_cache_spectrum8_mandala.glsl
+ant_gem_glass_mandala.glsl
+ant_gem_nebula_fold.glsl
+game_ant_glass_mandala.glsl
+[Plasma Ant Crystal]
+ant_spectrum_crystal_echo.glsl
+ant_spectrum_prismatic_bloom.glsl
+ant_spectrum_gradient_bloom.glsl
+[Prismatic Pilot Vortex 0488]
+game_hologram.glsl
+[Cosmic Inthesky Echo]
+inthesky_cache_astral_tessellation.glsl
+inthesky_cache_celestial_cathedral.glsl
+inthesky_cache_solar_pillar_array.glsl
+[Chromatic Skinny Tide]
+skinny.glsl
+zigzag.glsl
+dark_rainbow_rubber_soul.glsl
+game_vignette_breath.glsl
+[Geometric Pilot Hall]
+fractal_mirror_grid_fold.glsl
+[Velvet Deep Crystal]
+halluc_smoke_curl.glsl
+ant_gem_deep_bloom.glsl
+blurry.glsl
+game_ant_deep_bloom.glsl
+[Prismatic Ant Pulse 0493]
+ant_gem_plasma_facets.glsl
+ant_gem_metal_pulse.glsl
+[Storm Shader02 Recursion]
+frac_shader02_octo_strobe.glsl
+frac_shader02_octo_strobe2.glsl
+grid_rand_strobe.glsl
+grid_strobe.glsl
+strobe_colors.glsl
+[Cyber Codex Vortex]
+codex_vhs_tape_warp.glsl
+fractal_vhs.glsl
+twist-code-double-helix.glsl
+twist-code-fractal-conduit.glsl
+twist-code-serpent-tunnel.glsl
+[Chromatic Matrix Tide]
+matrix_mouse.glsl
+rainbow_mouse_x1.glsl
+[Chromatic Grad Cipher]
+grad.glsl
+heartthrob2.glsl
+psych_xor.glsl
+color_effect_xor.glsl
+[Kaleidoscopic Texture Radiance]
+Electric_Fold.glsl
+Electric_Fold_Texture.glsl
+fold-water.glsl
+[Cyber Holographic Crystal]
+code-frac-x-holographic-hive.glsl
+codex_grad_fractal_crystal_bloom.glsl
+code-update-neon-mycelium.glsl
+[Plasma Sine Vortex 0500]
+react_x_spiral_twist.glsl
+twist_audio_ex_sine_audio.glsl
+twist_audio_ex_spectrum_spiral.glsl
+twist_audio_ex_spiral_zoom.glsl
+random_x_audio_nebula_flow.glsl
+[Liquid Spin Dream]
+echo_rainbow_spin.glsl
+rainbow_top.glsl
+[Mirrored Wrap Vortex 0502]
+mirror-spiral.glsl
+mirror-wrap-rotate.glsl
+[Prismatic Mirror2 Hall]
+mirror-prism.glsl
+mirror2_s.glsl
+crystal.glsl
+prism_glass.glsl
+[Cyber Infinite Vortex]
+twist-code-infinite-bore.glsl
+twist-code-mirror-abyss.glsl
+twist-code-prism-singularity.glsl
+[Storm Pilot Vortex]
+xcordstrobe.glsl
+[Cyber Eclipse Recursion]
+code-frac-solar-lattice.glsl
+code-update-fractal-eclipse.glsl
+[Liquid Drain Hall]
+drain_mirror.glsl
+fractal_mirror_ring_expand.glsl
+drain_mandella.glsl
+drain_rainbow.glsl
+[Temporal Alpha Cipher]
+echo_alpha_three.glsl
+echo_alpha_two.glsl
+echo_alpha_two_xor.glsl
+echo_s_rgb.glsl
+self_alphablend_scale_xor.glsl
+[Chromatic Deeps1 Pulse]
+deeps1.glsl
+expand_mul_fast.glsl
+green_move.glsl
+page_turn.glsl
+color_flux_whirl.glsl
+[Electric Ant Dream 0510]
+ant_light_color_warp_cathedral.glsl
+Liquid_Light_Rainbow_Blend.glsl
+ant_light_color_frozen_lightning.glsl
+ant_light_color_phase_shift.glsl
+[Chromatic Color3 Echo]
+echo_color3.glsl
+echo_mix_colors.glsl
+shift_grad.glsl
+sine_grad5.glsl
+acidcolor.glsl
+[Warped Sin Hall]
+mirror-twist-sin.glsl
+mirror-twisted.glsl
+twist_gpt_full.glsl
+[Liquid Nautilus Circuit]
+liquid_code_mercury_vortex.glsl
+spiral_wave_1.glsl
+liquid_code_chrome_nautilus.glsl
+[Fractal Fractal2 Circuit]
+code-frac-vortex-bloom.glsl
+code-frac-x-event-horizon-bloom.glsl
+frac_zoom8.glsl
+fractal2.glsl
+new_fractal2.glsl
+[Plasma Spectrum8 Echo 0515]
+ant_cache_spectrum8_tunnel.glsl
+ant_cache_spectrum8_voronoi_pulse.glsl
+rainbow_x_prism_pulse.glsl
+[Temporal Ant Pulse 0516]
+ant_peak_inversion_cache_spectrum_time_mandala_pulse.glsl
+ant_peak_inversion_cache_spectrum_time_oilslick_meltdown.glsl
+[Chromatic Diagsquare Tide]
+diagsquare.glsl
+psych.glsl
+psych_ripple.glsl
+purple_haze.glsl
+[Plasma Audio13 Hall]
+mirror_x_audio13.glsl
+mirror_x_audio17.glsl
+mirror_x_audio23.glsl
+mirror_x_audio33.glsl
+react5.glsl
+[Prismatic Ant Chrome]
+ant_gem_metal_prism.glsl
+game_ant_metal_opal.glsl
+game_ant_metal_prism.glsl
+[Chromatic Bend2 Vortex]
+bend2.glsl
+game_emp_blast.glsl
+color_swirl_c.glsl
+[Plasma Random Crystal]
+plasma_prism.glsl
+random_x_audio_plasma_storm.glsl
+react13.glsl
+ant_spectrum_prism_cascade.glsl
+[Prismatic Pilot Pulse]
+random_x_audio_crystal_breathe.glsl
+[Mirrored Ant Pulse]
+ant_spectrum_mirror_fractal.glsl
+ant_spectrum_mirror_infinity.glsl
+ant_spectrum_mirror_wave.glsl
+mirror_x_audio34.glsl
+[Kaleidoscopic Shader02 Recursion]
+fill_black_fold.glsl
+fold.glsl
+frac_shader02_dmd6i_air.glsl
+frac_shader02_dmdi_radial.glsl
+radial.glsl
+[Plasma Random Vortex 0525]
+random_x_audio_spiral_zoom.glsl
+twist_audio.glsl
+twist_audio_ex_inverse_radius.glsl
+twist_audio_ex_vortex_pump.glsl
+[Warped Shader03 Recursion]
+frac_shader03_wormhole.glsl
+frac_zoom1.glsl
+random_x_audio_warp_tunnel.glsl
+warp_tunnel.glsl
+[Plasma Audio40 Hall]
+mirror_x_audio40.glsl
+halluc_audio.glsl
+[Warped Random Pulse 0528]
+random_x_audio_polar_warp.glsl
+twist_audio_ex_polar_freq.glsl
+warp_ppong.glsl
+random_spectrum_wormhole.glsl
+[Liquid Drain Hall 0529]
+drain_mirror_amp.glsl
+drain_mirror_top.glsl
+[Temporal And Dream]
+ant_time_f_color_echo_chamber.glsl
+echo_and_or_xor.glsl
+echo_color4.glsl
+echo_xor_or_and.glsl
+blur_offset_color_fade.glsl
+[Plasma Ant Echo]
+ant_cache_spectrum8_neural.glsl
+ant_cache_spectrum8_plasma.glsl
+ant_texture_cache_spectrum_scale_plasma.glsl
+plasma.glsl
+[Warped Tearing Silk]
+spiral-aura.glsl
+tearing_spiral.glsl
+warp_ppong.glsl
+[Cyber Update Radiance]
+code-update-cyber-lotus.glsl
+code-update-laser-basilica.glsl
+kale_code_seraphic_lattice.glsl
+kale_code_stained_cosmos.glsl
+[Electric Ant Vortex]
+light_spiral.glsl
+ant_light_color_galaxy_swirl.glsl
+[Prismatic Ant Pulse 0535]
+react_x_pingpong_glitch.glsl
+ant_gem_crystal_pulse.glsl
+ant_spectrum_crystal_gradient.glsl
+game_ant_crystal_pulse.glsl
+gem-pong.glsl
+[Storm Spectrum8 Echo]
+ant_cache_spectrum8_glitch_storm.glsl
+ant_cache_spectrum8_tremor_storm.glsl
+glitchy-rainbow.glsl
+halluc_ember_storm.glsl
+[Prismatic Ant Chrome 0537]
+ant_gem_metal_prism.glsl
+game_ant_metal_prism.glsl
+[Fractal Infinite Crystal]
+frac_shader_diamond.glsl
+fractal_mirror_infinite_reflect.glsl
+[Cyber Quantum Crystal]
+code-frac-x-quantum-crystal.glsl
+code-update-chromatic-gravity-lens.glsl
+kale_code_phoenix_prism.glsl
+metal-code-chrome-tide.glsl
+vhs-code-chroma-bleed.glsl
+[Glitch Game Circuit]
+game_pixelsort_glitch.glsl
+glitch-no-noise.glsl
+glitch_jump.glsl
+[Mercury Game Burst]
+game_ant_metal_coil.glsl
+game_ant_metal_forge.glsl
+game_ant_metal_storm.glsl
+[Liquid Spin Dream 0542]
+psych_wave_rainbow.glsl
+rainbow_cd_spin.glsl
+rainbow_color2.glsl
+[Warped Pilot Recursion]
+fractal_mirror_swirl_mirror.glsl
+color_swirl_beautiful.glsl
+[Cosmic Update Circuit]
+code-update-celestial-circuit.glsl
+code-update-cosmic-loom.glsl
+game_ant_cosmic_web.glsl
+ant_gem_metal_orbital.glsl
+code-update-temporal-prism-orbit.glsl
+[Warped Beat Pulse]
+spiral_wave.glsl
+twist_audio_ex_zoom_beat.glsl
+wspiral.glsl
+ant_cache_spectrum8_galaxy_swirl.glsl
+[Velvet Ant Chrome]
+game_ant_mercury_bloom.glsl
+[Mirrored Cascade Recursion]
+fractal_mirror_cascade_fold.glsl
+fractal_mirror_sine_fold_pulse.glsl
+mirror_x_audio31.glsl
+[Chromatic Kale3 Circuit]
+kale3.glsl
+pull_out.glsl
+recep-2.glsl
+rightintwo.glsl
+kale_code_chromatic_shrine.glsl
+[Cyber Citadel Tide]
+code-frac-ocean-kaleido.glsl
+code-mirror-ripple-citadel.glsl
+rainbow_metal_code_kaleido_chrome.glsl
+code_wave_rev.glsl
+game_codex_underwater_depth.glsl
+[Cyber Tsunami Crystal]
+code-update-quartz-tsunami.glsl
+vhs-code-dropout.glsl
+kale_code_crystal_maelstrom.glsl
+[Temporal Alpha Pulse]
+echo_2.glsl
+echo_alpha_three_rgb.glsl
+random_x_audio_echo_cascade.glsl
+[Fractal Infinite Echo]
+frac_shader01.glsl
+fractal.glsl
+Fractal1.glsl
+fractal_recursion.glsl
+[Prismatic Ant Circuit]
+ant_light_color_prism_bloom_echo.glsl
+code-update-radiant-dream-engine.glsl
+codex_vhs_ghost_luma.glsl
+ant_light_color_crystal_cave.glsl
+[Molten Ant Chrome]
+ant_gem_metal_ember.glsl
+game_ant_metal_ember.glsl
+game_ant_metal_inferno.glsl
+[Plasma Audio15 Hall]
+mirror_audio.glsl
+mirror_x_audio15.glsl
+HyperFcousAmp.glsl
+pulse1.glsl
+react16.glsl
+[Storm Gradient Cipher]
+flash_gradient_strobe.glsl
+green_gradient_strobe.glsl
+new_xor_scale_strobe.glsl
+xorstrobe.glsl
+[Chromatic Ant Echo 0557]
+ant_time_f_color_trail_blaze.glsl
+bowl.glsl
+ol.glsl
+RGBColorTrails_cache.glsl
+ant_time_f_color_polar_history.glsl
+[Fractal Shader03 Vortex]
+frac_shader02_dmd6i_air_twist.glsl
+frac_shader03_wormhole3.glsl
+frac_shader03_wormhole4.glsl
+fractal_zoom_e.glsl
+[Cyber Window Recursion]
+code-frac-x-infinite-rose-window.glsl
+code-frac-x-plasma-chrysalis.glsl
+[Mirrored Ant Pulse 0560]
+ant_spectrum_neon_mirror.glsl
+ant_spectrum_prism_mirror.glsl
+mirror_x_audio24.glsl
+[Chromatic Drum Vortex]
+g_drum_by_mouse.glsl
+color_swirl_o1_mouse.glsl
+[Prismatic Ant Pulse 0562]
+ant_gem_metal_pulse.glsl
+ant_gem_metal_pulse_mouse.glsl
+ant_gem_void_pulse.glsl
+gem_rainbow_metal_audio.glsl
+[Cyber Inversion Echo 0563]
+inversion_code_cache_reaction_front.glsl
+inversion_code_cache_synaptic_canopy.glsl
+inversion_code_cache_tachyon_ribbons.glsl
+inversion_code_cache_vacuum_bloom.glsl
+vhs-code-ghosting.glsl
+[Chromatic Cycle Echo]
+bi_cycle.glsl
+echo_color.glsl
+color_g.glsl
+[Cosmic Ant Crystal]
+ant_cache_spectrum8_cosmic_web.glsl
+ant_gem_cosmic_web.glsl
+[Fractal Ant Tide]
+ant_cache_spectrum8_fractal.glsl
+code-frac-liquid-mirror.glsl
+code-frac-quartz-ripples.glsl
+game_ant_fractal_ocean.glsl
+halluc_liquid_fractal.glsl
+[Liquid Codex Dream]
+codex_vhs_rainbow_noise.glsl
+rainbow.banding.glsl
+[Plasma Drum Vortex]
+react_x_drum_zoom.glsl
+twist_audio_ex_fbm_audio.glsl
+random_x_audio_shockwave.glsl
+[Chromatic Mirdmd Pulse]
+mirdmd.glsl
+audiocolor.glsl
+picolor.glsl
+[Plasma Spectrum8 Vortex]
+ant_cache_spectrum8_strobe_tunnel.glsl
+ant_cache_spectrum8_vortex.glsl
+ant_cache_spectrum8_warp_drive.glsl
+random_x_audio_vortex_spin.glsl
+[Prismatic Rainbow1 Tide]
+Liquid_Crystal_2.glsl
+Liquid_Crystal_Rainbow1.glsl
+[Glitch Damaged Circuit]
+damaged_vcr.glsl
+game_radio_static.glsl
+[Liquid Drain Recursion]
+frac_shader02_dmdXi3_drain.glsl
+cwave2.glsl
+cxripple.glsl
+drain_mouse.glsl
+drain_reset.glsl
+[Temporal Inthesky Hall]
+echo_mirror_3.glsl
+inthesky_cache_nebula_mirrors.glsl
+echo_4_rev.glsl
+[Mirrored Audio10 Pulse]
+mirror_x_audio10.glsl
+mirror_x_audio14.glsl
+mirror_x_audio20.glsl
+mirror_x_audio28.glsl
+[Cyber Codex Dream 0576]
+codex_cartoon_vhs.glsl
+game_codex_radar_ping.glsl
+codex_cartoon_color.glsl
+[Warped Ant Crystal]
+ant_gem_prism_vortex.glsl
+gem-spiral-cont2.glsl
+gem_spiderweb_tunnel.glsl
+[Mirrored Vision Vortex]
+spiral_mirror_2.glsl
+spiral_mirror_rev.glsl
+[Temporal Ant Pulse 0579]
+ant_spectrum_echo_chamber.glsl
+ant_texture_cache_spectrum_scale_mosaic.glsl
+ant_texture_cache_spectrum_scale_silk.glsl
+[Mercury Ant Crystal 0580]
+ant_gem_metal_ember.glsl
+ant_gem_metal_inferno.glsl
+ant_gem_metal_lattice.glsl
+game_ant_metal_lattice.glsl
+game_ant_metal_tessera.glsl
+[Cyber Choir Echo]
+inv_cache_code_afterimage_choir.glsl
+inversion_code_cache_cellular_aegis.glsl
+inversion_code_cache_dipole_choir.glsl
+[Chromatic Pencil Tide]
+game_pencil_lines.glsl
+sepia.glsl
+dark_rainbow2.glsl
+[Temporal Mix Hall]
+echo_5_mix_rev.glsl
+echo_rev_x1.glsl
+[Molten Game Tide]
+game_ant_fire_spoke.glsl
+game_desert_heat.glsl
+Liquid_Heat.glsl
+Liquid_Heat_blend.glsl
+[Chromatic Ant Crystal 0585]
+d1.glsl
+heartthrob.glsl
+ant_time_f_color_holo_replay.glsl
+ant_time_f_color_quantum_freeze.glsl
+o1-hue.glsl
+[Plasma Audio35 Hall]
+mirror_x_audio35.glsl
+genergy.glsl
+react12.glsl
+react_x_phase_stretch.glsl
+[Prismatic Crack Pulse]
+random_x_audio_glass_crack.glsl
+[Geometric Random Pulse]
+geometric3.glsl
+grid_pattern.glsl
+gridcolor_gradient.glsl
+random_x_audio_hexgrid.glsl
+random_x_audio_ripple_rings.glsl
+[Prismatic Cont Vortex]
+ant_gem_sketch_warp.glsl
+gem-spiral-cont-ts.glsl
+gem-spiral-cont.glsl
+[Mirrored Kaleidoscope Pulse]
+ant_spectrum_mirror_kaleidoscope.glsl
+fractal_mirror_radial_pulse.glsl
+mirror_x_audio3.glsl
+random_spectrum_fractal_kaleidoscope.glsl
+[Cyber Inv Echo]
+inv_cache_code_entoptic_constellation.glsl
+inv_cache_code_peripheral_drift.glsl
+inv_cache_code_phosphene_swarm.glsl
+inv_cache_code_scintillating_aura.glsl
+inv_cache_code_synesthetic_veil.glsl
+[Fractal Singularity Nebula]
+code-frac-bass-singularity.glsl
+code-frac-plasma-orbit.glsl
+code-frac-x-astral-dream-engine.glsl
+frac_star1.glsl
+[Fractal Shader03 Vortex 0593]
+frac_shader03_size.glsl
+frac_shader03_worm4_amp.glsl
+frac_shader03_wormhole2.glsl
+frac_shader03_wormhole4.glsl
+[Liquid Ink Dream]
+rainbow_x_ink_wave.glsl
+rainbow_ink_t.glsl
+rainbow_prisim.glsl
+[Fractal Helix Hall]
+fractal_mirror_bass_zoom.glsl
+fractal_mirror_helix_mirror.glsl
+fractal_mirror_tunnel_reflect.glsl
+fractal_mirror_vortex_mirror.glsl
+fractal_mirror_zoom_pulse.glsl
+[Electric Game Pulse]
+game_minimap_glow.glsl
+light_pulse.glsl
+[Prismatic Spir Recursion]
+gem_frac.glsl
+gem_frac_spir.glsl
+[Mirrored Ant Pulse 0598]
+ant_spectrum_mirror_cascade.glsl
+ant_spectrum_mirror_infinity.glsl
+mirror_x_audio8.glsl
+[Cyber Horizon Vortex 0599]
+twist-code-event-horizon.glsl
+twist-code-feedback-spiral.glsl
+twist-code-radial-overdrive.glsl
+twist-code-spiral-shockwave.glsl
+[Mirrored Ant Pulse 0600]
+ant_spectrum_fractal_mirror.glsl
+ant_spectrum_kaleido_wave.glsl
+drain_mirror_amp.glsl
+mirror_x_audio39.glsl
+[XOR Xor2 Recursion]
+frac_shader_xor2.glsl
+alpha_xor.glsl
+gxor2.glsl
+negative.glsl
+xorsheet.glsl
+[Mercury Pilot Vortex 0602]
+[Warped Sine Dream]
+spiral-mouse.glsl
+warp_tunnel.glsl
+g_swirl.glsl
+sine_swirl.glsl
+ant_time_f_color_timeline_swirl.glsl
+[Temporal Shader04 Recursion 0604]
+frac_shader04_echo.glsl
+frac_shader04_echo2.glsl
+frac_shader_echo4_spin_full.glsl
+feedback_recursion_cache.glsl
+[Plasma Ant Nebula]
+ant_peak_inversion_cache_spectrum_time_starburst_supernova.glsl
+ant_spectrum_gradient_storm.glsl
+ant_texture_cache_spectrum_scale_cosmic_web.glsl
+[Temporal And Cipher]
+echo_and_or_xor.glsl
+echo_color4.glsl
+echo_or_and_xor.glsl
+xor_code_opal_feedback.glsl
+[Liquid Ant Dream]
+ant_light_color_acid_ripple.glsl
+rainbow_color3.glsl
+[Fractal Smooth Radiance]
+frac_shader01_smooth.glsl
+frac_shader01_smooth_neon.glsl
+game_ant_frac_neon.glsl
+game_ant_frac_smooth.glsl
+whitelight.glsl
+[Temporal Spectrum8 Dream]
+color_peak_inversion_cache_spectrum8.glsl
+color_trails_cache_spectrum_ribbon_aurora.glsl
+spectral_smear_cache.glsl
+[Plasma Jitter Vortex 0610]
+twist_audio_ex_treble_jitter.glsl
+random_spectrum_wormhole.glsl
+[Liquid Game Chrome]
+rainbow_metal_code_fractal_rainbow.glsl
+game_ant_chrome_wave.glsl
+metal-code-nanofluid-forge.glsl
+[Geometric Random Radiance]
+light-rings.glsl
+random_x_audio_freq_rings.glsl
+[Mirrored Rotating Pulse]
+fractal_mirror_rotating_mirror.glsl
+mirror_x_audio18.glsl
+mirror_x_audio25.glsl
+mirror_x_audio37.glsl
+reverse_xor.glsl
+[Temporal Infinite Vortex]
+[Plasma Spectrum8 Echo 0615]
+ant_cache_spectrum8_acid_rain.glsl
+color_peak_inversion_cache_spectrum_time.glsl
+color_trails_cache_spectrum.glsl
+plasma_xor.glsl
+[Kaleidoscopic Ant Dream]
+ant_time_f_color_memory_kaleidoscope.glsl
+ant_time_f_color_radial_smear.glsl
+[Prismatic Pilot Mist]
+[Mirrored Snap Vortex]
+mirror-geometric.glsl
+mirror-wrap-rotate-snap.glsl
+mirror_dir.glsl
+spiral_mirror_top.glsl
+[Chromatic Dark Cipher 0619]
+color-mod-dark.glsl
+color_xor.glsl
+colorsheet.glsl
+[Geometric Pattern Dream]
+grid_pattern.glsl
+gridcolor_gradient.glsl
+and_smooth.glsl
+[Glitch Tex Mandala]
+tex_fold.glsl
+distortf2.glsl
+glitchf.glsl
+radial_distortion.glsl
+radial_distortion2.glsl
+[Electric Ant Echo]
+ant_peak_inversion_cache_spectrum_time_fractal_inferno.glsl
+ant_cache_spectrum8_neon_grid.glsl
+ant_peak_inversion_cache_spectrum_time_neon_grid_inferno.glsl
+neon.glsl
+[XOR Time Recursion 0623]
+frac_shader_xor.glsl
+time_frac_xor.glsl
+xor_positional_offset.glsl
+xor_rgb_smoother_mouse.glsl
+[Cyber Chandelier Tide]
+code-mirror-liquid-chandelier.glsl
+code-mirror-ocean-origami.glsl
+code_flux_mouse.glsl
+code_wave.glsl
+[Mirrored Ant Pulse 0625]
+ant_spectrum_kaleido_pulse.glsl
+ant_spectrum_mirror_cascade.glsl
+mirror_x_audio19.glsl
+[Plasma Audio11 Shatter]
+mirror_x_audio11.glsl
+glitch-react.glsl
+[Cyber Engine Mist]
+code-frac-x-astral-dream-engine.glsl
+kale_code_dream_engine.glsl
+[Warped Dual Pulse]
+twist_audio_ex_dual_axis.glsl
+twist_audio_ex_quad_freq.glsl
+swirlMouse.glsl
+[Electric Ant Dream 0629]
+ant_light_color_electric_web.glsl
+ant_time_f_color_light_painting.glsl
+[Geometric Pilot Crystal]
+[Mercury Ant Nebula]
+ant_gem_metal_nebula.glsl
+game_ant_metal_nebula.glsl
+game_ant_metal_pulse.glsl
+[Cyber Well Vortex 0632]
+twist-code-gravity-well.glsl
+twist-code-neon-collapse.glsl
+twist-code-turbine-rift.glsl
+[Temporal Scale Pulse]
+ant_texture_cache_spectrum_scale_ghost.glsl
+ant_texture_cache_spectrum_scale_ripple.glsl
+[Prismatic Crack Recursion]
+gem-hue-frac.glsl
+random_x_audio_glass_crack.glsl
+gem_glass.glsl
+[Temporal Ant Vortex]
+ant_peak_inversion_cache_spectrum_time_hyperspace_tunnel.glsl
+ant_peak_inversion_cache_spectrum_time_warp_drive_overload.glsl
+ant_texture_cache_spectrum_scale_tunnel.glsl
+ant_texture_cache_spectrum_scale_vortex.glsl
+swirl_cache.glsl
+[Liquid Grainbow Dream]
+rainbow_fractal.glsl
+grainbow.glsl
+[Fractal Shader02 Pulse 0637]
+frac_shader02_dmd6i_audio.glsl
+frac_shader02_dmdXi_amp.glsl
+frac_shader03_wormhole_amp.glsl
+[Chromatic Inversion Hall]
+mirror-color-o1.glsl
+color_peak_inversion.glsl
+[Prismatic Crystalprism Tide]
+c_ripple.glsl
+ripple_prism.glsl
+water_r.glsl
+crystal-2.glsl
+crystalprism.glsl
+[Temporal Ribbon Dream]
+color_trails_cache_spectrum_ribbon_blaze.glsl
+color_trails_cache_spectrum_ribbon_monsoon.glsl
+echo_color1.glsl
+echo_color5.glsl
+[Chromatic Delic Pulse]
+delic.glsl
+pool.glsl
+random_x_audio_chromatic_pulse.glsl
+[Mirrored Goofy Mist]
+mirror-goofy.glsl
+mirror-gpt.glsl
+mirror_blur1.glsl
+mirror_blur2.glsl
+mirror_blur3.glsl
+[Temporal Color2 Dream]
+echo_color2.glsl
+echo_color4.glsl
+echo_mix_colors_rev.glsl
+echo_rev_x1.glsl
+[Cyber Kale Nebula]
+game_codex_bullet_time_focus.glsl
+kale_code_astral_rose.glsl
+kale_code_nebula_chrysalis.glsl
+code-update-aurora-cathedral.glsl
+[Prismatic Ant Pulse 0645]
+ant_spectrum_crystal_gradient.glsl
+crystal.glsl
+random_x_audio_crystal_breathe.glsl
+[Prismatic Ant Chrome 0646]
+ant_gem_metal_shard.glsl
+ant_gem_metal_weave.glsl
+[Cyber Inv Echo 0647]
+inv_cache_code_cortical_form_constants.glsl
+inv_cache_code_entoptic_constellation.glsl
+inversion_code_cache_arc_constellation.glsl
+[Chromatic Ant Pulse 0648]
+sin.glsl
+ant_spectrum_chromatic_lotus.glsl
+[Cyber Rose Hall]
+code-mirror-infinity-rose.glsl
+kale_code_quantum_orchid.glsl
+vhs-code-kung-fury.glsl
+[Prismatic Inversion Echo]
+code-frac-diamond-echo.glsl
+inversion_code_cache_quasicrystal_field.glsl
+temporal_prism_cache.glsl
+code-update-temporal-prism-orbit.glsl
+[Glitch Game Pulse]
+game_damage_pulse.glsl
+react_x_hash_glitch.glsl
+[Plasma Random Vortex 0652]
+random_x_audio_zoom_strobe.glsl
+react_x_drum_zoom.glsl
+twist_audio_ex_bass_quake.glsl
+zoom_pulse.glsl
+[Cyber Singularity Pulse]
+code-frac-bass-singularity.glsl
+twist-code-deep-space-drill.glsl
+code-update-plasma-chrysalis.glsl
+[Mirrored Bowl Lattice]
+mirror-bowl-by-time.glsl
+mirror-bowl.glsl
+mirror-geometric.glsl
+reverse_xy.glsl
+[Plasma Ring Vortex]
+react_x_ring_spiral.glsl
+zoom_pulse2.glsl
+[Fractal Crown Vortex]
+code-frac-crystal-tunnel.glsl
+code-frac-spiral-crown.glsl
+code-frac-x-julia-wormhole.glsl
+code-frac-x-nebula-vortex.glsl
+frac_zoom2.glsl
+[Fractal Pilot Lattice]
+[Warped Comp Pulse]
+comp_zoom.glsl
+twist_audio_ex_octave_stack.glsl
+warpcursor.glsl
+wormhole_audio.glsl
+[Fractal Zero Tide]
+fractal_liquid_no_zero.glsl
+Liquid_Fractal_Tunnel.glsl
+[Liquid Film Crystal]
+old-film-water.glsl
+ripple_cycle.glsl
+ripple_cycle2.glsl
+waterbend.glsl
+water_prism.glsl
+[Plasma Random Vortex 0661]
+mirror-bubble-zoom-mouse-audio.glsl
+random_x_audio_twist_mirror.glsl
+twist_audio_ex_mid_swirl.glsl
+wormhole_audio.glsl
+[Cyber Codex Shatter 0662]
+code-frac-x-fractured-singularity.glsl
+codex_glitch_shard_stutter.glsl
+xor_code_quantum_palette.glsl
+codex_vhs_chroma_bleed.glsl
+codex_quantum_bloom.glsl
+[Cyber Codex Silk]
+code-frac-zero-gravity-fold.glsl
+codex_aurora_vortex.glsl
+codex_grad_fractal_aurora_mandala.glsl
+codex_complex_aura.glsl
+game_codex_boss_aura.glsl
+[Cosmic Game Chrome]
+game_ant_metal_nebula.glsl
+game_ant_metal_orbital.glsl
+[Mirrored Wrap Vortex 0665]
+mirror-pong2.glsl
+mirror-self.glsl
+mirror-wrap-rotate90.glsl
+mirror-wrap-scale.glsl
+mirror_revy.glsl
+[Prismatic Ballroom Circuit]
+code-mirror-crystal-ballroom.glsl
+code-mirror-diamond-horizon.glsl
+code-mirror-opal-wormhole.glsl
+hallu_code_abyssal_opaline.glsl
+[Temporal Alpha Dream]
+echo_alpha_three_rgb.glsl
+echo_div4_rainbow.glsl
+echo_mix_colors.glsl
+echo_xor.glsl
+[Cyber Chromatic Vortex]
+twist-code-chromatic-vortex.glsl
+twist-code-octave-wormhole.glsl
+twist-code-phase-cyclone.glsl
+twist-code-singularity-maelstrom.glsl
+code-update-iridescent-turbine.glsl
+[Electric Pilot Tide]
+brighten.glsl
+[Liquid Pilot Crystal]
+Liquid_Crystal_2.glsl
+ripple_ppong.glsl
+[Plasma Audio30 Shatter]
+mirror_x_audio30.glsl
+react_x_glitch_peak.glsl
+[Prismatic Pattern Lattice]
+diamond.glsl
+diamond_pattern_1.glsl
+[Chromatic Recall Vortex 0673]
+ant_time_f_color_tunnel_recall.glsl
+color-o.glsl
+[Cyber Inv Echo 0674]
+inv_cache_code_breathing_architecture.glsl
+inv_cache_code_peripheral_drift.glsl
+inversion_code_cache_flux_lattice.glsl
+inversion_code_cache_plasma_filaments.glsl
+[Liquid Vision Vortex]
+bubble-zoom-mouse.glsl
+mirror-bubble-zoom-mouse-audio.glsl
+[Electric Lightfade Circuit]
+lightfade.glsl
+game_cyberpunk_neon.glsl
+neon.glsl
+neon_mouse.glsl
+[Prismatic Ant Chrome 0677]
+ant_gem_metal_glacier.glsl
+ant_gem_metal_helix.glsl
+game_ant_gem_pencil.glsl
+game_ant_metal_chrome.glsl
+gem_txt.glsl
+[Fractal Shader02 Pulse 0678]
+comb3-frac-mouse2.glsl
+frac_shader02_dmd6i_bowl.glsl
+frac_shader02_dmd6i_spectrum16.glsl
+frac_shader02_octo_amp.glsl
+[Fractal Shader03 Hall]
+frac_shader03_wormhole.glsl
+fractal_mirror_polar_reflect.glsl
+fractal_mirror_stripe_kaleidoscope.glsl
+fractal_mirror_tunnel_reflect.glsl
+[Liquid Move Shatter]
+wave_spiral.glsl
+bubble-move.glsl
+sine_ripple.glsl
+triwavedistort.glsl
+[Prismatic Cont Vortex 0681]
+gem-spiral-cont.glsl
+gem-spiral-full.glsl
+[XOR Gxor Burst]
+gxor.glsl
+negative_xor_strobe.glsl
+new_xor_scale_strobe.glsl
+[Storm Random Echo]
+echo_strobe_x1.glsl
+random_strobe.glsl
+strobe.glsl
+[Liquid Psyce Hall]
+mirror-bubble.glsl
+mirror-psyce-wave-all.glsl
+bubble.glsl
+bubble_amp.glsl
+[Kaleidoscopic Pilot Hall]
+[Mirrored New Mandala]
+echo_mirror_1.glsl
+fractal_mirror_cascade_fold.glsl
+fractal_mirror_tri_fold.glsl
+[Cyber Inversion Echo 0687]
+inversion_code_cache_charge_topography.glsl
+inversion_code_cache_photon_mesh.glsl
+inversion_code_cache_quantum_foam.glsl
+[Plasma Freq Vortex]
+twist_audio_ex_bass_pulse.glsl
+twist_audio_ex_bass_quake.glsl
+twist_audio_ex_polar_freq.glsl
+[Glitch Random Pulse 0689]
+random_x_audio_glitch_pulse.glsl
+random_x_audio_glitch_tear.glsl
+react_x_noise_glitch.glsl
+[Geometric Random Pulse 0690]
+random_x_audio_diamond_pulse.glsl
+random_x_audio_mosaic_beat.glsl
+[Prismatic Tesseract Circuit]
+code-mirror-glass-tesseract.glsl
+code-update-diamond-supernova.glsl
+ant_spectrum_crystal_cathedral.glsl
+kale_code_crystal_maelstrom.glsl
+[Prismatic Ant Ember]
+ant_gem_fire_spoke.glsl
+[Cyber Update Nebula]
+code-update-celestial-circuit.glsl
+code-update-event-horizon-crown.glsl
+codex_signal_decay.glsl
+game_codex_shield_hit.glsl
+hallu_code_vesper_xenolith.glsl
+[Plasma Random Radiance]
+random_spectrum_deep_melt.glsl
+random_spectrum_neon_organism.glsl
+[Cyber Parallel Vortex 0695]
+twist-code-parallel-helix.glsl
+twist-code-tidal-twister.glsl
+[Plasma Ant Echo 0696]
+ant_peak_inversion_cache_spectrum_time_zebra_riot.glsl
+ant_texture_cache_spectrum_scale_comet.glsl
+ant_texture_cache_spectrum_scale_inkdrop.glsl
+spectrum_cache1.glsl
+game_ant_metal_flux.glsl
+[Prismatic Ant Chrome 0697]
+rainbow_metal_code_diamond_liquid.glsl
+ant_gem_metal_lattice.glsl
+ant_gem_metal_opal.glsl
+ant_gem_metal_shard.glsl
+ant_gem_metal_tessera.glsl
+[Chromatic Ant Shatter]
+ant_time_f_color_glitch_archive.glsl
+ant_time_f_color_timeline_strips.glsl
+color_grad1.glsl
+[Electric Electricmirror Hall]
+ElectricMirror.glsl
+lightfadedark.glsl
+neon.glsl
+[Plasma New Tide]
+ripple-amp.glsl
+[Prismatic Pilot Tide 0701]
+Liquid_Crystal.glsl
+[Fractal Shader02 Tide]
+frac_mouse_z.glsl
+frac_shader02_dmd6i.glsl
+frac_shader02_dmd6i_bubble.glsl
+frac_shader02_dmd9i.glsl
+frac_shader02_dmd_mandella.glsl
+[Kaleidoscopic Pilot Hall 0703]
+ant_spectrum_kaleido_rings.glsl
+[Chromatic Blue Tide]
+blue_4.glsl
+cane.glsl
+diagsquarecircle.glsl
+wrap_around.glsl
+rainbow_pi01.glsl
+[Chromatic Ant Hall 0705]
+ant_time_f_color_mirror_corridor.glsl
+edge_black.glsl
+red.glsl
+ant_time_f_color_crosshatch_recall.glsl
+[Plasma Pilot Recursion]
+fractal_audio.glsl
+fractal_texture_large_audio.glsl
+[Mirrored Bulge Radiance]
+fractal_mirror_neon_bulge.glsl
+fractal_mirror_neon_stripe.glsl
+fractal_mirror_petal_reflect.glsl
+bend_rev.glsl
+brighten_rev.glsl
+[Fractal Large Pulse 0708]
+ant_spectrum_mirror_fractal.glsl
+fractal_mirror_sine_fold_pulse.glsl
+fractal_texture_large-nowrap.glsl
+fractal_texture_large_spectrum.glsl
+[Aurora Ant Dream]
+game_ant_aurora_tunnel.glsl
+color_trails_cache_spectrum_ribbon_aurora.glsl
+ant_time_f_color_fft_aurora.glsl
+[Plasma Random Vortex 0710]
+random_x_audio_bass_tunnel.glsl
+random_x_audio_warp_tunnel.glsl
+react_x_ring_spiral.glsl
+react_x_vert_warp.glsl
+zoom_pulse3.glsl
+[Cyber Codex Vortex 0711]
+vhs-code-tape-warp.glsl
+codex_vhs_crt_combo.glsl
+game_codex_pixel_pickup.glsl
+game_codex_shadow_realm.glsl
+vhs-code-worn-tape.glsl
+[Fractal Shader02 Pulse 0712]
+frac_shader02_dmd6i_amp.glsl
+frac_shader02_dmd6i_transparent.glsl
+frac_shader03_worm4_amp.glsl
+react3.glsl
+[Prismatic Ant Vortex]
+ant_gem_prism_vortex.glsl
+gem-spiral-cont-ts.glsl
+[Temporal Inthesky Recursion]
+fractal_mirror_echo_fold.glsl
+fractal_mirror_grid_fold.glsl
+inthesky_cache_fractal_firmament.glsl
+inthesky_cache_stained_glass_heavens.glsl
+[Liquid Drain Dream 0715]
+drain_rainbow.glsl
+rainbow_pi_neoin.glsl
+[Temporal Ant Pulse 0716]
+ant_peak_inversion_cache_spectrum_time_voronoi_seizure.glsl
+ant_texture_cache_spectrum_scale_lava.glsl
+color_trails_cache_spectrum_jet_ember.glsl
+color_trails_cache_spectrum_shear_mirage.glsl
+[Chromatic Jet Burst]
+color_trails_cache_spectrum_jet_storm.glsl
+colordivflash.glsl
+[Aurora Aura5 Crystal]
+spiral-aura.glsl
+aura.glsl
+aura5.glsl
+auraXi2.glsl
+gem-aura.glsl
+[Liquid New Pulse]
+ripple-amp.glsl
+[Liquid Vision Hall]
+mirror-bubble.glsl
+bubble-2.glsl
+bubble.glsl
+[Kaleidoscopic Fov Hall]
+fold-fov.glsl
+fold-mirror.glsl
+[Liquid Pilot Vortex 0722]
+inflate-ripple.glsl
+ripple_mouse2.glsl
+tripple2.glsl
+wave-l.glsl
+[Chromatic Kale Hall]
+mirror-color-mouse.glsl
+kale_mouse.glsl
+[Temporal Inversion Circuit]
+echo_two.glsl
+inthesky_cache_stained_glass_heavens.glsl
+inversion_code_cache_gravitational_shear.glsl
+inversion_code_cache_resonance_cavity.glsl
+inversion_code_cache_tachyon_ribbons.glsl
+[Cyber Engine Mist 0725]
+code-frac-velvet-recursion.glsl
+code-frac-x-astral-dream-engine.glsl
+code-frac-x-velvet-recursion.glsl
+code-update-radiant-dream-engine.glsl
+kale_code_dream_engine.glsl
+[Temporal Trails Pulse]
+ant_texture_cache_spectrum_scale_starfield.glsl
+color_trails_cache_spectrum_jet_glacier.glsl
+color_trails_cache_spectrum_orbit_gyro.glsl
+color_trails_cache_spectrum_orbit_prism.glsl
+spectrum_cache4.glsl
+[Mercury Ant Crystal 0727]
+game_ant_metal_vortex.glsl
+ant_gem_metal_crystal.glsl
+ant_gem_metal_weave.glsl
+game_ant_metal_crystal.glsl
+[Chromatic Fill Crystal]
+fill_white.glsl
+optxtime_tex.glsl
+gem-color-spsiral.glsl
+[Prismatic Update Circuit]
+code-update-holographic-monolith.glsl
+inversion_code_cache_quasicrystal_field.glsl
+xor_code_glass_circuit.glsl
+[Warped Snap Hall]
+mirror-wrap-rotate-snap.glsl
+spiral_by_time.glsl
+tunnel_x.glsl
+rotate_xyz.glsl
+[Prismatic Ant Chrome 0731]
+ant_gem_metal_opal.glsl
+gem_metal.glsl
+[Warped New Circuit]
+code-frac-x-chrono-tunnel.glsl
+frac_zoom4.glsl
+kale_code_cathedral_vortex.glsl
+twist-code-quantum-tunnel.glsl
+[Mirrored Audio4 Pulse]
+mirror_x_audio4.glsl
+mirror_x_audio6.glsl
+mirror_x_audio9.glsl
+[Chromatic Darkr Ember]
+darkr.glsl
+halluc_acid_fire.glsl
+mix_diag.glsl
+acid_color2.glsl
+[Plasma Random Circuit]
+random_x_audio_pixel_scatter.glsl
+random_x_audio_pixelsort.glsl
+random_x_audio_rgb_split.glsl
+react6.glsl
+[Prismatic Ant Chrome 0736]
+ant_gem_metal_cascade.glsl
+ant_gem_metal_coil.glsl
+ant_gem_metal_forge.glsl
+ant_gem_metal_storm.glsl
+[Prismatic Cycle Tide]
+gem-ripple.glsl
+ripple_cycle_prism.glsl
+[Mirrored Ant Pulse 0738]
+ant_spectrum_gradient_mirror.glsl
+ant_spectrum_mirror_nebula.glsl
+ant_spectrum_mirror_spiral.glsl
+mirror_x_audio2.glsl
+mirror_x_audio40.glsl
+[Velvet Pilot Vortex]
+dream-tunnel.glsl
+dream-tunnel2.glsl
+game_dream_glow.glsl
+[Chromatic Time Echo]
+eye2.glsl
+g_ufo_3d_v2.glsl
+game_bullet_time.glsl
+grayscale.glsl
+ant_time_f_color_afterimage_burn.glsl
+[Plasma Audio12 Hall]
+mirror_x_audio12.glsl
+mirror_x_audio27.glsl
+af_scale_pulse.glsl
+react14.glsl
+react9.glsl
+[Liquid Side Circuit]
+code_wave.glsl
+code_wave_side.glsl
+Liquid_Rainbow.glsl
+metal-code-liquid-tessera.glsl
+rainbow_metal_code_nebula_spectrum.glsl
+[Mirrored Spectrum8 Echo 0743]
+ant_cache_spectrum8_echo_quad_mirror.glsl
+mirror_x_audio29.glsl
+echo_rev_x2.glsl
+[Cyber Codex Tide 0744]
+codex_liquid_tessellation.glsl
+metal-code-liquid-tessera.glsl
+rainbow_metal_code_chromatic_cascade.glsl
+rainbow_metal_code_quantum_forge.glsl
+[Mercury Ant Mist]
+ant_gem_mercury_bloom.glsl
+game_ant_mercury_bloom.glsl
+[Fractal Crown Vortex 0746]
+code-frac-spiral-crown.glsl
+frac_shader02_dmdi6i_zoom.glsl
+[Temporal Trails Pulse 0747]
+ant_texture_cache_spectrum_scale_chromatic.glsl
+color_trails_cache_spectrum_jet_nebula.glsl
+color_trails_cache_spectrum_shear_mirage.glsl
+inthesky_cache_solar_pillar_array.glsl
+[Temporal Ant Pulse 0748]
+ant_peak_inversion_cache_spectrum_time_vortex_singularity.glsl
+ant_peak_inversion_cache_spectrum_time_spectrum_visualizer.glsl
+[Plasma Ribbon Dream]
+color_trails_cache_spectrum_ribbon_serpent.glsl
+glitch-react.glsl
+react_x_chromatic_split.glsl
+[Mercury Ant Crystal 0750]
+ant_gem_metal_coil.glsl
+ant_gem_metal_tessera.glsl
+game_ant_metal_tessera.glsl
+[Chromatic Game Silk]
+game_phosphor.glsl
+gboil.glsl
+ant_light_color_aurora_veil.glsl
+[Liquid Depth Hall]
+fractal_mirror_depth_wave.glsl
+spiral_mirror_wave.glsl
+cripple2.glsl
+drain_bend.glsl
+ripple_left.glsl
+[Prismatic Ant Echo]
+ant_peak_inversion_cache_spectrum_time_hologram_collapse.glsl
+ant_spectrum_echo_diamond.glsl
+[Fractal Chromatic Dream]
+code-frac-chromatic-rift.glsl
+gem-hue-frac.glsl
+[Kaleidoscopic Ant Hall]
+ant_peak_inversion_cache_spectrum_time_kaleidoscope_storm.glsl
+ant_spectrum_mirror_kaleidoscope.glsl
+[Plasma Ant Echo 0756]
+ant_cache_spectrum8_neural.glsl
+ant_cache_spectrum8_vignette_calm.glsl
+color_trails_cache_spectrum_shear_delta.glsl
+ant_spectrum_chromatic_pulse.glsl
+random_x_audio_strobe_color.glsl
+[Electric Ant Dream 0757]
+ant_light_color_deep_fractal_glow.glsl
+ant_light_color_pulse_matrix.glsl
+[Temporal Trails Dream]
+color_trails_cache_spectrum_shear_quartz.glsl
+echo_mix_colors_rev.glsl
+echo_xor_color_blend.glsl
+echo_xor_or_and.glsl
+inversion_code_cache_spectral_terrain.glsl
+[Mirrored Spin Silk]
+mirror-spiral-aura.glsl
+mirror-wrap-spin.glsl
+[Liquid Chromatic Dream]
+fractal_mirror_chromatic_wave.glsl
+rainbow_spiral_loose.glsl
+glitchy-rainbow.glsl
+codex_vhs_rainbow_noise.glsl
+rainbow_blur.glsl
+[Prismatic Ant Vortex 0761]
+ant_gem_sketch_warp.glsl
+gem-color-spiral.glsl
+[Liquid Game Dream]
+game_disco_floor.glsl
+game_rain.glsl
+ant_light_color_neon_rain.glsl
+[Temporal Spectrum8 Shatter]
+ant_cache_spectrum8_glitch_boil.glsl
+ant_cache_spectrum8_vignette_calm.glsl
+glitchy.glsl
+[Prismatic Ant Shatter]
+ant_gem_spiral_shatter.glsl
+gem-spiral-full.glsl
+glitch-zoom.glsl
+brokenglass.glsl
+[Cyber Basilica Chrome]
+code-mirror-spectral-basilica.glsl
+liquid_code_silver_riptide.glsl
+metal-code-iridescent-foundry.glsl
+metal-code-nanofluid-forge.glsl
+[Chromatic Comb3 Echo]
+comb3_mouse.glsl
+echo_mix_colors.glsl
+echo_xor_color_blend.glsl
+game_thermal.glsl
+xor_rgb_rainbow_1.glsl
+[Temporal Trails Pulse 0767]
+ant_peak_inversion_cache_spectrum_time_caustic_drowning.glsl
+color_trails_cache_spectrum_knot_spindle.glsl
+color_trails_cache_spectrum_knot_tangle.glsl
+color_trails_cache_spectrum_ribbon_blaze.glsl
+ant_time_f_color_ghost_train.glsl
+[Molten Halluc Pulse 0768]
+ant_cache_spectrum8_lava_flow.glsl
+halluc_lava_crack.glsl
+halluc_plasma_flame.glsl
+[Plasma Ant Vortex]
+ant_cache_spectrum8_vortex.glsl
+ant_spectrum_echo_vortex.glsl
+ant_spectrum_prismatic_tunnel.glsl
+[Electric Ant Dream 0770]
+ant_light_color_wave_collapse.glsl
+ant_gem_neon_silk.glsl
+ant_light_color_helix_aurora.glsl
+ant_light_color_infinity_loop.glsl
+[Cyber Tesseract Lattice]
+code-frac-x-tesseract-lattice.glsl
+code-mirror-glass-tesseract.glsl
+[Glitch Squish Circuit]
+fractal_mirror_glitch_fractal.glsl
+glitchy-squish.glsl
+singleton-noise.glsl
+vhs_damage.glsl
+[Chromatic Psyche Tide]
+psyche_wave.glsl
+color_swirl_g.glsl
+rainbow_color_swirl.glsl
+[Cyber Whirlpool Tide]
+liquid_code_iridescent_whirlpool.glsl
+rainbow_metal_code_radiant_helix.glsl
+[Mirrored Ant Pulse 0775]
+ant_spectrum_mirror_spiral.glsl
+mirror_x_audio9.glsl
+spiral_mirror_2.glsl
+[Temporal Ant Pulse 0776]
+ant_peak_inversion_cache_spectrum_time_hyperspace_tunnel.glsl
+ant_texture_cache_spectrum_scale_tunnel.glsl
+ant_texture_cache_spectrum_scale_ember.glsl
+[Chromatic Ant Radiance 0777]
+ant_light_color_quantum_fold.glsl
+ant_light_color_aurora_weave.glsl
+ant_light_color_prism_tornado.glsl
+ant_time_f_color_fft_aurora.glsl
+[Cyber Opera Hall]
+code-frac-liquid-mirror.glsl
+code-frac-ocean-kaleido.glsl
+code-mirror-fractured-opera.glsl
+rainbow-code-stained-kaleidoscope.glsl
+code_wave_rev.glsl
+[Plasma Drum Tide]
+react_x_drum_zoom.glsl
+random_x_audio_shockwave.glsl
+react_x_moving_phase.glsl
+[Prismatic Ballroom Circuit 0780]
+code-mirror-crystal-ballroom.glsl
+code-mirror-opal-wormhole.glsl
+inversion_code_cache_phonon_crystal.glsl
+[Plasma Spectrum8 Vortex 0781]
+ant_cache_spectrum8_strobe_tunnel.glsl
+random_x_audio_zoom_strobe.glsl
+[Aurora Vault Circuit]
+code-frac-aurora-vault.glsl
+code-mirror-aurora-corridor.glsl
+codex_grad_fractal_aurora_mandala.glsl
+[Liquid Flow Pulse]
+rainbow_x_prism_pulse.glsl
+react_x_rainbow_flow.glsl
+[Warped Ant Echo]
+rotate_xyz_zoom.glsl
+ant_texture_cache_spectrum_scale_swirl.glsl
+[Plasma Ant Vortex 0785]
+ant_spectrum_mirror_wave.glsl
+mirror-bubble-zoom-mouse-audio.glsl
+random_spectrum_mercury_vortex.glsl
+twist_audio_ex_mirror_audio.glsl
+twist_audio_ex_wave_collapse.glsl
+[Kaleidoscopic Pilot Hall 0786]
+[Chromatic Chromatic Echo]
+ant_cache_spectrum8_chromatic_pulse.glsl
+rainbow_x_chromatic_storm.glsl
+[Velvet Pilot Recursion]
+random_x_audio_fractal_bloom.glsl
+game_fog.glsl
+smoke.glsl
+bloom.glsl
+[Prismatic Ant Pulse 0789]
+ant_spectrum_crystal_echo.glsl
+ant_spectrum_echo_prism.glsl
+game_ant_gem_spectrum.glsl
+gem_spectrum_test.glsl
+[Mercury Ant Crystal 0790]
+ant_gem_metal_ember.glsl
+ant_gem_metal_inferno.glsl
+game_ant_metal_inferno.glsl
+game_ant_metal_opal.glsl
+[Liquid Pilot Crystal 0791]
+Liquid_Fractal_Tunnel.glsl
+Liquid_Crystal_Rainbow1.glsl
+ripple_cycle_prism.glsl
+rainbow_color1.glsl
+[Prismatic Ant Mandala 0792]
+ant_cache_spectrum8_mandala.glsl
+ant_gem_glass_mandala.glsl
+inthesky_cache_prismatic_thunderhead.glsl
+game_ant_gem_polar.glsl
+[Prismatic Dmd4 Recursion]
+frac_shader_diamond.glsl
+frac_shader_dmd4_glass.glsl
+[Cyber Grad Recursion]
+codex_grad_fractal_electric_garden.glsl
+codex_grad_fractal_hypernova_eye.glsl
+codex_grad_fractal_nebula_gate.glsl
+[Temporal Inversion Circuit 0795]
+blend_orig_10_cache.glsl
+echo_4.glsl
+inversion_code_cache_photon_mesh.glsl
+inversion_code_cache_plasma_filaments.glsl
+ResizeVertical_cache.glsl
+[Aurora Maelstrom Circuit]
+code-frac-x-aurora-maelstrom.glsl
+codex_aurora_vortex.glsl
+inv_cache_code_synesthetic_veil.glsl
+xor_code_bitplane_aurora.glsl
+[Plasma Chromatic Dream]
+twist_audio_ex_chromatic.glsl
+twist_audio_ex_color_split.glsl
+[Aurora Corridor Circuit]
+code-mirror-aurora-corridor.glsl
+rainbow-code-aurora-silk.glsl
+[Chromatic Dispersionz Circuit]
+DispersionZ.glsl
+matrix_mul3.glsl
+sum.glsl
+weirdlines.glsl
+xor_code_chromatic_weave.glsl
+[Liquid Chromatic Dream 0800]
+liquid_code_chrome_nautilus.glsl
+ant_spectrum_chromatic_web.glsl
+ant_spectrum_rainbow_helix.glsl
+rainbow-code-chromatic-ribbons.glsl
+srainbow.glsl
+[Temporal Trails Pulse 0801]
+color_trails_cache_spectrum_jet_nebula.glsl
+color_trails_cache_spectrum_orbit_lantern.glsl
+color_trails_cache_spectrum_orbit_prism.glsl
+inversion_code_cache_borromean_energy.glsl
+[Fractal Double Hall]
+fractal_mirror_double_fold.glsl
+fractal_mirror_hex_fold.glsl
+fractal_mirror_ring_expand.glsl
+[Temporal Ant Nebula]
+ant_peak_inversion_cache_spectrum_time_glitch_apocalypse.glsl
+ant_texture_cache_spectrum_scale_cosmic_web.glsl
+ant_texture_cache_spectrum_scale_starfield.glsl
+inthesky_cache_astral_tessellation.glsl
+[Electric Lightfade Cipher]
+lightfade_xor.glsl
+pos_light.glsl
+xor_code_neon_topology.glsl
+XorKernBrighter.glsl
+[Chromatic Cave Crystal]
+ant_light_color_crystal_cave.glsl
+color-f2.glsl
+[Chromatic Rgb Tide 0806]
+ant_light_color_acid_ripple.glsl
+rainbow_x_swirl_freq.glsl
+vhs-color-mode.glsl
+xor_rgb_rainbow_mouse.glsl
+xor_rgb_rainbow_swirl_limit.glsl
+[Chromatic Hive Circuit]
+code-frac-spectral-hive.glsl
+game_gameboy_dmg.glsl
+pastel.glsl
+[Mirrored Ant Pulse 0808]
+ant_spectrum_prism_mirror.glsl
+mirror_x_audio26.glsl
+mirror_x_audio36.glsl
+[Liquid Curtain Dream]
+rainbow_cd_curtain.glsl
+rainbow_ink.glsl
+rainbow_swirl_limit.glsl
+[Aurora Sanctum Circuit]
+code-frac-x-aurora-sanctum.glsl
+code-update-aurora-cathedral.glsl
+[Cyber Auger Vortex]
+twist-code-cosmic-auger.glsl
+twist-code-octave-wormhole.glsl
+code-update-spectral-wormhole.glsl
+[Fractal Rotating Hall]
+fractal_mirror_aurora_mirror.glsl
+fractal_mirror_rotating_mirror.glsl
+fractal_mirror_shatter_fold.glsl
+[Temporal Ant Lattice]
+code-mirror-echo-temple.glsl
+ant_cache_spectrum8_neon_grid.glsl
+ant_cache_spectrum8_spectrum_rings.glsl
+ant_spectrum_diamond_echo.glsl
+inversion_code_cache_flux_lattice.glsl
+[Mirrored Game Crystal]
+game_ant_gem_kaleido.glsl
+game_kaleido_combat.glsl
+reverse_alpha.glsl
+game_ant_gem_glass.glsl
+[Warped Cwarp Hall]
+cwarp.glsl
+mirror-bubble-zoom-mouse.glsl
+mirror-zoom.glsl
+twistex.glsl
+zoom_pong.glsl
+[Cosmic Grad Circuit]
+codex_grad_fractal_nebula_gate.glsl
+code-update-nebula-origami.glsl
+[Cyber Whirlpool Tide 0817]
+code-frac-x-liquid-julia-dream.glsl
+liquid_code_iridescent_whirlpool.glsl
+liquid_code_molten_helix.glsl
+[Liquid Ant Crystal 0818]
+ant_gem_liquid_mirror.glsl
+game_film_grain.glsl
+halluc_liquid.glsl
+Liquid_Crystal.glsl
+[Plasma Ant Hall]
+ant_spectrum_gradient_mirror.glsl
+ant_spectrum_neon_mirror.glsl
+frac_shader02_dmd6i_audio.glsl
+mirror_x_audio5.glsl
+ant_spectrum_neon_echo.glsl
+[Fractal Garden Crystal]
+code-frac-fracture-garden.glsl
+code-frac-prism-wormhole.glsl
+gem-spiral-frac.glsl
+[Cyber Horizon Recursion]
+code-frac-vortex-bloom.glsl
+code-frac-x-event-horizon-bloom.glsl
+code-frac-x-prismatic-basilica.glsl
+codex_grad_fractal_crystal_bloom.glsl
+[Cyber Citadel Hall]
+code-mirror-ripple-citadel.glsl
+code-mirror-zero-gravity-mirage.glsl
+code_rev3.glsl
+[Plasma Ant Echo 0823]
+ant_peak_inversion_cache_spectrum_time_warp_drive_overload.glsl
+ant_texture_cache_spectrum_scale_vortex.glsl
+twist_audio_ex_treble_static.glsl
+color_trails_cache_spectrum_ribbon_monsoon.glsl
+color_trails_cache_spectrum_shear_magnet.glsl
+[Plasma Random Vortex 0824]
+ant_cache_spectrum8_warp_drive.glsl
+gem-spiral-full-audio.glsl
+random_spectrum_glass_vortex.glsl
+random_x_audio_polar_warp.glsl
+random_x_audio_prism_shatter.glsl
+[Electric Ant Dream 0825]
+ant_light_color_prism_bloom_echo.glsl
+ant_light_color_radiant_mosaic.glsl
+ant_light_color_flicker_gem.glsl
+ant_light_color_hypnotic_rings.glsl
+[Liquid Drain Dream 0826]
+water-fold-ex..glsl
+drain.glsl
+psyche_ripple.glsl
+dark_rainbow_limit.glsl
+rainbow_cd_strobe.glsl
+[Chromatic Drum Tide]
+g_drum.glsl
+game_snow.glsl
+shake.glsl
+ant_time_f_color_spectrum_waterfall.glsl
+[Mercury Ant Crystal 0828]
+ant_gem_metal_chrome.glsl
+ant_gem_metal_pulse_mouse.glsl
+[Plasma Ant Dream]
+glitch-react-color.glsl
+ant_spectrum_rainbow_pulse.glsl
+react_x_multi_rainbow.glsl
+[Temporal Ant Pulse 0830]
+ant_peak_inversion_cache_spectrum_time_lightning_god.glsl
+ant_peak_inversion_cache_spectrum_time_strobe_void.glsl
+ant_texture_cache_spectrum_scale_neon_trail.glsl
+[Temporal Ant Lattice 0831]
+ant_cache_spectrum8_geometric_polar.glsl
+ant_texture_cache_spectrum_scale_mosaic.glsl
+[Cyber Stair Recursion]
+code-frac-infinite-stair.glsl
+code-frac-ruby-hyperspace.glsl
+code-frac-x-chromatic-constellation.glsl
+datam.glsl
+[Cyber Alloy Chrome]
+metal-code-plasma-alloy.glsl
+metal-code-silver-maelstrom.glsl
+[Electric Ant Pulse]
+ant_spectrum_neon_mandala.glsl
+ant_spectrum_neon_butterfly.glsl
+[Liquid Div4 Dream]
+echo_div4_rainbow.glsl
+echo_rainbow_spin.glsl
+dark_rainbow.glsl
+list_rainbow_enter.glsl
+rainbow_left.glsl
+[Chromatic Jet Echo]
+color_trails_cache_spectrum_jet_glacier.glsl
+color-f-diag.glsl
+[Temporal Spectrum8 Pulse 0837]
+ant_cache_spectrum8_chromatic_pulse.glsl
+ant_cache_spectrum8_oilslick.glsl
+color_trails_cache_spectrum_jet_photon.glsl
+spectrum_cache2.glsl
+spectrum_cache3.glsl
+[Temporal Ant Lattice 0838]
+[Chromatic Icefield Circuit 0839]
+code-frac-x-spectral-icefield.glsl
+edge_face.glsl
+game_arcade_marquee.glsl
+[Aurora Ant Radiance]
+ant_light_color_aurora_weave.glsl
+ant_light_color_helix_aurora.glsl
+[Temporal Scale Pulse 0841]
+ant_texture_cache_spectrum_scale_lava.glsl
+ant_texture_cache_spectrum_scale_neon_trail.glsl
+[Cyber Codex Recursion]
+code-frac-laser-orchid.glsl
+code-frac-neon-petals.glsl
+codex_glitch_fractal_datamosh.glsl
+codex_grad_fractal_electric_garden.glsl
+[Temporal Ant Mandala 0843]
+ant_peak_inversion_cache_spectrum_time_mandala_pulse.glsl
+ant_cache_spectrum8_radial_echo.glsl
+ant_texture_cache_spectrum_scale_polar_echo.glsl
+[Cosmic Ant Crystal 0844]
+ant_gem_nebula_fold.glsl
+game_ant_nebula_fold.glsl
+ant_gem_metal_nebula.glsl
+[Cyber Cathedral Recursion 0845]
+code-frac-velvet-recursion.glsl
+code-frac-x-hyperion-cathedral.glsl
+code-update-velvet-inferno.glsl
+[Velvet Pilot Recursion 0846]
+fractal_mirror_bloom_mirror.glsl
+[Chromatic Random Circuit]
+rainbow_fractal_random.glsl
+ant_time_f_color_data_stream.glsl
+bit_rainbow.glsl
+[Prismatic Ant Chrome 0848]
+ant_gem_aurora_tunnel.glsl
+ant_gem_metal_vortex.glsl
+ant_gem_metal_ripple.glsl
+ant_gem_metal_storm.glsl
+[Cosmic Auger Circuit 0849]
+twist-code-cosmic-auger.glsl
+twist-code-orbital-rip.glsl
+[Electric Dmd6I Recursion]
+frac_shader02_dmd6i_neon.glsl
+fractal4.glsl
+fractal_mirror_neon_ring.glsl
+glow.glsl
+[Prismatic Game Burst]
+game_ant_diamond_storm.glsl
+[Temporal Ant Pulse 0852]
+ant_peak_inversion_cache_spectrum_time_lightning_god.glsl
+ant_texture_cache_spectrum_scale_lightning.glsl
+ant_texture_cache_spectrum_scale_silk.glsl
+[Liquid Beat Dream]
+rainbow_x_spiral_beat.glsl
+glitch_rainbow.glsl
+game_ant_gem_rainbow.glsl
+rainbow_bright.glsl
+react_x_rainbow_beat.glsl
+[Cyber Reef Radiance]
+code-frac-electric-reef.glsl
+code-update-electric-reef.glsl
+codex_neon_topography.glsl
+[Prismatic Ant Mist]
+random_spectrum_diamond_rings.glsl
+ant_gem_deep_bloom.glsl
+ant_gem_mercury_bloom.glsl
+ant_spectrum_prismatic_bloom.glsl
+ant_spectrum_gradient_bloom.glsl
+[Cyber Update Tide]
+code-frac-quartz-ripples.glsl
+code-update-liquid-stained-glass.glsl
+code-update-oceanic-star-forge.glsl
+rainbow-code-prismatic-caustics.glsl
+[Aurora Ant Chrome]
+ant_gem_metal_aurora.glsl
+game_ant_metal_aurora.glsl
+[Electric Ant Echo 0858]
+Electric_Fold.glsl
+ElectricMirror.glsl
+ant_cache_spectrum8_lightning.glsl
+ant_texture_cache_spectrum_scale_neon_trail.glsl
+[Fractal Quad Mandala]
+fractal_mirror_mosaic_fold.glsl
+fractal_mirror_quad_fold.glsl
+fractal_mirror_shatter_fold.glsl
+[Mercury Ant Crystal 0860]
+ant_gem_metal_flux.glsl
+ant_gem_metal_lattice.glsl
+game_ant_metal_lattice.glsl
+[Liquid Ant Dream 0861]
+ant_gem_rainbow_fracture.glsl
+fractal_diamond_rainbow_overflow.glsl
+rainbow-code-opal-vortex.glsl
+rainbow_fractal.glsl
+Light_Rainbow_Swirl.glsl
+[Kaleidoscopic Bands Pulse]
+twist_audio_ex_radial_bands.glsl
+game_radial_focus.glsl
+[Fractal Shader04 Mandala]
+frac_shader02_dmd6iFold.glsl
+frac_shader04_echo3_spin.glsl
+frac_shader04_grid.glsl
+fractal-fold-neon.glsl
+fractal-foldzx.glsl
+[Liquid Vision Pulse]
+react_x_ripple_bass.glsl
+react_x_wave_distort.glsl
+[Chromatic Ant Crystal 0865]
+ant_light_color_psyche_tunnel.glsl
+gem-hue-frac-spectrum16.glsl
+ant_light_color_hologram_pulse.glsl
+[Plasma Ant Echo 0866]
+ant_peak_inversion_cache_spectrum_time_neural_overload.glsl
+ant_texture_cache_spectrum_scale_lightning.glsl
+random_x_audio_neon_edge.glsl
+[Mirrored Monolith Crystal]
+code-mirror-chromatic-monolith.glsl
+code-mirror-diamond-horizon.glsl
+fractal_mirror_diamond_reflect.glsl
+fractal_mirror_nebula_reflect.glsl
+gem-light-frac.glsl
+[Electric Bulge Burst]
+fractal_mirror_neon_bulge.glsl
+DigitalLightStorm.glsl
+strobe_light.glsl
+[Cyber Palace Hall]
+code-mirror-celestial-palace.glsl
+code-mirror-diamond-horizon.glsl
+code-mirror-glass-tesseract.glsl
+code-mirror-solar-mosaic.glsl
+code-update-nebula-origami.glsl
+[Cyber Update Radiance 0870]
+code-frac-x-holographic-hive.glsl
+code-update-electric-reef.glsl
+code-update-laser-basilica.glsl
+code-update-neon-mycelium.glsl
+[Cyber Inversion Echo 0871]
+inv_cache_code_phosphene_swarm.glsl
+inversion_code_cache_phonon_crystal.glsl
+inversion_code_cache_quantum_foam.glsl
+inversion_code_cache_synaptic_canopy.glsl
+metal-code-mercury-cathedral.glsl
+[Cyber Chandelier Hall]
+code-mirror-liquid-chandelier.glsl
+code-mirror-neon-reliquary.glsl
+code-mirror-solar-mosaic.glsl
+kale_code_opal_tesseract.glsl
+[Mirrored Pilot Tide]
+game_ant_liquid_mirror.glsl
+[Plasma Scale Radiance]
+af_scale_spectrum.glsl
+ant_texture_cache_spectrum_scale_glow_pulse.glsl
+plasma2.glsl
+random_spectrum_plasma_neon.glsl
+react17.glsl
+[Prismatic Ant Recursion 0875]
+gem_fractal_bump.glsl
+ant_gem_ice_ripple.glsl
+[Kaleidoscopic Ant Pulse]
+ant_spectrum_aurora_fold.glsl
+ant_spectrum_gradient_kaleidoscope.glsl
+ant_spectrum_kaleido_pulse.glsl
+random_spectrum_fractal_kaleidoscope.glsl
+[Chromatic Inversion Echo]
+color_peak_inversion_cache.glsl
+color_trails_cache_spectrum.glsl
+[XOR Sac Tide]
+sac-geo-xor.glsl
+xor_increase.glsl
+xorMouse.glsl
+xorsheet_2.glsl
+rainbow_x_xor_beat.glsl
+[Plasma Ant Echo 0879]
+ant_spectrum_echo_spiral.glsl
+twist_audio_ex_freq_layers.glsl
+ant_peak_inversion_cache_spectrum_time_plasma_furnace.glsl
+color_trails_cache_spectrum_knot_helix.glsl
+color_trails_cache_spectrum_shear_razor.glsl
+[Chromatic Ant Radiance 0880]
+ant_light_color_wave_collapse.glsl
+cos_sin.glsl
+color_effect.glsl
+[Warped Vision Tide]
+mirror-color-swirl.glsl
+spiral_wave.glsl
+[Chromatic Tint Crystal]
+game_gba_tint.glsl
+goo.glsl
+magic-2.glsl
+scramble-3.glsl
+rainbow_rip_prism.glsl
+[Fractal Kaleidoscope Mandala]
+fractal_mirror_dual_kaleidoscope.glsl
+fractal_mirror_logpolar_chromatic.glsl
+fractal_mirror_sine_fold_pulse.glsl
+[Chromatic Spectrum8 Pulse]
+color_peak_inversion_cache_spectrum8.glsl
+game_halftone.glsl
+sbrv.glsl
+color_flux.glsl
+[Liquid Rev2 Dream]
+rainbow_spiral_rev2.glsl
+rainbow_swirl_limit_discard.glsl
+[Prismatic Ant Tide 0886]
+ant_gem_fractal_ocean.glsl
+ant_light_color_diamond_rain.glsl
+gem-fish.glsl
+gem_spiderweb.glsl
+[Prismatic Random Lattice]
+diamond.glsl
+random_x_audio_diamond_pulse.glsl
+random_x_audio_tile_explode.glsl
+gem-deep.glsl
+[Plasma Pilot Hall]
+mirror_x_audio4.glsl
+random_x_audio_sine_fold.glsl
+[Geometric Random Pulse 0889]
+twist_audio_ex_concentric_rings.glsl
+random_x_audio_freq_rings.glsl
+random_x_audio_hexgrid.glsl
+[Cyber Palace Hall 0890]
+code-mirror-celestial-palace.glsl
+code-mirror-nebula-lens.glsl
+code-mirror-prismatic-sanctum.glsl
+code-mirror-vortex-gallery.glsl
+metal-code-opal-steel.glsl
+[Temporal Trails Pulse 0891]
+ant_peak_inversion_cache_spectrum_time_galaxy_devourer.glsl
+ant_texture_cache_spectrum_scale_chromatic.glsl
+color_trails_cache_spectrum_knot_helix.glsl
+color_trails_cache_spectrum_knot_velvet.glsl
+color_trails_cache_spectrum_orbit_halo.glsl
+[Geometric Random Pulse 0892]
+random_spectrum_tunnel_rings.glsl
+random_spectrum_diamond_rings.glsl
+random_x_audio_ripple_rings.glsl
+[Prismatic Ant Chrome 0893]
+ant_gem_metal_flux.glsl
+ant_gem_metal_pulse.glsl
+[Chromatic Balloon Tide]
+balloon.glsl
+ant_spectrum_rainbow_cathedral.glsl
+[Chromatic Ant Lattice]
+acidcam.glsl
+comp_mouse.glsl
+fisheye_pi.mp4.glsl
+game_ant_hypno_lens.glsl
+ant_time_f_color_bass_pulse_rings.glsl
+[Fractal Random Pulse]
+frac_shader03_wormhole_amp.glsl
+fractal_mirror_vortex_mirror.glsl
+fractal_mirror_zoom_pulse.glsl
+random_x_audio_fractal_bloom.glsl
+random_x_audio_twist_mirror.glsl
+[Chromatic Blue Radiance]
+blue_3.glsl
+gltichtest.glsl
+scale.glsl
+bright_rainbow.glsl
+color_w2.glsl
+[Cyber Ripples Tide]
+code-frac-liquid-mirror.glsl
+code-frac-x-liquid-julia-dream.glsl
+code-frac-x-molten-ripples.glsl
+codex_grad_fractal_oceanic_void.glsl
+liquid_code_molten_helix.glsl
+[Electric Bulge Recursion]
+fractal_mirror_neon_bulge.glsl
+fractal_mirror_neon_stripe.glsl
+neon.glsl
+[Plasma Ant Hall 0900]
+ant_spectrum_fractal_mirror.glsl
+frac_shader02_dmd2_amp.glsl
+mirror_x_audio1.glsl
+mirror_x_audio7.glsl
+[Liquid Ant Chrome]
+rainbow_metal_fractal.glsl
+ant_gem_chrome_wave.glsl
+gem-rainbow-metal3.glsl
+gem_rainbow_metal.glsl
+[Liquid Rgb Cipher]
+xor_code_rgb_smooth_liquid_pastel.glsl
+xor_rgb_dark_rainbow.glsl
+[Warped Shader02 Recursion]
+brot-zoom-mouse.glsl
+frac_shader02_dmdi6i_zoom_xor.glsl
+frac_zoom6.glsl
+xor_sine_swirl.glsl
+[Chromatic 3High Radiance]
+elastic_mouse.glsl
+pong_tex.glsl
+seek2.glsl
+ant_light_color_ember_cascade.glsl
+[Cyber Pause Crystal]
+codex_vhs_pause_jitter.glsl
+kale_code_diamond_tempest.glsl
+vhs-code-pause-jitter.glsl
+[Fractal Ant Hall]
+ant_spectrum_mirror_fractal.glsl
+frac_mirror_mouse_zoom.glsl
+fractal_mirror_bass_zoom.glsl
+fractal_mirror_spiral_flip.glsl
+[Chromatic Trails Echo 0907]
+color_trails_cache_spectrum_jet_ember.glsl
+color_trails_cache_spectrum_jet_storm.glsl
+color_trails_cache_spectrum_orbit_prism.glsl
+gem-rainbow-metal3.glsl
+[Prismatic Ant Chrome 0908]
+ant_gem_metal_fracture.glsl
+ant_gem_metal_forge.glsl
+[Chromatic Ant Radiance 0909]
+ant_light_color_mirror_inferno.glsl
+color_w.glsl
+[Mirrored Rev2 Recursion]
+fractal_mirror_bloom_fold.glsl
+fractal_mirror_echo_fold.glsl
+fractal_mirror_ripple_fold.glsl
+rainbow_spiral_rev2.glsl
+[Temporal Spectrum8 Tide]
+ant_cache_spectrum8_liquid_light.glsl
+ant_cache_spectrum8_zebra_wave.glsl
+[Cyber Codex Chrome]
+codex_chrome_spiderweb.glsl
+game_codex_critical_hit.glsl
+game_codex_portal_rift.glsl
+ant_gem_metal_orbital.glsl
+[Fractal Sketch Hall]
+fractal-fold-sketch.glsl
+fractal_mirror_crystal_fold.glsl
+fractal_mirror_petal_reflect.glsl
+fractal_mirror_prism_split.glsl
+[Cyber Inversion Tide]
+inversion_code_cache_laser_caustics.glsl
+rainbow-code-neon-topography.glsl
+rainbow_metal_code_electric_iridescence.glsl
+rainbow_metal_code_infinity_mercury.glsl
+rainbow_metal_code_neon_mercury.glsl
+[Temporal Ant Tide]
+ant_texture_cache_spectrum_scale_wave_warp.glsl
+ant_cache_spectrum8_acid_rain.glsl
+ant_cache_spectrum8_caustic_storm.glsl
+[Chromatic Ant Radiance 0916]
+ant_light_color_spiral_nebula.glsl
+color_glitch_dark.glsl
+game_sharpen.glsl
+ant_light_color_infinity_loop.glsl
+ant_light_color_solar_corona.glsl
+[Chromatic Ant Radiance 0917]
+ant_light_color_fractal_fire.glsl
+ant_light_color_tesseract_fold.glsl
+fractal_mirror_chromatic_fold.glsl
+ant_light_color_cyber_grid.glsl
+[Cyber Psychic Lattice]
+codex_glitch_psychic_tiles.glsl
+rainbow-code-diamond-wave.glsl
+[Chromatic Shift Crystal]
+shift.glsl
+sin_delic.glsl
+gem-deep.glsl
+gem_rainbow_metal.glsl
+[Cyber Dreamlogic Echo]
+inv_cache_code_dreamlogic_mosaic.glsl
+inversion_code_cache_vacuum_bloom.glsl
+[Cyber Codex Silk 0921]
+codex_grad_fractal_aurora_mandala.glsl
+game_codex_boss_aura.glsl
+game_codex_freeze_frame.glsl
+game_codex_speed_boost.glsl
+[Cyber Vision Recursion]
+code-frac-x-julia-wormhole.glsl
+code-frac-x-liquid-julia-dream.glsl
+[Chromatic Color5 Echo]
+rainbow_spiral.glsl
+echo_color5.glsl
+echo_rainbow_swirl.glsl
+[Plasma Spectrum8 Echo 0924]
+ant_cache_spectrum8_kaleidoscope.glsl
+fractal_mirror_kaleidoscope_pulse.glsl
+ant_cache_spectrum8_tremor_storm.glsl
+[Cyber Forge Dream]
+rainbow_metal_code_fractal_rainbow.glsl
+rainbow_metal_code_iridescent_ripple.glsl
+rainbow_metal_code_aurora_forge.glsl
+rainbow_metal_code_chrome_bloom.glsl
+random_x_audio_color_orbit.glsl
+[Prismatic Codex Circuit]
+xor_code_opal_feedback.glsl
+codex_prism_feedback.glsl
+xor_code_rgb_smooth_velvet_prism.glsl
+[Plasma Ant Echo 0927]
+ant_spectrum_mirror_bloom.glsl
+ant_spectrum_echo_bloom.glsl
+ant_spectrum_rainbow_echo.glsl
+color_trails_cache_spectrum_knot_braid.glsl
+inversion_code_cache_dark_energy_lens.glsl
+[Aurora Ribbon Echo]
+color_trails_cache_spectrum_ribbon_aurora.glsl
+inthesky_cache_aurora_rupture.glsl
+[Cyber Chrysalis Recursion]
+code-frac-mandala-pulse.glsl
+code-frac-x-plasma-chrysalis.glsl
+code-frac-x-prismatic-basilica.glsl
+code-frac-zero-gravity-fold.glsl
+[Prismatic Ant Radiance]
+codex_grad_fractal_prism_storm.glsl
+ant_light_color_liquid_prism.glsl
+ant_light_color_shockwave_prism.glsl
+[Prismatic Movement Tide]
+gem_rainbow_metal_movement.glsl
+rainbow-code-prismatic-caustics.glsl
+[Cyber Codex Shatter 0932]
+codex_glitch_folded_scanburn.glsl
+codex_glitch_kaleido_tear.glsl
+codex_glitch_logpolar_rift.glsl
+[Molten Ant Crystal]
+game_speedlines.glsl
+ant_gem_fire_spoke.glsl
+ant_gem_molten_web.glsl
+ant_light_color_solar_flare.glsl
+[Cyber Inversion Echo 0934]
+inversion_code_cache_harmonic_glyphs.glsl
+inversion_code_cache_spectral_terrain.glsl
+ripple_cache.glsl
+vhs_color.glsl
+[Cyber Hypercube Vortex 0935]
+twist-code-hypercube-vortex.glsl
+twist-code-kaleido-throat.glsl
+[Fractal Vision Mandala]
+fractal_mirror_grid_fold.glsl
+fractal_mirror_radial_pulse.glsl
+fractal_mirror_wave_fold.glsl
+[Cyber Psychedelic Tide]
+rainbow_metal_code_psychedelic_foundry.glsl
+rainbow_metal_code_solar_mercury.glsl
+[Cosmic Supernova Circuit]
+code-frac-x-diamond-supernova.glsl
+code-frac-x-nebula-vortex.glsl
+[Electric Ant Dream 0939]
+ant_light_color_stardust_spiral.glsl
+ant_light_color_vortex_bloom.glsl
+[Liquid Ant Dream 0940]
+ant_spectrum_rainbow_vortex.glsl
+random_x_audio_wave_grid.glsl
+rainbow_expand_noise.glsl
+rainbow_light_swirl.glsl
+rainbow_x_light_bass.glsl
+[Kaleidoscopic Kaleidoscope Hall]
+ant_spectrum_kaleidoscope_dream.glsl
+xor_code_kaleido_spectrum.glsl
+[Temporal Ant Tide 0942]
+ant_peak_inversion_cache_spectrum_time_acid_rain_flood.glsl
+ant_texture_cache_spectrum_scale_shockwave.glsl
+[Electric Ant Tide]
+ant_light_color_glitch_rainbow.glsl
+rainbow-code-neon-topography.glsl
+rainbow_expand_noise_xor_light.glsl
+[Cyber Oceanic Hall]
+code-frac-x-oceanic-shatter.glsl
+code-mirror-fractured-opera.glsl
+code-mirror-ocean-origami.glsl
+code-mirror-opal-wormhole.glsl
+metal-code-molten-mirror.glsl
+[Electric Ant Dream 0945]
+ant_light_color_kaleidovoid.glsl
+ant_light_color_molten_mirror.glsl
+ant_light_color_neon_shatter.glsl
+ant_light_color_nova_burst.glsl
+[Prismatic Ant Pulse 0946]
+ant_spectrum_prism_fold.glsl
+color_trails_cache_spectrum_shear_quartz.glsl
+gem_rainbow_spectrum.glsl
+[Mirrored Audio16 Pulse]
+fractal_mirror_spiral_pulse.glsl
+mirror_x_audio16.glsl
+mirror_x_audio32.glsl
+mirror_x_audio38.glsl
+[Plasma Shader02 Cipher]
+frac_shader02_dmdi6i_zoom_xor_amp.glsl
+react_x_xor_gradient.glsl
+[Liquid Ant Dream 0949]
+ant_spectrum_rainbow_fractal.glsl
+fractal_diamond_rainbow_no_tex.glsl
+ant_light_color_cosmic_ripple.glsl
+ant_light_color_plasma_ocean.glsl
+[Cosmic Spectrum8 Echo]
+ant_cache_spectrum8_galaxy_swirl.glsl
+ant_cache_spectrum8_starburst.glsl
+[Liquid Ant Dream 0951]
+ant_spectrum_rainbow_fold.glsl
+gem-rainbow-metal3-slider.glsl
+rainbow_metal_code_chromatic_cascade.glsl
+rainbow_metal_code_quantum_forge.glsl
+[Glitch Boil Recursion]
+fractal_mirror_shatter_fold.glsl
+glitch_boil.glsl
+[Chromatic Dark Mist]
+dark_psych.glsl
+fat-red.glsl
+shrink_texture.glsl
+color-bloom.glsl
+rainbow_x_pulse_blur.glsl
+[Cyber Orbital Nebula]
+code-frac-plasma-orbit.glsl
+code-frac-x-orbital-julia.glsl
+codex_glitch_bloom_wormhole.glsl
+xor_code_solarized_ribbons.glsl
+xor_code_rgb_smooth_spectral_mist.glsl
+[Fractal Pilot Hall]
+fractal_mirror_julia_warp.glsl
+fractal_mirror_warp_glitch.glsl
+[Temporal Ant Shatter]
+ant_texture_cache_spectrum_scale_fracture.glsl
+ant_cache_spectrum8_glitch_storm.glsl
+[Prismatic Ant Lattice]
+ant_spectrum_echo_diamond.glsl
+ant_gem_diamond_storm.glsl
+gem_spectrum_extreme.glsl
+[Fractal Game Shatter]
+code-frac-x-velvet-recursion.glsl
+game_ant_metal_fracture.glsl
+ghost_fracture_cache.glsl
+codex_glitch_recursive_xor.glsl
+game_codex_lava_damage.glsl
+[Prismatic Update Circuit 0959]
+code-update-temporal-prism-orbit.glsl
+rainbow-code-holographic-facets.glsl
+[Cyber Kale Tide]
+kale_code_liquid_mosaic.glsl
+metal-code-magnetic-ferrofluid.glsl
+rainbow_metal_code_hypercolor_alloy.glsl
+rainbow_metal_code_infinity_mercury.glsl
+[Temporal Ant Burst]
+ant_peak_inversion_cache_spectrum_time_chromatic_quake.glsl
+ant_texture_cache_spectrum_scale_plasma.glsl
+inthesky_cache_storm_crown.glsl
+ant_time_f_color_shutter_burst.glsl
+[Temporal Gkale Mandala]
+fold-spin.glsl
+ant_cache_spectrum8_geometric_polar.glsl
+codex_polar_echo_lens.glsl
+gkale_echo.glsl
+gkale_echo2.glsl
+[Cyber Codex Recursion 0963]
+codex_fractal_orchid.glsl
+codex_grad_fractal_royal_shatter.glsl
+codex_grad_fractal_solar_crown.glsl
+codex_glitch_mandel_wound.glsl
+[Kaleidoscopic Ant Hall 0964]
+ant_spectrum_kaleido_flame.glsl
+ant_spectrum_kaleido_storm.glsl
+[Cyber Iris Recursion]
+code-frac-cosmic-iris.glsl
+code-frac-liquid-mirror.glsl
+code-frac-x-molten-ripples.glsl
+code-mirror-bass-observatory.glsl
+code-update-opal-ferrofluid.glsl
+[Plasma Freq Mandala]
+random_x_audio_freq_kaleidoscope.glsl
+random_x_audio_mirror_fold.glsl
+twist_audio_ex_kaleido_freq.glsl
+twist_audio_ex_ripple_freq.glsl
+[Cyber Smooth Silk 0967]
+code-update-liquid-stained-glass.glsl
+rainbow-code-aurora-silk.glsl
+xor_code_rgb_smooth_aurora_blend.glsl
+xor_code_rgb_smooth_silk_gradient.glsl
+[Glitch Ant Tide]
+ant_spectrum_rainbow_shatter.glsl
+rainbow_expand_noise_xor.glsl
+[Temporal Ant Pulse 0969]
+ant_cache_spectrum8_mirror_tile_rotor.glsl
+ant_texture_cache_spectrum_scale_kaleido.glsl
+ant_cache_spectrum8_holographic.glsl
+ant_peak_inversion_cache_spectrum_time_radial_echo_chamber.glsl
+ant_texture_cache_spectrum_scale_holo_grid.glsl
+[Temporal Ant Recursion 0970]
+ant_peak_inversion_cache_spectrum_time_fractal_inferno.glsl
+frac_cache.glsl
+random_x_audio_heat_shimmer.glsl
+[Temporal Trails Pulse 0971]
+ant_texture_cache_spectrum_scale_ripple.glsl
+color_trails_cache_spectrum_knot_velvet.glsl
+color_trails_cache_spectrum_orbit_halo.glsl
+[Cyber Grad Recursion 0972]
+code-frac-x-tesseract-lattice.glsl
+codex_grad_fractal_inferno_lattice.glsl
+codex_grad_fractal_solar_crown.glsl
+[Kaleidoscopic Ant Hall 0973]
+ant_spectrum_kaleido_rings.glsl
+ant_spectrum_kaleido_storm.glsl
+ant_spectrum_kaleidoscope_dream.glsl
+[Cyber Pagoda Hall]
+code-mirror-electric-mandala.glsl
+code-mirror-laser-pagoda.glsl
+code-mirror-plasma-catacombs.glsl
+code-mirror-velvet-kaleidoscope.glsl
+[Cyber Game Tide]
+game_ant_metal_ripple.glsl
+rainbow-code-liquid-pearl.glsl
+code-update-mercury-rose.glsl
+rainbow_metal_code_radiant_helix.glsl
+[Mirrored Ant Pulse 0976]
+ant_cache_spectrum8_kaleido_sin_osc.glsl
+ant_spectrum_kaleido_storm.glsl
+ant_spectrum_mirror_nebula.glsl
+ant_texture_cache_spectrum_scale_mirror_drift.glsl
+[Chromatic Ant Radiance 0977]
+ant_light_color_fractal_lantern.glsl
+ant_light_color_kaleidoscope_blaze.glsl
+ant_light_color_neon_mandala.glsl
+ant_light_color_plasma_helix.glsl
+plasma_rainbow.glsl
+[Electric Pilot Vortex 0978]
+halluc_fog_tunnel.glsl
+ant_light_color_chromatic_worm.glsl
+ant_light_color_galaxy_swirl.glsl
+[Cyber Scintillating Echo]
+inv_cache_code_scintillating_aura.glsl
+inversion_code_cache_electrostatic_dunes.glsl
+rainbow-code-spectral-bloom.glsl
+[Prismatic Supernova Recursion]
+code-frac-x-diamond-supernova.glsl
+fractal_diamond_rainbow.glsl
+[Prismatic Crystalball Recursion]
+fractal_mirror_diamond_wave.glsl
+crystal-2.glsl
+crystalball.glsl
+crystalprism.glsl
+[Electric Ant Shatter]
+ant_light_color_strobe_fracture.glsl
+distort_light.glsl
+[Temporal Spectrum8 Recursion]
+ant_cache_spectrum8_fractal.glsl
+ant_cache_spectrum8_fractal_xor_fold.glsl
+[Cosmic Alloy Circuit]
+rainbow_metal_code_cosmic_alloy.glsl
+rainbow_metal_code_supernova_metal.glsl
+[Cyber Coil Tide]
+rainbow_metal_code_neon_mercury.glsl
+rainbow_metal_code_spectral_coil.glsl
+[Liquid Chalice Chrome]
+liquid_code_mercury_vortex.glsl
+rainbow_metal_code_plasma_chalice.glsl
+rainbow_x_metal_react.glsl
+[Liquid Ant Dream 0987]
+alpha_diamond.glsl
+ant_light_color_diamond_rain.glsl
+ant_light_color_spectral_drain.glsl
+rainbow-touch.glsl
+[Cyber Trails Dream]
+color_trails_cache_spectrum_orbit_vortex.glsl
+rainbow-code-diamond-wave.glsl
+rainbow_metal_code_nebula_spectrum.glsl
+rainbow_metal_code_prismatic_tide.glsl
+[Fractal Blend Tide]
+fractal_diamond_rainbow_blend.glsl
+rainbow_x_fractal_bass.glsl
+[Cosmic Trails Echo]
+ant_peak_inversion_cache_spectrum_time_starburst_supernova.glsl
+color_trails_cache_spectrum_orbit_gyro.glsl
+color_trails_cache_spectrum_orbit_lantern.glsl
+[Cyber Iridescence Tide]
+rainbow_metal_code_liquid_mandala.glsl
+rainbow_metal_code_electric_iridescence.glsl
+[Liquid Vision Chrome]
+rainbow_metal_fractal.glsl
+gem_rainbow_metal_audio.glsl
+[Cyber Stained Crystal]
+code-frac-x-plasma-chrysalis.glsl
+code-frac-x-stained-glass-julia.glsl
+rainbow-code-stained-kaleidoscope.glsl
+codex_glass_mosaic_flow.glsl
+[Prismatic Const Tide]
+code-frac-diamond-echo.glsl
+fractal_diamond_rainbow_overflow_const.glsl
+rainbow_spiral_rev.glsl
+gem-rainbow-metal3-spectrum.glsl
+rainbow_metal_code_magnetic_opal.glsl
+[Cyber Filigree Nebula]
+code-frac-solar-lattice.glsl
+code-frac-x-cosmic-filigree.glsl
+code-frac-zero-gravity-fold.glsl
+kale_code_velvet_mandala.glsl
+xor_code_cosmic_halftone.glsl
+[Fractal Ant Mandala]
+ant_spectrum_kaleido_wave.glsl
+code-frac-ocean-kaleido.glsl
+code-frac-quartz-ripples.glsl
+fractal_mirror_mosaic_fold.glsl
+[Temporal Ant Pulse 0997]
+ant_peak_inversion_cache_spectrum_time_magma_eruption.glsl
+ant_peak_inversion_cache_spectrum_time_neon_grid_inferno.glsl
+[Prismatic Update Circuit 0998]
+code-update-diamond-supernova.glsl
+rainbow_metal_code_diamond_liquid.glsl
+[Cyber Tessera Tide]
+rainbow_metal_code_kaleido_chrome.glsl
+metal-code-liquid-tessera.glsl
+rainbow_metal_code_holographic_metal.glsl
+xor_code_prismatic_bloom.glsl
+[Prismatic Vision Circuit]
+code-frac-crystal-tunnel.glsl
+rainbow_metal_code_opal_vortex.glsl
