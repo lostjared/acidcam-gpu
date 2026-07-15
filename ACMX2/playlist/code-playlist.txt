@@ -1,0 +1,500 @@
+[Aurora Rose Awakening]
+code-update-aurora-cathedral.glsl
+kale_code_astral_rose.glsl
+rainbow-code-aurora-silk.glsl
+rainbow-code-spectral-bloom.glsl
+[Celestial Circuit Garden]
+code-update-celestial-circuit.glsl
+code-mirror-electric-mandala.glsl
+xor_code_glass_circuit.glsl
+ant_light_color_electric_web.glsl
+[Opal Gravity Halo]
+code-update-chromatic-gravity-lens.glsl
+code-frac-x-orbital-julia.glsl
+rainbow-code-liquid-pearl.glsl
+ant_spectrum_echo_bloom.glsl
+[Cosmic Loom Cathedral]
+code-update-cosmic-loom.glsl
+code-mirror-spectral-basilica.glsl
+rainbow-code-chromatic-ribbons.glsl
+ant_light_color_stardust_spiral.glsl
+[Cyber Lotus Shrine]
+code-update-cyber-lotus.glsl
+kale_code_chromatic_shrine.glsl
+xor_code_neon_topology.glsl
+neon.glsl
+[Diamond Supernova Ballroom]
+code-update-diamond-supernova.glsl
+code-mirror-crystal-ballroom.glsl
+rainbow_metal_code_diamond_liquid.glsl
+rainbow-code-spectral-bloom.glsl
+[Electric Reef Aurora]
+code-update-electric-reef.glsl
+code-frac-electric-reef.glsl
+rainbow_metal_code_electric_iridescence.glsl
+ant_light_color_aurora_veil.glsl
+[Event Horizon Crown]
+code-update-event-horizon-crown.glsl
+twist-code-event-horizon.glsl
+rainbow_metal_code_solar_mercury.glsl
+bloom.glsl
+[Fractal Eclipse Reliquary]
+code-update-fractal-eclipse.glsl
+code-mirror-neon-reliquary.glsl
+code-frac-solar-lattice.glsl
+ant_light_color_solar_corona.glsl
+[Holographic Monolith Dream]
+code-update-holographic-monolith.glsl
+code-mirror-chromatic-monolith.glsl
+rainbow-code-holographic-facets.glsl
+ant_spectrum_neon_echo.glsl
+[Prismatic Turbine Rift]
+code-update-iridescent-turbine.glsl
+twist-code-turbine-rift.glsl
+rainbow_metal_code_chromatic_cascade.glsl
+ant_light_color_shockwave_prism.glsl
+[Laser Basilica Rose]
+code-update-laser-basilica.glsl
+code-frac-x-infinite-rose-window.glsl
+kale_code_seraphic_lattice.glsl
+ant_light_color_nova_burst.glsl
+[Liquid Stained Cosmos]
+code-update-liquid-stained-glass.glsl
+kale_code_stained_cosmos.glsl
+rainbow-code-stained-kaleidoscope.glsl
+prism_glass.glsl
+[Mercury Rose Vortex]
+code-update-mercury-rose.glsl
+liquid_code_mercury_vortex.glsl
+rainbow_metal_code_opal_vortex.glsl
+ant_light_color_vortex_bloom.glsl
+[Nebula Origami Palace]
+code-update-nebula-origami.glsl
+code-mirror-celestial-palace.glsl
+code-frac-x-cosmic-filigree.glsl
+smoke.glsl
+[Neon Mycelium Hive]
+code-update-neon-mycelium.glsl
+code-frac-x-holographic-hive.glsl
+xor_code_bitplane_aurora.glsl
+ant_light_color_frozen_lightning.glsl
+[Oceanic Star Forge]
+code-update-oceanic-star-forge.glsl
+ant_gem_fractal_ocean.glsl
+rainbow_metal_code_aurora_forge.glsl
+water_prism.glsl
+[Opal Ferrofluid Cathedral]
+code-update-opal-ferrofluid.glsl
+metal-code-magnetic-ferrofluid.glsl
+code-mirror-liquid-chandelier.glsl
+rainbow-code-prismatic-caustics.glsl
+[Plasma Chrysalis Bloom]
+code-update-plasma-chrysalis.glsl
+code-frac-x-plasma-chrysalis.glsl
+kale_code_nebula_chrysalis.glsl
+rainbow-code-spectral-bloom.glsl
+[Quantum Ribbon Vault]
+code-update-quantum-ribbon-vault.glsl
+code-frac-aurora-vault.glsl
+xor_code_chromatic_weave.glsl
+ant_spectrum_prismatic_bloom.glsl
+[Quartz Tsunami Prism]
+code-update-quartz-tsunami.glsl
+code-frac-quartz-ripples.glsl
+rainbow_metal_code_prismatic_tide.glsl
+Liquid_Crystal_Rainbow1.glsl
+[Radiant Dream Engine]
+code-update-radiant-dream-engine.glsl
+kale_code_dream_engine.glsl
+code-frac-x-astral-dream-engine.glsl
+ant_light_color_prism_bloom_echo.glsl
+[Spectral Wormhole Rails]
+code-update-spectral-wormhole.glsl
+twist-code-octave-wormhole.glsl
+rainbow_metal_code_spectral_coil.glsl
+echo_rainbow_spin.glsl
+[Temporal Prism Orbit]
+code-update-temporal-prism-orbit.glsl
+code-frac-diamond-echo.glsl
+rainbow-code-holographic-facets.glsl
+echo-pingpong.glsl
+[Velvet Inferno Phoenix]
+code-update-velvet-inferno.glsl
+kale_code_phoenix_prism.glsl
+rainbow_metal_code_psychedelic_foundry.glsl
+ant_light_color_ember_cascade.glsl
+[Aurora Maelstrom Silk]
+code-frac-x-aurora-maelstrom.glsl
+code-mirror-aurora-corridor.glsl
+rainbow-code-aurora-silk.glsl
+ant_spectrum_gradient_bloom.glsl
+[Prismatic Basilica Fracture]
+code-frac-x-prismatic-basilica.glsl
+code-mirror-prismatic-sanctum.glsl
+rainbow-code-holographic-facets.glsl
+ant_gem_rainbow_fracture.glsl
+[Chrono Tunnel Observatory]
+code-frac-x-chrono-tunnel.glsl
+code-mirror-bass-observatory.glsl
+twist-code-quantum-tunnel.glsl
+react_x_drum_zoom.glsl
+[Quantum Crystal Tempest]
+code-frac-x-quantum-crystal.glsl
+kale_code_diamond_tempest.glsl
+rainbow-code-diamond-wave.glsl
+ant_spectrum_crystal_echo.glsl
+[Velvet Mobius Recursion]
+code-frac-x-velvet-recursion.glsl
+code-mirror-velvet-kaleidoscope.glsl
+xor_code_rgb_smooth_velvet_prism.glsl
+ant_light_color_deep_fractal_glow.glsl
+[Stained Glass Julia]
+code-frac-x-stained-glass-julia.glsl
+kale_code_stained_cosmos.glsl
+rainbow-code-stained-kaleidoscope.glsl
+crystalprism.glsl
+[Nebula Singularity Vortex]
+code-frac-x-nebula-vortex.glsl
+twist-code-singularity-maelstrom.glsl
+rainbow_metal_code_nebula_spectrum.glsl
+ant_light_color_galaxy_swirl.glsl
+[Oceanic Shatter Tide]
+code-frac-x-oceanic-shatter.glsl
+code-mirror-ocean-origami.glsl
+rainbow_metal_code_prismatic_tide.glsl
+glitch_wave.glsl
+[Molten Ripple Helix]
+code-frac-x-molten-ripples.glsl
+liquid_code_molten_helix.glsl
+rainbow_metal_code_solar_mercury.glsl
+ant_light_color_solar_flare.glsl
+[Event Horizon Crystal Bloom]
+code-frac-x-event-horizon-bloom.glsl
+twist-code-gravity-well.glsl
+rainbow_metal_code_chrome_bloom.glsl
+bloom.glsl
+[Diamond Supernova Lattice]
+code-frac-x-diamond-supernova.glsl
+code-mirror-diamond-horizon.glsl
+rainbow_metal_code_supernova_metal.glsl
+ant_spectrum_diamond_echo.glsl
+[Aurora Sanctum]
+code-frac-x-aurora-sanctum.glsl
+code-mirror-celestial-palace.glsl
+rainbow-code-aurora-silk.glsl
+ant_light_color_helix_aurora.glsl
+[Liquid Julia Whirlpool]
+code-frac-x-liquid-julia-dream.glsl
+liquid_code_iridescent_whirlpool.glsl
+rainbow-code-liquid-pearl.glsl
+echo_rainbow_swirl.glsl
+[Fractured Singularity Static]
+code-frac-x-fractured-singularity.glsl
+twist-code-neon-collapse.glsl
+xor_code_quantum_palette.glsl
+codex_glitch_shard_stutter.glsl
+[Hyperion Crystal Cathedral]
+code-frac-x-hyperion-cathedral.glsl
+code-mirror-glass-tesseract.glsl
+kale_code_crystal_maelstrom.glsl
+ant_spectrum_crystal_cathedral.glsl
+[Laser Orchid Filigree]
+code-frac-laser-orchid.glsl
+kale_code_infinite_filigree.glsl
+rainbow_metal_code_radiant_helix.glsl
+ant_light_color_flicker_gem.glsl
+[Ruby Hyperspace Pagoda]
+code-frac-ruby-hyperspace.glsl
+code-mirror-laser-pagoda.glsl
+twist-code-radial-overdrive.glsl
+ant_light_color_warp_cathedral.glsl
+[Crystal Tunnel Nautilus]
+code-frac-crystal-tunnel.glsl
+liquid_code_chrome_nautilus.glsl
+rainbow-code-prismatic-caustics.glsl
+ant_spectrum_prismatic_tunnel.glsl
+[Spectral Hive Topography]
+code-frac-spectral-hive.glsl
+code-mirror-fractured-opera.glsl
+rainbow-code-neon-topography.glsl
+xor_code_neon_topology.glsl
+[Spiral Crown Aurora Forge]
+code-frac-spiral-crown.glsl
+twist-code-double-helix.glsl
+rainbow_metal_code_aurora_forge.glsl
+ant_light_color_stardust_spiral.glsl
+[Zero Gravity Mirage]
+code-frac-zero-gravity-fold.glsl
+code-mirror-zero-gravity-mirage.glsl
+xor_code_rgb_smooth_spectral_mist.glsl
+ant_light_color_phase_shift.glsl
+[Fracture Garden Mosaic]
+code-frac-fracture-garden.glsl
+kale_code_liquid_mosaic.glsl
+rainbow-code-stained-kaleidoscope.glsl
+codex_glass_mosaic_flow.glsl
+[Bass Singularity Collapse]
+code-frac-bass-singularity.glsl
+twist-code-deep-space-drill.glsl
+rainbow_metal_code_infinity_mercury.glsl
+react_x_ripple_bass.glsl
+[Plasma Catacombs]
+code-mirror-plasma-catacombs.glsl
+code-frac-plasma-orbit.glsl
+rainbow_metal_code_plasma_chalice.glsl
+ant_light_color_plasma_helix.glsl
+[Infinity Rose Mandala]
+code-mirror-infinity-rose.glsl
+kale_code_quantum_orchid.glsl
+rainbow_metal_code_liquid_mandala.glsl
+ant_spectrum_neon_mandala.glsl
+[Solar Mosaic Forge]
+code-mirror-solar-mosaic.glsl
+code-frac-solar-lattice.glsl
+rainbow_metal_code_quantum_forge.glsl
+ant_light_color_solar_corona.glsl
+[Electric Mandala Storm]
+code-mirror-electric-mandala.glsl
+kale_code_opal_tesseract.glsl
+rainbow_metal_code_electric_iridescence.glsl
+DigitalLightStorm.glsl
+[Kaleido Throat Orchid]
+twist-code-kaleido-throat.glsl
+kale_code_quantum_orchid.glsl
+rainbow_metal_code_kaleido_chrome.glsl
+ant_spectrum_kaleido_pulse.glsl
+[Parallel Helix Aurora]
+twist-code-parallel-helix.glsl
+rainbow_metal_code_radiant_helix.glsl
+rainbow-code-aurora-silk.glsl
+ant_light_color_helix_aurora.glsl
+[Feedback Spiral Opal]
+twist-code-feedback-spiral.glsl
+xor_code_opal_feedback.glsl
+rainbow_metal_code_opal_vortex.glsl
+echo_color3.glsl
+[Hypercube Tesseract Vortex]
+twist-code-hypercube-vortex.glsl
+code-mirror-glass-tesseract.glsl
+kale_code_opal_tesseract.glsl
+ant_light_color_tesseract_fold.glsl
+[Serpent Tunnel Silk]
+twist-code-serpent-tunnel.glsl
+rainbow-code-chromatic-ribbons.glsl
+xor_code_rgb_smooth_silk_gradient.glsl
+ant_spectrum_rainbow_helix.glsl
+[Phase Cyclone Prism]
+twist-code-phase-cyclone.glsl
+code-frac-chromatic-rift.glsl
+rainbow-code-prismatic-caustics.glsl
+ant_light_color_phase_shift.glsl
+[Tidal Twister Pearl]
+twist-code-tidal-twister.glsl
+liquid_code_iridescent_whirlpool.glsl
+rainbow-code-liquid-pearl.glsl
+water.glsl
+[Spiral Shockwave Supernova]
+twist-code-spiral-shockwave.glsl
+rainbow_metal_code_supernova_metal.glsl
+ant_light_color_shockwave_prism.glsl
+bloom.glsl
+[Infinite Bore Mercury]
+twist-code-infinite-bore.glsl
+liquid_code_mercury_vortex.glsl
+rainbow_metal_code_infinity_mercury.glsl
+ant_spectrum_echo_vortex.glsl
+[Orbital Rip Constellation]
+twist-code-orbital-rip.glsl
+code-frac-x-chromatic-constellation.glsl
+xor_code_cosmic_halftone.glsl
+ant_light_color_nova_burst.glsl
+[Cathedral Vortex Chrome]
+kale_code_cathedral_vortex.glsl
+metal-code-mercury-cathedral.glsl
+rainbow_metal_code_kaleido_chrome.glsl
+ant_spectrum_mirror_bloom.glsl
+[Phoenix Prism Foundry]
+kale_code_phoenix_prism.glsl
+metal-code-iridescent-foundry.glsl
+rainbow_metal_code_psychedelic_foundry.glsl
+ant_light_color_fractal_fire.glsl
+[Infinite Filigree Circuit]
+kale_code_infinite_filigree.glsl
+xor_code_glass_circuit.glsl
+rainbow-code-holographic-facets.glsl
+ant_light_color_cyber_grid.glsl
+[Velvet Mandala Mist]
+kale_code_velvet_mandala.glsl
+xor_code_rgb_smooth_velvet_prism.glsl
+ant_spectrum_gradient_kaleidoscope.glsl
+ant_light_color_aurora_weave.glsl
+[Liquid Mosaic Tessera]
+kale_code_liquid_mosaic.glsl
+metal-code-liquid-tessera.glsl
+rainbow_metal_code_liquid_mandala.glsl
+ant_light_color_radiant_mosaic.glsl
+[Chromatic Shrine Bloom]
+kale_code_chromatic_shrine.glsl
+xor_code_prismatic_bloom.glsl
+rainbow-code-spectral-bloom.glsl
+ant_spectrum_rainbow_fold.glsl
+[Chrome Nautilus Tide]
+liquid_code_chrome_nautilus.glsl
+metal-code-chrome-tide.glsl
+rainbow_metal_code_chromatic_cascade.glsl
+ant_light_color_cosmic_ripple.glsl
+[Mercury Vortex Forge]
+liquid_code_mercury_vortex.glsl
+metal-code-nanofluid-forge.glsl
+rainbow_metal_code_quantum_forge.glsl
+ant_gem_mercury_bloom.glsl
+[Silver Riptide Aurora]
+liquid_code_silver_riptide.glsl
+metal-code-silver-maelstrom.glsl
+rainbow_metal_code_aurora_forge.glsl
+ant_light_color_aurora_veil.glsl
+[Iridescent Whirlpool Pearl]
+liquid_code_iridescent_whirlpool.glsl
+rainbow-code-liquid-pearl.glsl
+rainbow_metal_code_iridescent_ripple.glsl
+ant_spectrum_gradient_bloom.glsl
+[Holographic Rainbow Forge]
+rainbow-code-holographic-facets.glsl
+rainbow_metal_code_holographic_metal.glsl
+xor_code_kaleido_spectrum.glsl
+ant_light_color_prism_bloom_echo.glsl
+[Prismatic Caustic Cathedral]
+rainbow-code-prismatic-caustics.glsl
+rainbow_metal_code_prismatic_tide.glsl
+ant_spectrum_crystal_cathedral.glsl
+crystalprism.glsl
+[Aurora Silk Afterimage]
+rainbow-code-aurora-silk.glsl
+inv_cache_code_afterimage_choir.glsl
+xor_code_rgb_smooth_aurora_blend.glsl
+ant_spectrum_echo_bloom.glsl
+[Neon Topographic Rain]
+rainbow-code-neon-topography.glsl
+xor_code_neon_topology.glsl
+ant_light_color_neon_rain.glsl
+codex_neon_topography.glsl
+[Diamond Wave Fracture]
+rainbow-code-diamond-wave.glsl
+rainbow_metal_code_diamond_liquid.glsl
+ant_gem_diamond_storm.glsl
+ant_spectrum_rainbow_shatter.glsl
+[Spectral Bloom Choir]
+rainbow-code-spectral-bloom.glsl
+inv_cache_code_scintillating_aura.glsl
+ant_spectrum_rainbow_echo.glsl
+echo-pingpong_c.glsl
+[Opal Vortex Feedback]
+rainbow-code-opal-vortex.glsl
+xor_code_opal_feedback.glsl
+codex_prism_feedback.glsl
+ant_spectrum_echo_vortex.glsl
+[Stained Kaleidoscope Cathedral]
+rainbow-code-stained-kaleidoscope.glsl
+kale_code_stained_cosmos.glsl
+ant_spectrum_rainbow_cathedral.glsl
+prism_glass_wall_noedge.glsl
+[Bitplane Aurora Circuit]
+xor_code_bitplane_aurora.glsl
+code-update-celestial-circuit.glsl
+ant_light_color_electric_web.glsl
+codex_signal_decay.glsl
+[Quantum Palette Tesseract]
+xor_code_quantum_palette.glsl
+kale_code_opal_tesseract.glsl
+ant_light_color_quantum_fold.glsl
+codex_quantum_bloom.glsl
+[Solarized Ribbon Inferno]
+xor_code_solarized_ribbons.glsl
+rainbow-code-chromatic-ribbons.glsl
+ant_light_color_solar_flare.glsl
+ant_gem_fire_spoke.glsl
+[Prismatic XOR Bloom]
+xor_code_prismatic_bloom.glsl
+rainbow-code-holographic-facets.glsl
+ant_light_color_prism_bloom_echo.glsl
+bloom.glsl
+[Lucid Field Dreamlogic]
+inv_cache_code_lucid_field.glsl
+inv_cache_code_dreamlogic_mosaic.glsl
+xor_code_rgb_smooth_liquid_pastel.glsl
+ant_light_color_kaleidovoid.glsl
+[Phosphene Constellation]
+inv_cache_code_phosphene_swarm.glsl
+inv_cache_code_entoptic_constellation.glsl
+code-frac-x-chromatic-constellation.glsl
+ant_light_color_stardust_spiral.glsl
+[Cortical Form Cathedral]
+inv_cache_code_cortical_form_constants.glsl
+code-mirror-spectral-basilica.glsl
+xor_code_kaleido_spectrum.glsl
+ant_spectrum_neon_mandala.glsl
+[Breathing Architecture]
+inv_cache_code_breathing_architecture.glsl
+code-mirror-echo-temple.glsl
+react_x_phase_stretch.glsl
+breathe.glsl
+[Peripheral Aurora Drift]
+inv_cache_code_peripheral_drift.glsl
+xor_code_rgb_smooth_aurora_blend.glsl
+ant_light_color_aurora_veil.glsl
+smoke.glsl
+[Analog Dream Transmission]
+code-update-radiant-dream-engine.glsl
+codex_vhs_ghost_luma.glsl
+vhs-code-tape-warp.glsl
+vhs-code-worn-tape.glsl
+[Kung Fury Supernova]
+code-update-diamond-supernova.glsl
+codex_vhs_rainbow_noise.glsl
+vhs-code-kung-fury.glsl
+crt.glsl
+[Midnight Aurora Dub]
+code-frac-x-aurora-maelstrom.glsl
+codex_vhs_midnight_dub.glsl
+vhs-code-ghosting.glsl
+ant_spectrum_neon_echo.glsl
+[Magnetic Dropout Monolith]
+code-update-holographic-monolith.glsl
+codex_vhs_magnetic_dropouts.glsl
+vhs-code-dropout.glsl
+xor_code_glass_circuit.glsl
+[Tracking Roll Wormhole]
+code-update-spectral-wormhole.glsl
+codex_vhs_tracking_roll.glsl
+vhs-code-head-switch.glsl
+glitch-react-color.glsl
+[Pause Jitter Kaleidoscope]
+kale_code_diamond_tempest.glsl
+codex_vhs_pause_jitter.glsl
+vhs-code-pause-jitter.glsl
+glitch_boil.glsl
+[Chroma Bleed Crystal]
+code-frac-x-quantum-crystal.glsl
+codex_vhs_chroma_bleed.glsl
+vhs-code-chroma-bleed.glsl
+crystalblend2.glsl
+[CRT Neon Escape]
+code-mirror-neon-reliquary.glsl
+codex_glitch_neon_escape.glsl
+codex_vhs_crt_combo.glsl
+vhs-code-rf-noise.glsl
+[Datamosh Fractal Wound]
+code-frac-glitch-cathedral.glsl
+codex_glitch_fractal_datamosh.glsl
+codex_glitch_mandel_wound.glsl
+vhs-code-tracking-roll.glsl
+[Recursive XOR Scanburn]
+codex_glitch_recursive_xor.glsl
+xor_code_kaleido_spectrum.glsl
+codex_glitch_folded_scanburn.glsl
+vhs-code-home-movie.glsl
+[Grand Finale Astral Supernova]
+code-update-radiant-dream-engine.glsl
+code-frac-x-diamond-supernova.glsl
+rainbow_metal_code_supernova_metal.glsl
+ant_light_color_prism_bloom_echo.glsl
