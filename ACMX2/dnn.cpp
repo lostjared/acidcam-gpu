@@ -14,6 +14,10 @@
 
 #include <opencv2/core/version.hpp>
 #include <opencv2/imgproc.hpp>
+#ifdef ACMX2_WITH_CUDA
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaimgproc.hpp>
+#endif
 #include <yaml-cpp/yaml.h>
 
 namespace ac_dnn {
@@ -32,6 +36,7 @@ namespace {
         int explicitBackend = -1;
         int explicitTarget = -1;
         bool selected = false;
+        bool usesCuda = false;
     };
 
     BackendMode backendModeFromEnvironment() {
@@ -119,6 +124,8 @@ namespace {
         if (state.mode == BackendMode::Explicit) {
             net.setPreferableBackend(state.explicitBackend);
             net.setPreferableTarget(state.explicitTarget);
+            state.usesCuda =
+                state.explicitBackend == cv::dnn::DNN_BACKEND_CUDA;
             std::cout << "[ACMX2] DNN backend: explicitly configured ("
                       << state.explicitBackend << '/' << state.explicitTarget << ")\n";
             return runForward(net, blob, inputName, outputName);
@@ -129,6 +136,7 @@ namespace {
                                           : state.mode;
         if (requested == BackendMode::Cpu) {
             setCpuBackend(net);
+            state.usesCuda = false;
             std::cout << "[ACMX2] DNN backend: CPU (forced by ACMX2_DNN_BACKEND)\n";
             return runForward(net, blob, inputName, outputName);
         }
@@ -137,6 +145,7 @@ namespace {
         if (requested == BackendMode::Cuda || requested == BackendMode::CudaFp16) {
             try {
                 setCudaBackend(net, requestFp16);
+                state.usesCuda = true;
                 std::cout << "[ACMX2] DNN backend: CUDA "
                           << (requestFp16 ? "FP16" : "FP32")
                           << " (forced by ACMX2_DNN_BACKEND)\n";
@@ -145,6 +154,7 @@ namespace {
                 std::cerr << "acmx2: Requested CUDA DNN backend failed; falling back to CPU: "
                           << error.what() << '\n';
                 setCpuBackend(net);
+                state.usesCuda = false;
                 return runForward(net, blob, inputName, outputName);
             }
         }
@@ -155,15 +165,18 @@ namespace {
             backendAvailable(cv::dnn::DNN_BACKEND_CUDA, cv::dnn::DNN_TARGET_CUDA);
         if (!fp16Available && !fp32Available) {
             setCpuBackend(net);
+            state.usesCuda = false;
             std::cout << "[ACMX2] DNN backend: CPU (CUDA unavailable)\n";
             return runForward(net, blob, inputName, outputName);
         }
 
         setCpuBackend(net);
+        state.usesCuda = false;
         TimedOutput cpu = benchmarkBackend(net, blob, inputName, outputName);
         const bool useFp16 = fp16Available;
         try {
             setCudaBackend(net, useFp16);
+            state.usesCuda = true;
             TimedOutput cuda = benchmarkBackend(net, blob, inputName, outputName);
             if (cuda.milliseconds < cpu.milliseconds) {
                 std::cout << "[ACMX2] DNN backend: CUDA "
@@ -173,11 +186,13 @@ namespace {
                 return cuda.output;
             }
             setCpuBackend(net);
+            state.usesCuda = false;
             std::cout << "[ACMX2] DNN backend: CPU (" << cpu.milliseconds
                       << " ms vs CUDA " << cuda.milliseconds << " ms)\n";
             return cpu.output;
         } catch (const cv::Exception &error) {
             setCpuBackend(net);
+            state.usesCuda = false;
             std::cerr << "acmx2: CUDA DNN benchmark failed; using CPU ("
                       << cpu.milliseconds << " ms): " << error.what() << '\n';
             return cpu.output;
@@ -213,11 +228,21 @@ struct OnnxWrapper::Impl {
     bool swapRb = true;
     bool dynamicShape = false;
     int shapeAlignment = 4;
+    bool bilateralSmoothing = false;
+    int bilateralDiameter = 5;
+    double bilateralSigmaColor = 5.0;
+    double bilateralSigmaSpace = 5.0;
+    bool cudaSmoothingFailed = false;
     cv::String inputName;
     cv::String outputName;
     cv::Mat blob;
     cv::Mat work;
     cv::Mat converted;
+    cv::Mat smoothed;
+#ifdef ACMX2_WITH_CUDA
+    cv::cuda::GpuMat gpuConverted;
+    cv::cuda::GpuMat gpuSmoothed;
+#endif
 
     explicit Impl(const std::string &yamlPath) {
         if (!std::filesystem::exists(yamlPath)) {
@@ -260,6 +285,33 @@ struct OnnxWrapper::Impl {
                         mean = cv::Scalar(values[0], values[1], values[2]);
                 }
             }
+            // The 256x256 dynamic configs enable edge-preserving smoothing
+            // by default. A YAML postprocessing block can override it.
+            bilateralSmoothing =
+                dynamicShape && inputSize.width > 0 && inputSize.height > 0 &&
+                inputSize.width <= 256 && inputSize.height <= 256;
+            if (cfg["postprocessing"] && cfg["postprocessing"]["bilateral"]) {
+                const YAML::Node bilateral =
+                    cfg["postprocessing"]["bilateral"];
+                if (bilateral.IsScalar()) {
+                    bilateralSmoothing =
+                        bilateral.as<bool>(bilateralSmoothing);
+                } else {
+                    bilateralSmoothing =
+                        bilateral["enabled"].as<bool>(bilateralSmoothing);
+                    bilateralDiameter =
+                        bilateral["diameter"].as<int>(bilateralDiameter);
+                    bilateralSigmaColor =
+                        bilateral["sigma_color"].as<double>(
+                            bilateralSigmaColor);
+                    bilateralSigmaSpace =
+                        bilateral["sigma_space"].as<double>(
+                            bilateralSigmaSpace);
+                }
+            }
+            bilateralDiameter = std::max(1, bilateralDiameter);
+            if ((bilateralDiameter & 1) == 0)
+                ++bilateralDiameter;
 
             const std::vector<cv::String> names = net.getUnconnectedOutLayersNames();
             multipleOutputs = names.size() > 1;
@@ -298,6 +350,32 @@ struct OnnxWrapper::Impl {
         return {alignDimension(width), alignDimension(height)};
     }
 
+    const cv::Mat &smoothLowResolutionOutput(const cv::Mat &source) {
+        if (!bilateralSmoothing)
+            return source;
+#ifdef ACMX2_WITH_CUDA
+        if (backend.usesCuda && !cudaSmoothingFailed) {
+            try {
+                gpuConverted.upload(source);
+                cv::cuda::bilateralFilter(
+                    gpuConverted, gpuSmoothed, bilateralDiameter,
+                    static_cast<float>(bilateralSigmaColor),
+                    static_cast<float>(bilateralSigmaSpace));
+                gpuSmoothed.download(smoothed);
+                return smoothed;
+            } catch (const cv::Exception &error) {
+                cudaSmoothingFailed = true;
+                std::cerr
+                    << "acmx2: CUDA bilateral smoothing failed; using CPU: "
+                    << error.what() << '\n';
+            }
+        }
+#endif
+        cv::bilateralFilter(source, smoothed, bilateralDiameter,
+                            bilateralSigmaColor, bilateralSigmaSpace);
+        return smoothed;
+    }
+
     void process(const cv::Mat &image, cv::Mat &output) {
         if (!loaded || inferenceFailed || image.empty())
             return;
@@ -325,7 +403,8 @@ struct OnnxWrapper::Impl {
                 cv::add(work, cv::Scalar::all(1.0), work);
                 cv::divide(1.0, work, work);
                 cv::normalize(work, converted, 0, 255, cv::NORM_MINMAX, CV_8U);
-                cv::resize(converted, converted, image.size(), 0, 0, cv::INTER_LINEAR);
+                const cv::Mat &display = smoothLowResolutionOutput(converted);
+                cv::resize(display, converted, image.size(), 0, 0, cv::INTER_LINEAR);
                 cv::cvtColor(converted, output, cv::COLOR_GRAY2BGR);
                 return;
             }
@@ -339,7 +418,8 @@ struct OnnxWrapper::Impl {
                 const cv::Mat plane(height, width, CV_32F,
                                     const_cast<float *>(raw.ptr<float>(0, 0)));
                 cv::normalize(plane, converted, 0, 255, cv::NORM_MINMAX, CV_8U);
-                cv::resize(converted, converted, image.size(), 0, 0, cv::INTER_LINEAR);
+                const cv::Mat &display = smoothLowResolutionOutput(converted);
+                cv::resize(display, converted, image.size(), 0, 0, cv::INTER_LINEAR);
                 cv::cvtColor(converted, output, cv::COLOR_GRAY2BGR);
                 return;
             }
@@ -354,7 +434,8 @@ struct OnnxWrapper::Impl {
             }
             cv::merge(planes, work);
             cv::normalize(work, converted, 0, 255, cv::NORM_MINMAX, CV_8U);
-            cv::resize(converted, converted, image.size(), 0, 0, cv::INTER_LINEAR);
+            const cv::Mat &display = smoothLowResolutionOutput(converted);
+            cv::resize(display, converted, image.size(), 0, 0, cv::INTER_LINEAR);
             cv::cvtColor(converted, output, cv::COLOR_RGB2BGR);
         } catch (const cv::Exception &error) {
             inferenceFailed = true;

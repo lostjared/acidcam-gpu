@@ -245,7 +245,19 @@ Set either `width` or `height` to `0` to derive that dimension from the source
 aspect ratio, or set both to `0` to use the source dimensions. Dynamic sizes are
 rounded to `alignment` because style-transfer networks commonly downsample by
 four. ACMX2 re-plans and re-benchmarks the selected backend if the resolved
-input dimensions change.
+input dimensions change. Dynamic configurations at 256×256 or below also apply
+an edge-preserving bilateral filter before upscaling. CUDA-selected models use
+`cv::cuda::bilateralFilter`; CPU-selected models use the equivalent CPU filter.
+Override its defaults with:
+
+```yaml
+postprocessing:
+  bilateral:
+    enabled: true
+    diameter: 5
+    sigma_color: 50.0
+    sigma_space: 50.0
+```
 
 At startup, the Qt6 interface probes the installed `acmx2` binary with
 `--check-cuda`, `--check-audio`, and `--check-midi` and automatically disables
@@ -622,5 +634,4 @@ Then select **Virtual_Audio.monitor** as the audio input device.
 See the full tables in the [main acidcam-gpu README](../README.md#command-line-arguments).
 
 ---
-
 
