@@ -1,0 +1,10 @@
+# Style transfer – mosaic. Output: [1,3,224,224] RGB image.
+model:
+  path: fast-neural-style-mosaic.onnx
+
+preprocessing:
+  width: 224
+  height: 224
+  scale: 1.0
+  swap_rb: true
+  mean: [0.0, 0.0, 0.0]

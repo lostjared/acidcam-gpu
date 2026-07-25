@@ -6436,16 +6436,13 @@ class ACView : public gl::GLObject {
                 human_background_only = args.human_background_only;
                 human_black_point = args.human_black;
                 human_white_point = args.human_white;
-                human_seg_model = std::make_unique<ac_dnn::PPHS>(
-                    human_model_path,
-                    cv::dnn::DNN_BACKEND_CUDA,
-                    cv::dnn::DNN_TARGET_CUDA);
+                human_seg_model = std::make_unique<ac_dnn::PPHS>(human_model_path);
                 mx::system_out << "acmx2: Human segmentation (PPHS) enabled with model: "
                                << human_model_path
-                               << " [DNN_BACKEND_CUDA / DNN_TARGET_CUDA]"
+                               << " [automatic CPU/CUDA selection]"
                                << (human_background_only ? " [background-only shader mode]" : "")
                                << "\n";
-            } catch (const cv::Exception &e) {
+            } catch (const std::exception &e) {
                 mx::system_err << "acmx2: Failed to load human segmentation model '"
                                << args.human_model << "': " << e.what() << "\n";
                 human_seg_model.reset();
@@ -6458,8 +6455,8 @@ class ACView : public gl::GLObject {
                 edge_det_model = std::make_unique<ac_dnn::Dexined>(args.edge_model);
                 mx::system_out << "acmx2: Edge detection (Dexined) enabled with model: "
                                << args.edge_model
-                               << " [DNN_BACKEND_CUDA / DNN_TARGET_CUDA]\n";
-            } catch (const cv::Exception &e) {
+                               << " [automatic CPU/CUDA selection]\n";
+            } catch (const std::exception &e) {
                 mx::system_err << "acmx2: Failed to load edge detection model '"
                                << args.edge_model << "': " << e.what() << "\n";
                 edge_det_model.reset();
@@ -6469,7 +6466,7 @@ class ACView : public gl::GLObject {
             try {
                 onnx_proc_model = std::make_unique<ac_dnn::OnnxWrapper>(args.onnx_model);
                 mx::system_out << "acmx2: Generic ONNX model enabled from YAML: " << args.onnx_model << "\n";
-            } catch (const cv::Exception &e) {
+            } catch (const std::exception &e) {
                 mx::system_err << "acmx2: Failed to load ONNX model '" << args.onnx_model << "': " << e.what() << "\n";
                 onnx_proc_model.reset();
             }
@@ -8225,13 +8222,9 @@ class ACView : public gl::GLObject {
                 if (human_background_only) {
                     cv::Mat alpha8 = ac_dnn::hardenedAlphaMask(newFrame, mask, human_black_point, human_white_point);
                     if (!alpha8.empty() && alpha8.size() == newFrame.size()) {
-                        cv::Mat rgb;
-                        cv::cvtColor(newFrame, rgb, cv::COLOR_BGR2RGB);
-                        cv::Mat ch[3];
-                        cv::split(rgb, ch);
-                        cv::Mat rgba_channels[4] = {ch[0], ch[1], ch[2], alpha8};
                         cv::Mat rgba;
-                        cv::merge(rgba_channels, 4, rgba);
+                        cv::cvtColor(newFrame, rgba, cv::COLOR_BGR2RGBA);
+                        cv::insertChannel(alpha8, rgba, 3);
 
                         // Lazy-allocate / resize the overlay GL texture.
                         if (human_overlay_tex == 0) {
@@ -8262,16 +8255,12 @@ class ACView : public gl::GLObject {
                         // processes only the background.  The GL blend pass
                         // below composites the original person back on top
                         // using straight-alpha blending.
-                        cv::Mat alpha_f;
-                        alpha8.convertTo(alpha_f, CV_32F, 1.0 / 255.0);
-                        cv::Mat inv_alpha_f = 1.0f - alpha_f;
-                        cv::Mat inv_bgr;
-                        cv::cvtColor(inv_alpha_f, inv_bgr, cv::COLOR_GRAY2BGR);
-                        cv::Mat frame_f;
-                        newFrame.convertTo(frame_f, CV_32FC3, 1.0 / 255.0);
-                        cv::Mat bg_f;
-                        cv::multiply(frame_f, inv_bgr, bg_f);
-                        bg_f.convertTo(newFrame, CV_8UC3, 255.0);
+                        cv::Mat inverseAlpha;
+                        cv::subtract(cv::Scalar::all(255), alpha8, inverseAlpha);
+                        cv::Mat inverseBgr;
+                        cv::cvtColor(inverseAlpha, inverseBgr, cv::COLOR_GRAY2BGR);
+                        cv::multiply(newFrame, inverseBgr, newFrame,
+                                     1.0 / 255.0, CV_8UC3);
                     }
                 } else {
                     cv::Mat isolated = ac_dnn::isolateBody(newFrame, mask, human_black_point, human_white_point);

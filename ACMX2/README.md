@@ -223,6 +223,29 @@ cmake .. -DWITH_OPENCV_DNN=ON
 ```
 
 Note: `-DWITH_OPENCV_DNN=ON` requires the `yaml-cpp` package to be installed for YAML configuration file parsing.
+It can be combined with `-DWITH_CUDA=OFF`; DNN inference will then use the
+OpenCV CPU backend. With CUDA enabled, ACMX2 benchmarks CPU and CUDA once per
+loaded model and keeps the faster backend. Set `ACMX2_DNN_BACKEND=cpu`,
+`cuda`, or `cuda_fp16` to override automatic selection.
+
+Generic ONNX YAML files may enable runtime-dynamic spatial dimensions:
+
+```yaml
+model:
+  path: comic.onnx
+  input: input
+preprocessing:
+  width: 256
+  height: 256
+  dynamic: true
+  alignment: 4
+```
+
+Set either `width` or `height` to `0` to derive that dimension from the source
+aspect ratio, or set both to `0` to use the source dimensions. Dynamic sizes are
+rounded to `alignment` because style-transfer networks commonly downsample by
+four. ACMX2 re-plans and re-benchmarks the selected backend if the resolved
+input dimensions change.
 
 At startup, the Qt6 interface probes the installed `acmx2` binary with
 `--check-cuda`, `--check-audio`, and `--check-midi` and automatically disables
@@ -599,7 +622,5 @@ Then select **Virtual_Audio.monitor** as the audio input device.
 See the full tables in the [main acidcam-gpu README](../README.md#command-line-arguments).
 
 ---
-
-
 
 

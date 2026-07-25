@@ -1,0 +1,11 @@
+model:
+  path: ai-style.onnx
+  input: input
+preprocessing:
+  width: 256
+  height: 256
+  dynamic: true
+  alignment: 4
+  scale: 1.0
+  swap_rb: true
+  mean: [0.0, 0.0, 0.0]
