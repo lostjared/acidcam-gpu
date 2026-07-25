@@ -2726,7 +2726,8 @@ class ShaderLibrary {
     std::unordered_map<int, ProgramData> program_names_2d;
     std::unordered_map<int, ProgramData> program_names_3d;
     bool shader_bypass = false;
-    bool isDragging = false;
+    bool isDraggingLeft = false;
+    bool isDraggingRight = false;
     bool wasClicked = false;
     float clickStartX = 0.0f;
     float clickStartY = 0.0f;
@@ -4493,25 +4494,32 @@ class ShaderLibrary {
         }
         int mouseX = 0, mouseY = 0;
         Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
-        float currentY = static_cast<float>(win->h - mouseY);
-        float currentX = static_cast<float>(mouseX);
-        if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-            if (!isDragging) {
-                clickStartX = currentX;
-                clickStartY = currentY;
-                lastClickX = currentX;
-                lastClickY = currentY;
-                isDragging = true;
-                wasClicked = true;
-            }
-        } else {
-            isDragging = false;
-        }
-        if (isDragging) {
-            glUniform4f(n.iMouse, currentX, currentY, clickStartX, clickStartY);
-        } else {
-            glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
-        }
+	float currentY = static_cast<float>(win->h - mouseY);
+	float currentX = static_cast<float>(mouseX);
+
+
+	if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+	    if (!isDraggingLeft) {
+		clickStartX = currentX;
+		clickStartY = currentY;
+		lastClickX = currentX;
+		lastClickY = currentY;
+		isDraggingLeft = true;
+		wasClicked = true;
+	    }   
+	} else {
+	    isDraggingLeft = false;
+	}
+	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+	    if (!isDraggingRight) {
+		isDraggingRight = true;
+	    }   
+	} else {
+	    isDraggingRight = false;
+	}
+	float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
+	float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
+	glUniform4f(n.iMouse, currentX, currentY, leftClickFlag, rightClickFlag);
         if (wasClicked && n.iMouseClick != -1) {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
@@ -4642,26 +4650,31 @@ class ShaderLibrary {
             glUniform1f(n.iFrameRate, 24.0f);
         }
         int mouseX = 0, mouseY = 0;
-        Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
-        float currentY = static_cast<float>(win->h - mouseY);
-        float currentX = static_cast<float>(mouseX);
-        if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-            if (!isDragging) {
-                clickStartX = currentX;
-                clickStartY = currentY;
-                lastClickX = currentX;
-                lastClickY = currentY;
-                isDragging = true;
-                wasClicked = true;
-            }
-        } else {
-            isDragging = false;
-        }
-        if (isDragging) {
-            glUniform4f(n.iMouse, currentX, currentY, clickStartX, clickStartY);
-        } else {
-            glUniform4f(n.iMouse, currentX, currentY, 0.0f, 0.0f);
-        }
+	Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
+	float currentY = static_cast<float>(win->h - mouseY);
+	float currentX = static_cast<float>(mouseX);
+	if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+	    if (!isDraggingLeft) {
+		clickStartX = currentX;
+		clickStartY = currentY;
+		lastClickX = currentX;
+		lastClickY = currentY;
+		isDraggingLeft = true;
+		wasClicked = true;
+	    }   
+	} else {
+	    isDraggingLeft = false;
+	}
+	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+	    if (!isDraggingRight) {
+		isDraggingRight = true;
+	    }   
+	} else {
+	    isDraggingRight = false;
+	}
+	float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
+	float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
+	glUniform4f(n.iMouse, currentX, currentY, leftClickFlag, rightClickFlag);
         if (wasClicked && n.iMouseClick != -1) {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
@@ -4839,28 +4852,31 @@ class ShaderLibrary {
         GLint iMouseClickLoc = names[index()].iMouseClick;
 
         int mouseX = 0, mouseY = 0;
-        Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
-        float currentY = static_cast<float>(win->h - mouseY);
-        float currentX = static_cast<float>(mouseX);
-
-        if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-            if (!isDragging) {
-                clickStartX = currentX;
-                clickStartY = currentY;
-                lastClickX = currentX;
-                lastClickY = currentY;
-                isDragging = true;
-                wasClicked = true;
-            }
-        } else {
-            isDragging = false;
-        }
-
-        if (isDragging) {
-            glUniform4f(iMouseLoc, currentX, currentY, clickStartX, clickStartY);
-        } else {
-            glUniform4f(iMouseLoc, currentX, currentY, 0.0f, 0.0f);
-        }
+	Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
+	float currentY = static_cast<float>(win->h - mouseY);
+	float currentX = static_cast<float>(mouseX);
+	if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+	    if (!isDraggingLeft) {
+		clickStartX = currentX;
+		clickStartY = currentY;
+		lastClickX = currentX;
+		lastClickY = currentY;
+		isDraggingLeft = true;
+		wasClicked = true;
+	    }   
+	} else {
+	    isDraggingLeft = false;
+	}
+	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+	    if (!isDraggingRight) {
+		isDraggingRight = true;
+	    }   
+	} else {
+	    isDraggingRight = false;
+	}
+	float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
+	float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
+	glUniform4f(iMouseLoc, currentX, currentY, leftClickFlag, rightClickFlag);
 
         if (wasClicked && iMouseClickLoc != -1) {
             glUniform2f(iMouseClickLoc, lastClickX, lastClickY);
