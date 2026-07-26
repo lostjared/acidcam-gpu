@@ -1,0 +1,11 @@
+model:
+  path: pencil-16.onnx
+  input: input
+preprocessing:
+  width: 768
+  height: 768
+  dynamic: true
+  alignment: 4
+  scale: 1.0
+  swap_rb: true
+  mean: [0.0, 0.0, 0.0]
