@@ -259,6 +259,14 @@ postprocessing:
     sigma_space: 50.0
 ```
 
+The model directory includes four optional dynamic quality tiers for every
+YAML-configured style model:
+
+- `*-256.yaml` — fastest; bilateral smoothing enabled automatically
+- `*-512.yaml` — balanced quality
+- `*-768.yaml` — high quality
+- `*-1024.yaml` — ultra quality for slower or offline rendering
+
 At startup, the Qt6 interface probes the installed `acmx2` binary with
 `--check-cuda`, `--check-audio`, and `--check-midi` and automatically disables
 menu entries (GPU Filter Settings, Audio Settings, MIDI Settings) and CLI
@@ -634,4 +642,3 @@ Then select **Virtual_Audio.monitor** as the audio input device.
 See the full tables in the [main acidcam-gpu README](../README.md#command-line-arguments).
 
 ---
-
