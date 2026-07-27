@@ -101,9 +101,7 @@ set(CMAKE_REQUIRED_INCLUDES
     ${CUDAToolkit_INCLUDE_DIRS}
     ${MXWrite_INCLUDE_DIRS}
     ${SDL2_INCLUDE_DIRS}
-    ${FFMPEG_INCLUDE_DIRS}
-    /usr/local/include
-    /usr/local/include/opencv4
+    ${FFMPEG_INCLUDE_DIRS}   
 )
 if(WITH_CUDA)
     list(APPEND CMAKE_REQUIRED_INCLUDES /opt/cuda/include)
@@ -129,7 +127,7 @@ endif()
 if(NOT HAVE_OPTIONAL OR NOT HAVE_STRING_VIEW)
     message(FATAL_ERROR "C++17 headers (<optional>, <string_view>) not found. Please ensure your compiler supports C++17/C++20.")
 endif()
-set(CMAKE_REQUIRED_INCLUDES ${OpenCV_INCLUDE_DIRS} /usr/local/include/opencv4)
+set(CMAKE_REQUIRED_INCLUDES ${OpenCV_INCLUDE_DIRS})
 check_include_file_cxx("opencv2/opencv.hpp" HAVE_OPENCV_HPP)
 if(WITH_CUDA)
     check_include_file_cxx("opencv2/core/cuda.hpp" HAVE_OPENCV_CUDA_HPP)
@@ -315,8 +313,6 @@ target_include_directories(acmx2 PRIVATE
     ${CUDAToolkit_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
     ${FFMPEG_INCLUDE_DIRS}
-    /usr/local/include
-    /usr/local/include/opencv4
 )
 if(WITH_CUDA)
     target_include_directories(acmx2 PRIVATE /opt/cuda/include)
