@@ -299,7 +299,7 @@ class MainWindow : public QMainWindow {
     void publishRepeatStateToRunningProcess();
     void publishRuntimeSettingsToRunningProcess();
     void cleanupShaderSelectionSharedMemory();
-  #ifdef __linux__
+  #if defined(__linux__) || defined(__APPLE__)
     int shaderSelectionShmFd = -1;
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
     quint32 shaderSelectionSequence = 0;

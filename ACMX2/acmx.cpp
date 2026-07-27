@@ -112,8 +112,9 @@ namespace ac_gpu {
 #endif
 #if defined(__APPLE__)
 #include <fcntl.h>
-#include <unistd.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #endif
 #include <deque>
 #include <glm/gtc/matrix_transform.hpp>
@@ -6534,7 +6535,7 @@ class ACView : public gl::GLObject {
             initMidi(args.midi_map_file, args.midi_device);
         }
 #endif
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     if (args.interface_shm) {
         initShaderSelectionSharedMemory();
     }
@@ -6639,7 +6640,7 @@ class ACView : public gl::GLObject {
     bool saved_pass_enabled_before_random = false;
     size_t saved_shader_index_before_random = 0;
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     int shaderSelectionShmFd = -1;
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
     uint32_t shaderSelectionLastSequence = 0;
@@ -7161,9 +7162,9 @@ class ACView : public gl::GLObject {
      * 10.Release the VideoCapture.
      */
     ~ACView() override {
-    #ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
         cleanupShaderSelectionSharedMemory();
-    #endif
+#endif
 #ifdef MIDI_ENABLED
         cleanupMidi();
 #endif
@@ -8066,7 +8067,7 @@ class ACView : public gl::GLObject {
         pollMidi(win);
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     syncShaderSelectionFromInterface(win);
 #endif
 

@@ -41,7 +41,7 @@
 #include <functional>
 #include <random>
 #include <sstream>
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -1190,7 +1190,7 @@ int MainWindow::currentShaderRow() const {
 }
 
 void MainWindow::initShaderSelectionSharedMemory() {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     if (shaderSelectionShm)
         return;
 
@@ -1247,7 +1247,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
 }
 
 void MainWindow::publishSelectedShaderIndexToRunningProcess() {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     if (!shaderSelectionShm)
         return;
     const int row = currentShaderRow();
@@ -1259,7 +1259,7 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
 }
 
 void MainWindow::publishMultipassShadersToRunningProcess() {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     if (!shaderSelectionShm)
         return;
 
@@ -1287,7 +1287,7 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
 }
 
 void MainWindow::publishRepeatStateToRunningProcess() {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     if (!shaderSelectionShm)
         return;
     shaderSelectionShm->repeat_enabled = (play_repeat && play_repeat->isChecked()) ? 1 : 0;
@@ -1296,7 +1296,7 @@ void MainWindow::publishRepeatStateToRunningProcess() {
 }
 
 void MainWindow::publishRuntimeSettingsToRunningProcess() {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     if (!shaderSelectionShm)
         return;
 
@@ -1339,7 +1339,7 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
 }
 
 void MainWindow::cleanupShaderSelectionSharedMemory() {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
     if (shaderSelectionShm) {
         ::munmap(shaderSelectionShm, sizeof(acmx2::ipc::ShaderSelectionShmData));
         shaderSelectionShm = nullptr;
