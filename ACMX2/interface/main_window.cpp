@@ -2091,19 +2091,11 @@ void MainWindow::runSelected() {
     if (audio_available && audio_enabled) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
-        arguments << "--sense" << QString::number(audio_sense);
-        if (audio_passthrough)
-            arguments << "--pass-through";
 
         if (audio_input == -1)
             arguments << "--audio-input" << "default";
         else
             arguments << "--audio-input" << QString::number(audio_input);
-
-        if (audio_output == -1)
-            arguments << "--audio-output" << "default";
-        else
-            arguments << "--audio-output" << QString::number(audio_output);
 
         if (record_audio) {
             QString wavPath;
@@ -2115,6 +2107,17 @@ void MainWindow::runSelected() {
             }
             arguments << "--record-audio" << wavPath;
             arguments << "--record-gain" << QString::number(record_volume, 'f', 2);
+        }
+    }
+
+    if (audio_available && (audio_enabled || !audio_file.isEmpty())) {
+        arguments << "--sense" << QString::number(audio_sense);
+        if (audio_passthrough) {
+            arguments << "--pass-through";
+            if (audio_output == -1)
+                arguments << "--audio-output" << "default";
+            else
+                arguments << "--audio-output" << QString::number(audio_output);
         }
     }
 
@@ -2298,19 +2301,11 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
     if (audio_available && audio_enabled) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
-        arguments << "--sense" << QString::number(audio_sense);
-        if (audio_passthrough)
-            arguments << "--pass-through";
 
         if (audio_input == -1)
             arguments << "--audio-input" << "default";
         else
             arguments << "--audio-input" << QString::number(audio_input);
-
-        if (audio_output == -1)
-            arguments << "--audio-output" << "default";
-        else
-            arguments << "--audio-output" << QString::number(audio_output);
 
         if (record_audio) {
             QString wavPath;
@@ -2322,6 +2317,17 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
             }
             arguments << "--record-audio" << wavPath;
             arguments << "--record-gain" << QString::number(record_volume, 'f', 2);
+        }
+    }
+
+    if (audio_available && (audio_enabled || !audio_file.isEmpty())) {
+        arguments << "--sense" << QString::number(audio_sense);
+        if (audio_passthrough) {
+            arguments << "--pass-through";
+            if (audio_output == -1)
+                arguments << "--audio-output" << "default";
+            else
+                arguments << "--audio-output" << QString::number(audio_output);
         }
     }
 

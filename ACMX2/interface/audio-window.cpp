@@ -11,7 +11,10 @@ AudioSettings::AudioSettings(QWidget *parent)
     setWindowTitle("Audio Settings");
 
     audioReactivityCheckBox = new QCheckBox("Enable Audio Reactivity", this);
-    audioPassThroughCheckBox = new QCheckBox("Enable Audio Pass Through", this);
+    audioPassThroughCheckBox =
+        new QCheckBox("Enable Audio Pass Through / File Playback", this);
+    audioPassThroughCheckBox->setToolTip(
+        "Play live microphone input or the selected audio file through the output device.");
     recordAudioCheckBox = new QCheckBox("Record Audio to File", this);
 
     QLabel *recordVolumeLabel = new QLabel("Recording Volume:", this);
@@ -81,11 +84,10 @@ AudioSettings::AudioSettings(QWidget *parent)
         audioFileLineEdit->setEnabled(checked);
         audioFileBrowseButton->setEnabled(checked);
         audioTruncCheckBox->setEnabled(checked);
-        // When using file audio, disable mic-specific controls
-        audioPassThroughCheckBox->setEnabled(!checked);
+        // When using file audio, disable only microphone-specific controls.
+        // Pass-through and output selection remain available for file playback.
         channelSpinBox->setEnabled(!checked);
         inputDeviceComboBox->setEnabled(!checked);
-        outputDeviceComboBox->setEnabled(!checked);
     });
 
     connect(audioFileBrowseButton, &QPushButton::clicked, this, [this]() {

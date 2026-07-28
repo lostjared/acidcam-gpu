@@ -30,22 +30,23 @@ namespace mx {
 
     class ObjectRequest {
       public:
-        explicit ObjectRequest(const std::string &host_ = "localhost", const std::string &model_ = "codellama:7b", const std::string &filename_ = "shader.glsl") : host(host_), model(model_), filename(filename_) {}
-        void setHost(const std::string &host_) {
-            host = host_;
+        explicit ObjectRequest(const std::string &host = "localhost", const std::string &model = "codellama:7b", const std::string &filename = "shader.glsl")
+            : host(host), model(model), filename(filename) {}
+        void setHost(const std::string &host) {
+            this->host = host;
         }
-        void setModel(const std::string &model_) {
-            model = model_;
+        void setModel(const std::string &model) {
+            this->model = model;
         }
-        void setFilename(const std::string &filename_) {
-            filename = filename_;
+        void setFilename(const std::string &filename) {
+            this->filename = filename;
         }
-        void setShader(const std::string &shader_) {
-            shader = shader_;
+        void setShader(const std::string &shader) {
+            this->shader = shader;
         }
 
-        void setPrompt(const std::string &prompt_) {
-            prompt = prompt_;
+        void setPrompt(const std::string &prompt) {
+            this->prompt = prompt;
         }
 
         static std::string unescape(const std::string &input);

@@ -86,10 +86,10 @@ void PropWindow::init() {
 #else
     QString filePath = appSettings.value("exePath", "acmx2.exe").toString();
 #endif
-    QString shader_ = appSettings.value("shaders", "").toString();
+    QString shader = appSettings.value("shaders", "").toString();
     QString screenshotDir = appSettings.value("prefix_path", defaultPicturesDir).toString();
     exePathLineEdit->setText(filePath);
-    shaderDirLineEdit->setText(shader_);
+    shaderDirLineEdit->setText(shader);
     screenshotDirLineEdit->setText(screenshotDir);
     exePathLineEdit->setMinimumHeight(30);
     shaderDirLineEdit->setMinimumHeight(30);

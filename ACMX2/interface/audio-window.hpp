@@ -3,8 +3,8 @@
  * @brief Qt6 dialog for configuring audio reactivity settings.
  *
  * Provides device selection (input / output), sensitivity, channel count,
- * pass-through, recording options, and an optional file-based audio source
- * that replaces live microphone input for audio-reactive shaders.
+ * pass-through/file playback, recording options, and an optional file-based
+ * audio source that replaces live microphone input for audio-reactive shaders.
  */
 
 #ifndef AUDIOSETTINGS_HPP
@@ -71,12 +71,12 @@ class AudioSettings : public QDialog {
     QSlider *sensitivitySlider;
     QComboBox *inputDeviceComboBox;
     QComboBox *outputDeviceComboBox;
-    QCheckBox *audioFileCheckBox;       ///< Toggle file-based audio input.
-    QLineEdit *audioFileLineEdit;       ///< Displays the selected audio file path.
-    QPushButton *audioFileBrowseButton; ///< Opens a file dialog to choose an audio file.
-    QCheckBox *audioTruncCheckBox;      ///< Stop playback when the audio file ends.
-    QCheckBox *audioBuffersCheckBox;    ///< Enable spectrum history buffer CLI option.
-    QSpinBox *audioBuffersSpinBox;      ///< Number of spectrum history frames.
+    QCheckBox *audioFileCheckBox;         ///< Toggle file-based audio input.
+    QLineEdit *audioFileLineEdit;         ///< Displays the selected audio file path.
+    QPushButton *audioFileBrowseButton;   ///< Opens a file dialog to choose an audio file.
+    QCheckBox *audioTruncCheckBox;        ///< Stop playback when the audio file ends.
+    QCheckBox *audioBuffersCheckBox;      ///< Enable spectrum history buffer CLI option.
+    QSpinBox *audioBuffersSpinBox;        ///< Number of spectrum history frames.
     QDoubleSpinBox *audioWarmRateSpinBox; ///< Startup warmup rate for audio intensity ramp.
     QPushButton *okButton;
     QPushButton *cancelButton;

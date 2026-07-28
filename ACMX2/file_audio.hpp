@@ -3,6 +3,10 @@
 
 #include <string>
 
+namespace acmx2::audio {
+    class AudioAnalyzer;
+}
+
 /**
  * @file file_audio.hpp
  * @brief File-based audio input for audio-reactive shaders.
@@ -10,14 +14,13 @@
  * Provides an alternative audio source that reads from a media file
  * (WAV, MP3, AAC, FLAC, OGG, or video containers with an audio track)
  * instead of a live microphone via RtAudio.  The decoded audio drives
- * the same global reactivity variables (gAmplitude, gPeak, gRMS, etc.)
- * and 1-D FFT spectrum texture used by GLSL shaders.
+ * the same AudioAnalyzer and 1-D FFT spectrum texture used by live input.
  *
  * Typical usage:
  * @code
  *   if (file_audio_open("music.mp3")) {
  *       // each frame:
- *       file_audio_process_frame(60.0);
+ *       file_audio_process_frame(60.0, analyzer);
  *   }
  *   file_audio_close();
  * @endcode
@@ -40,17 +43,27 @@
 bool file_audio_open(const std::string &filepath);
 
 /**
- * @brief Advance playback by one video frame and update audio globals.
+ * @brief Configure real-time playback of the decoded file through an output device.
+ *
+ * The stream is opened immediately and starts when file_audio_process_frame()
+ * first advances the file, keeping audible playback aligned with visual analysis.
+ *
+ * @param output_device RtAudio device ID, or -1 for the default output.
+ * @return @c true when the output stream was configured successfully.
+ */
+bool file_audio_enable_output(int output_device);
+
+/**
+ * @brief Advance playback by one video frame and update the audio analyzer.
  *
  * Consumes @c 44100/video_fps samples from the internal buffer and
- * computes amplitude, peak, RMS, smoothed amplitude, 3-band energy
- * (low / mid / high), and dominant frequency.  The sample window is
- * also pushed to the FFT ring buffer via push_audio_buffer().
+ * forwards the decoded sample window to the shared AudioAnalyzer.
  *
  * @param video_fps Video frame rate — determines how many audio samples
  *                  are consumed per call.
+ * @param analyzer Shared analyzer that also services live audio input.
  */
-void file_audio_process_frame(double video_fps);
+void file_audio_process_frame(double video_fps, acmx2::audio::AudioAnalyzer &analyzer);
 
 /**
  * @brief Check whether file audio playback is still active.
@@ -61,8 +74,8 @@ bool file_audio_is_active();
 /**
  * @brief Close the file audio decoder and release all resources.
  *
- * Frees any remaining FFmpeg contexts (safe to call even if already
- * closed) and releases the decoded sample buffer.
+ * Stops file playback, frees any remaining FFmpeg contexts (safe to call
+ * even if already closed), and releases the decoded sample buffer.
  */
 void file_audio_close();
 

@@ -54,6 +54,8 @@
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
 #include "file_audio.hpp"
+
+using acmx2::audio::FFT_SIZE;
 #endif
 #ifdef MIDI_ENABLED
 #include <rtmidi/RtMidi.h>
@@ -75,8 +77,8 @@
 #else
 // Stubs so code compiled without CUDA still has the symbols it references.
 #ifndef CHECK_CUDA
-#define CHECK_CUDA(call) \
-    do {                 \
+#define CHECK_CUDA(call)         \
+    do {                         \
         static_cast<void>(call); \
     } while (0)
 #endif
@@ -105,8 +107,8 @@ namespace ac_gpu {
 #ifdef __linux__
 #include <fcntl.h>
 #include <linux/videodev2.h>
-#include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -998,7 +1000,7 @@ class FFMpegVideoReader {
             enableCudaHwDecode(codec);
         }
 #else
-    static_cast<void>(prefer_cuda);
+        static_cast<void>(prefer_cuda);
 #endif
 
         if (avcodec_open2(codec_ctx, codec, nullptr) < 0) {
@@ -2201,9 +2203,9 @@ bool loadProgramBinaryFunctions() {
  *
  * ### What this class does
  * Every audio frame, the RtAudio callback captures raw PCM samples into a
- * double buffer (see `push_audio_buffer()`).  On the **render** thread,
- * `update()` calls `compute_audio_fft()` to run a radix-2 FFT and then
- * uploads the resulting magnitude array into a **GL_TEXTURE_1D** so that
+ * thread-safe analyzer buffer. On the **render** thread, `update()` computes
+ * a radix-2 FFT and uploads the resulting magnitude array into a
+ * **GL_TEXTURE_1D** so that
  * any GLSL shader can sample it.
  *
  * ### How the 1D texture works
@@ -2236,10 +2238,13 @@ bool loadProgramBinaryFunctions() {
  * `init()` creates the texture; `cleanup()` deletes it.  The destructor
  * calls `cleanup()` automatically, so you never leak GPU resources.
  *
- * @see push_audio_buffer(), compute_audio_fft(), get_fft_magnitudes()
+ * @see acmx2::audio::AudioAnalyzer
  */
 class SpectrumTexture {
   public:
+    explicit SpectrumTexture(acmx2::audio::AudioAnalyzer &analyzer)
+        : analyzer(analyzer) {}
+
     /**
      * @brief Create the 1D texture and set its sampling parameters.
      *
@@ -2282,7 +2287,7 @@ class SpectrumTexture {
      * @brief Compute a fresh FFT and upload the magnitudes into the texture.
      *
      * This is the per-frame call that bridges the audio and GPU worlds:
-     * 1. `compute_audio_fft()` reads the latest PCM snapshot, applies a
+     * 1. AudioAnalyzer reads the latest PCM snapshot, applies a
      *    Hann window, runs the radix-2 FFT, and writes the magnitudes.
      * 2. `glTexSubImage1D()` copies those magnitudes into the existing
      *    texture **without** reallocating — much cheaper than `glTexImage1D`
@@ -2294,8 +2299,8 @@ class SpectrumTexture {
     void update() {
         if (textureID == 0)
             return;
-        compute_audio_fft();
-        const auto &mags = get_fft_magnitudes();
+        analyzer.compute_spectrum();
+        const auto &mags = analyzer.spectrum();
         glBindTexture(GL_TEXTURE_1D, textureID);
         glTexSubImage1D(GL_TEXTURE_1D, 0, 0, bins, GL_RED, GL_FLOAT, mags.data());
         glBindTexture(GL_TEXTURE_1D, 0);
@@ -2304,8 +2309,8 @@ class SpectrumTexture {
     void update(float scale) {
         if (textureID == 0)
             return;
-        compute_audio_fft();
-        const auto &mags = get_fft_magnitudes();
+        analyzer.compute_spectrum();
+        const auto &mags = analyzer.spectrum();
         scaled_buf.resize(mags.size());
         for (size_t i = 0; i < mags.size(); ++i)
             scaled_buf[i] = mags[i] * scale;
@@ -2348,6 +2353,7 @@ class SpectrumTexture {
     static constexpr int SPECTRUM_TEXTURE_UNIT = 9;
 
   private:
+    acmx2::audio::AudioAnalyzer &analyzer;
     GLuint textureID = 0;          ///< OpenGL name for the 1D texture.
     int bins = 0;                  ///< Number of texels (== FFT_SIZE / 2).
     std::vector<float> scaled_buf; ///< Scratch buffer for sensitivity-scaled magnitudes.
@@ -2373,6 +2379,9 @@ class SpectrumTexture {
  */
 class SpectrumHistory {
   public:
+    explicit SpectrumHistory(const acmx2::audio::AudioAnalyzer &analyzer)
+        : analyzer(analyzer) {}
+
     /// First texture unit assigned to spectrum0 (units 0–9 already taken).
     static constexpr int BASE_UNIT = 10;
     /// Maximum supported buffer depth (clamped to keep texture units in range).
@@ -2415,7 +2424,7 @@ class SpectrumHistory {
     void update(float scale = 0.0f) {
         if (textures.empty())
             return;
-        const auto &mags = get_fft_magnitudes();
+        const auto &mags = analyzer.spectrum();
         const float *src = mags.data();
         if (scale != 0.0f) {
             scaled_buf.resize(mags.size());
@@ -2464,6 +2473,7 @@ class SpectrumHistory {
     ~SpectrumHistory() { cleanup(); }
 
   private:
+    const acmx2::audio::AudioAnalyzer &analyzer;
     std::vector<GLuint> textures;  ///< Ring of `GL_TEXTURE_1D` names.
     int bins = 0;                  ///< Texels per texture (== FFT_SIZE / 2).
     int write_idx = 0;             ///< Next slot to overwrite.
@@ -2492,8 +2502,9 @@ class ShaderLibrary {
     float time_speed = 1.0f;
     double video_fps = 0.0;
 #ifdef AUDIO_ENABLED
-    int audio_buffer_count_ = 0;         ///< Count of `spectrumN` history textures (set via setAudioBufferCount, 0 = disabled).
-    float audio_warmup_envelope_ = 1.0f; ///< Startup ramp [0..1] used to soften initial audio-reactive intensity.
+    const acmx2::audio::AudioAnalyzer *audio_analyzer = nullptr;
+    int audio_buffer_count = 0;         ///< Count of `spectrumN` history textures (set via setAudioBufferCount, 0 = disabled).
+    float audio_warmup_envelope = 1.0f; ///< Startup ramp [0..1] used to soften initial audio-reactive intensity.
 #endif
 #ifdef MIDI_ENABLED
     float midi_slider[4] = {0.0f, 0.0f, 0.0f, 0.0f}; ///< MIDI CC slider values (0.0–1.0) for shader uniforms slider1–slider4.
@@ -2653,7 +2664,7 @@ class ShaderLibrary {
      *  - size the per-program `texture_array_loc` lookup vector;
      *  - bound the runtime binding loop in the cache-render path.
      */
-    int cache_size_ = 8;
+    int cache_size = 8;
 
     /**
      * @brief Read a fragment shader file and inject `#define SIZE N`
@@ -2705,7 +2716,7 @@ class ShaderLibrary {
     bool loadProgramWithSize(gl::ShaderProgram *prog,
                              const std::string &vert_path,
                              const std::string &frag_path) const {
-        std::string frag_src = injectShaderSize(frag_path, cache_size_);
+        std::string frag_src = injectShaderSize(frag_path, cache_size);
         if (frag_src.empty()) {
             // Could not read the fragment file; fall back so the loader can
             // produce its own diagnostic.
@@ -2785,7 +2796,12 @@ class ShaderLibrary {
     }
 
   public:
+#ifdef AUDIO_ENABLED
+    explicit ShaderLibrary(const acmx2::audio::AudioAnalyzer *analyzer = nullptr)
+        : audio_analyzer(analyzer) {}
+#else
     ShaderLibrary() = default;
+#endif
     ~ShaderLibrary() {}
 
 #ifdef MIDI_ENABLED
@@ -2826,11 +2842,11 @@ class ShaderLibrary {
             size = 1;
         if (size > 64)
             size = 64;
-        cache_size_ = size;
+        cache_size = size;
     }
 
     /// @brief Active cache ring size as seen by the shader-compile path.
-    int cacheSize() const { return cache_size_; }
+    int cacheSize() const { return cache_size; }
 
     /**
      * @brief Remove all compiled shader programs and reset the library index.
@@ -2948,18 +2964,18 @@ class ShaderLibrary {
                 // every `textures[i]` element queried individually.
                 names[pos].texture_array_base_loc = glGetUniformLocation(prog->id(), "textures[0]");
                 if (names[pos].texture_array_base_loc != -1) {
-                    std::vector<GLint> units(static_cast<std::size_t>(cache_size_), 0);
-                    for (int i = 0; i < cache_size_; ++i) {
+                    std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
+                    for (int i = 0; i < cache_size; ++i) {
                         units[static_cast<std::size_t>(i)] = i + 1;
                     }
-                    glUniform1iv(names[pos].texture_array_base_loc, cache_size_, units.data());
+                    glUniform1iv(names[pos].texture_array_base_loc, cache_size, units.data());
                 }
                 // textures[0..N-1] is the array-form alias and scales with
                 // the runtime --texture-cache-size. glGetUniformLocation
                 // returns -1 for any element the shader doesn't actually
                 // declare/reference; glUniform1i on -1 is a silent no-op.
-                names[pos].texture_array_loc.assign(static_cast<std::size_t>(cache_size_), -1);
-                for (int i = 0; i < cache_size_; ++i) {
+                names[pos].texture_array_loc.assign(static_cast<std::size_t>(cache_size), -1);
+                for (int i = 0; i < cache_size; ++i) {
                     names[pos].texture_array_loc[i] = glGetUniformLocation(
                         prog->id(),
                         std::string("textures[" + std::to_string(i) + "]").c_str());
@@ -2978,8 +2994,8 @@ class ShaderLibrary {
             names[pos].amp_high = glGetUniformLocation(prog->id(), "amp_high");
             names[pos].iSampleRate = glGetUniformLocation(prog->id(), "iSampleRate");
             names[pos].spectrum_loc = glGetUniformLocation(prog->id(), "spectrum");
-            names[pos].spectrum_history_locs.assign(static_cast<size_t>(audio_buffer_count_), -1);
-            for (int i = 0; i < audio_buffer_count_; ++i) {
+            names[pos].spectrum_history_locs.assign(static_cast<size_t>(audio_buffer_count), -1);
+            for (int i = 0; i < audio_buffer_count; ++i) {
                 std::string uname = "spectrum" + std::to_string(i);
                 names[pos].spectrum_history_locs[i] =
                     glGetUniformLocation(prog->id(), uname.c_str());
@@ -3034,7 +3050,7 @@ class ShaderLibrary {
      * @param value Zero-based cache texture slot (0–7).
      */
     void setUniform(const std::string &name, int value) {
-        if (value < 0 || value >= cache_size_) {
+        if (value < 0 || value >= cache_size) {
             return;
         }
         auto &names = is3d ? program_names_3d : program_names_2d;
@@ -3051,7 +3067,7 @@ class ShaderLibrary {
         if (names[index()].texture_array_base_loc != -1) {
             return;
         }
-        // Array-form `textures[value]` scales to whatever cache_size_ is
+        // Array-form `textures[value]` scales to whatever cache_size is
         // active. glUniform1i on -1 (uniform absent or optimized out) is
         // a no-op, so the bounds check above is the only guard needed.
         if (value < static_cast<int>(names[index()].texture_array_loc.size())) {
@@ -3085,15 +3101,15 @@ class ShaderLibrary {
             n = 0;
         if (n > SpectrumHistory::MAX_BUFFERS)
             n = SpectrumHistory::MAX_BUFFERS;
-        audio_buffer_count_ = n;
+        audio_buffer_count = n;
     }
 
     /// @brief Number of `spectrumN` history textures currently configured.
-    int audioBufferCount() const { return audio_buffer_count_; }
+    int audioBufferCount() const { return audio_buffer_count; }
 
     /// @brief Set startup audio warmup envelope in [0,1] for uniform scaling.
     void setAudioWarmupEnvelope(float env) {
-        audio_warmup_envelope_ = std::clamp(env, 0.0f, 1.0f);
+        audio_warmup_envelope = std::clamp(env, 0.0f, 1.0f);
     }
 #endif
 
@@ -3599,7 +3615,7 @@ class ShaderLibrary {
         out.close();
 
         // Invalidate the on-disk cache since the library composition changed.
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size_);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size);
         if (std::filesystem::exists(cache_file)) {
             std::filesystem::remove(cache_file, ec);
             if (!ec) {
@@ -3645,7 +3661,7 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Program binary functions loaded successfully\n";
         fflush(stdout);
 
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size_);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size);
         std::fstream file;
         file.open(library_path + "/index.txt", std::ios::in);
         if (!file.is_open()) {
@@ -3941,7 +3957,7 @@ class ShaderLibrary {
     /// @brief Attempt to load all shader programs from the binary cache file.
     bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont,
                        const std::string &vert_2d = "", const std::string &vert_3d = "") {
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size_);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size);
 
         mx::system_out << "acmx2: Checking for shader cache at: " << cache_file << "\n";
         fflush(stdout);
@@ -4299,7 +4315,7 @@ class ShaderLibrary {
         // cache now and reload from it so subsequent runs hit the binary cache
         // instead of recompiling 1700+ shaders every launch. If building or
         // reloading fails for any reason, fall back to a plain source compile.
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), text, cache_size_);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), text, cache_size);
         mx::system_out << "acmx2: Building shader cache at: " << cache_file << "\n";
         fflush(stdout);
         programs_2d.clear();
@@ -4495,32 +4511,31 @@ class ShaderLibrary {
         }
         int mouseX = 0, mouseY = 0;
         Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
-	float currentY = static_cast<float>(win->h - mouseY);
-	float currentX = static_cast<float>(mouseX);
+        float currentY = static_cast<float>(win->h - mouseY);
+        float currentX = static_cast<float>(mouseX);
 
-
-	if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-	    if (!isDraggingLeft) {
-		clickStartX = currentX;
-		clickStartY = currentY;
-		lastClickX = currentX;
-		lastClickY = currentY;
-		isDraggingLeft = true;
-		wasClicked = true;
-	    }   
-	} else {
-	    isDraggingLeft = false;
-	}
-	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-	    if (!isDraggingRight) {
-		isDraggingRight = true;
-	    }   
-	} else {
-	    isDraggingRight = false;
-	}
-	float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
-	float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
-	glUniform4f(n.iMouse, currentX, currentY, leftClickFlag, rightClickFlag);
+        if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+            if (!isDraggingLeft) {
+                clickStartX = currentX;
+                clickStartY = currentY;
+                lastClickX = currentX;
+                lastClickY = currentY;
+                isDraggingLeft = true;
+                wasClicked = true;
+            }
+        } else {
+            isDraggingLeft = false;
+        }
+        if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+            if (!isDraggingRight) {
+                isDraggingRight = true;
+            }
+        } else {
+            isDraggingRight = false;
+        }
+        float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
+        float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
+        glUniform4f(n.iMouse, currentX, currentY, leftClickFlag, rightClickFlag);
         if (wasClicked && n.iMouseClick != -1) {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
@@ -4530,35 +4545,43 @@ class ShaderLibrary {
         }
         uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
+        const auto audio_metrics = audio_analyzer != nullptr
+                                       ? audio_analyzer->metrics()
+                                       : acmx2::audio::AudioMetrics{};
+        const float audio_sensitivity =
+            audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
         if (time_audio) {
-            glUniform1f(n.amp, get_amp() * audio_warmup_envelope_);
-            glUniform1f(n.amp_untouched, get_sense());
+            glUniform1f(n.amp, audio_metrics.amplitude * audio_warmup_envelope);
+            glUniform1f(n.amp_untouched, audio_sensitivity);
         }
         if (n.iSampleRate != -1) {
-            glUniform1f(n.iSampleRate, 44100.0f);
+            const float sample_rate = audio_analyzer != nullptr
+                                          ? static_cast<float>(audio_analyzer->sample_rate())
+                                          : 44100.0f;
+            glUniform1f(n.iSampleRate, sample_rate);
         }
         if (n.iamp != -1) {
-            glUniform1f(n.iamp, get_freq());
+            glUniform1f(n.iamp, audio_metrics.frequency);
         }
         {
-            float sense = get_sense() * 4.0f * audio_warmup_envelope_;
+            float sense = audio_sensitivity * 4.0f * audio_warmup_envelope;
             if (n.amp_peak != -1) {
-                glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
+                glUniform1f(n.amp_peak, std::sqrt(audio_metrics.peak) * sense);
             }
             if (n.amp_rms != -1) {
-                glUniform1f(n.amp_rms, std::sqrt(get_amp_rms()) * sense);
+                glUniform1f(n.amp_rms, std::sqrt(audio_metrics.rms) * sense);
             }
             if (n.amp_smooth != -1) {
-                glUniform1f(n.amp_smooth, std::sqrt(get_amp_smooth()) * sense);
+                glUniform1f(n.amp_smooth, std::sqrt(audio_metrics.smooth) * sense);
             }
             if (n.amp_low != -1) {
-                glUniform1f(n.amp_low, std::sqrt(get_amp_low()) * sense);
+                glUniform1f(n.amp_low, std::sqrt(audio_metrics.low) * sense);
             }
             if (n.amp_mid != -1) {
-                glUniform1f(n.amp_mid, std::sqrt(get_amp_mid()) * sense);
+                glUniform1f(n.amp_mid, std::sqrt(audio_metrics.mid) * sense);
             }
             if (n.amp_high != -1) {
-                glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
+                glUniform1f(n.amp_high, std::sqrt(audio_metrics.high) * sense);
             }
         }
         // Tell the shader which texture unit holds the spectrum.
@@ -4576,18 +4599,18 @@ class ShaderLibrary {
         // was last used. Sampler uniforms are program state, but binding
         // them here keeps the multipass path self-sufficient.
         if (n.texture_array_base_loc != -1) {
-            std::vector<GLint> units(static_cast<std::size_t>(cache_size_), 0);
-            for (int i = 0; i < cache_size_; ++i) {
+            std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
+            for (int i = 0; i < cache_size; ++i) {
                 units[static_cast<std::size_t>(i)] = i + 1;
             }
-            glUniform1iv(n.texture_array_base_loc, cache_size_, units.data());
+            glUniform1iv(n.texture_array_base_loc, cache_size, units.data());
         } else {
             for (int i = 0; i < static_cast<int>(n.texture_array_loc.size()); ++i) {
                 if (n.texture_array_loc[i] != -1)
                     glUniform1i(n.texture_array_loc[i], i + 1);
             }
         }
-        for (int i = 0; i < 8 && i < cache_size_; ++i) {
+        for (int i = 0; i < 8 && i < cache_size; ++i) {
             if (n.texture_cache_loc[i] != -1)
                 glUniform1i(n.texture_cache_loc[i], i + 1);
         }
@@ -4651,31 +4674,31 @@ class ShaderLibrary {
             glUniform1f(n.iFrameRate, 24.0f);
         }
         int mouseX = 0, mouseY = 0;
-	Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
-	float currentY = static_cast<float>(win->h - mouseY);
-	float currentX = static_cast<float>(mouseX);
-	if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-	    if (!isDraggingLeft) {
-		clickStartX = currentX;
-		clickStartY = currentY;
-		lastClickX = currentX;
-		lastClickY = currentY;
-		isDraggingLeft = true;
-		wasClicked = true;
-	    }   
-	} else {
-	    isDraggingLeft = false;
-	}
-	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-	    if (!isDraggingRight) {
-		isDraggingRight = true;
-	    }   
-	} else {
-	    isDraggingRight = false;
-	}
-	float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
-	float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
-	glUniform4f(n.iMouse, currentX, currentY, leftClickFlag, rightClickFlag);
+        Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
+        float currentY = static_cast<float>(win->h - mouseY);
+        float currentX = static_cast<float>(mouseX);
+        if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+            if (!isDraggingLeft) {
+                clickStartX = currentX;
+                clickStartY = currentY;
+                lastClickX = currentX;
+                lastClickY = currentY;
+                isDraggingLeft = true;
+                wasClicked = true;
+            }
+        } else {
+            isDraggingLeft = false;
+        }
+        if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+            if (!isDraggingRight) {
+                isDraggingRight = true;
+            }
+        } else {
+            isDraggingRight = false;
+        }
+        float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
+        float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
+        glUniform4f(n.iMouse, currentX, currentY, leftClickFlag, rightClickFlag);
         if (wasClicked && n.iMouseClick != -1) {
             glUniform2f(n.iMouseClick, lastClickX, lastClickY);
         }
@@ -4685,35 +4708,43 @@ class ShaderLibrary {
         }
         uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
+        const auto audio_metrics = audio_analyzer != nullptr
+                                       ? audio_analyzer->metrics()
+                                       : acmx2::audio::AudioMetrics{};
+        const float audio_sensitivity =
+            audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
         if (time_audio) {
-            glUniform1f(n.amp, get_amp() * audio_warmup_envelope_);
-            glUniform1f(n.amp_untouched, get_sense());
+            glUniform1f(n.amp, audio_metrics.amplitude * audio_warmup_envelope);
+            glUniform1f(n.amp_untouched, audio_sensitivity);
         }
         if (n.iSampleRate != -1) {
-            glUniform1f(n.iSampleRate, 44100.0f);
+            const float sample_rate = audio_analyzer != nullptr
+                                          ? static_cast<float>(audio_analyzer->sample_rate())
+                                          : 44100.0f;
+            glUniform1f(n.iSampleRate, sample_rate);
         }
         if (n.iamp != -1) {
-            glUniform1f(n.iamp, get_freq());
+            glUniform1f(n.iamp, audio_metrics.frequency);
         }
         {
-            float sense = get_sense() * 4.0f * audio_warmup_envelope_;
+            float sense = audio_sensitivity * 4.0f * audio_warmup_envelope;
             if (n.amp_peak != -1) {
-                glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
+                glUniform1f(n.amp_peak, std::sqrt(audio_metrics.peak) * sense);
             }
             if (n.amp_rms != -1) {
-                glUniform1f(n.amp_rms, std::sqrt(get_amp_rms()) * sense);
+                glUniform1f(n.amp_rms, std::sqrt(audio_metrics.rms) * sense);
             }
             if (n.amp_smooth != -1) {
-                glUniform1f(n.amp_smooth, std::sqrt(get_amp_smooth()) * sense);
+                glUniform1f(n.amp_smooth, std::sqrt(audio_metrics.smooth) * sense);
             }
             if (n.amp_low != -1) {
-                glUniform1f(n.amp_low, std::sqrt(get_amp_low()) * sense);
+                glUniform1f(n.amp_low, std::sqrt(audio_metrics.low) * sense);
             }
             if (n.amp_mid != -1) {
-                glUniform1f(n.amp_mid, std::sqrt(get_amp_mid()) * sense);
+                glUniform1f(n.amp_mid, std::sqrt(audio_metrics.mid) * sense);
             }
             if (n.amp_high != -1) {
-                glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
+                glUniform1f(n.amp_high, std::sqrt(audio_metrics.high) * sense);
             }
         }
         if (n.spectrum_loc != -1) {
@@ -4727,18 +4758,18 @@ class ShaderLibrary {
         // Re-assert texture-cache sampler bindings (samp1..samp8 and
         // textures[0..N-1]) for multipass passes targeting cache shaders.
         if (n.texture_array_base_loc != -1) {
-            std::vector<GLint> units(static_cast<std::size_t>(cache_size_), 0);
-            for (int i = 0; i < cache_size_; ++i) {
+            std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
+            for (int i = 0; i < cache_size; ++i) {
                 units[static_cast<std::size_t>(i)] = i + 1;
             }
-            glUniform1iv(n.texture_array_base_loc, cache_size_, units.data());
+            glUniform1iv(n.texture_array_base_loc, cache_size, units.data());
         } else {
             for (int i = 0; i < static_cast<int>(n.texture_array_loc.size()); ++i) {
                 if (n.texture_array_loc[i] != -1)
                     glUniform1i(n.texture_array_loc[i], i + 1);
             }
         }
-        for (int i = 0; i < 8 && i < cache_size_; ++i) {
+        for (int i = 0; i < 8 && i < cache_size; ++i) {
             if (n.texture_cache_loc[i] != -1)
                 glUniform1i(n.texture_cache_loc[i], i + 1);
         }
@@ -4797,7 +4828,13 @@ class ShaderLibrary {
 #ifdef AUDIO_ENABLED
             if (time_audio) {
                 float dt_scalex = audio_delta ? static_cast<float>(delta_time) : 1.0f;
-                float new_ampx = ((get_amp() * get_sense()) * (time_speed * dt_scalex));
+                const auto audio_metrics = audio_analyzer != nullptr
+                                               ? audio_analyzer->metrics()
+                                               : acmx2::audio::AudioMetrics{};
+                const float audio_sensitivity =
+                    audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
+                float new_ampx =
+                    audio_metrics.amplitude * audio_sensitivity * time_speed * dt_scalex;
                 time_f += new_ampx;
             }
 #endif
@@ -4853,31 +4890,31 @@ class ShaderLibrary {
         GLint iMouseClickLoc = names[index()].iMouseClick;
 
         int mouseX = 0, mouseY = 0;
-	Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
-	float currentY = static_cast<float>(win->h - mouseY);
-	float currentX = static_cast<float>(mouseX);
-	if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-	    if (!isDraggingLeft) {
-		clickStartX = currentX;
-		clickStartY = currentY;
-		lastClickX = currentX;
-		lastClickY = currentY;
-		isDraggingLeft = true;
-		wasClicked = true;
-	    }   
-	} else {
-	    isDraggingLeft = false;
-	}
-	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-	    if (!isDraggingRight) {
-		isDraggingRight = true;
-	    }   
-	} else {
-	    isDraggingRight = false;
-	}
-	float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
-	float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
-	glUniform4f(iMouseLoc, currentX, currentY, leftClickFlag, rightClickFlag);
+        Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
+        float currentY = static_cast<float>(win->h - mouseY);
+        float currentX = static_cast<float>(mouseX);
+        if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+            if (!isDraggingLeft) {
+                clickStartX = currentX;
+                clickStartY = currentY;
+                lastClickX = currentX;
+                lastClickY = currentY;
+                isDraggingLeft = true;
+                wasClicked = true;
+            }
+        } else {
+            isDraggingLeft = false;
+        }
+        if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+            if (!isDraggingRight) {
+                isDraggingRight = true;
+            }
+        } else {
+            isDraggingRight = false;
+        }
+        float leftClickFlag = isDraggingLeft ? 1.0f : 0.0f;
+        float rightClickFlag = isDraggingRight ? 1.0f : 0.0f;
+        glUniform4f(iMouseLoc, currentX, currentY, leftClickFlag, rightClickFlag);
 
         if (wasClicked && iMouseClickLoc != -1) {
             glUniform2f(iMouseClickLoc, lastClickX, lastClickY);
@@ -4893,45 +4930,54 @@ class ShaderLibrary {
         uploadAcidCamUniforms(names[index()], index());
 
 #ifdef AUDIO_ENABLED
+        const auto audio_metrics = audio_analyzer != nullptr
+                                       ? audio_analyzer->metrics()
+                                       : acmx2::audio::AudioMetrics{};
+        const float audio_sensitivity =
+            audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
         GLuint amp_i = names[index()].amp;
         float amplitude = 1.0f;
         float dt_scale = audio_delta ? static_cast<float>(delta_time) : 1.0f;
-        float new_amp = (get_amp() * get_sense()) * (time_speed * dt_scale);
+        float new_amp =
+            audio_metrics.amplitude * audio_sensitivity * time_speed * dt_scale;
         if (std::isnan(new_amp) || std::isinf(new_amp) || new_amp > 1e6f) {
             amplitude = 1.0f;
         } else {
             amplitude = new_amp;
         }
-        glUniform1f(amp_i, amplitude * audio_warmup_envelope_);
+        glUniform1f(amp_i, amplitude * audio_warmup_envelope);
         GLuint amp_u = names[index()].amp_untouched;
-        glUniform1f(amp_u, get_amp());
+        glUniform1f(amp_u, audio_metrics.amplitude);
         GLint iSampleRateLoc = names[index()].iSampleRate;
         if (iSampleRateLoc != -1) {
-            glUniform1f(iSampleRateLoc, 44100.0f);
+            const float sample_rate = audio_analyzer != nullptr
+                                          ? static_cast<float>(audio_analyzer->sample_rate())
+                                          : 44100.0f;
+            glUniform1f(iSampleRateLoc, sample_rate);
         }
         if (names[index()].iamp != -1) {
-            glUniform1f(names[index()].iamp, get_freq());
+            glUniform1f(names[index()].iamp, audio_metrics.frequency);
         }
         {
-            float sense = get_sense() * 4.0f * audio_warmup_envelope_;
+            float sense = audio_sensitivity * 4.0f * audio_warmup_envelope;
             auto &n = names[index()];
             if (n.amp_peak != -1) {
-                glUniform1f(n.amp_peak, std::sqrt(get_amp_peak()) * sense);
+                glUniform1f(n.amp_peak, std::sqrt(audio_metrics.peak) * sense);
             }
             if (n.amp_rms != -1) {
-                glUniform1f(n.amp_rms, std::sqrt(get_amp_rms()) * sense);
+                glUniform1f(n.amp_rms, std::sqrt(audio_metrics.rms) * sense);
             }
             if (n.amp_smooth != -1) {
-                glUniform1f(n.amp_smooth, std::sqrt(get_amp_smooth()) * sense);
+                glUniform1f(n.amp_smooth, std::sqrt(audio_metrics.smooth) * sense);
             }
             if (n.amp_low != -1) {
-                glUniform1f(n.amp_low, std::sqrt(get_amp_low()) * sense);
+                glUniform1f(n.amp_low, std::sqrt(audio_metrics.low) * sense);
             }
             if (n.amp_mid != -1) {
-                glUniform1f(n.amp_mid, std::sqrt(get_amp_mid()) * sense);
+                glUniform1f(n.amp_mid, std::sqrt(audio_metrics.mid) * sense);
             }
             if (n.amp_high != -1) {
-                glUniform1f(n.amp_high, std::sqrt(get_amp_high()) * sense);
+                glUniform1f(n.amp_high, std::sqrt(audio_metrics.high) * sense);
             }
         }
         if (names[index()].spectrum_loc != -1) {
@@ -5088,7 +5134,7 @@ class ShaderLibrary {
     /**
      * @brief Enable or disable audio-reactive time advancement.
      *
-     * When enabled, time_f is driven by `get_amp() * get_sense()`
+     * When enabled, time_f is driven by analyzer amplitude and sensitivity
      * instead of wall-clock delta, making the shader evolve in
      * sync with the audio input.
      *
@@ -5116,8 +5162,12 @@ class ShaderLibrary {
 #ifdef AUDIO_ENABLED
     bool timeActive() const { return time_active; }
     bool timeAudio() const { return time_audio; }
-    float getAmp() const { return get_amp(); }
-    float getAmpUntouched() const { return get_sense(); }
+    float getAmp() const {
+        return audio_analyzer != nullptr ? audio_analyzer->metrics().amplitude : 0.0f;
+    }
+    float getAmpUntouched() const {
+        return audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
+    }
 #endif
     /// @brief Reserved for future SDL event handling inside the library.
     void event(SDL_Event &e) {}
@@ -5161,6 +5211,7 @@ struct MXArguments {
     bool is3d = false;
 #ifdef AUDIO_ENABLED
     bool audio_enabled = false;
+    bool audio_pass_through = false;
     unsigned int audio_channels = 2;
     float audio_sensitivty = 0.25f;
     float audio_warm_rate = 0.5f; ///< Startup warmup envelope rate (1/sec). 0.5 ~= 2s to full strength.
@@ -5302,8 +5353,8 @@ struct FrameData {
  *  │     writer.write_ts()           │
  *  │                                 │
  *  │  writerRunning  atomic<bool>    │
- *  │  written_frame_counter          │
- *  │  (skips first N warmup frames)  │
+ *  │  Starts only after the first    │
+ *  │  valid source frame is ready    │
  *  └────────┬────────────────────────┘
  *           │
  *           │  (on shutdown, if audio was recorded)
@@ -5344,11 +5395,12 @@ class ACView : public gl::GLObject {
     int audio_input_device;
     int audio_output_device;
     std::string audio_record_file;
-    SpectrumTexture spectrumTex;        ///< 1D texture holding the FFT magnitude spectrum for shaders.
-    SpectrumHistory spectrumHistory;    ///< Ring of `spectrumN` 1D textures (history buffer; --enable-audio-buffers).
-    int audio_buffer_count = 0;         ///< Number of history frames retained for `spectrumN` (0 = disabled).
-    float audio_warmup_envelope = 0.0f; ///< Startup fade for audio-driven uniforms/textures.
-    float audio_warmup_rate = 0.5f;     ///< Warmup envelope slope in 1/sec (higher = faster ramp).
+    acmx2::audio::AudioEngine audio_engine;
+    SpectrumTexture spectrumTex{audio_engine.analyzer()};     ///< 1D FFT magnitude texture for shaders.
+    SpectrumHistory spectrumHistory{audio_engine.analyzer()}; ///< Ring of spectrum history textures.
+    int audio_buffer_count = 0;                               ///< Number of history frames retained for `spectrumN` (0 = disabled).
+    float audio_warmup_envelope = 0.0f;                       ///< Startup fade for audio-driven uniforms/textures.
+    float audio_warmup_rate = 0.5f;                           ///< Warmup envelope slope in 1/sec (higher = faster ramp).
     std::chrono::steady_clock::time_point audio_warmup_last_tick = std::chrono::steady_clock::now();
     bool spectrum_scale_by_sense = false; ///< When true, scale spectrum 1D buffer by audio sensitivity.
     bool file_audio_mode = false;         ///< True when audio comes from a file instead of RtAudio.
@@ -6372,7 +6424,15 @@ class ACView : public gl::GLObject {
                 file_audio_mode = true;
                 audio_file_path = args.audio_file;
                 audio_trunc_mode = args.audio_trunc;
-                set_sense(args.audio_sensitivty);
+                audio_engine.analyzer().reset();
+                audio_engine.analyzer().set_sample_rate(44100);
+                audio_engine.analyzer().set_sensitivity(args.audio_sensitivty);
+                if (args.audio_pass_through &&
+                    !file_audio_enable_output(audio_output_device)) {
+                    mx::system_err
+                        << "acmx2: File audio playback could not be opened; "
+                           "continuing with visual reactivity only\n";
+                }
                 resetAudioWarmupEnvelope();
                 spectrumTex.init();
                 audio_buffer_count = std::min(std::max(args.audio_buffers, 0),
@@ -6383,7 +6443,8 @@ class ACView : public gl::GLObject {
                 }
                 mx::system_out << "acmx2: File audio enabled from: " << args.audio_file << "\n";
                 mx::system_out << "acmx2: FFT spectrum texture initialised ("
-                               << get_fft_bin_count() << " bins on GL_TEXTURE"
+                               << acmx2::audio::AudioAnalyzer::spectrum_bin_count()
+                               << " bins on GL_TEXTURE"
                                << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
                 if (audio_buffer_count > 0) {
                     mx::system_out << "acmx2: Audio history buffers enabled ("
@@ -6397,11 +6458,18 @@ class ACView : public gl::GLObject {
                 mx::system_err << "acmx2: Error could not open audio file: " << args.audio_file << "\n";
             }
         } else if (args.audio_enabled) {
-            if (init_audio(args.audio_channels, args.audio_sensitivty, audio_input_device, audio_output_device) != 0) {
-                mx::system_err << "acmx2: Error could not initalize audio\n";
+            const acmx2::audio::AudioStreamConfig audio_config{
+                args.audio_channels,
+                args.audio_sensitivty,
+                audio_input_device,
+                audio_output_device,
+                args.audio_pass_through,
+            };
+            if (!audio_engine.open(audio_config)) {
+                mx::system_err << "acmx2: Error could not initialize audio\n";
             } else {
                 audio_is_enabled = true;
-                set_record_gain(args.record_gain);
+                audio_engine.recorder().set_gain(args.record_gain);
                 resetAudioWarmupEnvelope();
                 spectrumTex.init();
                 audio_buffer_count = std::min(std::max(args.audio_buffers, 0),
@@ -6411,7 +6479,8 @@ class ACView : public gl::GLObject {
                     library.setAudioBufferCount(audio_buffer_count);
                 }
                 mx::system_out << "acmx2: FFT spectrum texture initialised ("
-                               << get_fft_bin_count() << " bins on GL_TEXTURE"
+                               << acmx2::audio::AudioAnalyzer::spectrum_bin_count()
+                               << " bins on GL_TEXTURE"
                                << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
                 if (audio_buffer_count > 0) {
                     mx::system_out << "acmx2: Audio history buffers enabled ("
@@ -6536,9 +6605,9 @@ class ACView : public gl::GLObject {
         }
 #endif
 #if defined(__linux__) || defined(__APPLE__)
-    if (args.interface_shm) {
-        initShaderSelectionSharedMemory();
-    }
+        if (args.interface_shm) {
+            initShaderSelectionSharedMemory();
+        }
 #endif
     }
 
@@ -7243,13 +7312,12 @@ class ACView : public gl::GLObject {
 
 #ifdef AUDIO_ENABLED
         if (audio_is_enabled) {
-            if (is_audio_recording()) {
-                stop_audio_recording();
-            }
+            if (audio_engine.recorder().is_recording())
+                audio_engine.recorder().stop();
             if (file_audio_mode)
                 file_audio_close();
             else
-                close_audio();
+                audio_engine.close();
             spectrumTex.cleanup();
             spectrumHistory.cleanup();
         }
@@ -7262,7 +7330,7 @@ class ACView : public gl::GLObject {
                 recordCudaPboResources[i] = nullptr;
             }
 #else
-        static_cast<void>(i);
+            static_cast<void>(i);
 #endif
         }
 
@@ -7418,11 +7486,6 @@ class ACView : public gl::GLObject {
                                    << " codec: " << encode_opts.codec
                                    << (encode_opts.realtime ? " [realtime]" : "")
                                    << " FPS: " << fps << "\n";
-#ifdef AUDIO_ENABLED
-                    if (!png_video_mode) {
-                        startAudioRecordingIfNeeded();
-                    }
-#endif
                     mx::system_out << "acmx2: Pipeline mode => decode: graphic/image, encode: "
                                    << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
 
@@ -7492,9 +7555,6 @@ class ACView : public gl::GLObject {
                                    << " codec: " << cam_opts.codec
                                    << " [realtime]"
                                    << " FPS: " << fps << "\n";
-#ifdef AUDIO_ENABLED
-                    startAudioRecordingIfNeeded();
-#endif
                     mx::system_out << "acmx2: Pipeline mode => decode: camera, encode: "
                                    << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
                 } else {
@@ -7673,9 +7733,6 @@ class ACView : public gl::GLObject {
                                            << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
                                            << " ***\n";
                         }
-#ifdef AUDIO_ENABLED
-                        startAudioRecordingIfNeeded();
-#endif
                         mx::system_out << "acmx2: Pipeline mode => decode: " << decode_mode
                                        << ", encode: "
                                        << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
@@ -8068,7 +8125,7 @@ class ACView : public gl::GLObject {
 #endif
 
 #if defined(__linux__) || defined(__APPLE__)
-    syncShaderSelectionFromInterface(win);
+        syncShaderSelectionFromInterface(win);
 #endif
 
         if (isMuxing.load()) {
@@ -8103,8 +8160,7 @@ class ACView : public gl::GLObject {
             return;
         }
 
-        if (duration_limit > 0.0 && writer.is_open() && writerRunning) {
-            // auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - captureStartTime).count();
+        if (duration_limit > 0.0 && media_timeline_started && writer.is_open() && writerRunning) {
             frames_proc++;
             if (fps != 0) {
                 double time_passed = static_cast<double>(frames_proc) / fps;
@@ -8140,15 +8196,18 @@ class ACView : public gl::GLObject {
             return;
         }
 
+        bool received_source_frame = false;
         if (!isPaused && !isFrozen) {
             if (!graphic.empty()) {
                 newFrame = graphic_frame.clone();
                 cv::flip(newFrame, newFrame, 0);
+                received_source_frame = !newFrame.empty();
             } else if (filename.empty()) {
                 std::unique_lock<std::mutex> lock(captureQueueMutex);
                 if (!captureQueue.empty()) {
                     newFrame = std::move(captureQueue.front());
                     captureQueue.pop();
+                    received_source_frame = !newFrame.empty();
                 }
             } else {
                 bool read_ok = false;
@@ -8197,6 +8256,7 @@ class ACView : public gl::GLObject {
                     return;
                 }
 
+                received_source_frame = input_is_hdr ? !hdr_frame_mat.empty() : !newFrame.empty();
                 if (!newFrame.empty())
                     cv::flip(newFrame, newFrame, 0);
                 // HDR path: leave @c hdr_frame_mat top-down. The SDR path
@@ -8460,42 +8520,45 @@ class ACView : public gl::GLObject {
                 }
             }
         }
-        // Decrement warmup counter each frame (after cache check)
-        if (cache_warmup_frames > 0) {
+        if (received_source_frame) {
+            source_frame_ready = true;
+            startMediaTimelineIfReady();
+        }
+
+        // Count cache warmup in real source frames, not loading-screen draws.
+        if (cache_warmup_frames > 0 && received_source_frame) {
             cache_warmup_frames--;
         }
         glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
         glViewport(0, 0, win->w, win->h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (!isFrozen && !library.isBypassed()) {
-            library.useProgram();
 #ifdef AUDIO_ENABLED
-            if (audio_is_enabled) {
-                float audio_warmup = updateAudioWarmupEnvelope();
-                library.setAudioWarmupEnvelope(audio_warmup);
-                // Only process audio frames after the post-load warmup period to maintain A/V sync
-                if (cache_warmup_frames <= 0) {
-                    if (file_audio_mode) {
-                        file_audio_process_frame(fps);
-                        if (audio_trunc_mode && !file_audio_is_active()) {
-                            mx::system_out << "acmx2: Audio file finished, stopping (--audio-trunc).\n";
-                            fflush(stdout);
-                            running = false;
-                        }
-                    }
-                    float spectrum_scale = spectrum_scale_by_sense
-                                               ? (get_sense() * audio_warmup)
-                                               : audio_warmup;
-                    spectrumTex.update(spectrum_scale);
-                    spectrumTex.bind();
-                    if (audio_buffer_count > 0) {
-                        spectrumHistory.update(spectrum_scale);
-                        spectrumHistory.bindAll();
-                    }
+        if (!isFrozen && audio_is_enabled && media_timeline_started) {
+            float audio_warmup = updateAudioWarmupEnvelope();
+            library.setAudioWarmupEnvelope(audio_warmup);
+            if (file_audio_mode) {
+                file_audio_process_frame(fps, audio_engine.analyzer());
+                if (audio_trunc_mode && !file_audio_is_active()) {
+                    mx::system_out << "acmx2: Audio file finished, stopping (--audio-trunc).\n";
+                    fflush(stdout);
+                    running = false;
                 }
             }
+            float spectrum_scale = spectrum_scale_by_sense
+                                       ? (audio_engine.analyzer().sensitivity() * audio_warmup)
+                                       : audio_warmup;
+            spectrumTex.update(spectrum_scale);
+            spectrumTex.bind();
+            if (audio_buffer_count > 0) {
+                spectrumHistory.update(spectrum_scale);
+                spectrumHistory.bindAll();
+            }
+        }
 #endif
+
+        if (!isFrozen && !library.isBypassed()) {
+            library.useProgram();
             library.update(win);
             library.setFPS(static_cast<float>(fps));
         }
@@ -9042,7 +9105,10 @@ class ACView : public gl::GLObject {
             glDisable(GL_BLEND);
         }
 
-        bool needWriter = (((writer.is_open() || png_video_mode || generate_mode) && cache_warmup_frames <= 0) || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
+        bool needWriter = (((writer.is_open() || png_video_mode || generate_mode) && media_timeline_started) ||
+                           snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 ||
+                           tiff_snapshot_state > 0) &&
+                          !isFrozen;
 
         bool has_snapshot_request = (snapshot_state > 0);
         bool has_hdr_snapshot_request = (hdr_snapshot_state > 0);
@@ -9189,12 +9255,20 @@ class ACView : public gl::GLObject {
                 bool is_webp_snapshot_frame = (hdr_snapshot_state == 2);
                 bool is_raw_snapshot_frame = (raw_snapshot_state == 2);
                 bool is_tiff_snapshot_frame = (tiff_snapshot_state == 2);
+                const bool has_normal_output =
+                    media_timeline_started && (writer.is_open() || png_video_mode || generate_mode);
+                const bool previous_recording_frame_ready = recording_pbo_primed;
 
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
                 glBindTexture(GL_TEXTURE_2D, fboTexture);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-                if (writer.is_open() || png_video_mode || generate_mode || is_snapshot_frame || is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
+                if (has_normal_output) {
+                    recording_pbo_primed = true;
+                }
+
+                if ((has_normal_output && previous_recording_frame_ready) || is_snapshot_frame ||
+                    is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
                     bool used_zero_copy = false;
 
 #ifdef ACMX2_WITH_CUDA
@@ -10063,19 +10137,19 @@ class ACView : public gl::GLObject {
                 break;
 #ifdef AUDIO_ENABLED
             case SDLK_INSERT: {
-                float s = get_sense() + 0.1f;
+                float s = audio_engine.analyzer().sensitivity() + 0.1f;
                 if (s > 5.0f)
                     s = 5.0f;
-                set_sense(s);
+                audio_engine.analyzer().set_sensitivity(s);
                 mx::system_out << "acmx2: Audio sensitivity increased to " << s << "\n";
                 fflush(stdout);
                 break;
             }
             case SDLK_DELETE: {
-                float s = get_sense() - 0.1f;
+                float s = audio_engine.analyzer().sensitivity() - 0.1f;
                 if (s < 0.1f)
                     s = 0.1f;
-                set_sense(s);
+                audio_engine.analyzer().set_sensitivity(s);
                 mx::system_out << "acmx2: Audio sensitivity decreased to " << s << "\n";
                 fflush(stdout);
                 break;
@@ -10118,7 +10192,6 @@ class ACView : public gl::GLObject {
 
   private:
     unsigned int frame_counter = 0;
-    unsigned int written_frame_counter = 0;
     std::string crf = "23";
     EncodeOptions encode_opts{};
     std::string prefix_path;
@@ -10126,7 +10199,11 @@ class ACView : public gl::GLObject {
     int camera_index = 0;
     std::tuple<int, std::string, int> flib;
     std::optional<cv::Size> sizev, sizec;
+#ifdef AUDIO_ENABLED
+    ShaderLibrary library{&audio_engine.analyzer()};
+#else
     ShaderLibrary library;
+#endif
     Writer writer;
     double fps = 30;
     bool repeat = false;
@@ -10191,11 +10268,13 @@ class ACView : public gl::GLObject {
     std::mutex captureQueueMutex;
     std::condition_variable captureQueueCondVar;
     std::chrono::steady_clock::time_point lastFrameTime = std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point captureStartTime;
     FrameCache frame_cache;
     bool texture_cache = false;
     int cache_delay = 1;
     int cache_warmup_frames = 0; // Frames to skip before pushing into cache after load
+    bool source_frame_ready = false;
+    bool media_timeline_started = false;
+    bool recording_pbo_primed = false;
     std::atomic<bool> finished{false};
     std::atomic<bool> copy_audio{false};
     std::atomic<bool> skip_audio_mux_on_exit{false};
@@ -10541,15 +10620,9 @@ class ACView : public gl::GLObject {
      * - Passes video frames to `writer.write()` (file/image mode) or
      *   `writer.write_ts()` (camera mode) for H.264 encoding via FFmpeg.
      *
-     * The first 1 frame (file mode) or 30 frames (camera mode) are
-     * discarded as warmup to avoid capturing startup artefacts.
-     *
      * The thread blocks on `queueCondVar` when the queue is empty.
      * It exits when `writerRunning` is set to false and the queue is
      * drained.
-     *
-     * Audio recording (if enabled) is started on the first frame
-     * after warmup, keeping audio and video synchronised.
      *
      * @see stopWriterThread()
      */
@@ -10557,11 +10630,8 @@ class ACView : public gl::GLObject {
         if (writerThread.joinable())
             return;
         writerRunning = true;
-        written_frame_counter = 0;
         writerThread = std::thread([this]() {
             try {
-                captureStartTime = std::chrono::steady_clock::now();
-
                 // Drain queued frames before exiting. shutdown paths set
                 // writerRunning=false first, then notify; if we only loop on
                 // writerRunning we can leave tail frames unwritten.
@@ -10697,17 +10767,6 @@ class ACView : public gl::GLObject {
                         });
                     }
 #endif
-                    if ((writer.is_open() || png_video_mode) && (!filename.empty() || !graphic.empty()) && written_frame_counter == 0) {
-                        written_frame_counter++;
-                        continue;
-                    } else if (writer.is_open() && written_frame_counter <= 30 && filename.empty() && graphic.empty()) {
-                        written_frame_counter++;
-                        continue;
-                    }
-#ifdef AUDIO_ENABLED
-                    startAudioRecordingIfNeeded();
-#endif
-
                     if ((writer.is_open() || png_video_mode) && !fd.isSnapshot && !fd.isTiffSnapshot) {
                         if (png_video_mode) {
                             uint64_t frame_index = png_video_frame_counter.fetch_add(1);
@@ -10759,18 +10818,43 @@ class ACView : public gl::GLObject {
     /**
      * @brief Start WAV audio capture if recording is configured and not already active.
      *
-     * Used from both writer startup and writer loop paths to ensure
-     * `--record-audio` is activated reliably for file, image, and
-     * camera recording modes.
+     * Called when the first valid source frame starts the shared media
+     * timeline so captured audio and encoded video have the same origin.
      */
     void startAudioRecordingIfNeeded() {
 #ifdef AUDIO_ENABLED
-        if (audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !is_audio_recording()) {
-            if (!start_audio_recording(audio_record_file)) {
+        auto &recorder = audio_engine.recorder();
+        if (audio_is_enabled && !file_audio_mode && !audio_record_file.empty() &&
+            !recorder.is_recording()) {
+            if (!recorder.start(audio_record_file,
+                                audio_engine.analyzer().sample_rate(),
+                                audio_engine.input_channels())) {
                 mx::system_err << "acmx2: Error could not start audio recording to: " << audio_record_file << "\n";
             }
         }
 #endif
+    }
+
+    /**
+     * @brief Start playback and recording timing on the first valid source frame.
+     *
+     * Writer setup, shader compilation, and camera startup can all render
+     * before an input frame exists. This one-shot gate prevents those draws
+     * from advancing file audio or entering the video writer.
+     */
+    void startMediaTimelineIfReady() {
+        if (media_timeline_started || !source_frame_ready) {
+            return;
+        }
+
+        media_timeline_started = true;
+        frames_proc = 0;
+#ifdef AUDIO_ENABLED
+        resetAudioWarmupEnvelope();
+        startAudioRecordingIfNeeded();
+#endif
+        mx::system_out << "acmx2: Media timeline started on first source frame\n";
+        fflush(stdout);
     }
 
     /**
@@ -10783,7 +10867,7 @@ class ACView : public gl::GLObject {
     bool needsMux() {
 #ifdef AUDIO_ENABLED
         return audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !ofilename.empty() &&
-               (is_audio_recording() || std::filesystem::exists(audio_record_file));
+               (audio_engine.recorder().is_recording() || std::filesystem::exists(audio_record_file));
 #else
         return false;
 #endif
@@ -10824,14 +10908,14 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
         if (!audio_is_enabled || audio_record_file.empty() || ofilename.empty())
             return;
-        if (!is_audio_recording() && !std::filesystem::exists(audio_record_file)) {
+        auto &recorder = audio_engine.recorder();
+        if (!recorder.is_recording() && !std::filesystem::exists(audio_record_file)) {
             mx::system_out << "acmx2: recorded audio file not found, skipping recorded-audio mux: " << audio_record_file << "\n";
             fflush(stdout);
             return;
         }
-        if (is_audio_recording()) {
-            stop_audio_recording();
-        }
+        if (recorder.is_recording())
+            recorder.stop();
         std::string out_ext = std::filesystem::path(ofilename).extension().string();
         if (out_ext.empty())
             out_ext = ".mp4";
@@ -10854,7 +10938,7 @@ class ACView : public gl::GLObject {
         // an input option to ffmpeg rescales the video container PTS to
         // match audio without re-encoding.  Clamped to a sane range so
         // a corrupt or zero-length WAV never produces a wild scale.
-        const double audio_duration = get_audio_recorded_duration_seconds();
+        const double audio_duration = recorder.duration_seconds();
         double itsscale = 1.0;
         if (video_duration > 0.0 && audio_duration > 0.0) {
             const double s = audio_duration / video_duration;
@@ -11002,7 +11086,7 @@ class ACView : public gl::GLObject {
             const bool shouldTransferAudio = !png_video_mode && !filename.empty() && !repeat && copy_audio;
 #ifdef AUDIO_ENABLED
             const bool shouldRecordedMux = !png_video_mode && audio_is_enabled && !file_audio_mode && !audio_record_file.empty() &&
-                                           (is_audio_recording() || std::filesystem::exists(audio_record_file));
+                                           (audio_engine.recorder().is_recording() || std::filesystem::exists(audio_record_file));
             const bool shouldFileAudioMux = !png_video_mode && file_audio_mode && !audio_file_path.empty() && !audio_record_file.empty() && !ofilename.empty();
 #else
             const bool shouldRecordedMux = false;
@@ -11075,9 +11159,8 @@ class ACView : public gl::GLObject {
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
 #ifdef AUDIO_ENABLED
-            if (audio_is_enabled && is_audio_recording()) {
-                stop_audio_recording();
-            }
+            if (audio_is_enabled && audio_engine.recorder().is_recording())
+                audio_engine.recorder().stop();
 #endif
             fflush(stdout);
             fflush(stderr);
@@ -11330,7 +11413,7 @@ namespace {
         printSection(out, c, "Recording And Encoding", {{"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"}, {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"}, {"--generate <N>", "Save a PNG frame every N frames to an output subdirectory (video or camera mode).", "acmx2 -i in.mp4 --generate 30"}, {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"}, {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"}, {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"}, {"--encode-preset <name>", "Encoder speed/quality preset (ultrafast .. veryslow).", "acmx2 --encode-preset fast"}, {"--encode-tune <name>", "Tune encoder for content type or low latency.", "acmx2 --encode-tune film"}, {"--encode-crf <0-51>", "Set encoder quality directly (lower = better quality/larger file).", "acmx2 --encode-crf 18"}, {"--encode-codec <mode>", "Codec backend: auto, software, or nvenc.", "acmx2 --encode-codec nvenc"}, {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"}, {"--no-drop", "Never drop frames; block producer when encoder queue is full.", "acmx2 --no-drop"}, {"--display-filter", "Show current shader/stack and GPU filter in upper-left corner.", "acmx2 --display-filter"}, {"--use-watermark <text>", "Enable watermark with given text in recorded videos (upper-left).", "acmx2 --use-watermark \"My Channel\""}, {"--use-watermark-color <r,g,b>", "Watermark text color as 0-255 components.", "acmx2 --use-watermark-color 255,255,0"}, {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"}, {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}});
 
 #ifdef AUDIO_ENABLED
-        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Pass captured input audio directly to selected output device.", "acmx2 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select output audio device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--enable-audio-buffers <N>", "Allocate N sampler1D spectrumN history textures (1..22, spectrum0=newest).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
+        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--enable-audio-buffers <N>", "Allocate N sampler1D spectrumN history textures (1..22, spectrum0=newest).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
 #endif
 
 #ifdef MIDI_ENABLED
@@ -11735,7 +11818,7 @@ int main(int argc, char **argv) {
                 break;
             case 'Y':
             case 'y':
-                set_output(true);
+                args.audio_pass_through = true;
                 break;
             case 300:
                 if (arg.arg_value == "default")
@@ -11750,7 +11833,7 @@ int main(int argc, char **argv) {
                     args.audio_output = atoi(arg.arg_value.c_str());
                 break;
             case 302:
-                list_audio_devices();
+                acmx2::audio::AudioEngine::list_devices();
                 exit(EXIT_SUCCESS);
                 break;
             case 303:

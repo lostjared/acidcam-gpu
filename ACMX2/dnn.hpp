@@ -23,7 +23,7 @@ namespace ac_dnn {
 
       private:
         struct Impl;
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> impl;
     };
 
     /// DexiNed edge detector.
@@ -39,7 +39,7 @@ namespace ac_dnn {
 
       private:
         struct Impl;
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> impl;
     };
 
     /// PP-HumanSeg foreground segmentation model.
@@ -59,7 +59,7 @@ namespace ac_dnn {
 
       private:
         struct Impl;
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> impl;
     };
 
     cv::Mat isolateBody(const cv::Mat &image, const cv::Mat &mask,
