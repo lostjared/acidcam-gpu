@@ -161,7 +161,11 @@ float get_amp_low() { return gLow; }
 float get_amp_mid() { return gMid; }
 float get_amp_high() { return gHigh; }
 
+#ifdef __linux__
 RtAudio audio(RtAudio::LINUX_PULSE);
+#else
+RtAudio audio;
+#endif
 
 void set_output(bool o) {
     output_buffer = o;
