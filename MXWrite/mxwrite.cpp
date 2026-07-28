@@ -1000,6 +1000,10 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
 }
 
 void Writer::write(void *rgba_buffer) {
+    write_at_pts(rgba_buffer, AV_NOPTS_VALUE);
+}
+
+void Writer::write_at_pts(void *rgba_buffer, int64_t pts) {
     if (!rgba_buffer) {
         return;
     }
@@ -1090,7 +1094,9 @@ void Writer::write(void *rgba_buffer) {
             releaseFrame(queued_frame);
             return;
         }
-        queued_frame->pts = frame_count++;
+        queued_frame->pts =
+            pts == AV_NOPTS_VALUE ? frame_count : std::max(frame_count, pts);
+        frame_count = queued_frame->pts + 1;
         encode_queue.push(queued_frame);
     }
 
@@ -1098,6 +1104,10 @@ void Writer::write(void *rgba_buffer) {
 }
 
 void Writer::write_hdr_rgba16(void *rgba16_buffer) {
+    write_hdr_rgba16_at_pts(rgba16_buffer, AV_NOPTS_VALUE);
+}
+
+void Writer::write_hdr_rgba16_at_pts(void *rgba16_buffer, int64_t pts) {
     if (!rgba16_buffer) {
         return;
     }
@@ -1175,7 +1185,9 @@ void Writer::write_hdr_rgba16(void *rgba16_buffer) {
             releaseFrame(queued_frame);
             return;
         }
-        queued_frame->pts = frame_count++;
+        queued_frame->pts =
+            pts == AV_NOPTS_VALUE ? frame_count : std::max(frame_count, pts);
+        frame_count = queued_frame->pts + 1;
         encode_queue.push(queued_frame);
     }
 
@@ -1183,6 +1195,13 @@ void Writer::write_hdr_rgba16(void *rgba16_buffer) {
 }
 
 bool Writer::write_cuda_rgba(void *cuda_rgba_buffer, int src_stride, [[maybe_unused]] bool bottom_up) {
+    return write_cuda_rgba_at_pts(cuda_rgba_buffer, src_stride, AV_NOPTS_VALUE,
+                                  bottom_up);
+}
+
+bool Writer::write_cuda_rgba_at_pts(void *cuda_rgba_buffer, int src_stride,
+                                    int64_t pts,
+                                    [[maybe_unused]] bool bottom_up) {
     if (!cuda_rgba_buffer || src_stride <= 0) {
         return false;
     }
@@ -1300,7 +1319,9 @@ bool Writer::write_cuda_rgba(void *cuda_rgba_buffer, int src_stride, [[maybe_unu
             queue_cv.notify_one();
             return true;
         }
-        queued_frame->pts = frame_count++;
+        queued_frame->pts =
+            pts == AV_NOPTS_VALUE ? frame_count : std::max(frame_count, pts);
+        frame_count = queued_frame->pts + 1;
         encode_queue.push(queued_frame);
     }
 

@@ -54,10 +54,27 @@ bool file_audio_open(const std::string &filepath);
 bool file_audio_enable_output(int output_device);
 
 /**
+ * @brief Check whether real-time output playback can provide the master clock.
+ *
+ * This remains true from output configuration until the decoded audio reaches
+ * its end. Before the stream starts, its timestamp is zero.
+ */
+bool file_audio_has_output_clock();
+
+/**
+ * @brief Return the current output-device playback timestamp in seconds.
+ *
+ * @return Playback position measured by the RtAudio callback, or 0 when no
+ *         output clock is available.
+ */
+double file_audio_playback_time();
+
+/**
  * @brief Advance playback by one video frame and update the audio analyzer.
  *
- * Consumes @c 44100/video_fps samples from the internal buffer and
- * forwards the decoded sample window to the shared AudioAnalyzer.
+ * Without output playback, advances by exactly one video-frame duration
+ * using a fractional sample accumulator. With output playback, analyzes the
+ * sample window at the output device's current timestamp.
  *
  * @param video_fps Video frame rate — determines how many audio samples
  *                  are consumed per call.

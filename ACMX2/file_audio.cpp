@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -33,6 +34,7 @@ static SwrContext *swrCtx = nullptr;
 static int audioStreamIndex = -1;
 static std::vector<float> decodedSamples; // all decoded mono float samples at 44100 Hz
 static size_t playbackPos = 0;
+static double framePlaybackPos = 0.0;
 static std::atomic<bool> fileAudioActive{false};
 
 namespace {
@@ -347,6 +349,7 @@ bool file_audio_open(const std::string &filepath) {
     }
 
     playbackPos = 0;
+    framePlaybackPos = 0.0;
     fileAudioActive = true;
 
     std::cout << "acmx2: file_audio: Loaded " << decodedSamples.size()
@@ -373,14 +376,22 @@ bool file_audio_enable_output(int output_device) {
     return true;
 }
 
+bool file_audio_has_output_clock() {
+    return fileAudioActive.load(std::memory_order_acquire) &&
+           fileAudioOutput != nullptr && fileAudioOutput->is_configured();
+}
+
+double file_audio_playback_time() {
+    if (!file_audio_has_output_clock())
+        return 0.0;
+    return static_cast<double>(fileAudioOutput->position()) /
+           static_cast<double>(FILE_AUDIO_SAMPLE_RATE);
+}
+
 /// @brief Advance one video-frame worth of samples and update audio analysis.
 void file_audio_process_frame(double video_fps, acmx2::audio::AudioAnalyzer &analyzer) {
     if (!fileAudioActive || decodedSamples.empty())
         return;
-
-    unsigned int samplesPerFrame = static_cast<unsigned int>(44100.0 / video_fps);
-    if (samplesPerFrame == 0)
-        samplesPerFrame = 512;
 
     const bool output_playback =
         fileAudioOutput != nullptr && fileAudioOutput->is_configured();
@@ -392,8 +403,24 @@ void file_audio_process_frame(double video_fps, acmx2::audio::AudioAnalyzer &ana
         return;
     }
 
-    unsigned int available = static_cast<unsigned int>(
-        std::min(static_cast<size_t>(samplesPerFrame), decodedSamples.size() - playbackPos));
+    const double samples_per_frame =
+        video_fps > 0.0
+            ? static_cast<double>(FILE_AUDIO_SAMPLE_RATE) / video_fps
+            : 512.0;
+    size_t next_playback_pos = playbackPos;
+    if (output_playback) {
+        next_playback_pos += std::max<size_t>(
+            1, static_cast<size_t>(std::floor(samples_per_frame)));
+    } else {
+        framePlaybackPos += samples_per_frame;
+        next_playback_pos = std::max(
+            playbackPos + 1,
+            static_cast<size_t>(std::floor(framePlaybackPos)));
+    }
+    next_playback_pos = std::min(next_playback_pos, decodedSamples.size());
+
+    unsigned int available =
+        static_cast<unsigned int>(next_playback_pos - playbackPos);
     const float *samples = decodedSamples.data() + playbackPos;
 
     analyzer.process_samples(samples, available, 1);
@@ -401,10 +428,11 @@ void file_audio_process_frame(double video_fps, acmx2::audio::AudioAnalyzer &ana
     if (output_playback) {
         if (!fileAudioOutput->is_started() && !fileAudioOutput->start()) {
             fileAudioOutput.reset();
-            playbackPos += available;
+            playbackPos = next_playback_pos;
+            framePlaybackPos = static_cast<double>(playbackPos);
         }
     } else {
-        playbackPos += available;
+        playbackPos = next_playback_pos;
     }
 }
 
@@ -426,4 +454,5 @@ void file_audio_close() {
     decodedSamples.clear();
     decodedSamples.shrink_to_fit();
     playbackPos = 0;
+    framePlaybackPos = 0.0;
 }

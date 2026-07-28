@@ -1074,6 +1074,60 @@ class FFMpegVideoReader {
         return true;
     }
 
+    /**
+     * @brief Decode and discard one frame without transferring or converting it.
+     *
+     * Used when an external playback clock has advanced beyond the next video
+     * timestamp. Hardware frames stay on the decoder device and software
+     * frames avoid swscale/OpenCV allocation entirely.
+     */
+    bool skip() {
+        if (!codec_ctx || !format_ctx) {
+            return false;
+        }
+
+        while (true) {
+            if (!draining) {
+                const int read_ret = av_read_frame(format_ctx, packet);
+                if (read_ret >= 0) {
+                    if (packet->stream_index == stream_index) {
+                        if (avcodec_send_packet(codec_ctx, packet) < 0) {
+                            av_packet_unref(packet);
+                            return false;
+                        }
+                    }
+                    av_packet_unref(packet);
+                } else if (!drain_packet_sent) {
+                    if (avcodec_send_packet(codec_ctx, nullptr) < 0) {
+                        return false;
+                    }
+                    drain_packet_sent = true;
+                    draining = true;
+                }
+            }
+
+            const int receive_ret =
+                avcodec_receive_frame(codec_ctx, decoded_frame);
+            if (receive_ret == AVERROR(EAGAIN)) {
+                if (draining) {
+                    return false;
+                }
+                continue;
+            }
+            if (receive_ret == AVERROR_EOF) {
+                return false;
+            }
+            if (receive_ret < 0) {
+                return false;
+            }
+
+            av_frame_unref(decoded_frame);
+            av_frame_unref(sw_frame);
+            ++current_frame;
+            return true;
+        }
+    }
+
     bool read(cv::Mat &out_bgr) {
         if (!codec_ctx || !format_ctx) {
             return false;
@@ -5285,6 +5339,8 @@ struct FrameData {
     bool isTiffSnapshot = false;       ///< True if this frame should be saved as a TIFF snapshot (16-bit HDR, 8-bit SDR).
     bool isHdr = false;                ///< True when @c pixels holds 16-bit PQ/HLG-encoded BT.2020 RGBA (8 bytes/pixel).
     int hdrTrc = 0;                    ///< AVColorTransferCharacteristic (PQ=16, HLG=18) when @c isHdr.
+    bool usesAudioClock = false;       ///< Frame timing follows real-time file-audio output.
+    uint64_t timelineFrame = 0;        ///< Audio-clock position expressed in nominal video frames.
 };
 
 /**
@@ -6055,6 +6111,8 @@ class ACView : public gl::GLObject {
 #endif
     int pboIndex = 0;
     int pboNextIndex = 1;
+    bool recording_pbo_uses_audio_clock[2] = {false, false};
+    uint64_t recording_pbo_timeline_frame[2] = {0, 0};
     SnapshotThreadPool snapshot_pool{2};
     TextureUploader tex_uploader;
 
@@ -6427,11 +6485,16 @@ class ACView : public gl::GLObject {
                 audio_engine.analyzer().reset();
                 audio_engine.analyzer().set_sample_rate(44100);
                 audio_engine.analyzer().set_sensitivity(args.audio_sensitivty);
-                if (args.audio_pass_through &&
-                    !file_audio_enable_output(audio_output_device)) {
-                    mx::system_err
-                        << "acmx2: File audio playback could not be opened; "
-                           "continuing with visual reactivity only\n";
+                if (args.audio_pass_through) {
+                    if (!file_audio_enable_output(audio_output_device)) {
+                        mx::system_err
+                            << "acmx2: File audio playback could not be opened; "
+                               "continuing with visual reactivity only\n";
+                    } else {
+                        mx::system_out
+                            << "acmx2: File audio output is the master clock; "
+                               "late video frames will be dropped\n";
+                    }
                 }
                 resetAudioWarmupEnvelope();
                 spectrumTex.init();
@@ -7712,7 +7775,9 @@ class ACView : public gl::GLObject {
                     mx::system_out << "acmx2: --png enabled: writing video frames to " << png_video_dir << "\n";
                 } else {
                     if (writer.open(ofilename, w, h, fps, encode_opts)) {
-                        if (silent_mode || no_drop_mode) {
+                        bool block_encoder_queue =
+                            silent_mode || no_drop_mode;
+                        if (block_encoder_queue) {
                             // Batch transcoding or --no-drop: block the producer
                             // when the encoder queue fills instead of dropping
                             // frames.
@@ -8106,8 +8171,15 @@ class ACView : public gl::GLObject {
      */
     virtual void draw(gl::GLWindow *win) override {
         // Skip FPS pacing in headless/silent batch mode so transcoding runs
-        // at full speed instead of being capped at the input's frame rate.
-        if (fps > 0.0 && !silent_mode) {
+        // at full speed. Real-time file-audio output is the exception: its
+        // hardware clock must pace video even when the window is hidden.
+        bool use_realtime_pacing = !silent_mode;
+#ifdef AUDIO_ENABLED
+        use_realtime_pacing =
+            use_realtime_pacing ||
+            (file_audio_mode && file_audio_has_output_clock());
+#endif
+        if (fps > 0.0 && use_realtime_pacing) {
             auto now = std::chrono::steady_clock::now();
             auto frame_duration = std::chrono::microseconds(static_cast<long long>(1000000.0 / fps));
             if (now > lastFrameTime + (frame_duration * 4)) {
@@ -8161,15 +8233,22 @@ class ACView : public gl::GLObject {
         }
 
         if (duration_limit > 0.0 && media_timeline_started && writer.is_open() && writerRunning) {
-            frames_proc++;
-            if (fps != 0) {
-                double time_passed = static_cast<double>(frames_proc) / fps;
-                // if (elapsed >= duration_limit) {
-                if (time_passed >= duration_limit) {
-                    mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
-                    fflush(stdout);
-                    running = false;
-                }
+            double time_passed = 0.0;
+            bool has_media_clock = false;
+#ifdef AUDIO_ENABLED
+            if (file_audio_mode && file_audio_has_output_clock()) {
+                time_passed = file_audio_playback_time();
+                has_media_clock = true;
+            }
+#endif
+            if (!has_media_clock && fps > 0.0) {
+                frames_proc++;
+                time_passed = static_cast<double>(frames_proc) / fps;
+            }
+            if (time_passed >= duration_limit) {
+                mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
+                fflush(stdout);
+                running = false;
             }
         }
 
@@ -8197,6 +8276,10 @@ class ACView : public gl::GLObject {
         }
 
         bool received_source_frame = false;
+        bool file_audio_clock_controls_video = false;
+        bool source_frame_uses_audio_clock = false;
+        uint64_t source_timeline_frame = 0;
+        bool stop_after_recording_drain = false;
         if (!isPaused && !isFrozen) {
             if (!graphic.empty()) {
                 newFrame = graphic_frame.clone();
@@ -8210,55 +8293,117 @@ class ACView : public gl::GLObject {
                     received_source_frame = !newFrame.empty();
                 }
             } else {
-                bool read_ok = false;
-                if (use_ffmpeg_reader) {
-                    if (input_is_hdr) {
-                        read_ok = ffmpeg_reader.readHdr(hdr_frame_mat);
-                        if (!read_ok && !filename.empty() && repeat) {
-                            mx::system_out << "acmx2: video loop...\n";
-                            if (ffmpeg_reader.seekStart()) {
-                                read_ok = ffmpeg_reader.readHdr(hdr_frame_mat);
+                bool audio_clock_available = false;
+                double audio_clock_time = 0.0;
+#ifdef AUDIO_ENABLED
+                audio_clock_available = file_audio_mode && file_audio_has_output_clock();
+                file_audio_clock_controls_video = audio_clock_available;
+                if (audio_clock_available) {
+                    audio_clock_time = file_audio_playback_time();
+                }
+#endif
+
+                uint64_t target_frame = decoded_video_frame_count;
+                if (audio_clock_available && media_timeline_started && fps > 0.0) {
+                    target_frame = static_cast<uint64_t>(
+                        std::floor(std::max(0.0, audio_clock_time) * fps));
+                }
+
+                const bool frame_due =
+                    !audio_clock_available || !media_timeline_started ||
+                    target_frame >= decoded_video_frame_count;
+                if (frame_due) {
+                    const uint64_t frames_to_decode =
+                        audio_clock_available && media_timeline_started
+                            ? target_frame - decoded_video_frame_count + 1
+                            : 1;
+                    bool read_ok = false;
+                    bool decoded_any_frame = false;
+
+                    auto read_next_frame = [&](bool discard) {
+                        bool ok = false;
+                        if (use_ffmpeg_reader) {
+                            ok = discard
+                                     ? ffmpeg_reader.skip()
+                                 : input_is_hdr
+                                     ? ffmpeg_reader.readHdr(hdr_frame_mat)
+                                     : ffmpeg_reader.read(newFrame);
+                            if (!ok && repeat) {
+                                mx::system_out << "acmx2: video loop...\n";
+                                if (ffmpeg_reader.seekStart()) {
+                                    ok = discard
+                                             ? ffmpeg_reader.skip()
+                                         : input_is_hdr
+                                             ? ffmpeg_reader.readHdr(hdr_frame_mat)
+                                             : ffmpeg_reader.read(newFrame);
+                                }
                             }
-                            if (!read_ok) {
-                                mx::system_out << "acmx2: cannot read after looping.\n";
+                        } else {
+                            ok = discard ? cap.grab() : cap.read(newFrame);
+                            if (!ok && repeat) {
+                                mx::system_out << "acmx2: video loop...\n";
+                                cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                                ok = discard ? cap.grab()
+                                             : cap.read(newFrame);
                             }
                         }
-                    } else {
-                        read_ok = ffmpeg_reader.read(newFrame);
-                        if (!read_ok && !filename.empty() && repeat) {
-                            mx::system_out << "acmx2: video loop...\n";
-                            if (ffmpeg_reader.seekStart()) {
-                                read_ok = ffmpeg_reader.read(newFrame);
-                            }
-                            if (!read_ok) {
-                                mx::system_out << "acmx2: cannot read after looping.\n";
-                            }
+                        if (ok) {
+                            decoded_video_frame_count++;
                         }
-                    }
-                } else {
-                    read_ok = cap.read(newFrame);
-                    if (!read_ok && !filename.empty() && repeat) {
-                        mx::system_out << "acmx2: video loop...\n";
-                        cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-                        read_ok = cap.read(newFrame);
+                        return ok;
+                    };
+
+                    for (uint64_t frame = 0; frame < frames_to_decode; ++frame) {
+                        const bool discard =
+                            frame + 1 < frames_to_decode;
+                        read_ok = read_next_frame(discard);
                         if (!read_ok) {
+                            break;
+                        }
+                        decoded_any_frame = true;
+                    }
+
+                    if (!read_ok) {
+                        if (decoded_any_frame) {
+                            // The audio clock jumped beyond the final source
+                            // timestamp. Render the last successfully decoded
+                            // frame, then detect EOF again on the next draw so
+                            // the asynchronous PBO can be drained.
+                            read_ok = true;
+                        } else if (repeat) {
                             mx::system_out << "acmx2: cannot read after looping.\n";
                         }
+                        if (!read_ok) {
+                            const bool can_drain_recording =
+                                !input_is_hdr && recording_pbo_primed &&
+                                (writer.is_open() || png_video_mode ||
+                                 generate_mode);
+                            if (can_drain_recording) {
+                                stop_after_recording_drain = true;
+                            } else {
+                                if (silent_mode) {
+                                    std::cout << "\n";
+                                }
+                                running = false;
+                                finished = true;
+                                return;
+                            }
+                        }
+                    }
+
+                    if (read_ok) {
+                        received_source_frame =
+                            input_is_hdr ? !hdr_frame_mat.empty() : !newFrame.empty();
+                        source_frame_uses_audio_clock = audio_clock_available;
+                        source_timeline_frame =
+                            audio_clock_available
+                                ? std::min(target_frame,
+                                           decoded_video_frame_count - 1)
+                                : decoded_video_frame_count - 1;
+                        if (!newFrame.empty())
+                            cv::flip(newFrame, newFrame, 0);
                     }
                 }
-
-                if (!read_ok) {
-                    if (silent_mode) {
-                        std::cout << "\n";
-                    }
-                    running = false;
-                    finished = true;
-                    return;
-                }
-
-                received_source_frame = input_is_hdr ? !hdr_frame_mat.empty() : !newFrame.empty();
-                if (!newFrame.empty())
-                    cv::flip(newFrame, newFrame, 0);
                 // HDR path: leave @c hdr_frame_mat top-down. The SDR path
                 // pre-flips because its shader chain produces a Y-flipped
                 // readback that the CPU loop then re-flips; the HDR path
@@ -8538,7 +8683,11 @@ class ACView : public gl::GLObject {
             float audio_warmup = updateAudioWarmupEnvelope();
             library.setAudioWarmupEnvelope(audio_warmup);
             if (file_audio_mode) {
-                file_audio_process_frame(fps, audio_engine.analyzer());
+                const bool process_file_audio =
+                    file_audio_has_output_clock() || received_source_frame;
+                if (process_file_audio) {
+                    file_audio_process_frame(fps, audio_engine.analyzer());
+                }
                 if (audio_trunc_mode && !file_audio_is_active()) {
                     mx::system_out << "acmx2: Audio file finished, stopping (--audio-trunc).\n";
                     fflush(stdout);
@@ -9105,7 +9254,12 @@ class ACView : public gl::GLObject {
             glDisable(GL_BLEND);
         }
 
-        bool needWriter = (((writer.is_open() || png_video_mode || generate_mode) && media_timeline_started) ||
+        const bool normal_output_frame_due =
+            media_timeline_started &&
+            (!file_audio_clock_controls_video || received_source_frame ||
+             stop_after_recording_drain);
+        bool needWriter = (((writer.is_open() || png_video_mode || generate_mode) &&
+                            normal_output_frame_due) ||
                            snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 ||
                            tiff_snapshot_state > 0) &&
                           !isFrozen;
@@ -9152,6 +9306,10 @@ class ACView : public gl::GLObject {
                 fd.isSnapshot = has_hdr_snapshot_request;
                 fd.isWebPSnapshot = has_hdr_snapshot_request;
                 fd.isRawSnapshot = has_raw_snapshot_request;
+                fd.usesAudioClock =
+                    source_frame_uses_audio_clock && !has_hdr_snapshot_request &&
+                    !has_raw_snapshot_request;
+                fd.timelineFrame = source_timeline_frame;
 
                 {
                     std::unique_lock<std::mutex> lock(queueMutex);
@@ -9256,7 +9414,7 @@ class ACView : public gl::GLObject {
                 bool is_raw_snapshot_frame = (raw_snapshot_state == 2);
                 bool is_tiff_snapshot_frame = (tiff_snapshot_state == 2);
                 const bool has_normal_output =
-                    media_timeline_started && (writer.is_open() || png_video_mode || generate_mode);
+                    normal_output_frame_due && (writer.is_open() || png_video_mode || generate_mode);
                 const bool previous_recording_frame_ready = recording_pbo_primed;
 
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
@@ -9264,6 +9422,10 @@ class ACView : public gl::GLObject {
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
                 if (has_normal_output) {
+                    recording_pbo_uses_audio_clock[pboIndex] =
+                        source_frame_uses_audio_clock;
+                    recording_pbo_timeline_frame[pboIndex] =
+                        source_timeline_frame;
                     recording_pbo_primed = true;
                 }
 
@@ -9272,7 +9434,10 @@ class ACView : public gl::GLObject {
                     bool used_zero_copy = false;
 
 #ifdef ACMX2_WITH_CUDA
-                    if (writer.is_open() && !generate_mode && !is_snapshot_frame && !is_webp_snapshot_frame && !is_raw_snapshot_frame && !is_tiff_snapshot_frame && recordCudaPboResources[pboNextIndex]) {
+                    if (writer.is_open() && !generate_mode &&
+                        !is_snapshot_frame && !is_webp_snapshot_frame &&
+                        !is_raw_snapshot_frame && !is_tiff_snapshot_frame &&
+                        recordCudaPboResources[pboNextIndex]) {
                         cudaGraphicsResource *resource = recordCudaPboResources[pboNextIndex];
                         void *devPtr = nullptr;
                         size_t mappedBytes = 0;
@@ -9282,7 +9447,20 @@ class ACView : public gl::GLObject {
 
                         const size_t requiredBytes = static_cast<size_t>(win->w) * static_cast<size_t>(win->h) * 4;
                         if (devPtr && mappedBytes >= requiredBytes) {
-                            used_zero_copy = writer.write_cuda_rgba(devPtr, static_cast<int>(win->w) * 4, true);
+                            if (recording_pbo_uses_audio_clock[pboNextIndex]) {
+                                used_zero_copy =
+                                    writer.write_cuda_rgba_at_pts(
+                                        devPtr, static_cast<int>(win->w) * 4,
+                                        static_cast<int64_t>(
+                                            recording_pbo_timeline_frame
+                                                [pboNextIndex]),
+                                        true);
+                            } else {
+                                used_zero_copy =
+                                    writer.write_cuda_rgba(
+                                        devPtr, static_cast<int>(win->w) * 4,
+                                        true);
+                            }
                         }
 
                         CHECK_CUDA(cudaGraphicsUnmapResources(1, &resource, 0));
@@ -9315,6 +9493,12 @@ class ACView : public gl::GLObject {
                             fd.isWebPSnapshot = is_webp_snapshot_frame;
                             fd.isRawSnapshot = is_raw_snapshot_frame;
                             fd.isTiffSnapshot = is_tiff_snapshot_frame;
+                            fd.usesAudioClock =
+                                recording_pbo_uses_audio_clock[pboNextIndex] &&
+                                !fd.isSnapshot && !fd.isRawSnapshot &&
+                                !fd.isTiffSnapshot;
+                            fd.timelineFrame =
+                                recording_pbo_timeline_frame[pboNextIndex];
 
                             if (is_snapshot_frame) {
                                 snapshot_state = 0;
@@ -9359,6 +9543,14 @@ class ACView : public gl::GLObject {
                 pboIndex = (pboIndex + 1) % 2;
                 pboNextIndex = (pboNextIndex + 1) % 2;
             }
+        }
+
+        if (stop_after_recording_drain) {
+            if (silent_mode) {
+                std::cout << "\n";
+            }
+            running = false;
+            finished = true;
         }
 
         // Restore fboTexture so the next frame (and any crossfade snapshot)
@@ -10275,6 +10467,7 @@ class ACView : public gl::GLObject {
     bool source_frame_ready = false;
     bool media_timeline_started = false;
     bool recording_pbo_primed = false;
+    uint64_t decoded_video_frame_count = 0;
     std::atomic<bool> finished{false};
     std::atomic<bool> copy_audio{false};
     std::atomic<bool> skip_audio_mux_on_exit{false};
@@ -10632,6 +10825,77 @@ class ACView : public gl::GLObject {
         writerRunning = true;
         writerThread = std::thread([this]() {
             try {
+                auto write_video_frame = [this](const FrameData &fd) {
+                    if (writer.is_open() || png_video_mode) {
+                        if (png_video_mode) {
+                            uint64_t frame_index =
+                                png_video_frame_counter.fetch_add(1);
+                            std::ostringstream frame_name;
+                            frame_name << png_video_dir << "/frame-"
+                                       << std::setfill('0') << std::setw(8)
+                                       << frame_index << ".png";
+                            std::string frame_path = frame_name.str();
+                            if (fd.isHdr) {
+                                png::SavePNG_RGBA16(frame_path.c_str(),
+                                                    fd.pixels.data(), fd.width,
+                                                    fd.height);
+                            } else {
+                                png::SavePNG_RGBA(
+                                    frame_path.c_str(),
+                                    const_cast<unsigned char *>(fd.pixels.data()),
+                                    fd.width, fd.height);
+                            }
+                        } else if (fd.isHdr) {
+                            if (fd.usesAudioClock) {
+                                writer.write_hdr_rgba16_at_pts(
+                                    const_cast<unsigned char *>(fd.pixels.data()),
+                                    static_cast<int64_t>(fd.timelineFrame));
+                            } else {
+                                writer.write_hdr_rgba16(
+                                    const_cast<unsigned char *>(fd.pixels.data()));
+                            }
+                        } else if (!filename.empty() || !graphic.empty()) {
+                            if (fd.usesAudioClock) {
+                                writer.write_at_pts(
+                                    const_cast<unsigned char *>(fd.pixels.data()),
+                                    static_cast<int64_t>(fd.timelineFrame));
+                            } else {
+                                writer.write(
+                                    const_cast<unsigned char *>(fd.pixels.data()));
+                            }
+                        } else {
+                            writer.write_ts(
+                                const_cast<unsigned char *>(fd.pixels.data()));
+                        }
+                    }
+
+                    if (generate_mode) {
+                        uint64_t all_idx = generate_all_frames.fetch_add(1);
+                        if (generate_interval > 0 &&
+                            all_idx %
+                                    static_cast<uint64_t>(generate_interval) ==
+                                0) {
+                            uint64_t saved_idx =
+                                generate_saved_counter.fetch_add(1);
+                            std::ostringstream frame_name;
+                            frame_name << generate_dir << "/frame-"
+                                       << std::setfill('0') << std::setw(8)
+                                       << saved_idx << ".png";
+                            std::string frame_path = frame_name.str();
+                            if (fd.isHdr) {
+                                png::SavePNG_RGBA16(frame_path.c_str(),
+                                                    fd.pixels.data(), fd.width,
+                                                    fd.height);
+                            } else {
+                                png::SavePNG_RGBA(
+                                    frame_path.c_str(),
+                                    const_cast<unsigned char *>(fd.pixels.data()),
+                                    fd.width, fd.height);
+                            }
+                        }
+                    }
+                };
+
                 // Drain queued frames before exiting. shutdown paths set
                 // writerRunning=false first, then notify; if we only loop on
                 // writerRunning we can leave tail frames unwritten.
@@ -10767,46 +11031,14 @@ class ACView : public gl::GLObject {
                         });
                     }
 #endif
-                    if ((writer.is_open() || png_video_mode) && !fd.isSnapshot && !fd.isTiffSnapshot) {
-                        if (png_video_mode) {
-                            uint64_t frame_index = png_video_frame_counter.fetch_add(1);
-                            std::ostringstream frame_name;
-                            frame_name << png_video_dir << "/frame-"
-                                       << std::setfill('0') << std::setw(8) << frame_index
-                                       << ".png";
-                            std::string frame_path = frame_name.str();
-                            if (fd.isHdr) {
-                                png::SavePNG_RGBA16(frame_path.c_str(), fd.pixels.data(), fd.width, fd.height);
-                            } else {
-                                png::SavePNG_RGBA(frame_path.c_str(),
-                                                  const_cast<unsigned char *>(fd.pixels.data()),
-                                                  fd.width, fd.height);
-                            }
-                        } else if (fd.isHdr) {
-                            writer.write_hdr_rgba16(fd.pixels.data());
-                        } else if (!filename.empty() || !graphic.empty())
-                            writer.write(fd.pixels.data());
-                        else
-                            writer.write_ts(fd.pixels.data());
+                    const bool is_snapshot_task =
+                        fd.isSnapshot || fd.isRawSnapshot ||
+                        fd.isTiffSnapshot;
+                    if (is_snapshot_task) {
+                        continue;
                     }
-                    if (generate_mode && !fd.isSnapshot && !fd.isTiffSnapshot) {
-                        uint64_t all_idx = generate_all_frames.fetch_add(1);
-                        if (generate_interval > 0 && all_idx % static_cast<uint64_t>(generate_interval) == 0) {
-                            uint64_t saved_idx = generate_saved_counter.fetch_add(1);
-                            std::ostringstream frame_name;
-                            frame_name << generate_dir << "/frame-"
-                                       << std::setfill('0') << std::setw(8) << saved_idx
-                                       << ".png";
-                            std::string frame_path = frame_name.str();
-                            if (fd.isHdr) {
-                                png::SavePNG_RGBA16(frame_path.c_str(), fd.pixels.data(), fd.width, fd.height);
-                            } else {
-                                png::SavePNG_RGBA(frame_path.c_str(),
-                                                  const_cast<unsigned char *>(fd.pixels.data()),
-                                                  fd.width, fd.height);
-                            }
-                        }
-                    }
+
+                    write_video_frame(fd);
                 }
             } catch (const std::exception &e) {
                 mx::system_err << "acmx2: writer thread exception: " << e.what() << "\n";
@@ -10995,13 +11227,10 @@ class ACView : public gl::GLObject {
      * @brief Run ffmpeg synchronously to mux the audio file into the output video.
      *
      * Copies the video stream from the output file and encodes the audio
-     * file track as AAC 192 kbps.  When the produced video is shorter
-     * than the audio, the audio track is truncated to the video duration
-     * so the file never has audio playing past the end of picture.  This
-     * cap is applied in camera mode (no input video file) and whenever
-     * an input video is played without @c --repeat.  When @c --repeat is
-     * active the input video loops to fill the audio length, so the
-     * full audio track is preserved instead of being clipped.
+     * file track as AAC 192 kbps. Output is always limited to the shorter
+     * stream. The video timeline is also capped to the original source-video
+     * duration when that duration is known, preventing a longer audio file or
+     * repeated/queued tail frame from extending the result.
      * The result is written to a temporary file which replaces the
      * original on success.
      */
@@ -11020,30 +11249,36 @@ class ACView : public gl::GLObject {
             fflush(stderr);
             return;
         }
-        double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
+        double video_duration =
+            (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps
+                                  : 0.0;
+        double mux_duration = video_duration;
+        if (!filename.empty() && fps > 0.0 && totalFrames > 0.0) {
+            const double source_video_duration = totalFrames / fps;
+            mux_duration =
+                mux_duration > 0.0
+                    ? std::min(mux_duration, source_video_duration)
+                    : source_video_duration;
+        }
         std::ostringstream cmd;
         cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_file_path
             << "\" -map 0:v:0? -map 1:a:0?"
             << " -c:v copy -c:a aac -b:a 192k";
-        // Cap output to the video's duration so the audio is truncated to
-        // match the recorded video whenever:
-        //   - we are in camera mode (no input video file), or
-        //   - we are playing an input video without --repeat (video plays
-        //     once and stops, so audio must not outlast it).
-        // When --repeat is active the input video loops to fill the audio
-        // length, so we let the full audio play out instead.
-        // This overrides the --audio-trunc preservation behavior because the
-        // user wants audio to never outlast the produced video.
-        const bool is_camera_mode = filename.empty() && graphic.empty();
-        const bool truncate_audio_to_video = is_camera_mode || !repeat;
-        if (video_duration > 0.0 && truncate_audio_to_video) {
-            cmd << " -t " << std::fixed << std::setprecision(3) << video_duration;
+        if (mux_duration > 0.0) {
+            cmd << " -t " << std::fixed << std::setprecision(6)
+                << mux_duration;
         }
+        cmd << " -shortest";
         if (is_mp4_like) {
             cmd << " -movflags +faststart";
         }
         cmd << " \"" << tmp_out << "\" 2>&1";
-        mx::system_out << "acmx2: muxing audio file into video...\n";
+        mx::system_out << "acmx2: muxing audio file into video"
+                       << " (shortest stream"
+                       << (mux_duration > 0.0
+                               ? ", max " + std::to_string(mux_duration) + "s"
+                               : std::string())
+                       << ")...\n";
         fflush(stdout);
         int ret = std::system(cmd.str().c_str());
         if (ret == 0) {

@@ -130,6 +130,12 @@ class Writer {
      */
     void write(void *rgba_buffer);
     /**
+     * @brief Queue a host RGBA frame with an explicit presentation timestamp.
+     * @param rgba_buffer Pointer to tightly packed RGBA8 pixels.
+     * @param pts Presentation timestamp in units of the configured frame time base.
+     */
+    void write_at_pts(void *rgba_buffer, int64_t pts);
+    /**
      * @brief Write a 16-bit RGBA frame that is already PQ- or HLG-encoded in
      *        BT.2020 primaries (8 bytes/pixel: R16,G16,B16,A16, little-endian
      *        unsigned normalised).
@@ -145,6 +151,12 @@ class Writer {
      */
     void write_hdr_rgba16(void *rgba16_buffer);
     /**
+     * @brief Queue a 16-bit HDR RGBA frame with an explicit presentation timestamp.
+     * @param rgba16_buffer Pointer to tightly packed RGBA16 pixels.
+     * @param pts Presentation timestamp in units of the configured frame time base.
+     */
+    void write_hdr_rgba16_at_pts(void *rgba16_buffer, int64_t pts);
+    /**
      * @brief Queue a CUDA RGBA frame for encoding.
      * @param cuda_rgba_buffer CUDA device pointer.
      * @param src_stride Source row pitch in bytes.
@@ -152,6 +164,16 @@ class Writer {
      * @return true if the frame was accepted.
      */
     bool write_cuda_rgba(void *cuda_rgba_buffer, int src_stride, bool bottom_up = false);
+    /**
+     * @brief Queue a CUDA RGBA frame with an explicit presentation timestamp.
+     * @param cuda_rgba_buffer CUDA device pointer.
+     * @param src_stride Source row pitch in bytes.
+     * @param pts Presentation timestamp in units of the configured frame time base.
+     * @param bottom_up Whether the source is stored bottom-up.
+     * @return true if the frame was accepted.
+     */
+    bool write_cuda_rgba_at_pts(void *cuda_rgba_buffer, int src_stride, int64_t pts,
+                                bool bottom_up = false);
     /**
      * @brief Open a timestamp-based output stream using the legacy CRF string interface.
      * @param filename Output file path.
@@ -189,7 +211,13 @@ class Writer {
     void set_block_when_full(bool value) { block_when_full = value; }
     /** @brief Check whether the encoder queue blocks instead of dropping frames. */
     bool get_block_when_full() const { return block_when_full; }
-    /** @brief Return the number of frames submitted to the writer. */
+    /**
+     * @brief Return the output timeline length in nominal frame ticks.
+     *
+     * For sequential writes this equals the submitted frame count. Explicit
+     * PTS writes may leave gaps, in which case it is the highest accepted PTS
+     * plus one.
+     */
     int64_t get_frame_count() const { return frame_count; }
     /** @brief Return the encoded duration in seconds. */
     double get_duration() const;
@@ -207,7 +235,7 @@ class Writer {
     int height = 0; ///< Output height in pixels.
     int fps_num = 0; ///< Output FPS numerator.
     int fps_den = 0; ///< Output FPS denominator.
-    int64_t frame_count = 0; ///< Frames submitted so far.
+    int64_t frame_count = 0; ///< Next sequential PTS / explicit-PTS timeline length.
     double last_duration = 0.0; ///< Cached duration from the last encode step.
     AVFormatContext *format_ctx = nullptr; ///< Active container context.
     AVCodecContext *codec_ctx = nullptr; ///< Active codec context.
