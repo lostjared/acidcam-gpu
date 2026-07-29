@@ -50,7 +50,7 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 
 Recent commits in this repository focused on workflow and output quality improvements:
 
-- **Audio spectrum history buffers**: added `--enable-audio-buffers <N>` (1..22) to expose rolling FFT history as `spectrum0..spectrumN-1` in GLSL.
+- **Audio spectrum history array**: `--enable-audio-buffers <N>` allocates one runtime-sized `sampler1DArray` for rolling FFT history, limited only by the GPU's array-layer limit.
 - **Audio warmup control**: added `--audio-warm-rate <value>` to fade audio-reactive strength in at startup and reduce initial transients.
 - **Startup sync/warmup hardening**: camera/file startup now delays cache/audio/writer activity long enough to avoid loading-screen bleed into cache textures and keep early A/V processing aligned.
 - **Texture cache scope expanded**: `--texture-cache` now applies to camera and graphics input, not just file input.
@@ -438,7 +438,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | | `--audio-file` | `<file>` | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
 | | `--audio-trunc` | | Stop playback when the audio file reaches the end |
 | | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in `1/sec` (default: `0.5`; `0` disables warmup) |
-| | `--enable-audio-buffers` | `<N>` | Allocate `N` FFT history textures (`1..22`) exposed as `spectrum0..spectrumN-1` |
+| | `--enable-audio-buffers` | `<N>` | Allocate one FFT history `sampler1DArray` with `N` GPU-limited layers |
 
 ### MIDI Options (requires `MIDI_ENABLED` build)
 
@@ -711,7 +711,10 @@ scripts/migrate_cache_samplers.pl shaders
 | `amp_high` | `float` | High-frequency energy (>3000 Hz) |
 | `iSampleRate` | `float` | Audio sample rate (`44100.0`) |
 | `spectrum` | `sampler1D` | FFT frequency-magnitude spectrum (256 bins, GL_TEXTURE9) |
-| `spectrum0`–`spectrumN-1` | `sampler1D` | FFT history textures (newest to oldest), enabled by `--enable-audio-buffers <N>` |
+| `spectrum0` | `sampler1D` | Current-frame alias of the live spectrum |
+| `spectrum_history` | `sampler1DArray` | Runtime-sized FFT history array enabled by `--enable-audio-buffers <N>` |
+| `spectrum_history_head` | `int` | Physical layer containing the newest history frame |
+| `spectrum_history_size` | `int` | Allocated history-array layer count |
 
 The `spectrum` uniform is a 1D texture (`GL_R32F`, 256 texels) holding the FFT magnitudes of the current audio frame. Texel coordinate `x = 0.0` is the DC bin and `x = 1.0` is the Nyquist frequency (22 050 Hz at 44 100 Hz sample rate). Sampling uses `GL_LINEAR` filtering and `GL_CLAMP_TO_EDGE` wrapping. Example usage:
 
@@ -720,7 +723,22 @@ uniform sampler1D spectrum;           // bound to texture unit 9
 float energy = texture(spectrum, x).r; // x in [0,1]
 ```
 
-When `--enable-audio-buffers <N>` is enabled, shaders can also sample `spectrum0` (newest history frame) through `spectrumN-1` (oldest retained frame) for temporal FFT effects.
+History age is a dynamic array coordinate, so one sampler binding supports any
+requested depth up to `GL_MAX_ARRAY_TEXTURE_LAYERS`:
+
+```glsl
+int size = max(spectrum_history_size, 1);
+int layer = (spectrum_history_head - (age % size) + size) % size;
+float energy = texture(spectrum_history, vec2(frequency, float(layer))).r;
+```
+
+`spectrum0` remains a current-frame `sampler1D` alias. Convert legacy
+`spectrum1`, `spectrum2`, and later lookups with:
+
+```bash
+scripts/migrate_spectrum_samplers.pl --dry-run shaders
+scripts/migrate_spectrum_samplers.pl shaders
+```
 
 ### MIDI Slider Uniforms (requires `MIDI=ON` build)
 

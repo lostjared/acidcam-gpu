@@ -2540,56 +2540,69 @@ class SpectrumTexture {
 
 /**
  * @class SpectrumHistory
- * @brief Ring buffer of `sampler1D` FFT spectrum textures exposing previous frames.
+ * @brief Runtime-sized ring buffer stored in one 1D array texture.
  *
- * Enabled via the `--enable-audio-buffers <N>` CLI option.  Allocates @p N
- * 1D textures (`GL_R32F`, `FFT_SIZE/2` texels each) and exposes them to
- * GLSL shaders as `uniform sampler1D spectrum0;` (newest, current frame),
- * `spectrum1` (one frame back), …, `spectrum<N-1>` (oldest stored frame).
+ * Enabled via the `--enable-audio-buffers <N>` CLI option. Allocates one
+ * `GL_TEXTURE_1D_ARRAY` with @p N `GL_R32F` layers and exposes it to GLSL as
+ * `uniform sampler1DArray spectrum_history;`. The requested layer count is
+ * clamped only to the active GPU's `GL_MAX_ARRAY_TEXTURE_LAYERS` limit.
  *
  * Each call to `update()` writes the current FFT magnitudes into the
- * texture at the ring head and advances the head — no texture data is
- * copied between slots.  `bindAll()` then binds each slot to a texture
- * unit such that the shader-visible index corresponds to age (0 = newest).
+ * layer at the ring head and advances the head. No texture data is copied
+ * between layers. Shaders use `spectrum_history_head` and
+ * `spectrum_history_size` to convert a logical age into a physical layer.
  *
- * Texture units used: @c BASE_UNIT … @c BASE_UNIT + N − 1 (default 10..).
- * Units 0–8 are reserved for the main video frame and temporal cache;
- * unit 9 is the live `spectrum` texture.
+ * The complete array uses only texture unit 10. Unit 9 remains the live
+ * `spectrum`/`spectrum0` texture.
  */
 class SpectrumHistory {
   public:
     explicit SpectrumHistory(const acmx2::audio::AudioAnalyzer &analyzer)
         : analyzer(analyzer) {}
 
-    /// First texture unit assigned to spectrum0 (units 0–9 already taken).
-    static constexpr int BASE_UNIT = 10;
-    /// Maximum supported buffer depth (clamped to keep texture units in range).
-    static constexpr int MAX_BUFFERS = 22;
+    /// Texture unit assigned to the complete spectrum history array.
+    static constexpr int TEXTURE_UNIT = 10;
 
     /**
-     * @brief Allocate @p count history textures and prime sampling parameters.
+     * @brief Allocate one array texture with @p requested_count history layers.
      *
-     * @param count Number of history frames (clamped to [0, MAX_BUFFERS]).
+     * @param requested_count Number of requested history frames.
+     * @return The allocated layer count after applying the GPU limit.
      */
-    void init(int count) {
+    int init(int requested_count) {
         cleanup();
-        if (count <= 0)
-            return;
-        if (count > MAX_BUFFERS)
-            count = MAX_BUFFERS;
-        bins = FFT_SIZE / 2;
-        textures.assign(static_cast<size_t>(count), 0);
-        glGenTextures(count, textures.data());
-        std::vector<float> zeros(static_cast<size_t>(bins), 0.0f);
-        for (int i = 0; i < count; ++i) {
-            glBindTexture(GL_TEXTURE_1D, textures[i]);
-            glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, bins, 0, GL_RED, GL_FLOAT, zeros.data());
-            glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        if (requested_count <= 0)
+            return 0;
+
+        GLint max_layers = 0;
+        glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &max_layers);
+        if (max_layers <= 0) {
+            mx::system_err
+                << "acmx2: GL_TEXTURE_1D_ARRAY is unavailable on this context\n";
+            return 0;
         }
-        glBindTexture(GL_TEXTURE_1D, 0);
+        layer_count = std::min(requested_count, static_cast<int>(max_layers));
+        if (layer_count != requested_count) {
+            mx::system_err << "acmx2: --enable-audio-buffers clamped to GPU "
+                              "array-layer limit "
+                           << layer_count << " (was " << requested_count << ")\n";
+        }
+
+        bins = FFT_SIZE / 2;
+        std::vector<float> zeros(
+            static_cast<size_t>(bins) * static_cast<size_t>(layer_count),
+            0.0f);
+        glGenTextures(1, &texture_id);
+        glBindTexture(GL_TEXTURE_1D_ARRAY, texture_id);
+        glTexImage2D(GL_TEXTURE_1D_ARRAY, 0, GL_R32F, bins, layer_count, 0,
+                     GL_RED, GL_FLOAT, zeros.data());
+        glTexParameteri(GL_TEXTURE_1D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_1D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_1D_ARRAY, GL_TEXTURE_WRAP_S,
+                        GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_1D_ARRAY, 0);
         write_idx = 0;
+        return layer_count;
     }
 
     /**
@@ -2601,7 +2614,7 @@ class SpectrumHistory {
      * spectrum's sensitivity scaling).
      */
     void update(float scale = 0.0f) {
-        if (textures.empty())
+        if (texture_id == 0 || layer_count == 0)
             return;
         const auto &mags = analyzer.spectrum();
         const float *src = mags.data();
@@ -2611,41 +2624,38 @@ class SpectrumHistory {
                 scaled_buf[i] = mags[i] * scale;
             src = scaled_buf.data();
         }
-        glBindTexture(GL_TEXTURE_1D, textures[write_idx]);
-        glTexSubImage1D(GL_TEXTURE_1D, 0, 0, bins, GL_RED, GL_FLOAT, src);
-        glBindTexture(GL_TEXTURE_1D, 0);
-        write_idx = (write_idx + 1) % static_cast<int>(textures.size());
+        glBindTexture(GL_TEXTURE_1D_ARRAY, texture_id);
+        glTexSubImage2D(GL_TEXTURE_1D_ARRAY, 0, 0, write_idx, bins, 1, GL_RED,
+                        GL_FLOAT, src);
+        glBindTexture(GL_TEXTURE_1D_ARRAY, 0);
+        write_idx = (write_idx + 1) % layer_count;
     }
 
-    /**
-     * @brief Bind every history texture so spectrum@p i = (i frames ago).
-     *
-     * Slot 0 is the most recently written frame, slot N−1 is the oldest.
-     * Leaves the active texture unit at @c GL_TEXTURE0 to avoid leaking
-     * state into subsequent draws.
-     */
-    void bindAll() const {
-        if (textures.empty())
+    /// Bind the complete spectrum history array to its single texture unit.
+    void bind() const {
+        if (texture_id == 0)
             return;
-        const int n = static_cast<int>(textures.size());
-        const int newest = (write_idx - 1 + n) % n;
-        for (int i = 0; i < n; ++i) {
-            int slot = (newest - i + n) % n;
-            glActiveTexture(GL_TEXTURE0 + BASE_UNIT + i);
-            glBindTexture(GL_TEXTURE_1D, textures[slot]);
-        }
+        glActiveTexture(GL_TEXTURE0 + TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_1D_ARRAY, texture_id);
         glActiveTexture(GL_TEXTURE0);
     }
 
-    /// Number of history textures currently allocated.
-    int count() const { return static_cast<int>(textures.size()); }
+    /// Physical layer containing the newest spectrum frame.
+    int newestLayer() const {
+        return layer_count > 0 ? (write_idx - 1 + layer_count) % layer_count
+                               : 0;
+    }
 
-    /// Delete all allocated textures and reset state.
+    /// Number of history layers currently allocated.
+    int count() const { return layer_count; }
+
+    /// Delete the array texture and reset state.
     void cleanup() {
-        if (!textures.empty()) {
-            glDeleteTextures(static_cast<GLsizei>(textures.size()), textures.data());
-            textures.clear();
+        if (texture_id != 0) {
+            glDeleteTextures(1, &texture_id);
+            texture_id = 0;
         }
+        layer_count = 0;
         write_idx = 0;
     }
 
@@ -2653,9 +2663,10 @@ class SpectrumHistory {
 
   private:
     const acmx2::audio::AudioAnalyzer &analyzer;
-    std::vector<GLuint> textures;  ///< Ring of `GL_TEXTURE_1D` names.
-    int bins = 0;                  ///< Texels per texture (== FFT_SIZE / 2).
-    int write_idx = 0;             ///< Next slot to overwrite.
+    GLuint texture_id = 0;         ///< One `GL_TEXTURE_1D_ARRAY` object.
+    int bins = 0;                  ///< Texels per layer (== FFT_SIZE / 2).
+    int layer_count = 0;           ///< Runtime-selected array depth.
+    int write_idx = 0;             ///< Next physical layer to overwrite.
     std::vector<float> scaled_buf; ///< Scratch for sensitivity-scaled magnitudes.
 };
 #endif // AUDIO_ENABLED
@@ -2682,7 +2693,8 @@ class ShaderLibrary {
     double video_fps = 0.0;
 #ifdef AUDIO_ENABLED
     const acmx2::audio::AudioAnalyzer *audio_analyzer = nullptr;
-    int audio_buffer_count = 0;         ///< Count of `spectrumN` history textures (set via setAudioBufferCount, 0 = disabled).
+    int audio_buffer_count = 0;         ///< Runtime depth of the spectrum history array.
+    int spectrum_history_head = 0;      ///< Physical layer containing the newest spectrum.
     float audio_warmup_envelope = 1.0f; ///< Startup ramp [0..1] used to soften initial audio-reactive intensity.
 #endif
 #ifdef MIDI_ENABLED
@@ -2717,8 +2729,11 @@ class ShaderLibrary {
         GLint iamp = -1;
         GLint amp_peak = -1, amp_rms = -1, amp_smooth = -1;
         GLint amp_low = -1, amp_mid = -1, amp_high = -1;
-        GLint spectrum_loc = -1;                  ///< Location of `uniform sampler1D spectrum;` (-1 if unused).
-        std::vector<GLint> spectrum_history_locs; ///< Locations of `spectrum0..spectrumN-1` (-1 entries if unused).
+        GLint spectrum_loc = -1;              ///< Live `sampler1D spectrum`.
+        GLint spectrum_zero_loc = -1;         ///< Current-frame `spectrum0` alias.
+        GLint spectrum_history_loc = -1;      ///< `sampler1DArray spectrum_history`.
+        GLint spectrum_history_head_loc = -1; ///< Newest physical array layer.
+        GLint spectrum_history_size_loc = -1; ///< Runtime array depth.
 #endif
         GLint texture_cache_loc[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
         // Array-form alias of texture_cache_loc: locations of `textures[0]..textures[N-1]`
@@ -3208,12 +3223,14 @@ class ShaderLibrary {
             names[pos].amp_high = glGetUniformLocation(prog->id(), "amp_high");
             names[pos].iSampleRate = glGetUniformLocation(prog->id(), "iSampleRate");
             names[pos].spectrum_loc = glGetUniformLocation(prog->id(), "spectrum");
-            names[pos].spectrum_history_locs.assign(static_cast<size_t>(audio_buffer_count), -1);
-            for (int i = 0; i < audio_buffer_count; ++i) {
-                std::string uname = "spectrum" + std::to_string(i);
-                names[pos].spectrum_history_locs[i] =
-                    glGetUniformLocation(prog->id(), uname.c_str());
-            }
+            names[pos].spectrum_zero_loc =
+                glGetUniformLocation(prog->id(), "spectrum0");
+            names[pos].spectrum_history_loc =
+                glGetUniformLocation(prog->id(), "spectrum_history");
+            names[pos].spectrum_history_head_loc =
+                glGetUniformLocation(prog->id(), "spectrum_history_head");
+            names[pos].spectrum_history_size_loc =
+                glGetUniformLocation(prog->id(), "spectrum_history_size");
 #endif
             // acidcamGL-compatible uniform locations
             names[pos].value_alpha_r = glGetUniformLocation(prog->id(), "value_alpha_r");
@@ -3321,22 +3338,22 @@ class ShaderLibrary {
 
 #ifdef AUDIO_ENABLED
     /**
-     * @brief Configure how many `spectrumN` history textures to query and bind.
-     *
-     * Must be called before `loadPrograms`/`loadProgramsWithCache` so that
-     * uniform locations for `spectrum0..spectrum<N-1>` are cached.  A value
-     * of 0 disables the feature.
+     * @brief Configure the runtime depth of `spectrum_history`.
      */
     void setAudioBufferCount(int n) {
-        if (n < 0)
-            n = 0;
-        if (n > SpectrumHistory::MAX_BUFFERS)
-            n = SpectrumHistory::MAX_BUFFERS;
-        audio_buffer_count = n;
+        audio_buffer_count = std::max(n, 0);
+        if (audio_buffer_count == 0)
+            spectrum_history_head = 0;
     }
 
-    /// @brief Number of `spectrumN` history textures currently configured.
+    /// @brief Number of spectrum history array layers currently configured.
     int audioBufferCount() const { return audio_buffer_count; }
+
+    /// @brief Set the physical array layer containing the newest FFT frame.
+    void setSpectrumHistoryHead(int layer) {
+        spectrum_history_head =
+            audio_buffer_count > 0 ? layer % audio_buffer_count : 0;
+    }
 
     /// @brief Set startup audio warmup envelope in [0,1] for uniform scaling.
     void setAudioWarmupEnvelope(float env) {
@@ -4827,10 +4844,15 @@ class ShaderLibrary {
         if (n.spectrum_loc != -1) {
             glUniform1i(n.spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         }
-        for (int i = 0; i < static_cast<int>(n.spectrum_history_locs.size()); ++i) {
-            if (n.spectrum_history_locs[i] != -1)
-                glUniform1i(n.spectrum_history_locs[i], SpectrumHistory::BASE_UNIT + i);
-        }
+        if (n.spectrum_zero_loc != -1)
+            glUniform1i(n.spectrum_zero_loc,
+                        SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+        if (n.spectrum_history_loc != -1)
+            glUniform1i(n.spectrum_history_loc, SpectrumHistory::TEXTURE_UNIT);
+        if (n.spectrum_history_head_loc != -1)
+            glUniform1i(n.spectrum_history_head_loc, spectrum_history_head);
+        if (n.spectrum_history_size_loc != -1)
+            glUniform1i(n.spectrum_history_size_loc, audio_buffer_count);
 #endif
         // Re-assert the selected texture-cache sampler representation.
         if (use_history_array) {
@@ -4993,10 +5015,15 @@ class ShaderLibrary {
         if (n.spectrum_loc != -1) {
             glUniform1i(n.spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         }
-        for (int i = 0; i < static_cast<int>(n.spectrum_history_locs.size()); ++i) {
-            if (n.spectrum_history_locs[i] != -1)
-                glUniform1i(n.spectrum_history_locs[i], SpectrumHistory::BASE_UNIT + i);
-        }
+        if (n.spectrum_zero_loc != -1)
+            glUniform1i(n.spectrum_zero_loc,
+                        SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+        if (n.spectrum_history_loc != -1)
+            glUniform1i(n.spectrum_history_loc, SpectrumHistory::TEXTURE_UNIT);
+        if (n.spectrum_history_head_loc != -1)
+            glUniform1i(n.spectrum_history_head_loc, spectrum_history_head);
+        if (n.spectrum_history_size_loc != -1)
+            glUniform1i(n.spectrum_history_size_loc, audio_buffer_count);
 #endif
         // Re-assert the selected texture-cache sampler representation.
         if (use_history_array) {
@@ -5233,13 +5260,19 @@ class ShaderLibrary {
         if (names[index()].spectrum_loc != -1) {
             glUniform1i(names[index()].spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         }
-        {
-            auto &nh = names[index()].spectrum_history_locs;
-            for (int i = 0; i < static_cast<int>(nh.size()); ++i) {
-                if (nh[i] != -1)
-                    glUniform1i(nh[i], SpectrumHistory::BASE_UNIT + i);
-            }
-        }
+        auto &spectrum_names = names[index()];
+        if (spectrum_names.spectrum_zero_loc != -1)
+            glUniform1i(spectrum_names.spectrum_zero_loc,
+                        SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+        if (spectrum_names.spectrum_history_loc != -1)
+            glUniform1i(spectrum_names.spectrum_history_loc,
+                        SpectrumHistory::TEXTURE_UNIT);
+        if (spectrum_names.spectrum_history_head_loc != -1)
+            glUniform1i(spectrum_names.spectrum_history_head_loc,
+                        spectrum_history_head);
+        if (spectrum_names.spectrum_history_size_loc != -1)
+            glUniform1i(spectrum_names.spectrum_history_size_loc,
+                        audio_buffer_count);
 #endif
         if (use_history_array) {
             auto &n = names[index()];
@@ -5477,7 +5510,7 @@ struct MXArguments {
     float record_gain = 1.0f;
     std::string audio_file;
     bool audio_trunc = false; ///< When true, stop playback when file audio reaches the end.
-    int audio_buffers = 0;    ///< Count of `spectrumN` history textures (--enable-audio-buffers).
+    int audio_buffers = 0;    ///< Requested spectrum-history array depth.
 #endif
     bool silent = false;
 #ifdef MIDI_ENABLED
@@ -5657,8 +5690,8 @@ class ACView : public gl::GLObject {
     std::string audio_record_file;
     acmx2::audio::AudioEngine audio_engine;
     SpectrumTexture spectrumTex{audio_engine.analyzer()};     ///< 1D FFT magnitude texture for shaders.
-    SpectrumHistory spectrumHistory{audio_engine.analyzer()}; ///< Ring of spectrum history textures.
-    int audio_buffer_count = 0;                               ///< Number of history frames retained for `spectrumN` (0 = disabled).
+    SpectrumHistory spectrumHistory{audio_engine.analyzer()}; ///< Runtime-sized FFT history array.
+    int audio_buffer_count = 0;                               ///< Allocated history-array layer count.
     float audio_warmup_envelope = 0.0f;                       ///< Startup fade for audio-driven uniforms/textures.
     float audio_warmup_rate = 0.5f;                           ///< Warmup envelope slope in 1/sec (higher = faster ramp).
     std::chrono::steady_clock::time_point audio_warmup_last_tick = std::chrono::steady_clock::now();
@@ -6705,10 +6738,9 @@ class ACView : public gl::GLObject {
                 }
                 resetAudioWarmupEnvelope();
                 spectrumTex.init();
-                audio_buffer_count = std::min(std::max(args.audio_buffers, 0),
-                                              SpectrumHistory::MAX_BUFFERS);
+                audio_buffer_count =
+                    spectrumHistory.init(std::max(args.audio_buffers, 0));
                 if (audio_buffer_count > 0) {
-                    spectrumHistory.init(audio_buffer_count);
                     library.setAudioBufferCount(audio_buffer_count);
                 }
                 mx::system_out << "acmx2: File audio enabled from: " << args.audio_file << "\n";
@@ -6717,12 +6749,11 @@ class ACView : public gl::GLObject {
                                << " bins on GL_TEXTURE"
                                << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
                 if (audio_buffer_count > 0) {
-                    mx::system_out << "acmx2: Audio history buffers enabled ("
-                                   << audio_buffer_count << " frames, spectrum0..spectrum"
-                                   << (audio_buffer_count - 1) << " on GL_TEXTURE"
-                                   << SpectrumHistory::BASE_UNIT << "..GL_TEXTURE"
-                                   << (SpectrumHistory::BASE_UNIT + audio_buffer_count - 1)
-                                   << ")\n";
+                    mx::system_out
+                        << "acmx2: Audio spectrum history array enabled ("
+                        << audio_buffer_count
+                        << " layers in one GL_TEXTURE_1D_ARRAY on GL_TEXTURE"
+                        << SpectrumHistory::TEXTURE_UNIT << ")\n";
                 }
             } else {
                 mx::system_err << "acmx2: Error could not open audio file: " << args.audio_file << "\n";
@@ -6742,10 +6773,9 @@ class ACView : public gl::GLObject {
                 audio_engine.recorder().set_gain(args.record_gain);
                 resetAudioWarmupEnvelope();
                 spectrumTex.init();
-                audio_buffer_count = std::min(std::max(args.audio_buffers, 0),
-                                              SpectrumHistory::MAX_BUFFERS);
+                audio_buffer_count =
+                    spectrumHistory.init(std::max(args.audio_buffers, 0));
                 if (audio_buffer_count > 0) {
-                    spectrumHistory.init(audio_buffer_count);
                     library.setAudioBufferCount(audio_buffer_count);
                 }
                 mx::system_out << "acmx2: FFT spectrum texture initialised ("
@@ -6753,12 +6783,11 @@ class ACView : public gl::GLObject {
                                << " bins on GL_TEXTURE"
                                << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
                 if (audio_buffer_count > 0) {
-                    mx::system_out << "acmx2: Audio history buffers enabled ("
-                                   << audio_buffer_count << " frames, spectrum0..spectrum"
-                                   << (audio_buffer_count - 1) << " on GL_TEXTURE"
-                                   << SpectrumHistory::BASE_UNIT << "..GL_TEXTURE"
-                                   << (SpectrumHistory::BASE_UNIT + audio_buffer_count - 1)
-                                   << ")\n";
+                    mx::system_out
+                        << "acmx2: Audio spectrum history array enabled ("
+                        << audio_buffer_count
+                        << " layers in one GL_TEXTURE_1D_ARRAY on GL_TEXTURE"
+                        << SpectrumHistory::TEXTURE_UNIT << ")\n";
                 }
             }
         }
@@ -8929,7 +8958,8 @@ class ACView : public gl::GLObject {
             spectrumTex.bind();
             if (audio_buffer_count > 0) {
                 spectrumHistory.update(spectrum_scale);
-                spectrumHistory.bindAll();
+                spectrumHistory.bind();
+                library.setSpectrumHistoryHead(spectrumHistory.newestLayer());
             }
         }
 #endif
@@ -11895,7 +11925,7 @@ namespace {
         printSection(out, c, "Recording And Encoding", {{"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"}, {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"}, {"--generate <N>", "Save a PNG frame every N frames to an output subdirectory (video or camera mode).", "acmx2 -i in.mp4 --generate 30"}, {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"}, {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"}, {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"}, {"--encode-preset <name>", "Encoder speed/quality preset (ultrafast .. veryslow).", "acmx2 --encode-preset fast"}, {"--encode-tune <name>", "Tune encoder for content type or low latency.", "acmx2 --encode-tune film"}, {"--encode-crf <0-51>", "Set encoder quality directly (lower = better quality/larger file).", "acmx2 --encode-crf 18"}, {"--encode-codec <mode>", "Codec backend: auto, software, or nvenc.", "acmx2 --encode-codec nvenc"}, {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"}, {"--no-drop", "Never drop frames; block producer when encoder queue is full.", "acmx2 --no-drop"}, {"--display-filter", "Show current shader/stack and GPU filter in upper-left corner.", "acmx2 --display-filter"}, {"--use-watermark <text>", "Enable watermark with given text in recorded videos (upper-left).", "acmx2 --use-watermark \"My Channel\""}, {"--use-watermark-color <r,g,b>", "Watermark text color as 0-255 components.", "acmx2 --use-watermark-color 255,255,0"}, {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"}, {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}});
 
 #ifdef AUDIO_ENABLED
-        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--enable-audio-buffers <N>", "Allocate N sampler1D spectrumN history textures (1..22, spectrum0=newest).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
+        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--enable-audio-buffers <N>", "Allocate one sampler1DArray with N spectrum-history layers (GPU-limited).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
 #endif
 
 #ifdef MIDI_ENABLED
@@ -12009,7 +12039,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(304, "record-gain", "Recording volume gain 0.0-2.0 (default: 1.0)")
         .addOptionDoubleValue(305, "audio-file", "Use audio from file (WAV/MP3/etc.) for reactivity instead of mic")
         .addOptionDouble(306, "audio-trunc", "Stop playback when the audio file reaches the end")
-        .addOptionDoubleValue(307, "enable-audio-buffers", "Allocate N spectrumN history textures (1..22)")
+        .addOptionDoubleValue(307, "enable-audio-buffers", "Allocate a spectrum-history sampler1DArray with N layers")
         .addOptionDoubleValue(308, "audio-warm-rate", "Startup audio warmup rate (1/sec, default: 0.5)")
 #endif
         .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
@@ -12342,12 +12372,6 @@ int main(int argc, char **argv) {
                 int n = atoi(arg.arg_value.c_str());
                 if (n < 0)
                     n = 0;
-                if (n > SpectrumHistory::MAX_BUFFERS) {
-                    mx::system_err << "acmx2: --enable-audio-buffers clamped to "
-                                   << SpectrumHistory::MAX_BUFFERS << " (was "
-                                   << n << ")\n";
-                    n = SpectrumHistory::MAX_BUFFERS;
-                }
                 args.audio_buffers = n;
             } break;
             case 308: {
