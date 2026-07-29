@@ -65,7 +65,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioTruncCheckBox->setEnabled(false);
     audioBuffersCheckBox = new QCheckBox("Enable Audio Spectrum History Buffers", this);
     audioBuffersSpinBox = new QSpinBox(this);
-    audioBuffersSpinBox->setRange(1, 22);
+    audioBuffersSpinBox->setRange(1, 512);
     audioBuffersSpinBox->setValue(8);
     audioBuffersSpinBox->setEnabled(false);
 
