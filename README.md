@@ -252,7 +252,7 @@ sudo bash build-script/install-deps-arch.sh
 | `--disable-counter` | | Disable timer and FPS counter overlay |
 | `--silent` | | Process video without window. Only valid with `-i/--input` video files and requires `-o/--output`; camera and image input are rejected. |
 
-### 3D / DNN Model Options
+### Other Options
 
 | Long | Value | Description |
 |------|-------|-------------|
