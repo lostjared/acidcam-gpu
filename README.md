@@ -793,7 +793,7 @@ Early Example (as a GIF)
 
 # Latest Shader Pack
 
-https://lostsidedead.biz/acmx2/shaders.zip
+git clone https://github.com/lostjared/shaders.git
 
 # Latest 3D Geometry 
 
