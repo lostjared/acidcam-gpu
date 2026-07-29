@@ -599,6 +599,13 @@ void SettingsWindow::init() {
 
     textureCacheCheckBox = new QCheckBox("Texture Cache", this);
     textureCacheCheckBox->setEnabled(true);
+    auto *textureCacheArrayCheckBox =
+        new QCheckBox("Use sampler2DArray history", this);
+    textureCacheArrayCheckBox->setObjectName("textureCacheArrayCheckBox");
+    textureCacheArrayCheckBox->setToolTip(
+        "Pass --texture-cache-array and bind frame history as one array texture");
+    textureCacheArrayCheckBox->setEnabled(
+        textureCacheCheckBox->isChecked());
     cacheDelaySpinBox = new QSpinBox(this);
     cacheDelaySpinBox->setRange(1, 8);
     cacheDelaySpinBox->setValue(1);
@@ -737,6 +744,7 @@ void SettingsWindow::init() {
     cacheRow->addWidget(cacheSizeSpinBox);
     cacheRow->addStretch();
     playbackGrid->addLayout(cacheRow, ++r, 0, 1, 2);
+    playbackGrid->addWidget(textureCacheArrayCheckBox, ++r, 0, 1, 2);
 
     // ── Display & 3D group ────────────────────────────────────────────
     auto *displayGroup = new QGroupBox("Display & 3D", this);
@@ -825,6 +833,8 @@ void SettingsWindow::init() {
 
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheDelaySpinBox, &QSpinBox::setEnabled);
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheSizeSpinBox, &QSpinBox::setEnabled);
+    connect(textureCacheCheckBox, &QCheckBox::toggled,
+            textureCacheArrayCheckBox, &QCheckBox::setEnabled);
     connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
     connect(maxSizeLimitCheckBox, &QCheckBox::toggled, maxSizeLimitSpinBox, &QDoubleSpinBox::setEnabled);
 
@@ -1073,6 +1083,12 @@ void SettingsWindow::loadUiState() {
     browseOnnxModelButton->setEnabled(useOnnxModelCheckBox->isChecked());
 
     textureCacheCheckBox->setChecked(appSettings.value("interface/texture_cache", false).toBool());
+    if (auto *arrayCheck =
+            findChild<QCheckBox *>("textureCacheArrayCheckBox")) {
+        arrayCheck->setChecked(
+            appSettings.value("interface/texture_cache_array", false).toBool());
+        arrayCheck->setEnabled(textureCacheCheckBox->isChecked());
+    }
     cacheDelaySpinBox->setValue(appSettings.value("interface/cache_delay", 1).toInt());
     cacheSizeSpinBox->setValue(appSettings.value("interface/cache_size", 8).toInt());
     useYuvCheckBox->setChecked(appSettings.value("interface/use_yuv", false).toBool());
@@ -1138,6 +1154,11 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/onnx_model_file", onnxModelFileLineEdit->text());
 
     appSettings.setValue("interface/texture_cache", textureCacheCheckBox->isChecked());
+    if (auto *arrayCheck =
+            findChild<QCheckBox *>("textureCacheArrayCheckBox")) {
+        appSettings.setValue("interface/texture_cache_array",
+                             arrayCheck->isChecked());
+    }
     appSettings.setValue("interface/cache_delay", cacheDelaySpinBox->value());
     appSettings.setValue("interface/cache_size", cacheSizeSpinBox->value());
     appSettings.setValue("interface/use_yuv", useYuvCheckBox->isChecked());

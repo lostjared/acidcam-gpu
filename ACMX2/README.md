@@ -416,6 +416,8 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 |------|-------|-------------|
 | `--texture-cache` | | Enable texture cache (camera, video, and graphic modes) |
 | `--cache-delay` | `<frames>` | Texture cache delay in frames |
+| `--texture-cache-size` | `<frames>` | Texture cache ring size (`1`–`64`, default `8`) |
+| `--texture-cache-array` | | Bind the cache as `sampler2DArray history` instead of separate samplers |
 | `--copy-audio` | | Copy audio track from input to output |
 | `--enable-3d` | | Enable 3D cube rendering |
 | `--model` | `<file>` | 3D model file (`.mxmod`) |
@@ -569,6 +571,112 @@ All fragment shaders receive the following uniforms automatically. Uniforms that
 | Uniform | Type | Description |
 |---------|------|-------------|
 | `samp1`–`samp8` | `sampler2D` | Cached frame textures from the texture cache ring buffer |
+| `textures[SIZE]` | `sampler2D[]` | Scalable oldest-to-newest cache view in the default binding mode |
+| `history` | `sampler2DArray` | Optional ring-layer view, mapped oldest-to-newest with `history_head` |
+
+Shaders can support both cache representations with the injected
+`USE_HISTORY_TEXTURE_ARRAY` macro:
+
+```glsl
+#if USE_HISTORY_TEXTURE_ARRAY
+uniform sampler2DArray history;
+uniform int history_head;
+#define HISTORY_LAYER(index) ((history_head + (index)) % SIZE)
+#define SAMPLE_HISTORY(index, uv) \
+    texture(history, vec3((uv), float(HISTORY_LAYER(index))))
+#else
+uniform sampler2D textures[SIZE];
+#define SAMPLE_HISTORY(index, uv) texture(textures[index], (uv))
+#endif
+```
+
+#### Why `sampler2DArray` Is the Optimal Choice
+
+A `sampler2DArray` is one OpenGL texture object whose layers are equally sized
+2D images. The engine binds the entire history cache to one texture unit instead
+of binding `samp1` through `samp8` separately, which simplifies the host-side
+OpenGL state and leaves more texture units available for other inputs.
+
+The history layer is the third texture-coordinate component:
+
+```glsl
+uniform sampler2D samp;
+uniform sampler2DArray history;
+uniform int history_head;
+
+vec4 sample_cache(int index, vec2 uv) {
+    uv = mirror_repeat(uv);
+    int layer = (history_head + index) % SIZE;
+    return texture(history, vec3(uv, float(layer)));
+}
+```
+
+Unlike dynamically indexing an array of sampler uniforms, the layer number is a
+normal texture coordinate. GLSL 3.30 can therefore select it at runtime without
+an eight-way `switch`, allowing the driver to emit a native array-texture fetch
+on NVIDIA RTX and other supporting hardware.
+
+The array is updated as a ring rather than shifted every frame.
+`history_head` identifies the physical layer containing logical history index
+zero; adding it preserves the oldest-to-newest shader contract while uploading
+only one array layer per frame.
+
+All layers must have identical dimensions and internal formats. Cache frames
+already match the active framebuffer or viewport, so the texture cache
+naturally satisfies that requirement. Enable this representation with
+`--texture-cache-array`.
+
+#### Gradual Shader Migration Has No Rendering Cost
+
+Legacy sampler declarations may remain in a shader while it is being migrated.
+GLSL compilers perform dead-code elimination from the fragment output, so an
+unused `samp1`–`samp8` or `textures[SIZE]` declaration is removed from the
+linked program. It performs no texture fetch, consumes no texture unit in the
+linked shader, and allocates no texture storage by itself.
+
+An optimized-out uniform has no active location:
+
+```cpp
+GLint location = glGetUniformLocation(program, "samp1"); // -1 when inactive
+glUniform1i(location, 1);                                // specified no-op
+```
+
+OpenGL silently ignores a `glUniform*` call whose location is `-1`, so the
+engine can continue querying legacy names during the transition. Shaders can
+support both paths and be migrated one at a time:
+
+```glsl
+#if USE_HISTORY_TEXTURE_ARRAY
+uniform sampler2DArray history;
+uniform int history_head;
+#else
+uniform sampler2D samp1;
+uniform sampler2D samp2;
+// ...samp3 through samp8...
+#endif
+
+vec4 get_history(int index, vec2 uv) {
+#if USE_HISTORY_TEXTURE_ARRAY
+    int layer = (history_head + index) % SIZE;
+    return texture(history, vec3(uv, float(layer)));
+#else
+    if (index == 0) return texture(samp1, uv);
+    if (index == 1) return texture(samp2, uv);
+    // ...remaining legacy cases...
+    return vec4(0.0);
+#endif
+}
+```
+
+The engine defines `USE_HISTORY_TEXTURE_ARRAY` as `0` or `1`, so use `#if`
+rather than `#ifdef`. The inactive branch is removed at preprocessing time and
+adds no runtime branching. Mass conversion is optional; the repository utility
+is available when a clean, array-only shader library is desired:
+
+```bash
+scripts/migrate_cache_samplers.pl --dry-run shaders
+scripts/migrate_cache_samplers.pl shaders
+```
 
 ### acidcamGL-Compatible Uniforms
 

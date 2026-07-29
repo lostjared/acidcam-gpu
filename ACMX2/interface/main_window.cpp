@@ -115,13 +115,20 @@ QString resolveAssetsPath() {
 #endif
 }
 
-QString resolveShaderCachePath(const QString &libraryPath, int cacheSize) {
+bool textureCacheArraySettingEnabled() {
+    QSettings settings("LostSideDead", "acmx2");
+    return settings.value("interface/texture_cache_array", false).toBool();
+}
+
+QString resolveShaderCachePath(const QString &libraryPath, int cacheSize,
+                               bool useArray) {
     const QString assets = resolveAssetsPath();
     std::error_code ec;
     std::filesystem::path libFsPath(libraryPath.toStdString());
     std::filesystem::path absLib = std::filesystem::absolute(libFsPath, ec);
     std::string key = ec ? libraryPath.toStdString() : absLib.lexically_normal().string();
     key += "|s=" + std::to_string(cacheSize);
+    key += "|a=" + std::to_string(useArray ? 1 : 0);
     std::ostringstream nameStream;
     nameStream << ".shader_cache_" << std::hex << std::hash<std::string>{}(key);
     const QString filename = QString::fromStdString(nameStream.str());
@@ -617,6 +624,13 @@ void MainWindow::initControls() {
     centralWidget->setLayout(layout);
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
+    QSettings interfaceSettings("LostSideDead", "acmx2");
+    cache_enabled =
+        interfaceSettings.value("interface/texture_cache", false).toBool();
+    cache_delay =
+        interfaceSettings.value("interface/cache_delay", 1).toInt();
+    cache_size = std::clamp(
+        interfaceSettings.value("interface/cache_size", 8).toInt(), 1, 64);
     baseAppStyleSheet = qApp->styleSheet();
     QString path = appSettings.value("shaders", "").toString();
     path = path.trimmed();
@@ -1366,7 +1380,9 @@ void MainWindow::refreshShaderCacheStatus() {
     shaderCacheMTime = QDateTime();
     if (shader_path.isEmpty())
         return;
-    const QString cachePath = resolveShaderCachePath(shader_path, cache_size);
+    const QString cachePath = resolveShaderCachePath(
+        shader_path, cache_size,
+        cache_enabled && textureCacheArraySettingEnabled());
     QFileInfo cacheInfo(cachePath);
     if (!cacheInfo.exists() || !cacheInfo.isFile()) {
         Log("Shader cache not found at: " + cachePath);
@@ -1385,7 +1401,9 @@ bool MainWindow::isShaderCacheStale() const {
 #else
     if (!use_shader_cache || shader_path.isEmpty() || items.isEmpty())
            return false;
-    const QString cachePath = resolveShaderCachePath(shader_path, cache_size);
+    const QString cachePath = resolveShaderCachePath(
+        shader_path, cache_size,
+        cache_enabled && textureCacheArraySettingEnabled());
     QFileInfo cacheInfo(cachePath);
     if (!cacheInfo.exists() || !cacheInfo.isFile())
         return true;
@@ -2031,6 +2049,8 @@ void MainWindow::runSelected() {
     // Pass texture cache size so the SIZE macro injected into the fragment
     // matches whatever the user has configured for cache shaders.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
+    if (cache_enabled && textureCacheArraySettingEnabled())
+        arguments << "--texture-cache-array";
     QString res;
     QTextStream stream(&res);
     stream << camera_res.width() << "x" << camera_res.height();
@@ -2241,6 +2261,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
     arguments << "--interface-shm";
     // Always pass texture cache size so runtime SIZE matches the cache file.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
+    if (cache_enabled && textureCacheArraySettingEnabled())
+        arguments << "--texture-cache-array";
     QString res;
     QTextStream stream(&res);
     stream << camera_res.width() << "x" << camera_res.height();
@@ -2812,6 +2834,8 @@ void MainWindow::menuBuildShaderCache() {
     args << "--build" << build_path;
     args << "-p" << assets_path;
     args << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
+    if (cache_enabled && textureCacheArraySettingEnabled())
+        args << "--texture-cache-array";
 
     if (enable_3d) {
         args << "--enable-3d";
@@ -2879,6 +2903,10 @@ void MainWindow::menuRemoveBroken() {
     QStringList args;
     args << "--remove-broken" << scan_path;
     args << "-p" << assets_path;
+    args << "--texture-cache-size"
+         << QString::number(cache_size > 0 ? cache_size : 8);
+    if (cache_enabled && textureCacheArraySettingEnabled())
+        args << "--texture-cache-array";
     if (enable_3d)
         args << "--enable-3d";
 

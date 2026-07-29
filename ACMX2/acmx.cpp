@@ -1646,21 +1646,25 @@ class SnapshotThreadPool {
  * @class FrameCache
  * @brief Fixed-capacity ring buffer of GL textures for temporal shaders.
  *
- * Shaders whose filename contains "cache" receive up to 8 previous frames
- * as additional sampler2D uniforms (samp1–samp8). Rather than holding
- * cv::Mat copies and re-uploading every slot each frame, this class keeps
- * a ring of @c num_frames pre-allocated GL textures and uploads only the
- * newest frame into the next slot. The "oldest → newest" indexing used
- * by callers is preserved via a logical-to-physical slot translation.
+ * Legacy shaders whose filename contains "cache" receive previous frames as
+ * separate sampler2D uniforms. Array-cache shaders instead receive one
+ * sampler2DArray whose layers form the ring. In either mode only the newest
+ * frame is uploaded into the next physical slot. The "oldest → newest"
+ * indexing used by shaders is preserved via a logical-to-physical offset.
  *
  * This mirrors the texture-ring approach used by gl_compute_cv and
  * eliminates 7 BGR→RGBA conversions plus 7 texture uploads per push.
  */
 class FrameCache {
   public:
-    /// @param num Maximum number of frames to retain.
-    explicit FrameCache(std::size_t num)
-        : num_frames(num) {
+    /**
+     * @param num Maximum number of frames to retain.
+     * @param use_array Store the ring in one `GL_TEXTURE_2D_ARRAY` instead of
+     *                  separate `GL_TEXTURE_2D` objects.
+     */
+    explicit FrameCache(std::size_t num, bool use_array = false)
+        : num_frames(num),
+          use_history_array(use_array) {
     }
     ~FrameCache() { cleanup(); }
 
@@ -1685,6 +1689,13 @@ class FrameCache {
         width = w;
         height = h;
         is_hdr = hdr;
+        if (use_history_array) {
+            allocateHistoryTexture();
+            head = 0;
+            count = 0;
+            return;
+        }
+
         textures.assign(num_frames, 0);
         glGenTextures(static_cast<GLsizei>(num_frames), textures.data());
         const GLint internal = hdr ? GL_RGBA16F : GL_RGBA;
@@ -1716,6 +1727,10 @@ class FrameCache {
             glDeleteFramebuffers(1, &scratch_fbo);
             scratch_fbo = 0;
         }
+        if (history_texture != 0) {
+            glDeleteTextures(1, &history_texture);
+            history_texture = 0;
+        }
         head = 0;
         count = 0;
         width = 0;
@@ -1736,12 +1751,29 @@ class FrameCache {
      * @param w,h     Region to copy (typically the full FBO dimensions).
      */
     void pushFromFBO(GLuint src_fbo, int w, int h) {
-        if (textures.empty())
+        if (!hasStorage())
             return;
         GLint prev_read = 0;
         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, src_fbo);
         glReadBuffer(GL_COLOR_ATTACHMENT0);
+        if (use_history_array) {
+            if (w != width || h != height) {
+                width = w;
+                height = h;
+                allocateHistoryTexture();
+                head = 0;
+                count = 0;
+            }
+            glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
+            glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+                                static_cast<GLint>(head), 0, 0, w, h);
+            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
+            advance();
+            return;
+        }
+
         glBindTexture(GL_TEXTURE_2D, textures[head]);
         if (w != width || h != height) {
             // Re-spec the head slot to match the new size; remaining slots
@@ -1761,9 +1793,7 @@ class FrameCache {
         glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
-        head = (head + 1) % num_frames;
-        if (count < num_frames)
-            ++count;
+        advance();
     }
 
     /**
@@ -1774,10 +1804,27 @@ class FrameCache {
      * and one texture upload occur per call.
      */
     void push(const cv::Mat &frame) {
-        if (textures.empty())
+        if (!hasStorage())
             return;
         cv::Mat tmp;
         cv::cvtColor(frame, tmp, cv::COLOR_BGR2RGBA);
+        if (use_history_array) {
+            if (tmp.cols != width || tmp.rows != height) {
+                width = tmp.cols;
+                height = tmp.rows;
+                allocateHistoryTexture();
+                head = 0;
+                count = 0;
+            }
+            glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
+            glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+                            static_cast<GLint>(head), tmp.cols, tmp.rows, 1,
+                            GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            advance();
+            return;
+        }
+
         glBindTexture(GL_TEXTURE_2D, textures[head]);
         if (tmp.cols != width || tmp.rows != height) {
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tmp.cols, tmp.rows, 0,
@@ -1789,9 +1836,7 @@ class FrameCache {
                             GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
         }
         glBindTexture(GL_TEXTURE_2D, 0);
-        head = (head + 1) % num_frames;
-        if (count < num_frames)
-            ++count;
+        advance();
     }
 
     /**
@@ -1808,7 +1853,7 @@ class FrameCache {
      * @param w,h     Region to copy (typically the full texture size).
      */
     void pushFromTexture(GLuint src_tex, int w, int h) {
-        if (textures.empty() || src_tex == 0)
+        if (!hasStorage() || src_tex == 0)
             return;
         if (scratch_fbo == 0) {
             glGenFramebuffers(1, &scratch_fbo);
@@ -1819,6 +1864,25 @@ class FrameCache {
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                GL_TEXTURE_2D, src_tex, 0);
         glReadBuffer(GL_COLOR_ATTACHMENT0);
+        if (use_history_array) {
+            if (w != width || h != height) {
+                width = w;
+                height = h;
+                allocateHistoryTexture();
+                head = 0;
+                count = 0;
+            }
+            glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
+            glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+                                static_cast<GLint>(head), 0, 0, w, h);
+            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D, 0, 0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
+            advance();
+            return;
+        }
+
         glBindTexture(GL_TEXTURE_2D, textures[head]);
         if (w != width || h != height) {
             const GLint internal = is_hdr ? GL_RGBA16F : GL_RGBA;
@@ -1838,9 +1902,7 @@ class FrameCache {
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                GL_TEXTURE_2D, 0, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
-        head = (head + 1) % num_frames;
-        if (count < num_frames)
-            ++count;
+        advance();
     }
 
     /**
@@ -1855,8 +1917,19 @@ class FrameCache {
     /// Number of frames currently retained (0 ≤ n ≤ capacity).
     std::size_t size() const { return count; }
 
+    /// Maximum number of frames retained by the ring.
+    std::size_t capacity() const { return num_frames; }
+
     /// True when the ring is fully populated.
     bool isFull() const { return count == num_frames; }
+
+    /// Array texture containing the physical history ring layers.
+    GLuint historyTexture() const { return history_texture; }
+
+    /// Physical array layer corresponding to logical history index zero.
+    int oldestLayer() const {
+        return isFull() ? static_cast<int>(head) : 0;
+    }
 
     /**
      * @brief Pre-fill every slot with copies of a single frame.
@@ -1866,11 +1939,29 @@ class FrameCache {
      * ring as full.
      */
     void fill(const cv::Mat &frame) {
-        if (textures.empty())
+        if (!hasStorage())
             return;
         cv::Mat tmp;
         cv::cvtColor(frame, tmp, cv::COLOR_BGR2RGBA);
         const bool size_matches = (tmp.cols == width && tmp.rows == height);
+        if (use_history_array) {
+            if (!size_matches) {
+                width = tmp.cols;
+                height = tmp.rows;
+                allocateHistoryTexture();
+            }
+            glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
+            for (std::size_t i = 0; i < num_frames; ++i) {
+                glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+                                static_cast<GLint>(i), tmp.cols, tmp.rows, 1,
+                                GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+            }
+            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            head = 0;
+            count = num_frames;
+            return;
+        }
+
         for (std::size_t i = 0; i < num_frames; ++i) {
             glBindTexture(GL_TEXTURE_2D, textures[i]);
             if (!size_matches) {
@@ -1891,14 +1982,48 @@ class FrameCache {
     }
 
   private:
+    bool hasStorage() const {
+        return use_history_array ? history_texture != 0 : !textures.empty();
+    }
+
+    void advance() {
+        head = (head + 1) % num_frames;
+        if (count < num_frames)
+            ++count;
+    }
+
+    /**
+     * @brief Allocate the optional array texture using the cache's dimensions
+     * and pixel format.
+     */
+    void allocateHistoryTexture() {
+        if (!use_history_array || num_frames == 0 || width <= 0 || height <= 0)
+            return;
+        if (history_texture == 0) {
+            glGenTextures(1, &history_texture);
+        }
+        glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
+        const GLint internal = is_hdr ? GL_RGBA16F : GL_RGBA;
+        const GLenum type = is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
+        glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, internal, width, height,
+                     static_cast<GLsizei>(num_frames), 0, GL_RGBA, type, nullptr);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    }
+
     std::size_t num_frames;
     int width = 0;
     int height = 0;
     bool is_hdr = false;
+    bool use_history_array = false;
     std::size_t head = 0;
     std::size_t count = 0;
     std::vector<GLuint> textures;
-    GLuint scratch_fbo = 0; ///< Scratch FBO used by pushFromTexture().
+    GLuint scratch_fbo = 0;     ///< Scratch FBO used by pushFromTexture().
+    GLuint history_texture = 0; ///< Optional array-backed history ring.
 };
 
 /**
@@ -2603,6 +2728,8 @@ class ShaderLibrary {
         // shaders can scale beyond the legacy 8-frame ceiling.
         std::vector<GLint> texture_array_loc;
         GLint texture_array_base_loc = -1; ///< Base location of `textures[0]` for bulk glUniform1iv assignment.
+        GLint history_loc = -1;            ///< Location of optional `uniform sampler2DArray history;`.
+        GLint history_head_loc = -1;       ///< Location of the array ring's oldest physical layer.
         GLint iFrame = -1;
         GLint iTimeDelta = -1;
         GLint iDate = -1;
@@ -2649,7 +2776,8 @@ class ShaderLibrary {
      */
     static std::string shaderCacheFilePath(const std::string &assets_path,
                                            const std::string &library_path,
-                                           int cache_size = 8) {
+                                           int cache_size = 8,
+                                           bool use_array = false) {
         std::error_code ec;
         std::filesystem::path lib(library_path);
         std::filesystem::path abs_lib = std::filesystem::absolute(lib, ec);
@@ -2659,6 +2787,7 @@ class ShaderLibrary {
         // for one N must not be reused for a different N — the sampler array
         // declaration would mismatch the linked program.
         key += "|s=" + std::to_string(cache_size);
+        key += "|a=" + std::to_string(use_array ? 1 : 0);
         std::hash<std::string> hasher;
         std::ostringstream name_stream;
         name_stream << ".shader_cache_" << std::hex << hasher(key);
@@ -2719,6 +2848,8 @@ class ShaderLibrary {
      *  - bound the runtime binding loop in the cache-render path.
      */
     int cache_size = 8;
+    bool use_history_array = false;
+    int history_head = 0;
 
     /**
      * @brief Read a fragment shader file and inject `#define SIZE N`
@@ -2738,7 +2869,8 @@ class ShaderLibrary {
      * @param size       Cache ring length to bake as `SIZE`.
      * @return Modified fragment source, or empty string on read failure.
      */
-    static std::string injectShaderSize(const std::string &frag_path, int size) {
+    static std::string injectShaderSize(const std::string &frag_path, int size,
+                                        bool use_array) {
         std::ifstream in(frag_path);
         if (!in.is_open())
             return {};
@@ -2752,7 +2884,10 @@ class ShaderLibrary {
             std::size_t nl = src.find('\n', v_pos);
             insert_pos = (nl == std::string::npos) ? src.size() : nl + 1;
         }
-        std::string define = "#define SIZE " + std::to_string(size) + "\n";
+        std::string define =
+            "#define SIZE " + std::to_string(size) + "\n" +
+            "#define USE_HISTORY_TEXTURE_ARRAY " +
+            std::to_string(use_array ? 1 : 0) + "\n";
         src.insert(insert_pos, define);
         return src;
     }
@@ -2770,7 +2905,8 @@ class ShaderLibrary {
     bool loadProgramWithSize(gl::ShaderProgram *prog,
                              const std::string &vert_path,
                              const std::string &frag_path) const {
-        std::string frag_src = injectShaderSize(frag_path, cache_size);
+        std::string frag_src =
+            injectShaderSize(frag_path, cache_size, use_history_array);
         if (frag_src.empty()) {
             // Could not read the fragment file; fall back so the loader can
             // produce its own diagnostic.
@@ -2903,6 +3039,16 @@ class ShaderLibrary {
     int cacheSize() const { return cache_size; }
 
     /**
+     * @brief Select the cache sampler representation before compiling shaders.
+     *
+     * Array mode binds a single `sampler2DArray history` at texture unit 1.
+     * Legacy mode binds `samp1..samp8` and `textures[SIZE]` to units 1..SIZE.
+     */
+    void setHistoryTextureArray(bool enabled) {
+        use_history_array = enabled;
+    }
+
+    /**
      * @brief Remove all compiled shader programs and reset the library index.
      *
      * Releases every unique_ptr in both the 2D and 3D program vectors,
@@ -2931,13 +3077,16 @@ class ShaderLibrary {
      */
     void loadProgram(gl::GLWindow *win, const std::string text) {
         programs_2d.push_back(makeProgram());
-        if (!programs_2d.back()->loadProgram(win->util.getFilePath("data/vert.glsl"), text)) {
+        if (!loadProgramWithSize(programs_2d.back().get(),
+                                 win->util.getFilePath("data/vert.glsl"), text)) {
             throw mx::Exception("Error loading 2D shader program: " + text);
         }
         setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text);
         if (dual_mode) {
             programs_3d.push_back(makeProgram());
-            if (!programs_3d.back()->loadProgram(win->util.getFilePath("data/vertex.glsl"), text)) {
+            if (!loadProgramWithSize(programs_3d.back().get(),
+                                     win->util.getFilePath("data/vertex.glsl"),
+                                     text)) {
                 throw mx::Exception("Error loading 3D shader program: " + text);
             }
             setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text);
@@ -3008,6 +3157,16 @@ class ShaderLibrary {
             }
 
             if (name.find("cache") != std::string::npos) {
+                names[pos].history_loc =
+                    glGetUniformLocation(prog->id(), "history");
+                names[pos].history_head_loc =
+                    glGetUniformLocation(prog->id(), "history_head");
+                if (use_history_array && names[pos].history_loc != -1) {
+                    glUniform1i(names[pos].history_loc, 1);
+                }
+                if (use_history_array && names[pos].history_head_loc != -1) {
+                    glUniform1i(names[pos].history_head_loc, history_head);
+                }
                 // samp1..samp8 are the legacy slot-named samplers (capped
                 // at 8 because the engine only ever declared that many).
                 for (int i = 0; i < 8; ++i) {
@@ -3017,7 +3176,8 @@ class ShaderLibrary {
                 // location; some drivers do not reliably expose locations for
                 // every `textures[i]` element queried individually.
                 names[pos].texture_array_base_loc = glGetUniformLocation(prog->id(), "textures[0]");
-                if (names[pos].texture_array_base_loc != -1) {
+                if (!use_history_array &&
+                    names[pos].texture_array_base_loc != -1) {
                     std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
                     for (int i = 0; i < cache_size; ++i) {
                         units[static_cast<std::size_t>(i)] = i + 1;
@@ -3111,6 +3271,12 @@ class ShaderLibrary {
         if (names.find(index()) == names.end()) {
             return;
         }
+        if (use_history_array) {
+            if (value == 0 && names[index()].history_loc != -1) {
+                glUniform1i(names[index()].history_loc, 1);
+            }
+            return;
+        }
         // samp1..samp8 only exist for the first 8 slots (legacy ceiling).
         if (value < 8) {
             glUniform1i(names[index()].texture_cache_loc[value], value + 1);
@@ -3127,6 +3293,17 @@ class ShaderLibrary {
         if (value < static_cast<int>(names[index()].texture_array_loc.size())) {
             glUniform1i(names[index()].texture_array_loc[value], value + 1);
         }
+    }
+
+    /**
+     * @brief Set the physical array layer that represents logical history zero.
+     *
+     * The array texture is updated as a ring, so this offset advances whenever
+     * the oldest frame is overwritten. Shaders map a logical index with
+     * `(history_head + index) % SIZE`.
+     */
+    void setHistoryHead(int layer) {
+        history_head = layer;
     }
 
     /**
@@ -3669,7 +3846,9 @@ class ShaderLibrary {
         out.close();
 
         // Invalidate the on-disk cache since the library composition changed.
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size);
+        std::string cache_file =
+            shaderCacheFilePath(win ? win->util.path : std::string(),
+                                library_path, cache_size, use_history_array);
         if (std::filesystem::exists(cache_file)) {
             std::filesystem::remove(cache_file, ec);
             if (!ec) {
@@ -3715,7 +3894,9 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Program binary functions loaded successfully\n";
         fflush(stdout);
 
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size);
+        std::string cache_file =
+            shaderCacheFilePath(win ? win->util.path : std::string(),
+                                library_path, cache_size, use_history_array);
         std::fstream file;
         file.open(library_path + "/index.txt", std::ios::in);
         if (!file.is_open()) {
@@ -4011,7 +4192,9 @@ class ShaderLibrary {
     /// @brief Attempt to load all shader programs from the binary cache file.
     bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont,
                        const std::string &vert_2d = "", const std::string &vert_3d = "") {
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size);
+        std::string cache_file =
+            shaderCacheFilePath(win ? win->util.path : std::string(),
+                                library_path, cache_size, use_history_array);
 
         mx::system_out << "acmx2: Checking for shader cache at: " << cache_file << "\n";
         fflush(stdout);
@@ -4369,7 +4552,9 @@ class ShaderLibrary {
         // cache now and reload from it so subsequent runs hit the binary cache
         // instead of recompiling 1700+ shaders every launch. If building or
         // reloading fails for any reason, fall back to a plain source compile.
-        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), text, cache_size);
+        std::string cache_file =
+            shaderCacheFilePath(win ? win->util.path : std::string(), text,
+                                cache_size, use_history_array);
         mx::system_out << "acmx2: Building shader cache at: " << cache_file << "\n";
         fflush(stdout);
         programs_2d.clear();
@@ -4647,26 +4832,30 @@ class ShaderLibrary {
                 glUniform1i(n.spectrum_history_locs[i], SpectrumHistory::BASE_UNIT + i);
         }
 #endif
-        // Re-assert texture-cache sampler bindings (samp1..samp8 and
-        // textures[0..N-1]) so multipass passes that declare these
-        // uniforms point at units 1..N regardless of when their program
-        // was last used. Sampler uniforms are program state, but binding
-        // them here keeps the multipass path self-sufficient.
-        if (n.texture_array_base_loc != -1) {
-            std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
-            for (int i = 0; i < cache_size; ++i) {
-                units[static_cast<std::size_t>(i)] = i + 1;
-            }
-            glUniform1iv(n.texture_array_base_loc, cache_size, units.data());
+        // Re-assert the selected texture-cache sampler representation.
+        if (use_history_array) {
+            if (n.history_loc != -1)
+                glUniform1i(n.history_loc, 1);
+            if (n.history_head_loc != -1)
+                glUniform1i(n.history_head_loc, history_head);
         } else {
-            for (int i = 0; i < static_cast<int>(n.texture_array_loc.size()); ++i) {
-                if (n.texture_array_loc[i] != -1)
-                    glUniform1i(n.texture_array_loc[i], i + 1);
+            if (n.texture_array_base_loc != -1) {
+                std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
+                for (int i = 0; i < cache_size; ++i) {
+                    units[static_cast<std::size_t>(i)] = i + 1;
+                }
+                glUniform1iv(n.texture_array_base_loc, cache_size, units.data());
+            } else {
+                for (int i = 0;
+                     i < static_cast<int>(n.texture_array_loc.size()); ++i) {
+                    if (n.texture_array_loc[i] != -1)
+                        glUniform1i(n.texture_array_loc[i], i + 1);
+                }
             }
-        }
-        for (int i = 0; i < 8 && i < cache_size; ++i) {
-            if (n.texture_cache_loc[i] != -1)
-                glUniform1i(n.texture_cache_loc[i], i + 1);
+            for (int i = 0; i < 8 && i < cache_size; ++i) {
+                if (n.texture_cache_loc[i] != -1)
+                    glUniform1i(n.texture_cache_loc[i], i + 1);
+            }
         }
 #ifdef MIDI_ENABLED
         for (int i = 0; i < 4; ++i) {
@@ -4809,23 +4998,30 @@ class ShaderLibrary {
                 glUniform1i(n.spectrum_history_locs[i], SpectrumHistory::BASE_UNIT + i);
         }
 #endif
-        // Re-assert texture-cache sampler bindings (samp1..samp8 and
-        // textures[0..N-1]) for multipass passes targeting cache shaders.
-        if (n.texture_array_base_loc != -1) {
-            std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
-            for (int i = 0; i < cache_size; ++i) {
-                units[static_cast<std::size_t>(i)] = i + 1;
-            }
-            glUniform1iv(n.texture_array_base_loc, cache_size, units.data());
+        // Re-assert the selected texture-cache sampler representation.
+        if (use_history_array) {
+            if (n.history_loc != -1)
+                glUniform1i(n.history_loc, 1);
+            if (n.history_head_loc != -1)
+                glUniform1i(n.history_head_loc, history_head);
         } else {
-            for (int i = 0; i < static_cast<int>(n.texture_array_loc.size()); ++i) {
-                if (n.texture_array_loc[i] != -1)
-                    glUniform1i(n.texture_array_loc[i], i + 1);
+            if (n.texture_array_base_loc != -1) {
+                std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
+                for (int i = 0; i < cache_size; ++i) {
+                    units[static_cast<std::size_t>(i)] = i + 1;
+                }
+                glUniform1iv(n.texture_array_base_loc, cache_size, units.data());
+            } else {
+                for (int i = 0;
+                     i < static_cast<int>(n.texture_array_loc.size()); ++i) {
+                    if (n.texture_array_loc[i] != -1)
+                        glUniform1i(n.texture_array_loc[i], i + 1);
+                }
             }
-        }
-        for (int i = 0; i < 8 && i < cache_size; ++i) {
-            if (n.texture_cache_loc[i] != -1)
-                glUniform1i(n.texture_cache_loc[i], i + 1);
+            for (int i = 0; i < 8 && i < cache_size; ++i) {
+                if (n.texture_cache_loc[i] != -1)
+                    glUniform1i(n.texture_cache_loc[i], i + 1);
+            }
         }
 #ifdef MIDI_ENABLED
         for (int i = 0; i < 4; ++i) {
@@ -5045,6 +5241,13 @@ class ShaderLibrary {
             }
         }
 #endif
+        if (use_history_array) {
+            auto &n = names[index()];
+            if (n.history_loc != -1)
+                glUniform1i(n.history_loc, 1);
+            if (n.history_head_loc != -1)
+                glUniform1i(n.history_head_loc, history_head);
+        }
 #ifdef MIDI_ENABLED
         for (int i = 0; i < 4; ++i) {
             if (names[index()].slider_loc[i] != -1)
@@ -5259,6 +5462,7 @@ struct MXArguments {
     std::tuple<int, std::string, int> slib;
     bool full = false;
     bool cache = false;
+    bool cache_array = false;
     int cache_delay = 1;
     int cache_size = 8;
     bool copy_audio = false;
@@ -6451,8 +6655,11 @@ class ACView : public gl::GLObject {
           fps{args.fps_value},
           repeat{args.repeat},
           full{args.full},
-          frame_cache{static_cast<std::size_t>(args.cache_size > 0 ? args.cache_size : 8)},
+          frame_cache{
+              static_cast<std::size_t>(args.cache_size > 0 ? args.cache_size : 8),
+              args.cache_array},
           texture_cache{args.cache},
+          texture_cache_array{args.cache_array},
           cache_delay{args.cache_delay},
           copy_audio{args.copy_audio},
           gpu_cuda_device{args.cuda_device},
@@ -7876,7 +8083,8 @@ class ACView : public gl::GLObject {
         // (b) size the per-program `texture_array_loc` lookup vector,
         // (c) keep the on-disk binary cache keyed per-size to avoid
         //     reusing a binary compiled for a different SIZE.
-        library.setCacheSize(static_cast<int>(frame_cache.size()));
+        library.setCacheSize(static_cast<int>(frame_cache.capacity()));
+        library.setHistoryTextureArray(texture_cache_array);
         if (std::get<0>(flib) == 1) {
             if (use_shader_cache_flag)
                 library.loadProgramsWithCache(win, std::get<1>(flib), overlayFont);
@@ -8543,14 +8751,24 @@ class ACView : public gl::GLObject {
                     hdr_counter = 0;
                 }
                 if (frame_cache.isFull()) {
-                    const int n_bind = library.cacheSize();
-                    for (int i = 0; i < n_bind; ++i) {
-                        // setUniform(name, slot) routes through ProgramData
-                        // and assigns BOTH `samp(i+1)` (for i<8) and
-                        // `textures[i]` to texture unit i+1.
-                        library.setUniform("samp" + std::to_string(i + 1), i);
-                        glActiveTexture(GL_TEXTURE1 + i);
-                        glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(i));
+                    if (texture_cache_array) {
+                        library.setHistoryHead(frame_cache.oldestLayer());
+                        library.setUniform("history", 0);
+                        glActiveTexture(GL_TEXTURE1);
+                        glBindTexture(GL_TEXTURE_2D_ARRAY,
+                                      frame_cache.historyTexture());
+                    } else {
+                        const int n_bind = library.cacheSize();
+                        for (int i = 0; i < n_bind; ++i) {
+                            // setUniform(name, slot) routes through ProgramData
+                            // and assigns BOTH `samp(i+1)` (for i<8) and
+                            // `textures[i]` to texture unit i+1.
+                            library.setUniform(
+                                "samp" + std::to_string(i + 1), i);
+                            glActiveTexture(GL_TEXTURE1 + i);
+                            glBindTexture(GL_TEXTURE_2D,
+                                          frame_cache.textureAt(i));
+                        }
                     }
                 }
             }
@@ -8656,11 +8874,21 @@ class ACView : public gl::GLObject {
                     counter = 0;
                 }
                 if (frame_cache.isFull()) {
-                    const int n_bind = library.cacheSize();
-                    for (int i = 0; i < n_bind; ++i) {
-                        library.setUniform("samp" + std::to_string(i + 1), i);
-                        glActiveTexture(GL_TEXTURE1 + i);
-                        glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(i));
+                    if (texture_cache_array) {
+                        library.setHistoryHead(frame_cache.oldestLayer());
+                        library.setUniform("history", 0);
+                        glActiveTexture(GL_TEXTURE1);
+                        glBindTexture(GL_TEXTURE_2D_ARRAY,
+                                      frame_cache.historyTexture());
+                    } else {
+                        const int n_bind = library.cacheSize();
+                        for (int i = 0; i < n_bind; ++i) {
+                            library.setUniform(
+                                "samp" + std::to_string(i + 1), i);
+                            glActiveTexture(GL_TEXTURE1 + i);
+                            glBindTexture(GL_TEXTURE_2D,
+                                          frame_cache.textureAt(i));
+                        }
                     }
                 }
             }
@@ -8909,10 +9137,18 @@ class ACView : public gl::GLObject {
                             // does this when the active library shader is a cache
                             // shader; multipass passes need their own bindings.
                             if (texture_cache && frame_cache.isFull() && library.isCache2D(static_cast<size_t>(shader_idx))) {
-                                const int n_bind = library.cacheSize();
-                                for (int ci = 0; ci < n_bind; ++ci) {
-                                    glActiveTexture(GL_TEXTURE1 + ci);
-                                    glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(ci));
+                                if (texture_cache_array) {
+                                    glActiveTexture(GL_TEXTURE1);
+                                    glBindTexture(GL_TEXTURE_2D_ARRAY,
+                                                  frame_cache.historyTexture());
+                                } else {
+                                    const int n_bind = library.cacheSize();
+                                    for (int ci = 0; ci < n_bind; ++ci) {
+                                        glActiveTexture(GL_TEXTURE1 + ci);
+                                        glBindTexture(
+                                            GL_TEXTURE_2D,
+                                            frame_cache.textureAt(ci));
+                                    }
                                 }
                                 glActiveTexture(GL_TEXTURE0);
                             }
@@ -9077,10 +9313,18 @@ class ACView : public gl::GLObject {
                             // does this when the active library shader is a cache
                             // shader; multipass passes need their own bindings.
                             if (texture_cache && frame_cache.isFull() && library.isCache2D(static_cast<size_t>(shader_idx))) {
-                                const int n_bind = library.cacheSize();
-                                for (int ci = 0; ci < n_bind; ++ci) {
-                                    glActiveTexture(GL_TEXTURE1 + ci);
-                                    glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(ci));
+                                if (texture_cache_array) {
+                                    glActiveTexture(GL_TEXTURE1);
+                                    glBindTexture(GL_TEXTURE_2D_ARRAY,
+                                                  frame_cache.historyTexture());
+                                } else {
+                                    const int n_bind = library.cacheSize();
+                                    for (int ci = 0; ci < n_bind; ++ci) {
+                                        glActiveTexture(GL_TEXTURE1 + ci);
+                                        glBindTexture(
+                                            GL_TEXTURE_2D,
+                                            frame_cache.textureAt(ci));
+                                    }
                                 }
                                 glActiveTexture(GL_TEXTURE0);
                             }
@@ -10462,6 +10706,7 @@ class ACView : public gl::GLObject {
     std::chrono::steady_clock::time_point lastFrameTime = std::chrono::steady_clock::now();
     FrameCache frame_cache;
     bool texture_cache = false;
+    bool texture_cache_array = false;
     int cache_delay = 1;
     int cache_warmup_frames = 0; // Frames to skip before pushing into cache after load
     bool source_frame_ready = false;
@@ -11641,6 +11886,8 @@ namespace {
 
         printSection(out, c, "Shaders And Visual Pipeline", {{"-s <index.txt>, --shaders <index.txt>", "Use shader library index file (playlist-able shader set).", "acmx2 --shaders ./shaders/index.txt"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"-h <index>, --shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders index.txt --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --playlist live_set.txt --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader, remove failing entries from index.txt, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}});
 
+        printSection(out, c, "Texture Array Cache", {{"--texture-cache-array", "Store frame history in one sampler2DArray named history.", "acmx2 --texture-cache-array"}});
+
         printSection(out, c, "DNN And ONNX Models", {{"--human <file>", "Load ONNX human segmentation model (e.g., pphumanseg .onnx) to isolate foreground person.", "acmx2 --human human_seg.onnx -i input.mp4 -o output.mp4"}, {"--background", "When --human is used, apply shaders only to background; composite person on top.", "acmx2 --human model.onnx --background"}, {"--black <threshold>", "Set mask black point / shadow crush threshold for color/segmentation masks (default: 0.35).", "acmx2 --human seg.onnx --black 0.25"}, {"--white <threshold>", "Set mask white point / opacity saturation threshold for color/segmentation masks (default: 0.75).", "acmx2 --human seg.onnx --white 0.85"}, {"--edge <file>", "Load ONNX edge detection model (e.g., Dexined .onnx) to replace frame with edge map.", "acmx2 --edge edges.onnx -i video.mp4 -o edges.mp4"}, {"--onnx <file>", "Load generic ONNX model from YAML config file; replaces frame with model output.", "acmx2 --onnx bubble.yaml -i input.mp4 -o output.mp4"}});
 
         printSection(out, c, "GPU And CUDA", {{"--gpu-filter <list>", "Apply CUDA filter chain by index list (comma-separated).", "acmx2 --gpu-filter 1,12,18"}, {"--gpu-buffer <N>", "Set GPU temporal frame buffer size (4..32).", "acmx2 --gpu-buffer 12"}, {"--list-filters", "List all built-in GPU filters and their indices.", "acmx2 --list-filters"}, {"-m <idx>, --cuda-device <idx>", "Select CUDA device index to run processing on.", "acmx2 --cuda-device 0"}, {"--list-cuda-devices", "List CUDA devices visible to the runtime.", "acmx2 --list-cuda-devices"}, {"--check-cuda", "Report whether this build has CUDA support enabled.", "acmx2 --check-cuda"}});
@@ -11727,6 +11974,7 @@ int main(int argc, char **argv) {
         .addOptionDouble(256, "texture-cache", "Enable texture cache")
         .addOptionDoubleValue(257, "cache-delay", "Cache delay in frames")
         .addOptionDoubleValue(275, "texture-cache-size", "Ring buffer size for texture cache (default 8)")
+        .addOptionDouble(276, "texture-cache-array", "Expose texture cache as sampler2DArray history")
         .addOptionDouble(258, "copy-audio", "Copy audio track")
         .addOptionDouble(259, "enable-3d", "Enable 3D cube")
         .addOptionDoubleValue(260, "model", "Model file")
@@ -11956,6 +12204,12 @@ int main(int argc, char **argv) {
                 mx::system_out << "acmx2: Texture cache size set to: " << args.cache_size << "\n";
                 break;
             }
+            case 276:
+                args.cache = true;
+                args.cache_array = true;
+                mx::system_out
+                    << "acmx2: Texture cache array enabled as uniform history.\n";
+                break;
             case 258:
                 args.copy_audio = true;
                 break;
@@ -12579,7 +12833,9 @@ int main(int argc, char **argv) {
                  * @param is3d   Include 3-D shaders in the cache.
                  * @param assets Base asset path for vertex shader lookup.
                  */
-                BuildWindow(const std::string &path, bool is3d, const std::string &assets, int tex_cache_size)
+                BuildWindow(const std::string &path, bool is3d,
+                            const std::string &assets, int tex_cache_size,
+                            bool use_array)
                     : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false),
                       lib_path(path), enable_3d(is3d), assets_path(assets) {
                     mx::system_out << "acmx2: Window created, setting up...\n";
@@ -12587,9 +12843,12 @@ int main(int argc, char **argv) {
                     util.path = assets_path;
                     library.enableDualMode(enable_3d);
                     library.setCacheSize(tex_cache_size > 0 ? tex_cache_size : 8);
+                    library.setHistoryTextureArray(use_array);
                 }
 
-                BuildWindow(const std::string &path, bool is3d, const std::string &assets, int tex_cache_size, bool)
+                BuildWindow(const std::string &path, bool is3d,
+                            const std::string &assets, int tex_cache_size,
+                            bool use_array, bool)
                     : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
                       lib_path(path), enable_3d(is3d), assets_path(assets) {
                     mx::system_out << "acmx2: Window created, setting up...\n";
@@ -12597,6 +12856,7 @@ int main(int argc, char **argv) {
                     util.path = assets_path;
                     library.enableDualMode(enable_3d);
                     library.setCacheSize(tex_cache_size > 0 ? tex_cache_size : 8);
+                    library.setHistoryTextureArray(use_array);
                 }
 
                 /**
@@ -12696,12 +12956,16 @@ int main(int argc, char **argv) {
 
 #if defined(__linux__)
             if (args.silent) {
-                BuildWindow build_win(args.build_library_path, args.is3d, args.path, args.cache_size, true);
+                BuildWindow build_win(args.build_library_path, args.is3d,
+                                      args.path, args.cache_size,
+                                      args.cache_array, true);
                 build_win.buildLoop();
                 return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
             }
 #endif
-            BuildWindow build_win(args.build_library_path, args.is3d, args.path, args.cache_size);
+            BuildWindow build_win(args.build_library_path, args.is3d,
+                                  args.path, args.cache_size,
+                                  args.cache_array);
             build_win.buildLoop();
 
             return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
