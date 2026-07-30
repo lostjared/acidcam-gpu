@@ -1,6 +1,7 @@
 #include "settings.hpp"
 #include "custom_style.hpp"
 #include <QApplication>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QGridLayout>
@@ -35,6 +36,27 @@ static const GUID MEDIASUBTYPE_I420 = {0x30323449, 0x0000, 0x0010, {0x80, 0x00, 
 #endif
 
 namespace {
+    bool pathsReferToSameFile(const QString &firstPath, const QString &secondPath) {
+        const QFileInfo firstInfo(firstPath);
+        const QFileInfo secondInfo(secondPath);
+
+        QString normalizedFirst = firstInfo.canonicalFilePath();
+        if (normalizedFirst.isEmpty()) {
+            normalizedFirst = QDir::cleanPath(firstInfo.absoluteFilePath());
+        }
+
+        QString normalizedSecond = secondInfo.canonicalFilePath();
+        if (normalizedSecond.isEmpty()) {
+            normalizedSecond = QDir::cleanPath(secondInfo.absoluteFilePath());
+        }
+
+#ifdef _WIN32
+        return normalizedFirst.compare(normalizedSecond, Qt::CaseInsensitive) == 0;
+#else
+        return normalizedFirst == normalizedSecond;
+#endif
+    }
+
     void appendUniqueFps(QList<double> &fpsList, double fps) {
         if (fps <= 0.0) {
             return;
@@ -1436,6 +1458,15 @@ void SettingsWindow::acceptSettings() {
         if (outputVideoFile.isEmpty()) {
             QMessageBox::information(this, "Output required", "Requires you set a output filename");
             reject();
+            return;
+        }
+
+        if (useInputVideoFile &&
+            pathsReferToSameFile(inputVideoFile, outputVideoFile)) {
+            QMessageBox::critical(
+                this,
+                "Input and output files must be different",
+                "You cannot process and write to the same video file. Select a different output file.");
             return;
         }
     }
