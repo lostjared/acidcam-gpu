@@ -32,10 +32,12 @@ class ShaderDialog : public QDialog {
     QPushButton *okButton;
     QPushButton *cancelButton;
     QCheckBox *defaultCodeCheckBox;
+    QCheckBox *cacheShaderCheckBox;
     QString shaderPath;
 
     void init();
-    void createShaderFile(const QString &shaderName, bool includeDefaultCode);
+    bool createShaderFile(const QString &shaderName, bool includeDefaultCode,
+                          bool createCacheShader);
   private slots:
     void onOkButtonClicked();
     void onCancelButtonClicked();
