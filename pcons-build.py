@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pcons"]
+# dependencies = ["pcons>=0.24"]
 # ///
 """pcons build for acidcam-gpu / ACMX2 (https://github.com/lostjared/acidcam-gpu).
 
@@ -27,10 +27,12 @@ parentheses:
     VARIANT=debug     (-DCMAKE_BUILD_TYPE)   default: release
     PREFIX=<dir>      (-DCMAKE_PREFIX_PATH)  extra dependency search prefix
 
-Everything is found through pkg-config except libmx2
-(https://github.com/lostjared/libmx2) and glm, which install CMake config
-files but no .pc; those two are located by prefix. Point PREFIX at them when
-they are installed somewhere other than /usr/local or the Homebrew prefix.
+Everything is found through pkg-config. libmx2
+(https://github.com/lostjared/libmx2) only provides a .pc file when it is
+built with pcons; a CMake-built libmx2 installs neither .pc files nor a
+findable glm, so both are located by prefix instead. Point PREFIX at them
+when they are installed somewhere other than /usr/local or the Homebrew
+prefix.
 
 Usage:
     uvx pcons                  # configure, generate and build
@@ -45,13 +47,12 @@ from pcons import (
     ImportedTarget,
     PackageDescription,
     Project,
+    Target,
     find_c_toolchain,
     find_cuda_toolchain,
     get_platform,
     get_var,
 )
-from pcons.core.node import Node
-from pcons.core.target import Target
 from pcons.packages.finders import PkgConfigFinder
 
 project_dir = Path(__file__).parent
@@ -207,16 +208,22 @@ def find_cuda_runtime() -> ImportedTarget:
     )
 
 
-# libmx2 headers include glm unqualified, so glm is a public dependency of it.
-glm = find_by_prefix("glm", "glm/glm.hpp", hint="Install glm (a header-only library). ")
-libmx2 = find_by_prefix(
-    "libmx2",
-    "mx2/mx.hpp",
-    include_subdir="mx2",
-    libraries=("mx", "mxgl"),
-    hint="Build it from https://github.com/lostjared/libmx2. ",
-)
-libmx2.link(glm)
+# libmx2 built with pcons installs pkg-config files, and they already carry
+# glm's include directory. A CMake-built libmx2 installs neither, so fall back
+# to searching the prefix and add glm by hand.
+libmx2 = project.find_package("libmxgl", required=False)
+if libmx2 is None:
+    glm = find_by_prefix(
+        "glm", "glm/glm.hpp", hint="Install glm (a header-only library). "
+    )
+    libmx2 = find_by_prefix(
+        "libmx2",
+        "mx2/mx.hpp",
+        include_subdir="mx2",
+        libraries=("mx", "mxgl"),
+        hint="Build it from https://github.com/lostjared/libmx2. ",
+    )
+    libmx2.link(glm)
 
 # OpenGL: a framework on macOS, a plain library elsewhere.
 if platform.is_macos:
@@ -270,7 +277,7 @@ if with_cuda:
 # ACMX2: the engine
 # =============================================================================
 
-sources: list[str | Path | Node] = ["ACMX2/acmx.cpp", "ACMX2/program.cpp"]
+sources: list[str | Path] = ["ACMX2/acmx.cpp", "ACMX2/program.cpp"]
 defines = ["WITH_GL"]
 libs: list[Target] = [libmx2, opencv, sdl2, sdl2_ttf, mxwrite, ffmpeg]
 
