@@ -18,6 +18,16 @@
 
 [YouTube Video Tutorial](https://youtu.be/-IDAF8MMmkg)
 
+This project now builds with [pcons](pcons.org), a modern
+software build tool. It's simpler, cleaner & faster than CMake, since
+the build scripts are plain modern python, and it has a nice clean API
+and supports lots of languages and tools.
+
+To build with it, just `uvx pcons` if you have
+[uv](docs.astral.sh/uv/), or `python -mpip install pcons;
+pcons`.
+
+
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
 
 > **NVIDIA GPUs are no longer required.** ACMX2 builds and runs on AMD, Intel, and Apple GPUs using the OpenGL/SDL2 path (`-DWITH_CUDA=OFF`). On NVIDIA systems with the CUDA toolkit and an OpenCV build that includes CUDA support, you can opt in to the CUDA GPU-filter stack and FFmpeg CUDA hardware decode by configuring with `-DWITH_CUDA=ON` (the default when CUDA is detected).
