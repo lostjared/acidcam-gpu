@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pcons"]
+# dependencies = ["pcons>=0.24"]
 # ///
 """pcons build for the ACMX2 Qt 6 interface (acmx2_interface).
 
