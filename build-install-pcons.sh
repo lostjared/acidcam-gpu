@@ -12,11 +12,13 @@ show_usage() {
 Usage: ./build-install-pcons.sh [PCONS_VAR=value ...]
 
 Build and install ACMX2, the CUDA tools (when enabled), helper programs, and
-the Qt interface. The default installation prefix is /usr/local.
+the Qt interface. Audio and MIDI support are enabled by default. The default
+installation prefix is /usr/local.
 
 Examples:
   ./build-install-pcons.sh
-  ./build-install-pcons.sh AUDIO=1 MIDI=1 DNN=1
+  ./build-install-pcons.sh DNN=1
+  ./build-install-pcons.sh AUDIO=0 MIDI=0
   ./build-install-pcons.sh WITH_CUDA=0
   VARIANT=debug ./build-install-pcons.sh WITH_CUDA=0
 
@@ -76,12 +78,14 @@ pcons_options=(--reconfigure)
 if [[ -n "$jobs" ]]; then
     pcons_options+=(-j "$jobs")
 fi
+pcons_defaults=(AUDIO=1 MIDI=1)
 
 echo "Building and staging ACMX2 targets..."
 (
     cd "$REPO_DIR"
     CC="$compiler_c" CXX="$compiler_cxx" \
-        "$pcons_command" "${pcons_options[@]}" "VARIANT=$variant" "$@" all
+        "$pcons_command" "${pcons_options[@]}" "${pcons_defaults[@]}" \
+        "VARIANT=$variant" "$@" all
 )
 
 echo "Building and staging the Qt interface..."
