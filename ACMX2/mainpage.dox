@@ -100,6 +100,7 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Preferred camera FPS persistence</b> — Qt Settings stores the selected FPS and restores/reapplies it after device/resolution repopulation when available
 - <b>Startup cache/audio synchronization warmup</b> — initial frames are drained/skipped to avoid loading-screen content entering <tt>samp1..samp8</tt>, and early audio/writer activity waits for warmup completion
 - <b>Texture cache in all input modes</b> — <tt>--texture-cache</tt> applies to camera, video, and graphic input paths
+- <b>Texture cache array mode</b> — <tt>--texture-cache-array</tt> enables the cache and exposes frame history through one <tt>sampler2DArray history</tt> ring; the maintained <a href="https://github.com/lostjared/shaders">shader collection</a> has been updated for this interface
 - <b>Long-run time phase stability</b> — <tt>time_f</tt> wrap/reset now uses a large <tt>2*PI</tt> multiple to preserve trig continuity across long sessions
 - <b>Snapshot format refinements</b> — SDR TIFF/WebP save behavior improved for consistency across capture modes
 - <b>Distrobox export</b> — script to export applications to the host desktop with icons and `.desktop` files
@@ -185,6 +186,188 @@ sudo bash build-script/install-deps-arch.sh
 @endcode
 
 @section building Building
+
+@subsection build_pcons Building with pcons
+
+The repository includes native pcons build descriptions for both the engine and
+the Qt interface. The root <tt>pcons-build.py</tt> builds and stages:
+
+- <tt>MXWrite/libmxwrite.a</tt>, the FFmpeg writer used by ACMX2
+- <tt>acmx2</tt>, <tt>audio_transfer</tt>, and <tt>shader_generator</tt>
+- <tt>libacidcam-gpu.so</tt> and the <tt>acidcam</tt> player when CUDA is enabled
+- ACMX2 runtime data under <tt>dist/share/acmx2/</tt>
+
+<tt>ACMX2/interface/pcons-build.py</tt> is a separate Qt6 build that produces
+<tt>acmx2_interface</tt>, <tt>midi-map</tt>, and the desktop entry. Both builds
+generate Ninja files in a <tt>build/</tt> directory and stage installable files
+in a <tt>dist/</tt> directory.
+
+@subsubsection build_pcons_requirements pcons requirements
+
+The pcons scripts require Python 3.11 or newer, Ninja, a C++ compiler, and the
+same development libraries described in @ref install_linux. The root build uses
+C++20. The <tt>glslc</tt> Vulkan shader compiler is not required for ACMX2's
+OpenGL shader sources.
+
+There is no pcons source tree to clone into this repository. If
+<a href="https://docs.astral.sh/uv/">uv</a> is installed, <tt>uvx</tt> can run
+pcons in an isolated cached environment:
+
+@code{.sh}
+uvx pcons --version
+@endcode
+
+The combined install script expects a <tt>pcons</tt> executable on
+<tt>PATH</tt>. Install that command once with either of these methods:
+
+@code{.sh}
+# Recommended when uv is available
+uv tool install pcons
+
+# Alternative Python installation
+python3 -m pip install --user pcons
+@endcode
+
+@subsubsection build_pcons_engine Engine and command-line targets
+
+From the repository root, configure and build all standard targets with:
+
+@code{.sh}
+CC=gcc CXX=g++ uvx pcons --reconfigure all
+@endcode
+
+The initial command generates <tt>build/build.ninja</tt>. Subsequent incremental
+builds can use either pcons or Ninja directly:
+
+@code{.sh}
+uvx pcons all
+ninja -C build
+
+# Build one target and its dependencies
+ninja -C build acmx2
+@endcode
+
+To use a versioned GCC installation, set both compiler variables during the
+pcons configure step:
+
+@code{.sh}
+CC=gcc-16 CXX=g++-16 uvx pcons --reconfigure all
+@endcode
+
+pcons settings use <tt>NAME=value</tt>, without CMake's <tt>-D</tt> prefix:
+
+| pcons setting | Default | Purpose |
+|---------------|---------|---------|
+| <tt>WITH_CUDA=0\|1</tt> | Enabled when <tt>nvcc</tt> is found | Build the CUDA filter library and player, and enable CUDA support in ACMX2 |
+| <tt>AUDIO=0\|1</tt> | <tt>0</tt> | Build RtAudio live/file audio support |
+| <tt>MIDI=0\|1</tt> | <tt>0</tt> | Build RtMidi control support |
+| <tt>DNN=0\|1</tt> | <tt>0</tt> | Build OpenCV DNN filters; also requires yaml-cpp |
+| <tt>WEBP=0\|1</tt> | <tt>0</tt> | Enable WebP HDR snapshots |
+| <tt>TIFF=0\|1</tt> | <tt>0</tt> | Enable 16-bit TIFF HDR snapshots |
+| <tt>VARIANT=release\|debug</tt> | <tt>release</tt> | Select the compiler build variant |
+| <tt>PREFIX=/path</tt> | System prefixes | Add a dependency search prefix for libmx2, glm, and pkg-config packages |
+
+For example, build the OpenGL-only engine with audio and MIDI enabled:
+
+@code{.sh}
+CC=gcc CXX=g++ uvx pcons --reconfigure \
+    WITH_CUDA=0 AUDIO=1 MIDI=1 all
+@endcode
+
+If libmx2 was installed in a nonstandard prefix, pass it during configuration:
+
+@code{.sh}
+uvx pcons --reconfigure PREFIX="$HOME/.local" WITH_CUDA=0 all
+@endcode
+
+The staged programs and data can be exercised before system installation:
+
+@code{.sh}
+./dist/bin/acmx2 --help
+./dist/bin/acmx2 --check-cuda
+./dist/bin/acmx2 --check-audio
+./dist/bin/acmx2 --check-midi
+
+# Run with the staged runtime data
+./dist/bin/acmx2 -p ./dist/share/acmx2/data -d 0
+@endcode
+
+@subsubsection build_pcons_interface Qt interface and MIDI map tool
+
+The Qt interface is intentionally configured separately from the root engine
+build. After building the engine, run:
+
+@code{.sh}
+cd ACMX2/interface
+CC=gcc CXX=g++ uvx pcons --reconfigure all
+cd ../..
+@endcode
+
+The generated programs can be launched from the repository checkout with:
+
+@code{.sh}
+./ACMX2/interface/dist/bin/acmx2_interface
+./ACMX2/interface/dist/bin/midi-map
+@endcode
+
+The interface launches <tt>acmx2</tt> from <tt>PATH</tt>. Install ACMX2 first or
+add the root staging directory temporarily when testing both staging trees:
+
+@code{.sh}
+PATH="$PWD/dist/bin:$PATH" ./ACMX2/interface/dist/bin/acmx2_interface
+@endcode
+
+@subsubsection build_pcons_install Combined build and installation
+
+<tt>build-install-pcons.sh</tt> builds the root targets, builds the Qt interface
+and MIDI map utility, verifies the staged output, and installs everything. The
+default prefix is <tt>/usr/local</tt>; the script invokes <tt>sudo</tt> only when
+the selected destination is not writable.
+
+@code{.sh}
+# Build and install the default configuration
+./build-install-pcons.sh
+
+# Enable CUDA-independent audio, MIDI, and DNN features
+./build-install-pcons.sh AUDIO=1 MIDI=1 DNN=1
+
+# Build without CUDA
+./build-install-pcons.sh WITH_CUDA=0
+
+# Install into a user-writable prefix
+ACMX2_INSTALL_PREFIX="$HOME/.local" \
+    ./build-install-pcons.sh WITH_CUDA=0
+
+# Use GCC 16 and twelve parallel jobs
+CC=gcc-16 CXX=g++-16 ACMX2_JOBS=12 \
+    ./build-install-pcons.sh WITH_CUDA=0
+@endcode
+
+Set <tt>ACMX2_DESTDIR</tt> to prepend a packaging root to the installation
+prefix. Set <tt>VARIANT=debug</tt> for a debug build. Run
+<tt>./build-install-pcons.sh --help</tt> for the complete environment-variable
+reference. The script installs the programs under <tt>&lt;prefix&gt;/bin</tt>, the
+CUDA library under <tt>&lt;prefix&gt;/lib</tt> when enabled, runtime data under
+<tt>&lt;prefix&gt;/share/acmx2</tt>, and the interface desktop entry under
+<tt>&lt;prefix&gt;/share/applications</tt>.
+
+@subsubsection build_pcons_clean Cleaning and reconfiguration
+
+Clean generated build outputs while retaining each configured build directory:
+
+@code{.sh}
+# Root engine build
+uvx pcons clean -B build
+
+# Qt interface build
+cd ACMX2/interface
+uvx pcons clean -B build
+@endcode
+
+Use <tt>--reconfigure</tt> again after changing compilers, dependency prefixes,
+or feature settings. A normal pcons clean deliberately leaves the build
+directory, Ninja metadata, and tool caches in place; the directory therefore
+does not need to be empty after cleaning.
 
 @subsection build_macos Building on macOS (Intel & Apple Silicon)
 
@@ -456,9 +639,52 @@ appears in the dock while the application is running.
 |-------------------|-------------|-------------|
 | `--texture-cache` |             | Enable texture cache (camera, video, and graphic modes) |
 | `--cache-delay`   | `<frames>`  | Texture cache delay in frames |
+| `--texture-cache-size` | `<frames>` | Texture cache ring size (1–64, default 8) |
+| `--texture-cache-array` |       | Enable the texture cache and bind frame history as one `sampler2DArray history` ring |
 | `--copy-audio`    |             | Copy audio track from input to output |
 | `--enable-3d`     |             | Enable 3D cube rendering |
 | `--model`         | `<file>`    | 3D model file (`.mxmod`) |
+
+@subsection shader_texture_array_cache sampler2DArray Texture History
+
+The updated cache path stores all equally sized history frames as layers of one
+OpenGL texture array. Compared with binding separate <tt>samp1</tt> through
+<tt>samp8</tt> textures, this uses one texture unit and lets GLSL select a
+history layer dynamically. The engine updates the array as a ring and provides
+<tt>history_head</tt>, the physical layer corresponding to logical history
+index zero (oldest frame).
+
+Run a compatible shader library with array-backed history using:
+
+@code{.sh}
+acmx2 -s ./shaders/index.txt --texture-cache-array --texture-cache-size 16
+@endcode
+
+<tt>--texture-cache-array</tt> also enables the texture cache; it does not need
+to be combined with <tt>--texture-cache</tt>. ACMX2 injects
+<tt>USE_HISTORY_TEXTURE_ARRAY</tt> as either <tt>0</tt> or <tt>1</tt> when it
+compiles a shader, allowing one shader to support both the array and legacy
+cache paths:
+
+@code{.glsl}
+#if USE_HISTORY_TEXTURE_ARRAY
+uniform sampler2DArray history;
+uniform int history_head;
+#define HISTORY_LAYER(index) ((history_head + (index)) % SIZE)
+#define SAMPLE_HISTORY(index, uv) \
+    texture(history, vec3((uv), float(HISTORY_LAYER(index))))
+#else
+uniform sampler2D textures[SIZE];
+#define SAMPLE_HISTORY(index, uv) texture(textures[index], (uv))
+#endif
+@endcode
+
+The current shader collection has been migrated for this interface and is
+maintained at <a href="https://github.com/lostjared/shaders">github.com/lostjared/shaders</a>:
+
+@code{.sh}
+git clone https://github.com/lostjared/shaders.git
+@endcode
 
 @subsection cli_audio Audio Options (requires AUDIO_ENABLED build)
 | Short | Long             | Value       | Description |
@@ -664,7 +890,7 @@ filter chain is omitted in that mode).
 - [Project Documentation](https://lostsidedead.biz/acmx2-explained.html)
 - [GPU Filters Explained](https://lostsidedead.biz/acmx2/filter_browser.html)
 - [Example Shaders](https://lostsidedead.biz/acmx2/shader_browser.html)
-- [Latest Shader Pack](https://lostsidedead.biz/packs)
+- [Latest Shader Pack](https://github.com/lostjared/shaders)
 - [Latest 3D Geometry](https://lostsidedead.biz/packs)
 
 

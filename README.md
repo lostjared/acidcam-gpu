@@ -70,6 +70,7 @@ From the latest `acidcam-gpu` commits, current focus areas include:
 - **Audio startup warmup envelope**: new `--audio-warm-rate <value>` option fades audio-reactive uniforms/spectrum from 0 to full strength at startup (default `0.5` 1/sec, about 2 seconds).
 - **Camera/file A/V startup sync hardening**: cache and writer paths now include a startup warmup window so loading-screen frames are not pushed into `samp1..samp8`, and early audio/file processing is held until warmup completes.
 - **Texture cache behavior update**: `--texture-cache` now works in camera, video, and graphic input modes (not video-only).
+- **Texture cache array mode**: `--texture-cache-array` enables the cache and exposes frame history through one `sampler2DArray history` ring; the maintained [shader collection](https://github.com/lostjared/shaders) has been updated for this interface.
 - **Shader time wrap stability fix**: `time_f` wrap/reset behavior now uses a large `2*PI` multiple to preserve long-running shader phase continuity.
 - **Qt camera FPS persistence improvement**: preferred camera FPS is now saved/restored and retained across resolution/device repopulation when supported.
 - **Headless and terminal workflow updates**: improved silent/headless processing behavior, terminal color-coded output, and related CLI flow refinements.
@@ -269,7 +270,7 @@ sudo bash build-script/install-deps-arch.sh
 | `--texture-cache` | | Enable texture cache (camera, video, and graphic modes) |
 | `--cache-delay` | `<frames>` | Texture cache delay in frames |
 | `--texture-cache-size` | `<frames>` | Texture cache ring size (`1`–`64`, default `8`) |
-| `--texture-cache-array` | | Bind the cache as `sampler2DArray history` instead of separate samplers |
+| `--texture-cache-array` | | Enable the cache and bind history as one `sampler2DArray history` ring |
 | `--copy-audio` | | Copy audio track from input to output |
 | `--enable-3d` | | Enable 3D cube rendering |
 | `--model` | `<file>` | 3D model file (`.mxmod`) |
@@ -803,7 +804,13 @@ Early Example (as a GIF)
 
 # Latest Shader Pack
 
+The maintained shader collection is available at
+[github.com/lostjared/shaders](https://github.com/lostjared/shaders). It includes
+the cache-shader updates for the `sampler2DArray history` interface.
+
+```bash
 git clone https://github.com/lostjared/shaders.git
+```
 
 # Latest 3D Geometry 
 
@@ -984,7 +991,16 @@ only one array layer per frame.
 All layers must have identical dimensions and internal formats. Cache frames
 already match the active framebuffer or viewport, so the texture cache
 naturally satisfies that requirement. Enable this representation with
-`--texture-cache-array`.
+`--texture-cache-array`; the option also enables the texture cache, so a
+separate `--texture-cache` flag is not required:
+
+```bash
+acmx2 -s ./shaders/index.txt --texture-cache-array --texture-cache-size 16
+```
+
+The maintained [ACMX2 shader collection](https://github.com/lostjared/shaders)
+has been updated to support this array-backed history path. Clone it for the
+latest compatible cache shaders, or run `git pull` in an existing checkout.
 
 #### Gradual Shader Migration Has No Rendering Cost
 
