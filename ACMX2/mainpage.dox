@@ -14,8 +14,9 @@ designed to push the boundaries of psychedelic glitch art. Part of the <b>ACMX2<
 via CUDA, enabling fluid, high-resolution visual transformations at 60+ FPS.
 
 <b>CUDA acceleration is a compile-time option</b> (<tt>-DWITH_CUDA=ON/OFF</tt>, default
-<tt>ON</tt>). When enabled it requires OpenCV 4 compiled with CUDA support. When
-disabled, the engine builds against stock OpenCV and runs the full GLSL/SDL2
+<tt>ON</tt>). The project now requires OpenCV 5. When CUDA is enabled, OpenCV 5
+must be compiled with CUDA support. When disabled, the engine builds against
+stock OpenCV 5 and runs the full GLSL/SDL2
 shader pipeline without the CUDA GPU-filter stack — see
 @ref build_optional and @ref build_nocuda.
 
@@ -33,6 +34,7 @@ processing hit a bottleneck.
 @section techstack Tech Stack
 
 - <b>Language:</b> C++20
+- <b>Computer Vision:</b> OpenCV 5
 - <b>Parallel Computing:</b> NVIDIA CUDA (Optimized for RTX 2070)
 - <b>Graphics API:</b> OpenGL / SDL (Hardware-accelerated rendering)
 - <b>Format Support:</b> Native MX2 MXMOD 3D model parsing for real-time geometry glitching.
@@ -167,7 +169,7 @@ sudo pacman -S --needed base-devel git cmake ninja pkg-config curl unzip
 # NVIDIA & CUDA
 sudo pacman -S --needed nvidia-utils cuda
 
-# OpenCV (with CUDA support)
+# OpenCV 5 (with CUDA support)
 sudo pacman -S --needed opencv-cuda hdf5 vtk fmt glew
 
 # SDL2 & Qt6
@@ -450,11 +452,11 @@ CUDA, audio, and MIDI support are all optional at compile time:
 @subsubsection build_nocuda Building without CUDA (pure OpenGL build)
 
 If you do not have an NVIDIA GPU, cannot install the CUDA toolkit, or want to
-build against a stock OpenCV (no CUDA modules), configure ACMX2 with
+build against a stock OpenCV 5 installation (no CUDA modules), configure ACMX2 with
 <tt>-DWITH_CUDA=OFF</tt>. The engine falls back to the OpenGL/SDL2 shader path;
 all shader-based features continue to work, only the CUDA GPU filter stack is
 omitted. In this configuration <tt>opencv-cuda</tt> and the NVIDIA CUDA toolkit
-are not required — stock <tt>opencv</tt> is sufficient, and the top-level
+are not required — stock OpenCV 5 is sufficient, and the top-level
 <tt>acidcam-gpu</tt> CUDA library does not need to be installed.
 
 @code{.sh}
@@ -634,16 +636,40 @@ appears in the dock while the application is running.
 | `--disable-counter` |           | Disable timer and FPS counter overlay |
 | `--silent`        |             | Process video without window; only valid for `-i/--input` video files and requires `-o/--output` |
 
-@subsection cli_3d 3D / Model Options
+@subsection cli_texture_cache Texture Cache Options
 | Long              | Value       | Description |
 |-------------------|-------------|-------------|
 | `--texture-cache` |             | Enable texture cache (camera, video, and graphic modes) |
 | `--cache-delay`   | `<frames>`  | Texture cache delay in frames |
 | `--texture-cache-size` | `<frames>` | Texture cache ring size (1–64, default 8) |
+
+@subsection cli_texture_cache_array Texture Cache Array Options
+| Long              | Value       | Description |
+|-------------------|-------------|-------------|
 | `--texture-cache-array` |       | Enable the texture cache and bind frame history as one `sampler2DArray history` ring |
-| `--copy-audio`    |             | Copy audio track from input to output |
+
+@subsection cli_3d 3D / Model Options
+| Long              | Value       | Description |
+|-------------------|-------------|-------------|
 | `--enable-3d`     |             | Enable 3D cube rendering |
 | `--model`         | `<file>`    | 3D model file (`.mxmod`) |
+
+@subsection cli_recording_output Recording and Output Options
+| Long              | Value       | Description |
+|-------------------|-------------|-------------|
+| `--copy-audio`    |             | Copy audio track from input to output |
+| `--png`           |             | Save output frames as PNG files instead of video encoding (use with `-o/--output`) |
+| `--generate`      | `<interval>` | Save a PNG image at the specified frame interval |
+
+@subsection cli_onnx ONNX Model Options
+| Long              | Value       | Description |
+|-------------------|-------------|-------------|
+| `--edge`          | `<file>`    | Load an edge-detection ONNX model |
+| `--human`         | `<file>`    | Load a human-segmentation ONNX model |
+| `--background`    |             | With `--human`, apply shaders only to the background |
+| `--onnx`          | `<file>`    | Load an ONNX model from a YAML configuration file |
+| `--black`         | `<point>`   | Mask black point / shadow crush threshold (default 0.35) |
+| `--white`         | `<point>`   | Mask white point / opacity saturation threshold (default 0.75) |
 
 @subsection shader_texture_array_cache sampler2DArray Texture History
 
@@ -936,7 +962,7 @@ to live display and optional MXWrite output encoding.
 
 The system operates as a <b>two-stage GPU pipeline</b>: first, CUDA kernels process every pixel in parallel on the GPU's streaming multiprocessors (one thread per pixel), applying a user-defined chain of filters entirely in device memory. Then, the CUDA output is transferred to OpenGL via a Pixel Buffer Object (PBO) — a zero-copy GPU-to-GPU transfer — where it becomes a texture. GLSL fragment shaders then apply additional full-frame visual effects in one or more stacked passes using ping-pong framebuffers. Both the CUDA filter chain and the GLSL shader pass stack are independently configurable and orderable, producing a combinatorial explosion of possible visual outcomes.
 
-<em>Stack: C++20 / CUDA 12.x / OpenCV CUDA / OpenGL / Qt6 / MXWrite</em>
+<em>Stack: C++20 / CUDA 12.x / OpenCV 5 CUDA / OpenGL / Qt6 / MXWrite</em>
 
 
 
@@ -1470,7 +1496,7 @@ The project requires a very specific dependency stack  not all of it is availabl
 - <b>NVIDIA GPU:</b> RTX 20-series or newer. The project is developed and optimized on an RTX 2070. Older hardware may work but is not guaranteed.
 - <b>NVIDIA Proprietary Drivers:</b> v535 or newer. The CUDA runtime links against driver libraries at version-specific interfaces.
 - <b>CUDA Toolkit 12.x:</b> provides <tt>nvcc</tt>, <tt>cuda_runtime.h</tt>, <tt>cudaMalloc/cudaMemcpy/cudaDeviceSynchronize</tt>, and device code compilation.
-- <b>OpenCV with CUDA support:</b> must be compiled from source with <tt>WITH_CUDA=ON</tt> and matching CUDA architecture flags. Provides <tt>cv::cuda::GpuMat</tt>, <tt>cv::cuda::cvtColor</tt>, <tt>cv::cuda::printShortCudaDeviceInfo</tt>, and the <tt>cv::VideoCapture</tt> backend used in the CLI.
+- <b>OpenCV 5 with CUDA support:</b> must be compiled from source with <tt>WITH_CUDA=ON</tt> and matching CUDA architecture flags. Provides <tt>cv::cuda::GpuMat</tt>, <tt>cv::cuda::cvtColor</tt>, <tt>cv::cuda::printShortCudaDeviceInfo</tt>, and the <tt>cv::VideoCapture</tt> backend used in the CLI.
 - <b>libmx2 / MXWrite:</b> the MX2 ecosystem library provides MXMOD 3D model parsing and the MXWrite encoder wrapper around FFmpeg. Build and install <tt>libmx2</tt> first; ACMX2 now builds MXWrite from the local source tree via CMake.
 - <b>Qt6:</b> required only for the ACMX2 Qt interface, not for the library or CLI.
 - <b>C++20 compiler:</b> the project uses <tt>std::format</tt>, <tt>std::filesystem</tt>, and other C++20 features throughout <tt>main_cv.cu</tt>.

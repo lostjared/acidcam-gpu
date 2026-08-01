@@ -30,7 +30,9 @@ pcons`.
 
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
 
-> **NVIDIA GPUs are no longer required.** ACMX2 builds and runs on AMD, Intel, and Apple GPUs using the OpenGL/SDL2 path (`-DWITH_CUDA=OFF`). On NVIDIA systems with the CUDA toolkit and an OpenCV build that includes CUDA support, you can opt in to the CUDA GPU-filter stack and FFmpeg CUDA hardware decode by configuring with `-DWITH_CUDA=ON` (the default when CUDA is detected).
+> **OpenCV 5 is now required.** The project has moved from OpenCV 4 to OpenCV 5. Use a stock OpenCV 5 build for the portable OpenGL configuration, or an OpenCV 5 build with CUDA support when enabling the optional CUDA pipeline.
+
+> **NVIDIA GPUs are no longer required.** ACMX2 builds and runs on AMD, Intel, and Apple GPUs using the OpenGL/SDL2 path (`-DWITH_CUDA=OFF`). On NVIDIA systems with the CUDA toolkit and an OpenCV 5 build that includes CUDA support, you can opt in to the CUDA GPU-filter stack and FFmpeg CUDA hardware decode by configuring with `-DWITH_CUDA=ON` (the default when CUDA is detected).
 
 ## 🚀 Purpose & Vision
 The original project brought a massive library of "glitch" filters to digital artists. However, as resolutions climbed to 4K and filter stacks became more complex, CPU-based processing hit a bottleneck. 
@@ -40,12 +42,13 @@ The original project brought a massive library of "glitch" filters to digital ar
 
 ## 🛠 Tech Stack
 * **Language:** C++20
+* **Computer Vision:** OpenCV 5
 * **Graphics API:** OpenGL / SDL2 (cross-vendor, hardware-accelerated rendering — works on NVIDIA, AMD, Intel, and Apple GPUs)
 * **Optional Parallel Computing:** NVIDIA CUDA (compile-time opt-in via `-DWITH_CUDA=ON`; tested on RTX 2070 and newer)
 * **Format Support:** Native **MX2 MXMOD** 3D model parsing for real-time geometry glitching.
 
 ## ⚡ Optional NVIDIA / CUDA Acceleration
-When built with `-DWITH_CUDA=ON` on a system with an NVIDIA GPU and CUDA-enabled OpenCV, ACMX2 can additionally leverage:
+When built with `-DWITH_CUDA=ON` on a system with an NVIDIA GPU and CUDA-enabled OpenCV 5, ACMX2 can additionally leverage:
 * **Shared Memory:** Fast on-chip memory to speed up neighborhood-based CUDA filters.
 * **Massive Throughput:** Thousands of CUDA cores to apply multiple glitch layers in a single pass.
 * **CUDA/OpenGL Zero-Copy Interop:** High-speed texture sharing between CUDA and OpenGL.
@@ -147,12 +150,12 @@ sudo pacman -S --needed base-devel git cmake ninja pkg-config curl unzip
 sudo pacman -S --needed nvidia-utils cuda
 ```
 
-**OpenCV:**
+**OpenCV 5:**
 ```bash
-# Stock OpenCV (works for the default OpenGL-only build):
+# Stock OpenCV 5 (works for the default OpenGL-only build):
 sudo pacman -S --needed opencv hdf5 vtk fmt glew
 
-# Or, if you want CUDA GPU filters, install the CUDA-enabled build instead:
+# Or, if you want CUDA GPU filters, install an OpenCV 5 CUDA-enabled build instead:
 sudo pacman -S --needed opencv-cuda hdf5 vtk fmt glew
 ```
 
@@ -263,27 +266,42 @@ sudo bash build-script/install-deps-arch.sh
 | `--disable-counter` | | Disable timer and FPS counter overlay |
 | `--silent` | | Process video without window. Only valid with `-i/--input` video files and requires `-o/--output`; camera and image input are rejected. |
 
-### Other Options
+### Texture Cache Options
 
 | Long | Value | Description |
 |------|-------|-------------|
 | `--texture-cache` | | Enable texture cache (camera, video, and graphic modes) |
 | `--cache-delay` | `<frames>` | Texture cache delay in frames |
 | `--texture-cache-size` | `<frames>` | Texture cache ring size (`1`–`64`, default `8`) |
+
+### Texture Cache Array Options
+
+| Long | Value | Description |
+|------|-------|-------------|
 | `--texture-cache-array` | | Enable the cache and bind history as one `sampler2DArray history` ring |
-| `--copy-audio` | | Copy audio track from input to output |
+
+### 3D / Model Options
+
+| Long | Value | Description |
+|------|-------|-------------|
 | `--enable-3d` | | Enable 3D cube rendering |
 | `--model` | `<file>` | 3D model file (`.mxmod`) |
-| `--edge` | `<file>` | DNN Model for edge detection file you want is: edge_detection_dexined_2024sep.onnx |
-| `--human` | `<file>` | DNN Model for human detection file you want is: human_segmentation_pphumanseg_2023mar.onnx |
-| `--background` | | Enable background processing on --human |
+
+### Recording and Output Options
+
+| Long | Value | Description |
+|------|-------|-------------|
+| `--copy-audio` | | Copy audio track from input to output |
 | `--png` | | Save output frames as PNG files instead of video encoding (use with `-o/--output`) |
-| `--generate` | `<interval>` | Generate mode: create images at specifided interavals |
+| `--generate` | `<interval>` | Save a PNG image at the specified frame interval |
 
 ### ONNX Model Options
 
 | Long | Value | Description |
 |------|-------|-------------|
+| `--edge` | `<file>` | DNN Model for edge detection file you want is: edge_detection_dexined_2024sep.onnx |
+| `--human` | `<file>` | DNN Model for human detection file you want is: human_segmentation_pphumanseg_2023mar.onnx |
+| `--background` | | Enable background processing on --human |
 | `--onnx` | `<file>` | Load ONNX model from YAML configuration file (specifies model path and preprocessing parameters) |
 | `--black` | `<point>` | Mask black point / shadow crush threshold for color adjustment (default: 0.35) |
 | `--white` | `<point>` | Mask white point / opacity saturation threshold for color adjustment (default: 0.75) |
@@ -742,7 +760,7 @@ Each of the major optional subsystems is toggled by a CMake flag on ACMX2:
 #### Building without CUDA (pure OpenGL build)
 
 If you do not have an NVIDIA GPU, cannot install the CUDA toolkit, or want to
-build against a stock OpenCV (no CUDA modules), configure ACMX2 with
+build against a stock OpenCV 5 installation (no CUDA modules), configure ACMX2 with
 `-DWITH_CUDA=OFF`. The engine falls back to the OpenGL/SDL2 shader path — all
 shader-based features continue to work; only the CUDA GPU filter stack is
 omitted.
@@ -770,7 +788,7 @@ cmake .. && make -j$(nproc) && sudo make install
 ```
 
 Note: when `WITH_CUDA=OFF` you do **not** need `opencv-cuda` or the NVIDIA
-CUDA toolkit — stock `opencv` is sufficient, and the top-level `acidcam-gpu`
+CUDA toolkit — stock OpenCV 5 is sufficient, and the top-level `acidcam-gpu`
 CUDA library does not need to be installed.
 
 You can combine flags freely — for example an OpenGL-only build with audio:
