@@ -65,7 +65,7 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Shader playlists with named nodes</b> — organize shaders into named tree nodes; each node loads its shaders into the multi-pass pipeline when selected at runtime
 - <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
 - <b>Audio startup warmup control</b> — <tt>--audio-warm-rate &lt;value&gt;</tt> controls startup fade-in rate for audio-reactive uniforms/textures (default <tt>0.5</tt> 1/sec)
-- <b>Audio spectrum history buffers</b> — <tt>--enable-audio-buffers &lt;N&gt;</tt> exposes rolling FFT history textures as <tt>spectrum0..spectrumN-1</tt> for temporal audio-reactive effects
+- <b>Audio spectrum history array</b> — <tt>--enable-audio-buffers &lt;N&gt;</tt> exposes rolling FFT history through one runtime-sized <tt>sampler1DArray spectrum_history</tt>; the former <tt>spectrum1</tt>...<tt>spectrumN</tt> sampler interface is no longer used
 - <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; the audio track is automatically muxed into the output video
 - <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; file-mode recording/mux behavior uses explicit opt-in semantics
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
@@ -701,7 +701,7 @@ git clone https://github.com/lostjared/shaders.git
 |       | `--audio-file`   | `<file>`    | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
 |       | `--audio-trunc`  |             | Stop playback when the audio file reaches the end |
 |       | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in 1/sec (default: 0.5; 0 disables warmup) |
-|       | `--enable-audio-buffers` | `<N>` | Allocate N FFT history textures (`1..22`) exposed as `spectrum0..spectrumN-1` |
+|       | `--enable-audio-buffers` | `<N>` | Allocate one FFT history `sampler1DArray` with `N` GPU-limited layers |
 
 @subsection cli_midi MIDI Options (requires MIDI_ENABLED build)
 | Long            | Value       | Description |
@@ -785,8 +785,11 @@ All fragment shaders receive the following uniforms automatically.
 | `amp_mid`     | `float` | Mid-frequency energy (300–3000 Hz) |
 | `amp_high`    | `float` | High-frequency energy (>3000 Hz) |
 | `iSampleRate` | `float` | Audio sample rate (`44100.0`) |
-| `spectrum`    | `sampler1D` | FFT frequency-magnitude spectrum (256 bins, GL_TEXTURE9) |
-| `spectrum0`–`spectrumN-1` | `sampler1D` | FFT history textures (newest to oldest), enabled by `--enable-audio-buffers <N>` |
+| `spectrum` | `sampler1D` | FFT frequency-magnitude spectrum (256 bins, GL_TEXTURE9) |
+| `spectrum0` | `sampler1D` | Current-frame compatibility alias of the live spectrum |
+| `spectrum_history` | `sampler1DArray` | Runtime-sized FFT history array enabled by `--enable-audio-buffers <N>` |
+| `spectrum_history_head` | `int` | Physical layer containing the newest history frame |
+| `spectrum_history_size` | `int` | Allocated history-array layer count |
 
 The `spectrum` uniform is a 1D texture (`GL_R32F`, 256 texels) holding
 the FFT magnitudes of the current audio frame.  Texel coordinate
@@ -799,9 +802,32 @@ uniform sampler1D spectrum;           // bound to texture unit 9
 float energy = texture(spectrum, x).r; // x in [0,1]
 @endcode
 
-When <tt>--enable-audio-buffers &lt;N&gt;</tt> is active, shaders can also sample
-<tt>spectrum0</tt> (newest history frame) through <tt>spectrumN-1</tt> (oldest kept frame)
-for temporal spectrum effects.
+When <tt>--enable-audio-buffers &lt;N&gt;</tt> is active, history age is a dynamic
+array coordinate. One sampler binding therefore supports any requested depth
+up to <tt>GL_MAX_ARRAY_TEXTURE_LAYERS</tt>:
+
+@code{.glsl}
+uniform sampler1DArray spectrum_history;
+uniform int spectrum_history_head;
+uniform int spectrum_history_size;
+
+int size = max(spectrum_history_size, 1);
+int layer = (spectrum_history_head - (age % size) + size) % size;
+float energy = texture(spectrum_history, vec2(frequency, float(layer))).r;
+@endcode
+
+In this example, <tt>frequency</tt> is in <tt>[0,1]</tt> and <tt>age</tt> is
+<tt>0</tt> for the newest frame, <tt>1</tt> for the preceding frame, and so on.
+<tt>spectrum0</tt> remains a current-frame <tt>sampler1D</tt> compatibility
+alias, but the engine no longer binds separate <tt>spectrum1</tt>...<tt>spectrumN</tt>
+uniforms. Those names belong to the legacy shader interface used by older ACMX2
+releases; there is no current command-line mode that restores them. Convert
+legacy shaders with:
+
+@code{.sh}
+scripts/migrate_spectrum_samplers.pl --dry-run shaders
+scripts/migrate_spectrum_samplers.pl shaders
+@endcode
 
 @subsection uniforms_midi MIDI Slider Uniforms (MIDI=ON)
 | Uniform       | Type    | Description |

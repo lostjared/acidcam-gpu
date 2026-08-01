@@ -50,7 +50,7 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 
 Recent commits in this repository focused on workflow and output quality improvements:
 
-- **Audio spectrum history array**: `--enable-audio-buffers <N>` allocates one runtime-sized `sampler1DArray` for rolling FFT history, limited only by the GPU's array-layer limit.
+- **Audio spectrum history array**: `--enable-audio-buffers <N>` exposes rolling FFT history through one runtime-sized `sampler1DArray spectrum_history`, limited only by the GPU's array-layer limit. The former `spectrum1`...`spectrumN` sampler interface is no longer used.
 - **Audio warmup control**: added `--audio-warm-rate <value>` to fade audio-reactive strength in at startup and reduce initial transients.
 - **Startup sync/warmup hardening**: camera/file startup now delays cache/audio/writer activity long enough to avoid loading-screen bleed into cache textures and keep early A/V processing aligned.
 - **Texture cache scope expanded**: `--texture-cache` now applies to camera and graphics input, not just file input.
@@ -727,13 +727,21 @@ History age is a dynamic array coordinate, so one sampler binding supports any
 requested depth up to `GL_MAX_ARRAY_TEXTURE_LAYERS`:
 
 ```glsl
+uniform sampler1DArray spectrum_history;
+uniform int spectrum_history_head;
+uniform int spectrum_history_size;
+
 int size = max(spectrum_history_size, 1);
 int layer = (spectrum_history_head - (age % size) + size) % size;
 float energy = texture(spectrum_history, vec2(frequency, float(layer))).r;
 ```
 
-`spectrum0` remains a current-frame `sampler1D` alias. Convert legacy
-`spectrum1`, `spectrum2`, and later lookups with:
+Here, `frequency` is in `[0,1]` and `age` is `0` for the newest frame, `1`
+for the preceding frame, and so on. `spectrum0` remains a current-frame
+`sampler1D` compatibility alias, but the engine no longer binds separate
+`spectrum1`...`spectrumN` uniforms. Those names belong to the legacy shader
+interface used by older ACMX2 releases; there is no current command-line mode
+that restores them. Convert those legacy lookups with:
 
 ```bash
 scripts/migrate_spectrum_samplers.pl --dry-run shaders
