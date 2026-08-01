@@ -89,7 +89,13 @@ if with_cuda:
             "or configure with WITH_CUDA=0."
         )
     env.add_toolchain(cuda)
-    env.cuda.flags.append("--use_fast_math")
+    env.cuda.flags.extend(
+        [
+            "--std=c++20",
+            "--use_fast_math",
+            "--forward-unknown-to-host-compiler",
+        ]
+    )
 
 # CMake applies these to every target in the repo.
 env.cxx.flags.extend(["-O3", "-Wall", "-pedantic"])
@@ -121,9 +127,13 @@ def find_opencv(*components: str) -> ImportedTarget:
     has no notion of components and lists every module, so filter its
     library list down to the transitive set named here.
     """
-    pkg = PkgConfigFinder().find("opencv4")
+    pkg = PkgConfigFinder().find("opencv5")
     if pkg is None:
         raise SystemExit("OpenCV not found: install OpenCV development libraries.")
+    if not platform.is_windows:
+        for include_dir in pkg.include_dirs:
+            pkg.compile_flags.extend(["-isystem", include_dir])
+        pkg.include_dirs.clear()
     wanted = {f"opencv_{component}" for component in components}
     pkg.libraries = [lib for lib in pkg.libraries if lib in wanted]
     missing = wanted - set(pkg.libraries)
@@ -328,8 +338,10 @@ shader_generator.link(package("libcurl"))
 # Install
 # =============================================================================
 
-project.Install("bin", [acmx2, audio_transfer, shader_generator])
+programs = [acmx2, audio_transfer, shader_generator]
+if acidcam is not None:
+    programs.append(acidcam)
+project.Install("bin", programs)
 project.InstallDir("share/acmx2", "ACMX2/data")
-if acidcam is not None and acidcam_gpu is not None:
-    project.Install("bin", [acidcam])
+if acidcam_gpu is not None:
     project.Install("lib", [acidcam_gpu])
