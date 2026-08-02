@@ -70,20 +70,28 @@ namespace ac_gpu {
                 completedFrames = 0;
             }
 
-            std::rotate(deviceFrames.begin(), deviceFrames.begin() + 1, deviceFrames.end());
-
-            if (d_uploadBuffer.channels() == 3) {
-                cv::cuda::cvtColor(d_uploadBuffer, deviceFrames.back(), cv::COLOR_BGR2RGBA);
+            if (completedFrames == 0) {
+                if (d_uploadBuffer.channels() == 3) {
+                    cv::cuda::cvtColor(d_uploadBuffer, deviceFrames.front(), cv::COLOR_BGR2RGBA);
+                } else {
+                    d_uploadBuffer.copyTo(deviceFrames.front());
+                }
+                for (int i = 1; i < arraySize; ++i) {
+                    deviceFrames.front().copyTo(deviceFrames[i]);
+                }
+                completedFrames = arraySize;
             } else {
-                d_uploadBuffer.copyTo(deviceFrames.back());
+                std::rotate(deviceFrames.begin(), deviceFrames.begin() + 1, deviceFrames.end());
+                if (d_uploadBuffer.channels() == 3) {
+                    cv::cuda::cvtColor(d_uploadBuffer, deviceFrames.back(), cv::COLOR_BGR2RGBA);
+                } else {
+                    d_uploadBuffer.copyTo(deviceFrames.back());
+                }
             }
 
             for (int i = 0; i < arraySize; ++i) {
                 rawPointers[i] = deviceFrames[i].data;
             }
-
-            if (completedFrames < arraySize)
-                ++completedFrames;
         }
 
         unsigned char **getDeviceFramePointers() {

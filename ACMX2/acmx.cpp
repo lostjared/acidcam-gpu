@@ -1675,7 +1675,8 @@ class FrameCache {
      * @brief Allocate the ring of GL textures sized to @p w x @p h.
      *
      * Must be called once a GL context is current. Existing textures (if
-     * any) are released first. All slots are initialised to opaque black.
+     * any) are released first. The ring remains empty until the first source
+     * frame is replicated into every slot by one of the push methods.
      *
      * @param w   Texture width in pixels.
      * @param h   Texture height in pixels.
@@ -1766,34 +1767,50 @@ class FrameCache {
                 count = 0;
             }
             glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
-            glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-                                static_cast<GLint>(head), 0, 0, w, h);
+            if (count == 0) {
+                for (std::size_t i = 0; i < num_frames; ++i) {
+                    glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+                                        static_cast<GLint>(i), 0, 0, w, h);
+                }
+            } else {
+                glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+                                    static_cast<GLint>(head), 0, 0, w, h);
+            }
             glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
-            advance();
+            finishPush();
             return;
         }
 
-        glBindTexture(GL_TEXTURE_2D, textures[head]);
         if (w != width || h != height) {
-            // Re-spec the head slot to match the new size; remaining slots
-            // keep their old size until they cycle through. Size changes
-            // are rare in practice (window/HDR resources are stable).
             const GLint internal = is_hdr ? GL_RGBA16F : GL_RGBA;
             const GLenum type = is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
-            glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
-                         GL_RGBA, type, nullptr);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            for (GLuint texture : textures) {
+                glBindTexture(GL_TEXTURE_2D, texture);
+                glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
+                             GL_RGBA, type, nullptr);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            }
             width = w;
             height = h;
+            head = 0;
+            count = 0;
         }
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        if (count == 0) {
+            for (GLuint texture : textures) {
+                glBindTexture(GL_TEXTURE_2D, texture);
+                glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+            }
+        } else {
+            glBindTexture(GL_TEXTURE_2D, textures[head]);
+            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        }
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
-        advance();
+        finishPush();
     }
 
     /**
@@ -1806,16 +1823,13 @@ class FrameCache {
     void push(const cv::Mat &frame) {
         if (!hasStorage())
             return;
+        if (count == 0 || frame.cols != width || frame.rows != height) {
+            fill(frame);
+            return;
+        }
         cv::Mat tmp;
         cv::cvtColor(frame, tmp, cv::COLOR_BGR2RGBA);
         if (use_history_array) {
-            if (tmp.cols != width || tmp.rows != height) {
-                width = tmp.cols;
-                height = tmp.rows;
-                allocateHistoryTexture();
-                head = 0;
-                count = 0;
-            }
             glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
             glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
                             static_cast<GLint>(head), tmp.cols, tmp.rows, 1,
@@ -1826,15 +1840,8 @@ class FrameCache {
         }
 
         glBindTexture(GL_TEXTURE_2D, textures[head]);
-        if (tmp.cols != width || tmp.rows != height) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tmp.cols, tmp.rows, 0,
-                         GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
-            width = tmp.cols;
-            height = tmp.rows;
-        } else {
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tmp.cols, tmp.rows,
-                            GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
-        }
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tmp.cols, tmp.rows,
+                        GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
         glBindTexture(GL_TEXTURE_2D, 0);
         advance();
     }
@@ -1873,36 +1880,55 @@ class FrameCache {
                 count = 0;
             }
             glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
-            glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-                                static_cast<GLint>(head), 0, 0, w, h);
+            if (count == 0) {
+                for (std::size_t i = 0; i < num_frames; ++i) {
+                    glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+                                        static_cast<GLint>(i), 0, 0, w, h);
+                }
+            } else {
+                glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+                                    static_cast<GLint>(head), 0, 0, w, h);
+            }
             glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
             glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                    GL_TEXTURE_2D, 0, 0);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
-            advance();
+            finishPush();
             return;
         }
 
-        glBindTexture(GL_TEXTURE_2D, textures[head]);
         if (w != width || h != height) {
             const GLint internal = is_hdr ? GL_RGBA16F : GL_RGBA;
             const GLenum type = is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
-            glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
-                         GL_RGBA, type, nullptr);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            for (GLuint texture : textures) {
+                glBindTexture(GL_TEXTURE_2D, texture);
+                glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
+                             GL_RGBA, type, nullptr);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            }
             width = w;
             height = h;
+            head = 0;
+            count = 0;
         }
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        if (count == 0) {
+            for (GLuint texture : textures) {
+                glBindTexture(GL_TEXTURE_2D, texture);
+                glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+            }
+        } else {
+            glBindTexture(GL_TEXTURE_2D, textures[head]);
+            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        }
         glBindTexture(GL_TEXTURE_2D, 0);
         // Detach to avoid keeping a stale reference to the source texture.
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                GL_TEXTURE_2D, 0, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
-        advance();
+        finishPush();
     }
 
     /**
@@ -1934,9 +1960,7 @@ class FrameCache {
     /**
      * @brief Pre-fill every slot with copies of a single frame.
      *
-     * Seeds the cache with blank (black) textures so "cache" shaders have
-     * valid sampler data before the first real frame arrives. Marks the
-     * ring as full.
+     * Seeds the entire cache with one frame and marks the ring as full.
      */
     void fill(const cv::Mat &frame) {
         if (!hasStorage())
@@ -1990,6 +2014,15 @@ class FrameCache {
         head = (head + 1) % num_frames;
         if (count < num_frames)
             ++count;
+    }
+
+    void finishPush() {
+        if (count == 0) {
+            head = 0;
+            count = num_frames;
+        } else {
+            advance();
+        }
     }
 
     /**
@@ -8293,9 +8326,7 @@ class ACView : public gl::GLObject {
                 // and format so glCopyTexSubImage2D can copy GPU->GPU.
                 frame_cache.init(win->w, win->h, true);
             } else {
-                cv::Mat blankMat = cv::Mat::zeros(frame_h, frame_w, CV_8UC3);
                 frame_cache.init(frame_w, frame_h);
-                frame_cache.fill(blankMat);
             }
             mx::system_out << "acmx2: Texture cache initalized.\n";
             fflush(stdout);
@@ -8770,7 +8801,13 @@ class ACView : public gl::GLObject {
             }();
             if (texture_cache && (library.isCache() || multipass_uses_cache)) {
                 static int hdr_counter = 0;
-                if (++hdr_counter > cache_delay) {
+                if (frame_cache.size() == 0) {
+                    if (received_source_frame) {
+                        frame_cache.pushFromFBO(hdr_linear_video_fbo,
+                                                win->w, win->h);
+                        hdr_counter = 0;
+                    }
+                } else if (++hdr_counter > cache_delay) {
                     if (cache_warmup_frames <= 0) {
                         // GPU->GPU copy of the freshly decoded linear-light
                         // frame into the next ring slot. No CPU readback.
@@ -8890,7 +8927,11 @@ class ACView : public gl::GLObject {
                                       return false;
                                   }()))) {
                 static int counter = 0;
-                if (++counter > cache_delay) {
+                if (frame_cache.size() == 0) {
+                    frame_cache.pushFromTexture(camera_texture,
+                                                newFrame.cols, newFrame.rows);
+                    counter = 0;
+                } else if (++counter > cache_delay) {
                     // Only push frames into cache after the post-load warmup period
                     if (cache_warmup_frames <= 0) {
                         // GPU->GPU copy from the camera texture that was just
