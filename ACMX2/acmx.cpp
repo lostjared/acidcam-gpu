@@ -10186,8 +10186,8 @@ class ACView : public gl::GLObject {
      * @brief Handle SDL keyboard events (shader navigation, mode toggles, etc.).
      *
      * Key bindings (SDL_KEYUP):
-     * - Up/Down: Previous/next shader (or playlist entry if playlist enabled,
-     *   or change main shader with crossfade while in random multipass mode).
+     * - Up/Down: Crossfade to the previous/next shader (or playlist entry if
+     *   playlist mode is enabled).
      * - Shift+Up/Down: In playlist or autopilot mode, change the post-multipass
      *   shader without altering the current playlist position.
      * - Left/Right: Previous/next GPU CUDA filter.
@@ -10261,7 +10261,10 @@ class ACView : public gl::GLObject {
                     mx::system_out << "acmx2: Playlist [" << playlist_index << "/" << playlist_indices.size() << "]\n";
                     fflush(stdout);
                 } else {
-                    library.dec();
+                    if (library.index() > 0) {
+                        beginCrossfade(win);
+                        library.dec();
+                    }
                 }
                 if (is3d_enabled)
                     cube.setShaderProgram(library.shader());
@@ -10309,7 +10312,10 @@ class ACView : public gl::GLObject {
                     mx::system_out << "acmx2: Playlist [" << playlist_index << "/" << playlist_indices.size() << "]\n";
                     fflush(stdout);
                 } else {
-                    library.inc();
+                    if (library.index() + 1 < library.size()) {
+                        beginCrossfade(win);
+                        library.inc();
+                    }
                 }
                 if (is3d_enabled)
                     cube.setShaderProgram(library.shader());
@@ -11981,7 +11987,7 @@ namespace {
         const CliColors c = makeCliColors();
         out << c.title << "\nKeyboard Controls" << c.reset << "\n";
 
-        printSection(out, c, "Main", {{"Escape", "Quit.", ""}, {"Ctrl+X", "Quit without audio mux.", ""}, {"Up Arrow", "Previous shader (or previous playlist entry in playlist/autopilot mode).", ""}, {"Down Arrow", "Next shader (or next playlist entry in playlist/autopilot mode).", ""}, {"Shift+Up Arrow", "In playlist/autopilot mode: change post-multipass shader backward.", ""}, {"Shift+Down Arrow", "In playlist/autopilot mode: change post-multipass shader forward.", ""}, {"Left Arrow", "Previous GPU filter (if enabled).", ""}, {"Right Arrow", "Next GPU filter (if enabled).", ""}, {"Space", "Enable/disable processing.", ""}, {"L", "Toggle video freeze (Video/Image modes).", ""}, {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""}, {"J", "Toggle autopilot mode (requires playlist).", ""}, {"Y", "Toggle sequential autopilot (cycles playlist in order, requires playlist).", ""}, {"N", "Toggle random crossfade selection for autopilot shader switches.", ""}, {"T", "Enable/disable time.", ""}, {"U / I", "Step time when time is disabled.", ""}, {"Page Up / Page Down", "Increase/decrease time speed.", ""}, {"M", "Toggle multi-pass / multi-shader pass.", ""}, {"F", "Toggle fullscreen.", ""}, {"Q", "Toggle reactive time (if AUDIO_ENABLED).", ""}, {"Insert", "Increase audio sensitivity.", ""}, {"Delete", "Decrease audio sensitivity.", ""}, {"End", "Toggle spectrum sensitivity scaling.", ""}, {"Home", "Toggle audio delta time scaling.", ""}, {"3", "Toggle 2D/3D mode.", ""}});
+        printSection(out, c, "Main", {{"Escape", "Quit.", ""}, {"Ctrl+X", "Quit without audio mux.", ""}, {"Up Arrow", "Crossfade to the previous shader (or playlist entry in playlist/autopilot mode).", ""}, {"Down Arrow", "Crossfade to the next shader (or playlist entry in playlist/autopilot mode).", ""}, {"Shift+Up Arrow", "In playlist/autopilot mode: change post-multipass shader backward.", ""}, {"Shift+Down Arrow", "In playlist/autopilot mode: change post-multipass shader forward.", ""}, {"Left Arrow", "Previous GPU filter (if enabled).", ""}, {"Right Arrow", "Next GPU filter (if enabled).", ""}, {"Space", "Enable/disable processing.", ""}, {"L", "Toggle video freeze (Video/Image modes).", ""}, {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""}, {"J", "Toggle autopilot mode (requires playlist).", ""}, {"Y", "Toggle sequential autopilot (cycles playlist in order, requires playlist).", ""}, {"N", "Toggle random crossfade selection for autopilot shader switches.", ""}, {"T", "Enable/disable time.", ""}, {"U / I", "Step time when time is disabled.", ""}, {"Page Up / Page Down", "Increase/decrease time speed.", ""}, {"M", "Toggle multi-pass / multi-shader pass.", ""}, {"F", "Toggle fullscreen.", ""}, {"Q", "Toggle reactive time (if AUDIO_ENABLED).", ""}, {"Insert", "Increase audio sensitivity.", ""}, {"Delete", "Decrease audio sensitivity.", ""}, {"End", "Toggle spectrum sensitivity scaling.", ""}, {"Home", "Toggle audio delta time scaling.", ""}, {"3", "Toggle 2D/3D mode.", ""}});
 
         printSection(out, c, "Snapshots", {{"Z", "Save PNG snapshot (SDR 8-bit; HDR mode still outputs SDR PNG).", ""}, {"4", "Save TIFF snapshot (SDR: 8-bit RGBA; HDR: 16-bit RGBA; requires ACMX2_WITH_TIFF).", ""}, {"5", "Save lossless WebP snapshot (HDR is tone-mapped; requires ACMX2_WITH_WEBP).", ""}, {"6", "Save raw RGBA snapshot (HDR: 16-bit RGBA, otherwise 8-bit RGBA).", "ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw"}});
 
