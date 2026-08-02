@@ -68,22 +68,23 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Audio reactivity</b> — shaders respond to real-time audio input (RtAudio/PulseAudio)
 - <b>Audio startup warmup control</b> — <tt>--audio-warm-rate &lt;value&gt;</tt> controls startup fade-in rate for audio-reactive uniforms/textures (default <tt>0.5</tt> 1/sec)
 - <b>Audio spectrum history array</b> — <tt>--enable-audio-buffers &lt;N&gt;</tt> exposes rolling FFT history through one runtime-sized <tt>sampler1DArray spectrum_history</tt>; the former <tt>spectrum1</tt>...<tt>spectrumN</tt> sampler interface is no longer used
-- <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; the audio track is automatically muxed into the output video
-- <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; file-mode recording/mux behavior uses explicit opt-in semantics
+- <b>File-based audio reactivity</b> — drive audio-reactive shaders from an audio or video file instead of a live microphone via <tt>--audio-file</tt>; file-mode recording and muxing use explicit opt-in semantics
 - <b>MIDI control</b> — map hardware knobs and buttons to shader parameters
 - <b>FFmpeg CUDA video decode</b> — file input prefers FFmpeg hardware decode on CUDA, with automatic fallback when unavailable
 - <b>Video recording</b> with optional audio muxing via FFmpeg
 - <b>Expanded output container support</b> — includes MKV output support in addition to the existing MP4 workflow
 - <b>Up to 8K recording support</b> — 4K and below records as H.264; above 4K records as HEVC (H.265)
 - <b>Hardware-first H.264 encoding</b> — prefers <tt>h264_nvenc</tt> via MXWrite and falls back to software H.264 automatically
-- <b>Configurable recording quality</b> — preset, tune, CRF, codec mode, and realtime low-latency flags are available in both CLI and Qt session settings
+- <b>Configurable recording quality</b> — preset, tune, CRF, codec mode, realtime low-latency flags, and arbitrary FFmpeg-style encoder parameters are available in both CLI and Qt session settings
+- <b>Lossless HEVC/NVENC output</b> — select <tt>hevc_nvenc</tt>, NVENC <tt>p1</tt>...<tt>p7</tt> presets, <tt>lossless</tt> tuning, and options such as <tt>-profile:v rext -pix_fmt yuv444p</tt> through MXWrite
 - <b>Pipeline mode reporting</b> — startup log prints active decode/encode modes for validation and benchmarking
 - <b>Color-coded terminal status output</b> — improves readability when monitoring long-running headless jobs
 - <b>Silent mode</b> — headless video processing without a window
 - <b>HDR video pipeline</b> — detects BT.2020 PQ/HLG sources, processes them in linear BT.2020, and writes HDR HEVC Main10 output
 - <b>HLG to HDR10 conversion path</b> — improves interoperability across HDR source and export workflows
 - <b>Shader cache</b> — precompile shader binaries for fast startup
-- <b>Shader workflow tools</b> — reload and rebuild cache paths are integrated for faster iteration during shader authoring
+- <b>Live shader coding</b> — saving from the Qt editor signals ACMX2 through shared memory to recompile and hot-swap only the edited shader; failures keep the previous program active and report the driver error in the interface log
+- <b>Shader workflow tools</b> — live reload and persistent cache-rebuild paths are integrated for faster iteration during shader authoring
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
 - <b>Persistent Qt session dialogs</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened, with fresh defaults of <tt>1280x720</tt> camera capture and <tt>Default</tt> display resolution
 - <b>Metadata viewer</b> — inspect media metadata directly from the Qt interface
@@ -113,6 +114,121 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>PNG frame output</b> — <tt>--png</tt> option saves individual frames as PNG files instead of video encoding
 - <b>Audio animation mux</b> — embedded animated audio track during file processing to indicate progress
 - <b>Black/White Points adjustment</b> — <tt>--black &lt;point&gt;</tt> and <tt>--white &lt;point&gt;</tt> provide fine-grained control for shadow crush and opacity saturation thresholds
+
+@section recent_updates_2026 Recent Updates — July and August 2026
+
+@subsection updates_2026_08 August 2026 (Month to Date)
+
+<b>Live shader coding</b>
+
+- Saving a shader in the built-in Qt editor now publishes a reload request over
+  the interface shared-memory channel while ACMX2 continues rendering.
+- The request identifies both the stable library index and canonical source
+  path. ACMX2 validates both values and recompiles only the edited slot rather
+  than rebuilding the complete shader library.
+- New 2D and, when enabled, 3D programs are compiled and initialized in
+  temporary objects. They replace the live programs only after compilation,
+  linking, and uniform discovery all succeed.
+- A failed edit never destroys the last valid shader. The active program keeps
+  rendering, and the complete OpenGL compiler or linker diagnostic is sent to
+  stderr and displayed in the Qt interface log.
+- The workflow supports full-library and single-fragment launches. Correct the
+  source and save again to retry without restarting ACMX2.
+- A successful editor save also marks the persistent shader cache stale so a
+  future launch can rebuild its binary cache from the new source.
+
+<b>Lossless HEVC and custom FFmpeg parameters</b>
+
+- Qt Session Settings now exposes explicit <tt>h264_nvenc</tt> and
+  <tt>hevc_nvenc</tt> codec modes, NVENC presets <tt>p1</tt> through <tt>p7</tt>,
+  and tunes including <tt>lossless</tt>.
+- The persistent extra-parameters field maps to <tt>--encode-params</tt> and is
+  forwarded through ACMX2 to the repository-local MXWrite implementation.
+- FFmpeg-style encoder settings that do not have dedicated controls can be
+  supplied directly, including profiles and pixel formats.
+
+@code{.sh}
+acmx2 --encode-codec hevc_nvenc \
+      --encode-params "-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p" \
+      -o output_hardware_lossless.mkv
+@endcode
+
+MKV is recommended for HEVC workflows that combine lossless tuning with a
+non-default pixel format such as <tt>yuv444p</tt>.
+
+<b>Runtime interaction and cache warmup</b>
+
+- Right-click shader selection remains available during playlist playback and
+  changes the post/main shader without replacing the playlist node's multipass
+  list.
+- Up/Down navigation now consistently begins a crossfade when moving to a
+  valid neighboring shader.
+- The first real source frame is replicated across every texture-history slot
+  during startup. Both legacy 2D texture slots and
+  <tt>sampler2DArray history</tt> mode begin with useful image data instead of
+  black frames, preventing dark startup trails in temporal shaders.
+- Build, packaging, and generated-documentation scripts received additional
+  portability updates.
+
+@subsection updates_2026_07 July 2026
+
+<b>Texture and spectrum history</b>
+
+- <tt>--texture-cache-array</tt> adds a one-object
+  <tt>sampler2DArray history</tt> ring with <tt>history_head</tt>, while
+  <tt>--texture-cache-size &lt;N&gt;</tt> selects cache depths up to 64 frames.
+- The injected <tt>USE_HISTORY_TEXTURE_ARRAY</tt> macro lets shaders support
+  array mode and the legacy <tt>samp1</tt>...<tt>samp8</tt> or
+  <tt>textures[SIZE]</tt> interfaces from the same source.
+- <tt>scripts/migrate_cache_samplers.pl</tt> provides dry-run and rewrite modes
+  for migrating existing cache shaders.
+- <tt>--enable-audio-buffers &lt;N&gt;</tt> now allocates one runtime-sized
+  <tt>sampler1DArray spectrum_history</tt>, with depth bounded by the GPU's
+  array-layer capacity. <tt>spectrum0</tt> remains a current-frame compatibility
+  alias.
+- <tt>scripts/migrate_spectrum_samplers.pl</tt> converts legacy
+  <tt>spectrum1</tt>, <tt>spectrum2</tt>, and later sampler references to array
+  layer access.
+- <tt>--audio-warm-rate &lt;value&gt;</tt> controls the startup fade-in of
+  audio-reactive uniforms and spectrum data.
+
+<b>Playback, processing, and content</b>
+
+- File audio/video synchronization and pass-through timing were reworked so
+  decoding, playback, rendering, and MXWrite output follow a more consistent
+  clock and shutdown/drain path.
+- File-audio recording and muxing now use explicit opt-in behavior, avoiding
+  unintended output operations during preview-only sessions.
+- Texture caching was extended to camera and still-image inputs, and startup
+  warmup prevents splash/loading frames from entering temporal history.
+- Qt shared-memory runtime controls gained live shader selection and playback
+  setting updates without restarting the process.
+- Playlist authoring gained shuffle, concat, and clear actions, while random
+  and sequential autopilot plus post-multipass navigation expanded live control.
+- Long-running shaders preserve trigonometric phase continuity when
+  <tt>time_f</tt> wraps, preventing a visible jump during extended sessions.
+- Qt session dialogs retain their last-used values, preferred camera FPS is
+  restored after capability re-enumeration, and the metadata viewer exposes
+  input-media details from the interface.
+- The shader editor prompts before closing modified source through Escape or
+  the window close action.
+- ONNX processing gained broader model/YAML coverage, preprocessing and
+  smoothing improvements, and additional style/model assets.
+- New shader packs, playlists, and MXMOD geometry expanded the included live
+  performance content.
+
+<b>Encoding, safety, and build system</b>
+
+- ACMX2 adopted the repository-local MXWrite library, explicit hardware versus
+  software encoding modes, and optional <tt>hevc_nvenc</tt> output.
+- Headless/silent processing, startup pipeline reporting, and color-coded
+  terminal output improved long-running batch monitoring.
+- HDR and color handling gained HLG-to-HDR10 workflow updates, MKV output, and
+  more consistent SDR TIFF/WebP snapshot behavior.
+- Input/output validation now rejects attempts to read and write the same file,
+  preventing destructive file collisions.
+- Pcons build scripts, dependency setup helpers, and OpenCV 5 compatibility
+  changes improved portable CUDA and non-CUDA builds.
 
 @section version_history Version History
 
@@ -148,6 +264,26 @@ re-enumeration when that FPS is supported by the selected device.
 
 The Qt editor flow also includes safer close behavior: if modified shader content is open,
 closing via Escape or window close prompts to save changes before exiting the editor.
+
+@subsection ui_live_shader_coding Live Shader Coding from the Qt Editor
+
+Launch a full shader library or a single shader from the Qt interface, open a
+shader in the built-in editor, and save it normally. The interface writes the
+shader's canonical path and library index into the versioned shared-memory
+control block and advances a reload sequence number. The ACMX2 render process
+observes the request on its next frame and recompiles only the requested shader.
+
+The replacement is transactional from the renderer's point of view. ACMX2
+compiles and links temporary programs, resolves the standard ACMX2, Shadertoy,
+audio, cache, and MIDI uniform locations, and only then swaps the new program
+into the live shader library. Dual-mode sessions prepare both 2D and 3D
+variants before either existing variant is replaced.
+
+If the new source does not compile or link, ACMX2 continues using the previous
+valid program. The GPU driver's full diagnostic string is written to the child
+process error stream, which the Qt launcher displays in its log. Editing and
+saving again sends another request, so shader authors can iterate continuously
+without closing the preview or losing the current session state.
 
 @section install Installation & Prerequisites
 
