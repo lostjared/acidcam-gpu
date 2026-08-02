@@ -27,6 +27,14 @@ The interface automatically resolves the ACMX2 data directory at `<prefix>/share
 - On a fresh configuration with no saved values, the main **Settings** dialog defaults camera capture resolution to `1280x720` and display/output resolution to `Default`.
 - Persisted selections are restored by stored values when possible, which helps keep device selections stable across dialog rebuilds.
 
+## Live Shader Editing
+
+When ACMX2 is launched from the interface, saving a shader in the built-in
+editor sends a shared-memory reload request to the running process. ACMX2
+recompiles only that shader and installs the replacement immediately. If the
+edited source does not compile or link, the current program remains active and
+the complete OpenGL compiler message is written to the interface log.
+
 ## Encoding Controls
 
 - The main **Settings** dialog includes an **Encoding Quality** group.

@@ -210,6 +210,29 @@ static bool resolveShaderPathInLibrary(const std::string &library_path,
     return true;
 }
 
+static std::vector<std::string> sortedShaderLibraryEntries(const std::string &library_path) {
+    std::ifstream file(library_path + "/index.txt");
+    std::vector<std::string> shader_files;
+    std::string line;
+    while (std::getline(file, line)) {
+        const auto shader_entry = normalizeShaderIndexEntry(line);
+        if (!shader_entry)
+            continue;
+        std::string full_path;
+        if (resolveShaderPathInLibrary(library_path, *shader_entry, full_path))
+            shader_files.push_back(*shader_entry);
+    }
+    std::sort(shader_files.begin(), shader_files.end(),
+              [](const std::string &a, const std::string &b) {
+                  return std::lexicographical_compare(
+                      a.begin(), a.end(), b.begin(), b.end(),
+                      [](unsigned char ca, unsigned char cb) {
+                          return std::tolower(ca) < std::tolower(cb);
+                      });
+              });
+    return shader_files;
+}
+
 // ---------------------------------------------------------------------------
 // Graceful shutdown for headless / --silent mode.
 //
@@ -2990,6 +3013,120 @@ class ShaderLibrary {
         return std::make_unique<gl::ShaderProgram>();
     }
 
+    static std::string shaderInfoLog(GLuint shader) {
+        GLint length = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+        if (length <= 1)
+            return {};
+        std::vector<char> buffer(static_cast<std::size_t>(length), '\0');
+        GLsizei written = 0;
+        glGetShaderInfoLog(shader, length, &written, buffer.data());
+        std::size_t used = static_cast<std::size_t>(std::max<GLsizei>(written, 0));
+        while (used > 0 && buffer[used - 1] == '\0')
+            --used;
+        return std::string(buffer.data(), used);
+    }
+
+    static std::string programInfoLog(GLuint program) {
+        GLint length = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+        if (length <= 1)
+            return {};
+        std::vector<char> buffer(static_cast<std::size_t>(length), '\0');
+        GLsizei written = 0;
+        glGetProgramInfoLog(program, length, &written, buffer.data());
+        std::size_t used = static_cast<std::size_t>(std::max<GLsizei>(written, 0));
+        while (used > 0 && buffer[used - 1] == '\0')
+            --used;
+        return std::string(buffer.data(), used);
+    }
+
+    /** Compile a replacement program while retaining complete driver diagnostics. */
+    std::unique_ptr<gl::ShaderProgram> compileProgramForReload(
+        const std::string &vert_path,
+        const std::string &frag_path,
+        std::string &error) const {
+        std::ifstream vertex_file(vert_path);
+        if (!vertex_file.is_open()) {
+            error = "Could not read vertex shader: " + vert_path;
+            return {};
+        }
+        std::ostringstream vertex_stream;
+        vertex_stream << vertex_file.rdbuf();
+        const std::string vertex_source = vertex_stream.str();
+        const std::string fragment_source =
+            injectShaderSize(frag_path, cache_size, use_history_array);
+        if (fragment_source.empty()) {
+            error = "Could not read fragment shader: " + frag_path;
+            return {};
+        }
+
+        const auto compile_stage = [&error](GLenum type,
+                                            const std::string &source,
+                                            const std::string &label) -> GLuint {
+            const GLuint shader = glCreateShader(type);
+            if (shader == 0) {
+                error = "Could not create " + label + " shader object";
+                return 0;
+            }
+            const char *source_ptr = source.c_str();
+            glShaderSource(shader, 1, &source_ptr, nullptr);
+            glCompileShader(shader);
+            GLint compiled = GL_FALSE;
+            glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+            if (compiled != GL_TRUE) {
+                error = label + " shader compilation failed";
+                const std::string log = shaderInfoLog(shader);
+                if (!log.empty())
+                    error += ":\n" + log;
+                glDeleteShader(shader);
+                return 0;
+            }
+            return shader;
+        };
+
+        const GLuint vertex_shader =
+            compile_stage(GL_VERTEX_SHADER, vertex_source, vert_path);
+        if (vertex_shader == 0)
+            return {};
+        const GLuint fragment_shader =
+            compile_stage(GL_FRAGMENT_SHADER, fragment_source, frag_path);
+        if (fragment_shader == 0) {
+            glDeleteShader(vertex_shader);
+            return {};
+        }
+
+        const GLuint program = glCreateProgram();
+        if (program == 0) {
+            glDeleteShader(vertex_shader);
+            glDeleteShader(fragment_shader);
+            error = "Could not create shader program";
+            return {};
+        }
+        glAttachShader(program, vertex_shader);
+        glAttachShader(program, fragment_shader);
+        glLinkProgram(program);
+        GLint linked = GL_FALSE;
+        glGetProgramiv(program, GL_LINK_STATUS, &linked);
+        if (linked != GL_TRUE) {
+            error = "Shader program link failed";
+            const std::string log = programInfoLog(program);
+            if (!log.empty())
+                error += ":\n" + log;
+            glDeleteProgram(program);
+            glDeleteShader(vertex_shader);
+            glDeleteShader(fragment_shader);
+            return {};
+        }
+
+        glDetachShader(program, vertex_shader);
+        glDetachShader(program, fragment_shader);
+        glDeleteShader(vertex_shader);
+        glDeleteShader(fragment_shader);
+        error.clear();
+        return std::make_unique<gl::ShaderProgram>(program);
+    }
+
     /**
      * @brief Compile a minimal passthrough fragment shader as a stand-in.
      *
@@ -3142,6 +3279,96 @@ class ShaderLibrary {
         } else {
             mx::system_out << "acmx2: Compiled Shader 0 (2D): " << text << " ✔ \n";
         }
+    }
+
+    /**
+     * @brief Recompile one library slot and atomically replace it on success.
+     *
+     * Both 2D and 3D variants are compiled into temporary programs first.
+     * The currently running programs remain installed if compilation, linking,
+     * or uniform setup fails.
+     */
+    bool reloadProgram(gl::GLWindow *win, size_t shader_index,
+                       const std::string &fragment_path, std::string &error) {
+        if (shader_index >= programs_2d.size()) {
+            error = "Shader reload index is outside the loaded library: " +
+                    std::to_string(shader_index);
+            return false;
+        }
+        if (dual_mode && shader_index >= programs_3d.size()) {
+            error = "Shader reload index is outside the loaded 3D library: " +
+                    std::to_string(shader_index);
+            return false;
+        }
+
+        auto replacement_2d = compileProgramForReload(
+            win->util.getFilePath("data/vert.glsl"), fragment_path, error);
+        if (!replacement_2d)
+            return false;
+
+        std::unique_ptr<gl::ShaderProgram> replacement_3d;
+        if (dual_mode) {
+            replacement_3d = compileProgramForReload(
+                win->util.getFilePath("data/vertex.glsl"), fragment_path, error);
+            if (!replacement_3d)
+                return false;
+        }
+
+        std::unordered_map<int, ProgramData> replacement_names_2d;
+        std::unordered_map<int, ProgramData> replacement_names_3d;
+        try {
+            setupProgramUniforms(win, replacement_2d.get(), replacement_names_2d,
+                                 shader_index, fragment_path);
+            if (dual_mode) {
+                setupProgramUniforms(win, replacement_3d.get(), replacement_names_3d,
+                                     shader_index, fragment_path);
+            }
+        } catch (const std::exception &e) {
+            error = std::string("Shader uniform setup failed: ") + e.what();
+            shader()->useProgram();
+            return false;
+        } catch (...) {
+            error = "Shader uniform setup failed with an unknown error";
+            shader()->useProgram();
+            return false;
+        }
+
+        const int index_key = static_cast<int>(shader_index);
+        const auto names_2d_it = replacement_names_2d.find(index_key);
+        const auto current_names_2d_it = program_names_2d.find(index_key);
+        if (names_2d_it == replacement_names_2d.end()) {
+            error = "Shader reload did not produce 2D uniform metadata";
+            shader()->useProgram();
+            return false;
+        }
+        if (current_names_2d_it == program_names_2d.end()) {
+            error = "Loaded shader is missing 2D uniform metadata";
+            shader()->useProgram();
+            return false;
+        }
+
+        auto names_3d_it = replacement_names_3d.end();
+        auto current_names_3d_it = program_names_3d.end();
+        if (dual_mode) {
+            names_3d_it = replacement_names_3d.find(index_key);
+            current_names_3d_it = program_names_3d.find(index_key);
+            if (names_3d_it == replacement_names_3d.end() ||
+                current_names_3d_it == program_names_3d.end()) {
+                error = "Shader reload is missing 3D uniform metadata";
+                shader()->useProgram();
+                return false;
+            }
+        }
+
+        programs_2d[shader_index].swap(replacement_2d);
+        std::swap(current_names_2d_it->second, names_2d_it->second);
+        if (dual_mode) {
+            programs_3d[shader_index].swap(replacement_3d);
+            std::swap(current_names_3d_it->second, names_3d_it->second);
+        }
+        shader()->useProgram();
+        error.clear();
+        return true;
     }
 
     /**
@@ -7045,6 +7272,7 @@ class ACView : public gl::GLObject {
     int shaderSelectionShmFd = -1;
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
     uint32_t shaderSelectionLastSequence = 0;
+    uint32_t shaderReloadLastSequence = 0;
 
     void initShaderSelectionSharedMemory() {
         if (shaderSelectionShm)
@@ -7073,6 +7301,7 @@ class ACView : public gl::GLObject {
         }
 
         shaderSelectionLastSequence = shaderSelectionShm->sequence;
+        shaderReloadLastSequence = shaderSelectionShm->reload_sequence;
     }
 
     void cleanupShaderSelectionSharedMemory() {
@@ -7097,6 +7326,82 @@ class ACView : public gl::GLObject {
             return;
 
         shaderSelectionLastSequence = shaderSelectionShm->sequence;
+        const auto readBoundedText = [](const char *buf, std::size_t cap) {
+            std::size_t len = 0;
+            while (len < cap && buf[len] != '\0') {
+                ++len;
+            }
+            return std::string(buf, len);
+        };
+
+        if (shaderSelectionShm->reload_sequence != shaderReloadLastSequence) {
+            shaderReloadLastSequence = shaderSelectionShm->reload_sequence;
+            const int requestedReloadIndex = shaderSelectionShm->reload_shader_index;
+            const std::string requestedPath = readBoundedText(
+                shaderSelectionShm->reload_shader_path,
+                acmx2::ipc::kShaderSelectionMaxReloadPath);
+            std::string reloadPath;
+            size_t reloadIndex = 0;
+            std::string reloadError;
+
+            if (requestedReloadIndex < 0 || requestedPath.empty()) {
+                reloadError = "Invalid shader reload request from interface";
+            } else if (std::get<0>(flib) == 1) {
+                const auto shaderFiles = sortedShaderLibraryEntries(std::get<1>(flib));
+                if (static_cast<size_t>(requestedReloadIndex) >= shaderFiles.size()) {
+                    reloadError = "Shader reload index is outside index.txt: " +
+                                  std::to_string(requestedReloadIndex);
+                } else if (!resolveShaderPathInLibrary(
+                               std::get<1>(flib),
+                               shaderFiles[static_cast<size_t>(requestedReloadIndex)],
+                               reloadPath)) {
+                    reloadError = "Could not resolve shader reload path from index.txt";
+                } else {
+                    std::error_code requestedError;
+                    const auto canonicalRequested = std::filesystem::weakly_canonical(
+                        std::filesystem::path(requestedPath), requestedError);
+                    std::error_code expectedError;
+                    const auto canonicalExpected = std::filesystem::weakly_canonical(
+                        std::filesystem::path(reloadPath), expectedError);
+                    if (requestedError || expectedError ||
+                        canonicalRequested != canonicalExpected) {
+                        reloadError = "Shader reload path does not match the requested library index";
+                    } else {
+                        reloadIndex = static_cast<size_t>(requestedReloadIndex);
+                    }
+                }
+            } else {
+                std::error_code requestedError;
+                const auto canonicalRequested = std::filesystem::weakly_canonical(
+                    std::filesystem::path(requestedPath), requestedError);
+                std::error_code loadedError;
+                const auto canonicalLoaded = std::filesystem::weakly_canonical(
+                    std::filesystem::path(std::get<1>(flib)), loadedError);
+                if (requestedError || loadedError || canonicalRequested != canonicalLoaded) {
+                    reloadError = "Saved shader is not the shader loaded by this process";
+                } else {
+                    reloadPath = canonicalLoaded.string();
+                }
+            }
+
+            if (reloadError.empty() &&
+                library.reloadProgram(win, reloadIndex, reloadPath, reloadError)) {
+                if (is3d_enabled)
+                    cube.setShaderProgram(library.shader());
+                sprite.setShader(library.shader());
+                updateShaderNameCache();
+                mx::system_out << "acmx2: Live reloaded shader " << reloadPath << "\n";
+                mx::system_out.flush();
+                fflush(stdout);
+            } else {
+                mx::system_err << "acmx2: Live shader reload failed for "
+                               << requestedPath << ":\n"
+                               << reloadError << "\n";
+                mx::system_err.flush();
+                fflush(stderr);
+            }
+        }
+
         std::vector<int> requestedPassList;
         requestedPassList.reserve(shaderSelectionShm->shader_pass_count);
         const uint32_t clampedPassCount = std::min<uint32_t>(
@@ -7127,14 +7432,6 @@ class ACView : public gl::GLObject {
 
         repeat = (shaderSelectionShm->repeat_enabled != 0);
         display_filter = (shaderSelectionShm->display_filter_enabled != 0);
-
-        const auto readBoundedText = [](const char *buf, std::size_t cap) {
-            std::size_t len = 0;
-            while (len < cap && buf[len] != '\0') {
-                ++len;
-            }
-            return std::string(buf, len);
-        };
 
         const std::string requestedWatermark = readBoundedText(
             shaderSelectionShm->watermark_text,

@@ -299,6 +299,7 @@ class MainWindow : public QMainWindow {
 
     void initShaderSelectionSharedMemory();
     void publishSelectedShaderIndexToRunningProcess();
+    void publishShaderReloadToRunningProcess(const QString &filePath);
     void publishMultipassShadersToRunningProcess();
     void publishRepeatStateToRunningProcess();
     void publishRuntimeSettingsToRunningProcess();
@@ -307,6 +308,7 @@ class MainWindow : public QMainWindow {
     int shaderSelectionShmFd = -1;
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
     quint32 shaderSelectionSequence = 0;
+    quint32 shaderReloadSequence = 0;
 #endif
 };
 

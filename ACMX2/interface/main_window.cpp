@@ -1175,9 +1175,10 @@ void MainWindow::listClicked(const QModelIndex &i) {
     QString filePath = shader_path + "/" + itemText;
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
-    connect(editor, &TextEditor::fileSaved, this, [this](const QString &) {
+    connect(editor, &TextEditor::fileSaved, this, [this](const QString &filePath) {
         shaderCacheMarkedStaleBySave = true;
         populateShaderTree();
+        publishShaderReloadToRunningProcess(filePath);
     });
     open_files.append(editor);
     editor->show();
@@ -1253,9 +1254,13 @@ void MainWindow::initShaderSelectionSharedMemory() {
         std::fill(std::begin(shaderSelectionShm->reserved), std::end(shaderSelectionShm->reserved), 0);
         std::fill(std::begin(shaderSelectionShm->gpu_filter_indices), std::end(shaderSelectionShm->gpu_filter_indices), -1);
         std::fill(std::begin(shaderSelectionShm->watermark_text), std::end(shaderSelectionShm->watermark_text), '\0');
+        shaderSelectionShm->reload_shader_index = -1;
+        std::fill(std::begin(shaderSelectionShm->reload_shader_path), std::end(shaderSelectionShm->reload_shader_path), '\0');
+        shaderSelectionShm->reload_sequence = 0;
         shaderSelectionShm->sequence = 0;
     }
     shaderSelectionSequence = shaderSelectionShm->sequence;
+    shaderReloadSequence = shaderSelectionShm->reload_sequence;
 #endif
 }
 
@@ -1268,6 +1273,39 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
         return;
     shaderSelectionShm->selected_index = row;
     shaderSelectionShm->sequence = ++shaderSelectionSequence;
+#endif
+}
+
+void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
+#if defined(__linux__) || defined(__APPLE__)
+    if (!shaderSelectionShm || !process ||
+        process->state() != QProcess::Running || cacheBuildInProgress) {
+        return;
+    }
+
+    const QFileInfo savedFile(filePath);
+    const QString shaderName = QDir(shader_path).relativeFilePath(savedFile.absoluteFilePath());
+    const int shaderIndex = items.indexOf(shaderName, 0, Qt::CaseInsensitive);
+    if (shaderIndex < 0) {
+        Log("Saved shader is not in the active library; live reload was skipped: " + filePath);
+        return;
+    }
+
+    const QByteArray reloadPath = savedFile.canonicalFilePath().toUtf8();
+    if (reloadPath.isEmpty() ||
+        reloadPath.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
+        Log("Shader path is too long for live reload: " + filePath);
+        return;
+    }
+
+    shaderSelectionShm->reload_shader_index = shaderIndex;
+    std::fill(std::begin(shaderSelectionShm->reload_shader_path), std::end(shaderSelectionShm->reload_shader_path), '\0');
+    std::copy(reloadPath.cbegin(), reloadPath.cend(), shaderSelectionShm->reload_shader_path);
+    shaderSelectionShm->reload_sequence = ++shaderReloadSequence;
+    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+    Log("Requested live shader reload: " + shaderName);
+#else
+    Q_UNUSED(filePath);
 #endif
 }
 
