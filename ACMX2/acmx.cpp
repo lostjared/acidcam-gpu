@@ -7113,7 +7113,11 @@ class ACView : public gl::GLObject {
         const bool requestedPassEnabled = shaderSelectionShm->shader_pass_enabled != 0 && !requestedPassList.empty();
         const bool multipassChanged = (shader_pass_enabled != requestedPassEnabled) ||
                                       (shader_pass_list != requestedPassList);
-        if (!random_multipass_mode) {
+        // Playlist mode owns the active pass list. A right-click shader
+        // selection from the interface should change only the post/main
+        // shader, just like Shift+Up/Down, without replacing the playlist
+        // node with the interface's standalone multipass settings.
+        if (!random_multipass_mode && !playlist_enabled) {
             if (multipassChanged && requestedPassEnabled)
                 beginCrossfade(win);
             shader_pass_list = requestedPassList;
@@ -7212,7 +7216,7 @@ class ACView : public gl::GLObject {
             return;
         if (static_cast<size_t>(requestedIndex) >= library.size())
             return;
-        if (shaderLocked || playlist_enabled || random_multipass_mode)
+        if (shaderLocked || random_multipass_mode)
             return;
         if (static_cast<size_t>(requestedIndex) == library.index())
             return;
