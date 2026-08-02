@@ -31,9 +31,11 @@ The interface automatically resolves the ACMX2 data directory at `<prefix>/share
 
 - The main **Settings** dialog includes an **Encoding Quality** group.
 - Available controls:
-	- preset: `ultrafast` through `veryslow`
-	- tune: `none`, `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, `zerolatency`
+	- preset: `ultrafast` through `veryslow`, plus NVENC `p1` through `p7`
+	- tune: software tunes plus NVENC `hq`, `uhq`, `ll`, `ull`, and `lossless`
 	- CRF quality override
-	- codec mode: `auto`, `software`, `nvenc`
+	- codec mode: `auto`, `software`, `nvenc`, `h264_nvenc`, `hevc_nvenc`
+	- NVENC presets `p1` through `p7` and tunes including `lossless`
+	- extra FFmpeg-style encoder parameters, such as `-profile:v rext -pix_fmt yuv444p`
 	- realtime low-latency encoding toggle
 - These settings are persisted with `QSettings` and are forwarded to `acmx2` using the matching CLI flags.

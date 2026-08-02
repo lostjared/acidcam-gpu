@@ -11975,6 +11975,8 @@ namespace {
 
         printSection(out, c, "Recording And Encoding", {{"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"}, {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"}, {"--generate <N>", "Save a PNG frame every N frames to an output subdirectory (video or camera mode).", "acmx2 -i in.mp4 --generate 30"}, {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"}, {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"}, {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"}, {"--encode-preset <name>", "Encoder speed/quality preset (ultrafast .. veryslow).", "acmx2 --encode-preset fast"}, {"--encode-tune <name>", "Tune encoder for content type or low latency.", "acmx2 --encode-tune film"}, {"--encode-crf <0-51>", "Set encoder quality directly (lower = better quality/larger file).", "acmx2 --encode-crf 18"}, {"--encode-codec <mode>", "Codec backend: auto, software, or nvenc.", "acmx2 --encode-codec nvenc"}, {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"}, {"--no-drop", "Never drop frames; block producer when encoder queue is full.", "acmx2 --no-drop"}, {"--display-filter", "Show current shader/stack and GPU filter in upper-left corner.", "acmx2 --display-filter"}, {"--use-watermark <text>", "Enable watermark with given text in recorded videos (upper-left).", "acmx2 --use-watermark \"My Channel\""}, {"--use-watermark-color <r,g,b>", "Watermark text color as 0-255 components.", "acmx2 --use-watermark-color 255,255,0"}, {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"}, {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}});
 
+        printSection(out, c, "Advanced Encoder Parameters", {{"--encode-params <string>", "Pass additional FFmpeg-style video encoder options through MXWrite.", "acmx2 --encode-codec hevc_nvenc --encode-params \"-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p\""}});
+
 #ifdef AUDIO_ENABLED
         printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--enable-audio-buffers <N>", "Allocate one sampler1DArray with N spectrum-history layers (GPU-limited).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
 #endif
@@ -12113,16 +12115,17 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(412, "cross-fade", "Crossfade duration in seconds when switching playlist shaders (default: 0.5)")
         .addOptionDoubleValue(413, "enumerate-device", "List supported resolutions for a camera device index")
         .addOptionDouble(414, "use-yuv", "Use YUV (YUYV) camera format instead of MJPG")
-        .addOptionDoubleValue(600, "encode-preset", "Encoder preset: ultrafast,superfast,veryfast,faster,fast,medium,slow,slower,veryslow (default: medium)")
-        .addOptionDoubleValue(601, "encode-tune", "Encoder tune: none,film,animation,grain,stillimage,psnr,ssim,fastdecode,zerolatency (default: none)")
+        .addOptionDoubleValue(600, "encode-preset", "Encoder preset: ultrafast..veryslow or NVENC p1..p7 (default: medium)")
+        .addOptionDoubleValue(601, "encode-tune", "Encoder tune: software tunes or NVENC hq,uhq,ll,ull,lossless (default: none)")
         .addOptionDoubleValue(602, "encode-crf", "Encoder CRF quality 0 (best) .. 51 (worst), default 18")
-        .addOptionDoubleValue(603, "encode-codec", "Encoder codec: auto,software,nvenc (default: auto)")
+        .addOptionDoubleValue(603, "encode-codec", "Encoder codec: auto,software,nvenc,h264_nvenc,hevc_nvenc (default: auto)")
         .addOptionDouble(604, "encode-realtime", "Enable low-latency realtime encoding flags")
         .addOptionDouble(605, "flip", "Vertical flip output frames")
         .addOptionDouble(606, "no-drop", "Video mode: never drop frames; block when encoder queue is full")
         .addOptionDouble(607, "display-filter", "Display current shader/stack and GPU filter in upper-left corner")
         .addOptionDoubleValue(608, "use-watermark", "Enable watermark with the given text in upper-left corner of recorded video")
         .addOptionDoubleValue(609, "use-watermark-color", "Watermark color as r,g,b each 0-255 (default: 255,0,150)")
+        .addOptionDoubleValue(614, "encode-params", "Additional FFmpeg-style video encoder parameters passed through MXWrite")
 #ifdef MIDI_ENABLED
         .addOptionDoubleValue(500, "midi-map", "MIDI config file (.midi_cfg)")
         .addOptionDoubleValue(501, "midi-device", "MIDI input device index")
@@ -12681,6 +12684,11 @@ int main(int argc, char **argv) {
                 }
                 break;
             }
+            case 614:
+                args.encode_opts.ffmpeg_options = arg.arg_value;
+                mx::system_out << "acmx2: Extra FFmpeg encoder parameters: "
+                               << args.encode_opts.ffmpeg_options << "\n";
+                break;
 #ifdef MIDI_ENABLED
             case 500:
                 args.midi_map_file = arg.arg_value;

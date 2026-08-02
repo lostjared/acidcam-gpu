@@ -106,7 +106,7 @@ class SettingsWindow : public QDialog {
     /// @return Human-readable camera name.
     QString getCameraName(int device_index);
 
-    /// @return Selected x264-style encoder preset name (ultrafast..veryslow).
+    /// @return Selected software or NVENC encoder preset name.
     QString getEncodePreset() const;
     /// @return Selected encoder tune (empty for "none").
     QString getEncodeTune() const;
@@ -114,6 +114,8 @@ class SettingsWindow : public QDialog {
     int getEncodeCrf() const;
     /// @return Selected encoder codec preference (auto/software/nvenc).
     QString getEncodeCodec() const;
+    /// @return Additional FFmpeg-style video encoder parameters.
+    QString getEncodeParameters() const;
     /// @return True if realtime low-latency encoding is enabled.
     bool isEncodeRealtime() const;
     /// @return True if no-drop encoder backpressure mode is enabled.
@@ -197,6 +199,7 @@ class SettingsWindow : public QDialog {
     QComboBox *encodeTuneComboBox = nullptr;
     QSpinBox *encodeCrfSpinBox = nullptr;
     QComboBox *encodeCodecComboBox = nullptr;
+    QLineEdit *encodeParametersLineEdit = nullptr;
     QCheckBox *encodeRealtimeCheckBox = nullptr;
     QCheckBox *encodeNoDropCheckBox = nullptr;
     QCheckBox *writePngCheckBox = nullptr;
@@ -216,7 +219,6 @@ class SettingsWindow : public QDialog {
     void resizeEvent(QResizeEvent *event) override;
 
   private:
-
     int selectedCameraIndex;
     QSize selectedCameraResolution;
     QSize selectedScreenResolution;

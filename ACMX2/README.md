@@ -110,8 +110,8 @@ Recent Qt interface updates focus on session usability and repeatability:
 - If no saved settings exist yet, the **Settings** dialog starts with camera capture resolution set to `1280x720` and screen/output resolution set to `Default`.
 - Camera capability enumeration still dynamically fills the resolution/FPS lists, and the restored/default value is applied when available.
 - Camera FPS now persists as a preferred value and is re-selected after capability repopulation when that FPS is available.
-- The **Settings** dialog also includes an **Encoding Quality** section for preset, tune, CRF, codec selection (`auto` / `software` / `nvenc`), and realtime low-latency encoding.
-- Encoding controls map directly to the CLI flags `--encode-preset`, `--encode-tune`, `--encode-crf`, `--encode-codec`, and `--encode-realtime`.
+- The **Settings** dialog also includes an **Encoding Quality** section for software/NVENC presets, tune, CRF, codec selection (`auto`, `software`, `nvenc`, `h264_nvenc`, or `hevc_nvenc`), extra FFmpeg-style encoder parameters, and realtime low-latency encoding.
+- Encoding controls map directly to the CLI flags `--encode-preset`, `--encode-tune`, `--encode-crf`, `--encode-codec`, `--encode-params`, and `--encode-realtime`.
 
 ---
 
@@ -379,10 +379,11 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | `-m` | `--cuda-device` | `<index>` | CUDA device index |
 | | `--interface-shm` | | Enable Qt interface shared-memory control channel (off by default for normal CLI runs) |
 | | `--duration` | `<seconds>` | Recording duration limit in seconds (float); stop recording and exit after elapsed |
-| | `--encode-preset` | `<name>` | Encoder preset: `ultrafast`..`veryslow` |
-| | `--encode-tune` | `<name>` | Encoder tune: `none`, `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, `zerolatency` |
+| | `--encode-preset` | `<name>` | Encoder preset: `ultrafast`..`veryslow` or NVENC `p1`..`p7` |
+| | `--encode-tune` | `<name>` | Encoder tune, including NVENC `hq`, `uhq`, `ll`, `ull`, and `lossless` |
 | | `--encode-crf` | `<0-51>` | Encoder CRF quality override (default: `18`) |
-| | `--encode-codec` | `<mode>` | Encoder codec mode: `auto`, `software`, or `nvenc` |
+| | `--encode-codec` | `<mode>` | Encoder codec mode: `auto`, `software`, `nvenc`, `h264_nvenc`, or `hevc_nvenc` |
+| | `--encode-params` | `<string>` | Additional FFmpeg-style video encoder options passed through MXWrite |
 | | `--encode-realtime` | | Enable low-latency realtime encoding flags |
 | | `--no-drop` | | Video-file processing: never drop frames; block when the encoder queue is full |
 

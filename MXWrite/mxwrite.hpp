@@ -13,16 +13,16 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 }
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <atomic>
+#include <cstdint>
 #include <mutex>
 #include <queue>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
-#include <cstdint>
 #ifdef MXWRITE_HAS_CUDA_COPY
 #include <cuda_runtime.h>
 #endif
@@ -31,7 +31,7 @@ extern "C" {
  * @brief Queue entry that stores a frame pointer and its capture timestamp.
  */
 struct Frame_Data {
-    void *data; ///< Pointer to RGBA frame data owned by the producer.
+    void *data;                                         ///< Pointer to RGBA frame data owned by the producer.
     std::chrono::steady_clock::time_point capture_time; ///< Capture time for timestamp-based encoding.
 };
 
@@ -40,26 +40,31 @@ struct Frame_Data {
  *
  * preset: x264 preset name — ultrafast, superfast, veryfast, faster, fast,
  *         medium, slow, slower, veryslow. Mapped to NVENC p1..p7.
- * tune:   x264 tune — empty string (none), film, animation, grain, stillimage,
- *         psnr, ssim, fastdecode, zerolatency.
+ * tune:   Software tune, or NVENC hq, uhq, ll, ull, or lossless. Empty uses
+ *         the encoder default (NVENC hq).
  * crf:    Constant Rate Factor, 0 (lossless) .. 51 (worst). 18 is visually
  *         near-lossless; 23 is default for x264; 28 is typical "small file".
  *         For NVENC this is forwarded as `cq`.
  * codec:  "auto" (NVENC if available, else software), "software" (force software),
  *         "nvenc" (force resolution-selected NVENC), "h264_nvenc", or
  *         "hevc_nvenc". NVENC requests fall back to the matching software codec.
- * realtime: when true, applies low-latency settings (tune=zerolatency for x264,
- *           tune=ll + zerolatency=1 for NVENC). Overrides tune value.
+ * ffmpeg_options: Additional FFmpeg-style video encoder options, for example
+ *         "-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p".
+ *         These options override the corresponding built-in settings. MXWrite
+ *         uses libavcodec directly, so input/output filenames are not accepted.
+ * realtime: when true, applies low-latency defaults (tune=zerolatency for x264,
+ *           tune=ll + zerolatency=1 for NVENC). Extra options may override them.
  * block_when_full: when true, producer threads block if the encoder queue is
  *                  full instead of dropping frames.
  */
 struct EncodeOptions {
     std::string preset = "medium"; ///< Encoder preset name.
     std::string tune = "";         ///< Optional tuning mode.
-    int crf = 18;                   ///< Constant Rate Factor.
-    std::string codec = "auto";     ///< Encoder selection policy or concrete NVENC codec.
-    bool realtime = false;          ///< Enable low-latency settings.
-    bool block_when_full = false;   ///< Block producer threads instead of dropping when the encoder queue is full.
+    int crf = 18;                  ///< Constant Rate Factor.
+    std::string codec = "auto";    ///< Encoder selection policy or concrete NVENC codec.
+    std::string ffmpeg_options;    ///< Additional FFmpeg-style video encoder options.
+    bool realtime = false;         ///< Enable low-latency settings.
+    bool block_when_full = false;  ///< Block producer threads instead of dropping when the encoder queue is full.
 
     /**
      * @brief HDR output options.
@@ -80,11 +85,11 @@ struct EncodeOptions {
      * resulting file is a correctly-tagged HDR container.
      */
     struct HdrInfo {
-        bool enabled = false; ///< Enables the HDR output path.
+        bool enabled = false;    ///< Enables the HDR output path.
         int color_primaries = 0; ///< AVColorPrimaries value.
-        int color_trc = 0; ///< AVColorTransferCharacteristic value.
-        int color_space = 0; ///< AVColorSpace value.
-        int color_range = 0; ///< AVColorRange value.
+        int color_trc = 0;       ///< AVColorTransferCharacteristic value.
+        int color_space = 0;     ///< AVColorSpace value.
+        int color_range = 0;     ///< AVColorRange value.
         /// Raw AVMasteringDisplayMetadata side-data bytes, or empty.
         std::vector<uint8_t> mastering_display;
         /// Raw AVContentLightMetadata side-data bytes, or empty.
@@ -230,32 +235,32 @@ class Writer {
     }
 
   private:
-    bool opened{false}; ///< Internal open-state flag.
-    int width = 0; ///< Output width in pixels.
-    int height = 0; ///< Output height in pixels.
-    int fps_num = 0; ///< Output FPS numerator.
-    int fps_den = 0; ///< Output FPS denominator.
-    int64_t frame_count = 0; ///< Next sequential PTS / explicit-PTS timeline length.
-    double last_duration = 0.0; ///< Cached duration from the last encode step.
+    bool opened{false};                    ///< Internal open-state flag.
+    int width = 0;                         ///< Output width in pixels.
+    int height = 0;                        ///< Output height in pixels.
+    int fps_num = 0;                       ///< Output FPS numerator.
+    int fps_den = 0;                       ///< Output FPS denominator.
+    int64_t frame_count = 0;               ///< Next sequential PTS / explicit-PTS timeline length.
+    double last_duration = 0.0;            ///< Cached duration from the last encode step.
     AVFormatContext *format_ctx = nullptr; ///< Active container context.
-    AVCodecContext *codec_ctx = nullptr; ///< Active codec context.
-    AVStream *stream = nullptr; ///< Output video stream.
-    AVFrame *frameYUV = nullptr; ///< Software-converted YUV frame.
-    AVFrame *frameRGBA = nullptr; ///< Staging RGBA frame.
+    AVCodecContext *codec_ctx = nullptr;   ///< Active codec context.
+    AVStream *stream = nullptr;            ///< Output video stream.
+    AVFrame *frameYUV = nullptr;           ///< Software-converted YUV frame.
+    AVFrame *frameRGBA = nullptr;          ///< Staging RGBA frame.
     AVFrame *frame10 = nullptr;            ///< YUV420P10LE frame used for HDR output.
-    AVFrame *upload_sw_frame = nullptr; ///< Software upload frame used by CUDA/hardware paths.
-    AVBufferRef *hw_device_ctx = nullptr; ///< Hardware device context, when available.
-    AVBufferRef *hw_frames_ctx = nullptr; ///< Hardware frames pool, when available.
-    bool use_hw_encode = false; ///< True when hardware encoding is active.
+    AVFrame *upload_sw_frame = nullptr;    ///< Software upload frame used by CUDA/hardware paths.
+    AVBufferRef *hw_device_ctx = nullptr;  ///< Hardware device context, when available.
+    AVBufferRef *hw_frames_ctx = nullptr;  ///< Hardware frames pool, when available.
+    bool use_hw_encode = false;            ///< True when hardware encoding is active.
 #ifdef MXWRITE_HAS_CUDA_COPY
     // Dedicated stream so the producer's RGBA→hwframe copy does not serialise
     // with the renderer's default-stream work or with the encoder thread.
     cudaStream_t cuda_upload_stream = nullptr;
 #endif
-    bool hdr_output = false;              ///< True when HDR (HEVC Main10/PQ) output is active.
-    EncodeOptions::HdrInfo hdr_info;      ///< HDR metadata captured at open() time.
-    SwsContext *sws_ctx = nullptr; ///< Frame conversion context.
-    AVRational time_base; ///< Stream time base.
+    bool hdr_output = false;         ///< True when HDR (HEVC Main10/PQ) output is active.
+    EncodeOptions::HdrInfo hdr_info; ///< HDR metadata captured at open() time.
+    SwsContext *sws_ctx = nullptr;   ///< Frame conversion context.
+    AVRational time_base;            ///< Stream time base.
     /** @brief Convert a frame rate into a rational numerator/denominator pair. */
     void calculateFPSFraction(float fps, int &fps_num, int &fps_den);
     std::chrono::steady_clock::time_point recordingStart; ///< Start time for timestamp mode.
@@ -265,11 +270,11 @@ class Writer {
     // Memory cost is bounded by the NVENC frame pool / sw RGBA frame buffer.
     static constexpr size_t MAX_QUEUE_SIZE = 120;
     std::condition_variable queue_cv; ///< Signals queue availability.
-    std::jthread encode_thread; ///< Background encoder thread.
+    std::jthread encode_thread;       ///< Background encoder thread.
 
-    std::mutex queue_mutex{}; ///< Guards the frame queue.
-    std::mutex writer_mutex{}; ///< Guards writer state transitions.
-    bool stop_requested = false; ///< Signals encoder shutdown.
+    std::mutex queue_mutex{};                 ///< Guards the frame queue.
+    std::mutex writer_mutex{};                ///< Guards writer state transitions.
+    bool stop_requested = false;              ///< Signals encoder shutdown.
     std::atomic<bool> block_when_full{false}; ///< Queue backpressure mode.
 
     /** @brief Shared implementation for open() and open_ts(). */

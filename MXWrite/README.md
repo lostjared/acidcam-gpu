@@ -94,3 +94,22 @@ int main() {
     return 0;
 }
 ```
+
+For explicit HEVC NVENC configuration, use `EncodeOptions`. Extra parameters use
+FFmpeg command-line spelling and override the built-in preset/tune defaults:
+
+```cpp
+EncodeOptions options;
+options.codec = "hevc_nvenc";
+options.ffmpeg_options =
+    "-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p";
+
+Writer writer;
+if (!writer.open("output_hardware_lossless.mkv", 1920, 1080, 60.0f, options)) {
+    return 1;
+}
+```
+
+MXWrite uses the FFmpeg libraries directly, so the parameter string contains
+video encoder/muxer options only; input and output filenames are supplied to
+`Writer::open()`.

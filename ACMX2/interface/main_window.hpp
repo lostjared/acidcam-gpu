@@ -8,6 +8,7 @@
  * @file main_window.hpp
  * @brief Main launcher window for ACMX2 shader selection and execution.
  */
+#include "../shader_selection_shm.hpp"
 #include "editor.hpp"
 #include "gpufilter.hpp"
 #include "midi-settings.hpp"
@@ -16,7 +17,6 @@
 #include "shader.hpp"
 #include "shaderlibrary.hpp"
 #include "shaderpass.hpp"
-#include "../shader_selection_shm.hpp"
 #include "version_info.hpp" //defines VERSION_INFO
 #include <QDateTime>
 #include <QHash>
@@ -109,7 +109,7 @@ class MainWindow : public QMainWindow {
                 hdr10Process->kill();
             }
         }
-            cleanupShaderSelectionSharedMemory();
+        cleanupShaderSelectionSharedMemory();
         QMainWindow::closeEvent(event);
     }
 
@@ -121,7 +121,10 @@ class MainWindow : public QMainWindow {
     ///        recomputing Last Modified and Compile Health columns.
     void populateShaderTree();
     /// @brief Compile-health status for a single shader.
-    enum class CompileHealth { Unknown, Cached, Failed, Stale };
+    enum class CompileHealth { Unknown,
+                               Cached,
+                               Failed,
+                               Stale };
     /// @brief Cached map of shader stem -> failed flag for the current library.
     QHash<QString, bool> shaderCacheStatus;
     /// @brief Modification time of the shader cache file when last read.
@@ -177,6 +180,7 @@ class MainWindow : public QMainWindow {
     QString encode_tune; // empty => "none"
     int encode_crf = 18;
     QString encode_codec = "auto";
+    QString encode_parameters;
     bool encode_realtime = false;
     bool encode_no_drop = false;
     /// @brief Join list items into a comma-separated argument string.
@@ -299,11 +303,11 @@ class MainWindow : public QMainWindow {
     void publishRepeatStateToRunningProcess();
     void publishRuntimeSettingsToRunningProcess();
     void cleanupShaderSelectionSharedMemory();
-  #if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__)
     int shaderSelectionShmFd = -1;
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
     quint32 shaderSelectionSequence = 0;
-  #endif
+#endif
 };
 
 #endif

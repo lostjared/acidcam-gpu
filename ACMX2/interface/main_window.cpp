@@ -6,32 +6,32 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
-#include <QComboBox>
 #include <QColorDialog>
+#include <QComboBox>
+#include <QDataStream>
 #include <QDateTime>
-#include <QFrame>
-#include <QHBoxLayout>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
-#include <QDataStream>
 #include <QFile>
 #include <QFileInfo>
+#include <QFormLayout>
+#include <QFrame>
 #include <QGuiApplication>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
 #include <QLabel>
-#include <QLineEdit>
-#include <QFormLayout>
-#include <QSpinBox>
 #include <QLayout>
+#include <QLineEdit>
 #include <QLocale>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSpinBox>
 #include <QTextStream>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
@@ -50,178 +50,178 @@
 #endif
 
 namespace {
-QString shellQuote(const QString &value) {
-    if (value.isEmpty()) {
-        return "''";
-    }
-    QString out = value;
-    out.replace("'", "'\\''");
-    return "'" + out + "'";
-}
-
-QString buildShellCommand(const QStringList &envAssignments, const QString &program,
-                          const QStringList &arguments) {
-    QStringList parts;
-    parts.reserve(envAssignments.size() + 1 + arguments.size());
-    for (const QString &entry : envAssignments) {
-        int eq = entry.indexOf('=');
-        if (eq <= 0) {
-            continue;
+    QString shellQuote(const QString &value) {
+        if (value.isEmpty()) {
+            return "''";
         }
-        QString key = entry.left(eq);
-        QString value = entry.mid(eq + 1);
-        parts << (key + "=" + shellQuote(value));
+        QString out = value;
+        out.replace("'", "'\\''");
+        return "'" + out + "'";
     }
-    parts << shellQuote(program);
-    for (const QString &arg : arguments) {
-        parts << shellQuote(arg);
+
+    QString buildShellCommand(const QStringList &envAssignments, const QString &program,
+                              const QStringList &arguments) {
+        QStringList parts;
+        parts.reserve(envAssignments.size() + 1 + arguments.size());
+        for (const QString &entry : envAssignments) {
+            int eq = entry.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            QString key = entry.left(eq);
+            QString value = entry.mid(eq + 1);
+            parts << (key + "=" + shellQuote(value));
+        }
+        parts << shellQuote(program);
+        for (const QString &arg : arguments) {
+            parts << shellQuote(arg);
+        }
+        return parts.join(' ');
     }
-    return parts.join(' ');
-}
 
 #ifdef __linux__
-QStringList defaultLinuxRunEnvAssignments() {
-    QStringList envAssignments;
-    QString uid = QString::number(getuid());
-    QString userRunPath = "/run/user/" + uid;
-    // Only force the X11 backend when an X server is actually reachable.
-    // On Wayland-only sessions (no XWayland) forcing x11 makes SDL fail with
-    // "'x11' not available". Leave SDL to auto-detect in that case.
-    QByteArray display = qgetenv("DISPLAY");
-    QByteArray waylandDisplay = qgetenv("WAYLAND_DISPLAY");
-    QByteArray sessionType = qgetenv("XDG_SESSION_TYPE");
-    if (!display.isEmpty()) {
-        envAssignments << "SDL_VIDEODRIVER=x11";
-    } else if (!waylandDisplay.isEmpty() || sessionType == "wayland") {
-        envAssignments << "SDL_VIDEODRIVER=wayland";
+    QStringList defaultLinuxRunEnvAssignments() {
+        QStringList envAssignments;
+        QString uid = QString::number(getuid());
+        QString userRunPath = "/run/user/" + uid;
+        // Only force the X11 backend when an X server is actually reachable.
+        // On Wayland-only sessions (no XWayland) forcing x11 makes SDL fail with
+        // "'x11' not available". Leave SDL to auto-detect in that case.
+        QByteArray display = qgetenv("DISPLAY");
+        QByteArray waylandDisplay = qgetenv("WAYLAND_DISPLAY");
+        QByteArray sessionType = qgetenv("XDG_SESSION_TYPE");
+        if (!display.isEmpty()) {
+            envAssignments << "SDL_VIDEODRIVER=x11";
+        } else if (!waylandDisplay.isEmpty() || sessionType == "wayland") {
+            envAssignments << "SDL_VIDEODRIVER=wayland";
+        }
+        if (QDir(userRunPath).exists()) {
+            envAssignments << ("XDG_RUNTIME_DIR=" + userRunPath);
+            envAssignments << ("PULSE_SERVER=unix:" + userRunPath + "/pulse/native");
+        }
+        envAssignments << "vblank_mode=0";
+        return envAssignments;
     }
-    if (QDir(userRunPath).exists()) {
-        envAssignments << ("XDG_RUNTIME_DIR=" + userRunPath);
-        envAssignments << ("PULSE_SERVER=unix:" + userRunPath + "/pulse/native");
-    }
-    envAssignments << "vblank_mode=0";
-    return envAssignments;
-}
 #endif
 
-QString resolveAssetsPath() {
-    QString dirPath = QCoreApplication::applicationDirPath();
+    QString resolveAssetsPath() {
+        QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
-    return dirPath + "/../Helpers";
+        return dirPath + "/../Helpers";
 #else
-    if (QFileInfo::exists(dirPath + "/data/win-icon.png"))
-        return dirPath;
-    return QStringLiteral("/usr/local/share/acmx2");
+        if (QFileInfo::exists(dirPath + "/data/win-icon.png"))
+            return dirPath;
+        return QStringLiteral("/usr/local/share/acmx2");
 #endif
-}
-
-bool textureCacheArraySettingEnabled() {
-    QSettings settings("LostSideDead", "acmx2");
-    return settings.value("interface/texture_cache_array", false).toBool();
-}
-
-QString resolveShaderCachePath(const QString &libraryPath, int cacheSize,
-                               bool useArray) {
-    const QString assets = resolveAssetsPath();
-    std::error_code ec;
-    std::filesystem::path libFsPath(libraryPath.toStdString());
-    std::filesystem::path absLib = std::filesystem::absolute(libFsPath, ec);
-    std::string key = ec ? libraryPath.toStdString() : absLib.lexically_normal().string();
-    key += "|s=" + std::to_string(cacheSize);
-    key += "|a=" + std::to_string(useArray ? 1 : 0);
-    std::ostringstream nameStream;
-    nameStream << ".shader_cache_" << std::hex << std::hash<std::string>{}(key);
-    const QString filename = QString::fromStdString(nameStream.str());
-
-    // Mirror ShaderLibrary::shaderCacheFilePath: prefer cache in assets dir,
-    // then fall back to the library directory itself (acmx2 writes there when
-    // assets isn't writable).
-    const QString assetsCache = assets + "/" + filename;
-    const QString libCache = libraryPath + "/" + filename;
-    if (QFileInfo::exists(assetsCache))
-        return assetsCache;
-    if (QFileInfo::exists(libCache))
-        return libCache;
-    return assetsCache;
-}
-
-// Parse the shader cache file produced by ShaderLibrary::buildShaderCache().
-// Returns a map of shader stem -> failed flag. Empty on missing/invalid cache.
-QHash<QString, bool> parseShaderCacheStatus(const QString &cachePath) {
-    QHash<QString, bool> result;
-    QFile f(cachePath);
-    if (!f.open(QIODevice::ReadOnly))
-        return result;
-
-    auto readU32 = [&](quint32 &v) -> bool {
-        return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
-    };
-    auto readU64 = [&](quint64 &v) -> bool {
-        return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
-    };
-    auto readU8 = [&](quint8 &v) -> bool {
-        return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
-    };
-    auto readStr = [&](QString &out) -> bool {
-        quint32 len = 0;
-        if (!readU32(len))
-            return false;
-        QByteArray buf = f.read(len);
-        if (quint32(buf.size()) != len)
-            return false;
-        out = QString::fromUtf8(buf);
-        return true;
-    };
-    auto skipBytes = [&](quint32 n) -> bool { return f.skip(n) == qint64(n); };
-
-    constexpr quint32 CACHE_MAGIC = 0x53484452;
-    constexpr quint32 CACHE_VERSION = 3;
-
-    quint32 magic = 0, version = 0;
-    if (!readU32(magic) || !readU32(version))
-        return result;
-    if (magic != CACHE_MAGIC || version != CACHE_VERSION)
-        return result;
-
-    QString tmp;
-    if (!readStr(tmp))
-        return result; // gl_renderer
-    if (!readStr(tmp))
-        return result; // gl_version
-
-    quint8 dual_mode = 0;
-    if (!readU8(dual_mode))
-        return result;
-
-    quint32 count = 0;
-    if (!readU32(count))
-        return result;
-
-    for (quint32 i = 0; i < count; ++i) {
-        QString name;
-        if (!readStr(name))
-            return result;
-        quint8 failed_flag = 0;
-        if (!readU8(failed_flag))
-            return result;
-        quint64 source_hash = 0;
-        if (!readU64(source_hash))
-            return result;
-        quint32 fmt2d = 0, sz2d = 0, fmt3d = 0, sz3d = 0;
-        if (!readU32(fmt2d) || !readU32(sz2d) || !skipBytes(sz2d))
-            return result;
-        if (!readU32(fmt3d) || !readU32(sz3d) || !skipBytes(sz3d))
-            return result;
-        result.insert(name, failed_flag != 0);
     }
-    return result;
-}
 
-QString formatLastModified(const QDateTime &dt) {
-    if (!dt.isValid())
-        return QStringLiteral("-");
-    return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
-}
+    bool textureCacheArraySettingEnabled() {
+        QSettings settings("LostSideDead", "acmx2");
+        return settings.value("interface/texture_cache_array", false).toBool();
+    }
+
+    QString resolveShaderCachePath(const QString &libraryPath, int cacheSize,
+                                   bool useArray) {
+        const QString assets = resolveAssetsPath();
+        std::error_code ec;
+        std::filesystem::path libFsPath(libraryPath.toStdString());
+        std::filesystem::path absLib = std::filesystem::absolute(libFsPath, ec);
+        std::string key = ec ? libraryPath.toStdString() : absLib.lexically_normal().string();
+        key += "|s=" + std::to_string(cacheSize);
+        key += "|a=" + std::to_string(useArray ? 1 : 0);
+        std::ostringstream nameStream;
+        nameStream << ".shader_cache_" << std::hex << std::hash<std::string>{}(key);
+        const QString filename = QString::fromStdString(nameStream.str());
+
+        // Mirror ShaderLibrary::shaderCacheFilePath: prefer cache in assets dir,
+        // then fall back to the library directory itself (acmx2 writes there when
+        // assets isn't writable).
+        const QString assetsCache = assets + "/" + filename;
+        const QString libCache = libraryPath + "/" + filename;
+        if (QFileInfo::exists(assetsCache))
+            return assetsCache;
+        if (QFileInfo::exists(libCache))
+            return libCache;
+        return assetsCache;
+    }
+
+    // Parse the shader cache file produced by ShaderLibrary::buildShaderCache().
+    // Returns a map of shader stem -> failed flag. Empty on missing/invalid cache.
+    QHash<QString, bool> parseShaderCacheStatus(const QString &cachePath) {
+        QHash<QString, bool> result;
+        QFile f(cachePath);
+        if (!f.open(QIODevice::ReadOnly))
+            return result;
+
+        auto readU32 = [&](quint32 &v) -> bool {
+            return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
+        };
+        auto readU64 = [&](quint64 &v) -> bool {
+            return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
+        };
+        auto readU8 = [&](quint8 &v) -> bool {
+            return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
+        };
+        auto readStr = [&](QString &out) -> bool {
+            quint32 len = 0;
+            if (!readU32(len))
+                return false;
+            QByteArray buf = f.read(len);
+            if (quint32(buf.size()) != len)
+                return false;
+            out = QString::fromUtf8(buf);
+            return true;
+        };
+        auto skipBytes = [&](quint32 n) -> bool { return f.skip(n) == qint64(n); };
+
+        constexpr quint32 CACHE_MAGIC = 0x53484452;
+        constexpr quint32 CACHE_VERSION = 3;
+
+        quint32 magic = 0, version = 0;
+        if (!readU32(magic) || !readU32(version))
+            return result;
+        if (magic != CACHE_MAGIC || version != CACHE_VERSION)
+            return result;
+
+        QString tmp;
+        if (!readStr(tmp))
+            return result; // gl_renderer
+        if (!readStr(tmp))
+            return result; // gl_version
+
+        quint8 dual_mode = 0;
+        if (!readU8(dual_mode))
+            return result;
+
+        quint32 count = 0;
+        if (!readU32(count))
+            return result;
+
+        for (quint32 i = 0; i < count; ++i) {
+            QString name;
+            if (!readStr(name))
+                return result;
+            quint8 failed_flag = 0;
+            if (!readU8(failed_flag))
+                return result;
+            quint64 source_hash = 0;
+            if (!readU64(source_hash))
+                return result;
+            quint32 fmt2d = 0, sz2d = 0, fmt3d = 0, sz3d = 0;
+            if (!readU32(fmt2d) || !readU32(sz2d) || !skipBytes(sz2d))
+                return result;
+            if (!readU32(fmt3d) || !readU32(sz3d) || !skipBytes(sz3d))
+                return result;
+            result.insert(name, failed_flag != 0);
+        }
+        return result;
+    }
+
+    QString formatLastModified(const QDateTime &dt) {
+        if (!dt.isValid())
+            return QStringLiteral("-");
+        return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
+    }
 } // namespace
 
 void MainWindow::initControls() {
@@ -266,7 +266,8 @@ void MainWindow::initControls() {
 
     connect(process, &QProcess::readyReadStandardError, this, [this]() {
         auto writeStderrLine = [this](const QString &line) {
-            if (line.contains("GStreamer")) return;
+            if (line.contains("GStreamer"))
+                return;
             if (line.contains("[ WARN:"))
                 this->Write("<b style='color:#ccaa00;'>Warning:</b> " + line + "<br>");
             else
@@ -774,99 +775,97 @@ void MainWindow::openCustomStyleEditor() {
         return acmx2::buildStyleSheet(p);
     };
 
-    const std::array<QPair<QString, QString>, 16> presetStyles = {{
-        {"Current Style", customStyleSheet},
-        {"Light: Blue & White",
-         makePalette("#f6fbff", "#143a5c", "#2d7cc4",
-                     "#ffffff", "#123b61", "#9cc6ea",
-                     "#2d7cc4", "#2368a6", "#ffffff",
-                     "#eaf5ff", "#143a5c", "#cfe6ff", "#0b2e4d",
-                     "#bcdcff", "1px solid #9cc6ea")},
-        {"Light: Slate",
-         makePalette("#f5f7fa", "#1f2a37", "#4b5563",
-                     "#ffffff", "#1f2937", "#b6c3d4",
-                     "#4b5563", "#374151", "#ffffff",
-                     "#e8edf4", "#1f2a37", "#d2dbe7", "#111827",
-                     "#cdd5e0", "1px solid #b6c3d4")},
-        {"Light: White & Red",
-         makePalette("#fffdfd", "#5b1515", "#d63b3b",
-                 "#ffffff", "#5a1a1a", "#e8bcbc",
-                 "#d63b3b", "#bc2f2f", "#ffffff",
-                 "#fff4f4", "#5b1515", "#ffdede", "#4b0f0f",
-                 "#ffd1d1", "1px solid #e8bcbc")},
-        {"Light: White & Green",
-         makePalette("#fcfffc", "#164529", "#2e9d57",
-                 "#ffffff", "#1a4f2f", "#b8dfc7",
-                 "#2e9d57", "#25824a", "#ffffff",
-                 "#f1fbf4", "#164529", "#d6f3df", "#11361f",
-                 "#c9eecf", "1px solid #b8dfc7")},
-        {"Light: White & Blue",
-         makePalette("#fcfdff", "#16395f", "#2f6ed7",
-                 "#ffffff", "#1b446f", "#b7d0f0",
-                 "#2f6ed7", "#285db7", "#ffffff",
-                 "#f1f6ff", "#16395f", "#d9e8ff", "#102b49",
-                 "#cddfff", "1px solid #b7d0f0")},
-        {"Light: White & Cyan",
-         makePalette("#fbfeff", "#12404a", "#1ea9bf",
-                 "#ffffff", "#14505d", "#b8e2ea",
-                 "#1ea9bf", "#198da0", "#ffffff",
-                 "#effbfe", "#12404a", "#d5f3f8", "#0e3138",
-                 "#c7edf4", "1px solid #b8e2ea")},
-        {"Light: White & Amber",
-         makePalette("#fffefb", "#5a3a12", "#d18b1f",
-                 "#ffffff", "#644317", "#ead7b6",
-                 "#d18b1f", "#b37518", "#ffffff",
-                 "#fff9ed", "#5a3a12", "#ffebcb", "#4a2f0f",
-                 "#ffe2b5", "1px solid #ead7b6")},
-        {"Dark: Crimson",
-         makePalette("#0f0608", "#ff637d", "#a02949",
-                     "#1b0b10", "#ff8fa3", "#7f2036",
-                     "#6f1630", "#8a1f3d", "#ffdfe6",
-                     "#16090d", "#ff637d", "#52111f", "#ffd5dc",
-                     "#52111f", "2px solid #a02949")},
-        {"Dark: Emerald",
-         makePalette("#06110c", "#7af7c2", "#2c8e68",
-                     "#0d1e16", "#95ffd0", "#2c8e68",
-                     "#1c6a4d", "#258961", "#dcfff2",
-                     "#08160f", "#7af7c2", "#12402d", "#d9fff0",
-                     "#12402d", "2px solid #2c8e68")},
-        {"Dark: Indigo",
-         makePalette("#070713", "#c6c8ff", "#5362ba",
-                     "#121634", "#d8daff", "#4956a5",
-                     "#36439a", "#4453b4", "#eef0ff",
-                     "#0d1022", "#c6c8ff", "#232a5a", "#eef0ff",
-                     "#232a5a", "2px solid #5362ba")},
-        {"Dark: Black & Red",
-         makePalette("#050505", "#ff4d4d", "#d90000",
-                     "#120808", "#ff7b7b", "#b50000",
-                     "#2a0c0c", "#3a1010", "#ffd6d6",
-                     "#0b0707", "#ff5a5a", "#6b1111", "#ffe9e9",
-                     "#5a0c0c", "2px solid #d90000")},
-        {"Dark: Black & Green",
-         makePalette("#040704", "#6dfb88", "#22b44a",
-                     "#0a140b", "#a8ffbe", "#1d9a3e",
-                     "#12331b", "#164425", "#e1ffe8",
-                     "#08100a", "#74ff95", "#12331b", "#e7ffed",
-                     "#10381d", "2px solid #22b44a")},
-        {"Dark: Black & Blue",
-         makePalette("#04060a", "#81b9ff", "#2f6ed7",
-                     "#0a1222", "#b4d4ff", "#2a5eb7",
-                     "#132749", "#1a3260", "#e7f1ff",
-                     "#070d1a", "#8cc0ff", "#1a3260", "#eef5ff",
-                     "#17335f", "2px solid #2f6ed7")},
-        {"Dark: Black & Cyan",
-         makePalette("#030809", "#7defff", "#1ba8c3",
-                     "#09161a", "#b8f7ff", "#1990a7",
-                     "#10323a", "#14414b", "#e7fbff",
-                     "#071015", "#89f3ff", "#0f3943", "#e8fcff",
-                     "#0f3943", "2px solid #1ba8c3")},
-        {"Dark: Black & Amber",
-         makePalette("#090704", "#ffd77a", "#d88c1d",
-                     "#1a1308", "#ffe7b4", "#bf7a19",
-                     "#3d2810", "#523618", "#fff3db",
-                     "#130e07", "#ffdf8a", "#5a3a16", "#fff4df",
-                     "#5a3a16", "2px solid #d88c1d")}
-    }};
+    const std::array<QPair<QString, QString>, 16> presetStyles = {{{"Current Style", customStyleSheet},
+                                                                   {"Light: Blue & White",
+                                                                    makePalette("#f6fbff", "#143a5c", "#2d7cc4",
+                                                                                "#ffffff", "#123b61", "#9cc6ea",
+                                                                                "#2d7cc4", "#2368a6", "#ffffff",
+                                                                                "#eaf5ff", "#143a5c", "#cfe6ff", "#0b2e4d",
+                                                                                "#bcdcff", "1px solid #9cc6ea")},
+                                                                   {"Light: Slate",
+                                                                    makePalette("#f5f7fa", "#1f2a37", "#4b5563",
+                                                                                "#ffffff", "#1f2937", "#b6c3d4",
+                                                                                "#4b5563", "#374151", "#ffffff",
+                                                                                "#e8edf4", "#1f2a37", "#d2dbe7", "#111827",
+                                                                                "#cdd5e0", "1px solid #b6c3d4")},
+                                                                   {"Light: White & Red",
+                                                                    makePalette("#fffdfd", "#5b1515", "#d63b3b",
+                                                                                "#ffffff", "#5a1a1a", "#e8bcbc",
+                                                                                "#d63b3b", "#bc2f2f", "#ffffff",
+                                                                                "#fff4f4", "#5b1515", "#ffdede", "#4b0f0f",
+                                                                                "#ffd1d1", "1px solid #e8bcbc")},
+                                                                   {"Light: White & Green",
+                                                                    makePalette("#fcfffc", "#164529", "#2e9d57",
+                                                                                "#ffffff", "#1a4f2f", "#b8dfc7",
+                                                                                "#2e9d57", "#25824a", "#ffffff",
+                                                                                "#f1fbf4", "#164529", "#d6f3df", "#11361f",
+                                                                                "#c9eecf", "1px solid #b8dfc7")},
+                                                                   {"Light: White & Blue",
+                                                                    makePalette("#fcfdff", "#16395f", "#2f6ed7",
+                                                                                "#ffffff", "#1b446f", "#b7d0f0",
+                                                                                "#2f6ed7", "#285db7", "#ffffff",
+                                                                                "#f1f6ff", "#16395f", "#d9e8ff", "#102b49",
+                                                                                "#cddfff", "1px solid #b7d0f0")},
+                                                                   {"Light: White & Cyan",
+                                                                    makePalette("#fbfeff", "#12404a", "#1ea9bf",
+                                                                                "#ffffff", "#14505d", "#b8e2ea",
+                                                                                "#1ea9bf", "#198da0", "#ffffff",
+                                                                                "#effbfe", "#12404a", "#d5f3f8", "#0e3138",
+                                                                                "#c7edf4", "1px solid #b8e2ea")},
+                                                                   {"Light: White & Amber",
+                                                                    makePalette("#fffefb", "#5a3a12", "#d18b1f",
+                                                                                "#ffffff", "#644317", "#ead7b6",
+                                                                                "#d18b1f", "#b37518", "#ffffff",
+                                                                                "#fff9ed", "#5a3a12", "#ffebcb", "#4a2f0f",
+                                                                                "#ffe2b5", "1px solid #ead7b6")},
+                                                                   {"Dark: Crimson",
+                                                                    makePalette("#0f0608", "#ff637d", "#a02949",
+                                                                                "#1b0b10", "#ff8fa3", "#7f2036",
+                                                                                "#6f1630", "#8a1f3d", "#ffdfe6",
+                                                                                "#16090d", "#ff637d", "#52111f", "#ffd5dc",
+                                                                                "#52111f", "2px solid #a02949")},
+                                                                   {"Dark: Emerald",
+                                                                    makePalette("#06110c", "#7af7c2", "#2c8e68",
+                                                                                "#0d1e16", "#95ffd0", "#2c8e68",
+                                                                                "#1c6a4d", "#258961", "#dcfff2",
+                                                                                "#08160f", "#7af7c2", "#12402d", "#d9fff0",
+                                                                                "#12402d", "2px solid #2c8e68")},
+                                                                   {"Dark: Indigo",
+                                                                    makePalette("#070713", "#c6c8ff", "#5362ba",
+                                                                                "#121634", "#d8daff", "#4956a5",
+                                                                                "#36439a", "#4453b4", "#eef0ff",
+                                                                                "#0d1022", "#c6c8ff", "#232a5a", "#eef0ff",
+                                                                                "#232a5a", "2px solid #5362ba")},
+                                                                   {"Dark: Black & Red",
+                                                                    makePalette("#050505", "#ff4d4d", "#d90000",
+                                                                                "#120808", "#ff7b7b", "#b50000",
+                                                                                "#2a0c0c", "#3a1010", "#ffd6d6",
+                                                                                "#0b0707", "#ff5a5a", "#6b1111", "#ffe9e9",
+                                                                                "#5a0c0c", "2px solid #d90000")},
+                                                                   {"Dark: Black & Green",
+                                                                    makePalette("#040704", "#6dfb88", "#22b44a",
+                                                                                "#0a140b", "#a8ffbe", "#1d9a3e",
+                                                                                "#12331b", "#164425", "#e1ffe8",
+                                                                                "#08100a", "#74ff95", "#12331b", "#e7ffed",
+                                                                                "#10381d", "2px solid #22b44a")},
+                                                                   {"Dark: Black & Blue",
+                                                                    makePalette("#04060a", "#81b9ff", "#2f6ed7",
+                                                                                "#0a1222", "#b4d4ff", "#2a5eb7",
+                                                                                "#132749", "#1a3260", "#e7f1ff",
+                                                                                "#070d1a", "#8cc0ff", "#1a3260", "#eef5ff",
+                                                                                "#17335f", "2px solid #2f6ed7")},
+                                                                   {"Dark: Black & Cyan",
+                                                                    makePalette("#030809", "#7defff", "#1ba8c3",
+                                                                                "#09161a", "#b8f7ff", "#1990a7",
+                                                                                "#10323a", "#14414b", "#e7fbff",
+                                                                                "#071015", "#89f3ff", "#0f3943", "#e8fcff",
+                                                                                "#0f3943", "2px solid #1ba8c3")},
+                                                                   {"Dark: Black & Amber",
+                                                                    makePalette("#090704", "#ffd77a", "#d88c1d",
+                                                                                "#1a1308", "#ffe7b4", "#bf7a19",
+                                                                                "#3d2810", "#523618", "#fff3db",
+                                                                                "#130e07", "#ffdf8a", "#5a3a16", "#fff4df",
+                                                                                "#5a3a16", "2px solid #d88c1d")}}};
 
     if (styleSheetAction) {
         QSignalBlocker blocker(styleSheetAction);
@@ -1390,7 +1389,7 @@ void MainWindow::refreshShaderCacheStatus() {
     }
     shaderCacheMTime = cacheInfo.lastModified();
     shaderCacheStatus = parseShaderCacheStatus(cachePath);
-    //Log("Shader cache: " + cachePath + " (" + QString::number(shaderCacheStatus.size()) + " entries)");
+    // Log("Shader cache: " + cachePath + " (" + QString::number(shaderCacheStatus.size()) + " entries)");
 }
 
 bool MainWindow::isShaderCacheStale() const {
@@ -1400,7 +1399,7 @@ bool MainWindow::isShaderCacheStale() const {
     return false;
 #else
     if (!use_shader_cache || shader_path.isEmpty() || items.isEmpty())
-           return false;
+        return false;
     const QString cachePath = resolveShaderCachePath(
         shader_path, cache_size,
         cache_enabled && textureCacheArraySettingEnabled());
@@ -1805,7 +1804,9 @@ void MainWindow::menuWatermarkSettings() {
     Log(QString("Watermark %1: \"%2\" color=%3,%4,%5")
             .arg(watermark_enabled ? "Enabled" : "Disabled")
             .arg(watermark_text)
-            .arg(watermark_r).arg(watermark_g).arg(watermark_b));
+            .arg(watermark_r)
+            .arg(watermark_g)
+            .arg(watermark_b));
     publishRuntimeSettingsToRunningProcess();
 }
 
@@ -1984,6 +1985,7 @@ void MainWindow::cameraSettings() {
     encode_tune = settingsWindow.getEncodeTune();
     encode_crf = settingsWindow.getEncodeCrf();
     encode_codec = settingsWindow.getEncodeCodec();
+    encode_parameters = settingsWindow.getEncodeParameters();
     encode_realtime = settingsWindow.isEncodeRealtime();
     encode_no_drop = settingsWindow.isEncodeNoDrop();
 }
@@ -2103,6 +2105,8 @@ void MainWindow::runSelected() {
             arguments << "--encode-tune" << encode_tune;
         if (!encode_codec.isEmpty() && encode_codec != "auto")
             arguments << "--encode-codec" << encode_codec;
+        if (!encode_parameters.isEmpty())
+            arguments << "--encode-params" << encode_parameters;
         if (encode_realtime)
             arguments << "--encode-realtime";
         if (encode_no_drop)
@@ -2313,6 +2317,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
             arguments << "--encode-tune" << encode_tune;
         if (!encode_codec.isEmpty() && encode_codec != "auto")
             arguments << "--encode-codec" << encode_codec;
+        if (!encode_parameters.isEmpty())
+            arguments << "--encode-params" << encode_parameters;
         if (encode_realtime)
             arguments << "--encode-realtime";
         if (encode_no_drop)
@@ -2514,15 +2520,24 @@ void MainWindow::runHdr10Conversion() {
         // -> slowest); map the x264-style names from the UI combo onto it.
         QString nvencPreset;
         const QString p = encode_preset.toLower();
-        if (p == "ultrafast")      nvencPreset = "p1";
-        else if (p == "superfast") nvencPreset = "p2";
-        else if (p == "veryfast")  nvencPreset = "p3";
-        else if (p == "faster")    nvencPreset = "p4";
-        else if (p == "fast")      nvencPreset = "p5";
-        else if (p == "medium")    nvencPreset = "p6";
-        else if (p == "slow")      nvencPreset = "p6";
-        else if (p == "slower")    nvencPreset = "p7";
-        else if (p == "veryslow")  nvencPreset = "p7";
+        if (p == "ultrafast")
+            nvencPreset = "p1";
+        else if (p == "superfast")
+            nvencPreset = "p2";
+        else if (p == "veryfast")
+            nvencPreset = "p3";
+        else if (p == "faster")
+            nvencPreset = "p4";
+        else if (p == "fast")
+            nvencPreset = "p5";
+        else if (p == "medium")
+            nvencPreset = "p6";
+        else if (p == "slow")
+            nvencPreset = "p6";
+        else if (p == "slower")
+            nvencPreset = "p7";
+        else if (p == "veryslow")
+            nvencPreset = "p7";
         else if (p.startsWith("p") && p.size() == 2 && p[1].isDigit())
             nvencPreset = p; // already an NVENC preset
         else
@@ -2538,9 +2553,9 @@ void MainWindow::runHdr10Conversion() {
              << "-color_primaries" << "bt2020"
              << "-colorspace" << "bt2020nc"
              << "-color_trc" << "smpte2084";
-         Log("HDR10 codec: hevc_nvenc (CUDA detected, preset=" + nvencPreset + ")<br>");
+        Log("HDR10 codec: hevc_nvenc (CUDA detected, preset=" + nvencPreset + ")<br>");
     } else {
-         args << "-vf" << "zscale=p=bt2020:t=smpte2084:m=bt2020nc,format=yuv420p10le"
+        args << "-vf" << "zscale=p=bt2020:t=smpte2084:m=bt2020nc,format=yuv420p10le"
              << "-c:v" << "libx265"
              << "-preset" << (encode_preset.isEmpty() ? QStringLiteral("medium") : encode_preset)
              << "-b:v" << "56M"
@@ -2700,7 +2715,8 @@ void MainWindow::copyCommand() {
         process->setProcessEnvironment(QProcessEnvironment::systemEnvironment());
 #ifdef Q_OS_WIN
         QString shell = qEnvironmentVariable("COMSPEC");
-        if (shell.isEmpty()) shell = "cmd.exe";
+        if (shell.isEmpty())
+            shell = "cmd.exe";
         QStringList shellArgs{"/C", cmdText};
 #else
         QString shell = "/bin/sh";

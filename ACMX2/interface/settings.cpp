@@ -408,7 +408,7 @@ SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
       modelFile("data/cube.mxmod.z"),
       selectedCudaDevice(0),
       maxDuration(0.0),
-            maxSizeLimit(0.0),
+      maxSizeLimit(0.0),
       executablePath(execPath) {
     init();
 }
@@ -643,12 +643,14 @@ void SettingsWindow::init() {
     QSettings encSettings("LostSideDead", "acmx2");
     encodePresetComboBox = new QComboBox(this);
     encodePresetComboBox->addItems({"ultrafast", "superfast", "veryfast", "faster", "fast",
-                                    "medium", "slow", "slower", "veryslow"});
+                                    "medium", "slow", "slower", "veryslow", "p1", "p2", "p3",
+                                    "p4", "p5", "p6", "p7"});
     encodePresetComboBox->setCurrentText(encSettings.value("recording/preset", "medium").toString());
 
     encodeTuneComboBox = new QComboBox(this);
     encodeTuneComboBox->addItems({"none", "film", "animation", "grain", "stillimage",
-                                  "psnr", "ssim", "fastdecode", "zerolatency"});
+                                  "psnr", "ssim", "fastdecode", "zerolatency", "hq", "uhq",
+                                  "ll", "ull", "lossless"});
     encodeTuneComboBox->setCurrentText(encSettings.value("recording/tune", "none").toString());
 
     encodeCrfSpinBox = new QSpinBox(this);
@@ -657,8 +659,16 @@ void SettingsWindow::init() {
     encodeCrfSpinBox->setToolTip("Constant Rate Factor: 0 = lossless, 18 = visually lossless, 23 = default, 28 = small file");
 
     encodeCodecComboBox = new QComboBox(this);
-    encodeCodecComboBox->addItems({"auto", "software", "nvenc", "hevc_nvenc"});
+    encodeCodecComboBox->addItems({"auto", "software", "nvenc", "h264_nvenc", "hevc_nvenc"});
     encodeCodecComboBox->setCurrentText(encSettings.value("recording/codec", "auto").toString());
+
+    encodeParametersLineEdit = new QLineEdit(this);
+    encodeParametersLineEdit->setText(encSettings.value("recording/parameters", "").toString());
+    encodeParametersLineEdit->setPlaceholderText(
+        "-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p");
+    encodeParametersLineEdit->setToolTip(
+        "Additional FFmpeg-style video encoder options passed through MXWrite. "
+        "Do not include an input or output filename.");
 
     encodeRealtimeCheckBox = new QCheckBox("Realtime (low-latency)", this);
     encodeRealtimeCheckBox->setChecked(encSettings.value("recording/realtime", false).toBool());
@@ -733,6 +743,8 @@ void SettingsWindow::init() {
     encodingGrid->addWidget(encodeCrfSpinBox, r, 1);
     encodingGrid->addWidget(new QLabel("Codec:", this), ++r, 0);
     encodingGrid->addWidget(encodeCodecComboBox, r, 1);
+    encodingGrid->addWidget(new QLabel("Extra FFmpeg parameters:", this), ++r, 0);
+    encodingGrid->addWidget(encodeParametersLineEdit, r, 1);
     encodingGrid->addWidget(encodeRealtimeCheckBox, ++r, 0, 1, 2);
     encodingGrid->addWidget(encodeNoDropCheckBox, ++r, 0, 1, 2);
 
@@ -1034,8 +1046,9 @@ void SettingsWindow::loadUiState() {
     QSettings appSettings("LostSideDead", "acmx2");
 
     preferredFpsText = appSettings.value(
-        "interface/preferred_fps",
-        appSettings.value("interface/camera_fps", "30")).toString();
+                                      "interface/preferred_fps",
+                                      appSettings.value("interface/camera_fps", "30"))
+                           .toString();
     if (preferredFpsText.isEmpty()) {
         preferredFpsText = "30";
     }
@@ -1361,6 +1374,10 @@ QString SettingsWindow::getEncodeCodec() const {
     return encodeCodecComboBox ? encodeCodecComboBox->currentText() : QString("auto");
 }
 
+QString SettingsWindow::getEncodeParameters() const {
+    return encodeParametersLineEdit ? encodeParametersLineEdit->text().trimmed() : QString();
+}
+
 bool SettingsWindow::isEncodeRealtime() const {
     return encodeRealtimeCheckBox && encodeRealtimeCheckBox->isChecked();
 }
@@ -1495,6 +1512,8 @@ void SettingsWindow::acceptSettings() {
         encSettings.setValue("recording/crf", encodeCrfSpinBox->value());
     if (encodeCodecComboBox)
         encSettings.setValue("recording/codec", encodeCodecComboBox->currentText());
+    if (encodeParametersLineEdit)
+        encSettings.setValue("recording/parameters", encodeParametersLineEdit->text().trimmed());
     if (encodeRealtimeCheckBox)
         encSettings.setValue("recording/realtime", encodeRealtimeCheckBox->isChecked());
     if (encodeNoDropCheckBox)
@@ -1538,7 +1557,7 @@ void SettingsWindow::detectInputHdr() {
     args << "-v" << "error"
          << "-select_streams" << "v:0"
          << "-show_entries" << "stream=color_transfer,color_primaries,color_space"
-            << "-of" << "default=noprint_wrappers=1:nokey=0"
+         << "-of" << "default=noprint_wrappers=1:nokey=0"
          << file;
     probe.start("ffprobe", args);
     if (!probe.waitForStarted(3000)) {
