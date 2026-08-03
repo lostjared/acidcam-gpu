@@ -52,6 +52,8 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
   font and word-wrap settings, and direct navigation to source locations
 - **Find in Files** — recursively search shader sources with regular expressions
   and open any result directly at its matching line and column
+- **Custom interface themes** — choose from 25 built-in light and dark
+  stylesheet presets or edit and persist custom QSS
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
 - **MIDI Map Tool** — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 
@@ -84,6 +86,11 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
   files recursively with a regular expression and optional case sensitivity.
   Results show file, line, match, and source text in a continuous uniform list;
   activating a result opens the editor with the exact match selected.
+- The Custom Style Editor now includes ten additional presets: Lavender Mist,
+  Rose Quartz, Sandstone, Mint & Navy, High Contrast, Cyberpunk Neon, Dracula,
+  Nord Frost, Solarized, and Graphite Orange. This brings the built-in palette
+  collection to 25 styles, while preserving editable QSS and the last selected
+  preset through `QSettings`.
 
 ### Shader Library Manifest Updates
 

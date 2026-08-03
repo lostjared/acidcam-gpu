@@ -88,6 +88,7 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Shader workflow tools</b> — live reload and persistent cache-rebuild paths are integrated for faster iteration during shader authoring
 - <b>Shader code editor</b> — line numbers, GLSL highlighting, bracket matching, automatic indentation/pairing, line operations, search/replace, and persistent display preferences
 - <b>Find in Files</b> — recursively search shader source with regular expressions and open a result directly at its matching line and column
+- <b>Custom interface themes</b> — choose from 25 built-in light and dark stylesheet presets or edit and persist custom QSS
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
 - <b>Persistent Qt session dialogs</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened, with fresh defaults of <tt>1280x720</tt> camera capture and <tt>Default</tt> display resolution
 - <b>Metadata viewer</b> — inspect media metadata directly from the Qt interface
@@ -160,6 +161,11 @@ for building without CUDA on systems that lack an NVIDIA GPU.
   <tt>.glsl</tt>, <tt>.frag</tt>, and <tt>.vert</tt> files using a regular
   expression and optional case sensitivity. Activating a result opens the
   editor at the exact match. Results use a uniform continuous row background.
+- The Custom Style Editor adds Lavender Mist, Rose Quartz, Sandstone, Mint &
+  Navy, High Contrast, Cyberpunk Neon, Dracula, Nord Frost, Solarized, and
+  Graphite Orange. Together with the existing themes, the editor now offers 25
+  built-in palettes plus the editable Current Style entry. The selected preset
+  and applied QSS remain persistent through <tt>QSettings</tt>.
 
 <b>Shader-library manifests</b>
 
