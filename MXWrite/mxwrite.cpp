@@ -1937,11 +1937,12 @@ void Writer::write_at_pts(void *rgba_buffer, int64_t pts) {
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
         if (block_when_full.load(std::memory_order_relaxed)) {
-            if (encode_queue.size() >= MAX_QUEUE_SIZE) {
-                // In no-drop mode, once the queue reaches capacity we wait
-                // until the encoder thread drains it, then continue.
+            if (encode_queue.size() >= NO_DROP_QUEUE_SIZE) {
+                // Keep file processing paced with the encoder. Wake whenever
+                // one queue slot becomes available rather than waiting for a
+                // large queue to fill and then drain completely.
                 queue_cv.wait(lock, [this] {
-                    return stop_requested || encode_queue.empty();
+                    return stop_requested || encode_queue.size() < NO_DROP_QUEUE_SIZE;
                 });
             }
             if (stop_requested) {
@@ -2030,9 +2031,9 @@ void Writer::write_hdr_rgba16_at_pts(void *rgba16_buffer, int64_t pts) {
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
         if (block_when_full.load(std::memory_order_relaxed)) {
-            if (encode_queue.size() >= MAX_QUEUE_SIZE) {
+            if (encode_queue.size() >= NO_DROP_QUEUE_SIZE) {
                 queue_cv.wait(lock, [this] {
-                    return stop_requested || encode_queue.empty();
+                    return stop_requested || encode_queue.size() < NO_DROP_QUEUE_SIZE;
                 });
             }
             if (stop_requested) {
@@ -2160,9 +2161,9 @@ bool Writer::write_cuda_rgba_at_pts(void *cuda_rgba_buffer, int src_stride,
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
         if (block_when_full.load(std::memory_order_relaxed)) {
-            if (encode_queue.size() >= MAX_QUEUE_SIZE) {
+            if (encode_queue.size() >= NO_DROP_QUEUE_SIZE) {
                 queue_cv.wait(lock, [this] {
-                    return stop_requested || encode_queue.empty();
+                    return stop_requested || encode_queue.size() < NO_DROP_QUEUE_SIZE;
                 });
             }
             if (stop_requested) {

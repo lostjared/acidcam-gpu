@@ -258,7 +258,7 @@ sudo bash build-script/install-deps-arch.sh
 | | `--list-encoders` | | List video encoders available through MXWrite |
 | | `--list-encoder-options` | `<name>` | List FFmpeg AVOptions exposed by one encoder |
 | | `--encode-realtime` | | Enable low-latency realtime encoding flags |
-| | `--no-drop` | | Video-file processing: never drop frames; block when the encoder queue is full |
+| | `--no-drop` | | Video-file processing: never drop frames; pace reading and processing to encoder throughput |
 | | `--use-watermark` | `<text>` | Embed a text watermark (upper-left) into recorded video |
 | | `--use-watermark-color` | `<r,g,b>` | Watermark text color as 0-255 RGB components (default: `255,0,150`) |
 | | `--display-filter` | | Show active shader/stack/GPU filter in upper-left corner of window and recording |

@@ -96,7 +96,7 @@ struct EncodeOptions {
     std::string codec = "auto";    ///< Encoder selection policy or exact FFmpeg encoder name.
     std::string ffmpeg_options;    ///< Additional FFmpeg-style video encoder options.
     bool realtime = false;         ///< Enable low-latency settings.
-    bool block_when_full = false;  ///< Block producer threads instead of dropping when the encoder queue is full.
+    bool block_when_full = false;  ///< Pace producers to encoder throughput instead of dropping frames.
 
     /**
      * @brief HDR output options.
@@ -242,9 +242,9 @@ class Writer {
     bool is_open() const { return opened; }
     /// @brief True when FFmpeg identifies the active encoder as hardware or hybrid.
     bool is_hardware_encode() const { return active_encoder_hardware; }
-    /// @brief If true, producer threads block when the encoder queue is full
-    /// instead of dropping frames. Intended for headless/batch transcoding
-    /// where every input frame must reach the output. Default: false (drop).
+    /// @brief If true, keep one pending frame and pace producer threads to the
+    /// encoder instead of dropping frames. Intended for headless/batch
+    /// transcoding where every input frame must reach the output. Default: false.
     void set_block_when_full(bool value) { block_when_full = value; }
     /** @brief Check whether the encoder queue blocks instead of dropping frames. */
     bool get_block_when_full() const { return block_when_full; }
@@ -303,6 +303,10 @@ class Writer {
     // Deep enough to absorb encoder hiccups (~4s at 30fps, ~2s at 60fps).
     // Memory cost is bounded by the NVENC frame pool / sw RGBA frame buffer.
     static constexpr size_t MAX_QUEUE_SIZE = 120;
+    // No-drop mode intentionally keeps only one pending frame. Together with
+    // the frame currently being encoded, this paces file processing to encoder
+    // throughput instead of producing 120-frame burst/stall cycles.
+    static constexpr size_t NO_DROP_QUEUE_SIZE = 1;
     std::condition_variable queue_cv; ///< Signals queue availability.
     std::jthread encode_thread;       ///< Background encoder thread.
 

@@ -906,9 +906,11 @@ void SettingsWindow::init() {
     encodeRealtimeCheckBox->setChecked(encSettings.value("recording/realtime", false).toBool());
     encodeRealtimeCheckBox->setToolTip("Enable low-latency encoding. Required for live camera capture.");
 
-    encodeNoDropCheckBox = new QCheckBox("No Drop (block when encoder queue is full)", this);
+    encodeNoDropCheckBox = new QCheckBox("No Drop (pace video processing to encoder)", this);
     encodeNoDropCheckBox->setChecked(encSettings.value("recording/no_drop", false).toBool());
-    encodeNoDropCheckBox->setToolTip("When enabled, avoid dropping frames by waiting for the encoder queue to drain.");
+    encodeNoDropCheckBox->setToolTip(
+        "Video mode: keep one pending frame and read/process the next frame as encoder "
+        "capacity becomes available. This avoids both dropped frames and large queue stalls.");
 
     // ── Input Source group ────────────────────────────────────────────
     auto *sourceGroup = new QGroupBox("Input Source", this);

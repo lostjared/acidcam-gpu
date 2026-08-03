@@ -6144,7 +6144,7 @@ struct MXArguments {
     bool flip_output = false;    ///< Vertical flip output frames when set (e.g., for HDR correction).
     bool png_output = false;     ///< Video-file mode only: write PNG frames to a subdirectory instead of encoding video.
     int generate_interval = 0;   ///< Save a PNG frame every N frames to a subdirectory (video or camera mode, 0 = disabled).
-    bool no_drop = false;        ///< In video mode, block when encoder queue is full instead of dropping.
+    bool no_drop = false;        ///< In video mode, pace frame production to encoder throughput.
     bool display_filter = false; ///< Display current shader/stack and GPU filter overlay in upper-left.
     std::string watermark_text;  ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
     int watermark_r = 255;       ///< Watermark red channel (0-255), default magenta-pink.
@@ -8478,8 +8478,8 @@ class ACView : public gl::GLObject {
             if (!ofilename.empty()) {
                 if (writer.open(ofilename, w, h, fps, encode_opts)) {
                     if (silent_mode || no_drop_mode) {
-                        // Block the producer when the encoder queue fills
-                        // so no encoded frames are dropped.
+                        // Pace the producer to encoder capacity so no encoded
+                        // frames are dropped and no large queue burst forms.
                         writer.set_block_when_full(true);
                     }
                     mx::system_out << "acmx2: Opened: " << ofilename
@@ -8718,9 +8718,9 @@ class ACView : public gl::GLObject {
                         bool block_encoder_queue =
                             silent_mode || no_drop_mode;
                         if (block_encoder_queue) {
-                            // Batch transcoding or --no-drop: block the producer
-                            // when the encoder queue fills instead of dropping
-                            // frames.
+                            // Batch transcoding or --no-drop: pace the producer
+                            // to encoder capacity instead of filling a large
+                            // queue or dropping frames.
                             writer.set_block_when_full(true);
                         }
                         mx::system_out << "acmx2: Opened: " << ofilename
@@ -8731,7 +8731,7 @@ class ACView : public gl::GLObject {
                                        << (encode_opts.realtime ? " [realtime]" : "")
                                        << "\n";
                         if (no_drop_mode) {
-                            mx::system_out << "acmx2: --no-drop active (video mode): producer blocks when encoder queue is full\n";
+                            mx::system_out << "acmx2: --no-drop active (video mode): frame processing paced to encoder throughput\n";
                         }
                         if (encode_opts.hdr.enabled) {
                             mx::system_out << "acmx2: *** HDR OUTPUT ENABLED: writing HEVC Main10 + BT.2020 "
@@ -12799,7 +12799,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(603, "encode-codec", "Encoder policy or exact FFmpeg encoder name (default: auto)")
         .addOptionDouble(604, "encode-realtime", "Enable low-latency realtime encoding flags")
         .addOptionDouble(605, "flip", "Vertical flip output frames")
-        .addOptionDouble(606, "no-drop", "Video mode: never drop frames; block when encoder queue is full")
+        .addOptionDouble(606, "no-drop", "Video mode: never drop frames; pace processing to encoder throughput")
         .addOptionDouble(607, "display-filter", "Display current shader/stack and GPU filter in upper-left corner")
         .addOptionDoubleValue(608, "use-watermark", "Enable watermark with the given text in upper-left corner of recorded video")
         .addOptionDoubleValue(609, "use-watermark-color", "Watermark color as r,g,b each 0-255 (default: 255,0,150)")
