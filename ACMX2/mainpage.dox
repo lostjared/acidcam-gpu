@@ -106,6 +106,10 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Camera device enumeration</b> — query V4L2 devices for supported resolutions and frame rates via <tt>--enumerate-device</tt>; the Qt Settings dialog dynamically populates resolution and FPS dropdowns from the selected camera
 - <b>Preferred camera FPS persistence</b> — Qt Settings stores the selected FPS and restores/reapplies it after device/resolution repopulation when available
 - <b>Startup cache/audio synchronization warmup</b> — initial frames are drained/skipped to avoid loading-screen content entering <tt>samp1..samp8</tt>, and early audio/writer activity waits for warmup completion
+- <b>Real-time webcam recording clock</b> — webcam output uses wall-clock PTS from the first valid source frame and drops late frames instead of slowing the recording, with or without audio
+- <b>No Drop limited to non-live inputs</b> — <tt>--no-drop</tt> remains available for video-file and graphics processing but is ignored for webcams; Qt unchecks and disables the option when Camera is selected
+- <b>Recorded webcam audio synchronization</b> — WAV capture shares the video start/stop boundary, and muxing preserves timestamped webcam PTS rather than rescaling playback speed
+- <b>Editable Window Resolution</b> — Qt retains the resolution presets while accepting custom <tt>WxH</tt> text; dimensions must be positive even integers and invalid input is rejected with a warning
 - <b>Texture cache in all input modes</b> — <tt>--texture-cache</tt> applies to camera, video, and graphic input paths
 - <b>Texture cache array mode</b> — <tt>--texture-cache-array</tt> enables the cache and exposes frame history through one <tt>sampler2DArray history</tt> ring; the maintained <a href="https://github.com/lostjared/shaders">shader collection</a> has been updated for this interface
 - <b>Long-run time phase stability</b> — <tt>time_f</tt> wrap/reset now uses a large <tt>2*PI</tt> multiple to preserve trig continuity across long sessions
@@ -122,6 +126,16 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 @section revisions Revisions
 
 @subsection updates_2026_08 August 2026 (Month to Date)
+
+<b>Version 2.3.3 recording synchronization</b>
+
+- Webcam recording uses wall-clock PTS and late-frame dropping in every audio
+  configuration, while No Drop is reserved for video-file and graphics input.
+- Live recorded audio now shares the webcam capture boundary and is muxed
+  without rescaling the timestamped video timeline.
+- Qt unchecks and disables No Drop whenever Camera is selected.
+- The Qt Window Resolution combo accepts either a preset, <tt>Default</tt>, or a
+  custom even <tt>WxH</tt> value and refuses invalid input without saving it.
 
 <b>Custom shader uniforms</b>
 
@@ -258,6 +272,17 @@ non-default pixel format such as <tt>yuv444p</tt>.
 
 <b>Playback, processing, and content</b>
 
+- Webcam recording now follows a steady wall clock independent of whether audio
+  is enabled. Each processed frame carries a nominal-FPS PTS through both CPU
+  and CUDA writer paths; frames targeting an already-used time slot are dropped,
+  while PTS gaps preserve the correct real-time duration.
+- Audio pass-through plays live input or file audio through the selected output
+  device but does not by itself record audio. With <tt>--record-audio</tt>, WAV
+  capture starts on the first source frame, stops at the video-capture boundary,
+  and is muxed without rescaling timestamped webcam video.
+- <tt>--no-drop</tt> now applies only to video-file and graphics processing. Live
+  webcam capture always favors synchronization and late-frame dropping over
+  encoder backpressure; Qt unchecks and disables No Drop in Camera mode.
 - File audio/video synchronization and pass-through timing were reworked so
   decoding, playback, rendering, and MXWrite output follow a more consistent
   clock and shutdown/drain path.
@@ -323,6 +348,16 @@ persisted across launches and translated directly into the matching command-line
 
 Camera FPS is persisted as a preferred value and re-selected after resolution/FPS capability
 re-enumeration when that FPS is supported by the selected device.
+
+No Drop is intentionally unavailable for live camera capture. Selecting Camera immediately
+unchecks and disables the setting, while video-file and graphics modes re-enable it. This avoids
+presenting encoder backpressure as a safe option for a live source whose output must remain on a
+real-time clock.
+
+Window Resolution remains a preset combo box but is also editable. Custom values use
+<tt>WxH</tt> syntax (for example <tt>1920x1080</tt>), and both dimensions must be positive and
+divisible by two for encoder compatibility. Invalid text produces a warning, leaves the Settings
+dialog open, and is neither applied nor persisted.
 
 The Qt editor flow also includes safer close behavior: if modified shader content is open,
 closing via Escape or window close prompts to save changes before exiting the editor.
@@ -901,7 +936,7 @@ appears in the dock while the application is running.
 |       | `--encode-codec`  | `<mode>`  | Encoder codec mode including <tt>h264_nvenc</tt> and <tt>hevc_nvenc</tt> |
 |       | `--encode-params` | `<string>` | Additional FFmpeg-style video encoder options passed through MXWrite |
 |       | `--encode-realtime` |         | Enable low-latency realtime encoding flags |
-|       | `--no-drop`      |           | Video-file processing: never drop frames; block when the encoder queue is full |
+|       | `--no-drop`      |           | Video-file/graphics processing: never drop frames and pace to encoder throughput; ignored for webcams |
 
 @subsection cli_shader Shader Options
 | Short | Long             | Value       | Description |
@@ -1015,11 +1050,11 @@ git clone https://github.com/lostjared/shaders.git
 | `-w`  | `--enable-audio` |             | Enable audio reactivity |
 | `-l`  | `--channels`     | `<num>`     | Audio channels |
 | `-q`  | `--sense`        | `<float>`   | Audio sensitivity |
-| `-y`  | `--pass-through` |             | Enable audio pass-through |
+| `-y`  | `--pass-through` |             | Play live input or file audio through the selected output device; does not itself record or mux audio |
 |       | `--audio-input`  | `<index>`   | Audio input device |
 |       | `--audio-output` | `<index>`   | Audio output device |
 |       | `--list-devices` |             | List audio devices and exit |
-|       | `--record-audio` | `<file>`    | Record captured audio to WAV (temporary file is removed after successful mux) |
+|       | `--record-audio` | `<file>`    | Record captured audio to WAV, mux it in sync with video, then remove it after a successful mux |
 |       | `--record-gain`  | `<float>`   | Recording volume gain (0.0–2.0) |
 |       | `--audio-file`   | `<file>`    | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
 |       | `--audio-trunc`  |             | Stop playback when the audio file reaches the end |
@@ -1397,6 +1432,24 @@ For HDR sources, ACMX2 switches to a different path. BT.2020 video tagged with P
 The HDR writer path then emits <b>HEVC Main10</b> output rather than H.264. MXWrite receives BT.2020 HDR frames and writes them as a 10-bit <tt>P010</tt> HEVC stream with BT.2020 primaries and the original transfer characteristic preserved. When the source contains mastering-display or content-light metadata, ACMX2 forwards that metadata to the output stream so downstream HDR-capable players and editors continue to recognize the export as HDR.
 
 When <tt>--record-audio</tt> is used, the recorded WAV is muxed into the output MP4 at shutdown and then deleted after a successful mux, leaving only the final output video.
+
+Webcam recording is always a real-time pipeline. Its clock begins on the first valid camera frame,
+and each output frame receives a presentation timestamp expressed in nominal FPS units. When the
+renderer or encoder cannot keep up, ACMX2 discards frames that would occupy an already-used time
+slot and leaves gaps for missed slots. The output therefore retains wall-clock duration and correct
+playback speed rather than becoming slow or drifting behind live audio. This behavior is used even
+when audio is disabled.
+
+With audio enabled, <tt>--pass-through</tt> only controls playback through the selected output
+device. <tt>--record-audio</tt> is the option that captures WAV audio for the final file. Recording
+starts with the same media boundary as video and stops before queued frames and encoder packets are
+drained. During muxing, ACMX2 preserves the webcam video's existing PTS and trims audio to its
+duration instead of rescaling the video timeline.
+
+Because a live camera cannot safely wait for a slow encoder without falling behind real time,
+<tt>--no-drop</tt> is ignored in webcam mode. It remains useful for video-file and graphics input,
+where the producer can be paced to encoder capacity without breaking synchronization. The Qt
+launcher reflects this distinction by unchecking and disabling No Drop whenever Camera is selected.
 
 @subsubsection explained_silent_mode_terminal_batching Silent Mode for Terminal Batching
 

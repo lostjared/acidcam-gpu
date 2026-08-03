@@ -43,6 +43,43 @@ static const GUID MEDIASUBTYPE_I420 = {0x30323449, 0x0000, 0x0010, {0x80, 0x00, 
 #endif
 
 namespace {
+    bool parse_even_resolution(const QString &text, QSize &resolution) {
+        const QString trimmed = text.trimmed();
+        if (trimmed.compare("Default", Qt::CaseInsensitive) == 0) {
+            resolution = QSize(0, 0);
+            return true;
+        }
+
+        static const QRegularExpression resolution_pattern(
+            R"(^(\d+)\s*[xX]\s*(\d+)$)");
+        const QRegularExpressionMatch match =
+            resolution_pattern.match(trimmed);
+        if (!match.hasMatch()) {
+            return false;
+        }
+
+        bool width_ok = false;
+        bool height_ok = false;
+        const int width = match.captured(1).toInt(&width_ok);
+        const int height = match.captured(2).toInt(&height_ok);
+        if (!width_ok || !height_ok || width <= 0 || height <= 0 ||
+            width % 2 != 0 || height % 2 != 0) {
+            return false;
+        }
+
+        resolution = QSize(width, height);
+        return true;
+    }
+
+    QString resolution_text(const QSize &resolution) {
+        if (resolution.isEmpty()) {
+            return "Default";
+        }
+        return QString("%1x%2")
+            .arg(resolution.width())
+            .arg(resolution.height());
+    }
+
     bool pathsReferToSameFile(const QString &firstPath, const QString &secondPath) {
         const QFileInfo firstInfo(firstPath);
         const QFileInfo secondInfo(secondPath);
@@ -757,6 +794,9 @@ void SettingsWindow::init() {
     browseGraphicsButton = new QPushButton("Browse", this);
 
     screenResolutionComboBox = new QComboBox(this);
+    screenResolutionComboBox->setEditable(true);
+    screenResolutionComboBox->setInsertPolicy(QComboBox::NoInsert);
+    screenResolutionComboBox->lineEdit()->setPlaceholderText("Default or WxH");
     screenResolutionComboBox->addItems({"Default",
                                         "320x240", "240x320", "400x300", "300x400", "512x384", "384x512",
                                         "640x360", "360x640", "640x480", "480x640", "720x480", "480x720",
@@ -906,7 +946,7 @@ void SettingsWindow::init() {
     encodeRealtimeCheckBox->setChecked(encSettings.value("recording/realtime", false).toBool());
     encodeRealtimeCheckBox->setToolTip("Enable low-latency encoding. Required for live camera capture.");
 
-    encodeNoDropCheckBox = new QCheckBox("No Drop (pace file processing to encoder)", this);
+    encodeNoDropCheckBox = new QCheckBox("No Drop", this);
     encodeNoDropCheckBox->setChecked(encSettings.value("recording/no_drop", false).toBool());
     encodeNoDropCheckBox->setToolTip(
         "File and graphics modes only: keep one pending frame and process the next frame "
@@ -1332,9 +1372,18 @@ void SettingsWindow::loadUiState() {
     }
 
     QString screenRes = appSettings.value("interface/screen_resolution", "Default").toString();
-    int screenResIdx = screenResolutionComboBox->findText(screenRes);
-    if (screenResIdx >= 0) {
-        screenResolutionComboBox->setCurrentIndex(screenResIdx);
+    QSize restored_screen_resolution;
+    if (parse_even_resolution(screenRes, restored_screen_resolution)) {
+        const QString normalized_screen_resolution =
+            resolution_text(restored_screen_resolution);
+        const int screenResIdx =
+            screenResolutionComboBox->findText(normalized_screen_resolution);
+        if (screenResIdx >= 0) {
+            screenResolutionComboBox->setCurrentIndex(screenResIdx);
+        } else {
+            screenResolutionComboBox->setCurrentText(
+                normalized_screen_resolution);
+        }
     }
 
     inputVideoFileLineEdit->setText(appSettings.value("interface/input_video", "").toString());
@@ -1416,7 +1465,12 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/camera_resolution", cameraResolutionComboBox->currentText());
     appSettings.setValue("interface/camera_fps", cameraFPSComboBox->currentText());
     appSettings.setValue("interface/preferred_fps", cameraFPSComboBox->currentText());
-    appSettings.setValue("interface/screen_resolution", screenResolutionComboBox->currentText());
+    QSize screen_resolution;
+    if (parse_even_resolution(screenResolutionComboBox->currentText(),
+                              screen_resolution)) {
+        appSettings.setValue("interface/screen_resolution",
+                             resolution_text(screen_resolution));
+    }
 
     appSettings.setValue("interface/input_video", inputVideoFileLineEdit->text());
     appSettings.setValue("interface/graphics_file", graphicsFileLineEdit->text());
@@ -1687,6 +1741,21 @@ QString SettingsWindow::getCameraName(int device_index) {
 }
 
 void SettingsWindow::acceptSettings() {
+    QSize screen_resolution;
+    if (!parse_even_resolution(screenResolutionComboBox->currentText(),
+                               screen_resolution)) {
+        QMessageBox::warning(
+            this,
+            "Invalid window resolution",
+            "Enter Default or a resolution in WxH format. Width and height "
+            "must be positive numbers divisible by 2 (for example, 1920x1080).");
+        screenResolutionComboBox->setFocus();
+        if (screenResolutionComboBox->lineEdit()) {
+            screenResolutionComboBox->lineEdit()->selectAll();
+        }
+        return;
+    }
+
     useInputVideoFile = inputVideoOptionRadioButton->isChecked();
     useGraphicsFile = graphicsFileOptionRadioButton->isChecked();
     saveOutputVideoFile = saveOutputVideoCheckBox->isChecked();
@@ -1718,12 +1787,9 @@ void SettingsWindow::acceptSettings() {
 
     cameraFPS = cameraFPSComboBox->currentText().toInt();
 
-    QStringList screenResParts = screenResolutionComboBox->currentText().split('x');
-    if (screenResParts.size() == 2) {
-        selectedScreenResolution = QSize(screenResParts[0].toInt(), screenResParts[1].toInt());
-    } else {
-        selectedScreenResolution = QSize(0, 0);
-    }
+    selectedScreenResolution = screen_resolution;
+    screenResolutionComboBox->setCurrentText(
+        resolution_text(screen_resolution));
 
     if (saveOutputVideoFile) {
         outputVideoFile = outputVideoFileLineEdit->text();

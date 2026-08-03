@@ -67,7 +67,7 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 
 ## Revisions
 
-### August 2026
+### Version 2.3.3 (August 2026)
 
 From the latest `acidcam-gpu` commits, current focus areas include:
 
@@ -78,6 +78,10 @@ From the latest `acidcam-gpu` commits, current focus areas include:
 - **Live shader coding**: saving in the Qt editor recompiles and replaces only the edited shader while ACMX2 keeps rendering; a failed compile leaves the previous valid program active and reports the full diagnostic.
 - **Editor themes and search**: the shader editor now includes 25 built-in color themes and **List > Find in Files** (`Ctrl+Shift+F`) for regular-expression searches across GLSL source.
 - **Lossless and custom encoder settings**: the Qt interface exposes H.264/HEVC NVENC modes, `p1`-`p7` presets, lossless tuning, and extra FFmpeg parameters through `--encode-params`.
+- **Real-time webcam recording synchronization**: webcam output now follows wall-clock presentation timestamps from the first valid camera frame. If rendering or encoding falls behind, late frames are dropped and timestamp gaps preserve the correct playback speed instead of stretching the recording. This path works with audio disabled, with live pass-through, and with recorded audio.
+- **Webcam No Drop behavior clarified**: `--no-drop` is now limited to video-file and graphics processing, where slowing production is safe. Webcam mode always uses timestamp-based late-frame dropping; the CLI ignores `--no-drop`, and the Qt Settings dialog unchecks and disables No Drop when Camera is selected.
+- **Recorded webcam audio boundary**: live WAV capture starts with the media timeline and stops at the video-capture boundary, before queued video frames and encoder packets drain. Timestamped webcam video is muxed without rescaling its PTS, preventing an audio-only tail or a playback-speed change.
+- **Editable window resolution**: the Qt Window Resolution control keeps its preset dropdown but also accepts a custom `WxH` value. Custom width and height must be positive even integers; invalid values show a warning and are not applied or saved.
 
 ### July 2026
 
@@ -258,7 +262,7 @@ sudo bash build-script/install-deps-arch.sh
 | | `--list-encoders` | | List video encoders available through MXWrite |
 | | `--list-encoder-options` | `<name>` | List FFmpeg AVOptions exposed by one encoder |
 | | `--encode-realtime` | | Enable low-latency realtime encoding flags |
-| | `--no-drop` | | Video-file processing: never drop frames; pace reading and processing to encoder throughput |
+| | `--no-drop` | | Video-file/graphics processing: never drop frames and pace processing to encoder throughput; ignored in webcam mode |
 | | `--use-watermark` | `<text>` | Embed a text watermark (upper-left) into recorded video |
 | | `--use-watermark-color` | `<r,g,b>` | Watermark text color as 0-255 RGB components (default: `255,0,150`) |
 | | `--display-filter` | | Show active shader/stack/GPU filter in upper-left corner of window and recording |
@@ -339,11 +343,11 @@ sudo bash build-script/install-deps-arch.sh
 | `-w` | `--enable-audio` | | Enable audio reactivity |
 | `-l` | `--channels` | `<num>` | Audio channels |
 | `-q` | `--sense` | `<float>` | Audio sensitivity |
-| `-y` | `--pass-through` | | Enable audio pass-through |
+| `-y` | `--pass-through` | | Play live input or file audio through the selected output device; this does not by itself record or mux audio |
 | | `--audio-input` | `<index>` | Audio input device (`default` or index) |
 | | `--audio-output` | `<index>` | Audio output device (`default` or index) |
 | | `--list-devices` | | List audio devices and exit |
-| | `--record-audio` | `<file>` | Record captured audio to WAV file (used for mux, then removed after successful mux) |
+| | `--record-audio` | `<file>` | Record captured audio to WAV, mux it in sync with video, then remove it after a successful mux |
 | | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
 | | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in `1/sec` (default: `0.5`; `0` disables warmup) |
 | | `--enable-audio-buffers` | `<N>` | Allocate one FFT history `sampler1DArray` with `N` GPU-limited layers |
@@ -514,6 +518,10 @@ Recording now exposes more detailed encoder controls in both the command line an
   - `--encode-realtime` — enable low-latency realtime encoding flags for live capture
 - **Qt Interface:** The **Settings** dialog discovers installed encoders, keeps `libx264` and `libx265` separate, labels hardware/software backends, shows supported pixel formats, and provides an option table. Double-clicking an option adds it to the extra FFmpeg parameters field.
 - **Persistence:** Encoding selections are stored and restored for later sessions.
+- **Webcam timing:** Camera recording always uses a real-time timestamp clock. Frames that arrive in an already-used nominal FPS slot are discarded, while gaps in PTS preserve elapsed time and keep the result at the correct speed even when the renderer or encoder cannot sustain every frame.
+- **No Drop scope:** No Drop remains available for video-file and graphics inputs, where processing can safely wait for encoder capacity. Selecting Camera in the Qt Settings dialog unchecks and disables it; command-line webcam mode also ignores `--no-drop`.
+- **Audio behavior:** Pass-through plays audio but does not add it to the output file. With `--record-audio`, capture begins on the first valid source frame, stops with video capture, and is muxed without changing timestamped webcam video speed.
+- **Custom window size:** The Window Resolution combo remains a preset selector and is also editable. Enter `Default` or an even `WxH` value such as `1920x1080`; malformed, zero, negative, or odd dimensions are rejected with a warning.
 
 ### Qt Interface Session Persistence
 
