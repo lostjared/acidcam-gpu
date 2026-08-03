@@ -906,11 +906,13 @@ void SettingsWindow::init() {
     encodeRealtimeCheckBox->setChecked(encSettings.value("recording/realtime", false).toBool());
     encodeRealtimeCheckBox->setToolTip("Enable low-latency encoding. Required for live camera capture.");
 
-    encodeNoDropCheckBox = new QCheckBox("No Drop (pace video processing to encoder)", this);
+    encodeNoDropCheckBox = new QCheckBox("No Drop (pace file processing to encoder)", this);
     encodeNoDropCheckBox->setChecked(encSettings.value("recording/no_drop", false).toBool());
     encodeNoDropCheckBox->setToolTip(
-        "Video mode: keep one pending frame and read/process the next frame as encoder "
-        "capacity becomes available. This avoids both dropped frames and large queue stalls.");
+        "File and graphics modes only: keep one pending frame and process the next frame "
+        "as encoder capacity becomes available. Webcam recording always uses wall-clock "
+        "timestamps and drops late frames to remain synchronized.");
+    encodeNoDropCheckBox->setEnabled(false);
 
     // ── Input Source group ────────────────────────────────────────────
     auto *sourceGroup = new QGroupBox("Input Source", this);
@@ -1125,7 +1127,9 @@ void SettingsWindow::init() {
     connect(browseOnnxModelButton, &QPushButton::clicked, this, &SettingsWindow::browseOnnxModelFile);
 
     connect(cameraOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
+        encodeNoDropCheckBox->setEnabled(!checked);
         if (checked) {
+            encodeNoDropCheckBox->setChecked(false);
             cameraIndexComboBox->setEnabled(true);
             cameraResolutionComboBox->setEnabled(true);
             cameraFPSComboBox->setEnabled(true);
@@ -1145,6 +1149,8 @@ void SettingsWindow::init() {
     });
 
     connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
+        if (checked)
+            encodeNoDropCheckBox->setEnabled(true);
         if (checked) {
             cameraIndexComboBox->setEnabled(false);
             cameraResolutionComboBox->setEnabled(false);
@@ -1166,6 +1172,8 @@ void SettingsWindow::init() {
     });
 
     connect(graphicsFileOptionRadioButton, &QRadioButton::toggled, this, [this](bool checked) {
+        if (checked)
+            encodeNoDropCheckBox->setEnabled(true);
         if (checked) {
             cameraIndexComboBox->setEnabled(false);
             cameraResolutionComboBox->setEnabled(false);
@@ -1215,6 +1223,10 @@ void SettingsWindow::init() {
     browseOutputVideoButton->setEnabled(false);
 
     loadUiState();
+    if (cameraOptionRadioButton->isChecked()) {
+        encodeNoDropCheckBox->setChecked(false);
+        encodeNoDropCheckBox->setEnabled(false);
+    }
 }
 
 void SettingsWindow::reflowGroupColumns(int columns) {
@@ -1625,7 +1637,8 @@ bool SettingsWindow::isEncodeRealtime() const {
 }
 
 bool SettingsWindow::isEncodeNoDrop() const {
-    return encodeNoDropCheckBox && encodeNoDropCheckBox->isChecked();
+    return encodeNoDropCheckBox && encodeNoDropCheckBox->isEnabled() &&
+           encodeNoDropCheckBox->isChecked();
 }
 
 QString SettingsWindow::getCameraName(int device_index) {

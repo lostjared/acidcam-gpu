@@ -2319,7 +2319,8 @@ void MainWindow::runSelected() {
             arguments << "--encode-params" << encode_parameters;
         if (encode_realtime)
             arguments << "--encode-realtime";
-        if (encode_no_drop)
+        if (encode_no_drop &&
+            (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
     }
     if (audio_available && audio_enabled) {
@@ -2531,7 +2532,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
             arguments << "--encode-params" << encode_parameters;
         if (encode_realtime)
             arguments << "--encode-realtime";
-        if (encode_no_drop)
+        if (encode_no_drop &&
+            (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
     }
     arguments << "--shader" << QString::number(index);
