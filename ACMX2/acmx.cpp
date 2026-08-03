@@ -12318,11 +12318,11 @@ namespace {
         out << c.title << "\nArguments" << c.reset << "\n";
         out << c.example << "Short and long forms are equivalent; values shown in <> are required." << c.reset << "\n";
 
-        printSection(out, c, "General", {{"-v, --help", "Show this help screen and keyboard controls.", "acmx2 --help"}, {"-p <path>, --path <path>", "Set assets root directory (shaders, data files, defaults).", "acmx2 --path ./data"}, {"-r <WxH>, --resolution <WxH>", "Set output/window resolution (for display and recording).", "acmx2 --resolution 1920x1080"}, {"-N, --fullscreen", "Start in fullscreen mode (Escape to exit fullscreen).", "acmx2 --fullscreen"}, {"--silent", "Run headless (no preview window). Intended for file-to-file rendering.", "acmx2 -i in.mp4 -o out.mp4 --silent"}, {"--duration <seconds>", "Auto-stop recording/output after elapsed seconds.", "acmx2 -i in.mp4 -o out.mp4 --duration 30"}, {"--max-size <MB>", "Auto-stop when output file size exceeds MB.", "acmx2 -i in.mp4 -o out.mp4 --max-size 500.0"}});
+        printSection(out, c, "General", {{"-v, -h, --help, --version", "Show this information screen and keyboard controls.", "acmx2 --help"}, {"-p <path>, --path <path>", "Set assets root directory (shaders, data files, defaults).", "acmx2 --path ./data"}, {"-r <WxH>, --resolution <WxH>", "Set output/window resolution (for display and recording).", "acmx2 --resolution 1920x1080"}, {"-N, --fullscreen", "Start in fullscreen mode (Escape to exit fullscreen).", "acmx2 --fullscreen"}, {"--silent", "Run headless (no preview window). Intended for file-to-file rendering.", "acmx2 -i in.mp4 -o out.mp4 --silent"}, {"--duration <seconds>", "Auto-stop recording/output after elapsed seconds.", "acmx2 -i in.mp4 -o out.mp4 --duration 30"}, {"--max-size <MB>", "Auto-stop when output file size exceeds MB.", "acmx2 -i in.mp4 -o out.mp4 --max-size 500.0"}});
 
         printSection(out, c, "Input Source", {{"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"}, {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"}, {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"}, {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"}, {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"}, {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}});
 
-        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"-h <index>, --shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}});
+        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"--shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}});
 
         printSection(out, c, "Texture Array Cache", {{"--texture-cache-array", "Store frame history in one sampler2DArray named history.", "acmx2 --texture-cache-array"}});
 
@@ -12359,11 +12359,17 @@ namespace {
     }
 } // namespace
 
-/// @brief Print program version, author, arguments, and keyboard controls.
-void printAbout() {
-    mx::system_out << PROGRAM_NAME << ": " << VERSION_INFO << "\n";
+/// @brief Print the program name, software brand, and project URL once.
+void printBranding() {
+    mx::system_out << PROGRAM_NAME << " " << VERSION_INFO << "\n";
     mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
     mx::system_out << "https://lostsidedead.biz\n";
+}
+
+/// @brief Print program information, arguments, and keyboard controls.
+void printAbout(bool include_branding = true) {
+    if (include_branding)
+        printBranding();
     printDetailedArguments(mx::system_out);
     printKeyboardControls(mx::system_out);
 }
@@ -12382,6 +12388,7 @@ int main(int argc, char **argv) {
     fflush(stdout);
     Argz<std::string> parser(argc, argv);
     parser.addOptionSingle('v', "Display help message")
+        .addOptionSingle('h', "Display help message")
         .addOptionSingleValue('p', "assets path")
         .addOptionDoubleValue('P', "path", "assets path")
         .addOptionSingleValue('r', "Resolution WidthxHeight")
@@ -12398,7 +12405,6 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue('S', "shaders", "Shader Library Index File")
         .addOptionSingleValue('f', "Fragment Shader")
         .addOptionDoubleValue('F', "fragment", "Fragment Shader")
-        .addOptionSingleValue('h', "Shader Index")
         .addOptionDoubleValue('H', "shader", "Shader Index")
         .addOptionSingleValue('e', "Save Prefix")
         .addOptionDoubleValue('E', "prefix", "Save Prefix")
@@ -12425,6 +12431,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(704, "edge", "Edge detection model (Dexined .onnx) -- replace frame with edge map")
         .addOptionDoubleValue(705, "onnx", "Generic ONNX model YAML config -- replace frame with DNN output")
         .addOptionDouble(261, "help", "print help info")
+        .addOptionDouble(262, "version", "print version and help info")
         .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
         .addOptionDoubleValue(401, "gpu-buffer", "GPU frame buffer size (4-32)")
         .addOptionDouble(402, "list-filters", "List available GPU filters")
@@ -12522,9 +12529,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    mx::system_out << PROGRAM_NAME << " " << VERSION_INFO << "\n";
-    mx::system_out << "(C) 2026 " << VERSION_AUTHOR << "\n";
-    mx::system_out << "https://lostsidedead.biz\n";
+    printBranding();
 
     Argument<std::string> arg;
     MXArguments args;
@@ -12533,8 +12538,10 @@ int main(int argc, char **argv) {
         while ((value = parser.proc(arg)) != -1) {
             switch (value) {
             case 'v':
+            case 'h':
             case 261:
-                printAbout();
+            case 262:
+                printAbout(false);
                 exit(EXIT_SUCCESS);
                 break;
             case 'p':
@@ -12589,7 +12596,6 @@ int main(int argc, char **argv) {
                 args.mode = 0;
                 args.fragment = arg.arg_value;
                 break;
-            case 'h':
             case 'H':
                 args.shader_index = atoi(arg.arg_value.c_str());
                 break;

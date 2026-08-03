@@ -44,8 +44,14 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 - **Lossless HEVC/NVENC workflows** — select `hevc_nvenc`, NVENC `p1`–`p7` presets, `lossless` tuning, and additional FFmpeg-style options passed through MXWrite
 - **Silent mode** — headless video processing without a window
 - **HDR video pipeline** — detects BT.2020 HDR sources, processes them in linear BT.2020, and re-encodes them as HDR HEVC Main10
-- **Shader cache** — precompile shader binaries for fast startup
+- **Shader cache** — precompile shader binaries for fast startup on supported
+  OpenGL drivers; source compilation is always used on macOS
 - **Live shader coding** — save a shader in the Qt editor while ACMX2 is running to recompile and reload only that shader without restarting the session
+- **Shader code editor** — line numbers, GLSL highlighting, bracket matching,
+  automatic indentation/pairing, line operations, search/replace, persistent
+  font and word-wrap settings, and direct navigation to source locations
+- **Find in Files** — recursively search shader sources with regular expressions
+  and open any result directly at its matching line and column
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
 - **MIDI Map Tool** — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 
@@ -58,7 +64,37 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 - Replacement programs are compiled and initialized before they are installed. A compile, link, or uniform-setup failure leaves the currently working shader active.
 - Full OpenGL compiler and linker diagnostics are written to the interface log, making edit-save-preview iteration possible without restarting the render session.
 - Live reload works with both full-library launches and the interface's single-shader launch mode. Canonical path and library-index checks prevent an editor save from replacing the wrong program.
-- Saving still marks the binary shader cache stale so a later launch can rebuild the persistent cache from the updated source.
+- On supported non-macOS platforms, saving also marks the binary shader cache stale so a later launch can rebuild the persistent cache from the updated source.
+
+### macOS Shader Authoring and Editor Workflow
+
+- Persistent shader binaries are disabled on macOS because Apple's
+  Metal-backed OpenGL implementation does not support `glProgramBinary`.
+  **Run from Cache** is disabled, **Rebuild Shader Cache** and the compile-health
+  column are hidden, and Run Selected/Run All compile shader source each time.
+- Saving from the editor on macOS sends only the live-reload request; it does
+  not try to write or invalidate an unsupported binary cache.
+- Editor File/Edit/View menus remain attached to each editor window instead of
+  moving into the macOS global menu bar, matching the main interface behavior.
+- The editor now includes line numbers, current line/column status, current-line
+  and matching-bracket highlighting, auto-indent and paired delimiters,
+  duplicate/move/comment/indent line tools, find/replace, Go to Line, adjustable
+  font size, and persistent word wrap.
+- **List > Find in Files** (`Ctrl+Shift+F`) searches `.glsl`, `.frag`, and `.vert`
+  files recursively with a regular expression and optional case sensitivity.
+  Results show file, line, match, and source text in a continuous uniform list;
+  activating a result opens the editor with the exact match selected.
+
+### Shader Library Manifest Updates
+
+- ACMX2 and the interface prefer `library.json` whenever it exists and retain
+  `index.txt` as a compatibility fallback.
+- Loading a text-only library in the interface automatically creates
+  `library.json` without modifying the original `index.txt`.
+- Cache building, live reload, sorting, adding/removing shaders, and Remove
+  Broken all operate on the selected manifest.
+- `convert-index-to-json.pl` provides the same conversion as a standalone,
+  core-Perl command-line utility with overwrite protection.
 
 ### Encoding and Output
 
@@ -162,6 +198,26 @@ Recent Qt interface updates focus on session usability and repeatability:
 - The **Settings** dialog also includes an **Encoding Quality** section for software/NVENC presets, tune, CRF, codec selection (`auto`, `software`, `nvenc`, `h264_nvenc`, or `hevc_nvenc`), extra FFmpeg-style encoder parameters, and realtime low-latency encoding.
 - Encoding controls map directly to the CLI flags `--encode-preset`, `--encode-tune`, `--encode-crf`, `--encode-codec`, `--encode-params`, and `--encode-realtime`.
 
+### Shader Editor and Find in Files
+
+The shader editor provides line numbers, GLSL syntax highlighting, current-line
+and matching-bracket highlighting, and a line/column status display. It
+automatically indents new blocks, inserts matching brackets and quotes, and
+supports smart Home, four-space Tab/Shift+Tab indentation, duplicate line
+(`Ctrl+D`), toggle comment (`Ctrl+/`), and move line (`Alt+Up`/`Alt+Down`).
+
+The Edit and View menus also provide undo/redo, find next/previous, replace, Go
+to Line (`Ctrl+G`), selection indentation, font zoom, and persistent word-wrap,
+font-size, and window-geometry settings. On macOS these menus are embedded in each
+editor window rather than being placed in the system-wide menu bar.
+
+Use **List > Find in Files** (`Ctrl+Shift+F`) from the main interface to search
+the active shader directory recursively. The query is a Qt regular expression,
+with optional case sensitivity, and searches `.glsl`, `.frag`, and `.vert`
+files. Each result includes its relative file, line number, matched text, and
+source line. Double-click a result or choose **Open Result** to open that shader
+at the exact line and column with the match selected.
+
 ### Live Shader Coding from the Qt Editor
 
 Launch ACMX2 from the interface, open a shader from the library, edit it, and
@@ -196,9 +252,22 @@ The JSON format is:
 }
 ```
 
-New libraries can choose either format in the interface. Sorting, adding or
-removing shaders, live reload, cache builds, and Remove Broken all operate on
-the selected manifest.
+The New Shader Library dialog can create `library.json` directly. If a library
+contains only `index.txt`, its first interface load creates the JSON manifest
+automatically. Sorting, adding or removing shaders, live reload, cache builds,
+and Remove Broken all operate on the selected manifest.
+
+Legacy libraries can also be converted from the command line:
+
+```bash
+./convert-index-to-json.pl ./shaders
+./convert-index-to-json.pl ./shaders/index.txt
+```
+
+The converter accepts either a library directory or an `index.txt` path. It
+keeps the original text file and refuses to replace an existing `library.json`
+unless `--force` is supplied. Use `--output <file>` to choose another output
+path. The script depends only on Perl core modules, including `JSON::PP`.
 
 ---
 
@@ -208,7 +277,12 @@ the selected manifest.
 
 ACMX2 builds and runs on macOS using OpenGL 4.1 backed by Metal. **CUDA is not available on macOS**, so the engine automatically builds with `-DWITH_CUDA=OFF`. Shader-based effects work fully; only the CUDA GPU-filter pipeline is omitted.
 
-The Apple Metal-backed OpenGL 4.1 driver does not support `glProgramBinary`, so **the shader binary cache is disabled by default at runtime** on macOS.
+The Apple Metal-backed OpenGL 4.1 driver does not support `glProgramBinary`, so
+**the shader binary cache is disabled at runtime** on macOS. The interface
+disables **Run from Cache**, hides **Rebuild Shader Cache** and the compile-health
+column, and passes `--no-cache` for normal launches so shaders compile from
+source on every run. Live editor saves remain supported and request an in-place
+source recompile without attempting to save a binary cache.
 
 **Quick start** (one command from an empty directory):
 
@@ -419,7 +493,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 
 **Silent (headless) batch processing:**
 ```bash
-./acmx2 -p ./data -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
+./acmx2 -p ./data -i input.mp4 -s ./shaders --shader 5 --silent -o output.mp4
 ```
 
 **Silent HDR batch processing:**
@@ -450,7 +524,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 
 | Short | Long | Value | Description |
 |-------|------|-------|-------------|
-| `-v` | `--help` | | Display help message and exit |
+| `-v`, `-h` | `--help`, `--version` | | Display the full program information, arguments, and keyboard controls, then exit |
 | `-p` | `--path` | `<dir>` | Assets path |
 | `-r` | `--resolution` | `WxH` | Window resolution (e.g. `1920x1080`) |
 | `-d` | `--device` | `<index>` | Camera device index |
@@ -480,7 +554,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 |-------|------|-------|-------------|
 | `-s` | `--shaders` | `<directory>` | Shader library directory (`library.json` preferred, `index.txt` fallback) |
 | `-f` | `--fragment` | `<file>` | Single fragment shader file |
-| `-h` | `--shader` | `<index>` | Initial shader index in library |
+| | `--shader` | `<index>` | Initial shader index in library |
 | | `--shader-pass` | `<indices>` | Shader pass indices (comma-separated, e.g. `0,1,2`) |
 | | `--playlist` | `<file>` | Shader playlist text file (one shader name per line) |
 | | `--build` | `<path>` | Build shader cache for specified library path and exit |
@@ -560,7 +634,7 @@ That gives you an end-to-end HDR round-trip: HDR in, effects in linear BT.2020, 
 Typical use:
 
 ```bash
-./acmx2 -p ./data -i input.mp4 -s ./shaders -h 12 --silent -o output.mp4
+./acmx2 -p ./data -i input.mp4 -s ./shaders --shader 12 --silent -o output.mp4
 ```
 
 HDR files use the same flag set and automatically stay in HDR:

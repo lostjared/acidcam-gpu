@@ -83,9 +83,11 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Silent mode</b> — headless video processing without a window
 - <b>HDR video pipeline</b> — detects BT.2020 PQ/HLG sources, processes them in linear BT.2020, and writes HDR HEVC Main10 output
 - <b>HLG to HDR10 conversion path</b> — improves interoperability across HDR source and export workflows
-- <b>Shader cache</b> — precompile shader binaries for fast startup
+- <b>Shader cache</b> — precompile shader binaries for fast startup on supported OpenGL drivers; source compilation is always used on macOS
 - <b>Live shader coding</b> — saving from the Qt editor signals ACMX2 through shared memory to recompile and hot-swap only the edited shader; failures keep the previous program active and report the driver error in the interface log
 - <b>Shader workflow tools</b> — live reload and persistent cache-rebuild paths are integrated for faster iteration during shader authoring
+- <b>Shader code editor</b> — line numbers, GLSL highlighting, bracket matching, automatic indentation/pairing, line operations, search/replace, and persistent display preferences
+- <b>Find in Files</b> — recursively search shader source with regular expressions and open a result directly at its matching line and column
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
 - <b>Persistent Qt session dialogs</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened, with fresh defaults of <tt>1280x720</tt> camera capture and <tt>Default</tt> display resolution
 - <b>Metadata viewer</b> — inspect media metadata directly from the Qt interface
@@ -135,8 +137,41 @@ for building without CUDA on systems that lack an NVIDIA GPU.
   stderr and displayed in the Qt interface log.
 - The workflow supports full-library and single-fragment launches. Correct the
   source and save again to retry without restarting ACMX2.
-- A successful editor save also marks the persistent shader cache stale so a
-  future launch can rebuild its binary cache from the new source.
+- On supported non-macOS platforms, a successful editor save also marks the
+  persistent shader cache stale so a future launch can rebuild its binary
+  cache from the new source.
+
+<b>macOS shader authoring and editor workflow</b>
+
+- Persistent shader binaries are disabled on macOS because Apple's
+  Metal-backed OpenGL implementation does not support
+  <tt>glProgramBinary</tt>. <b>Run from Cache</b> is disabled,
+  <b>Rebuild Shader Cache</b> and the compile-health column are hidden, and Run
+  Selected/Run All compile source each time.
+- Editor saves on macOS send the live-reload request without trying to write or
+  invalidate an unsupported binary cache.
+- File/Edit/View menus remain attached to each editor window on macOS instead
+  of moving into the system-wide menu bar.
+- The editor now provides line numbers, line/column status, current-line and
+  matching-bracket highlighting, automatic indentation and delimiter pairing,
+  line duplication/movement/comments, search/replace, Go to Line, font zoom,
+  and persistent word wrap.
+- <b>List &gt; Find in Files</b> (<tt>Ctrl+Shift+F</tt>) recursively searches
+  <tt>.glsl</tt>, <tt>.frag</tt>, and <tt>.vert</tt> files using a regular
+  expression and optional case sensitivity. Activating a result opens the
+  editor at the exact match. Results use a uniform continuous row background.
+
+<b>Shader-library manifests</b>
+
+- ACMX2 and the Qt interface prefer <tt>library.json</tt> and use
+  <tt>index.txt</tt> only when JSON is absent.
+- Loading a text-only library in the interface creates an equivalent
+  <tt>library.json</tt> without changing the original <tt>index.txt</tt>.
+- Cache building, live reload, list editing, and Remove Broken all use the
+  selected manifest.
+- <tt>convert-index-to-json.pl</tt> offers standalone conversion using only
+  core Perl modules and refuses to overwrite an existing JSON manifest unless
+  <tt>--force</tt> is supplied.
 
 <b>Lossless HEVC and custom FFmpeg parameters</b>
 
@@ -266,6 +301,32 @@ re-enumeration when that FPS is supported by the selected device.
 The Qt editor flow also includes safer close behavior: if modified shader content is open,
 closing via Escape or window close prompts to save changes before exiting the editor.
 
+@subsection ui_shader_editor Shader Editor and Find in Files
+
+The built-in shader editor includes line numbers, GLSL syntax highlighting,
+current-line and matching-bracket highlighting, and a line/column status
+display. New lines retain indentation and add one level after an opening brace;
+brackets and quotes are paired automatically. Tab and Shift+Tab apply
+four-space indentation, while smart Home moves between the first non-whitespace
+column and the beginning of the line.
+
+The Edit menu includes undo/redo, find next/previous, replace, Go to Line
+(<tt>Ctrl+G</tt>), duplicate line (<tt>Ctrl+D</tt>), toggle comment
+(<tt>Ctrl+/</tt>), move line (<tt>Alt+Up</tt>/<tt>Alt+Down</tt>), and selection
+indentation. The View menu controls font zoom and persistent word wrap. Font
+size and editor geometry are also restored through <tt>QSettings</tt>. On macOS,
+the File/Edit/View menu bar stays inside each code-editor window rather than
+moving into the global system menu bar.
+
+Choose <b>List &gt; Find in Files</b> or press <tt>Ctrl+Shift+F</tt> in the main
+interface to search the active shader directory recursively. The dialog accepts
+a regular expression and an optional case-sensitive mode, searches
+<tt>.glsl</tt>, <tt>.frag</tt>, and <tt>.vert</tt> files, and reports relative
+file name, line number, matched text, and the source line. Double-clicking a
+result or choosing <b>Open Result</b> reuses an existing editor when possible
+and selects the exact match at its line and column. The results tree uses a
+uniform row background without alternating separator blocks.
+
 @subsection ui_live_shader_coding Live Shader Coding from the Qt Editor
 
 Launch a full shader library or a single shader from the Qt interface, open a
@@ -285,6 +346,51 @@ valid program. The GPU driver's full diagnostic string is written to the child
 process error stream, which the Qt launcher displays in its log. Editing and
 saving again sends another request, so shader authors can iterate continuously
 without closing the preview or losing the current session state.
+
+On macOS the same live-reload path remains available even though persistent
+program binaries are unsupported. Saving publishes the source reload request
+without attempting to write or invalidate a shader cache.
+
+@subsection ui_shader_manifests Shader Library Manifests
+
+Shader-library options point to a directory. ACMX2 and the Qt interface select
+<tt>library.json</tt> when it exists and fall back to <tt>index.txt</tt> only when
+the JSON manifest is absent. A malformed JSON manifest is reported as an error
+rather than silently loading an older text list.
+
+The supported JSON structure is:
+
+@code{.json}
+{
+  "version": 1,
+  "shaders": [
+    "plasma.glsl",
+    "feedback_cache.glsl"
+  ]
+}
+@endcode
+
+The New Shader Library dialog can create this format directly. When the
+interface opens an older library that contains only <tt>index.txt</tt>, it
+automatically writes an equivalent <tt>library.json</tt>, skips blank lines, and
+leaves the original text file unchanged. The newly generated JSON manifest is
+used immediately. If creation fails, the interface logs the error and continues
+loading the legacy text manifest.
+
+Sorting, adding or removing shaders, live reload, shader-cache builds, and
+Remove Broken operate on the selected manifest. The standalone converter offers
+the same migration without launching the interface:
+
+@code{.sh}
+./convert-index-to-json.pl ./shaders
+./convert-index-to-json.pl ./shaders/index.txt
+@endcode
+
+The converter preserves shader order and duplicate entries, trims surrounding
+whitespace, skips blank lines, and writes UTF-8 JSON using Perl's core
+<tt>JSON::PP</tt> module. It refuses to overwrite an existing
+<tt>library.json</tt> unless <tt>--force</tt> is used; <tt>--output &lt;file&gt;</tt>
+selects a different destination.
 
 @section install Installation & Prerequisites
 
@@ -516,8 +622,13 @@ available on macOS</b>, so the engine automatically builds with
 GPU-filter pipeline is omitted.
 
 The Apple Metal-backed OpenGL 4.1 driver does not support <tt>glProgramBinary</tt>,
-so <b>the shader binary cache is disabled by default at runtime</b> on macOS. The
-Qt6 interface also disables cache-related UI options on Apple builds.
+so <b>the shader binary cache is disabled at runtime</b> on macOS. The Qt6
+interface disables <b>Run from Cache</b>, hides <b>Rebuild Shader Cache</b> and
+the compile-health column, and supplies <tt>--no-cache</tt> for normal launches.
+Run Selected and Run All therefore compile source on each run instead of trying
+to load or rebuild an unsupported cache. Live coding still works: editor saves
+request an in-place source recompile without attempting to save binary cache
+data.
 
 <b>Quick start</b> (one command from an empty directory):
 
@@ -692,7 +803,7 @@ appears in the dock while the application is running.
 
 <b>Silent (headless) batch processing:</b>
 @code{.sh}
-./acmx2 -p ./data -i input.mp4 -s ./shaders -h 5 --silent -o output.mp4
+./acmx2 -p ./data -i input.mp4 -s ./shaders --shader 5 --silent -o output.mp4
 @endcode
 
 <b>Silent HDR batch processing:</b>
@@ -720,7 +831,7 @@ appears in the dock while the application is running.
 @subsection cli_general General
 | Short | Long           | Value       | Description |
 |-------|----------------|-------------|-------------|
-| `-v`  | `--help`       |             | Display help message and exit |
+| `-v`, `-h` | `--help`, `--version` |             | Display full program information, arguments, and keyboard controls, then exit |
 | `-p`  | `--path`       | `<dir>`     | Assets path |
 | `-r`  | `--resolution` | `WxH`       | Window resolution (e.g. `1920x1080`) |
 | `-d`  | `--device`     | `<index>`   | Camera device index |
@@ -747,9 +858,9 @@ appears in the dock while the application is running.
 @subsection cli_shader Shader Options
 | Short | Long             | Value       | Description |
 |-------|------------------|-------------|-------------|
-| `-s`  | `--shaders`      | `<file>`    | Shader library index file |
+| `-s`  | `--shaders`      | `<directory>` | Shader library directory (`library.json` preferred, `index.txt` fallback) |
 | `-f`  | `--fragment`     | `<file>`    | Single fragment shader file |
-| `-h`  | `--shader`       | `<index>`   | Initial shader index in library |
+|       | `--shader`       | `<index>`   | Initial shader index in library |
 |       | `--shader-pass`  | `<indices>` | Shader pass indices (comma-separated) |
 |       | `--playlist`     | `<file>`    | Shader playlist text file |
 |       | `--autopilot-frames` | `<N>`   | Auto-switch to a random playlist node every N rendered frames (minimum 4) |
@@ -1146,7 +1257,7 @@ Both CUDA kernels and GLSL shaders execute on the <b>same physical hardware</b> 
 - <b>Shader pass ordering:</b> <tt>ACMX2/interface/shaderpass.cpp</tt> — explicit multi-pass chain, output of pass N feeds into pass N+1
 - <b>Audio integration:</b> <tt>ACMX2/audio.cpp/.hpp</tt> — RtAudio amplitude extraction, reactive parameter modulation
 - <b>Shader cache:</b> <tt>ACMX2/program.cpp/.hpp</tt> — binary cache with source+driver fingerprinting to skip recompile
-- <b>3D geometry:</b> <tt>ACMX2/models/*.mxmod</tt> — MXMOD-format geometry used in scene-influenced render stages
+- <b>3D geometry:</b> <tt>ACMX2/models/\*.mxmod</tt> — MXMOD-format geometry used in scene-influenced render stages
 - <b>Build:</b> <tt>ACMX2/CMakeLists.txt</tt> and <tt>ACMX2/interface/CMakeLists.txt</tt> — validates CUDA, OpenCV CUDA headers, FFmpeg, MXWrite, Qt6, RtAudio at configure time
 
 @subsubsection explained_how_the_qt_interface_works How the Qt Interface Works
@@ -1671,7 +1782,7 @@ The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers 
 - <tt>ACMX2/CMakeLists.txt</tt>  dependency checks + executable wiring
 - <tt>ACMX2/acmx.cpp</tt>  capture, render, controls, runtime loop
 - <tt>ACMX2/program.cpp/.hpp</tt>  shader program loading + binary cache
-- <tt>ACMX2/data/*.glsl</tt>  base passthrough/framebuffer shaders
+- <tt>ACMX2/data/\*.glsl</tt>  base passthrough/framebuffer shaders
 
 @subsubsection explained_acmx2_media_audio_3d ACMX2 Media + Audio + 3D
 
@@ -1679,15 +1790,15 @@ The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers 
 - <tt>ACMX2/audio.cpp/.hpp</tt>  RtAudio amplitude/reactive hooks
 - <tt>ACMX2/file_audio.cpp/.hpp</tt>  FFmpeg-based file audio decoder for audio reactivity from media files
 - <tt>ACMX2/audio_transfer.cpp</tt>  audio transfer helper
-- <tt>ACMX2/models/*.mxmod</tt>  MXMOD geometry library
-- <tt>ACMX2/examples/*.glsl</tt>  sample shader library/index
+- <tt>ACMX2/models/\*.mxmod</tt>  MXMOD geometry library
+- <tt>ACMX2/examples/\*.glsl</tt>  sample shader library/index
 
 @subsubsection explained_acmx2_interface_tools ACMX2 Interface + Tools
 
 
-- <tt>ACMX2/interface/*</tt>  Qt launcher/editor/dialog workflow
-- <tt>ACMX2/interface/midi-map/*</tt>  standalone MIDI controller mapping tool
-- <tt>ACMX2/shader_generator/*</tt>  AI-assisted shader generation utility
+- <tt>ACMX2/interface/\*</tt>  Qt launcher/editor/dialog workflow
+- <tt>ACMX2/interface/midi-map/\*</tt>  standalone MIDI controller mapping tool
+- <tt>ACMX2/shader_generator/\*</tt>  AI-assisted shader generation utility
 - <tt>ACMX2/shader.packs/</tt>  shader pack metadata
 - <tt>ACMX2/macos/</tt>  platform-specific notes
 
@@ -1704,7 +1815,7 @@ The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers 
 
 - <tt>podman/Containerfile.arch</tt>  Build containerized runtime image
 - <tt>podman/run-acmx2-arch.sh</tt>  GPU/camera/audio passthrough run script
-- <tt>acidcam-gpu/scripts/*</tt>  OpenCV CUDA and environment helper scripts
+- <tt>acidcam-gpu/scripts/\*</tt>  OpenCV CUDA and environment helper scripts
 
 @subsubsection explained_expanded_meaning_of_each_code_map_item Expanded Meaning of Each Code Map Item
 
@@ -1712,15 +1823,15 @@ The project is developed on <b>Bazzite Linux</b> using <b>Arch Linux containers 
 - <b><tt>ACMX2/CMakeLists.txt</tt>:</b> hard-gates feature availability at configure time; this file decides whether your build can legally run all advertised runtime paths.
 - <b><tt>ACMX2/acmx.cpp</tt>:</b> the largest operational core; input parsing, frame lifecycle, cache management, GL/CUDA interop, and output/control behavior converge here.
 - <b><tt>ACMX2/program.cpp/.hpp</tt>:</b> shader binary cache layer uses source+driver fingerprinting to skip repeated compile/link cycles and reduce startup latency.
-- <b><tt>ACMX2/data/*.glsl</tt>:</b> baseline vertex/fragment units that form base render stages and buffer transfer steps.
+- <b><tt>ACMX2/data/\*.glsl</tt>:</b> baseline vertex/fragment units that form base render stages and buffer transfer steps.
 - <b><tt>ACMX2/audio.cpp/.hpp</tt>:</b> real-time amplitude extraction from audio input; callback computes average magnitude used for reactive controls.
 - <b><tt>ACMX2/file_audio.cpp/.hpp</tt>:</b> alternative audio source that decodes a media file (WAV, MP3, FLAC, AAC, OGG, or a video container) via FFmpeg into a mono float buffer at 44 100 Hz.  Each video frame, <tt>file_audio_process_frame()</tt> advances through the buffer, computes amplitude / peak / RMS / 3-band energy / dominant frequency, and pushes samples to the FFT ring buffer — driving the same shader uniforms as the live microphone path.  When recording, the audio file track is muxed into the output MP4 via <tt>runFileAudioMuxSync()</tt>.
 - <b><tt>ACMX2/audio_transfer.cpp</tt>:</b> utility path for audio transfer/record style workflows and supporting media synchronization tasks.
-- <b><tt>ACMX2/models/*.mxmod</tt>:</b> model assets for 3D or scene-influenced visuals integrated with runtime rendering.
-- <b><tt>ACMX2/examples/*.glsl</tt>:</b> curated shader samples used as practical templates and quick-start visual blocks.
-- <b><tt>ACMX2/interface/*</tt>:</b> user-facing orchestration UI for session setup, process launch, list reordering, and settings persistence. The playlist dialog uses a tree widget with named nodes; each node groups shaders that load into the multi-pass pipeline as a unit.
-- <b><tt>ACMX2/interface/midi-map/*</tt>:</b> standalone Qt6 tool for creating MIDI controller mapping configurations (<tt>.midi_cfg</tt> files). Maps MIDI CC/note messages to ACMX2 keyboard actions (shader navigation, time control, 3D camera, etc.).
-- <b><tt>ACMX2/shader_generator/*</tt>:</b> assistant tooling that helps generate shader ideas/workflows while maintaining runtime-compatible output.
+- <b><tt>ACMX2/models/\*.mxmod</tt>:</b> model assets for 3D or scene-influenced visuals integrated with runtime rendering.
+- <b><tt>ACMX2/examples/\*.glsl</tt>:</b> curated shader samples used as practical templates and quick-start visual blocks.
+- <b><tt>ACMX2/interface/\*</tt>:</b> user-facing orchestration UI for session setup, process launch, list reordering, and settings persistence. The playlist dialog uses a tree widget with named nodes; each node groups shaders that load into the multi-pass pipeline as a unit.
+- <b><tt>ACMX2/interface/midi-map/\*</tt>:</b> standalone Qt6 tool for creating MIDI controller mapping configurations (<tt>.midi_cfg</tt> files). Maps MIDI CC/note messages to ACMX2 keyboard actions (shader navigation, time control, 3D camera, etc.).
+- <b><tt>ACMX2/shader_generator/\*</tt>:</b> assistant tooling that helps generate shader ideas/workflows while maintaining runtime-compatible output.
 - <b><tt>ACMX2/shader.packs/</tt>:</b> pack metadata and organization layer for large shader collections.
 - <b><tt>acidcam-gpu/include/ac-gpu/ac-gpu.hpp</tt>:</b> ABI/API boundary between host app and CUDA engine.
 - <b><tt>acidcam-gpu/src/filters.cu</tt>:</b> massive effect implementation + dispatch switch; this file is the core visual transformation engine.
