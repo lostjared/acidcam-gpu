@@ -35,6 +35,36 @@ struct Frame_Data {
     std::chrono::steady_clock::time_point capture_time; ///< Capture time for timestamp-based encoding.
 };
 
+/** @brief A video encoder reported by the linked FFmpeg installation. */
+struct EncoderInfo {
+    std::string name;          ///< Exact libavcodec encoder name (for example, libx265).
+    std::string long_name;     ///< Human-readable encoder description.
+    std::string codec_name;    ///< Encoded format name (for example, hevc or av1).
+    std::string pixel_formats; ///< Comma-separated supported input pixel formats.
+    bool hardware = false;     ///< True for hardware or hybrid encoders.
+    bool experimental = false; ///< True when FFmpeg marks the encoder experimental.
+};
+
+/** @brief One configurable AVOption exposed by a video encoder. */
+struct EncoderOptionInfo {
+    std::string name;          ///< Option name accepted by EncodeOptions::ffmpeg_options.
+    std::string type;          ///< FFmpeg option type.
+    std::string default_value; ///< Encoder default, when it can be represented as text.
+    std::string minimum;       ///< Minimum value for numeric options.
+    std::string maximum;       ///< Maximum value for numeric options.
+    std::string choices;       ///< Comma-separated named values for enum-like options.
+    std::string help;          ///< Human-readable FFmpeg option description.
+};
+
+/** @return Video encoders registered by the linked FFmpeg libraries. */
+std::vector<EncoderInfo> available_video_encoders();
+
+/**
+ * @brief Return the options exposed by one registered video encoder.
+ * @param encoder_name Exact encoder name returned by available_video_encoders().
+ */
+std::vector<EncoderOptionInfo> video_encoder_options(std::string_view encoder_name);
+
 /**
  * @brief User-configurable video encoder quality options.
  *
@@ -46,8 +76,10 @@ struct Frame_Data {
  *         near-lossless; 23 is default for x264; 28 is typical "small file".
  *         For NVENC this is forwarded as `cq`.
  * codec:  "auto" (NVENC if available, else software), "software" (force software),
- *         "nvenc" (force resolution-selected NVENC), "h264_nvenc", or
- *         "hevc_nvenc". NVENC requests fall back to the matching software codec.
+ *         "nvenc" (force resolution-selected NVENC), or any exact video encoder
+ *         name registered by FFmpeg, such as "libx264", "libx265", "libsvtav1",
+ *         "h264_qsv", or "hevc_vaapi". NVENC policy requests fall back to the
+ *         matching software codec.
  * ffmpeg_options: Additional FFmpeg-style video encoder options, for example
  *         "-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p".
  *         These options override the corresponding built-in settings. MXWrite
@@ -61,7 +93,7 @@ struct EncodeOptions {
     std::string preset = "medium"; ///< Encoder preset name.
     std::string tune = "";         ///< Optional tuning mode.
     int crf = 18;                  ///< Constant Rate Factor.
-    std::string codec = "auto";    ///< Encoder selection policy or concrete NVENC codec.
+    std::string codec = "auto";    ///< Encoder selection policy or exact FFmpeg encoder name.
     std::string ffmpeg_options;    ///< Additional FFmpeg-style video encoder options.
     bool realtime = false;         ///< Enable low-latency settings.
     bool block_when_full = false;  ///< Block producer threads instead of dropping when the encoder queue is full.
@@ -208,8 +240,8 @@ class Writer {
     void close();
     /** @brief Check whether the writer is currently open. */
     bool is_open() const { return opened; }
-    /// @brief True when the active encoder backend is hardware (NVENC).
-    bool is_hardware_encode() const { return use_hw_encode; }
+    /// @brief True when FFmpeg identifies the active encoder as hardware or hybrid.
+    bool is_hardware_encode() const { return active_encoder_hardware; }
     /// @brief If true, producer threads block when the encoder queue is full
     /// instead of dropping frames. Intended for headless/batch transcoding
     /// where every input frame must reach the output. Default: false (drop).
@@ -252,6 +284,8 @@ class Writer {
     AVBufferRef *hw_device_ctx = nullptr;  ///< Hardware device context, when available.
     AVBufferRef *hw_frames_ctx = nullptr;  ///< Hardware frames pool, when available.
     bool use_hw_encode = false;            ///< True when hardware encoding is active.
+    bool active_encoder_hardware = false;  ///< True when the selected FFmpeg encoder is hardware-backed.
+    bool direct_cuda_upload = false;       ///< True when CUDA RGBA frames can be copied without conversion.
 #ifdef MXWRITE_HAS_CUDA_COPY
     // Dedicated stream so the producer's RGBA→hwframe copy does not serialise
     // with the renderer's default-stream work or with the encoder thread.
@@ -279,8 +313,9 @@ class Writer {
 
     /** @brief Shared implementation for open() and open_ts(). */
     bool openInternal(const std::string &filename, int w, int h, float fps, const EncodeOptions &opts, bool ts_mode);
-    /** @brief Initialize CUDA/NVENC resources when hardware encoding is selected. */
-    bool initHardwareEncoding();
+    /** @brief Initialize an FFmpeg hardware device and frame pool for an encoder. */
+    bool initHardwareEncoding(const AVCodec *codec, AVPixelFormat requested_format,
+                              bool prefer_cuda_rgba);
     /** @brief Start the background encoder thread. */
     void startEncoderThread();
     /** @brief Stop the background encoder thread. */

@@ -65,9 +65,21 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 * **Visual User Interface** Simple to use User interface
 * **Command line tool** Command line tool
 
-## Recent Development Updates (last few days)
+## Revisions
+
+### August 2026
 
 From the latest `acidcam-gpu` commits, current focus areas include:
+
+- **Library-defined custom uniforms**: JSON shader libraries can define up to 64 custom `float` uniforms with minimum, maximum, step, and current values. The Qt **List > Add Custom Uniforms...** dialog creates sliders for them, saves them in `library.json`, and sends value changes to a running ACMX2 process without restarting it.
+- **Automatic custom-uniform declarations**: when a shader references a manifest-defined custom uniform but does not declare it, ACMX2 injects the required `uniform float` declaration before compilation. Adding or removing a definition reloads the current shader; ordinary slider changes only update the live value.
+- **Incremental shader-cache refresh**: on platforms with persistent program-binary caching, startup validation recompiles only shader entries whose prepared source has changed, then writes those entries back to the existing cache instead of rebuilding the entire library.
+- **JSON shader-library manifests**: `library.json` is now preferred over `index.txt`, the Qt interface can migrate text-only libraries automatically, and `convert-index-to-json.pl` provides standalone conversion.
+- **Live shader coding**: saving in the Qt editor recompiles and replaces only the edited shader while ACMX2 keeps rendering; a failed compile leaves the previous valid program active and reports the full diagnostic.
+- **Editor themes and search**: the shader editor now includes 25 built-in color themes and **List > Find in Files** (`Ctrl+Shift+F`) for regular-expression searches across GLSL source.
+- **Lossless and custom encoder settings**: the Qt interface exposes H.264/HEVC NVENC modes, `p1`-`p7` presets, lossless tuning, and extra FFmpeg parameters through `--encode-params`.
+
+### July 2026
 
 - **Audio spectrum history array**: `--enable-audio-buffers <N>` allocates one runtime-sized `sampler1DArray` for rolling FFT history, limited only by the GPU's array-layer limit.
 - **Audio startup warmup envelope**: new `--audio-warm-rate <value>` option fades audio-reactive uniforms/spectrum from 0 to full strength at startup (default `0.5` 1/sec, about 2 seconds).
@@ -91,9 +103,9 @@ From the latest `acidcam-gpu` commits, current focus areas include:
 - **Output and recording path updates**: MKV output support, additional format handling, no-drop frame path work, and SDR TIFF/WebP snapshot behavior updates.
 - **Audio-file recording behavior hardening**: explicit opt-in handling for file-mode audio recording/mux behavior.
 
-## Latest Features – May 2026
+### May 2026
 
-### DNN & ONNX Model Expansion
+#### DNN & ONNX Model Expansion
 
 The ONNX/DNN system has been significantly expanded with new pre-trained models and improved inference performance:
 
@@ -110,7 +122,7 @@ The ONNX/DNN system has been significantly expanded with new pre-trained models 
   - Integration with the `--edge` and `--human` options for extensibility
 - **Settings Window Improvements**: Settings dialog now has increased height for better visibility of longer model lists.
 
-### Generate Mode & Randomization
+#### Generate Mode & Randomization
 
 New features for spontaneous creative generation:
 
@@ -118,19 +130,31 @@ New features for spontaneous creative generation:
 - **Random Generate in Interface**: The Qt interface now includes a "Generate" button that randomizes effect parameters and creates new artistic variations in real-time.
 - **Audio Animation Mux**: Embeds an animated audio track during file processing so you know the application is still processing and not frozen. Useful for long batch operations.
 
-### Output Format Enhancements
+#### Output Format Enhancements
 
 Expanded output format support for modern workflows:
 
 - **PNG Frame Writing**: Write individual frames as PNG files instead of video, enabling frame-by-frame processing and archival. Use `--png` in video mode to enable PNG frame output instead of video encoding.
 - **PNG Snapshot Mode**: Save snapshots and output directly as PNG images with lossless quality.
 
-### Color & Tone Adjustment
+#### Color & Tone Adjustment
 
 Fine-grained color control additions:
 
 - **Black Point Control** (`--black <point>`): Precise shadow crush and black level correction (default: 0.35)
 - **White Point Control** (`--white <point>`): Precise opacity saturation and white level adjustment (default: 0.75)
+
+### Version 2.12.0
+
+- Video-file decode prefers direct FFmpeg CUDA acceleration when available and retains automatic software/OpenCV fallback.
+- Startup reports the active decode and encode paths.
+- WAV capture and recorded-audio mux cleanup were hardened across file, image, and camera modes.
+
+### Version 2.7.0
+
+- Updated build scripts and Podman configuration.
+- Audio muxing uses the video duration for more precise synchronization.
+- Fixed audio-track copying for completed recordings.
 
 ## 📦 Installation & Environment
 This project is developed and tested on **Bazzite Linux** using **Arch Linux** containers via **Distrobox**, but it builds on any modern Linux distribution as well as macOS.
@@ -230,7 +254,9 @@ sudo bash build-script/install-deps-arch.sh
 | | `--encode-preset` | `<name>` | Encoder preset: `ultrafast`..`veryslow` |
 | | `--encode-tune` | `<name>` | Encoder tune: `none`, `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, `zerolatency` |
 | | `--encode-crf` | `<0-51>` | Encoder CRF quality override (default: `18`) |
-| | `--encode-codec` | `<mode>` | Encoder codec mode: `auto`, `software`, or `nvenc` |
+| | `--encode-codec` | `<name>` | Encoder policy (`auto`, `software`, `nvenc`) or exact installed FFmpeg encoder name |
+| | `--list-encoders` | | List video encoders available through MXWrite |
+| | `--list-encoder-options` | `<name>` | List FFmpeg AVOptions exposed by one encoder |
 | | `--encode-realtime` | | Enable low-latency realtime encoding flags |
 | | `--no-drop` | | Video-file processing: never drop frames; block when the encoder queue is full |
 | | `--use-watermark` | `<text>` | Embed a text watermark (upper-left) into recorded video |
@@ -453,7 +479,7 @@ look saturated/clipped on SDR monitors.
 
 ---
 
-## Recent Updates
+## Feature Guides
 
 ### Random Multipass Mode
 
@@ -482,9 +508,11 @@ Recording now exposes more detailed encoder controls in both the command line an
   - `--encode-preset <name>` — preset from `ultrafast` through `veryslow`
   - `--encode-tune <name>` — tune from `none`, `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, or `zerolatency`
   - `--encode-crf <0-51>` — explicit CRF quality control (default: `18`)
-  - `--encode-codec <auto|software|nvenc>` — choose automatic selection, software encode, or NVENC explicitly
+  - `--encode-codec <name>` — choose `auto`, `software`, `nvenc`, or an exact encoder such as `libx264`, `libx265`, `libsvtav1`, `h264_qsv`, or `hevc_vaapi`
+  - `--list-encoders` — show the video encoders registered by the FFmpeg libraries linked to MXWrite
+  - `--list-encoder-options <name>` — show option names, types, defaults, ranges, named values, and descriptions for one encoder
   - `--encode-realtime` — enable low-latency realtime encoding flags for live capture
-- **Qt Interface:** The **Settings** dialog now includes an **Encoding Quality** group with preset, tune, CRF, codec, and realtime controls.
+- **Qt Interface:** The **Settings** dialog discovers installed encoders, keeps `libx264` and `libx265` separate, labels hardware/software backends, shows supported pixel formats, and provides an option table. Double-clicking an option adds it to the extra FFmpeg parameters field.
 - **Persistence:** Encoding selections are stored and restored for later sessions.
 
 ### Qt Interface Session Persistence
@@ -530,22 +558,6 @@ The built-in GLSL shader editor has been significantly enhanced:
 - Toggle comment (Ctrl+/)
 - Smart Home key behavior
 - Block indent/unindent (Tab/Shift+Tab with selection)
-
-### Version 2.12.0
-
-- Video-file decode now prefers direct FFmpeg decode with CUDA hardware acceleration when available.
-- Automatic decode fallback path retained for software/OpenCV FFmpeg decode.
-- Startup pipeline status line added, reporting active decode and encode modes.
-- Recording path now starts WAV capture as soon as writer opens in file/image/camera modes.
-- Recorded-audio mux flow hardened (skip mux if recorded WAV is missing).
-- Temporary recorded WAV is automatically removed after successful mux.
-
-### Version 2.7.0
-
-- Version bump to 2.7.0
-- Updated build scripts and Podman container configuration
-- Audio muxing fix: uses video duration for precise audio/video sync
-- Audio track copy fix for finished recordings
 
 ### Shader Playlist Tree with Named Nodes
 
@@ -950,6 +962,64 @@ All fragment shaders receive the following uniforms automatically. Uniforms that
 | `iFrameRate` | `float` | Frame rate |
 | `iChannelTime[0..3]` | `float` | Per-channel time |
 | `iChannelResolution[0..3]` | `vec3` | Per-channel resolution |
+
+### Custom Uniforms
+
+Shader libraries that use `library.json` can define up to 64 custom `float`
+uniforms. Each definition supplies a range, a step size, and a persisted value:
+
+```json
+{
+  "version": 1,
+  "shaders": [
+    "plasma.glsl",
+    "feedback_cache.glsl"
+  ],
+  "custom_uniforms": {
+    "warp_amount": {
+      "minimum": 0.0,
+      "maximum": 2.0,
+      "step": 0.05,
+      "value": 0.75
+    },
+    "color_shift": {
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "step": 0.01,
+      "value": 0.0
+    }
+  }
+}
+```
+
+Open the library in the Qt interface, then choose **List > Add Custom
+Uniforms...**. The dialog can add or delete definitions and provides a slider
+and numeric control for every value. Slider changes are saved back to
+`library.json` and published immediately to a running ACMX2 process. Adding or
+removing a uniform also requests a live reload of the current shader.
+
+Use a custom value like any other GLSL `float` uniform:
+
+```glsl
+uniform float warp_amount;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / iResolution;
+    uv.x += sin(uv.y * 20.0 + time_f) * warp_amount * 0.05;
+    gl_FragColor = texture(samp, uv);
+}
+```
+
+The declaration is optional: if shader source references a configured custom
+uniform but does not declare it, ACMX2 injects `uniform float <name>;` before
+compilation. Explicit declarations remain useful when the shader is also run by
+other GLSL hosts.
+
+Names must be unique GLSL identifiers, must not begin with `gl_`, and must be
+shorter than 64 UTF-8 bytes. Ranges and values must be finite,
+`maximum > minimum`, and `step > 0`; loaded values outside the range are
+clamped. Custom uniforms require `library.json` and are not available from a
+legacy `index.txt` manifest.
 
 ### Texture Cache Uniforms (shaders with "cache" in the filename)
 

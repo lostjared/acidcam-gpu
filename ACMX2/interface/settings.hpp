@@ -128,6 +128,8 @@ class SettingsWindow : public QDialog {
     void browseGraphicsFile();
     void browseModelFile();
     void browseOnnxModelFile();
+    /// @brief Display the AVOptions reported by the selected FFmpeg encoder.
+    void showEncoderOptions();
     /// @brief Probe the currently selected input video file with ffprobe and
     ///        update HDR-related UI state (status label, HDR10 checkbox).
     void detectInputHdr();
@@ -144,6 +146,10 @@ class SettingsWindow : public QDialog {
     void saveUiState();
     void populateCameraDevices();
     void populateCudaDevices();
+    /// @brief Populate exact encoder names by querying the selected ACMX2 executable.
+    void populateVideoEncoders(const QString &savedEncoder);
+    /// @brief Refresh the selected encoder description and option-button state.
+    void updateEncoderDetails();
     /// @brief Query resolutions and FPS capabilities for one camera device.
     /// @param deviceIndex Camera device index to inspect.
     void enumerateDevice(int deviceIndex);
@@ -199,6 +205,8 @@ class SettingsWindow : public QDialog {
     QComboBox *encodeTuneComboBox = nullptr;
     QSpinBox *encodeCrfSpinBox = nullptr;
     QComboBox *encodeCodecComboBox = nullptr;
+    QLabel *encodeCodecDetailsLabel = nullptr;
+    QPushButton *encodeOptionsButton = nullptr;
     QLineEdit *encodeParametersLineEdit = nullptr;
     QCheckBox *encodeRealtimeCheckBox = nullptr;
     QCheckBox *encodeNoDropCheckBox = nullptr;

@@ -119,9 +119,31 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Audio animation mux</b> — embedded animated audio track during file processing to indicate progress
 - <b>Black/White Points adjustment</b> — <tt>--black &lt;point&gt;</tt> and <tt>--white &lt;point&gt;</tt> provide fine-grained control for shadow crush and opacity saturation thresholds
 
-@section recent_updates_2026 Recent Updates — July and August 2026
+@section revisions Revisions
 
 @subsection updates_2026_08 August 2026 (Month to Date)
+
+<b>Custom shader uniforms</b>
+
+- JSON shader libraries can define up to 64 custom <tt>float</tt> uniforms,
+  each with a minimum, maximum, step size, and persisted current value.
+- <b>List &gt; Add Custom Uniforms...</b> opens a modeless Qt dialog with a
+  slider and numeric control for every definition. Value changes are saved to
+  <tt>library.json</tt> and published live to the running ACMX2 process.
+- Adding or removing a definition requests a live reload of the current shader.
+  ACMX2 injects a missing <tt>uniform float</tt> declaration when shader source
+  references a configured name, while preserving explicit declarations.
+- Names are validated as unique GLSL identifiers, names beginning with
+  <tt>gl_</tt> are rejected, and all ranges and values are validated before the
+  manifest is accepted.
+
+<b>Incremental shader-cache validation</b>
+
+- Cache hashes now cover the prepared shader source, including injected cache
+  macros and custom-uniform declarations.
+- On platforms with persistent program-binary caching, startup validation
+  recompiles only stale shader entries and writes them back to the existing
+  cache. A single edited shader no longer forces a complete library rebuild.
 
 <b>Live shader coding</b>
 
@@ -272,8 +294,6 @@ non-default pixel format such as <tt>yuv444p</tt>.
 - Pcons build scripts, dependency setup helpers, and OpenCV 5 compatibility
   changes improved portable CUDA and non-CUDA builds.
 
-@section version_history Version History
-
 @subsection v2_20_0 Version 2.20.0 (May 2026)
 - <b>ONNX Model Suite:</b> Added Bubble, Cartoon, Color Splash, Pencil Sketch, Custom Style Transfer, and Edge Detection models
 - <b>FP16 Inferensce:</b> Optimized DNN inference with half-precision floating-point for improved performance
@@ -372,9 +392,31 @@ The supported JSON structure is:
   "shaders": [
     "plasma.glsl",
     "feedback_cache.glsl"
-  ]
+  ],
+  "custom_uniforms": {
+    "warp_amount": {
+      "minimum": 0.0,
+      "maximum": 2.0,
+      "step": 0.05,
+      "value": 0.75
+    },
+    "color_shift": {
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "step": 0.01,
+      "value": 0.0
+    }
+  }
 }
 @endcode
+
+The optional <tt>custom_uniforms</tt> object maps each GLSL name to a
+<tt>minimum</tt>, <tt>maximum</tt>, <tt>step</tt>, and current <tt>value</tt>.
+A library may define at most 64 custom uniforms. Names must be unique GLSL
+identifiers shorter than 64 UTF-8 bytes and must not begin with <tt>gl_</tt>.
+Numeric fields must be finite,
+<tt>maximum</tt> must be greater than <tt>minimum</tt>, and <tt>step</tt> must
+be positive. Values outside the configured range are clamped when loaded.
 
 The New Shader Library dialog can create this format directly. When the
 interface opens an older library that contains only <tt>index.txt</tt>, it
@@ -1052,6 +1094,38 @@ All fragment shaders receive the following uniforms automatically.
 | `iResolution`  | `vec2`      | Window resolution |
 | `iMouse`       | `vec4`      | Mouse position |
 | `iDate`        | `vec4`      | Current date/time |
+
+@subsection uniforms_custom Custom Uniforms
+
+Custom uniforms are library-wide <tt>float</tt> values defined by the
+<tt>custom_uniforms</tt> object in <tt>library.json</tt>. Choose
+<b>List &gt; Add Custom Uniforms...</b> in the Qt interface to create a name,
+minimum, maximum, and step size. The dialog provides both a slider and an exact
+numeric control, persists the current value, and sends changes to ACMX2 while
+it is running.
+
+Use a configured value directly in GLSL:
+
+@code{.glsl}
+uniform float warp_amount;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / iResolution;
+    uv.x += sin(uv.y * 20.0 + time_f) * warp_amount * 0.05;
+    gl_FragColor = texture(samp, uv);
+}
+@endcode
+
+The declaration is optional. When the prepared source references a configured
+name but has no matching <tt>uniform float</tt> declaration, ACMX2 inserts the
+declaration after the GLSL version line. Keeping an explicit declaration is
+recommended when the same shader is used with other GLSL hosts.
+
+Changing only a value uploads it on subsequent frames without recompiling.
+Adding or deleting a definition reloads the active shader so its uniform
+locations and injected declarations stay synchronized. Prepared-source hashes
+also include these declarations, allowing supported program-binary caches to
+update only affected shader entries on the next load.
 
 @subsection uniforms_audio Audio-Reactive Uniforms (AUDIO=ON + -w flag)
 | Uniform       | Type    | Description |

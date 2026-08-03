@@ -113,3 +113,27 @@ if (!writer.open("output_hardware_lossless.mkv", 1920, 1080, 60.0f, options)) {
 MXWrite uses the FFmpeg libraries directly, so the parameter string contains
 video encoder/muxer options only; input and output filenames are supplied to
 `Writer::open()`.
+
+`EncodeOptions::codec` also accepts any exact video encoder name registered by
+the linked FFmpeg libraries. For example, `libx264` and `libx265` remain
+separate selections, and codecs such as `libsvtav1`, `libvpx-vp9`, `prores_ks`,
+`ffv1`, `h264_qsv`, `hevc_vaapi`, and `h264_videotoolbox` can be selected when
+present. MXWrite automatically chooses a compatible system-memory pixel format;
+hardware-frame-only encoders use FFmpeg's device and frame-pool APIs.
+
+Applications can populate encoder controls without maintaining a hard-coded
+list:
+
+```cpp
+for (const EncoderInfo &encoder : available_video_encoders()) {
+    std::cout << encoder.name << " (" << encoder.codec_name << ")\n";
+}
+
+for (const EncoderOptionInfo &option : video_encoder_options("libx265")) {
+    std::cout << "-" << option.name << ": " << option.help << "\n";
+}
+```
+
+An encoder being registered does not guarantee that its hardware is usable.
+Device-backed encoders return a clear open error when the required GPU, driver,
+or operating-system device is unavailable.

@@ -1,11 +1,15 @@
 #include "settings.hpp"
 #include "custom_style.hpp"
 #include <QApplication>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QGridLayout>
 #include <QGuiApplication>
+#include <QHeaderView>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -16,7 +20,10 @@
 #include <QScrollArea>
 #include <QSet>
 #include <QSettings>
+#include <QTimer>
+#include <QTreeWidget>
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <vector>
 #ifdef _WIN32
@@ -488,6 +495,221 @@ void SettingsWindow::populateCudaDevices() {
     }
 }
 
+void SettingsWindow::populateVideoEncoders(const QString &savedEncoder) {
+    encodeCodecComboBox->clear();
+    encodeCodecComboBox->addItem("Automatic (NVENC, then software)", "auto");
+    encodeCodecComboBox->addItem("Automatic software H.264/H.265", "software");
+    encodeCodecComboBox->addItem("Automatic NVIDIA NVENC", "nvenc");
+
+    QProcess process;
+    process.start(executablePath, QStringList() << "--list-encoders");
+    const bool finished = process.waitForFinished(5000);
+    const QString output = QString::fromUtf8(process.readAllStandardOutput());
+    if (finished && process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0) {
+        const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+        for (const QString &line : lines) {
+            const QStringList fields = line.split('\t', Qt::KeepEmptyParts);
+            if (fields.size() < 7 || fields.at(0) != "ENCODER") {
+                continue;
+            }
+            const QString name = fields.at(1);
+            const QString longName = fields.at(2);
+            const QString codecName = fields.at(3);
+            const bool hardware = fields.at(4) == "hardware";
+            const QString stability = fields.at(5);
+            const QString pixelFormats = fields.at(6);
+            const QString backend = hardware ? "hardware" : "software";
+            const QString label = QString("%1 — %2 [%3]").arg(name, longName, backend);
+            encodeCodecComboBox->addItem(label, name);
+            const int index = encodeCodecComboBox->count() - 1;
+            encodeCodecComboBox->setItemData(index, longName, Qt::UserRole + 1);
+            encodeCodecComboBox->setItemData(index, codecName, Qt::UserRole + 2);
+            encodeCodecComboBox->setItemData(index, backend, Qt::UserRole + 3);
+            encodeCodecComboBox->setItemData(index, stability, Qt::UserRole + 4);
+            encodeCodecComboBox->setItemData(index, pixelFormats, Qt::UserRole + 5);
+            encodeCodecComboBox->setItemData(
+                index,
+                QString("%1\nCodec: %2; backend: %3; status: %4\nPixel formats: %5")
+                    .arg(longName, codecName, backend, stability,
+                         pixelFormats.isEmpty() ? QString("encoder-defined") : pixelFormats),
+                Qt::ToolTipRole);
+        }
+    }
+
+    // Keep useful exact choices visible even when the configured executable
+    // is temporarily unavailable. They will fail with a clear MXWrite error
+    // if the linked FFmpeg build does not provide them.
+    const QList<QPair<QString, QString>> fallbackEncoders = {
+        {"libx264 — software H.264", "libx264"},
+        {"libx265 — software H.265/HEVC", "libx265"},
+        {"h264_nvenc — NVIDIA H.264", "h264_nvenc"},
+        {"hevc_nvenc — NVIDIA H.265/HEVC", "hevc_nvenc"}};
+    for (const auto &encoder : fallbackEncoders) {
+        if (encodeCodecComboBox->findData(encoder.second) < 0) {
+            encodeCodecComboBox->addItem(encoder.first, encoder.second);
+        }
+    }
+
+    int savedIndex = encodeCodecComboBox->findData(savedEncoder);
+    if (savedIndex < 0 && !savedEncoder.isEmpty()) {
+        encodeCodecComboBox->addItem(savedEncoder + " — unavailable in current FFmpeg build",
+                                     savedEncoder);
+        savedIndex = encodeCodecComboBox->count() - 1;
+    }
+    encodeCodecComboBox->setCurrentIndex(savedIndex >= 0 ? savedIndex : 0);
+}
+
+void SettingsWindow::updateEncoderDetails() {
+    if (!encodeCodecComboBox || !encodeCodecDetailsLabel || !encodeOptionsButton) {
+        return;
+    }
+    const QString name = encodeCodecComboBox->currentData().toString();
+    const QString description = encodeCodecComboBox->currentData(Qt::UserRole + 1).toString();
+    const QString codecName = encodeCodecComboBox->currentData(Qt::UserRole + 2).toString();
+    const QString backend = encodeCodecComboBox->currentData(Qt::UserRole + 3).toString();
+    const QString pixelFormats = encodeCodecComboBox->currentData(Qt::UserRole + 5).toString();
+    const bool exactEncoder = name != "auto" && name != "software" && name != "nvenc";
+    encodeOptionsButton->setEnabled(exactEncoder);
+    if (!description.isEmpty()) {
+        encodeCodecDetailsLabel->setText(
+            QString("%1 | codec: %2 | %3 | pixel formats: %4")
+                .arg(description, codecName, backend,
+                     pixelFormats.isEmpty() ? QString("encoder-defined") : pixelFormats));
+    } else if (exactEncoder) {
+        encodeCodecDetailsLabel->setText("Exact FFmpeg encoder: " + name);
+    } else {
+        encodeCodecDetailsLabel->setText(
+            "Selection policy; MXWrite chooses the concrete H.264/H.265 encoder at startup.");
+    }
+}
+
+void SettingsWindow::showEncoderOptions() {
+    const QString encoderName = encodeCodecComboBox->currentData().toString();
+    if (encoderName.isEmpty() || encoderName == "auto" || encoderName == "software" ||
+        encoderName == "nvenc") {
+        return;
+    }
+
+    QProcess process;
+    process.start(executablePath,
+                  QStringList() << "--list-encoder-options" << encoderName);
+    if (!process.waitForFinished(5000) || process.exitStatus() != QProcess::NormalExit ||
+        process.exitCode() != 0) {
+        const QString error = QString::fromUtf8(process.readAllStandardError()).trimmed();
+        QMessageBox::warning(this, "Encoder Options",
+                             error.isEmpty() ? "Unable to query this encoder." : error);
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(encoderName + " Encoder Options");
+    dialog.resize(1000, 560);
+    dialog.setStyleSheet(styleSheet());
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *summary = new QLabel(
+        "Double-click an option to add it to Extra FFmpeg parameters, or use the shown "
+        "name manually as -option value.",
+        &dialog);
+    summary->setWordWrap(true);
+    layout->addWidget(summary);
+
+    auto *tree = new QTreeWidget(&dialog);
+    tree->setColumnCount(6);
+    tree->setHeaderLabels({"Option", "Type", "Default", "Range", "Named values", "Description"});
+    tree->setRootIsDecorated(false);
+    tree->setAlternatingRowColors(false);
+    tree->setUniformRowHeights(false);
+    tree->setWordWrap(true);
+    tree->setTextElideMode(Qt::ElideNone);
+    tree->setSelectionBehavior(QAbstractItemView::SelectRows);
+    tree->setStyleSheet(
+        "QTreeWidget::item { background-color: transparent; padding: 4px; }"
+        "QTreeWidget::item:selected { background-color: palette(highlight); }");
+    const QString output = QString::fromUtf8(process.readAllStandardOutput());
+    for (const QString &line : output.split('\n', Qt::SkipEmptyParts)) {
+        const QStringList fields = line.split('\t', Qt::KeepEmptyParts);
+        if (fields.size() < 8 || fields.at(0) != "OPTION") {
+            continue;
+        }
+        QString range;
+        if (!fields.at(4).isEmpty() || !fields.at(5).isEmpty()) {
+            range = fields.at(4) + " … " + fields.at(5);
+        }
+        new QTreeWidgetItem(tree, {"-" + fields.at(1), fields.at(2), fields.at(3),
+                                   range, fields.at(6), fields.at(7)});
+    }
+    if (tree->topLevelItemCount() == 0) {
+        new QTreeWidgetItem(tree, {"(No private video AVOptions reported)"});
+    }
+    tree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    tree->header()->setSectionResizeMode(3, QHeaderView::Interactive);
+    tree->header()->setSectionResizeMode(4, QHeaderView::Interactive);
+    tree->header()->setSectionResizeMode(5, QHeaderView::Stretch);
+    tree->setColumnWidth(3, 175);
+    tree->setColumnWidth(4, 250);
+
+    const auto updateRowHeights = [tree]() {
+        const QFontMetrics metrics(tree->font());
+        for (int row = 0; row < tree->topLevelItemCount(); ++row) {
+            QTreeWidgetItem *item = tree->topLevelItem(row);
+            int height = metrics.height() + 10;
+            for (int column : {3, 4, 5}) {
+                const int textWidth = std::max(40, tree->columnWidth(column) - 12);
+                const QRect bounds = metrics.boundingRect(
+                    QRect(0, 0, textWidth, std::numeric_limits<int>::max()),
+                    Qt::TextWordWrap | Qt::AlignLeft, item->text(column));
+                height = std::max(height, bounds.height() + 10);
+            }
+            item->setSizeHint(0, QSize(tree->columnWidth(0), height));
+        }
+    };
+    connect(tree->header(), &QHeaderView::sectionResized, &dialog,
+            [updateRowHeights](int logicalIndex, int, int) {
+                if (logicalIndex >= 3) {
+                    updateRowHeights();
+                }
+            });
+    QTimer::singleShot(0, &dialog, updateRowHeights);
+    connect(tree, &QTreeWidget::itemDoubleClicked, &dialog,
+            [this, &dialog](QTreeWidgetItem *item, int) {
+                QString optionName = item->text(0);
+                if (!optionName.startsWith('-')) {
+                    return;
+                }
+                bool accepted = false;
+                const QString value = QInputDialog::getText(
+                    &dialog, "Set Encoder Option", optionName + " value:",
+                    QLineEdit::Normal, item->text(2), &accepted);
+                if (!accepted) {
+                    return;
+                }
+                QString escapedValue = value;
+                if (escapedValue.contains(' ') || escapedValue.contains('\t') ||
+                    escapedValue.contains('"')) {
+                    escapedValue.replace('\\', "\\\\");
+                    escapedValue.replace('"', "\\\"");
+                    escapedValue = '"' + escapedValue + '"';
+                }
+                QString parameters = encodeParametersLineEdit->text().trimmed();
+                if (!parameters.isEmpty()) {
+                    parameters += ' ';
+                }
+                parameters += optionName;
+                if (!escapedValue.isEmpty()) {
+                    parameters += ' ' + escapedValue;
+                }
+                encodeParametersLineEdit->setText(parameters);
+            });
+    layout->addWidget(tree);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.exec();
+}
+
 void SettingsWindow::init() {
     setStyleSheet(qApp->styleSheet());
     acmx2::applyCustomStyleIfEnabled(this);
@@ -659,8 +881,18 @@ void SettingsWindow::init() {
     encodeCrfSpinBox->setToolTip("Constant Rate Factor: 0 = lossless, 18 = visually lossless, 23 = default, 28 = small file");
 
     encodeCodecComboBox = new QComboBox(this);
-    encodeCodecComboBox->addItems({"auto", "software", "nvenc", "h264_nvenc", "hevc_nvenc"});
-    encodeCodecComboBox->setCurrentText(encSettings.value("recording/codec", "auto").toString());
+    encodeCodecComboBox->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    encodeCodecComboBox->setMinimumContentsLength(28);
+    populateVideoEncoders(encSettings.value("recording/codec", "auto").toString());
+    encodeCodecDetailsLabel = new QLabel(this);
+    encodeCodecDetailsLabel->setWordWrap(true);
+    encodeCodecDetailsLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    encodeOptionsButton = new QPushButton("Show Encoder Options...", this);
+    connect(encodeCodecComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int) { updateEncoderDetails(); });
+    connect(encodeOptionsButton, &QPushButton::clicked,
+            this, &SettingsWindow::showEncoderOptions);
+    updateEncoderDetails();
 
     encodeParametersLineEdit = new QLineEdit(this);
     encodeParametersLineEdit->setText(encSettings.value("recording/parameters", "").toString());
@@ -743,6 +975,8 @@ void SettingsWindow::init() {
     encodingGrid->addWidget(encodeCrfSpinBox, r, 1);
     encodingGrid->addWidget(new QLabel("Codec:", this), ++r, 0);
     encodingGrid->addWidget(encodeCodecComboBox, r, 1);
+    encodingGrid->addWidget(encodeOptionsButton, ++r, 1);
+    encodingGrid->addWidget(encodeCodecDetailsLabel, ++r, 0, 1, 2);
     encodingGrid->addWidget(new QLabel("Extra FFmpeg parameters:", this), ++r, 0);
     encodingGrid->addWidget(encodeParametersLineEdit, r, 1);
     encodingGrid->addWidget(encodeRealtimeCheckBox, ++r, 0, 1, 2);
@@ -841,7 +1075,9 @@ void SettingsWindow::init() {
     // against availableSize() keeps the dialog inside the screen.
     setSizeGripEnabled(true);
     setMinimumSize(420, 320);
-    QSize preferred(820, 790);
+    // Give both responsive columns enough room for descriptive encoder names,
+    // option buttons, and status text without requiring an initial resize.
+    QSize preferred(960, 840);
     if (QScreen *scr = QGuiApplication::primaryScreen()) {
         const QSize avail = scr->availableSize();
         preferred.setWidth(std::min(preferred.width(), avail.width() - 40));
@@ -1371,7 +1607,11 @@ int SettingsWindow::getEncodeCrf() const {
 }
 
 QString SettingsWindow::getEncodeCodec() const {
-    return encodeCodecComboBox ? encodeCodecComboBox->currentText() : QString("auto");
+    if (!encodeCodecComboBox) {
+        return QString("auto");
+    }
+    const QString encoderName = encodeCodecComboBox->currentData().toString();
+    return encoderName.isEmpty() ? encodeCodecComboBox->currentText() : encoderName;
 }
 
 QString SettingsWindow::getEncodeParameters() const {
@@ -1511,7 +1751,7 @@ void SettingsWindow::acceptSettings() {
     if (encodeCrfSpinBox)
         encSettings.setValue("recording/crf", encodeCrfSpinBox->value());
     if (encodeCodecComboBox)
-        encSettings.setValue("recording/codec", encodeCodecComboBox->currentText());
+        encSettings.setValue("recording/codec", getEncodeCodec());
     if (encodeParametersLineEdit)
         encSettings.setValue("recording/parameters", encodeParametersLineEdit->text().trimmed());
     if (encodeRealtimeCheckBox)
