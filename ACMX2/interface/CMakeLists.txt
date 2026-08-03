@@ -73,6 +73,7 @@ message(STATUS "")
 set(LAUNCHER_GUI_HEADERS
     audio-window.hpp
     editor.hpp
+    find-shader.hpp
     gpufilter.hpp
     main_window.hpp
     metadata-viewer.hpp
@@ -90,6 +91,7 @@ set(LAUNCHER_GUI_HEADERS
 set(LAUNCHER_GUI_SOURCES
     audio-window.cpp
     editor.cpp
+    find-shader.cpp
     gpufilter.cpp
     main.cpp
     main_window.cpp

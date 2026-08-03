@@ -141,6 +141,9 @@ class MainWindow : public QMainWindow {
     int currentShaderRow() const;
     /// @brief Select the row at @p row and scroll it into view.
     void selectShaderRow(int row);
+    /// @brief Open or focus an editor for a shader source location.
+    void openShaderEditor(const QString &filePath, int lineNumber = 1,
+                          int columnNumber = 0, int matchLength = 0);
     QMenu *fileMenu = nullptr;
     QMenu *cameraMenu = nullptr;
     QMenu *playbackMenu = nullptr;
@@ -156,6 +159,7 @@ class MainWindow : public QMainWindow {
     QAction *listMenu_new = nullptr, *listMenu_shader = nullptr, *listMenu_remove = nullptr, *listMenu_set_current = nullptr, *listMenu_up = nullptr, *listMenu_down = nullptr, *listMenu_shuffle = nullptr, *listMenu_sort = nullptr;
     QAction *helpMenu_about = nullptr;
     QAction *listMenu_findNext = nullptr;
+    QAction *listMenu_findInFiles = nullptr;
     QString lastSearchText;
     int lastFoundIndex = -1;
     QString executable_path;

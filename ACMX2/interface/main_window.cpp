@@ -1,6 +1,7 @@
 #include "main_window.hpp"
 #include "audio-window.hpp"
 #include "custom_style.hpp"
+#include "find-shader.hpp"
 #include "metadata-viewer.hpp"
 #include "settings.hpp"
 #include <QApplication>
@@ -567,6 +568,27 @@ void MainWindow::initControls() {
     listMenu_findNext->setShortcut(QKeySequence("F3"));
     connect(listMenu_findNext, &QAction::triggered, this, &MainWindow::menuFindNext);
     listMenu->addAction(listMenu_findNext);
+    listMenu_findInFiles = new QAction(tr("Find in Files..."), this);
+    listMenu_findInFiles->setShortcut(QKeySequence("Ctrl+Shift+F"));
+    connect(listMenu_findInFiles, &QAction::triggered, this, [this]() {
+        if (shader_path.isEmpty() || !QDir(shader_path).exists()) {
+            QMessageBox::information(
+                this, tr("Find in Files"),
+                tr("Load a shader library before searching its files."));
+            return;
+        }
+
+        auto *dialog = new FindShaderDialog(shader_path, this);
+        connect(dialog, &FindShaderDialog::resultActivated, this,
+                [this](const QString &filePath, int lineNumber,
+                       int columnNumber, int matchLength) {
+                    openShaderEditor(filePath, lineNumber, columnNumber, matchLength);
+                });
+        dialog->show();
+        dialog->raise();
+        dialog->activateWindow();
+    });
+    listMenu->addAction(listMenu_findInFiles);
     helpMenu_about = new QAction("About", this);
 
     connect(helpMenu_about, &QAction::triggered, this, [=]() {
@@ -1178,9 +1200,35 @@ void MainWindow::listClicked(const QModelIndex &i) {
         Log("Invalid shader name");
         return;
     }
-    cleanupClosedEditors();
-    TextEditor *editor = new TextEditor(this);
     QString filePath = shader_path + "/" + itemText;
+    openShaderEditor(filePath);
+}
+
+void MainWindow::openShaderEditor(const QString &filePath, int lineNumber,
+                                  int columnNumber, int matchLength) {
+    const QFileInfo requestedFile(filePath);
+    if (!requestedFile.exists() || !requestedFile.isFile()) {
+        QMessageBox::warning(this, tr("Open Shader"),
+                             tr("Shader file no longer exists:\n%1").arg(filePath));
+        return;
+    }
+
+    cleanupClosedEditors();
+    const QString canonicalPath = requestedFile.canonicalFilePath();
+    for (const QPointer<TextEditor> &openEditor : open_files) {
+        if (!openEditor)
+            continue;
+        const QString openPath = QFileInfo(openEditor->fileName()).canonicalFilePath();
+        if (!canonicalPath.isEmpty() && openPath == canonicalPath) {
+            openEditor->show();
+            openEditor->raise();
+            openEditor->activateWindow();
+            openEditor->revealLocation(lineNumber, columnNumber, matchLength);
+            return;
+        }
+    }
+
+    TextEditor *editor = new TextEditor(this);
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
     connect(editor, &TextEditor::fileSaved, this, [this](const QString &filePath) {
@@ -1192,6 +1240,7 @@ void MainWindow::listClicked(const QModelIndex &i) {
     });
     open_files.append(editor);
     editor->show();
+    editor->revealLocation(lineNumber, columnNumber, matchLength);
 }
 
 QString MainWindow::currentShaderName() const {

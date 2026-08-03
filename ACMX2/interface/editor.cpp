@@ -12,9 +12,11 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPainter>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QSettings>
 #include <QStatusBar>
 #include <QSyntaxHighlighter>
@@ -505,26 +507,52 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
         return;
     }
 
+    // Remove an empty auto-created pair with one Backspace press.
+    if (event->key() == Qt::Key_Backspace && event->modifiers() == Qt::NoModifier) {
+        QTextCursor cursor = textCursor();
+        if (!cursor.hasSelection() && cursor.position() > 0) {
+            const QChar previous = document()->characterAt(cursor.position() - 1);
+            const QChar next = document()->characterAt(cursor.position());
+            const bool isPair = (isOpenBracket(previous) && matchingBracket(previous) == next) ||
+                                ((previous == '"' || previous == '\'') && previous == next);
+            if (isPair) {
+                cursor.beginEditBlock();
+                cursor.deletePreviousChar();
+                cursor.deleteChar();
+                cursor.endEditBlock();
+                return;
+            }
+        }
+    }
+
+    const auto insertPair = [this](QChar opening, QChar closing) {
+        QTextCursor cursor = textCursor();
+        if (cursor.hasSelection()) {
+            const int selectionStart = cursor.selectionStart();
+            QString selectedText = cursor.selectedText();
+            selectedText.replace(QChar::ParagraphSeparator, '\n');
+            cursor.insertText(QString(opening) + selectedText + QString(closing));
+            cursor.setPosition(selectionStart + 1);
+            cursor.setPosition(selectionStart + 1 + selectedText.size(),
+                               QTextCursor::KeepAnchor);
+        } else {
+            cursor.insertText(QString(opening) + QString(closing));
+            cursor.movePosition(QTextCursor::Left);
+        }
+        setTextCursor(cursor);
+    };
+
     // Auto-close brackets
     if (event->text() == "{") {
-        QTextCursor cursor = textCursor();
-        cursor.insertText("{}");
-        cursor.movePosition(QTextCursor::Left);
-        setTextCursor(cursor);
+        insertPair('{', '}');
         return;
     }
     if (event->text() == "(") {
-        QTextCursor cursor = textCursor();
-        cursor.insertText("()");
-        cursor.movePosition(QTextCursor::Left);
-        setTextCursor(cursor);
+        insertPair('(', ')');
         return;
     }
     if (event->text() == "[") {
-        QTextCursor cursor = textCursor();
-        cursor.insertText("[]");
-        cursor.movePosition(QTextCursor::Left);
-        setTextCursor(cursor);
+        insertPair('[', ']');
         return;
     }
 
@@ -543,6 +571,10 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
     if (event->text() == "\"" || event->text() == "'") {
         QTextCursor cursor = textCursor();
         QChar quote = event->text().at(0);
+        if (cursor.hasSelection()) {
+            insertPair(quote, quote);
+            return;
+        }
         QChar nextChar = document()->characterAt(cursor.position());
         if (nextChar == quote) {
             cursor.movePosition(QTextCursor::Right);
@@ -566,12 +598,38 @@ TextEditor::TextEditor(QWidget *parent)
 
 void TextEditor::setText(const QString &text) {
     m_textEdit->setPlainText(text);
+    m_textEdit->document()->setModified(false);
     m_modified = false;
+    updateWindowTitle();
 }
 
 void TextEditor::setFileName(const QString &filen) {
     filename = filen;
     updateWindowTitle();
+}
+
+QString TextEditor::fileName() const {
+    return filename;
+}
+
+void TextEditor::revealLocation(int lineNumber, int columnNumber, int matchLength) {
+    const QTextBlock block = m_textEdit->document()->findBlockByLineNumber(
+        qMax(0, lineNumber - 1));
+    if (!block.isValid())
+        return;
+
+    const int lineLength = qMax(0, block.length() - 1);
+    const int column = qBound(0, columnNumber, lineLength);
+    const int selectionLength = qBound(0, matchLength, lineLength - column);
+    QTextCursor cursor(block);
+    cursor.setPosition(block.position() + column);
+    if (selectionLength > 0) {
+        cursor.setPosition(block.position() + column + selectionLength,
+                           QTextCursor::KeepAnchor);
+    }
+    m_textEdit->setTextCursor(cursor);
+    m_textEdit->centerCursor();
+    m_textEdit->setFocus();
 }
 
 void TextEditor::updateWindowTitle() {
@@ -587,7 +645,8 @@ void TextEditor::updateWindowTitle() {
 
 void TextEditor::init() {
     m_modified = false;
-    m_fontSize = 24;
+    QSettings editorSettings("LostSideDead");
+    m_fontSize = qBound(8, editorSettings.value("editor/fontSize", 24).toInt(), 72);
     acmx2::applyCustomStyleIfEnabled(this);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
@@ -692,11 +751,15 @@ void TextEditor::init() {
 
     QAction *toggleWordWrapAction = viewMenu->addAction("Word Wrap");
     toggleWordWrapAction->setCheckable(true);
-    toggleWordWrapAction->setChecked(false);
+    toggleWordWrapAction->setChecked(
+        editorSettings.value("editor/wordWrap", false).toBool());
 
     layout->setMenuBar(menuBar);
 
     m_textEdit = new CustomTextEdit(this);
+    m_textEdit->setLineWrapMode(toggleWordWrapAction->isChecked()
+                                    ? QPlainTextEdit::WidgetWidth
+                                    : QPlainTextEdit::NoWrap);
     m_textEdit->setTabStopDistance(4 * m_textEdit->fontMetrics().horizontalAdvance(' '));
     updateFontSize();
 
@@ -710,7 +773,15 @@ void TextEditor::init() {
     m_highlighter = new GlslSyntaxHighlighter(m_textEdit->document());
 
     setLayout(layout);
-    setGeometry(300, 300, 1024, 768);
+    if (!restoreGeometry(editorSettings.value("editor/geometry").toByteArray()))
+        setGeometry(300, 300, 1024, 768);
+
+    saveAction->setEnabled(false);
+    undoAction->setEnabled(false);
+    redoAction->setEnabled(false);
+    cutAction->setEnabled(false);
+    copyAction->setEnabled(false);
+    pasteAction->setEnabled(QApplication::clipboard()->mimeData()->hasText());
 
     connect(saveAction, &QAction::triggered, this, &TextEditor::saveContents);
     connect(saveAsAction, &QAction::triggered, this, &TextEditor::saveAs);
@@ -722,6 +793,10 @@ void TextEditor::init() {
     connect(copyAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::copy);
     connect(pasteAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::paste);
     connect(selectAllAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::selectAll);
+    connect(duplicateAction, &QAction::triggered, m_textEdit, &CustomTextEdit::duplicateLine);
+    connect(toggleCommentAction, &QAction::triggered, m_textEdit, &CustomTextEdit::toggleComment);
+    connect(moveUpAction, &QAction::triggered, m_textEdit, &CustomTextEdit::moveLineUp);
+    connect(moveDownAction, &QAction::triggered, m_textEdit, &CustomTextEdit::moveLineDown);
 
     connect(findAction, &QAction::triggered, this, &TextEditor::findText);
     connect(findNextAction, &QAction::triggered, this, &TextEditor::findNext);
@@ -735,6 +810,7 @@ void TextEditor::init() {
 
     connect(toggleWordWrapAction, &QAction::triggered, this, [this](bool checked) {
         m_textEdit->setLineWrapMode(checked ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+        QSettings("LostSideDead").setValue("editor/wordWrap", checked);
     });
 
     connect(shiftRightAction, &QAction::triggered, this, [this]() {
@@ -744,12 +820,23 @@ void TextEditor::init() {
         m_textEdit->unindentSelection();
     });
 
-    connect(m_textEdit, &QPlainTextEdit::textChanged, this, [this]() {
-        m_modified = true;
-        updateWindowTitle();
-    });
+    connect(m_textEdit->document(), &QTextDocument::modificationChanged,
+            this, [this, saveAction](bool modified) {
+                m_modified = modified;
+                saveAction->setEnabled(modified);
+                updateWindowTitle();
+            });
 
     connect(m_textEdit, &QPlainTextEdit::cursorPositionChanged, this, &TextEditor::updateCursorPosition);
+    connect(m_textEdit, &QPlainTextEdit::copyAvailable, cutAction, &QAction::setEnabled);
+    connect(m_textEdit, &QPlainTextEdit::copyAvailable, copyAction, &QAction::setEnabled);
+    connect(m_textEdit, &QPlainTextEdit::undoAvailable, undoAction, &QAction::setEnabled);
+    connect(m_textEdit, &QPlainTextEdit::redoAvailable, redoAction, &QAction::setEnabled);
+    connect(m_textEdit->document(), &QTextDocument::blockCountChanged,
+            this, [this](int) { updateCursorPosition(); });
+    connect(QApplication::clipboard(), &QClipboard::dataChanged, this, [pasteAction]() {
+        pasteAction->setEnabled(QApplication::clipboard()->mimeData()->hasText());
+    });
     setAttribute(Qt::WA_DeleteOnClose);
 }
 
@@ -759,21 +846,40 @@ void TextEditor::saveContents() {
         return;
     }
 
-    QFile file(filename);
+    writeFile(filename);
+}
+
+bool TextEditor::writeFile(const QString &filePath) {
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, "Error", "Could not save file: " + filename);
-        return;
+        QMessageBox::warning(
+            this, "Error",
+            "Could not save file: " + filePath + "\n\n" + file.errorString());
+        return false;
     }
 
-    QString content = m_textEdit->toPlainText();
     QTextStream out(&file);
-    out << content;
-    file.close();
+    out << m_textEdit->toPlainText();
+    out.flush();
+    if (out.status() != QTextStream::Ok) {
+        file.cancelWriting();
+        QMessageBox::warning(this, "Error", "Could not write file: " + filePath);
+        return false;
+    }
+    if (!file.commit()) {
+        QMessageBox::warning(
+            this, "Error",
+            "Could not finish saving file: " + filePath + "\n\n" + file.errorString());
+        return false;
+    }
 
+    filename = filePath;
+    m_textEdit->document()->setModified(false);
     m_modified = false;
     updateWindowTitle();
-    m_statusBar->showMessage("File saved", 2000);
+    m_statusBar->showMessage("Saved " + QFileInfo(filename).fileName(), 2000);
     emit fileSaved(filename);
+    return true;
 }
 
 void TextEditor::saveAs() {
@@ -783,16 +889,20 @@ void TextEditor::saveAs() {
         this, "Save File As", lastDir + "/" + QFileInfo(filename).fileName(), "GLSL Files (*.glsl *.frag *.vert);;All Files (*)");
 
     if (!newFileName.isEmpty()) {
-        appSettings.setValue("lastEditorSaveDir", QFileInfo(newFileName).absolutePath());
-        filename = newFileName;
-        saveContents();
+        if (writeFile(newFileName)) {
+            appSettings.setValue("lastEditorSaveDir", QFileInfo(newFileName).absolutePath());
+        }
     }
 }
 
 void TextEditor::findText() {
     bool ok;
+    QString initialText = m_lastSearchText;
+    const QString selectedText = m_textEdit->textCursor().selectedText();
+    if (!selectedText.isEmpty() && !selectedText.contains(QChar::ParagraphSeparator))
+        initialText = selectedText;
     QString searchText = QInputDialog::getText(this, "Find", "Enter text to find:",
-                                               QLineEdit::Normal, m_lastSearchText, &ok);
+                                               QLineEdit::Normal, initialText, &ok);
     if (ok && !searchText.isEmpty()) {
         m_lastSearchText = searchText;
         findNext();
@@ -870,8 +980,15 @@ void TextEditor::replaceText() {
     if (reply == QMessageBox::Yes) {
         QString text = m_textEdit->toPlainText();
         int count = text.count(searchText);
-        text.replace(searchText, replaceWith);
-        m_textEdit->setPlainText(text);
+        if (count > 0) {
+            text.replace(searchText, replaceWith);
+            QTextCursor cursor(m_textEdit->document());
+            cursor.beginEditBlock();
+            cursor.select(QTextCursor::Document);
+            cursor.insertText(text);
+            cursor.endEditBlock();
+        }
+        m_lastSearchText = searchText;
         m_statusBar->showMessage("Replaced " + QString::number(count) + " occurrence(s)", 3000);
     }
 }
@@ -892,6 +1009,7 @@ void TextEditor::increaseFontSize() {
     if (m_fontSize > 72)
         m_fontSize = 72;
     updateFontSize();
+    QSettings("LostSideDead").setValue("editor/fontSize", m_fontSize);
 }
 
 void TextEditor::decreaseFontSize() {
@@ -899,11 +1017,13 @@ void TextEditor::decreaseFontSize() {
     if (m_fontSize < 8)
         m_fontSize = 8;
     updateFontSize();
+    QSettings("LostSideDead").setValue("editor/fontSize", m_fontSize);
 }
 
 void TextEditor::resetFontSize() {
     m_fontSize = 24;
     updateFontSize();
+    QSettings("LostSideDead").setValue("editor/fontSize", m_fontSize);
 }
 
 void TextEditor::updateFontSize() {
@@ -935,11 +1055,18 @@ void TextEditor::updateCursorPosition() {
     QTextCursor cursor = m_textEdit->textCursor();
     int line = cursor.blockNumber() + 1;
     int col = cursor.columnNumber() + 1;
-    m_lineColLabel->setText(QString("Line: %1, Col: %2").arg(line).arg(col));
+    QString status = QString("Line: %1, Col: %2 | Lines: %3")
+                         .arg(line)
+                         .arg(col)
+                         .arg(m_textEdit->document()->blockCount());
+    if (cursor.hasSelection())
+        status += QString(" | Selected: %1").arg(cursor.selectionEnd() - cursor.selectionStart());
+    m_lineColLabel->setText(status);
 }
 
 void TextEditor::closeEvent(QCloseEvent *event) {
     if (maybePromptSave()) {
+        QSettings("LostSideDead").setValue("editor/geometry", saveGeometry());
         event->accept();
     } else {
         event->ignore();
@@ -949,6 +1076,7 @@ void TextEditor::closeEvent(QCloseEvent *event) {
 void TextEditor::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Escape && event->modifiers() == Qt::NoModifier) {
         if (maybePromptSave()) {
+            QSettings("LostSideDead").setValue("editor/geometry", saveGeometry());
             accept();
         }
         event->accept();

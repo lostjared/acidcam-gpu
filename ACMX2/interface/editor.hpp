@@ -46,13 +46,13 @@ class CustomTextEdit : public QPlainTextEdit {
   public:
     void indentSelection();
     void unindentSelection();
-
-  private:
-    void autoIndentNewLine();
     void duplicateLine();
     void moveLineUp();
     void moveLineDown();
     void toggleComment();
+
+  private:
+    void autoIndentNewLine();
     void smartHome(bool shift);
     bool hasMultiLineSelection();
 
@@ -88,6 +88,10 @@ class TextEditor : public QDialog {
     void setText(const QString &text);
     /// @brief Associate editor with a shader file path.
     void setFileName(const QString &filename);
+    /// @brief Return the file currently associated with this editor.
+    QString fileName() const;
+    /// @brief Move to a one-based line and select the requested source match.
+    void revealLocation(int lineNumber, int columnNumber = 0, int matchLength = 0);
 
   signals:
     /// @brief Emitted after the editor successfully writes its contents to disk.
@@ -102,6 +106,9 @@ class TextEditor : public QDialog {
     /// @brief Show a Save/Discard/Cancel prompt if the document is modified.
     /// @return True if the editor may close, false to cancel the close.
     bool maybePromptSave();
+    /// @brief Atomically write the document to disk.
+    /// @return True when the file was committed successfully.
+    bool writeFile(const QString &filePath);
     void saveContents();
     void saveAs();
     void findText();
