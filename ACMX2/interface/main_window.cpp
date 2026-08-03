@@ -1303,7 +1303,7 @@ void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
     std::copy(reloadPath.cbegin(), reloadPath.cend(), shaderSelectionShm->reload_shader_path);
     shaderSelectionShm->reload_sequence = ++shaderReloadSequence;
     shaderSelectionShm->sequence = ++shaderSelectionSequence;
-    Log("Requested live shader reload: " + shaderName);
+    Log("Requested live shader reload: " + shaderName + "<br>");
 #else
     Q_UNUSED(filePath);
 #endif
