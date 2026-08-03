@@ -6172,8 +6172,8 @@ struct FrameData {
     bool isTiffSnapshot = false;       ///< True if this frame should be saved as a TIFF snapshot (16-bit HDR, 8-bit SDR).
     bool isHdr = false;                ///< True when @c pixels holds 16-bit PQ/HLG-encoded BT.2020 RGBA (8 bytes/pixel).
     int hdrTrc = 0;                    ///< AVColorTransferCharacteristic (PQ=16, HLG=18) when @c isHdr.
-    bool usesAudioClock = false;       ///< Frame timing follows real-time file-audio output.
-    uint64_t timelineFrame = 0;        ///< Audio-clock position expressed in nominal video frames.
+    bool usesTimelineClock = false;    ///< Frame timing follows an external real-time clock.
+    uint64_t timelineFrame = 0;        ///< Clock position expressed in nominal video frames.
 };
 
 /**
@@ -6239,7 +6239,7 @@ struct FrameData {
  *  │     SnapshotThreadPool (async   │
  *  │     PNG write via enqueue())    │
  *  │   • Else: writer.write() /      │
- *  │     writer.write_ts()           │
+ *  │     writer.write_at_pts()       │
  *  │                                 │
  *  │  writerRunning  atomic<bool>    │
  *  │  Starts only after the first    │
@@ -6944,7 +6944,7 @@ class ACView : public gl::GLObject {
 #endif
     int pboIndex = 0;
     int pboNextIndex = 1;
-    bool recording_pbo_uses_audio_clock[2] = {false, false};
+    bool recording_pbo_uses_timeline_clock[2] = {false, false};
     uint64_t recording_pbo_timeline_frame[2] = {0, 0};
     SnapshotThreadPool snapshot_pool{2};
     TextureUploader tex_uploader;
@@ -8560,6 +8560,11 @@ class ACView : public gl::GLObject {
                                    << " FPS: " << fps << "\n";
                     mx::system_out << "acmx2: Pipeline mode => decode: camera, encode: "
                                    << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
+                    if (!no_drop_mode && fps > 0.0) {
+                        mx::system_out
+                            << "acmx2: Webcam recording follows wall-clock timestamps; "
+                               "late frames will be dropped\n";
+                    }
                 } else {
                     throw mx::Exception("Could not open output video file: " + ofilename);
                 }
@@ -9178,6 +9183,14 @@ class ACView : public gl::GLObject {
         if (duration_limit > 0.0 && media_timeline_started && writer.is_open() && writerRunning) {
             double time_passed = 0.0;
             bool has_media_clock = false;
+            if (filename.empty() && graphic.empty() && !no_drop_mode &&
+                fps > 0.0) {
+                time_passed = std::chrono::duration<double>(
+                                  std::chrono::steady_clock::now() -
+                                  media_timeline_start_time)
+                                  .count();
+                has_media_clock = true;
+            }
 #ifdef AUDIO_ENABLED
             if (file_audio_mode && file_audio_has_output_clock()) {
                 time_passed = file_audio_playback_time();
@@ -9220,7 +9233,7 @@ class ACView : public gl::GLObject {
 
         bool received_source_frame = false;
         bool file_audio_clock_controls_video = false;
-        bool source_frame_uses_audio_clock = false;
+        bool source_frame_uses_timeline_clock = false;
         uint64_t source_timeline_frame = 0;
         bool stop_after_recording_drain = false;
         if (!isPaused && !isFrozen) {
@@ -9234,6 +9247,24 @@ class ACView : public gl::GLObject {
                     newFrame = std::move(captureQueue.front());
                     captureQueue.pop();
                     received_source_frame = !newFrame.empty();
+                    if (received_source_frame && writer.is_open() &&
+                        !no_drop_mode && fps > 0.0) {
+                        // Live webcam recording follows wall-clock time. If
+                        // rendering or encoding falls behind, explicit PTS
+                        // gaps keep the video duration aligned with live
+                        // audio instead of slowing playback down.
+                        source_frame_uses_timeline_clock = true;
+                        if (media_timeline_started) {
+                            const double elapsed_seconds =
+                                std::chrono::duration<double>(
+                                    std::chrono::steady_clock::now() -
+                                    media_timeline_start_time)
+                                    .count();
+                            source_timeline_frame = static_cast<uint64_t>(
+                                std::floor(std::max(0.0, elapsed_seconds) *
+                                           fps));
+                        }
+                    }
                 }
             } else {
                 bool audio_clock_available = false;
@@ -9337,7 +9368,7 @@ class ACView : public gl::GLObject {
                     if (read_ok) {
                         received_source_frame =
                             input_is_hdr ? !hdr_frame_mat.empty() : !newFrame.empty();
-                        source_frame_uses_audio_clock = audio_clock_available;
+                        source_frame_uses_timeline_clock = audio_clock_available;
                         source_timeline_frame =
                             audio_clock_available
                                 ? std::min(target_frame,
@@ -10296,8 +10327,8 @@ class ACView : public gl::GLObject {
                 fd.isSnapshot = has_hdr_snapshot_request;
                 fd.isWebPSnapshot = has_hdr_snapshot_request;
                 fd.isRawSnapshot = has_raw_snapshot_request;
-                fd.usesAudioClock =
-                    source_frame_uses_audio_clock && !has_hdr_snapshot_request &&
+                fd.usesTimelineClock =
+                    source_frame_uses_timeline_clock && !has_hdr_snapshot_request &&
                     !has_raw_snapshot_request;
                 fd.timelineFrame = source_timeline_frame;
 
@@ -10412,8 +10443,8 @@ class ACView : public gl::GLObject {
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
                 if (has_normal_output) {
-                    recording_pbo_uses_audio_clock[pboIndex] =
-                        source_frame_uses_audio_clock;
+                    recording_pbo_uses_timeline_clock[pboIndex] =
+                        source_frame_uses_timeline_clock;
                     recording_pbo_timeline_frame[pboIndex] =
                         source_timeline_frame;
                     recording_pbo_primed = true;
@@ -10437,7 +10468,7 @@ class ACView : public gl::GLObject {
 
                         const size_t requiredBytes = static_cast<size_t>(win->w) * static_cast<size_t>(win->h) * 4;
                         if (devPtr && mappedBytes >= requiredBytes) {
-                            if (recording_pbo_uses_audio_clock[pboNextIndex]) {
+                            if (recording_pbo_uses_timeline_clock[pboNextIndex]) {
                                 used_zero_copy =
                                     writer.write_cuda_rgba_at_pts(
                                         devPtr, static_cast<int>(win->w) * 4,
@@ -10483,8 +10514,8 @@ class ACView : public gl::GLObject {
                             fd.isWebPSnapshot = is_webp_snapshot_frame;
                             fd.isRawSnapshot = is_raw_snapshot_frame;
                             fd.isTiffSnapshot = is_tiff_snapshot_frame;
-                            fd.usesAudioClock =
-                                recording_pbo_uses_audio_clock[pboNextIndex] &&
+                            fd.usesTimelineClock =
+                                recording_pbo_uses_timeline_clock[pboNextIndex] &&
                                 !fd.isSnapshot && !fd.isRawSnapshot &&
                                 !fd.isTiffSnapshot;
                             fd.timelineFrame =
@@ -11463,6 +11494,7 @@ class ACView : public gl::GLObject {
     int cache_warmup_frames = 0; // Frames to skip before pushing into cache after load
     bool source_frame_ready = false;
     bool media_timeline_started = false;
+    std::chrono::steady_clock::time_point media_timeline_start_time{};
     bool recording_pbo_primed = false;
     uint64_t decoded_video_frame_count = 0;
     std::atomic<bool> finished{false};
@@ -11807,8 +11839,8 @@ class ACView : public gl::GLObject {
      * and either:
      * - Dispatches snapshot frames to the SnapshotThreadPool for async
      *   PNG writing.
-     * - Passes video frames to `writer.write()` (file/image mode) or
-     *   `writer.write_ts()` (camera mode) for H.264 encoding via FFmpeg.
+     * - Passes video frames to `writer.write()` for sequential output or
+     *   `writer.write_at_pts()` for clock-synchronised output.
      *
      * The thread blocks on `queueCondVar` when the queue is empty.
      * It exits when `writerRunning` is set to false and the queue is
@@ -11843,7 +11875,7 @@ class ACView : public gl::GLObject {
                                     fd.width, fd.height);
                             }
                         } else if (fd.isHdr) {
-                            if (fd.usesAudioClock) {
+                            if (fd.usesTimelineClock) {
                                 writer.write_hdr_rgba16_at_pts(
                                     const_cast<unsigned char *>(fd.pixels.data()),
                                     static_cast<int64_t>(fd.timelineFrame));
@@ -11852,7 +11884,7 @@ class ACView : public gl::GLObject {
                                     const_cast<unsigned char *>(fd.pixels.data()));
                             }
                         } else if (!filename.empty() || !graphic.empty()) {
-                            if (fd.usesAudioClock) {
+                            if (fd.usesTimelineClock) {
                                 writer.write_at_pts(
                                     const_cast<unsigned char *>(fd.pixels.data()),
                                     static_cast<int64_t>(fd.timelineFrame));
@@ -11860,8 +11892,12 @@ class ACView : public gl::GLObject {
                                 writer.write(
                                     const_cast<unsigned char *>(fd.pixels.data()));
                             }
+                        } else if (fd.usesTimelineClock) {
+                            writer.write_at_pts(
+                                const_cast<unsigned char *>(fd.pixels.data()),
+                                static_cast<int64_t>(fd.timelineFrame));
                         } else {
-                            writer.write_ts(
+                            writer.write(
                                 const_cast<unsigned char *>(fd.pixels.data()));
                         }
                     }
@@ -12077,6 +12113,7 @@ class ACView : public gl::GLObject {
         }
 
         media_timeline_started = true;
+        media_timeline_start_time = std::chrono::steady_clock::now();
         frames_proc = 0;
 #ifdef AUDIO_ENABLED
         resetAudioWarmupEnvelope();
@@ -12157,19 +12194,17 @@ class ACView : public gl::GLObject {
             return;
         }
         double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
-        // Correct A/V drift caused by the webcam delivering fewer frames per
-        // second than the configured encoder FPS.  The video stream is
-        // written with fixed-FPS PTS (frame_count / fps), so it plays back
-        // faster than it was captured whenever the camera couldn't keep up.
-        // The audio WAV is recorded in real (wall-clock) time, so its
-        // duration reflects the true capture length.  Computing
-        // itsscale = audio_duration / video_duration and applying it as
-        // an input option to ffmpeg rescales the video container PTS to
-        // match audio without re-encoding.  Clamped to a sane range so
-        // a corrupt or zero-length WAV never produces a wild scale.
+        // Sequential video output may need a final duration correction when
+        // the webcam delivered fewer frames than its configured FPS. The
+        // normal live webcam path already carries wall-clock PTS, so rescaling
+        // that stream would destroy its synchronization; only trim its audio
+        // to the timestamped video duration.
         const double audio_duration = recorder.duration_seconds();
         double itsscale = 1.0;
-        if (video_duration > 0.0 && audio_duration > 0.0) {
+        const bool timestamped_webcam =
+            filename.empty() && graphic.empty() && !no_drop_mode && fps > 0.0;
+        if (!timestamped_webcam && video_duration > 0.0 &&
+            audio_duration > 0.0) {
             const double s = audio_duration / video_duration;
             if (s >= 0.5 && s <= 2.0) {
                 itsscale = s;
@@ -12310,6 +12345,13 @@ class ACView : public gl::GLObject {
     void beginMuxing(gl::GLWindow *win) {
         captureRunning = false;
         writerRunning = false;
+#ifdef AUDIO_ENABLED
+        // End live audio at the video capture boundary. Draining queued
+        // frames and encoder packets must not add an audio-only tail.
+        if (audio_is_enabled && audio_engine.recorder().is_recording()) {
+            audio_engine.recorder().stop();
+        }
+#endif
         queueCondVar.notify_all();
         captureQueueCondVar.notify_all();
         isMuxing = true;
@@ -12368,6 +12410,11 @@ class ACView : public gl::GLObject {
     void stopWriterThread() {
         bool recording = writer.is_open();
         writerRunning = false;
+#ifdef AUDIO_ENABLED
+        if (audio_is_enabled && audio_engine.recorder().is_recording()) {
+            audio_engine.recorder().stop();
+        }
+#endif
         queueCondVar.notify_all();
         if (writerThread.joinable()) {
             writerThread.join();
@@ -12390,10 +12437,6 @@ class ACView : public gl::GLObject {
                 transfer_audio(filename, ofilename);
                 mx::system_out << "acmx2: copied audio track from: " << filename << " to " << ofilename << "\n";
             }
-#ifdef AUDIO_ENABLED
-            if (audio_is_enabled && audio_engine.recorder().is_recording())
-                audio_engine.recorder().stop();
-#endif
             fflush(stdout);
             fflush(stderr);
         } else if (png_video_mode) {

@@ -1957,8 +1957,14 @@ void Writer::write_at_pts(void *rgba_buffer, int64_t pts) {
             releaseFrame(queued_frame);
             return;
         }
-        queued_frame->pts =
-            pts == AV_NOPTS_VALUE ? frame_count : std::max(frame_count, pts);
+        if (pts != AV_NOPTS_VALUE && pts < frame_count) {
+            // A timestamped live frame landed in a nominal frame slot that
+            // was already filled. Drop it instead of extending the video
+            // timeline and allowing it to drift behind the capture clock.
+            releaseFrame(queued_frame);
+            return;
+        }
+        queued_frame->pts = pts == AV_NOPTS_VALUE ? frame_count : pts;
         frame_count = queued_frame->pts + 1;
         encode_queue.push(queued_frame);
     }
@@ -2048,8 +2054,11 @@ void Writer::write_hdr_rgba16_at_pts(void *rgba16_buffer, int64_t pts) {
             releaseFrame(queued_frame);
             return;
         }
-        queued_frame->pts =
-            pts == AV_NOPTS_VALUE ? frame_count : std::max(frame_count, pts);
+        if (pts != AV_NOPTS_VALUE && pts < frame_count) {
+            releaseFrame(queued_frame);
+            return;
+        }
+        queued_frame->pts = pts == AV_NOPTS_VALUE ? frame_count : pts;
         frame_count = queued_frame->pts + 1;
         encode_queue.push(queued_frame);
     }
@@ -2182,8 +2191,12 @@ bool Writer::write_cuda_rgba_at_pts(void *cuda_rgba_buffer, int src_stride,
             queue_cv.notify_one();
             return true;
         }
-        queued_frame->pts =
-            pts == AV_NOPTS_VALUE ? frame_count : std::max(frame_count, pts);
+        if (pts != AV_NOPTS_VALUE && pts < frame_count) {
+            releaseFrame(queued_frame);
+            queue_cv.notify_one();
+            return true;
+        }
+        queued_frame->pts = pts == AV_NOPTS_VALUE ? frame_count : pts;
         frame_count = queued_frame->pts + 1;
         encode_queue.push(queued_frame);
     }
