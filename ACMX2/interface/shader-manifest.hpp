@@ -7,10 +7,19 @@
  */
 
 #include <QDateTime>
+#include <QList>
 #include <QString>
 #include <QStringList>
 
 namespace acmx2 {
+    struct CustomUniformDefinition {
+        QString name;
+        double minimum = 0.0;
+        double maximum = 1.0;
+        double step = 0.01;
+        double value = 0.0;
+    };
+
     enum class ShaderManifestFormat { Json,
                                       Text };
 
@@ -36,6 +45,14 @@ namespace acmx2 {
     /** Create a new manifest in the requested format. */
     bool create_shader_manifest(const QString &directory, ShaderManifestFormat format,
                                 const QStringList &shaders, QString &error);
+    /** Load custom float-uniform controls from library.json. */
+    bool load_custom_uniforms(const QString &directory,
+                              QList<CustomUniformDefinition> &uniforms,
+                              QString &error);
+    /** Rewrite custom float-uniform controls while preserving all other JSON fields. */
+    bool write_custom_uniforms(const QString &directory,
+                               const QList<CustomUniformDefinition> &uniforms,
+                               QString &error);
 } // namespace acmx2
 
 #endif

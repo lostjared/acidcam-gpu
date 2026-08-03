@@ -72,6 +72,7 @@ message(STATUS "")
 # Launcher GUI sources
 set(LAUNCHER_GUI_HEADERS
     audio-window.hpp
+    custom-uniforms.hpp
     editor.hpp
     find-shader.hpp
     gpufilter.hpp
@@ -91,6 +92,7 @@ set(LAUNCHER_GUI_HEADERS
 
 set(LAUNCHER_GUI_SOURCES
     audio-window.cpp
+    custom-uniforms.cpp
     editor.cpp
     find-shader.cpp
     gpufilter.cpp

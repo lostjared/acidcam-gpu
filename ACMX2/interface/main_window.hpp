@@ -29,6 +29,8 @@
 #include <QTreeWidget>
 #include <random>
 
+class CustomUniformDialog;
+
 /**
  * @brief Primary ACMX2 desktop UI.
  *
@@ -88,6 +90,7 @@ class MainWindow : public QMainWindow {
     void menuMidiSettings();
     void menuMetadataViewer();
     void menuWatermarkSettings();
+    void menuCustomUniforms();
     void menuToggleDisplayFilter(bool checked);
     void openCustomStyleEditor();
 
@@ -132,10 +135,6 @@ class MainWindow : public QMainWindow {
     QDateTime shaderCacheMTime;
     /// @brief Refresh `shaderCacheStatus` from the on-disk shader cache.
     void refreshShaderCacheStatus();
-    /// @brief Return true if a shader source file has been modified after the
-    ///        on-disk shader cache was last written. False if there is no
-    ///        cache file or no shaders, or if `use_shader_cache` is disabled.
-    bool isShaderCacheStale() const;
     /// @brief Return the filename in the Name column for the current selection.
     QString currentShaderName() const;
     /// @brief Return the row index of the current selection, or -1.
@@ -279,6 +278,8 @@ class MainWindow : public QMainWindow {
     int midi_device = -1;
     QAction *midiSettingsAction;
     QAction *stayOnTopAction;
+    QAction *customUniformsAction = nullptr;
+    CustomUniformDialog *customUniformDialog = nullptr;
     bool playlist_enabled = false;
     QStringList playlist_names;
     QList<QPair<QString, QStringList>> playlist_tree_data;
@@ -287,17 +288,6 @@ class MainWindow : public QMainWindow {
     bool autopilot_random = false;
     QAction *playlistAction;
     QString stderrBuffer;
-    /// @brief When true, the next acmx2 process to finish is a shader cache
-    ///        build and the launcher should immediately re-launch using
-    ///        @ref pendingLaunchArguments.
-    bool pendingLaunchAfterBuild = false;
-    /// @brief Arguments queued for an automatic launch after a cache rebuild.
-    QStringList pendingLaunchArguments;
-    /// @brief True until the first Run All invocation after startup.
-    bool firstRunAllPendingRebuild = true;
-    /// @brief Set when a shader file is saved from the editor so the next
-    ///        launch rebuilds cache even if file mtime granularity is coarse.
-    bool shaderCacheMarkedStaleBySave = false;
     /// @brief True while a cache rebuild process started by menuBuildShaderCache
     ///        is running.
     bool cacheBuildInProgress = false;
@@ -308,6 +298,7 @@ class MainWindow : public QMainWindow {
     void publishMultipassShadersToRunningProcess();
     void publishRepeatStateToRunningProcess();
     void publishRuntimeSettingsToRunningProcess();
+    void publishCustomUniformsToRunningProcess();
     void cleanupShaderSelectionSharedMemory();
 #if defined(__linux__) || defined(__APPLE__)
     int shaderSelectionShmFd = -1;

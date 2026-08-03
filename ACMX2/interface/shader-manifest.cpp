@@ -1,4 +1,5 @@
 #include "shader-manifest.hpp"
+#include "../shader_selection_shm.hpp"
 
 #include <QFile>
 #include <QFileInfo>
@@ -6,12 +7,23 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QTextStream>
+#include <algorithm>
+#include <cmath>
 
 namespace {
     constexpr auto JSON_MANIFEST_NAME = "library.json";
     constexpr auto TEXT_MANIFEST_NAME = "index.txt";
+
+    bool valid_custom_uniform_name(const QString &name) {
+        static const QRegularExpression identifier(
+            QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
+        return identifier.match(name).hasMatch() && !name.startsWith("gl_") &&
+               name.toUtf8().size() <
+                   static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName);
+    }
 
     QString json_entry_file(const QJsonValue &value) {
         if (value.isString())
@@ -250,5 +262,92 @@ namespace acmx2 {
             return false;
         }
         return true;
+    }
+
+    bool load_custom_uniforms(const QString &directory,
+                              QList<CustomUniformDefinition> &uniforms,
+                              QString &error) {
+        uniforms.clear();
+        error.clear();
+        const QString path = directory + "/" + JSON_MANIFEST_NAME;
+        if (!QFileInfo(path).isFile()) {
+            error = QObject::tr("Custom uniforms require %1.").arg(path);
+            return false;
+        }
+
+        QJsonDocument document;
+        if (!load_json_document(path, document, error))
+            return false;
+
+        const QJsonValue value = document.object().value("custom_uniforms");
+        if (value.isUndefined() || value.isNull())
+            return true;
+        if (!value.isObject()) {
+            error = QObject::tr("%1 field 'custom_uniforms' must be an object.")
+                        .arg(path);
+            return false;
+        }
+
+        const QJsonObject entries = value.toObject();
+        for (auto it = entries.constBegin(); it != entries.constEnd(); ++it) {
+            if (!it.value().isObject()) {
+                error = QObject::tr("Custom uniform '%1' must be an object.")
+                            .arg(it.key());
+                return false;
+            }
+            const QJsonObject entry = it.value().toObject();
+            CustomUniformDefinition uniform;
+            uniform.name = it.key();
+            if (!valid_custom_uniform_name(uniform.name)) {
+                error = QObject::tr("Custom uniform '%1' is not a valid GLSL identifier.")
+                            .arg(uniform.name);
+                return false;
+            }
+            uniform.minimum = entry.value("minimum").toDouble(0.0);
+            uniform.maximum = entry.value("maximum").toDouble(1.0);
+            uniform.step = entry.value("step").toDouble(0.01);
+            uniform.value = entry.value("value").toDouble(uniform.minimum);
+            if (!std::isfinite(uniform.minimum) ||
+                !std::isfinite(uniform.maximum) ||
+                !std::isfinite(uniform.step) ||
+                !std::isfinite(uniform.value) ||
+                uniform.maximum <= uniform.minimum || uniform.step <= 0.0) {
+                error = QObject::tr("Custom uniform '%1' has an invalid range or value.")
+                            .arg(uniform.name);
+                return false;
+            }
+            uniform.value = std::clamp(uniform.value, uniform.minimum,
+                                       uniform.maximum);
+            uniforms.append(uniform);
+        }
+        return true;
+    }
+
+    bool write_custom_uniforms(const QString &directory,
+                               const QList<CustomUniformDefinition> &uniforms,
+                               QString &error) {
+        error.clear();
+        const QString path = directory + "/" + JSON_MANIFEST_NAME;
+        QJsonDocument document;
+        if (!load_json_document(path, document, error))
+            return false;
+
+        QJsonObject entries;
+        for (const CustomUniformDefinition &uniform : uniforms) {
+            QJsonObject entry;
+            entry.insert("minimum", uniform.minimum);
+            entry.insert("maximum", uniform.maximum);
+            entry.insert("step", uniform.step);
+            entry.insert("value", std::clamp(uniform.value, uniform.minimum,
+                                             uniform.maximum));
+            entries.insert(uniform.name, entry);
+        }
+
+        QJsonObject root = document.object();
+        if (entries.isEmpty())
+            root.remove("custom_uniforms");
+        else
+            root.insert("custom_uniforms", entries);
+        return write_json_document(path, QJsonDocument(root), error);
     }
 } // namespace acmx2

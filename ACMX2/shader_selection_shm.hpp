@@ -7,11 +7,13 @@ namespace acmx2::ipc {
 
     inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection";
     inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
-    inline constexpr std::uint32_t kShaderSelectionVersion = 5;
+    inline constexpr std::uint32_t kShaderSelectionVersion = 6;
     inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxGpuFilterCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxWatermarkText = 256;
     inline constexpr std::uint32_t kShaderSelectionMaxReloadPath = 1024;
+    inline constexpr std::uint32_t kShaderSelectionMaxCustomUniforms = 64;
+    inline constexpr std::uint32_t kShaderSelectionMaxUniformName = 64;
 
     struct ShaderSelectionShmData {
         std::uint32_t magic = kShaderSelectionMagic;
@@ -35,6 +37,10 @@ namespace acmx2::ipc {
         std::int32_t reload_shader_index = -1;
         char reload_shader_path[kShaderSelectionMaxReloadPath] = {};
         std::uint32_t reload_sequence = 0;
+        std::uint32_t custom_uniform_count = 0;
+        char custom_uniform_names[kShaderSelectionMaxCustomUniforms]
+                                 [kShaderSelectionMaxUniformName] = {};
+        float custom_uniform_values[kShaderSelectionMaxCustomUniforms] = {};
         std::uint32_t sequence = 0;
     };
 

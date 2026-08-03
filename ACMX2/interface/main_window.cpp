@@ -1,5 +1,6 @@
 #include "main_window.hpp"
 #include "audio-window.hpp"
+#include "custom-uniforms.hpp"
 #include "custom_style.hpp"
 #include "find-shader.hpp"
 #include "metadata-viewer.hpp"
@@ -311,32 +312,7 @@ void MainWindow::initControls() {
                 populateShaderTree();
 
                 if (cacheBuildInProgress) {
-                    if (exitCode == 0) {
-                        shaderCacheMarkedStaleBySave = false;
-                    }
                     cacheBuildInProgress = false;
-                }
-
-                // If this exit was a shader cache rebuild triggered by a
-                // pending Run, launch the actual session now.
-                if (pendingLaunchAfterBuild) {
-                    const QStringList queuedArgs = pendingLaunchArguments;
-                    pendingLaunchAfterBuild = false;
-                    pendingLaunchArguments.clear();
-                    if (exitCode == 0) {
-                        Log("Cache rebuild finished; launching acmx2...");
-                        Log("shell: acmx2 " + concatList(queuedArgs) + "<br>");
-                        process->start(executable_path, queuedArgs);
-                        if (!process->waitForStarted()) {
-                            Log("<b style='color:red;'>Failed to start the program.</b>");
-                        } else {
-                            play_stop->setEnabled(true);
-                        }
-                    } else {
-                        Log("<b style='color:red;'>Cache rebuild failed; "
-                            "aborting queued launch.</b>");
-                    }
-                    return;
                 }
 
                 // Optional post-process: convert the produced HLG HDR file
@@ -458,10 +434,6 @@ void MainWindow::initControls() {
     play_stop->setEnabled(false);
     connect(play_stop, &QAction::triggered, this, [=]() {
         if (process->state() == QProcess::Running) {
-            // If the user stops during a pending cache rebuild, cancel the
-            // queued launch so we don't auto-run after termination.
-            pendingLaunchAfterBuild = false;
-            pendingLaunchArguments.clear();
             process->terminate();
         }
         if (hdr10Process && hdr10Process->state() == QProcess::Running) {
@@ -538,6 +510,10 @@ void MainWindow::initControls() {
     listMenu_shader = new QAction(tr("New Shader GLSL File"), this);
     connect(listMenu_shader, &QAction::triggered, this, &MainWindow::newShader);
     listMenu->addAction(listMenu_shader);
+    customUniformsAction = new QAction(tr("Add Custom Uniforms..."), this);
+    connect(customUniformsAction, &QAction::triggered, this,
+            &MainWindow::menuCustomUniforms);
+    listMenu->addAction(customUniformsAction);
     listMenu->addSeparator();
     listMenu_remove = new QAction(tr("Remove Shader"), this);
     connect(listMenu_remove, &QAction::triggered, this, &MainWindow::menuRemove);
@@ -609,6 +585,16 @@ void MainWindow::initControls() {
         box.exec();
     });
     helpMenu->addAction(helpMenu_about);
+    customUniformDialog = new CustomUniformDialog(this);
+    connect(customUniformDialog, &CustomUniformDialog::uniformsChanged, this,
+            &MainWindow::publishCustomUniformsToRunningProcess);
+    connect(customUniformDialog, &CustomUniformDialog::uniformDefinitionsChanged,
+            this, [this]() {
+                const QString shaderName = currentShaderName();
+                if (!shaderName.isEmpty())
+                    publishShaderReloadToRunningProcess(
+                        QDir(shader_path).filePath(shaderName));
+            });
     list_view = new QTreeWidget(this);
     list_view->setColumnCount(4);
     list_view->setHeaderLabels({tr("#"), tr("Name"), tr("Last Modified"), tr("Compile Health")});
@@ -1291,9 +1277,6 @@ void MainWindow::openShaderEditor(const QString &filePath, int lineNumber,
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
     connect(editor, &TextEditor::fileSaved, this, [this](const QString &filePath) {
-#ifndef Q_OS_MACOS
-        shaderCacheMarkedStaleBySave = true;
-#endif
         populateShaderTree();
         publishShaderReloadToRunningProcess(filePath);
     });
@@ -1375,6 +1358,14 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->reload_shader_index = -1;
         std::fill(std::begin(shaderSelectionShm->reload_shader_path), std::end(shaderSelectionShm->reload_shader_path), '\0');
         shaderSelectionShm->reload_sequence = 0;
+        shaderSelectionShm->custom_uniform_count = 0;
+        std::fill(&shaderSelectionShm->custom_uniform_names[0][0],
+                  &shaderSelectionShm->custom_uniform_names[0][0] +
+                      acmx2::ipc::kShaderSelectionMaxCustomUniforms *
+                          acmx2::ipc::kShaderSelectionMaxUniformName,
+                  '\0');
+        std::fill(std::begin(shaderSelectionShm->custom_uniform_values),
+                  std::end(shaderSelectionShm->custom_uniform_values), 0.0f);
         shaderSelectionShm->sequence = 0;
     }
     shaderSelectionSequence = shaderSelectionShm->sequence;
@@ -1507,6 +1498,41 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
 #endif
 }
 
+void MainWindow::publishCustomUniformsToRunningProcess() {
+#if defined(__linux__) || defined(__APPLE__)
+    if (!shaderSelectionShm || !customUniformDialog)
+        return;
+
+    std::fill(&shaderSelectionShm->custom_uniform_names[0][0],
+              &shaderSelectionShm->custom_uniform_names[0][0] +
+                  acmx2::ipc::kShaderSelectionMaxCustomUniforms *
+                      acmx2::ipc::kShaderSelectionMaxUniformName,
+              '\0');
+    std::fill(std::begin(shaderSelectionShm->custom_uniform_values),
+              std::end(shaderSelectionShm->custom_uniform_values), 0.0f);
+
+    quint32 count = 0;
+    for (const acmx2::CustomUniformDefinition &uniform :
+         customUniformDialog->uniforms()) {
+        if (count >= acmx2::ipc::kShaderSelectionMaxCustomUniforms)
+            break;
+        const QByteArray name = uniform.name.toUtf8();
+        if (name.isEmpty() ||
+            name.size() >=
+                static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName)) {
+            continue;
+        }
+        std::copy(name.cbegin(), name.cend(),
+                  shaderSelectionShm->custom_uniform_names[count]);
+        shaderSelectionShm->custom_uniform_values[count] =
+            static_cast<float>(uniform.value);
+        ++count;
+    }
+    shaderSelectionShm->custom_uniform_count = count;
+    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+#endif
+}
+
 void MainWindow::cleanupShaderSelectionSharedMemory() {
 #if defined(__linux__) || defined(__APPLE__)
     if (shaderSelectionShm) {
@@ -1551,30 +1577,6 @@ void MainWindow::refreshShaderCacheStatus() {
     shaderCacheMTime = cacheInfo.lastModified();
     shaderCacheStatus = parseShaderCacheStatus(cachePath);
     // Log("Shader cache: " + cachePath + " (" + QString::number(shaderCacheStatus.size()) + " entries)");
-#endif
-}
-
-bool MainWindow::isShaderCacheStale() const {
-#ifdef Q_OS_MACOS
-    // macOS does not support the persistent binary shader cache; never
-    // report staleness so we never trigger an auto-rebuild.
-    return false;
-#else
-    if (!use_shader_cache || shader_path.isEmpty() || items.isEmpty())
-        return false;
-    const QString cachePath = resolveShaderCachePath(
-        shader_path, cache_size,
-        cache_enabled && textureCacheArraySettingEnabled());
-    QFileInfo cacheInfo(cachePath);
-    if (!cacheInfo.exists() || !cacheInfo.isFile())
-        return true;
-    const QDateTime cacheMTime = cacheInfo.lastModified();
-    for (const QString &name : items) {
-        QFileInfo src(shader_path + "/" + name);
-        if (src.exists() && src.lastModified() > cacheMTime)
-            return true;
-    }
-    return false;
 #endif
 }
 
@@ -1728,6 +1730,30 @@ void MainWindow::fileOpenProp() {
     }
 }
 
+void MainWindow::menuCustomUniforms() {
+    if (!customUniformDialog || shader_path.isEmpty()) {
+        QMessageBox::information(this, tr("Custom Uniforms"),
+                                 tr("Load a shader library first."));
+        return;
+    }
+    const QString jsonPath = QDir(shader_path).filePath("library.json");
+    if (!QFileInfo(jsonPath).isFile()) {
+        QMessageBox::warning(
+            this, tr("Custom Uniforms"),
+            tr("Custom uniforms require a library.json manifest."));
+        return;
+    }
+
+    QString error;
+    if (!customUniformDialog->loadLibrary(shader_path, &error)) {
+        QMessageBox::warning(this, tr("Could Not Load Custom Uniforms"), error);
+        return;
+    }
+    customUniformDialog->show();
+    customUniformDialog->raise();
+    customUniformDialog->activateWindow();
+}
+
 bool MainWindow::loadShaders(const QString &path, bool force) {
     QString manifestPath = acmx2::shader_manifest_path(path);
     if (manifestPath.isEmpty()) {
@@ -1763,6 +1789,12 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     shader_path = path;
     activeShaderManifestPath = manifestPath;
     indexTimestamp = modified;
+    if (customUniformDialog &&
+        QFileInfo(manifestPath).fileName().compare("library.json", Qt::CaseInsensitive) == 0) {
+        QString uniformError;
+        if (!customUniformDialog->loadLibrary(path, &uniformError))
+            Log("Could not load custom uniforms: " + uniformError);
+    }
     const int previousRow = currentShaderRow();
     const QString previouslySelected = currentShaderName();
     items.clear();
@@ -2793,23 +2825,6 @@ void MainWindow::runAll() {
     publishSelectedShaderIndexToRunningProcess();
     publishRuntimeSettingsToRunningProcess();
 
-    const bool firstRunAllInvocation = firstRunAllPendingRebuild;
-    firstRunAllPendingRebuild = false;
-    const bool shouldForceInitialRebuild = firstRunAllInvocation && use_shader_cache;
-
-    if (use_shader_cache &&
-        (shouldForceInitialRebuild || shaderCacheMarkedStaleBySave || isShaderCacheStale())) {
-        if (shouldForceInitialRebuild) {
-            Log("First Run All after startup: rebuilding shader cache before launch.");
-        } else {
-            Log("Shader cache is out of date; rebuilding then launching automatically.");
-        }
-        pendingLaunchArguments = arguments;
-        pendingLaunchAfterBuild = true;
-        menuBuildShaderCache();
-        return;
-    }
-
     Log("shell: acmx2 " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
@@ -2996,8 +3011,6 @@ void MainWindow::menuBuildShaderCache() {
     // macOS does not support the persistent binary shader cache.
     Log("Rebuild Shader Cache is not available on macOS.");
     cacheBuildInProgress = false;
-    pendingLaunchAfterBuild = false;
-    pendingLaunchArguments.clear();
     return;
 #else
     QString build_path = shader_path;

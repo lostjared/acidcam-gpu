@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <argz.hpp>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -38,6 +39,7 @@
 #include <functional>
 #include <gl.hpp>
 #include <iomanip>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <mx.hpp>
@@ -45,6 +47,7 @@
 #include <optional>
 #include <queue>
 #include <random>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -217,7 +220,28 @@ struct ShaderManifestData {
     ShaderManifestFormat format = ShaderManifestFormat::Text;
     std::string path;
     std::vector<std::string> entries;
+    struct CustomUniform {
+        std::string name;
+        double minimum = 0.0;
+        double maximum = 1.0;
+        double step = 0.01;
+        double value = 0.0;
+    };
+    std::vector<CustomUniform> custom_uniforms;
 };
+
+static bool isValidCustomUniformName(const std::string &name) {
+    if (name.empty() ||
+        name.size() >= acmx2::ipc::kShaderSelectionMaxUniformName ||
+        name.rfind("gl_", 0) == 0 ||
+        !(std::isalpha(static_cast<unsigned char>(name.front())) ||
+          name.front() == '_')) {
+        return false;
+    }
+    return std::all_of(name.begin() + 1, name.end(), [](unsigned char ch) {
+        return std::isalnum(ch) || ch == '_';
+    });
+}
 
 static std::string shaderManifestPath(const std::string &library_path) {
     const std::filesystem::path root(library_path);
@@ -267,6 +291,49 @@ static bool loadShaderManifest(const std::string &library_path,
                 }
                 manifest.entries.push_back(std::move(file));
             }
+            const cv::FileNode uniforms = storage["custom_uniforms"];
+            if (!uniforms.empty()) {
+                if (!uniforms.isMap()) {
+                    error = manifest.path + " field 'custom_uniforms' must be an object";
+                    return false;
+                }
+                for (auto it = uniforms.begin(); it != uniforms.end(); ++it) {
+                    if (manifest.custom_uniforms.size() >=
+                        acmx2::ipc::kShaderSelectionMaxCustomUniforms) {
+                        error = manifest.path + " contains too many custom uniforms";
+                        return false;
+                    }
+                    const cv::FileNode entry = *it;
+                    ShaderManifestData::CustomUniform uniform;
+                    uniform.name = entry.name();
+                    if (!entry.isMap() || !isValidCustomUniformName(uniform.name)) {
+                        error = manifest.path + " contains an invalid custom uniform: " +
+                                uniform.name;
+                        return false;
+                    }
+                    if (!entry["minimum"].empty())
+                        entry["minimum"] >> uniform.minimum;
+                    if (!entry["maximum"].empty())
+                        entry["maximum"] >> uniform.maximum;
+                    if (!entry["step"].empty())
+                        entry["step"] >> uniform.step;
+                    uniform.value = uniform.minimum;
+                    if (!entry["value"].empty())
+                        entry["value"] >> uniform.value;
+                    if (!std::isfinite(uniform.minimum) ||
+                        !std::isfinite(uniform.maximum) ||
+                        !std::isfinite(uniform.step) ||
+                        !std::isfinite(uniform.value) ||
+                        uniform.maximum <= uniform.minimum || uniform.step <= 0.0) {
+                        error = manifest.path + " contains an invalid range for custom uniform: " +
+                                uniform.name;
+                        return false;
+                    }
+                    uniform.value = std::clamp(uniform.value, uniform.minimum,
+                                               uniform.maximum);
+                    manifest.custom_uniforms.push_back(std::move(uniform));
+                }
+            }
             return true;
         } catch (const cv::Exception &e) {
             error = "Could not parse " + manifest.path + ": " + e.what();
@@ -288,6 +355,7 @@ static bool loadShaderManifest(const std::string &library_path,
 
 static bool writeJsonShaderManifest(const std::string &path,
                                     const std::vector<std::string> &entries,
+                                    const std::vector<ShaderManifestData::CustomUniform> &custom_uniforms,
                                     std::string &error) {
     try {
         cv::FileStorage storage(path,
@@ -302,6 +370,20 @@ static bool writeJsonShaderManifest(const std::string &path,
         for (const std::string &entry : entries)
             storage << entry;
         storage << "]";
+        if (!custom_uniforms.empty()) {
+            storage << "custom_uniforms"
+                    << "{";
+            for (const auto &uniform : custom_uniforms) {
+                storage << uniform.name
+                        << "{"
+                        << "minimum" << uniform.minimum
+                        << "maximum" << uniform.maximum
+                        << "step" << uniform.step
+                        << "value" << uniform.value
+                        << "}";
+            }
+            storage << "}";
+        }
         storage.release();
         return true;
     } catch (const cv::Exception &e) {
@@ -2494,34 +2576,6 @@ struct ShaderCache {
     }
 };
 
-/**
- * @brief Compute an FNV-1a 64-bit hash of a file's contents.
- * @param filepath Path to the file to hash.
- * @return 64-bit hash, or 0 if the file cannot be opened.
- */
-static uint64_t fnv1a64_file(const std::string &filepath) {
-    std::ifstream f(filepath, std::ios::binary);
-    if (!f.is_open())
-        return 0;
-
-    uint64_t h = 1469598103934665603ull;
-    char buf[1 << 15];
-    while (f.good()) {
-        f.read(buf, sizeof(buf));
-        std::streamsize n = f.gcount();
-        for (std::streamsize i = 0; i < n; ++i) {
-            h ^= static_cast<uint8_t>(buf[i]);
-            h *= 1099511628211ull;
-        }
-    }
-    return h;
-}
-
-/// @brief Convenience wrapper—hashes a shader source file for cache validation.
-uint64_t hashFileContents(const std::string &filepath) {
-    return fnv1a64_file(filepath);
-}
-
 typedef void(APIENTRYP PFNGLGETPROGRAMBINARYPROC_LOCAL)(GLuint program, GLsizei bufSize, GLsizei *length, GLenum *binaryFormat, void *binary);
 typedef void(APIENTRYP PFNGLPROGRAMBINARYPROC_LOCAL)(GLuint program, GLenum binaryFormat, const void *binary, GLsizei length);
 
@@ -2880,6 +2934,9 @@ class ShaderLibrary {
     glm::vec4 inc_value = glm::vec4(0.0f);
     glm::vec4 inc_valuex = glm::vec4(0.0f);
     bool restore_black = false;
+    std::vector<ShaderManifestData::CustomUniform> custom_uniforms;
+    std::vector<std::regex> custom_uniform_declarations;
+    std::vector<std::regex> custom_uniform_references;
 
     /**
      * @struct ProgramData
@@ -2931,13 +2988,13 @@ class ShaderLibrary {
         GLint inc_value_loc = -1;
         GLint inc_valuex_loc = -1;
         GLint time_speed_loc = -1;
+        std::vector<GLint> custom_uniform_locs;
 #ifdef MIDI_ENABLED
         GLint slider_loc[4] = {-1, -1, -1, -1}; ///< Locations of optional `uniform float slider1..slider4;`
 #endif
     };
     size_t library_index = 0;
     bool use_cache = false;
-    bool rebuild_attempted = false; ///< Set after the first stale-cache rebuild to prevent repeated re-builds in the same session.
 
     /**
      * @brief Resolve the on-disk path for the shader binary cache file.
@@ -3051,8 +3108,8 @@ class ShaderLibrary {
      * @param size       Cache ring length to bake as `SIZE`.
      * @return Modified fragment source, or empty string on read failure.
      */
-    static std::string injectShaderSize(const std::string &frag_path, int size,
-                                        bool use_array) {
+    std::string injectShaderSize(const std::string &frag_path, int size,
+                                 bool use_array) const {
         std::ifstream in(frag_path);
         if (!in.is_open())
             return {};
@@ -3070,8 +3127,70 @@ class ShaderLibrary {
             "#define SIZE " + std::to_string(size) + "\n" +
             "#define USE_HISTORY_TEXTURE_ARRAY " +
             std::to_string(use_array ? 1 : 0) + "\n";
+        std::string sourceWithoutComments;
+        sourceWithoutComments.reserve(src.size());
+        bool lineComment = false;
+        bool blockComment = false;
+        for (std::size_t i = 0; i < src.size(); ++i) {
+            if (lineComment) {
+                if (src[i] == '\n') {
+                    lineComment = false;
+                    sourceWithoutComments.push_back('\n');
+                } else {
+                    sourceWithoutComments.push_back(' ');
+                }
+                continue;
+            }
+            if (blockComment) {
+                if (src[i] == '*' && i + 1 < src.size() && src[i + 1] == '/') {
+                    sourceWithoutComments.append("  ");
+                    ++i;
+                    blockComment = false;
+                } else {
+                    sourceWithoutComments.push_back(src[i] == '\n' ? '\n' : ' ');
+                }
+                continue;
+            }
+            if (src[i] == '/' && i + 1 < src.size() && src[i + 1] == '/') {
+                sourceWithoutComments.append("  ");
+                ++i;
+                lineComment = true;
+            } else if (src[i] == '/' && i + 1 < src.size() && src[i + 1] == '*') {
+                sourceWithoutComments.append("  ");
+                ++i;
+                blockComment = true;
+            } else {
+                sourceWithoutComments.push_back(src[i]);
+            }
+        }
+        for (std::size_t i = 0; i < custom_uniforms.size(); ++i) {
+            const bool referenced =
+                i < custom_uniform_references.size() &&
+                std::regex_search(sourceWithoutComments,
+                                  custom_uniform_references[i]);
+            const bool declared =
+                i < custom_uniform_declarations.size() &&
+                std::regex_search(sourceWithoutComments,
+                                  custom_uniform_declarations[i]);
+            if (referenced && !declared) {
+                define += "uniform float " + custom_uniforms[i].name + ";\n";
+            }
+        }
         src.insert(insert_pos, define);
         return src;
+    }
+
+    uint64_t preparedFragmentHash(const std::string &frag_path) const {
+        const std::string source =
+            injectShaderSize(frag_path, cache_size, use_history_array);
+        if (source.empty())
+            return 0;
+        uint64_t hash = 1469598103934665603ull;
+        for (unsigned char byte : source) {
+            hash ^= byte;
+            hash *= 1099511628211ull;
+        }
+        return hash;
     }
 
     /**
@@ -3288,6 +3407,46 @@ class ShaderLibrary {
 #else
     ShaderLibrary() = default;
 #endif
+
+    void setCustomUniformValues(
+        const std::vector<ShaderManifestData::CustomUniform> &uniforms) {
+        const bool namesChanged = custom_uniforms.size() != uniforms.size() ||
+                                  !std::equal(
+                                      custom_uniforms.begin(), custom_uniforms.end(),
+                                      uniforms.begin(),
+                                      [](const auto &left, const auto &right) {
+                                          return left.name == right.name;
+                                      });
+        custom_uniforms = uniforms;
+        if (!namesChanged)
+            return;
+        custom_uniform_declarations.clear();
+        custom_uniform_references.clear();
+        custom_uniform_declarations.reserve(custom_uniforms.size());
+        custom_uniform_references.reserve(custom_uniforms.size());
+        for (const auto &uniform : custom_uniforms) {
+            custom_uniform_declarations.emplace_back(
+                "\\buniform\\s+(?:(?:lowp|mediump|highp)\\s+)?float\\s+" +
+                uniform.name + "\\b");
+            custom_uniform_references.emplace_back("\\b" + uniform.name + "\\b");
+        }
+        const auto refreshLocations = [this](
+                                          auto &names,
+                                          const auto &programs) {
+            for (auto &[index, data] : names) {
+                data.custom_uniform_locs.assign(custom_uniforms.size(), -1);
+                if (index < 0 || static_cast<std::size_t>(index) >= programs.size())
+                    continue;
+                for (std::size_t i = 0; i < custom_uniforms.size(); ++i) {
+                    data.custom_uniform_locs[i] = glGetUniformLocation(
+                        programs[static_cast<std::size_t>(index)]->id(),
+                        custom_uniforms[i].name.c_str());
+                }
+            }
+        };
+        refreshLocations(program_names_2d, programs_2d);
+        refreshLocations(program_names_3d, programs_3d);
+    }
     ~ShaderLibrary() {}
 
 #ifdef MIDI_ENABLED
@@ -3618,6 +3777,11 @@ class ShaderLibrary {
             names[pos].inc_value_loc = glGetUniformLocation(prog->id(), "inc_value");
             names[pos].inc_valuex_loc = glGetUniformLocation(prog->id(), "inc_valuex");
             names[pos].time_speed_loc = glGetUniformLocation(prog->id(), "time_speed");
+            names[pos].custom_uniform_locs.assign(custom_uniforms.size(), -1);
+            for (std::size_t i = 0; i < custom_uniforms.size(); ++i) {
+                names[pos].custom_uniform_locs[i] = glGetUniformLocation(
+                    prog->id(), custom_uniforms[i].name.c_str());
+            }
 #ifdef MIDI_ENABLED
             names[pos].slider_loc[0] = glGetUniformLocation(prog->id(), "slider1");
             names[pos].slider_loc[1] = glGetUniformLocation(prog->id(), "slider2");
@@ -3833,6 +3997,7 @@ class ShaderLibrary {
         std::string manifest_error;
         if (!loadShaderManifest(text, manifest, manifest_error))
             throw mx::Exception("acmx2: " + manifest_error);
+        setCustomUniformValues(manifest.custom_uniforms);
 
         std::vector<std::string> shader_files;
         for (const std::string &entry : manifest.entries) {
@@ -4039,6 +4204,7 @@ class ShaderLibrary {
             mx::system_err << "acmx2: " << manifest_error << "\n";
             return false;
         }
+        setCustomUniformValues(manifest.custom_uniforms);
         const std::string manifest_path = manifest.path;
         std::string crash_marker_path = library_path + "/.remove_broken_last_shader";
 
@@ -4215,7 +4381,9 @@ class ShaderLibrary {
                 kept_entries.push_back(entry.raw);
         }
         if (manifest.format == ShaderManifestFormat::Json) {
-            if (!writeJsonShaderManifest(manifest_path, kept_entries, manifest_error)) {
+            if (!writeJsonShaderManifest(manifest_path, kept_entries,
+                                         manifest.custom_uniforms,
+                                         manifest_error)) {
                 mx::system_err << "acmx2: " << manifest_error << "\n";
                 return false;
             }
@@ -4246,6 +4414,92 @@ class ShaderLibrary {
                        << ", removed " << removed << " shader(s). "
                        << "Backup written to " << manifest_path << ".bak\n";
         fflush(stdout);
+        return true;
+    }
+
+    /**
+     * @brief Compile one shader and replace a single binary-cache entry.
+     *
+     * A failed compile is recorded in the entry so its manifest slot remains
+     * stable and can use the normal passthrough fallback.
+     */
+    bool compileShaderCacheEntry(const std::string &shader_file,
+                                 const std::string &full_path,
+                                 const std::string &vert_2d,
+                                 const std::string &vert_3d,
+                                 bool include_3d,
+                                 ShaderCacheEntry &entry) {
+        entry = {};
+        entry.shader_name = std::filesystem::path(shader_file).stem().string();
+        entry.source_hash = preparedFragmentHash(full_path);
+
+        const auto markFailed = [&](const std::string &reason) {
+            entry.failed = true;
+            entry.binary_2d.clear();
+            entry.binary_3d.clear();
+            entry.format_2d = 0;
+            entry.format_3d = 0;
+            mx::system_err << "acmx2: Incremental cache compile failed for "
+                           << shader_file << ": " << reason << "\n";
+            mx::system_err.flush();
+        };
+        const auto extractBinary = [](GLuint program, std::vector<char> &binary,
+                                      GLenum &format) {
+            GLint binaryLength = 0;
+            glGetProgramiv(program, GL_PROGRAM_BINARY_LENGTH, &binaryLength);
+            if (binaryLength <= 0)
+                return false;
+            binary.resize(static_cast<std::size_t>(binaryLength));
+            GLsizei actualLength = 0;
+            format = 0;
+            while (glGetError() != GL_NO_ERROR) {
+            }
+            glGetProgramBinaryFunc(program, binaryLength, &actualLength,
+                                   &format, binary.data());
+            if (glGetError() != GL_NO_ERROR || actualLength <= 0) {
+                binary.clear();
+                format = 0;
+                return false;
+            }
+            binary.resize(static_cast<std::size_t>(actualLength));
+            return true;
+        };
+
+        try {
+            gl::ShaderProgram program2d;
+            program2d.setSilent(true);
+            if (!loadProgramWithSize(&program2d, vert_2d, full_path)) {
+                markFailed("2D compile failed");
+                return false;
+            }
+            if (!extractBinary(program2d.id(), entry.binary_2d,
+                               entry.format_2d)) {
+                markFailed("could not extract 2D program binary");
+                return false;
+            }
+
+            if (include_3d) {
+                gl::ShaderProgram program3d;
+                program3d.setSilent(true);
+                if (!loadProgramWithSize(&program3d, vert_3d, full_path)) {
+                    markFailed("3D compile failed");
+                    return false;
+                }
+                if (!extractBinary(program3d.id(), entry.binary_3d,
+                                   entry.format_3d)) {
+                    markFailed("could not extract 3D program binary");
+                    return false;
+                }
+            }
+        } catch (const std::exception &error) {
+            markFailed(error.what());
+            return false;
+        } catch (...) {
+            markFailed("unknown exception");
+            return false;
+        }
+
+        entry.failed = false;
         return true;
     }
 
@@ -4283,8 +4537,14 @@ class ShaderLibrary {
         std::string cache_file =
             shaderCacheFilePath(win ? win->util.path : std::string(),
                                 library_path, cache_size, use_history_array);
-        std::vector<std::string> shader_files;
+        ShaderManifestData manifest;
         std::string manifest_error;
+        if (!loadShaderManifest(library_path, manifest, manifest_error)) {
+            mx::system_err << "acmx2: " << manifest_error << "\n";
+            return false;
+        }
+        setCustomUniformValues(manifest.custom_uniforms);
+        std::vector<std::string> shader_files;
         if (!collectShaderLibraryEntries(library_path, shader_files, manifest_error)) {
             mx::system_err << "acmx2: " << manifest_error << "\n";
             return false;
@@ -4311,7 +4571,7 @@ class ShaderLibrary {
 
             mx::system_out << "  - Computing hash... ";
             fflush(stdout);
-            entry.source_hash = hashFileContents(full_path);
+            entry.source_hash = preparedFragmentHash(full_path);
             mx::system_out << "done\n";
             fflush(stdout);
 
@@ -4553,6 +4813,13 @@ class ShaderLibrary {
     /// @brief Attempt to load all shader programs from the binary cache file.
     bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont,
                        const std::string &vert_2d = "", const std::string &vert_3d = "") {
+        ShaderManifestData manifest;
+        std::string manifest_error;
+        if (!loadShaderManifest(library_path, manifest, manifest_error)) {
+            mx::system_out << "acmx2: " << manifest_error << "\n";
+            return false;
+        }
+        setCustomUniformValues(manifest.custom_uniforms);
         std::string cache_file =
             shaderCacheFilePath(win ? win->util.path : std::string(),
                                 library_path, cache_size, use_history_array);
@@ -4599,7 +4866,6 @@ class ShaderLibrary {
         }
 
         std::vector<std::string> shader_files;
-        std::string manifest_error;
         if (!collectShaderLibraryEntries(library_path, shader_files, manifest_error)) {
             mx::system_out << "acmx2: " << manifest_error << "\n";
             return false;
@@ -4610,33 +4876,37 @@ class ShaderLibrary {
                            << " shaders but cache has " << cache.entries.size()
                            << " entries. Rebuilding cache...\n";
             fflush(stdout);
-            if (!vert_2d.empty() && !vert_3d.empty()) {
-                programs_2d.clear();
-                programs_3d.clear();
-                program_names_2d.clear();
-                program_names_3d.clear();
-                buildShaderCache(win, library_path, vert_2d, vert_3d);
-                mx::system_out << "acmx2: Cache rebuilt. Loading shaders from source...\n";
-                fflush(stdout);
-            }
             return false;
         }
 
-        for (size_t i = 0; i < shader_files.size(); ++i) {
-            std::string full_path = library_path + "/" + shader_files[i];
-            uint64_t current_hash = hashFileContents(full_path);
-            if (current_hash != cache.entries[i].source_hash) {
-                mx::system_out << "acmx2: Shader source changed: " << shader_files[i] << ", rebuilding cache...\n";
-                fflush(stdout);
-                if (!vert_2d.empty() && !vert_3d.empty()) {
-                    programs_2d.clear();
-                    programs_3d.clear();
-                    program_names_2d.clear();
-                    program_names_3d.clear();
-                    buildShaderCache(win, library_path, vert_2d, vert_3d);
-                    mx::system_out << "acmx2: Cache rebuilt. Loading shaders from source...\n";
-                    fflush(stdout);
-                }
+        std::vector<std::size_t> staleIndices;
+        for (std::size_t i = 0; i < shader_files.size(); ++i) {
+            const std::string fullPath = library_path + "/" + shader_files[i];
+            const uint64_t currentHash = preparedFragmentHash(fullPath);
+            if (currentHash != cache.entries[i].source_hash ||
+                cache.entries[i].shader_name !=
+                    std::filesystem::path(shader_files[i]).stem().string()) {
+                staleIndices.push_back(i);
+            }
+        }
+
+        if (!staleIndices.empty()) {
+            mx::system_out << "acmx2: Updating " << staleIndices.size()
+                           << " changed shader cache entr"
+                           << (staleIndices.size() == 1 ? "y" : "ies") << "...\n";
+            mx::system_out.flush();
+            for (const std::size_t index : staleIndices) {
+                const std::string fullPath =
+                    library_path + "/" + shader_files[index];
+                mx::system_out << "acmx2: Incremental cache update: "
+                               << shader_files[index] << "\n";
+                mx::system_out.flush();
+                compileShaderCacheEntry(shader_files[index], fullPath,
+                                        vert_2d, vert_3d, cache.dual_mode,
+                                        cache.entries[index]);
+            }
+            if (!cache.save(cache_file)) {
+                mx::system_err << "acmx2: Could not save incrementally updated shader cache\n";
                 return false;
             }
         }
@@ -4836,9 +5106,7 @@ class ShaderLibrary {
         fflush(stdout);
 
         // If more than 10% of the cached binaries failed to load (stale driver/GPU),
-        // automatically delete the cache file and rebuild from source.
-        // The rebuild is attempted at most once per session to avoid re-entering this
-        // path repeatedly when many shaders have genuine compile errors.
+        // delete the cache so loadProgramsWithCache() can rebuild it once.
         if (binary_fail_count > 0 && cache.entries.size() > 0) {
             size_t fail_pct = (binary_fail_count * 100) / cache.entries.size();
             if (fail_pct >= 10) {
@@ -4851,17 +5119,6 @@ class ShaderLibrary {
                 programs_3d.clear();
                 program_names_2d.clear();
                 program_names_3d.clear();
-                if (!rebuild_attempted && !vert_2d.empty() && !vert_3d.empty()) {
-                    rebuild_attempted = true;
-                    mx::system_out << "acmx2: Deleting stale cache and rebuilding (first attempt)...\n";
-                    fflush(stdout);
-                    buildShaderCache(win, library_path, vert_2d, vert_3d);
-                    mx::system_out << "acmx2: Cache rebuilt from source.\n";
-                    fflush(stdout);
-                } else {
-                    mx::system_out << "acmx2: Rebuild already attempted once this session — skipping re-build, loading from source directly.\n";
-                    fflush(stdout);
-                }
                 return false;
             }
         }
@@ -4880,6 +5137,11 @@ class ShaderLibrary {
      * @param loadingFont  Font used for the on-screen progress overlay.
      */
     void loadProgramsWithCache(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
+        ShaderManifestData manifest;
+        std::string manifest_error;
+        if (!loadShaderManifest(text, manifest, manifest_error))
+            throw mx::Exception("acmx2: " + manifest_error);
+        setCustomUniformValues(manifest.custom_uniforms);
         std::string vert_2d = win->util.getFilePath("data/vert.glsl");
         std::string vert_3d = win->util.getFilePath("data/vertex.glsl");
         if (loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
@@ -5205,6 +5467,7 @@ class ShaderLibrary {
                 glUniform1f(n.slider_loc[i], midi_slider[i]);
         }
 #endif
+        uploadCustomUniforms(n);
     }
 
     /**
@@ -5376,6 +5639,7 @@ class ShaderLibrary {
                 glUniform1f(n.slider_loc[i], midi_slider[i]);
         }
 #endif
+        uploadCustomUniforms(n);
     }
 
     /**
@@ -5607,6 +5871,7 @@ class ShaderLibrary {
                 glUniform1f(names[index()].slider_loc[i], midi_slider[i]);
         }
 #endif
+        uploadCustomUniforms(names[index()]);
     }
 
     /**
@@ -5653,6 +5918,17 @@ class ShaderLibrary {
      * @param n   ProgramData containing cached uniform locations.
      * @param idx Shader index (passed to index_value uniform).
      */
+    void uploadCustomUniforms(const ProgramData &data) const {
+        const std::size_t count = std::min(custom_uniforms.size(),
+                                           data.custom_uniform_locs.size());
+        for (std::size_t i = 0; i < count; ++i) {
+            if (data.custom_uniform_locs[i] != -1) {
+                glUniform1f(data.custom_uniform_locs[i],
+                            static_cast<float>(custom_uniforms[i].value));
+            }
+        }
+    }
+
     void uploadAcidCamUniforms(const ProgramData &n, size_t idx) {
         if (n.value_alpha_r != -1)
             glUniform1f(n.value_alpha_r, color_alpha_r);
@@ -7334,6 +7610,37 @@ class ACView : public gl::GLObject {
     uint32_t shaderSelectionLastSequence = 0;
     uint32_t shaderReloadLastSequence = 0;
 
+    std::vector<ShaderManifestData::CustomUniform>
+    customUniformsFromSharedMemory() const {
+        std::vector<ShaderManifestData::CustomUniform> uniforms;
+        if (!shaderSelectionShm)
+            return uniforms;
+        const uint32_t count = std::min<uint32_t>(
+            shaderSelectionShm->custom_uniform_count,
+            acmx2::ipc::kShaderSelectionMaxCustomUniforms);
+        uniforms.reserve(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            const char *nameData = shaderSelectionShm->custom_uniform_names[i];
+            std::size_t length = 0;
+            while (length < acmx2::ipc::kShaderSelectionMaxUniformName &&
+                   nameData[length] != '\0') {
+                ++length;
+            }
+            ShaderManifestData::CustomUniform uniform;
+            uniform.name.assign(nameData, length);
+            if (!isValidCustomUniformName(uniform.name))
+                continue;
+            uniform.minimum = -std::numeric_limits<double>::max();
+            uniform.maximum = std::numeric_limits<double>::max();
+            uniform.step = 1.0;
+            uniform.value = shaderSelectionShm->custom_uniform_values[i];
+            if (!std::isfinite(uniform.value))
+                uniform.value = 0.0;
+            uniforms.push_back(std::move(uniform));
+        }
+        return uniforms;
+    }
+
     void initShaderSelectionSharedMemory() {
         if (shaderSelectionShm)
             return;
@@ -7362,6 +7669,7 @@ class ACView : public gl::GLObject {
 
         shaderSelectionLastSequence = shaderSelectionShm->sequence;
         shaderReloadLastSequence = shaderSelectionShm->reload_sequence;
+        library.setCustomUniformValues(customUniformsFromSharedMemory());
     }
 
     void cleanupShaderSelectionSharedMemory() {
@@ -7393,6 +7701,8 @@ class ACView : public gl::GLObject {
             }
             return std::string(buf, len);
         };
+
+        library.setCustomUniformValues(customUniformsFromSharedMemory());
 
         if (shaderSelectionShm->reload_sequence != shaderReloadLastSequence) {
             shaderReloadLastSequence = shaderSelectionShm->reload_sequence;
@@ -8516,6 +8826,10 @@ class ACView : public gl::GLObject {
         } else {
             library.loadProgram(win, std::get<1>(flib));
         }
+#if defined(__linux__) || defined(__APPLE__)
+        if (shaderSelectionShm)
+            library.setCustomUniformValues(customUniformsFromSharedMemory());
+#endif
         library.setIndex(std::get<2>(flib));
         if (!playlist_file.empty()) {
             std::ifstream pfile(playlist_file);
