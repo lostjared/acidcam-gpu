@@ -101,6 +101,10 @@ class SettingsWindow : public QDialog {
     float getCrossFadeDuration() const;
     /// @brief Return whether flip mode is enabled.
     bool isFlipEnabled() const;
+    /// @brief Return whether input-frame rotation is enabled.
+    bool is_rotate_enabled() const;
+    /// @brief Return the selected rotation token for --rotate.
+    QString get_rotation_mode() const;
     /// @brief Resolve display name for a camera device index.
     /// @param device_index Camera device index.
     /// @return Human-readable camera name.
@@ -200,6 +204,8 @@ class SettingsWindow : public QDialog {
     QDoubleSpinBox *maxSizeLimitSpinBox;
     QDoubleSpinBox *crossFadeSpinBox;
     QCheckBox *flipCheckBox;
+    QCheckBox *rotate_check_box;
+    QComboBox *rotate_combo_box;
 
     QComboBox *encodePresetComboBox = nullptr;
     QComboBox *encodeTuneComboBox = nullptr;

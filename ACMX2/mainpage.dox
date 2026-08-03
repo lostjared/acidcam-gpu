@@ -110,6 +110,7 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>No Drop limited to non-live inputs</b> — <tt>--no-drop</tt> remains available for video-file and graphics processing but is ignored for webcams; Qt unchecks and disables the option when Camera is selected
 - <b>Recorded webcam audio synchronization</b> — WAV capture shares the video start/stop boundary, and muxing preserves timestamped webcam PTS rather than rescaling playback speed
 - <b>Editable Window Resolution</b> — Qt retains the resolution presets while accepting custom <tt>WxH</tt> text; dimensions must be positive even integers and invalid input is rejected with a warning
+- <b>Input-frame rotation</b> — Qt offers 90-degree clockwise, 180-degree, and 90-degree counterclockwise modes; CPU builds use <tt>cv::rotate</tt> and CUDA builds use <tt>cv::cuda::rotate</tt> on a <tt>GpuMat</tt>
 - <b>Texture cache in all input modes</b> — <tt>--texture-cache</tt> applies to camera, video, and graphic input paths
 - <b>Texture cache array mode</b> — <tt>--texture-cache-array</tt> enables the cache and exposes frame history through one <tt>sampler2DArray history</tt> ring; the maintained <a href="https://github.com/lostjared/shaders">shader collection</a> has been updated for this interface
 - <b>Long-run time phase stability</b> — <tt>time_f</tt> wrap/reset now uses a large <tt>2*PI</tt> multiple to preserve trig continuity across long sessions
@@ -136,6 +137,9 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - Qt unchecks and disables No Drop whenever Camera is selected.
 - The Qt Window Resolution combo accepts either a preset, <tt>Default</tt>, or a
   custom even <tt>WxH</tt> value and refuses invalid input without saving it.
+- Qt provides an optional Rotate control with clockwise, 180-degree, and
+  counterclockwise modes. Rotation occurs before DNN, CUDA-filter, and shader
+  processing; 90-degree modes swap the default output dimensions.
 
 <b>Custom shader uniforms</b>
 
@@ -358,6 +362,22 @@ Window Resolution remains a preset combo box but is also editable. Custom values
 <tt>WxH</tt> syntax (for example <tt>1920x1080</tt>), and both dimensions must be positive and
 divisible by two for encoder compatibility. Invalid text produces a warning, leaves the Settings
 dialog open, and is neither applied nor persisted.
+
+The <b>Playback</b> group also provides a <b>Rotate</b> checkbox and direction combo box. The
+available directions are 90 degrees clockwise, 180 degrees, and 90 degrees counterclockwise. The
+combo box is enabled only while Rotate is checked, and both values persist through
+<tt>QSettings</tt>. The launcher translates the selection into
+<tt>--rotate clockwise</tt>, <tt>--rotate 180</tt>, or
+<tt>--rotate counterclockwise</tt>.
+
+Rotation occurs before DNN inference, CUDA filtering, texture-cache updates, and GLSL shader
+passes. Consequently, all later processing observes the rotated orientation. A non-CUDA build
+uses <tt>cv::rotate</tt> on the source <tt>cv::Mat</tt>; a CUDA build uploads the source to a
+<tt>cv::cuda::GpuMat</tt> and calls <tt>cv::cuda::rotate</tt>.
+
+When Window Resolution is <tt>Default</tt>, a 90-degree rotation swaps the source width and height
+(for example, <tt>1920x1080</tt> becomes <tt>1080x1920</tt>). A custom Window Resolution remains
+the final display and recording size. The 180-degree mode preserves width and height.
 
 The Qt editor flow also includes safer close behavior: if modified shader content is open,
 closing via Escape or window close prompts to save changes before exiting the editor.
@@ -917,6 +937,7 @@ appears in the dock while the application is running.
 | `-v`, `-h` | `--help`, `--version` |             | Display full program information, arguments, and keyboard controls, then exit |
 | `-p`  | `--path`       | `<dir>`     | Assets path |
 | `-r`  | `--resolution` | `WxH`       | Window resolution (e.g. `1920x1080`) |
+|       | `--rotate`     | `<clockwise\|180\|counterclockwise>` | Rotate input frames before visual processing |
 | `-d`  | `--device`     | `<index>`   | Camera device index |
 | `-c`  | `--camera-res` | `WxH`       | Camera capture resolution |
 | `-i`  | `--input`      | `<file>`    | Input video file |

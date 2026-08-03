@@ -82,6 +82,7 @@ From the latest `acidcam-gpu` commits, current focus areas include:
 - **Webcam No Drop behavior clarified**: `--no-drop` is now limited to video-file and graphics processing, where slowing production is safe. Webcam mode always uses timestamp-based late-frame dropping; the CLI ignores `--no-drop`, and the Qt Settings dialog unchecks and disables No Drop when Camera is selected.
 - **Recorded webcam audio boundary**: live WAV capture starts with the media timeline and stops at the video-capture boundary, before queued video frames and encoder packets drain. Timestamped webcam video is muxed without rescaling its PTS, preventing an audio-only tail or a playback-speed change.
 - **Editable window resolution**: the Qt Window Resolution control keeps its preset dropdown but also accepts a custom `WxH` value. Custom width and height must be positive even integers; invalid values show a warning and are not applied or saved.
+- **Input-frame rotation**: Qt Settings now provides a Rotate checkbox with 90° clockwise, 180°, and 90° counterclockwise choices. CPU builds use `cv::rotate`; CUDA builds use `cv::cuda::rotate` on a `GpuMat`. With the default Window Resolution, 90° rotation swaps the output dimensions to preserve orientation.
 
 ### July 2026
 
@@ -243,6 +244,7 @@ sudo bash build-script/install-deps-arch.sh
 | `-v` | `--help` | | Display help message and exit |
 | `-p` | `--path` | `<dir>` | Assets path |
 | `-r` | `--resolution` | `WxH` | Window resolution (e.g. `1920x1080`) |
+| | `--rotate` | `<clockwise\|180\|counterclockwise>` | Rotate input frames before DNN, CUDA-filter, and shader processing |
 | `-d` | `--device` | `<index>` | Camera device index |
 | `-c` | `--camera-res` | `WxH` | Camera capture resolution |
 | `-i` | `--input` | `<file>` | Input video file |
@@ -522,6 +524,22 @@ Recording now exposes more detailed encoder controls in both the command line an
 - **No Drop scope:** No Drop remains available for video-file and graphics inputs, where processing can safely wait for encoder capacity. Selecting Camera in the Qt Settings dialog unchecks and disables it; command-line webcam mode also ignores `--no-drop`.
 - **Audio behavior:** Pass-through plays audio but does not add it to the output file. With `--record-audio`, capture begins on the first valid source frame, stops with video capture, and is muxed without changing timestamped webcam video speed.
 - **Custom window size:** The Window Resolution combo remains a preset selector and is also editable. Enter `Default` or an even `WxH` value such as `1920x1080`; malformed, zero, negative, or odd dimensions are rejected with a warning.
+
+### Input-Frame Rotation
+
+The Qt **Settings > Playback** group includes a **Rotate** checkbox. Enabling it activates a dropdown with **90 degrees clockwise**, **180 degrees**, and **90 degrees counterclockwise**. The enabled state and selected direction are saved with the other interface settings.
+
+The equivalent command-line option is:
+
+```bash
+acmx2 --rotate clockwise
+acmx2 --rotate 180
+acmx2 --rotate counterclockwise
+```
+
+Rotation is applied to each source frame before DNN models, CUDA filters, texture caching, and GLSL shader processing, so every later stage sees the same orientation. Non-CUDA builds rotate the `cv::Mat` with `cv::rotate`; CUDA builds upload the frame to a `cv::cuda::GpuMat` and use `cv::cuda::rotate`.
+
+With Window Resolution set to `Default`, either 90-degree mode swaps the source width and height—for example, `1920x1080` becomes `1080x1920`. An explicitly selected or entered Window Resolution is preserved and remains the final display/recording size. A 180-degree rotation does not swap dimensions.
 
 ### Qt Interface Session Persistence
 

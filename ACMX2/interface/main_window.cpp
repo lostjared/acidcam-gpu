@@ -2188,6 +2188,8 @@ void MainWindow::cameraSettings() {
     max_size_mb = settingsWindow.getMaxSizeLimit();
     cross_fade_duration = settingsWindow.getCrossFadeDuration();
     flip_enabled = settingsWindow.isFlipEnabled();
+    rotate_enabled = settingsWindow.is_rotate_enabled();
+    rotation_mode = settingsWindow.get_rotation_mode();
     png_output = settingsWindow.isPngOutputEnabled();
     generate_enabled = settingsWindow.isGenerateEnabled();
     generate_interval = settingsWindow.getGenerateInterval();
@@ -2417,6 +2419,10 @@ void MainWindow::runSelected() {
 
     if (flip_enabled) {
         arguments << "--flip";
+    }
+
+    if (rotate_enabled) {
+        arguments << "--rotate" << rotation_mode;
     }
 
     if (png_output && !output_file.isEmpty()) {
@@ -2668,6 +2674,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     if (flip_enabled) {
         arguments << "--flip";
+    }
+
+    if (rotate_enabled) {
+        arguments << "--rotate" << rotation_mode;
     }
 
     if (png_output && !output_file.isEmpty()) {

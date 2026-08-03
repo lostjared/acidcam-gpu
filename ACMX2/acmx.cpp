@@ -128,6 +128,7 @@ namespace ac_gpu {
 #ifdef ACMX2_WITH_CUDA
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudawarping.hpp>
 #endif
 #include <opencv2/opencv.hpp>
 #include <string_view>
@@ -6059,6 +6060,13 @@ class ShaderLibrary {
     void event(SDL_Event &e) {}
 };
 
+enum class FrameRotation {
+    None,
+    Clockwise90,
+    Rotate180,
+    Counterclockwise90
+};
+
 /**
  * @struct MXArguments
  * @brief Parsed command-line arguments for the ACMX2 application.
@@ -6141,10 +6149,11 @@ struct MXArguments {
     double max_size_mb = 0.0;
     float cross_fade_duration = 0.5f; ///< Crossfade duration in seconds when switching playlist shaders (default: 0.5).
     bool use_yuv = false;
-    bool flip_output = false;    ///< Vertical flip output frames when set (e.g., for HDR correction).
-    bool png_output = false;     ///< Video-file mode only: write PNG frames to a subdirectory instead of encoding video.
-    int generate_interval = 0;   ///< Save a PNG frame every N frames to a subdirectory (video or camera mode, 0 = disabled).
-    bool no_drop = false;        ///< In video mode, pace frame production to encoder throughput.
+    bool flip_output = false;                           ///< Vertical flip output frames when set (e.g., for HDR correction).
+    FrameRotation frame_rotation = FrameRotation::None; ///< Optional input-frame rotation.
+    bool png_output = false;                            ///< Video-file mode only: write PNG frames to a subdirectory instead of encoding video.
+    int generate_interval = 0;                          ///< Save a PNG frame every N frames to a subdirectory (video or camera mode, 0 = disabled).
+    bool no_drop = false;                               ///< In video mode, pace frame production to encoder throughput.
     bool display_filter = false; ///< Display current shader/stack and GPU filter overlay in upper-left.
     std::string watermark_text;  ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
     int watermark_r = 255;       ///< Watermark red channel (0-255), default magenta-pink.
@@ -7296,6 +7305,7 @@ class ACView : public gl::GLObject {
           no_drop_mode{args.no_drop},
           use_shader_cache_flag{args.use_shader_cache},
           flip_output{args.flip_output},
+          frame_rotation{args.frame_rotation},
           png_video_mode{args.png_output && !args.filename.empty()},
           generate_mode{args.generate_interval > 0},
           generate_interval{args.generate_interval},
@@ -7528,6 +7538,8 @@ class ACView : public gl::GLObject {
     std::unique_ptr<ac_gpu::DynamicFrameBuffer> gpu_frame_buffer;
 #ifdef ACMX2_WITH_CUDA
     cv::cuda::GpuMat gpuWorkingBuffer;
+    cv::cuda::GpuMat gpu_rotation_input;
+    cv::cuda::GpuMat gpu_rotation_output;
 #endif
     cv::Mat gpuFilteredFrame;
     unsigned char **d_ptrList = nullptr;
@@ -8456,6 +8468,10 @@ class ACView : public gl::GLObject {
             mx::system_out << "acmx2: Graphics file loaded: " << w << "x" << h << " at FPS: " << fps << "\n";
             fflush(stdout);
             fflush(stderr);
+            if (rotation_swaps_dimensions()) {
+                std::swap(w, h);
+                std::swap(frame_w, frame_h);
+            }
             if (sizev.has_value()) {
                 w = sizev.value().width;
                 h = sizev.value().height;
@@ -8536,6 +8552,11 @@ class ACView : public gl::GLObject {
             mx::system_out << "acmx2: Camera opened: " << w << "x" << h << " at FPS: " << fps << "\n";
             fflush(stderr);
             fflush(stdout);
+
+            if (rotation_swaps_dimensions()) {
+                std::swap(w, h);
+                std::swap(frame_w, frame_h);
+            }
 
             if (sizev.has_value()) {
                 w = sizev.value().width;
@@ -8683,6 +8704,11 @@ class ACView : public gl::GLObject {
                                                                                                   : hw_accel == cv::VIDEO_ACCELERATION_DRM   ? " (DRM)"
                                                                                                                                              : " (other)")
                                << "\n";
+            }
+
+            if (rotation_swaps_dimensions()) {
+                std::swap(w, h);
+                std::swap(frame_w, frame_h);
             }
 
             fflush(stdout);
@@ -9099,6 +9125,65 @@ class ACView : public gl::GLObject {
     }
 
     cv::Mat newFrame;
+
+    bool rotation_swaps_dimensions() const {
+        return frame_rotation == FrameRotation::Clockwise90 ||
+               frame_rotation == FrameRotation::Counterclockwise90;
+    }
+
+    void rotate_frame(cv::Mat &frame) {
+        if (frame.empty() || frame_rotation == FrameRotation::None) {
+            return;
+        }
+
+        // SDR frames are vertically corrected before upload and again during
+        // GL readback. Conjugating a 90-degree rotation by those flips
+        // reverses its visible direction, so use the opposite source-space
+        // transform to preserve the direction selected by the user.
+        FrameRotation source_rotation = frame_rotation;
+        if (!input_is_hdr) {
+            if (source_rotation == FrameRotation::Clockwise90) {
+                source_rotation = FrameRotation::Counterclockwise90;
+            } else if (source_rotation ==
+                       FrameRotation::Counterclockwise90) {
+                source_rotation = FrameRotation::Clockwise90;
+            }
+        }
+
+#ifdef ACMX2_WITH_CUDA
+        gpu_rotation_input.upload(frame);
+        cv::Size destination_size = frame.size();
+        double angle = 180.0;
+        double shift_x = static_cast<double>(frame.cols - 1);
+        double shift_y = static_cast<double>(frame.rows - 1);
+
+        if (source_rotation == FrameRotation::Clockwise90) {
+            destination_size = cv::Size(frame.rows, frame.cols);
+            angle = -90.0;
+            shift_x = static_cast<double>(frame.rows - 1);
+            shift_y = 0.0;
+        } else if (source_rotation == FrameRotation::Counterclockwise90) {
+            destination_size = cv::Size(frame.rows, frame.cols);
+            angle = 90.0;
+            shift_x = 0.0;
+            shift_y = static_cast<double>(frame.cols - 1);
+        }
+
+        cv::cuda::rotate(gpu_rotation_input, gpu_rotation_output,
+                         destination_size, angle, shift_x, shift_y,
+                         cv::INTER_NEAREST);
+        gpu_rotation_output.download(frame);
+#else
+        int rotation_code = cv::ROTATE_180;
+        if (source_rotation == FrameRotation::Clockwise90) {
+            rotation_code = cv::ROTATE_90_CLOCKWISE;
+        } else if (source_rotation == FrameRotation::Counterclockwise90) {
+            rotation_code = cv::ROTATE_90_COUNTERCLOCKWISE;
+        }
+        cv::rotate(frame, frame, rotation_code);
+#endif
+    }
+
     float movementSpeed = 0.1f;
 
     /**
@@ -9391,6 +9476,14 @@ class ACView : public gl::GLObject {
                 // the PBO-free readback, and empirically the single CPU
                 // flip in @c hdrReadback's caller is all that is needed
                 // to deliver top-down rows to the HEVC encoder.
+            }
+        }
+
+        if (received_source_frame && !isFrozen) {
+            if (input_is_hdr) {
+                rotate_frame(hdr_frame_mat);
+            } else {
+                rotate_frame(newFrame);
             }
         }
 #ifdef ACMX2_WITH_DNN
@@ -11533,6 +11626,7 @@ class ACView : public gl::GLObject {
 #endif
     bool use_yuv = false;
     bool flip_output = false;
+    FrameRotation frame_rotation = FrameRotation::None;
     bool png_video_mode = false;
     std::string png_video_dir;
     std::atomic<uint64_t> png_video_frame_counter{0};
@@ -12685,7 +12779,7 @@ namespace {
 
         printSection(out, c, "Input Source", {{"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"}, {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"}, {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"}, {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"}, {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"}, {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}});
 
-        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"--shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}});
+        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"--shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}, {"--rotate <mode>", "Rotate input frames clockwise, 180 degrees, or counterclockwise.", "acmx2 --rotate clockwise"}});
 
         printSection(out, c, "Texture Array Cache", {{"--texture-cache-array", "Store frame history in one sampler2DArray named history.", "acmx2 --texture-cache-array"}});
 
@@ -12848,6 +12942,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(603, "encode-codec", "Encoder policy or exact FFmpeg encoder name (default: auto)")
         .addOptionDouble(604, "encode-realtime", "Enable low-latency realtime encoding flags")
         .addOptionDouble(605, "flip", "Vertical flip output frames")
+        .addOptionDoubleValue(617, "rotate", "Rotate input frames: clockwise, 180, or counterclockwise")
         .addOptionDouble(606, "no-drop", "File/graphics mode: never drop frames; ignored for webcams")
         .addOptionDouble(607, "display-filter", "Display current shader/stack and GPU filter in upper-left corner")
         .addOptionDoubleValue(608, "use-watermark", "Enable watermark with the given text in upper-left corner of recorded video")
@@ -13372,6 +13467,36 @@ int main(int argc, char **argv) {
                 args.flip_output = true;
                 mx::system_out << "acmx2: Output frame flipping enabled\n";
                 break;
+            case 617: {
+                std::string rotation = arg.arg_value;
+                std::transform(rotation.begin(), rotation.end(),
+                               rotation.begin(), [](unsigned char character) {
+                                   return static_cast<char>(std::tolower(character));
+                               });
+                if (rotation == "clockwise" || rotation == "cw" ||
+                    rotation == "90" || rotation == "90cw") {
+                    args.frame_rotation = FrameRotation::Clockwise90;
+                    mx::system_out
+                        << "acmx2: Input frame rotation: 90 degrees clockwise\n";
+                } else if (rotation == "180") {
+                    args.frame_rotation = FrameRotation::Rotate180;
+                    mx::system_out
+                        << "acmx2: Input frame rotation: 180 degrees\n";
+                } else if (rotation == "counterclockwise" ||
+                           rotation == "ccw" || rotation == "90ccw" ||
+                           rotation == "270") {
+                    args.frame_rotation = FrameRotation::Counterclockwise90;
+                    mx::system_out
+                        << "acmx2: Input frame rotation: 90 degrees counterclockwise\n";
+                } else {
+                    mx::system_err
+                        << "acmx2: --rotate requires clockwise, 180, or "
+                           "counterclockwise\n";
+                    mx::system_err.flush();
+                    exit(EXIT_FAILURE);
+                }
+                break;
+            }
             case 606:
                 args.no_drop = true;
                 mx::system_out << "acmx2: --no-drop enabled (video mode)\n";

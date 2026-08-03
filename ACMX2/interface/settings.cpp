@@ -860,6 +860,13 @@ void SettingsWindow::init() {
 
     flipCheckBox = new QCheckBox("Flip", this);
 
+    rotate_check_box = new QCheckBox("Rotate", this);
+    rotate_combo_box = new QComboBox(this);
+    rotate_combo_box->addItem("90 degrees clockwise", "clockwise");
+    rotate_combo_box->addItem("180 degrees", "180");
+    rotate_combo_box->addItem("90 degrees counterclockwise", "counterclockwise");
+    rotate_combo_box->setEnabled(false);
+
     fullscreenCheckBox = new QCheckBox("Fullscreen", this);
 
     enable3dCheckBox = new QCheckBox("Enable 3D", this);
@@ -1039,6 +1046,8 @@ void SettingsWindow::init() {
     playbackGrid->addWidget(new QLabel("Crossfade (sec):", this), ++r, 0);
     playbackGrid->addWidget(crossFadeSpinBox, r, 1);
     playbackGrid->addWidget(flipCheckBox, ++r, 0, 1, 2);
+    playbackGrid->addWidget(rotate_check_box, ++r, 0);
+    playbackGrid->addWidget(rotate_combo_box, r, 1);
     playbackGrid->addWidget(fullscreenCheckBox, ++r, 0, 1, 2);
     auto *durationRow = new QHBoxLayout;
     durationRow->addWidget(durationLimitCheckBox);
@@ -1151,6 +1160,8 @@ void SettingsWindow::init() {
             textureCacheArrayCheckBox, &QCheckBox::setEnabled);
     connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
     connect(maxSizeLimitCheckBox, &QCheckBox::toggled, maxSizeLimitSpinBox, &QDoubleSpinBox::setEnabled);
+    connect(rotate_check_box, &QCheckBox::toggled, rotate_combo_box,
+            &QComboBox::setEnabled);
 
     connect(enable3dCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         modelFileLineEdit->setEnabled(checked);
@@ -1440,6 +1451,15 @@ void SettingsWindow::loadUiState() {
     maxSizeLimitSpinBox->setValue(appSettings.value("interface/max_size_mb", 500.0).toDouble());
     crossFadeSpinBox->setValue(appSettings.value("interface/crossfade", 0.5).toDouble());
     flipCheckBox->setChecked(appSettings.value("interface/flip", false).toBool());
+    const QString saved_rotation =
+        appSettings.value("interface/rotation_mode", "clockwise").toString();
+    const int rotation_index = rotate_combo_box->findData(saved_rotation);
+    if (rotation_index >= 0) {
+        rotate_combo_box->setCurrentIndex(rotation_index);
+    }
+    rotate_check_box->setChecked(
+        appSettings.value("interface/rotate", false).toBool());
+    rotate_combo_box->setEnabled(rotate_check_box->isChecked());
 
     // Recompute YUV availability for the restored camera/resolution even when
     // the combo-box index did not change (Qt won't emit change signals then).
@@ -1510,6 +1530,9 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/max_size_mb", maxSizeLimitSpinBox->value());
     appSettings.setValue("interface/crossfade", crossFadeSpinBox->value());
     appSettings.setValue("interface/flip", flipCheckBox->isChecked());
+    appSettings.setValue("interface/rotate", rotate_check_box->isChecked());
+    appSettings.setValue("interface/rotation_mode",
+                         rotate_combo_box->currentData().toString());
 }
 
 bool SettingsWindow::is3dEnabled() const {
@@ -1657,6 +1680,14 @@ float SettingsWindow::getCrossFadeDuration() const {
 
 bool SettingsWindow::isFlipEnabled() const {
     return flipCheckBox->isChecked();
+}
+
+bool SettingsWindow::is_rotate_enabled() const {
+    return rotate_check_box->isChecked();
+}
+
+QString SettingsWindow::get_rotation_mode() const {
+    return rotate_combo_box->currentData().toString();
 }
 
 QString SettingsWindow::getEncodePreset() const {

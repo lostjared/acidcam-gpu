@@ -262,6 +262,8 @@ class MainWindow : public QMainWindow {
     double max_size_mb = 0.0;
     float cross_fade_duration = 0.5f;
     bool flip_enabled = false;
+    bool rotate_enabled = false;
+    QString rotation_mode = "clockwise";
     bool png_output = false;
     bool generate_enabled = false;
     int generate_interval = 30;
