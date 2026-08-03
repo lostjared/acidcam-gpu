@@ -491,7 +491,15 @@ void MainWindow::initControls() {
 
     runFromCacheAction = new QAction(tr("Run from Cache"), this);
     runFromCacheAction->setCheckable(true);
+#ifdef Q_OS_MACOS
+    use_shader_cache = false;
+    runFromCacheAction->setChecked(false);
+    runFromCacheAction->setEnabled(false);
+    runFromCacheAction->setToolTip(
+        tr("Shader binary caching is not supported on macOS."));
+#else
     runFromCacheAction->setChecked(true);
+#endif
     connect(runFromCacheAction, &QAction::toggled, this, [this](bool checked) {
         use_shader_cache = checked;
         if (checked) {
@@ -1176,7 +1184,9 @@ void MainWindow::listClicked(const QModelIndex &i) {
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
     connect(editor, &TextEditor::fileSaved, this, [this](const QString &filePath) {
+#ifndef Q_OS_MACOS
         shaderCacheMarkedStaleBySave = true;
+#endif
         populateShaderTree();
         publishShaderReloadToRunningProcess(filePath);
     });
@@ -1415,6 +1425,11 @@ void MainWindow::selectShaderRow(int row) {
 void MainWindow::refreshShaderCacheStatus() {
     shaderCacheStatus.clear();
     shaderCacheMTime = QDateTime();
+#ifdef Q_OS_MACOS
+    // There is no persistent binary cache to inspect on macOS. Source saves
+    // are handled by the live-reload IPC path instead.
+    return;
+#else
     if (shader_path.isEmpty())
         return;
     const QString cachePath = resolveShaderCachePath(
@@ -1428,6 +1443,7 @@ void MainWindow::refreshShaderCacheStatus() {
     shaderCacheMTime = cacheInfo.lastModified();
     shaderCacheStatus = parseShaderCacheStatus(cachePath);
     // Log("Shader cache: " + cachePath + " (" + QString::number(shaderCacheStatus.size()) + " entries)");
+#endif
 }
 
 bool MainWindow::isShaderCacheStale() const {
@@ -2657,7 +2673,8 @@ void MainWindow::runAll() {
     firstRunAllPendingRebuild = false;
     const bool shouldForceInitialRebuild = firstRunAllInvocation && use_shader_cache;
 
-    if (shouldForceInitialRebuild || shaderCacheMarkedStaleBySave || isShaderCacheStale()) {
+    if (use_shader_cache &&
+        (shouldForceInitialRebuild || shaderCacheMarkedStaleBySave || isShaderCacheStale())) {
         if (shouldForceInitialRebuild) {
             Log("First Run All after startup: rebuilding shader cache before launch.");
         } else {

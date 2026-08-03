@@ -593,6 +593,11 @@ void TextEditor::init() {
     QVBoxLayout *layout = new QVBoxLayout(this);
 
     QMenuBar *menuBar = new QMenuBar(this);
+#ifdef Q_OS_MACOS
+    // Keep editor actions attached to each editor window, matching the main
+    // interface, instead of moving them into macOS's global menu bar.
+    menuBar->setNativeMenuBar(false);
+#endif
 
     QMenu *fileMenu = menuBar->addMenu("&File");
 
