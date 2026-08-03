@@ -210,12 +210,115 @@ static bool resolveShaderPathInLibrary(const std::string &library_path,
     return true;
 }
 
-static std::vector<std::string> sortedShaderLibraryEntries(const std::string &library_path) {
-    std::ifstream file(library_path + "/index.txt");
-    std::vector<std::string> shader_files;
+enum class ShaderManifestFormat { Json,
+                                  Text };
+
+struct ShaderManifestData {
+    ShaderManifestFormat format = ShaderManifestFormat::Text;
+    std::string path;
+    std::vector<std::string> entries;
+};
+
+static std::string shaderManifestPath(const std::string &library_path) {
+    const std::filesystem::path root(library_path);
+    const std::filesystem::path json_path = root / "library.json";
+    if (std::filesystem::is_regular_file(json_path))
+        return json_path.string();
+    const std::filesystem::path text_path = root / "index.txt";
+    if (std::filesystem::is_regular_file(text_path))
+        return text_path.string();
+    return {};
+}
+
+static bool loadShaderManifest(const std::string &library_path,
+                               ShaderManifestData &manifest,
+                               std::string &error) {
+    manifest = {};
+    error.clear();
+    manifest.path = shaderManifestPath(library_path);
+    if (manifest.path.empty()) {
+        error = "No library.json or index.txt found at: " + library_path;
+        return false;
+    }
+
+    if (std::filesystem::path(manifest.path).extension() == ".json") {
+        manifest.format = ShaderManifestFormat::Json;
+        try {
+            cv::FileStorage storage(manifest.path,
+                                    cv::FileStorage::READ | cv::FileStorage::FORMAT_JSON);
+            if (!storage.isOpened()) {
+                error = "Could not open shader manifest: " + manifest.path;
+                return false;
+            }
+            const cv::FileNode shaders = storage["shaders"];
+            if (shaders.type() == cv::FileNode::NONE || !shaders.isSeq()) {
+                error = manifest.path + " must contain a 'shaders' array";
+                return false;
+            }
+            for (const cv::FileNode &entry : shaders) {
+                std::string file;
+                if (entry.isString()) {
+                    entry >> file;
+                } else if (entry.isMap() && !entry["file"].empty()) {
+                    entry["file"] >> file;
+                } else {
+                    error = manifest.path + " contains a shader entry without a file name";
+                    return false;
+                }
+                manifest.entries.push_back(std::move(file));
+            }
+            return true;
+        } catch (const cv::Exception &e) {
+            error = "Could not parse " + manifest.path + ": " + e.what();
+            return false;
+        }
+    }
+
+    manifest.format = ShaderManifestFormat::Text;
+    std::ifstream file(manifest.path);
+    if (!file.is_open()) {
+        error = "Could not open shader manifest: " + manifest.path;
+        return false;
+    }
     std::string line;
-    while (std::getline(file, line)) {
-        const auto shader_entry = normalizeShaderIndexEntry(line);
+    while (std::getline(file, line))
+        manifest.entries.push_back(std::move(line));
+    return true;
+}
+
+static bool writeJsonShaderManifest(const std::string &path,
+                                    const std::vector<std::string> &entries,
+                                    std::string &error) {
+    try {
+        cv::FileStorage storage(path,
+                                cv::FileStorage::WRITE | cv::FileStorage::FORMAT_JSON);
+        if (!storage.isOpened()) {
+            error = "Could not write shader manifest: " + path;
+            return false;
+        }
+        storage << "version" << 1;
+        storage << "shaders"
+                << "[";
+        for (const std::string &entry : entries)
+            storage << entry;
+        storage << "]";
+        storage.release();
+        return true;
+    } catch (const cv::Exception &e) {
+        error = "Could not write " + path + ": " + e.what();
+        return false;
+    }
+}
+
+static bool collectShaderLibraryEntries(const std::string &library_path,
+                                        std::vector<std::string> &shader_files,
+                                        std::string &error) {
+    ShaderManifestData manifest;
+    if (!loadShaderManifest(library_path, manifest, error))
+        return false;
+    shader_files.clear();
+    for (const std::string &entry : manifest.entries) {
+        const auto shader_entry = normalizeShaderIndexEntry(entry);
         if (!shader_entry)
             continue;
         std::string full_path;
@@ -230,6 +333,14 @@ static std::vector<std::string> sortedShaderLibraryEntries(const std::string &li
                           return std::tolower(ca) < std::tolower(cb);
                       });
               });
+    return true;
+}
+
+static std::vector<std::string> sortedShaderLibraryEntries(const std::string &library_path) {
+    std::vector<std::string> shader_files;
+    std::string error;
+    if (!collectShaderLibraryEntries(library_path, shader_files, error))
+        mx::system_err << "acmx2: " << error << "\n";
     return shader_files;
 }
 
@@ -2732,7 +2843,7 @@ class SpectrumHistory {
  * @brief Manages the complete collection of compiled GLSL shader programs.
  *
  * Responsibilities:
- * - Load a single shader or a full library from an index.txt manifest.
+ * - Load a single shader or a full library from JSON or text manifests.
  * - Optionally build and restore a binary shader cache for fast startup.
  * - Track and upload all shader uniforms each frame (time, mouse, audio, etc.).
  * - Support dual-mode (2D + 3D vertex shader) compilation.
@@ -2841,7 +2952,7 @@ class ShaderLibrary {
      * library path so different libraries do not collide.
      *
      * @param assets_path  Assets directory passed via `--path` (may be empty).
-     * @param library_path Shader library directory (containing index.txt).
+     * @param library_path Shader library directory containing a supported manifest.
      * @param cache_size   Active texture-cache size used to key binary-cache compatibility.
      * @return Absolute or relative path to the shader cache file.
      */
@@ -3133,7 +3244,7 @@ class ShaderLibrary {
      * Used when a shader in the library fails to compile (either during
      * cache-build or source-compile).  A placeholder program is inserted
      * at the failing shader's index so that numeric indices remain
-     * aligned with the on-disk index.txt listing — this keeps
+     * aligned with the on-disk shader manifest — this keeps
      * user-selected indices (e.g. from the Qt interface or CLI
      * --shader-index) pointing at the intended slot even when one or
      * more shaders in the library are broken.
@@ -3716,29 +3827,22 @@ class ShaderLibrary {
         return shader_bypass;
     }
 
-    /// @brief Compile every shader listed in index.txt, showing a progress overlay.
+    /// @brief Compile every shader listed in the preferred manifest.
     void loadPrograms(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
-        std::fstream file;
-        file.open(text + "/index.txt", std::ios::in);
-        if (!file.is_open()) {
-            throw mx::Exception("acmx2: Could not load index.txt at shader path: " + text);
-        }
+        ShaderManifestData manifest;
+        std::string manifest_error;
+        if (!loadShaderManifest(text, manifest, manifest_error))
+            throw mx::Exception("acmx2: " + manifest_error);
 
-        // Collect all shader files first
         std::vector<std::string> shader_files;
-        {
-            std::string line;
-            while (std::getline(file, line)) {
-                auto shader_entry = normalizeShaderIndexEntry(line);
-                if (!shader_entry) {
-                    continue;
-                }
-                std::string full_path;
-                if (resolveShaderPathInLibrary(text, *shader_entry, full_path)) {
-                    shader_files.push_back(*shader_entry);
-                }
+        for (const std::string &entry : manifest.entries) {
+            auto shader_entry = normalizeShaderIndexEntry(entry);
+            if (!shader_entry)
+                continue;
+            std::string full_path;
+            if (resolveShaderPathInLibrary(text, *shader_entry, full_path)) {
+                shader_files.push_back(*shader_entry);
             }
-            file.close();
         }
 
         // Case-insensitive sort to match Qt interface behavior
@@ -3831,7 +3935,7 @@ class ShaderLibrary {
             }
             if (!ok_2d) {
                 // Replace the broken slot with a passthrough program so the
-                // shader index stays aligned with index.txt ordering.
+                // shader index stays aligned with manifest ordering.
                 programs_2d.pop_back();
                 auto ph = makePassthroughProgram(vert_2d);
                 if (!ph) {
@@ -3898,26 +4002,26 @@ class ShaderLibrary {
     }
 
     /**
-     * @brief Compile every shader in a library and rewrite index.txt without
+     * @brief Compile every shader in a library and rewrite its manifest without
      *        the ones that fail to compile.
      *
-     * Reads `<library_path>/index.txt`, attempts to compile each referenced
+     * Reads `library.json` when present, otherwise `index.txt`, and compiles each
      * fragment shader against the supplied 2D (and optionally 3D) vertex
-     * shaders, and produces a new `index.txt` that omits broken shaders.
-     * The original file is preserved as `index.txt.bak` (overwritten each run).
+     * shader. The selected manifest is rewritten without broken entries and
+     * preserved as a `.bak` file before replacement.
      *
      * Non-shader lines (blank lines and lines containing "material") are
-     * preserved verbatim. Files listed in index.txt that do not exist on
+     * preserved verbatim. Files listed in the manifest that do not exist on
      * disk are also dropped.
      *
      * The existing `.shader_cache` is deleted so the library is rebuilt
      * fresh on next launch.
      *
      * @param win           GL window (for asset resolution).
-     * @param library_path  Directory containing index.txt and .glsl files.
+     * @param library_path  Directory containing a shader manifest and GLSL files.
      * @param vert_2d       Path to the 2D vertex shader.
      * @param vert_3d       Path to the 3D vertex shader (only used when @ref dual_mode is set).
-     * @return true if index.txt was rewritten successfully (even when no shaders were removed).
+     * @return true if the manifest was rewritten successfully.
      */
     bool removeBrokenShaders(gl::GLWindow *win,
                              const std::string &library_path,
@@ -3929,7 +4033,13 @@ class ShaderLibrary {
             return false;
         }
 
-        std::string index_path = library_path + "/index.txt";
+        ShaderManifestData manifest;
+        std::string manifest_error;
+        if (!loadShaderManifest(library_path, manifest, manifest_error)) {
+            mx::system_err << "acmx2: " << manifest_error << "\n";
+            return false;
+        }
+        const std::string manifest_path = manifest.path;
         std::string crash_marker_path = library_path + "/.remove_broken_last_shader";
 
         auto writeCrashMarker = [&](const std::string &shader_name) {
@@ -3953,44 +4063,33 @@ class ShaderLibrary {
             }
         }
 
-        std::ifstream in(index_path);
-        if (!in.is_open()) {
-            mx::system_err << "acmx2: Could not open index.txt at: " << library_path << "\n";
-            return false;
-        }
-
-        // Preserve ordering and non-shader lines (blank / "material" lines).
+        // Preserve ordering and, for legacy manifests, non-shader lines.
         struct Line {
             std::string raw;  ///< Original line text.
             bool is_shader;   ///< True if this line references a fragment shader file.
             bool keep = true; ///< False if the shader failed to compile.
         };
         std::vector<Line> lines;
-        {
-            std::string l;
-            while (std::getline(in, l)) {
-                Line entry;
-                entry.raw = l;
-                auto shader_entry = normalizeShaderIndexEntry(l);
-                std::string full_path;
-                bool is_shader_line =
-                    shader_entry.has_value() &&
-                    resolveShaderPathInLibrary(library_path, *shader_entry, full_path);
-                if (shader_entry) {
-                    entry.raw = *shader_entry;
-                }
-                entry.is_shader = is_shader_line;
-                if (!is_shader_line && !l.empty() &&
-                    l.find("material") == std::string::npos) {
-                    // Referenced file is missing — drop this entry too.
-                    mx::system_out << "acmx2: ⚠ Removing missing file from index: " << l << "\n";
-                    entry.is_shader = false;
-                    entry.keep = false;
-                }
-                lines.push_back(std::move(entry));
+        for (const std::string &manifest_entry : manifest.entries) {
+            Line entry;
+            entry.raw = manifest_entry;
+            auto shader_entry = normalizeShaderIndexEntry(manifest_entry);
+            std::string full_path;
+            bool is_shader_line =
+                shader_entry.has_value() &&
+                resolveShaderPathInLibrary(library_path, *shader_entry, full_path);
+            if (shader_entry)
+                entry.raw = *shader_entry;
+            entry.is_shader = is_shader_line;
+            if (!is_shader_line && !manifest_entry.empty() &&
+                manifest_entry.find("material") == std::string::npos) {
+                mx::system_out << "acmx2: ⚠ Removing missing file from manifest: "
+                               << manifest_entry << "\n";
+                entry.is_shader = false;
+                entry.keep = false;
             }
+            lines.push_back(std::move(entry));
         }
-        in.close();
 
         size_t pre_removed_from_crash = 0;
         if (!last_crashed_shader.empty()) {
@@ -4098,29 +4197,39 @@ class ShaderLibrary {
 
         clearCrashMarker();
 
-        // Back up the original index.txt before rewriting.
+        // Back up the selected manifest before rewriting.
         std::error_code ec;
         std::filesystem::copy_file(
-            index_path,
-            library_path + "/index.txt.bak",
+            manifest_path,
+            manifest_path + ".bak",
             std::filesystem::copy_options::overwrite_existing,
             ec);
         if (ec) {
-            mx::system_out << "acmx2: Warning: could not create index.txt.bak ("
+            mx::system_out << "acmx2: Warning: could not create manifest backup ("
                            << ec.message() << ")\n";
         }
 
-        std::ofstream out(index_path, std::ios::trunc);
-        if (!out.is_open()) {
-            mx::system_err << "acmx2: Could not rewrite index.txt at: " << library_path << "\n";
-            return false;
-        }
+        std::vector<std::string> kept_entries;
         for (const auto &entry : lines) {
-            if (!entry.keep)
-                continue;
-            out << entry.raw << "\n";
+            if (entry.keep)
+                kept_entries.push_back(entry.raw);
         }
-        out.close();
+        if (manifest.format == ShaderManifestFormat::Json) {
+            if (!writeJsonShaderManifest(manifest_path, kept_entries, manifest_error)) {
+                mx::system_err << "acmx2: " << manifest_error << "\n";
+                return false;
+            }
+        } else {
+            std::ofstream out(manifest_path, std::ios::trunc);
+            if (!out.is_open()) {
+                mx::system_err << "acmx2: Could not rewrite manifest at: "
+                               << manifest_path << "\n";
+                return false;
+            }
+            for (const std::string &entry : kept_entries)
+                out << entry << "\n";
+            out.close();
+        }
 
         // Invalidate the on-disk cache since the library composition changed.
         std::string cache_file =
@@ -4135,7 +4244,7 @@ class ShaderLibrary {
 
         mx::system_out << "acmx2: Remove-broken complete: kept " << kept
                        << ", removed " << removed << " shader(s). "
-                       << "Backup written to index.txt.bak\n";
+                       << "Backup written to " << manifest_path << ".bak\n";
         fflush(stdout);
         return true;
     }
@@ -4143,7 +4252,7 @@ class ShaderLibrary {
     /**
      * @brief Build the on-disk shader binary cache for all shaders in a library.
      * @param win    GL window (provides vertex shader paths).
-     * @param library_path  Directory containing index.txt and .glsl files.
+     * @param library_path  Directory containing a shader manifest and GLSL files.
      * @param vert_2d  Path to the 2D vertex shader.
      * @param vert_3d  Path to the 3D vertex shader.
      * @return true on success.
@@ -4174,10 +4283,10 @@ class ShaderLibrary {
         std::string cache_file =
             shaderCacheFilePath(win ? win->util.path : std::string(),
                                 library_path, cache_size, use_history_array);
-        std::fstream file;
-        file.open(library_path + "/index.txt", std::ios::in);
-        if (!file.is_open()) {
-            mx::system_err << "acmx2: Could not open index.txt at: " << library_path << "\n";
+        std::vector<std::string> shader_files;
+        std::string manifest_error;
+        if (!collectShaderLibraryEntries(library_path, shader_files, manifest_error)) {
+            mx::system_err << "acmx2: " << manifest_error << "\n";
             return false;
         }
 
@@ -4185,31 +4294,6 @@ class ShaderLibrary {
         cache.gl_renderer = safeGLString(GL_RENDERER);
         cache.gl_version = safeGLString(GL_VERSION);
         cache.dual_mode = dual_mode;
-
-        std::vector<std::string> shader_files;
-        std::string line;
-        while (std::getline(file, line)) {
-            auto shader_entry = normalizeShaderIndexEntry(line);
-            if (!shader_entry) {
-                continue;
-            }
-            std::string full_path;
-            if (resolveShaderPathInLibrary(library_path, *shader_entry, full_path)) {
-                shader_files.push_back(*shader_entry);
-            }
-        }
-        file.close();
-
-        // Case-insensitive sort to match Qt interface behavior
-        std::sort(shader_files.begin(), shader_files.end(),
-                  [](const std::string &a, const std::string &b) {
-                      return std::lexicographical_compare(
-                          a.begin(), a.end(),
-                          b.begin(), b.end(),
-                          [](unsigned char ca, unsigned char cb) {
-                              return std::tolower(ca) < std::tolower(cb);
-                          });
-                  });
 
         mx::system_out << "acmx2: Building shader cache for " << shader_files.size() << " shaders...\n";
         fflush(stdout);
@@ -4514,39 +4598,15 @@ class ShaderLibrary {
             return false;
         }
 
-        std::fstream file;
-        file.open(library_path + "/index.txt", std::ios::in);
-        if (!file.is_open()) {
+        std::vector<std::string> shader_files;
+        std::string manifest_error;
+        if (!collectShaderLibraryEntries(library_path, shader_files, manifest_error)) {
+            mx::system_out << "acmx2: " << manifest_error << "\n";
             return false;
         }
 
-        std::vector<std::string> shader_files;
-        std::string line;
-        while (std::getline(file, line)) {
-            auto shader_entry = normalizeShaderIndexEntry(line);
-            if (!shader_entry) {
-                continue;
-            }
-            std::string full_path;
-            if (resolveShaderPathInLibrary(library_path, *shader_entry, full_path)) {
-                shader_files.push_back(*shader_entry);
-            }
-        }
-        file.close();
-
-        // Case-insensitive sort to match Qt interface behavior
-        std::sort(shader_files.begin(), shader_files.end(),
-                  [](const std::string &a, const std::string &b) {
-                      return std::lexicographical_compare(
-                          a.begin(), a.end(),
-                          b.begin(), b.end(),
-                          [](unsigned char ca, unsigned char cb) {
-                              return std::tolower(ca) < std::tolower(cb);
-                          });
-                  });
-
         if (shader_files.size() != cache.entries.size()) {
-            mx::system_out << "acmx2: Shader count mismatch: index.txt has " << shader_files.size()
+            mx::system_out << "acmx2: Shader count mismatch: manifest has " << shader_files.size()
                            << " shaders but cache has " << cache.entries.size()
                            << " entries. Rebuilding cache...\n";
             fflush(stdout);
@@ -4632,7 +4692,7 @@ class ShaderLibrary {
         size_t binary_fail_count = 0;
 
         // Helper: insert a passthrough program at the current slot to preserve
-        // index alignment with index.txt when a cache entry cannot be used.
+        // index alignment with the manifest when a cache entry cannot be used.
         auto push_passthrough_2d = [&](size_t i, const char *reason) {
             auto ph = makePassthroughProgram(vert_2d.empty()
                                                  ? win->util.getFilePath("data/vert.glsl")
@@ -4677,7 +4737,7 @@ class ShaderLibrary {
 
             // If this entry was marked as failed when the cache was built,
             // substitute a passthrough program so the slot index stays
-            // aligned with index.txt.
+            // aligned with the manifest.
             if (entry.failed || entry.binary_2d.empty()) {
                 if (!push_passthrough_2d(i, entry.failed ? "cached as failed" : "missing 2D binary")) {
                     return false;
@@ -4816,7 +4876,7 @@ class ShaderLibrary {
      * incompatible, falls back to loadPrograms() (compile from source).
      *
      * @param win          GL window for asset resolution.
-     * @param text         Shader library directory (containing index.txt).
+     * @param text         Shader library directory containing a supported manifest.
      * @param loadingFont  Font used for the on-screen progress overlay.
      */
     void loadProgramsWithCache(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
@@ -7349,13 +7409,13 @@ class ACView : public gl::GLObject {
             } else if (std::get<0>(flib) == 1) {
                 const auto shaderFiles = sortedShaderLibraryEntries(std::get<1>(flib));
                 if (static_cast<size_t>(requestedReloadIndex) >= shaderFiles.size()) {
-                    reloadError = "Shader reload index is outside index.txt: " +
+                    reloadError = "Shader reload index is outside the shader manifest: " +
                                   std::to_string(requestedReloadIndex);
                 } else if (!resolveShaderPathInLibrary(
                                std::get<1>(flib),
                                shaderFiles[static_cast<size_t>(requestedReloadIndex)],
                                reloadPath)) {
-                    reloadError = "Could not resolve shader reload path from index.txt";
+                    reloadError = "Could not resolve shader reload path from the manifest";
                 } else {
                     std::error_code requestedError;
                     const auto canonicalRequested = std::filesystem::weakly_canonical(
@@ -12262,7 +12322,7 @@ namespace {
 
         printSection(out, c, "Input Source", {{"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"}, {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"}, {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"}, {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"}, {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"}, {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}});
 
-        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <index.txt>, --shaders <index.txt>", "Use shader library index file (playlist-able shader set).", "acmx2 --shaders ./shaders/index.txt"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"-h <index>, --shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders index.txt --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --playlist live_set.txt --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --playlist live_set.txt --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader, remove failing entries from index.txt, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}});
+        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"-h <index>, --shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}});
 
         printSection(out, c, "Texture Array Cache", {{"--texture-cache-array", "Store frame history in one sampler2DArray named history.", "acmx2 --texture-cache-array"}});
 
@@ -12397,7 +12457,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)")
         .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
         .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)")
-        .addOptionDoubleValue(416, "remove-broken", "Compile each shader in library path; remove shaders that fail to compile from index.txt, then exit")
+        .addOptionDoubleValue(416, "remove-broken", "Compile each shader in library path; remove failures from its manifest, then exit")
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
         .addOptionDoubleValue(417, "autopilot-frames", "Autopilot frame interval; switch to a random playlist shader every N frames (minimum 4, J toggles)")
@@ -13053,8 +13113,9 @@ int main(int argc, char **argv) {
             mx::system_err.flush();
             return EXIT_FAILURE;
         }
-        if (!std::filesystem::exists(args.remove_broken_path + "/index.txt")) {
-            mx::system_err << "acmx2: Error: No index.txt found at: " << args.remove_broken_path << "\n";
+        if (shaderManifestPath(args.remove_broken_path).empty()) {
+            mx::system_err << "acmx2: Error: No library.json or index.txt found at: "
+                           << args.remove_broken_path << "\n";
             mx::system_err.flush();
             return EXIT_FAILURE;
         }
@@ -13165,8 +13226,9 @@ int main(int argc, char **argv) {
             mx::system_err.flush();
             return EXIT_FAILURE;
         }
-        if (!std::filesystem::exists(args.build_library_path + "/index.txt")) {
-            mx::system_err << "acmx2: Error: No index.txt found at: " << args.build_library_path << "\n";
+        if (shaderManifestPath(args.build_library_path).empty()) {
+            mx::system_err << "acmx2: Error: No library.json or index.txt found at: "
+                           << args.build_library_path << "\n";
             mx::system_err.flush();
             return EXIT_FAILURE;
         }

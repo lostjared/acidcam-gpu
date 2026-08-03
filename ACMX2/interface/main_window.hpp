@@ -56,6 +56,7 @@ class MainWindow : public QMainWindow {
     /// @brief Refresh shader index metadata timestamp.
     void updateIndex();
     QDateTime indexTimestamp;
+    QString activeShaderManifestPath;
   public slots:
     void fileOpenProp();
     void fileExit();

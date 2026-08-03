@@ -4,6 +4,7 @@
 #include "find-shader.hpp"
 #include "metadata-viewer.hpp"
 #include "settings.hpp"
+#include "shader-manifest.hpp"
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
@@ -698,8 +699,8 @@ void MainWindow::initControls() {
     publishRuntimeSettingsToRunningProcess();
     if (!path.isEmpty()) {
         QFileInfo pathInfo(path);
-        QFileInfo indexInfo(path + "/index.txt");
-        if (pathInfo.exists() && pathInfo.isDir() && indexInfo.exists()) {
+        if (pathInfo.exists() && pathInfo.isDir() &&
+            acmx2::shader_manifest_exists(path)) {
             shader_path = path;
             loadShaders(path);
             Log("Successfully loaded saved shader path");
@@ -709,8 +710,8 @@ void MainWindow::initControls() {
                 errorMsg += "directory does not exist";
             } else if (!pathInfo.isDir()) {
                 errorMsg += "path is not a directory";
-            } else if (!indexInfo.exists()) {
-                errorMsg += "index.txt not found in directory";
+            } else if (!acmx2::shader_manifest_exists(path)) {
+                errorMsg += "library.json or index.txt not found in directory";
             }
             Log(errorMsg);
         }
@@ -1121,11 +1122,6 @@ void MainWindow::menuSetCurrentShader() {
 }
 
 void MainWindow::updateIndex() {
-    QFile file(shader_path + "/index.txt");
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
-
-    QTextStream out(&file);
     QStringList writtenItems;
     const int rowCount = items.size();
 
@@ -1138,15 +1134,18 @@ void MainWindow::updateIndex() {
         QString fullPath = shader_path + "/" + shaderName;
         QFileInfo fileInfo(fullPath);
         if (fileInfo.exists() && fileInfo.isFile()) {
-            out << shaderName << "\n";
             writtenItems.append(shaderName);
         } else {
             Log("Warning: File no longer exists, removing from list: " + shaderName);
         }
     }
-    file.close();
-
-    indexTimestamp = QFileInfo(shader_path + "/index.txt").lastModified();
+    QString manifestError;
+    if (!acmx2::write_shader_manifest(shader_path, writtenItems, manifestError)) {
+        Log("Failed to update shader manifest: " + manifestError);
+        return;
+    }
+    indexTimestamp = acmx2::shader_manifest_last_modified(shader_path);
+    activeShaderManifestPath = acmx2::shader_manifest_path(shader_path);
 
     if (writtenItems.size() != rowCount) {
         items = writtenItems;
@@ -1626,7 +1625,6 @@ void MainWindow::fileOpenProp() {
         }
 
         QFileInfo shaderDirInfo(shaderDir);
-        QFileInfo indexFileInfo(shaderDir + "/index.txt");
         if (!shaderDirInfo.exists()) {
             QMessageBox::warning(this, "Invalid Shader Path", "Shader directory does not exist:\n" + shaderDir);
             return;
@@ -1637,8 +1635,11 @@ void MainWindow::fileOpenProp() {
             return;
         }
 
-        if (!indexFileInfo.exists()) {
-            QMessageBox::warning(this, "Missing index.txt", "Shader directory does not contain index.txt:\n" + shaderDir + "/index.txt");
+        if (!acmx2::shader_manifest_exists(shaderDir)) {
+            QMessageBox::warning(
+                this, "Missing Shader Manifest",
+                "Shader directory does not contain library.json or index.txt:\n" +
+                    shaderDir);
             return;
         }
 
@@ -1668,38 +1669,53 @@ void MainWindow::fileOpenProp() {
 }
 
 bool MainWindow::loadShaders(const QString &path, bool force) {
-    QFileInfo info(path + "/index.txt");
-    if (!info.exists() || !info.isFile()) {
-        QMessageBox::warning(this, "Could not open index file", "Failed to open file: " + path + "/index.txt");
+    QString manifestPath = acmx2::shader_manifest_path(path);
+    if (manifestPath.isEmpty()) {
+        QMessageBox::warning(this, "Could not open shader manifest",
+                             "No library.json or index.txt found in: " + path);
         return false;
     }
 
-    QDateTime modified = info.lastModified();
-    if (force == false && path == shader_path && !indexTimestamp.isNull() && modified <= indexTimestamp) {
+    if (QFileInfo(manifestPath).fileName().compare("index.txt", Qt::CaseInsensitive) == 0) {
+        bool generated = false;
+        QString migrationError;
+        if (!acmx2::migrate_index_manifest_to_json(path, generated,
+                                                   migrationError)) {
+            Log("Could not generate library.json from index.txt: " + migrationError);
+        } else if (generated) {
+            manifestPath = acmx2::shader_manifest_path(path);
+            Log("Generated library.json from index.txt");
+        }
+    }
+
+    QDateTime modified = QFileInfo(manifestPath).lastModified();
+    if (!force && path == shader_path && manifestPath == activeShaderManifestPath &&
+        !indexTimestamp.isNull() && modified <= indexTimestamp) {
         return true;
     }
-    QFile file(path + "/index.txt");
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, "Could not open index file", "Failed to open file: " + file.errorString());
+    QStringList manifestEntries;
+    QString manifestError;
+    if (!acmx2::load_shader_manifest(path, manifestEntries, manifestError)) {
+        QMessageBox::warning(this, "Could not open shader manifest", manifestError);
         return false;
     }
+
     shader_path = path;
+    activeShaderManifestPath = manifestPath;
     indexTimestamp = modified;
     const int previousRow = currentShaderRow();
     const QString previouslySelected = currentShaderName();
     items.clear();
     QStringList uniqueItems;
-    QTextStream in(&file);
-
-    while (!in.atEnd()) {
-        QString line = in.readLine().trimmed();
+    for (const QString &rawEntry : manifestEntries) {
+        const QString line = rawEntry.trimmed();
 
         if (line.isEmpty()) {
             continue;
         }
         const QString shaderEntry = sanitizeShaderName(line);
         if (shaderEntry.isEmpty()) {
-            Log("Skipping invalid shader path in index.txt: " + line);
+            Log("Skipping invalid shader path in " + QFileInfo(manifestPath).fileName() + ": " + line);
             continue;
         }
         QString fullPath = path + "/" + shaderEntry;
@@ -1714,7 +1730,6 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
             Log("Skipping duplicate shader: " + shaderEntry);
         }
     }
-    file.close();
     items = uniqueItems;
 
     Log("Loaded " + QString::number(items.size()) + " unique shader files");
@@ -3001,12 +3016,20 @@ void MainWindow::menuRemoveBroken() {
         return;
     }
 
+    const QString manifestPath = acmx2::shader_manifest_path(scan_path);
+    if (manifestPath.isEmpty()) {
+        QMessageBox::warning(this, "Missing Shader Manifest",
+                             "No library.json or index.txt found in: " + scan_path);
+        return;
+    }
+    const QString manifestName = QFileInfo(manifestPath).fileName();
+
     QMessageBox::StandardButton reply = QMessageBox::question(this,
                                                               tr("Remove Broken Shaders"),
                                                               tr("This will compile every shader in:\n\n%1\n\n"
-                                                                 "Any shader that fails to compile will be removed from index.txt "
-                                                                 "(the original will be backed up as index.txt.bak).\n\nContinue?")
-                                                                  .arg(scan_path),
+                                                                 "Any shader that fails to compile will be removed from %2 "
+                                                                 "(the original will be backed up as %2.bak).\n\nContinue?")
+                                                                  .arg(scan_path, manifestName),
                                                               QMessageBox::Yes | QMessageBox::No);
     if (reply != QMessageBox::Yes)
         return;
@@ -3050,23 +3073,24 @@ void MainWindow::menuRemoveBroken() {
     connect(scan,
             static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
             this,
-            [this, scan, scan_path](int exitCode, QProcess::ExitStatus) {
+            [this, scan, scan_path, manifestName](int exitCode, QProcess::ExitStatus) {
                 Log(QString("Remove-broken finished with exit code: %1<br>").arg(exitCode));
                 if (exitCode == 0) {
-                    // Reload the list view from the updated index.txt.
+                    // Reload the list view from the updated manifest.
                     loadShaders(scan_path, true);
                     QMessageBox::information(this,
                                              tr("Remove Broken"),
                                              tr("Finished scanning shader library.\n\n"
-                                                "index.txt has been updated and the shader list reloaded.\n"
-                                                "A backup of the original is at:\n%1/index.txt.bak")
-                                                 .arg(scan_path));
+                                                "%1 has been updated and the shader list reloaded.\n"
+                                                "A backup of the original is at:\n%2/%1.bak")
+                                                 .arg(manifestName, scan_path));
                 } else {
                     QMessageBox::warning(this,
                                          tr("Remove Broken"),
                                          tr("Remove-broken failed with exit code %1. "
-                                            "index.txt was not changed.")
-                                             .arg(exitCode));
+                                            "%2 was not changed.")
+                                             .arg(exitCode)
+                                             .arg(manifestName));
                 }
                 scan->deleteLater();
             });

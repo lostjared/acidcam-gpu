@@ -28,7 +28,8 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 ## Features
 
 - **Camera, video, or image input** with configurable resolution
-- **Shader library** — load a single fragment shader or a full library via `index.txt`
+- **Shader library** — load a single fragment shader or a full directory using
+  `library.json` when present, with `index.txt` as a compatibility fallback
 - **CUDA GPU filters** — apply GPU-accelerated pixel filters in addition to shaders
 - **3D mode** — render shaders onto a 3D model (`.mxmod`)
 - **Multipass shaders** — chain multiple shader passes in a single frame
@@ -176,6 +177,29 @@ linking fails, the last valid program remains in use and the driver-provided
 error string appears in the interface log. Fix the source and save again to
 retry without stopping the session.
 
+### Shader Library Manifests
+
+Shader-library paths are directories. When both manifests exist, ACMX2 and its
+Qt interface use `library.json`; otherwise they fall back to `index.txt`.
+When the Qt interface loads an older library that only has `index.txt`, it
+automatically creates an equivalent `library.json` and leaves the original
+text manifest unchanged.
+The JSON format is:
+
+```json
+{
+  "version": 1,
+  "shaders": [
+    "plasma.glsl",
+    "feedback_cache.glsl"
+  ]
+}
+```
+
+New libraries can choose either format in the interface. Sorting, adding or
+removing shaders, live reload, cache builds, and Remove Broken all operate on
+the selected manifest.
+
 ---
 
 ## Building
@@ -222,7 +246,7 @@ This installs Homebrew packages, clones `libmx2` and `acidcam-gpu` (which contai
    ```bash
    acmx2_interface
    # or from command line:
-   acmx2 -p /usr/local/share/acmx2/data -s /path/to/macos-shaders/index.txt -d 0
+   acmx2 -p /usr/local/share/acmx2/data -s /path/to/macos-shaders -d 0
    ```
 
 See [macos/README.md](macos/README.md) for full details, troubleshooting, and CMake flags.
@@ -454,7 +478,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 
 | Short | Long | Value | Description |
 |-------|------|-------|-------------|
-| `-s` | `--shaders` | `<file>` | Shader library index file |
+| `-s` | `--shaders` | `<directory>` | Shader library directory (`library.json` preferred, `index.txt` fallback) |
 | `-f` | `--fragment` | `<file>` | Single fragment shader file |
 | `-h` | `--shader` | `<index>` | Initial shader index in library |
 | | `--shader-pass` | `<indices>` | Shader pass indices (comma-separated, e.g. `0,1,2`) |

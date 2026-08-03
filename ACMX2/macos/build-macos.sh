@@ -116,7 +116,6 @@ echo "    acmx2_interface  installed to /usr/local/bin/acmx2_interface"
 echo
 echo "next: download the macOS-compatible shader pack and point the"
 echo "      interface at it (File -> Properties -> Shader Directory), or run"
-echo "      from the command line with: acmx2 -s /path/to/shaders/index.txt"
+echo "      from the command line with: acmx2 -s /path/to/shaders"
 echo
 echo "      macOS shader pack: https://lostsidedead.biz/acmx2/shaders.macos.zip"
-

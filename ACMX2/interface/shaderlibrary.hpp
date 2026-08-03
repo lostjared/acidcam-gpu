@@ -33,8 +33,9 @@ class LibraryWindow : public QDialog {
     QPushButton *okButton;
     QPushButton *cancelButton;
     QCheckBox *createDefaultShaderCheckBox;
+    QCheckBox *createJsonManifestCheckBox;
     void init();
-    void createShaderIndexFile(const QString &folderPath);
+    bool createShaderManifest(const QString &folderPath);
 
   public:
     /// @brief Return folder chosen for shader-library indexing.

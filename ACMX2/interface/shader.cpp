@@ -1,5 +1,6 @@
 #include "shader.hpp"
 #include "custom_style.hpp"
+#include "shader-manifest.hpp"
 #include <QSettings>
 
 ShaderDialog::ShaderDialog(QWidget *parent) : QDialog(parent) {
@@ -71,11 +72,11 @@ void ShaderDialog::onOkButtonClicked() {
         return;
     }
 
-    QFile file(shaderPath + "/index.txt");
-    if (file.open(QIODevice::Append | QIODevice::Text)) {
-        QTextStream out(&file);
-        out << shaderName << "\n";
-        file.close();
+    QString manifestError;
+    if (!acmx2::append_shader_manifest(shaderPath, shaderName, manifestError)) {
+        QFile::remove(shaderPath + "/" + shaderName);
+        QMessageBox::critical(this, "Error", manifestError);
+        return;
     }
     QMessageBox::information(this, "Success", "Shader file created successfully.");
     accept();

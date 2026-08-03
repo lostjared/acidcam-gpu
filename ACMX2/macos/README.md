@@ -62,7 +62,7 @@ This runs `install-dep.sh` (Homebrew packages) and then `build-macos.sh`
 4. **Run**
 
    ```sh
-   acmx2 -p /usr/local/share/acmx2/data -s /path/to/macos-shaders/index.txt -d 0
+   acmx2 -p /usr/local/share/acmx2/data -s /path/to/macos-shaders -d 0
    acmx2_interface
    ```
 

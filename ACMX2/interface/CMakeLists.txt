@@ -82,6 +82,7 @@ set(LAUNCHER_GUI_HEADERS
     prop.hpp
     settings.hpp
     shader.hpp
+    shader-manifest.hpp
     shaderlibrary.hpp
     shaderpass.hpp
     syntax.hpp
@@ -101,6 +102,7 @@ set(LAUNCHER_GUI_SOURCES
     prop.cpp
     settings.cpp
     shader.cpp
+    shader-manifest.cpp
     shaderlibrary.cpp
     shaderpass.cpp
     syntax.cpp

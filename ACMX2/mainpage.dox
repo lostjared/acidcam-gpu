@@ -59,7 +59,8 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 @section features Features
 
 - <b>Camera, video, or image input</b> with configurable resolution
-- <b>Shader library</b> — load a single fragment shader or a full library via `index.txt`
+- <b>Shader library</b> — load a single fragment shader or a directory using
+  <tt>library.json</tt> when present, with <tt>index.txt</tt> as a fallback
 - <b>CUDA GPU filters</b> — apply GPU-accelerated pixel filters in addition to shaders
 - <b>3D mode</b> — render shaders onto a 3D model (`.mxmod`)
 - <b>Multipass shaders</b> — chain multiple shader passes in a single frame
@@ -542,7 +543,7 @@ builds everything, and installs to <tt>/usr/local/bin/</tt>.
 
 # 4. Run
 acmx2_interface
-# or: acmx2 -p /usr/local/share/acmx2/data -s /path/to/shaders/index.txt -d 0
+# or: acmx2 -p /usr/local/share/acmx2/data -s /path/to/shaders -d 0
 @endcode
 
 See <tt>macos/README.md</tt> for full details, troubleshooting, and CMake flags.
@@ -820,7 +821,7 @@ index zero (oldest frame).
 Run a compatible shader library with array-backed history using:
 
 @code{.sh}
-acmx2 -s ./shaders/index.txt --texture-cache-array --texture-cache-size 16
+acmx2 -s ./shaders --texture-cache-array --texture-cache-size 16
 @endcode
 
 <tt>--texture-cache-array</tt> also enables the texture cache; it does not need
@@ -883,7 +884,7 @@ flags always take priority.
 | Variable | Equivalent flag | Description |
 |----------|-----------------|-------------|
 | `ACMX2_PATH` | `--path` / `-p` | Sets the default assets root directory (data files, fonts, shaders, models). Applied when `--path` is not specified on the command line. If neither is set, the current directory (`.`) is used as the fallback. |
-| `ACMX2_SHADER_PATH` | `--shaders` / `-s` | Sets the default shader library path (directory containing `index.txt` or the index file itself). Applied only when neither `--shaders` nor `--fragment` is specified. When set, shader-library mode (`mode = 1`) is activated automatically. |
+| `ACMX2_SHADER_PATH` | `--shaders` / `-s` | Sets the default shader library directory (`library.json` preferred, `index.txt` fallback). Applied only when neither `--shaders` nor `--fragment` is specified. When set, shader-library mode (`mode = 1`) is activated automatically. |
 
 <b>Precedence rules:</b>
 -# Explicit CLI flags (`--path`, `--shaders`, `--fragment`) always win.
@@ -911,7 +912,7 @@ Explicit flags still override the environment:
 
 @code{.sh}
 # Uses ~/dev/shaders instead of ACMX2_SHADER_PATH
-acmx2 -d 0 --shaders ~/dev/shaders/index.txt
+acmx2 -d 0 --shaders ~/dev/shaders
 @endcode
 
 @note The `ACMX2_SHADER_PATH` variable is ignored when `--fragment` is

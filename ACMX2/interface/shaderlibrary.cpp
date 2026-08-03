@@ -1,6 +1,7 @@
 
 #include "shaderlibrary.hpp"
 #include "custom_style.hpp"
+#include "shader-manifest.hpp"
 #include <QDir>
 #include <QFile>
 #include <QSettings>
@@ -26,6 +27,11 @@ void LibraryWindow::init() {
 
     createDefaultShaderCheckBox = new QCheckBox("Create default shader", this);
     layout->addWidget(createDefaultShaderCheckBox);
+
+    createJsonManifestCheckBox = new QCheckBox("Use library.json manifest", this);
+    createJsonManifestCheckBox->setToolTip(
+        "Store the shader list as JSON. Existing libraries continue to support index.txt.");
+    layout->addWidget(createJsonManifestCheckBox);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
@@ -75,13 +81,13 @@ void LibraryWindow::onOkButtonClicked() {
 
     QMessageBox::StandardButton reply = QMessageBox::question(
         this, "Confirm",
-        QString("Do you want to create a shader index file in the folder: %1?").arg(folderPath),
+        QString("Do you want to create a shader library in the folder: %1?").arg(folderPath),
         QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
         QDir dir;
-        dir.mkpath(folderPath);
-        createShaderIndexFile(folderPath);
+        if (!dir.mkpath(folderPath) || !createShaderManifest(folderPath))
+            return;
         path = folderPath;
 
         if (createDefaultShaderCheckBox->isChecked()) {
@@ -101,7 +107,7 @@ void LibraryWindow::onOkButtonClicked() {
             }
         }
 
-        QMessageBox::information(this, "Success", "Shader index file created successfully.");
+        QMessageBox::information(this, "Success", "Shader library created successfully.");
         accept();
     }
 }
@@ -114,13 +120,14 @@ void LibraryWindow::onCancelButtonClicked() {
     reject();
 }
 
-void LibraryWindow::createShaderIndexFile(const QString &folderPath) {
-    QFile file(folderPath + "/index.txt");
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        out << "default.glsl\n";
-        file.close();
-    } else {
-        QMessageBox::critical(this, "Error", "Failed to create shader index file.");
+bool LibraryWindow::createShaderManifest(const QString &folderPath) {
+    QString error;
+    const auto format = createJsonManifestCheckBox->isChecked()
+                            ? acmx2::ShaderManifestFormat::Json
+                            : acmx2::ShaderManifestFormat::Text;
+    if (!acmx2::create_shader_manifest(folderPath, format, {"default.glsl"}, error)) {
+        QMessageBox::critical(this, "Error", error);
+        return false;
     }
+    return true;
 }
