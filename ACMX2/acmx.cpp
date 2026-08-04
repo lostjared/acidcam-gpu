@@ -8761,6 +8761,16 @@ class ACView : public gl::GLObject {
                                << "\n";
             }
 
+            if (fps > 60.0) {
+                if (SDL_GL_SetSwapInterval(0) == 0) {
+                    mx::system_out << "acmx2: VSync disabled for high-frame-rate video input ("
+                                   << fps << " FPS)\n";
+                } else {
+                    mx::system_err << "acmx2: Could not disable VSync for " << fps
+                                   << " FPS video input: " << SDL_GetError() << "\n";
+                }
+            }
+
             if (rotation_swaps_dimensions()) {
                 std::swap(w, h);
                 std::swap(frame_w, frame_h);
