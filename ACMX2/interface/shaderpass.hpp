@@ -45,6 +45,8 @@ class ShaderPassDialog : public QDialog {
 
   signals:
     void settingsApplied(bool enabled, const QStringList &selectedShaderNames);
+    /// @brief Request that a shader in the pass list be opened for editing.
+    void shaderEditRequested(const QString &shaderName);
 
   public slots:
     void addShader();

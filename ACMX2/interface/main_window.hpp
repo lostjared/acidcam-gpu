@@ -236,6 +236,8 @@ class MainWindow : public QMainWindow {
     int gpu_buffer_size = 8;
     QAction *gpuFilterAction;
     QAction *shaderPassAction;
+    QPointer<ShaderPassDialog> shaderPassDialog;
+    QPointer<PlaylistDialog> playlistDialog;
     QAction *styleSheetAction;
     QAction *buildCacheAction;
     QAction *runFromCacheAction;

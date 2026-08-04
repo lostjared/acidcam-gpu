@@ -73,6 +73,7 @@ void ShaderPassDialog::setupUI() {
     shaderMainLayout->addWidget(selectedLabel);
     selectedShadersList = new QListWidget(this);
     selectedShadersList->setMinimumHeight(200);
+    selectedShadersList->setToolTip("Double-click a shader to open it in the code editor.");
     shaderMainLayout->addWidget(selectedShadersList);
 
     QHBoxLayout *fileButtonLayout = new QHBoxLayout();
@@ -106,6 +107,11 @@ void ShaderPassDialog::setupUI() {
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(searchLineEdit, &QLineEdit::textChanged, this, &ShaderPassDialog::filterSearchChanged);
+    connect(selectedShadersList, &QListWidget::itemDoubleClicked, this,
+            [this](QListWidgetItem *item) {
+                if (item)
+                    emit shaderEditRequested(item->text());
+            });
 
     connect(enableCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         shaderComboBox->setEnabled(checked);

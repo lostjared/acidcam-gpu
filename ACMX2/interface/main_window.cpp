@@ -2035,15 +2035,25 @@ void MainWindow::menuShaderPassSettings() {
         return;
     }
 
-    ShaderPassDialog passDialog(items, this);
-    passDialog.setEnabled(shader_pass_enabled);
-    if (!shader_pass_names.isEmpty()) {
-        passDialog.setSelectedShaderNames(shader_pass_names);
+    if (shaderPassDialog) {
+        shaderPassDialog->updateShaderList(items);
+        shaderPassDialog->show();
+        shaderPassDialog->raise();
+        shaderPassDialog->activateWindow();
+        return;
     }
 
-    auto applyMultipassSettings = [&]() {
-        shader_pass_enabled = passDialog.isShaderPassEnabled();
-        shader_pass_names = passDialog.getSelectedShaderNames();
+    shaderPassDialog = new ShaderPassDialog(items, this);
+    shaderPassDialog->setAttribute(Qt::WA_DeleteOnClose);
+    shaderPassDialog->setEnabled(shader_pass_enabled);
+    if (!shader_pass_names.isEmpty()) {
+        shaderPassDialog->setSelectedShaderNames(shader_pass_names);
+    }
+
+    ShaderPassDialog *dialog = shaderPassDialog;
+    auto applyMultipassSettings = [this, dialog]() {
+        shader_pass_enabled = dialog->isShaderPassEnabled();
+        shader_pass_names = dialog->getSelectedShaderNames();
         publishMultipassShadersToRunningProcess();
         if (shader_pass_enabled) {
             Log("Multi-Pass Shader Settings Saved: " + QString::number(shader_pass_names.size()) + " passes");
@@ -2052,8 +2062,8 @@ void MainWindow::menuShaderPassSettings() {
         }
     };
 
-    connect(&passDialog, &ShaderPassDialog::settingsApplied, this,
-            [&](bool enabled, const QStringList &selectedShaderNames) {
+    connect(dialog, &ShaderPassDialog::settingsApplied, this,
+            [this](bool enabled, const QStringList &selectedShaderNames) {
                 shader_pass_enabled = enabled;
                 shader_pass_names = selectedShaderNames;
                 publishMultipassShadersToRunningProcess();
@@ -2063,10 +2073,17 @@ void MainWindow::menuShaderPassSettings() {
                     Log("Multi-Pass Shader Disabled");
                 }
             });
+    connect(dialog, &ShaderPassDialog::shaderEditRequested, this,
+            [this](const QString &shaderName) {
+                const QString safeName = sanitizeShaderName(shaderName);
+                if (!safeName.isEmpty())
+                    openShaderEditor(QDir(shader_path).filePath(safeName));
+            });
+    connect(dialog, &QDialog::accepted, this, applyMultipassSettings);
 
-    if (passDialog.exec() == QDialog::Accepted) {
-        applyMultipassSettings();
-    }
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
 }
 
 void MainWindow::menuPlaylistSettings() {
@@ -2084,26 +2101,36 @@ void MainWindow::menuPlaylistSettings() {
         return;
     }
 
-    PlaylistDialog playlistDialog(items, this);
-    playlistDialog.setEnabled(playlist_enabled);
+    if (playlistDialog) {
+        playlistDialog->updateShaderList(items);
+        playlistDialog->show();
+        playlistDialog->raise();
+        playlistDialog->activateWindow();
+        return;
+    }
+
+    playlistDialog = new PlaylistDialog(items, this);
+    playlistDialog->setAttribute(Qt::WA_DeleteOnClose);
+    playlistDialog->setEnabled(playlist_enabled);
     if (!playlist_tree_data.isEmpty()) {
-        playlistDialog.setPlaylistTree(playlist_tree_data);
+        playlistDialog->setPlaylistTree(playlist_tree_data);
     } else if (!playlist_names.isEmpty()) {
-        playlistDialog.setSelectedShaderNames(playlist_names);
+        playlistDialog->setSelectedShaderNames(playlist_names);
     }
     if (!playlist_file_path.isEmpty()) {
-        playlistDialog.setPlaylistFile(playlist_file_path);
+        playlistDialog->setPlaylistFile(playlist_file_path);
     }
-    playlistDialog.setAutopilotFrames(autopilot_frames);
-    playlistDialog.setAutopilotRandom(autopilot_random);
+    playlistDialog->setAutopilotFrames(autopilot_frames);
+    playlistDialog->setAutopilotRandom(autopilot_random);
 
-    if (playlistDialog.exec() == QDialog::Accepted) {
-        playlist_enabled = playlistDialog.isPlaylistEnabled();
-        playlist_names = playlistDialog.getSelectedShaderNames();
-        playlist_tree_data = playlistDialog.getPlaylistTree();
-        playlist_file_path = playlistDialog.getPlaylistFile();
-        autopilot_frames = playlistDialog.getAutopilotFrames();
-        autopilot_random = playlistDialog.isAutopilotRandom();
+    PlaylistDialog *dialog = playlistDialog;
+    connect(dialog, &QDialog::accepted, this, [this, dialog]() {
+        playlist_enabled = dialog->isPlaylistEnabled();
+        playlist_names = dialog->getSelectedShaderNames();
+        playlist_tree_data = dialog->getPlaylistTree();
+        playlist_file_path = dialog->getPlaylistFile();
+        autopilot_frames = dialog->getAutopilotFrames();
+        autopilot_random = dialog->isAutopilotRandom();
         QSettings appSettings("LostSideDead");
         appSettings.setValue("playlistAutopilotFrames", autopilot_frames);
         appSettings.setValue("playlistAutopilotRandom", autopilot_random);
@@ -2120,7 +2147,11 @@ void MainWindow::menuPlaylistSettings() {
         } else {
             Log("Playlist Disabled");
         }
-    }
+    });
+
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
 }
 
 void MainWindow::cameraSettings() {
