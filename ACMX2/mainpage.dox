@@ -6,6 +6,12 @@
 <p><img src="https://lostsidedead.biz/screenshot4.jpg?v=1" alt="Sreenshot1" style="max-width:800px; width:80%; height:auto;" /></p>
 @endhtmlonly
 
+@section flatpak_download Download the ACMX2 Flatpak
+
+The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
+the shader library without requiring NVIDIA CUDA. Download it from the
+<a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
+
 @section intro Introduction
 
 <b>acidcam-gpu / ACMX2</b> is a high-performance, real-time video manipulation engine
@@ -522,6 +528,13 @@ whitespace, skips blank lines, and writes UTF-8 JSON using Perl's core
 selects a different destination.
 
 @section install Installation & Prerequisites
+
+@subsection install_flatpak Flatpak
+
+Download the portable, no-CUDA Linux package from the
+<a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
+The package includes the Qt interface, RtAudio, MIDI support, the MIDI map
+utility, runtime data, playlists, and a ready-to-use shader collection.
 
 @subsection install_linux Prerequisites for Linux (NVIDIA GPU)
 

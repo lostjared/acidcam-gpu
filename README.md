@@ -16,6 +16,8 @@
 
 [Full Documentation](https://lostsidedead.biz/acmx2/docs/)
 
+[Download the ACMX2 Flatpak](https://lostsidedead.biz/acmx2/release)
+
 [YouTube Video Tutorial](https://youtu.be/-IDAF8MMmkg)
 
 This project now builds with [pcons](https://pcons.org), a modern
@@ -167,6 +169,11 @@ Fine-grained color control additions:
 
 ## 📦 Installation & Environment
 This project is developed and tested on **Bazzite Linux** using **Arch Linux** containers via **Distrobox**, but it builds on any modern Linux distribution as well as macOS.
+
+### Flatpak download
+
+For the portable Linux build with the Qt interface, RtAudio, MIDI support, and no
+CUDA requirement, visit the [ACMX2 Flatpak download page](https://lostsidedead.biz/acmx2/release).
 
 ### Prerequisites
 * **GPU:** Any GPU with working OpenGL 3.3+ drivers (NVIDIA, AMD, Intel, or Apple Silicon). NVIDIA hardware is **optional** and only required if you want to enable the CUDA GPU-filter stack at compile time.
