@@ -111,6 +111,9 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Recorded webcam audio synchronization</b> — WAV capture shares the video start/stop boundary, and muxing preserves timestamped webcam PTS rather than rescaling playback speed
 - <b>Editable Window Resolution</b> — Qt retains the resolution presets while accepting custom <tt>WxH</tt> text; dimensions must be positive even integers and invalid input is rejected with a warning
 - <b>Input-frame rotation</b> — Qt offers 90-degree clockwise, 180-degree, and 90-degree counterclockwise modes; CPU builds use <tt>cv::rotate</tt> and CUDA builds use <tt>cv::cuda::rotate</tt> on a <tt>GpuMat</tt>
+- <b>High-frame-rate loopback capture</b> — Linux v4l2loopback enumeration includes common rates through 240 FPS, preserves an explicitly requested rate when the driver reports a stale interval, and disables window vsync above 60 FPS through the current libmx2 API
+- <b>Modeless playlist and multipass editing</b> — both Qt dialogs can remain open during other work, reuse and refresh an existing window when reopened, and let a selected multipass shader open directly in the code editor on double-click
+- <b>Arch/macOS dependency helper</b> — root-level <tt>install-required.sh</tt> installs platform packages, chooses stock or CUDA OpenCV on Arch according to detected NVIDIA hardware, and uses Homebrew without CUDA on macOS
 - <b>Texture cache in all input modes</b> — <tt>--texture-cache</tt> applies to camera, video, and graphic input paths
 - <b>Texture cache array mode</b> — <tt>--texture-cache-array</tt> enables the cache and exposes frame history through one <tt>sampler2DArray history</tt> ring; the maintained <a href="https://github.com/lostjared/shaders">shader collection</a> has been updated for this interface
 - <b>Long-run time phase stability</b> — <tt>time_f</tt> wrap/reset now uses a large <tt>2*PI</tt> multiple to preserve trig continuity across long sessions
@@ -140,6 +143,14 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - Qt provides an optional Rotate control with clockwise, 180-degree, and
   counterclockwise modes. Rotation occurs before DNN, CUDA-filter, and shader
   processing; 90-degree modes swap the default output dimensions.
+- Linux v4l2loopback enumeration supplements incomplete driver reporting with
+  common 24...240 FPS choices. The requested rate remains authoritative for a
+  loopback device, and rates above 60 FPS request a non-vsync desktop window.
+- Shader Playlist Settings and Multipass Shader Settings are modeless,
+  single-instance dialogs whose shader lists refresh when they are raised
+  again. Double-clicking a selected multipass shader opens the code editor.
+- The root <tt>install-required.sh</tt> helper installs dependencies on Arch or
+  macOS, selecting the appropriate OpenCV/CUDA package path for the host.
 
 <b>Custom shader uniforms</b>
 
@@ -353,6 +364,14 @@ persisted across launches and translated directly into the matching command-line
 Camera FPS is persisted as a preferred value and re-selected after resolution/FPS capability
 re-enumeration when that FPS is supported by the selected device.
 
+On Linux, v4l2loopback devices receive special handling because they commonly enumerate only the
+producer's current frame interval even though a consumer can request another value. ACMX2 adds
+24, 25, 30, 50, 60, 90, 120, 144, and 240 FPS choices to each discrete loopback resolution and
+keeps the explicitly requested FPS if OpenCV continues to report the old producer rate. For any
+requested camera rate above 60 FPS, the desktop window asks the current libmx2 <tt>GLWindow</tt>
+API to disable vsync so the swap interval does not cap capture at 60 FPS. Rates at or below 60 FPS
+retain the normal vsync request.
+
 No Drop is intentionally unavailable for live camera capture. Selecting Camera immediately
 unchecks and disables the setting, while video-file and graphics modes re-enable it. This avoids
 presenting encoder backpressure as a safe option for a live source whose output must remain on a
@@ -381,6 +400,13 @@ the final display and recording size. The 180-degree mode preserves width and he
 
 The Qt editor flow also includes safer close behavior: if modified shader content is open,
 closing via Escape or window close prompts to save changes before exiting the editor.
+
+<b>Shader Playlist Settings</b> and <b>Multipass Shader Settings</b> are modeless windows. The main
+interface remains usable while either window is open; choosing its menu action again raises the
+existing instance and refreshes the available shader list rather than creating a duplicate. Each
+instance deletes itself when closed, and accepted values are then published or saved through the
+existing playlist/multipass paths. In the multipass window, double-clicking an entry in the
+selected-shader list opens or focuses that source in the built-in editor.
 
 @subsection ui_shader_editor Shader Editor and Find in Files
 
@@ -532,6 +558,28 @@ Or install everything at once:
 @code{.sh}
 sudo bash build-script/install-deps-arch.sh
 @endcode
+
+@subsection install_required_helper Arch and macOS dependency helper
+
+From the repository root, the dependency-only helper supports Arch-based Linux
+and macOS:
+
+@code{.sh}
+./install-required.sh
+@endcode
+
+On Arch it uses <tt>pacman</tt>, invokes <tt>sudo</tt> when necessary, and checks
+for NVIDIA hardware with <tt>nvidia-smi</tt> or <tt>lspci</tt>. NVIDIA systems
+receive <tt>opencv-cuda</tt> and a suggested <tt>-DWITH_CUDA=ON</tt>
+configuration; other systems receive stock <tt>opencv</tt> and
+<tt>-DWITH_CUDA=OFF</tt>. On macOS it requires Homebrew, installs the equivalent
+packages, and uses <tt>-DWITH_CUDA=OFF</tt>.
+
+The helper deliberately does not install <tt>libmx2</tt>, which is not supplied
+by those default package managers. Build the current <tt>libmx2/libmx</tt>
+source as described in @ref build_libmx2 before configuring ACMX2. The
+high-frame-rate window path uses the current <tt>GLWindow</tt> constructor's
+explicit vsync parameter.
 
 @section building Building
 

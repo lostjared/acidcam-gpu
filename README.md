@@ -83,6 +83,10 @@ From the latest `acidcam-gpu` commits, current focus areas include:
 - **Recorded webcam audio boundary**: live WAV capture starts with the media timeline and stops at the video-capture boundary, before queued video frames and encoder packets drain. Timestamped webcam video is muxed without rescaling its PTS, preventing an audio-only tail or a playback-speed change.
 - **Editable window resolution**: the Qt Window Resolution control keeps its preset dropdown but also accepts a custom `WxH` value. Custom width and height must be positive even integers; invalid values show a warning and are not applied or saved.
 - **Input-frame rotation**: Qt Settings now provides a Rotate checkbox with 90° clockwise, 180°, and 90° counterclockwise choices. CPU builds use `cv::rotate`; CUDA builds use `cv::cuda::rotate` on a `GpuMat`. With the default Window Resolution, 90° rotation swaps the output dimensions to preserve orientation.
+- **High-frame-rate and loopback capture**: Linux `v4l2loopback` devices now expose common choices from 24 through 240 FPS in camera enumeration. ACMX2 preserves the requested loopback rate when the driver reports its stale producer rate, and requests a non-vsync window when the selected rate is above 60 FPS so 90/120/144/240 FPS capture is not capped by the display refresh path.
+- **Modeless playlist and multipass dialogs**: Shader Playlist Settings and Multipass Shader Settings can remain open while the main interface is used. Reopening an existing dialog focuses it and refreshes its shader list instead of creating a duplicate.
+- **Open multipass shaders in the editor**: double-click a shader in the selected multipass list to open or focus it in the built-in GLSL editor.
+- **Unified dependency helper**: the root `install-required.sh` installs dependencies on Arch-based Linux or macOS. Arch selects `opencv-cuda` when NVIDIA hardware is detected and stock `opencv` otherwise; macOS uses Homebrew and builds without CUDA.
 
 ### July 2026
 
@@ -222,6 +226,19 @@ Or install everything at once using the provided script:
 ```bash
 sudo bash build-script/install-deps-arch.sh
 ```
+
+For a cross-platform dependency-only setup, run the root helper instead:
+
+```bash
+./install-required.sh
+```
+
+On Arch-based Linux the helper uses `pacman` (and `sudo` when needed), detects
+NVIDIA hardware, and selects `opencv-cuda` or stock `opencv` accordingly. On
+macOS it uses Homebrew and configures the project without CUDA. The helper does
+not install `libmx2`; build the current `libmx2/libmx` source first using the
+steps above. ACMX2's high-frame-rate path requires the current `libmx2`
+`GLWindow` constructor with explicit vsync control.
 
 ---
 
@@ -628,6 +645,21 @@ The **Multipass Shader Settings** dialog now includes **Save List...** and **Loa
 - **Command line:** Use `--enumerate-device <index>` to list all supported resolutions and frame rates for a V4L2 camera device (Linux only).
 - **Qt Interface:** The **Settings** dialog now automatically queries the selected camera device for its supported resolutions and frame rates. The resolution and FPS dropdowns are dynamically populated based on the device capabilities. Changing the camera device re-enumerates, and changing the resolution updates the available frame rates. In graphics file mode the FPS options default to 24, 30, and 60.
 - **FPS preference persistence:** The selected camera FPS is now saved as a preferred value and restored when available after dialog reopen, app restart, or resolution list repopulation.
+- **Linux loopback devices:** `v4l2loopback` often reports only its current producer interval even though it accepts a different consumer interval. ACMX2 adds 24, 25, 30, 50, 60, 90, 120, 144, and 240 FPS choices for these devices and uses the explicitly requested value when the driver continues to report a stale rate.
+- **Above 60 FPS:** requesting a camera rate above 60 FPS creates the desktop OpenGL window with vsync disabled through the current `libmx2` API, preventing the display swap interval from imposing a 60 FPS ceiling. Rates at or below 60 FPS keep the normal vsync request.
+
+### Modeless Playlist and Multipass Editing
+
+The **Shader Playlist Settings** and **Multipass Shader Settings** windows are
+modeless, so they can stay open while you use the main interface or edit shader
+source. Choosing either menu action again raises the existing window and
+refreshes its available shader list rather than opening another copy. Closing a
+window deletes that dialog instance; the next menu action creates a fresh one
+from the current saved selection.
+
+In **Multipass Shader Settings**, double-click any shader in the selected list
+to open it in the built-in code editor. If that source is already open, ACMX2
+focuses the existing editor window.
 
 ### GPU Filter Save/Load
 
