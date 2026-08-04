@@ -45,7 +45,9 @@ app = project.QtProgram(
     env,
     sources=[
         "audio-window.cpp",
+        "custom-uniforms.cpp",
         "editor.cpp",
+        "find-shader.cpp",
         "gpufilter.cpp",
         "main.cpp",
         "main_window.cpp",
@@ -55,6 +57,7 @@ app = project.QtProgram(
         "prop.cpp",
         "settings.cpp",
         "shader.cpp",
+        "shader-manifest.cpp",
         "shaderlibrary.cpp",
         "shaderpass.cpp",
         "syntax.cpp",
