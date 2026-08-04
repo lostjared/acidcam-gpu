@@ -144,6 +144,35 @@ static std::string safeGLString(GLenum name) {
     return reinterpret_cast<const char *>(value);
 }
 
+#ifdef __linux__
+/**
+ * @brief Return whether a numbered V4L2 device is provided by v4l2loopback.
+ *
+ * Loopback devices expose only their current frame interval through
+ * VIDIOC_ENUM_FRAMEINTERVALS, even though consumers may select another
+ * time-per-frame value with VIDIOC_S_PARM.  Detecting them lets camera
+ * enumeration expose useful high-speed choices to the Qt interface.
+ */
+static bool isV4l2LoopbackDevice(int device_index) {
+    const std::string device_path = "/dev/video" + std::to_string(device_index);
+    const int fd = open(device_path.c_str(), O_RDWR | O_NONBLOCK);
+    if (fd < 0) {
+        return false;
+    }
+
+    v4l2_capability capability{};
+    const bool queried = ioctl(fd, VIDIOC_QUERYCAP, &capability) == 0;
+    close(fd);
+    if (!queried) {
+        return false;
+    }
+
+    const std::string driver(reinterpret_cast<const char *>(capability.driver));
+    return driver.find("v4l2loopback") != std::string::npos ||
+           driver.find("v4l2 loopback") != std::string::npos;
+}
+#endif
+
 static std::optional<std::string> normalizeShaderIndexEntry(const std::string &raw) {
     const auto first = raw.find_first_not_of(" \t\r\n");
     if (first == std::string::npos) {
@@ -8521,6 +8550,11 @@ class ACView : public gl::GLObject {
                        "wall-clock timestamps and late-frame dropping remain active\n";
                 no_drop_mode = false;
             }
+#ifdef __linux__
+            const bool loopback_device = isV4l2LoopbackDevice(camera_index);
+#else
+            const bool loopback_device = false;
+#endif
 #ifdef _WIN32
             cap.open(camera_index, cv::CAP_DSHOW);
 #elif defined(__linux__)
@@ -8543,13 +8577,34 @@ class ACView : public gl::GLObject {
                 cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y', 'U', 'Y', 'V'));
             else
                 cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-            cap.set(cv::CAP_PROP_FPS, fps);
+            const double requested_fps = fps;
+            const bool fps_configured = cap.set(cv::CAP_PROP_FPS, requested_fps);
             w = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
             h = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
-            fps = cap.get(cv::CAP_PROP_FPS);
+            const double reported_fps = cap.get(cv::CAP_PROP_FPS);
+            // v4l2loopback may continue to report the producer's initial
+            // 30 fps interval even after accepting a high-speed consumer
+            // interval.  Keep the explicitly requested rate in that case so
+            // the render loop does not impose an artificial 30 fps cap.
+            if (loopback_device && requested_fps > 0.0) {
+                fps = requested_fps;
+            } else if (reported_fps > 0.0) {
+                fps = reported_fps;
+            } else {
+                fps = requested_fps;
+            }
             frame_w = w;
             frame_h = h;
-            mx::system_out << "acmx2: Camera opened: " << w << "x" << h << " at FPS: " << fps << "\n";
+            mx::system_out << "acmx2: Camera opened: " << w << "x" << h
+                           << " at FPS: " << fps;
+            if (loopback_device && reported_fps > 0.0 &&
+                std::abs(reported_fps - requested_fps) > 0.05) {
+                mx::system_out << " (loopback reports " << reported_fps
+                               << ", requested " << requested_fps << ")";
+            } else if (!fps_configured && requested_fps > 0.0) {
+                mx::system_out << " (driver rejected requested " << requested_fps << ")";
+            }
+            mx::system_out << "\n";
             fflush(stderr);
             fflush(stdout);
 
@@ -12607,7 +12662,10 @@ class MainWindow : public gl::GLWindow {
      *
      * @param args Parsed CLI arguments (resolution, asset path, etc.).
      */
-    MainWindow(const MXArguments &args) : gl::GLWindow("ACMX2", args.tw, args.th, false), silent_mode(args.silent) {
+    MainWindow(const MXArguments &args)
+        : gl::GLWindow("ACMX2", args.tw, args.th, false, gl::GLMode::DESKTOP,
+                       4, 1, args.fps_value <= 60.0),
+          silent_mode(args.silent) {
         initCommon(args);
     }
 
@@ -13376,11 +13434,26 @@ int main(int argc, char **argv) {
                     exit(EXIT_FAILURE);
                 }
                 v4l2_capability cap{};
+                bool loopback_device = false;
                 if (ioctl(fd, VIDIOC_QUERYCAP, &cap) == 0) {
                     mx::system_out << "Device " << dev_idx << ": " << dev_path << "\n";
                     mx::system_out << "  Driver : " << cap.driver << "\n";
                     mx::system_out << "  Card   : " << cap.card << "\n";
                     mx::system_out << "  Bus    : " << cap.bus_info << "\n";
+                    const std::string driver(reinterpret_cast<const char *>(cap.driver));
+                    loopback_device = driver.find("v4l2loopback") != std::string::npos ||
+                                      driver.find("v4l2 loopback") != std::string::npos;
+                }
+
+                double current_fps = 0.0;
+                v4l2_streamparm stream_parameters{};
+                stream_parameters.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                if (ioctl(fd, VIDIOC_G_PARM, &stream_parameters) == 0 &&
+                    stream_parameters.parm.capture.timeperframe.numerator != 0) {
+                    const v4l2_fract &interval =
+                        stream_parameters.parm.capture.timeperframe;
+                    current_fps = static_cast<double>(interval.denominator) /
+                                  interval.numerator;
                 }
                 v4l2_fmtdesc fmt{};
                 fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -13399,19 +13472,70 @@ int main(int argc, char **argv) {
                     while (ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &fsize) == 0) {
                         if (fsize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
                             mx::system_out << "    " << fsize.discrete.width << "x" << fsize.discrete.height;
+                            std::vector<double> frame_rates;
+                            auto append_frame_rate = [&frame_rates](double frame_rate) {
+                                if (frame_rate <= 0.0) {
+                                    return;
+                                }
+                                const auto existing = std::find_if(
+                                    frame_rates.begin(), frame_rates.end(),
+                                    [frame_rate](double value) {
+                                        return std::abs(value - frame_rate) < 0.05;
+                                    });
+                                if (existing == frame_rates.end()) {
+                                    frame_rates.push_back(frame_rate);
+                                }
+                            };
                             v4l2_frmivalenum fival{};
                             fival.pixel_format = fmt.pixelformat;
                             fival.width = fsize.discrete.width;
                             fival.height = fsize.discrete.height;
                             fival.index = 0;
-                            bool first = true;
                             while (ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &fival) == 0) {
                                 if (fival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
-                                    double fps_val = static_cast<double>(fival.discrete.denominator) / fival.discrete.numerator;
-                                    mx::system_out << (first ? " @ " : ", ") << std::fixed << std::setprecision(1) << fps_val << " fps";
-                                    first = false;
+                                    if (fival.discrete.numerator != 0) {
+                                        append_frame_rate(
+                                            static_cast<double>(fival.discrete.denominator) /
+                                            fival.discrete.numerator);
+                                    }
+                                } else if (fival.type == V4L2_FRMIVAL_TYPE_STEPWISE ||
+                                           fival.type == V4L2_FRMIVAL_TYPE_CONTINUOUS) {
+                                    if (fival.stepwise.min.numerator != 0) {
+                                        append_frame_rate(
+                                            static_cast<double>(fival.stepwise.min.denominator) /
+                                            fival.stepwise.min.numerator);
+                                    }
+                                    if (fival.stepwise.max.numerator != 0) {
+                                        append_frame_rate(
+                                            static_cast<double>(fival.stepwise.max.denominator) /
+                                            fival.stepwise.max.numerator);
+                                    }
                                 }
                                 fival.index++;
+                            }
+
+                            append_frame_rate(current_fps);
+                            if (loopback_device) {
+                                // v4l2loopback reports only its current interval,
+                                // but accepts consumer-selected time-per-frame
+                                // values. Include common real-time and constrained
+                                // high-speed camera rates for the interface.
+                                constexpr double LOOPBACK_FRAME_RATES[] = {
+                                    24.0, 25.0, 30.0, 50.0, 60.0,
+                                    90.0, 120.0, 144.0, 240.0};
+                                for (double frame_rate : LOOPBACK_FRAME_RATES) {
+                                    append_frame_rate(frame_rate);
+                                }
+                            }
+
+                            std::sort(frame_rates.begin(), frame_rates.end(),
+                                      std::greater<double>());
+                            bool first = true;
+                            for (double frame_rate : frame_rates) {
+                                mx::system_out << (first ? " @ " : ", ")
+                                               << std::fixed << std::setprecision(1)
+                                               << frame_rate << " fps";
+                                first = false;
                             }
                             mx::system_out << "\n";
                         } else if (fsize.type == V4L2_FRMSIZE_TYPE_STEPWISE || fsize.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) {
