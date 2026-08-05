@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(ACMX2 VERSION 2.4.0 LANGUAGES C CXX)
+project(ACMX2 VERSION 2.5.0 LANGUAGES C CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
