@@ -1081,7 +1081,8 @@ void SettingsWindow::init() {
     modelRow->addWidget(browseModelButton);
     displayGrid->addLayout(modelRow, r, 1);
     displayGrid->addWidget(useOnnxModelCheckBox, ++r, 0, 1, 2);
-    displayGrid->addWidget(new QLabel("ONNX Model:", this), ++r, 0);
+    onnxModelLabel = new QLabel("ONNX Model:", this);
+    displayGrid->addWidget(onnxModelLabel, ++r, 0);
     auto *onnxModelRow = new QHBoxLayout;
     onnxModelRow->setSpacing(4);
     onnxModelRow->addWidget(onnxModelFileLineEdit);
@@ -1629,7 +1630,7 @@ QString SettingsWindow::getModelFile() const {
 }
 
 bool SettingsWindow::isOnnxModelEnabled() const {
-    return useOnnxModelCheckBox->isChecked();
+    return dnnAvailable && useOnnxModelCheckBox->isChecked();
 }
 
 QString SettingsWindow::getOnnxModelFile() const {
@@ -1652,6 +1653,34 @@ void SettingsWindow::setCudaAvailable(bool available) {
     if (cudaDeviceLabel) {
         cudaDeviceLabel->setEnabled(available);
     }
+}
+
+void SettingsWindow::setDnnAvailable(bool available) {
+    dnnAvailable = available;
+
+    if (onnxModelLabel)
+        onnxModelLabel->setEnabled(available);
+    if (useOnnxModelCheckBox) {
+        useOnnxModelCheckBox->setEnabled(available);
+        if (!available)
+            useOnnxModelCheckBox->setChecked(false);
+    }
+    if (onnxModelFileLineEdit)
+        onnxModelFileLineEdit->setEnabled(available && useOnnxModelCheckBox->isChecked());
+    if (browseOnnxModelButton)
+        browseOnnxModelButton->setEnabled(available && useOnnxModelCheckBox->isChecked());
+
+    const QString tooltip = available
+                                ? QString()
+                                : tr("Disabled: acmx2 was built without OpenCV DNN support.");
+    if (onnxModelLabel)
+        onnxModelLabel->setToolTip(tooltip);
+    if (useOnnxModelCheckBox)
+        useOnnxModelCheckBox->setToolTip(tooltip);
+    if (onnxModelFileLineEdit)
+        onnxModelFileLineEdit->setToolTip(tooltip);
+    if (browseOnnxModelButton)
+        browseOnnxModelButton->setToolTip(tooltip);
 }
 
 float SettingsWindow::getTimeSpeed() const {
@@ -1844,7 +1873,7 @@ void SettingsWindow::acceptSettings() {
         modelFile = modelFileLineEdit->text();
     }
 
-    if (useOnnxModelCheckBox->isChecked()) {
+    if (dnnAvailable && useOnnxModelCheckBox->isChecked()) {
         onnxModelFile = onnxModelFileLineEdit->text();
     } else {
         onnxModelFile.clear();

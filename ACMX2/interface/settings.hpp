@@ -35,6 +35,9 @@ class SettingsWindow : public QDialog {
     /// @brief Show or hide CUDA-specific controls based on availability.
     /// @param available True when CUDA runtime/device support is available.
     void setCudaAvailable(bool available);
+    /// @brief Enable or disable ONNX controls based on OpenCV DNN support.
+    /// @param available True when OpenCV DNN support is compiled in.
+    void setDnnAvailable(bool available);
     /// @return Selected camera device index.
     int getSelectedCameraIndex() const;
     /// @return Selected input camera resolution.
@@ -192,6 +195,7 @@ class SettingsWindow : public QDialog {
     QCheckBox *useYuvCheckBox;
     QLineEdit *modelFileLineEdit;
     QPushButton *browseModelButton;
+    QLabel *onnxModelLabel = nullptr;
     QCheckBox *useOnnxModelCheckBox;
     QLineEdit *onnxModelFileLineEdit;
     QPushButton *browseOnnxModelButton;
@@ -246,6 +250,7 @@ class SettingsWindow : public QDialog {
     int graphicsDuration;
     QString modelFile;
     QString onnxModelFile;
+    bool dnnAvailable = true;
     int selectedCudaDevice;
     double maxDuration;
     double maxSizeLimit;

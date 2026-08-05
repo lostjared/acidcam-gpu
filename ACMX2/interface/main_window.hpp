@@ -166,6 +166,7 @@ class MainWindow : public QMainWindow {
     bool cuda_available = false;
     bool audio_available = false;
     bool midi_available = false;
+    bool dnn_available = false;
     void detectCudaSupport();
     void detectFeatureSupport();
     QAction *listMenu_search = nullptr;

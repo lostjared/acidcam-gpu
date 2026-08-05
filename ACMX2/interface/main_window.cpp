@@ -2157,6 +2157,7 @@ void MainWindow::menuPlaylistSettings() {
 void MainWindow::cameraSettings() {
     SettingsWindow settingsWindow(executable_path, this);
     settingsWindow.setCudaAvailable(cuda_available);
+    settingsWindow.setDnnAvailable(dnn_available);
     if (settingsWindow.exec() == QDialog::Accepted) {
         full_screen_value = settingsWindow.isFullscreen();
         if (settingsWindow.isUsingInputVideoFile()) {
@@ -3305,6 +3306,7 @@ void MainWindow::detectFeatureSupport() {
     cuda_available = probeFeature(executable_path, "--check-cuda", "CUDA: enabled");
     audio_available = probeFeature(executable_path, "--check-audio", "AUDIO: enabled");
     midi_available = probeFeature(executable_path, "--check-midi", "MIDI: enabled");
+    dnn_available = probeFeature(executable_path, "--check-dnn", "OpenCV DNN: enabled");
 
     Log(cuda_available ? "CUDA: enabled (acmx2 built with CUDA support)"
                        : "CUDA: disabled (acmx2 built without CUDA support)");
@@ -3312,6 +3314,13 @@ void MainWindow::detectFeatureSupport() {
                         : "AUDIO: disabled (acmx2 built without audio support)");
     Log(midi_available ? "MIDI: enabled (acmx2 built with MIDI support)"
                        : "MIDI: disabled (acmx2 built without MIDI support)");
+    Log(dnn_available ? "OpenCV DNN: enabled (acmx2 built with OpenCV DNN support)"
+                      : "OpenCV DNN: disabled (acmx2 built without OpenCV DNN support)");
+
+    if (!dnn_available) {
+        onnx_model_enabled = false;
+        onnx_model.clear();
+    }
 
     if (gpuFilterAction) {
         gpuFilterAction->setEnabled(cuda_available);

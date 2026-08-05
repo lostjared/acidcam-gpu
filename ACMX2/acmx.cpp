@@ -12851,7 +12851,7 @@ namespace {
 
         printSection(out, c, "Texture Array Cache", {{"--texture-cache-array", "Store frame history in one sampler2DArray named history.", "acmx2 --texture-cache-array"}});
 
-        printSection(out, c, "DNN And ONNX Models", {{"--human <file>", "Load ONNX human segmentation model (e.g., pphumanseg .onnx) to isolate foreground person.", "acmx2 --human human_seg.onnx -i input.mp4 -o output.mp4"}, {"--background", "When --human is used, apply shaders only to background; composite person on top.", "acmx2 --human model.onnx --background"}, {"--black <threshold>", "Set mask black point / shadow crush threshold for color/segmentation masks (default: 0.35).", "acmx2 --human seg.onnx --black 0.25"}, {"--white <threshold>", "Set mask white point / opacity saturation threshold for color/segmentation masks (default: 0.75).", "acmx2 --human seg.onnx --white 0.85"}, {"--edge <file>", "Load ONNX edge detection model (e.g., Dexined .onnx) to replace frame with edge map.", "acmx2 --edge edges.onnx -i video.mp4 -o edges.mp4"}, {"--onnx <file>", "Load generic ONNX model from YAML config file; replaces frame with model output.", "acmx2 --onnx bubble.yaml -i input.mp4 -o output.mp4"}});
+        printSection(out, c, "DNN And ONNX Models", {{"--human <file>", "Load ONNX human segmentation model (e.g., pphumanseg .onnx) to isolate foreground person.", "acmx2 --human human_seg.onnx -i input.mp4 -o output.mp4"}, {"--background", "When --human is used, apply shaders only to background; composite person on top.", "acmx2 --human model.onnx --background"}, {"--black <threshold>", "Set mask black point / shadow crush threshold for color/segmentation masks (default: 0.35).", "acmx2 --human seg.onnx --black 0.25"}, {"--white <threshold>", "Set mask white point / opacity saturation threshold for color/segmentation masks (default: 0.75).", "acmx2 --human seg.onnx --white 0.85"}, {"--edge <file>", "Load ONNX edge detection model (e.g., Dexined .onnx) to replace frame with edge map.", "acmx2 --edge edges.onnx -i video.mp4 -o edges.mp4"}, {"--onnx <file>", "Load generic ONNX model from YAML config file; replaces frame with model output.", "acmx2 --onnx bubble.yaml -i input.mp4 -o output.mp4"}, {"--check-dnn", "Report whether this build has OpenCV DNN support enabled.", "acmx2 --check-dnn"}});
 
         printSection(out, c, "GPU And CUDA", {{"--gpu-filter <list>", "Apply CUDA filter chain by index list (comma-separated).", "acmx2 --gpu-filter 1,12,18"}, {"--gpu-buffer <N>", "Set GPU temporal frame buffer size (4..32).", "acmx2 --gpu-buffer 12"}, {"--list-filters", "List all built-in GPU filters and their indices.", "acmx2 --list-filters"}, {"-m <idx>, --cuda-device <idx>", "Select CUDA device index to run processing on.", "acmx2 --cuda-device 0"}, {"--list-cuda-devices", "List CUDA devices visible to the runtime.", "acmx2 --list-cuda-devices"}, {"--check-cuda", "Report whether this build has CUDA support enabled.", "acmx2 --check-cuda"}});
 
@@ -12955,6 +12955,7 @@ int main(int argc, char **argv) {
         .addOptionDoubleValue(703, "white", "Mask white point / opacity saturation threshold (default 0.75)")
         .addOptionDoubleValue(704, "edge", "Edge detection model (Dexined .onnx) -- replace frame with edge map")
         .addOptionDoubleValue(705, "onnx", "Generic ONNX model YAML config -- replace frame with DNN output")
+        .addOptionDouble(621, "check-dnn", "Report whether OpenCV DNN support is compiled in")
         .addOptionDouble(261, "help", "print help info")
         .addOptionDouble(262, "version", "print version and help info")
         .addOptionDoubleValue(400, "gpu-filter", "GPU filter indices (comma-separated)")
@@ -13052,6 +13053,14 @@ int main(int argc, char **argv) {
             std::cout << "AUDIO: enabled" << std::endl;
 #else
             std::cout << "AUDIO: disabled" << std::endl;
+#endif
+            return EXIT_SUCCESS;
+        }
+        if (std::string(argv[i]) == "--check-dnn") {
+#ifdef ACMX2_WITH_DNN
+            std::cout << "OpenCV DNN: enabled" << std::endl;
+#else
+            std::cout << "OpenCV DNN: disabled" << std::endl;
 #endif
             return EXIT_SUCCESS;
         }
@@ -13264,6 +13273,14 @@ int main(int argc, char **argv) {
                 std::cout << "CUDA: enabled\n";
 #else
                 std::cout << "CUDA: disabled\n";
+#endif
+                exit(EXIT_SUCCESS);
+                break;
+            case 621:
+#ifdef ACMX2_WITH_DNN
+                std::cout << "OpenCV DNN: enabled\n";
+#else
+                std::cout << "OpenCV DNN: disabled\n";
 #endif
                 exit(EXIT_SUCCESS);
                 break;
