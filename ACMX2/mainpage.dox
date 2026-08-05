@@ -6,6 +6,20 @@
 <p><img src="https://lostsidedead.biz/screenshot4.jpg?v=1" alt="Sreenshot1" style="max-width:800px; width:80%; height:auto;" /></p>
 @endhtmlonly
 
+@section intro Introduction
+
+<b>acidcam-gpu / ACMX2</b> is a high-performance, real-time video manipulation engine
+designed to push the boundaries of psychedelic glitch art. Part of the <b>ACMX2</b> and
+<b>libmx2</b> ecosystem, it can optionally offload complex glitch filters to <b>NVIDIA GPUs</b>
+via CUDA, enabling fluid, high-resolution visual transformations at 60+ FPS.
+
+<b>CUDA acceleration is a compile-time option</b> (<tt>-DWITH_CUDA=ON/OFF</tt>, default
+<tt>ON</tt>). The project now requires OpenCV 5. When CUDA is enabled, OpenCV 5
+must be compiled with CUDA support. When disabled, the engine builds against
+stock OpenCV 5 and runs the full GLSL/SDL2
+shader pipeline without the CUDA GPU-filter stack — see
+@ref build_optional and @ref build_nocuda.
+
 @section flatpak_download Download the ACMX2 Flatpak
 
 The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
@@ -52,20 +66,6 @@ with array mode disabled. On non-macOS systems,
 <b>Playback &gt; Rebuild Shader Cache</b> can precompile variants after the cache
 size or array mode is changed. macOS compiles shader source at runtime because
 persistent program-binary caching is unavailable there.
-
-@section intro Introduction
-
-<b>acidcam-gpu / ACMX2</b> is a high-performance, real-time video manipulation engine
-designed to push the boundaries of psychedelic glitch art. Part of the <b>ACMX2</b> and
-<b>libmx2</b> ecosystem, it can optionally offload complex glitch filters to <b>NVIDIA GPUs</b>
-via CUDA, enabling fluid, high-resolution visual transformations at 60+ FPS.
-
-<b>CUDA acceleration is a compile-time option</b> (<tt>-DWITH_CUDA=ON/OFF</tt>, default
-<tt>ON</tt>). The project now requires OpenCV 5. When CUDA is enabled, OpenCV 5
-must be compiled with CUDA support. When disabled, the engine builds against
-stock OpenCV 5 and runs the full GLSL/SDL2
-shader pipeline without the CUDA GPU-filter stack — see
-@ref build_optional and @ref build_nocuda.
 
 @section purpose Purpose & Vision
 

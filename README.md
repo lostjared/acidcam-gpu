@@ -14,6 +14,12 @@
 
 # acidcam-gpu / ACMX2
 
+**acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
+
+> **OpenCV 5 is now required.** The project has moved from OpenCV 4 to OpenCV 5. Use a stock OpenCV 5 build for the portable OpenGL configuration, or an OpenCV 5 build with CUDA support when enabling the optional CUDA pipeline.
+
+> **NVIDIA GPUs are no longer required.** ACMX2 builds and runs on AMD, Intel, and Apple GPUs using the OpenGL/SDL2 path (`-DWITH_CUDA=OFF`). On NVIDIA systems with the CUDA toolkit and an OpenCV 5 build that includes CUDA support, you can opt in to the CUDA GPU-filter stack and FFmpeg CUDA hardware decode by configuring with `-DWITH_CUDA=ON` (the default when CUDA is detected).
+
 [Full Documentation](https://lostsidedead.biz/acmx2/docs/)
 
 [Download the ACMX2 Flatpak](https://lostsidedead.biz/acmx2/release)
@@ -65,13 +71,6 @@ compile or appear not to apply. Legacy cache shaders that use `samp1` through
 disabled. On non-macOS systems, **Playback > Rebuild Shader Cache** can be run
 after changing the cache size or array mode to precompile the matching shader
 variants; macOS always compiles shader source at runtime.
-
-
-**acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
-
-> **OpenCV 5 is now required.** The project has moved from OpenCV 4 to OpenCV 5. Use a stock OpenCV 5 build for the portable OpenGL configuration, or an OpenCV 5 build with CUDA support when enabling the optional CUDA pipeline.
-
-> **NVIDIA GPUs are no longer required.** ACMX2 builds and runs on AMD, Intel, and Apple GPUs using the OpenGL/SDL2 path (`-DWITH_CUDA=OFF`). On NVIDIA systems with the CUDA toolkit and an OpenCV 5 build that includes CUDA support, you can opt in to the CUDA GPU-filter stack and FFmpeg CUDA hardware decode by configuring with `-DWITH_CUDA=ON` (the default when CUDA is detected).
 
 ## 🚀 Purpose & Vision
 The original project brought a massive library of "glitch" filters to digital artists. However, as resolutions climbed to 4K and filter stacks became more complex, CPU-based processing hit a bottleneck. 
