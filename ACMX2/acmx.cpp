@@ -4541,10 +4541,13 @@ class ShaderLibrary {
      * @param library_path  Directory containing a shader manifest and GLSL files.
      * @param vert_2d  Path to the 2D vertex shader.
      * @param vert_3d  Path to the 3D vertex shader.
+     * @param loadingFont Optional font used to render rebuild progress.
      * @return true on success.
      */
-    bool buildShaderCache(gl::GLWindow *win, const std::string &library_path, const std::string &vert_2d, const std::string &vert_3d) {
-        static_cast<void>(win);
+    bool buildShaderCache(gl::GLWindow *win, const std::string &library_path,
+                          const std::string &vert_2d,
+                          const std::string &vert_3d,
+                          mx::Font *loadingFont = nullptr) {
         if (glGetString(GL_VERSION) == nullptr) {
             mx::system_err << "acmx2: build-cache requires a valid OpenGL context\n";
             return false;
@@ -4590,7 +4593,98 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Building shader cache for " << shader_files.size() << " shaders...\n";
         fflush(stdout);
 
+        static constexpr const char *kCacheLogoVert =
+            "#version 330 core\n"
+            "layout(location = 0) in vec3 aPos;\n"
+            "layout(location = 1) in vec2 aTex;\n"
+            "out vec2 tc;\n"
+            "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
+        static constexpr const char *kCacheLogoFrag =
+            "#version 330 core\n"
+            "in vec2 tc;\n"
+            "out vec4 color;\n"
+            "uniform sampler2D samp;\n"
+            "void main() { color = texture(samp, tc); }\n";
+
+        gl::ShaderProgram cache_logo_shader;
+        auto cache_logo_sprite = std::make_unique<gl::GLSprite>();
+        bool cache_logo_loaded = false;
+        if (win != nullptr) {
+            const std::string logo_path = win->util.getFilePath("data/logo.png");
+            if (std::filesystem::exists(logo_path)) {
+                GLuint logo_texture = 0;
+                try {
+                    int logo_width = 0;
+                    int logo_height = 0;
+                    logo_texture = gl::loadTexture(
+                        logo_path, logo_width, logo_height);
+                    if (logo_texture &&
+                        cache_logo_shader.loadProgramFromText(
+                            kCacheLogoVert, kCacheLogoFrag)) {
+                        cache_logo_sprite->initSize(win->w, win->h);
+                        cache_logo_sprite->setName("samp");
+                        cache_logo_sprite->setShader(&cache_logo_shader);
+                        const float scale = std::min(
+                            static_cast<float>(win->w) / logo_width,
+                            static_cast<float>(win->h) / logo_height);
+                        const int draw_width =
+                            static_cast<int>(logo_width * scale);
+                        const int draw_height =
+                            static_cast<int>(logo_height * scale);
+                        const int draw_x = (win->w - draw_width) / 2;
+                        const int draw_y = (win->h - draw_height) / 2;
+                        cache_logo_sprite->initWithTexture(
+                            &cache_logo_shader, logo_texture,
+                            draw_x, draw_y, draw_width, draw_height);
+                        logo_texture = 0;
+                        cache_logo_loaded = true;
+                    }
+                } catch (...) {
+                }
+                if (logo_texture)
+                    glDeleteTextures(1, &logo_texture);
+            }
+        }
+
+        int last_progress_percent = -1;
+        const auto present_cache_progress = [&](std::size_t completed) {
+            // Pump native window events for every shader so desktop
+            // environments do not mark the synchronous rebuild as hung.
+            SDL_PumpEvents();
+            if (win == nullptr)
+                return;
+
+            const int percent = shader_files.empty()
+                                    ? 100
+                                    : static_cast<int>(
+                                          completed * 100 /
+                                          shader_files.size());
+            if (percent == last_progress_percent)
+                return;
+            last_progress_percent = percent;
+
+            glViewport(0, 0, win->w, win->h);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            if (cache_logo_loaded)
+                cache_logo_sprite->draw();
+            if (loadingFont != nullptr &&
+                loadingFont->handle().has_value()) {
+                const std::string progress_text =
+                    "Building Shader Cache " +
+                    std::to_string(completed) + "/" +
+                    std::to_string(shader_files.size()) + "...";
+                win->text.printText_Blended(
+                    *loadingFont, 10, 10, progress_text);
+            }
+            SDL_GL_SwapWindow(win->getWindow());
+            SDL_PumpEvents();
+        };
+
+        present_cache_progress(0);
+
         for (size_t i = 0; i < shader_files.size(); ++i) {
+            present_cache_progress(i);
             const std::string &shader_file = shader_files[i];
             std::string full_path = library_path + "/" + shader_file;
 
@@ -4758,6 +4852,8 @@ class ShaderLibrary {
                 continue;
             }
         }
+
+        present_cache_progress(shader_files.size());
 
         if (cache.save(cache_file)) {
             size_t ok_count = 0;
@@ -5192,7 +5288,7 @@ class ShaderLibrary {
         programs_3d.clear();
         program_names_2d.clear();
         program_names_3d.clear();
-        if (buildShaderCache(win, text, vert_2d, vert_3d) &&
+        if (buildShaderCache(win, text, vert_2d, vert_3d, &loadingFont) &&
             loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
             return;
         }
@@ -14172,6 +14268,29 @@ int main(int argc, char **argv) {
             mx::system_err << "acmx2: Error: --png in video-file mode requires -o/--output to derive the PNG frame directory\n";
             mx::system_err.flush();
             return EXIT_FAILURE;
+        }
+
+        // Create graphics-mode windows at the image's native dimensions when
+        // --resolution was not supplied. Some window managers do not reliably
+        // apply an SDL resize immediately after an OpenGL window is created,
+        // so determine the initial size before constructing MainWindow.
+        if (!args.graphic_file.empty() && !args.sizev.has_value()) {
+            const cv::Mat graphic_size_probe = cv::imread(args.graphic_file);
+            if (graphic_size_probe.empty()) {
+                mx::system_err << "acmx2: Error: graphics file not found or unreadable: "
+                               << args.graphic_file << "\n";
+                mx::system_err.flush();
+                return EXIT_FAILURE;
+            }
+
+            args.tw = graphic_size_probe.cols;
+            args.th = graphic_size_probe.rows;
+            if (args.frame_rotation == FrameRotation::Clockwise90 ||
+                args.frame_rotation == FrameRotation::Counterclockwise90) {
+                std::swap(args.tw, args.th);
+            }
+            mx::system_out << "acmx2: Graphics window initial size: "
+                           << args.tw << "x" << args.th << "\n";
         }
 
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");

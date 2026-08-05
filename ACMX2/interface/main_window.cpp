@@ -146,18 +146,27 @@ namespace {
         return resolution.width() > 0 && resolution.height() > 0;
     }
 
-    QString resolveShaderCachePath(const QString &libraryPath, int cacheSize,
-                                   bool useArray) {
-        const QString assets = resolveAssetsPath();
+    QString shaderCacheFilename(const QString &libraryPath, int cacheSize,
+                                bool useArray) {
         std::error_code ec;
-        std::filesystem::path libFsPath(libraryPath.toStdString());
-        std::filesystem::path absLib = std::filesystem::absolute(libFsPath, ec);
-        std::string key = ec ? libraryPath.toStdString() : absLib.lexically_normal().string();
+        const std::filesystem::path libraryFsPath(libraryPath.toStdString());
+        const std::filesystem::path absoluteLibrary =
+            std::filesystem::absolute(libraryFsPath, ec);
+        std::string key = ec ? libraryPath.toStdString()
+                             : absoluteLibrary.lexically_normal().string();
         key += "|s=" + std::to_string(cacheSize);
         key += "|a=" + std::to_string(useArray ? 1 : 0);
         std::ostringstream nameStream;
-        nameStream << ".shader_cache_" << std::hex << std::hash<std::string>{}(key);
-        const QString filename = QString::fromStdString(nameStream.str());
+        nameStream << ".shader_cache_" << std::hex
+                   << std::hash<std::string>{}(key);
+        return QString::fromStdString(nameStream.str());
+    }
+
+    QString resolveShaderCachePath(const QString &libraryPath, int cacheSize,
+                                   bool useArray) {
+        const QString assets = resolveAssetsPath();
+        const QString filename =
+            shaderCacheFilename(libraryPath, cacheSize, useArray);
 
         // Mirror ShaderLibrary::shaderCacheFilePath: prefer cache in assets dir,
         // then fall back to the library directory itself (acmx2 writes there when
@@ -476,10 +485,16 @@ void MainWindow::initControls() {
     buildCacheAction = new QAction(tr("Rebuild Shader Cache"), this);
     connect(buildCacheAction, &QAction::triggered, this, &MainWindow::menuBuildShaderCache);
     playbackMenu->addAction(buildCacheAction);
+    cleanShaderCacheAction = new QAction(tr("Clean Shader Cache"), this);
+    connect(cleanShaderCacheAction, &QAction::triggered,
+            this, &MainWindow::menuCleanShaderCache);
+    playbackMenu->addAction(cleanShaderCacheAction);
 #ifdef Q_OS_MACOS
     // macOS does not support the persistent binary shader cache.
     buildCacheAction->setVisible(false);
     buildCacheAction->setEnabled(false);
+    cleanShaderCacheAction->setVisible(false);
+    cleanShaderCacheAction->setEnabled(false);
 #endif
 
     removeBrokenAction = new QAction(tr("Remove Broken"), this);
@@ -522,10 +537,6 @@ void MainWindow::initControls() {
     displayFilterAction->setChecked(false);
     connect(displayFilterAction, &QAction::toggled, this, &MainWindow::menuToggleDisplayFilter);
     playbackMenu->addAction(displayFilterAction);
-
-    // recompileShadersAction = new QAction(tr("Recompile All Shaders"), this);
-    // connect(recompileShadersAction, &QAction::triggered, this, &MainWindow::menuRecompileShaders);
-    // playbackMenu->addAction(recompileShadersAction);
 
     listMenu_new = new QAction(tr("New Shader Library"), this);
     connect(listMenu_new, &QAction::triggered, this, &MainWindow::newList);
@@ -3319,72 +3330,94 @@ void MainWindow::menuRemoveBroken() {
     }
 }
 
-void MainWindow::menuRecompileShaders() {
-    QString recompile_path = shader_path;
-
-    if (recompile_path.isEmpty()) {
+void MainWindow::menuCleanShaderCache() {
+#ifdef Q_OS_MACOS
+    Log("Clean Shader Cache is not available on macOS.");
+    return;
+#else
+    QString libraryPath = shader_path;
+    if (libraryPath.isEmpty()) {
         QSettings appSettings("LostSideDead");
-        recompile_path = appSettings.value("shaders", "").toString();
+        libraryPath = appSettings.value("shaders", "").toString();
     }
 
-    if (recompile_path.isEmpty()) {
+    if (libraryPath.isEmpty()) {
         QMessageBox::warning(this, "Error", "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
         return;
     }
+    if (process->state() == QProcess::Running || cacheBuildInProgress) {
+        QMessageBox::warning(this, "Error", "A process is running. Stop it before cleaning the shader cache.");
+        return;
+    }
 
-    // Determine assets path (same logic acmx2 uses for --path resolution).
-    QString assetsPath = QCoreApplication::applicationDirPath();
-    if (!QFileInfo::exists(assetsPath + "/data/win-icon.png"))
-        assetsPath = "/usr/local/share/acmx2";
+    const QMessageBox::StandardButton reply = QMessageBox::question(
+        this, tr("Clean Shader Cache"),
+        tr("Delete all cached shader binaries for:\n\n%1\n\n"
+           "This will not rebuild the cache. Continue?")
+            .arg(libraryPath),
+        QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes)
+        return;
 
-    // Compute hashed cache filename matching ShaderLibrary::shaderCacheFilePath.
+    const QString assetsPath = resolveAssetsPath();
+    QStringList cacheFiles;
+    const auto addCacheFile = [&cacheFiles](const QString &path) {
+        if (!cacheFiles.contains(path))
+            cacheFiles.append(path);
+    };
+
+    // Current cache files are keyed by texture-cache size and array mode.
+    // Enumerate every valid combination so cleaning is independent of the
+    // currently selected Session Settings.
+    for (int size = 1; size <= 64; ++size) {
+        for (const bool useArray : {false, true}) {
+            const QString filename =
+                shaderCacheFilename(libraryPath, size, useArray);
+            addCacheFile(assetsPath + "/" + filename);
+            addCacheFile(libraryPath + "/" + filename);
+        }
+    }
+
+    // Remove the pre-size-key hashed cache and the original fixed-name cache.
     std::error_code ec;
-    std::filesystem::path libFsPath(recompile_path.toStdString());
-    std::filesystem::path absLib = std::filesystem::absolute(libFsPath, ec);
-    std::string key = ec ? recompile_path.toStdString()
-                         : absLib.lexically_normal().string();
-    std::ostringstream nameStream;
-    nameStream << ".shader_cache_" << std::hex
-               << std::hash<std::string>{}(key);
-    QString cacheFile = assetsPath + "/" + QString::fromStdString(nameStream.str());
+    const std::filesystem::path libraryFsPath(libraryPath.toStdString());
+    const std::filesystem::path absoluteLibrary =
+        std::filesystem::absolute(libraryFsPath, ec);
+    const std::string legacyKey =
+        ec ? libraryPath.toStdString()
+           : absoluteLibrary.lexically_normal().string();
+    std::ostringstream legacyName;
+    legacyName << ".shader_cache_" << std::hex
+               << std::hash<std::string>{}(legacyKey);
+    const QString legacyHashedName =
+        QString::fromStdString(legacyName.str());
+    addCacheFile(assetsPath + "/" + legacyHashedName);
+    addCacheFile(libraryPath + "/" + legacyHashedName);
+    addCacheFile(libraryPath + "/.shader_cache");
 
-    bool removedAny = false;
-    QFile cache(cacheFile);
-    if (cache.exists()) {
-        if (cache.remove()) {
+    int removedCount = 0;
+    int failedCount = 0;
+    for (const QString &cacheFile : cacheFiles) {
+        if (!QFileInfo::exists(cacheFile))
+            continue;
+        if (QFile::remove(cacheFile)) {
             Log("Deleted shader cache: " + cacheFile);
-            removedAny = true;
+            ++removedCount;
         } else {
             Log("<b style='color:red;'>Warning:</b> Could not delete cache file: " + cacheFile);
+            ++failedCount;
         }
     }
-    // Also clean up any legacy cache file stored alongside the library.
-    QString legacyCache = recompile_path + "/.shader_cache";
-    QFile legacy(legacyCache);
-    if (legacy.exists()) {
-        if (legacy.remove()) {
-            Log("Deleted legacy shader cache: " + legacyCache);
-            removedAny = true;
-        }
-    }
-    if (!removedAny) {
+
+    if (removedCount == 0 && failedCount == 0) {
         Log("No existing shader cache found");
-    }
-
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this,
-        "Rebuild Cache?",
-        "Shader cache has been cleared. Would you like to rebuild the cache now?",
-        QMessageBox::Yes | QMessageBox::No);
-
-    if (reply == QMessageBox::Yes) {
-        QString old_path = shader_path;
-        shader_path = recompile_path;
-        menuBuildShaderCache();
-        shader_path = old_path;
     } else {
-        Log("Shaders will be recompiled on next run");
+        Log(QString("Shader cache clean complete: removed %1 file(s), %2 failed")
+                .arg(removedCount)
+                .arg(failedCount));
     }
+    populateShaderTree();
+#endif
 }
 
 void MainWindow::detectCudaSupport() {

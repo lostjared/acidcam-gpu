@@ -85,7 +85,7 @@ class MainWindow : public QMainWindow {
     void menuPlaylistSettings();
     void menuBuildShaderCache();
     void menuRunFromCache();
-    void menuRecompileShaders();
+    void menuCleanShaderCache();
     void menuRemoveBroken();
     void menuMidiSettings();
     void menuMetadataViewer();
@@ -244,7 +244,7 @@ class MainWindow : public QMainWindow {
     QAction *styleSheetAction;
     QAction *buildCacheAction;
     QAction *runFromCacheAction;
-    QAction *recompileShadersAction;
+    QAction *cleanShaderCacheAction;
     QAction *removeBrokenAction;
     QString baseAppStyleSheet;
     QString customStyleSheet;
