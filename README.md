@@ -18,6 +18,8 @@
 
 > **OpenCV 5 is now required.** The project has moved from OpenCV 4 to OpenCV 5. Use a stock OpenCV 5 build for the portable OpenGL configuration, or an OpenCV 5 build with CUDA support when enabling the optional CUDA pipeline.
 
+> **OpenCV must include CUDA support for `WITH_CUDA=ON`.** Installing the NVIDIA CUDA toolkit by itself is not sufficient: CUDA support, including the OpenCV CUDA modules used by ACMX2, must be enabled when OpenCV is compiled. On Arch Linux, install `opencv-cuda` instead of the stock `opencv` package. On other distributions, use an equivalent CUDA-enabled OpenCV package or build OpenCV with CUDA enabled. If OpenCV has no CUDA modules, configure ACMX2 with `-DWITH_CUDA=OFF`.
+
 > **NVIDIA GPUs are no longer required.** ACMX2 builds and runs on AMD, Intel, and Apple GPUs using the OpenGL/SDL2 path (`-DWITH_CUDA=OFF`). On NVIDIA systems with the CUDA toolkit and an OpenCV 5 build that includes CUDA support, you can opt in to the CUDA GPU-filter stack and FFmpeg CUDA hardware decode by configuring with `-DWITH_CUDA=ON` (the default when CUDA is detected).
 
 [Full Documentation](https://lostsidedead.biz/acmx2/docs/)
@@ -228,11 +230,19 @@ sudo pacman -S --needed nvidia-utils cuda
 ```
 
 **OpenCV 5:**
+
+The CUDA toolkit does not add CUDA support to an existing OpenCV installation.
+For `-DWITH_CUDA=ON`, OpenCV itself must have been compiled with CUDA enabled
+and must provide the CUDA modules required by ACMX2, including `cudaimgproc`.
+On Arch Linux, `opencv-cuda` provides this build and is installed instead of
+the conflicting stock `opencv` package. Use stock `opencv` only with
+`-DWITH_CUDA=OFF`.
+
 ```bash
-# Stock OpenCV 5 (works for the default OpenGL-only build):
+# Portable OpenGL build (-DWITH_CUDA=OFF):
 sudo pacman -S --needed opencv hdf5 vtk fmt glew
 
-# Or, if you want CUDA GPU filters, install an OpenCV 5 CUDA-enabled build instead:
+# CUDA build (-DWITH_CUDA=ON); install instead of stock opencv:
 sudo pacman -S --needed opencv-cuda hdf5 vtk fmt glew
 ```
 
@@ -863,6 +873,11 @@ echo "completed..."
 ### Optional Build Features (CUDA / Audio / MIDI)
 
 Each of the major optional subsystems is toggled by a CMake flag on ACMX2:
+
+`-DWITH_CUDA=ON` requires both the NVIDIA CUDA toolkit and an OpenCV build that
+was compiled with CUDA support. Installing only the toolkit is not enough. On
+Arch Linux, use `opencv-cuda` instead of `opencv`; elsewhere, install an
+equivalent package or compile OpenCV with CUDA enabled.
 
 | Flag | Default | Effect when `OFF` |
 |------|---------|-------------------|
