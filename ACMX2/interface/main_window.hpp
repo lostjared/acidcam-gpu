@@ -210,6 +210,8 @@ class MainWindow : public QMainWindow {
     /// @return Sanitized shader name.
     QString sanitizeShaderName(const QString &name);
     void cleanupClosedEditors();
+    /// @brief Restore persisted Session Settings into the launcher's runtime state.
+    void loadSessionSettings();
     bool audio_enabled = false;
     unsigned int audio_channels = 2;
     float audio_sense = 0.25f;

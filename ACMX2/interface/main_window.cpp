@@ -123,6 +123,29 @@ namespace {
         return settings.value("interface/texture_cache_array", false).toBool();
     }
 
+    QSize storedResolution(QSettings &settings, const QString &key,
+                           const QSize &fallback, bool defaultIsEmpty) {
+        const QString text = settings.value(key).toString().trimmed();
+        if (text.compare("Default", Qt::CaseInsensitive) == 0) {
+            return defaultIsEmpty ? QSize(0, 0) : fallback;
+        }
+
+        static const QRegularExpression resolutionPattern(
+            R"(^\s*(\d+)\s*[xX]\s*(\d+)\s*$)");
+        const QRegularExpressionMatch match = resolutionPattern.match(text);
+        if (!match.hasMatch()) {
+            return fallback;
+        }
+
+        const int width = match.captured(1).toInt();
+        const int height = match.captured(2).toInt();
+        return width > 0 && height > 0 ? QSize(width, height) : fallback;
+    }
+
+    bool hasPositiveResolution(const QSize &resolution) {
+        return resolution.width() > 0 && resolution.height() > 0;
+    }
+
     QString resolveShaderCachePath(const QString &libraryPath, int cacheSize,
                                    bool useArray) {
         const QString assets = resolveAssetsPath();
@@ -642,13 +665,7 @@ void MainWindow::initControls() {
     centralWidget->setLayout(layout);
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
-    QSettings interfaceSettings("LostSideDead", "acmx2");
-    cache_enabled =
-        interfaceSettings.value("interface/texture_cache", false).toBool();
-    cache_delay =
-        interfaceSettings.value("interface/cache_delay", 1).toInt();
-    cache_size = std::clamp(
-        interfaceSettings.value("interface/cache_size", 8).toInt(), 1, 64);
+    loadSessionSettings();
     baseAppStyleSheet = qApp->styleSheet();
     QString path = appSettings.value("shaders", "").toString();
     path = path.trimmed();
@@ -706,6 +723,83 @@ void MainWindow::initControls() {
     customStyleSheet = appSettings.value("customStyleSheet", defaultCustomStyleSheet).toString();
 
     applyCustomStyleSheet(useCustomStyle);
+}
+
+void MainWindow::loadSessionSettings() {
+    QSettings settings("LostSideDead", "acmx2");
+
+    const QString inputMode =
+        settings.value("interface/input_mode", "camera").toString();
+    const bool videoMode = inputMode == "video";
+    const bool graphicsMode = inputMode == "graphic";
+    const bool cameraMode = !videoMode && !graphicsMode;
+
+    camera_index = static_cast<unsigned int>(
+        std::max(0, settings.value("interface/camera_device", 0).toInt()));
+    camera_res = storedResolution(settings, "interface/camera_resolution",
+                                  QSize(1280, 720), false);
+    screen_res = storedResolution(settings, "interface/screen_resolution",
+                                  QSize(0, 0), true);
+
+    output_fps = settings.value("interface/camera_fps", 30.0).toDouble();
+    if (output_fps <= 0.0)
+        output_fps = 30.0;
+
+    video_file = videoMode
+                     ? settings.value("interface/input_video", "").toString()
+                     : QString();
+    graphics_file = graphicsMode
+                        ? settings.value("interface/graphics_file", "").toString()
+                        : QString();
+
+    const bool saveOutput =
+        settings.value("interface/save_output", false).toBool();
+    output_file = saveOutput
+                      ? settings.value("interface/output_video", "").toString()
+                      : QString();
+    full_screen_value =
+        settings.value("interface/fullscreen", false).toBool();
+    copy_audio = videoMode && saveOutput &&
+                 settings.value("interface/copy_audio", false).toBool();
+
+    cache_enabled = !graphicsMode &&
+                    settings.value("interface/texture_cache", false).toBool();
+    cache_delay = settings.value("interface/cache_delay", 1).toInt();
+    cache_size = std::clamp(
+        settings.value("interface/cache_size", 8).toInt(), 1, 64);
+    use_yuv = cameraMode &&
+              settings.value("interface/use_yuv", false).toBool();
+
+    convert_to_hdr10 = videoMode && saveOutput &&
+                       settings.value("interface/convert_to_hdr10", false).toBool();
+    enable_3d = settings.value("interface/enable_3d", false).toBool();
+    model_file = settings.value("interface/model_file", "cube.mxmod.z").toString();
+    onnx_model_enabled = settings.value("interface/use_onnx_model", false).toBool();
+    onnx_model = settings.value("interface/onnx_model_file", "").toString();
+    cuda_device = settings.value("interface/cuda_device", 0).toInt();
+    time_speed = settings.value("interface/time_speed", 1.0).toFloat();
+    duration_limit_enabled =
+        settings.value("interface/duration_enabled", false).toBool();
+    max_duration = settings.value("interface/duration_seconds", 60.0).toDouble();
+    max_size_limit_enabled =
+        settings.value("interface/max_size_enabled", false).toBool();
+    max_size_mb = settings.value("interface/max_size_mb", 500.0).toDouble();
+    cross_fade_duration = settings.value("interface/crossfade", 0.5).toFloat();
+    flip_enabled = settings.value("interface/flip", false).toBool();
+    rotate_enabled = settings.value("interface/rotate", false).toBool();
+    rotation_mode = settings.value("interface/rotation_mode", "clockwise").toString();
+    png_output = settings.value("interface/write_png", false).toBool();
+    generate_enabled = settings.value("interface/generate_enabled", false).toBool();
+    generate_interval = settings.value("interface/generate_interval", 30).toInt();
+
+    encode_preset = settings.value("recording/preset", "medium").toString();
+    encode_tune = settings.value("recording/tune", "").toString();
+    encode_crf = settings.value("recording/crf", 18).toInt();
+    encode_codec = settings.value("recording/codec", "auto").toString();
+    encode_parameters = settings.value("recording/parameters", "").toString();
+    encode_realtime = settings.value("recording/realtime", false).toBool();
+    encode_no_drop = !cameraMode &&
+                     settings.value("recording/no_drop", false).toBool();
 }
 
 void MainWindow::applyMainViewStyles(bool customStyleEnabled) {
@@ -2297,9 +2391,12 @@ void MainWindow::runSelected() {
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     if (cache_enabled && textureCacheArraySettingEnabled())
         arguments << "--texture-cache-array";
+    const QSize effectiveCameraResolution =
+        hasPositiveResolution(camera_res) ? camera_res : QSize(1280, 720);
     QString res;
     QTextStream stream(&res);
-    stream << camera_res.width() << "x" << camera_res.height();
+    stream << effectiveCameraResolution.width() << "x"
+           << effectiveCameraResolution.height();
 
     QString scr_res;
     QTextStream stream_r(&scr_res);
@@ -2310,12 +2407,12 @@ void MainWindow::runSelected() {
 
     if (!graphics_file.isEmpty()) {
         arguments << "--graphic" << graphics_file;
-        if (screen_res.width() != 0)
+        if (hasPositiveResolution(screen_res))
             arguments << "--resolution" << scr_res;
         arguments << "--fps" << QString::number(output_fps);
     } else if (video_file.isEmpty()) {
         arguments << "--camera-res" << res;
-        if (screen_res.width() != 0)
+        if (hasPositiveResolution(screen_res))
             arguments << "--resolution" << scr_res;
         arguments << "--device" << QString::number(camera_index);
         arguments << "--fps" << QString::number(output_fps);
@@ -2327,7 +2424,7 @@ void MainWindow::runSelected() {
         }
     } else {
         arguments << "--input" << video_file;
-        if (screen_res.width() != 0)
+        if (hasPositiveResolution(screen_res))
             arguments << "--resolution" << scr_res;
         if (play_repeat->isChecked())
             arguments << "--repeat";
@@ -2516,9 +2613,12 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     if (cache_enabled && textureCacheArraySettingEnabled())
         arguments << "--texture-cache-array";
+    const QSize effectiveCameraResolution =
+        hasPositiveResolution(camera_res) ? camera_res : QSize(1280, 720);
     QString res;
     QTextStream stream(&res);
-    stream << camera_res.width() << "x" << camera_res.height();
+    stream << effectiveCameraResolution.width() << "x"
+           << effectiveCameraResolution.height();
     QString scr_res;
     QTextStream stream_r(&scr_res);
     stream_r << screen_res.width() << "x" << screen_res.height();
@@ -2528,12 +2628,12 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
 
     if (!graphics_file.isEmpty()) {
         arguments << "--graphic" << graphics_file;
-        if (screen_res.width() != 0)
+        if (hasPositiveResolution(screen_res))
             arguments << "--resolution" << scr_res;
         arguments << "--fps" << QString::number(output_fps);
     } else if (video_file.isEmpty()) {
         arguments << "--camera-res" << res;
-        if (screen_res.width() != 0)
+        if (hasPositiveResolution(screen_res))
             arguments << "--resolution" << scr_res;
         arguments << "--device" << QString::number(camera_index);
         arguments << "--fps" << QString::number(output_fps);
@@ -2545,7 +2645,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         }
     } else {
         arguments << "--input" << video_file;
-        if (screen_res.width() != 0)
+        if (hasPositiveResolution(screen_res))
             arguments << "--resolution" << scr_res;
         if (play_repeat->isChecked())
             arguments << "--repeat";

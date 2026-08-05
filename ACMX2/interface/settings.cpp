@@ -458,24 +458,20 @@ SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
 }
 
 void SettingsWindow::populateCameraDevices() {
-    QSet<QString> addedCameras;
-
 #ifdef __APPLE__
     const QStringList cameraNames = appleCameraNamesFromSystemProfiler();
     for (int i = 0; i < cameraNames.size(); ++i) {
         const QString cameraName = cameraNames.at(i).trimmed();
-        if (!cameraName.isEmpty() && !addedCameras.contains(cameraName)) {
+        if (!cameraName.isEmpty()) {
             cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
-            addedCameras.insert(cameraName);
         }
     }
 #elif defined(_WIN32)
     const auto devices = enumerateWindowsCameraDevices();
     for (const auto &device : devices) {
         const QString cameraName = device.name.trimmed();
-        if (!cameraName.isEmpty() && !addedCameras.contains(cameraName)) {
+        if (!cameraName.isEmpty()) {
             cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(device.index), device.index);
-            addedCameras.insert(cameraName);
         }
     }
 #else
@@ -484,10 +480,7 @@ void SettingsWindow::populateCameraDevices() {
         QFile file(sysfs_path);
         if (file.exists()) {
             QString cameraName = getCameraName(i);
-            if (!addedCameras.contains(cameraName)) {
-                cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
-                addedCameras.insert(cameraName);
-            }
+            cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
         }
     }
 #endif
