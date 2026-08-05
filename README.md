@@ -72,7 +72,11 @@ compile or appear not to apply. Legacy cache shaders that use `samp1` through
 `samp8` or `textures[SIZE]` can run with Texture Cache enabled and array mode
 disabled. On non-macOS systems, **Playback > Rebuild Shader Cache** can be run
 after changing the cache size or array mode to precompile the matching shader
-variants; macOS always compiles shader source at runtime.
+variants. The rebuild window remains responsive and shows the ACMX2 logo with
+compile progress while a full library is processed. **Playback > Clean Shader
+Cache** deletes every cached variant for the selected library without rebuilding
+it. macOS always compiles shader source at runtime, so both cache maintenance
+actions are unavailable there.
 
 ## 🚀 Purpose & Vision
 The original project brought a massive library of "glitch" filters to digital artists. However, as resolutions climbed to 4K and filter stacks became more complex, CPU-based processing hit a bottleneck. 
@@ -107,10 +111,30 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 
 ## Revisions
 
-### Version 2.3.3 (August 2026)
+### Version 2.5.0 (August 2026)
 
 From the latest `acidcam-gpu` commits, current focus areas include:
 
+- **Persistent launch settings**: camera/video/graphics mode, camera device,
+  input and output files, capture and window resolution, FPS, recording,
+  rotation, cache, ONNX, 3D, and encoding selections are restored when the Qt
+  launcher is closed and started again instead of reverting to camera 0.
+- **Safe restored dimensions**: malformed or missing saved resolutions fall
+  back to valid defaults, preventing invalid `4294967295x4294967295` encoder
+  dimensions when opening an output video.
+- **Native graphics window sizing**: graphics mode probes the selected image
+  before creating the SDL/OpenGL window, so the initial window matches the
+  image dimensions when Window Resolution is `Default`.
+- **OpenCV DNN capability reporting**: the interface startup log reports
+  whether the selected `acmx2` build includes OpenCV DNN. When it is disabled,
+  the Session Settings ONNX controls are disabled and any saved ONNX selection
+  is ignored.
+- **Responsive full cache rebuilds**: shader-cache rebuilding pumps window
+  events and displays the ACMX2 loading graphic with per-library progress so
+  desktop environments do not report the application as unresponsive.
+- **Clean Shader Cache**: **Playback > Clean Shader Cache** removes current and
+  legacy cache files for every cache-size/array-mode variant without starting
+  a rebuild.
 - **Library-defined custom uniforms**: JSON shader libraries can define up to 64 custom `float` uniforms with minimum, maximum, step, and current values. The Qt **List > Add Custom Uniforms...** dialog creates sliders for them, saves them in `library.json`, and sends value changes to a running ACMX2 process without restarting it.
 - **Automatic custom-uniform declarations**: when a shader references a manifest-defined custom uniform but does not declare it, ACMX2 injects the required `uniform float` declaration before compilation. Adding or removing a definition reloads the current shader; ordinary slider changes only update the live value.
 - **Incremental shader-cache refresh**: on platforms with persistent program-binary caching, startup validation recompiles only shader entries whose prepared source has changed, then writes those entries back to the existing cache instead of rebuilding the entire library.
@@ -614,12 +638,20 @@ With Window Resolution set to `Default`, either 90-degree mode swaps the source 
 
 ### Qt Interface Session Persistence
 
-The ACMX2 Qt interface now restores the last-used values when key dialogs are closed and reopened.
+The ACMX2 Qt interface restores last-used values both when dialogs are reopened
+and when the whole application is closed and started again.
 
 - **Persistent dialogs:** **Settings**, **Audio Settings**, **GPU Filter Settings**, and **MIDI Settings** now save their visible state through `QSettings`.
 - **Reopen workflow:** Closing a dialog with either **OK** or **Cancel** preserves the current values so you can reopen it and continue adjusting from where you left off.
+- **Restart workflow:** The launcher loads the persisted input mode, camera
+  device, files, resolutions, FPS, output, recording, cache, rotation, 3D,
+  ONNX, and encoder options during startup, so a previous session does not
+  silently revert to camera 0.
 - **Startup defaults:** When no saved preference exists yet, the **Settings** dialog now defaults the camera capture resolution to `1280x720` and the display/output resolution to `Default`.
 - **Device-aware restore:** Camera, CUDA, audio, and MIDI selectors restore by stored values where possible, which keeps the selected device stable even if combo-box ordering changes.
+- **Build-aware ONNX controls:** The startup log reports `OpenCV DNN: enabled`
+  or `OpenCV DNN: disabled`. ONNX selection is unavailable when the chosen
+  engine binary was built with `-DWITH_OPENCV_DNN=OFF`.
 
 ### MIDI Controller Support
 

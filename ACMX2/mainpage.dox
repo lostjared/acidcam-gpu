@@ -71,8 +71,11 @@ fail to compile or appear not to apply. Legacy shaders using
 <tt>samp1</tt>...<tt>samp8</tt> or <tt>textures[SIZE]</tt> use Texture Cache
 with array mode disabled. On non-macOS systems,
 <b>Playback &gt; Rebuild Shader Cache</b> can precompile variants after the cache
-size or array mode is changed. macOS compiles shader source at runtime because
-persistent program-binary caching is unavailable there.
+size or array mode is changed. The rebuild window remains responsive and shows
+the ACMX2 logo and compile progress. <b>Playback &gt; Clean Shader Cache</b>
+deletes all cache variants for the selected library without rebuilding them.
+macOS compiles shader source at runtime because persistent program-binary
+caching is unavailable there, so both cache maintenance actions are hidden.
 
 @section purpose Purpose & Vision
 
@@ -139,12 +142,14 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>HLG to HDR10 conversion path</b> — improves interoperability across HDR source and export workflows
 - <b>Shader cache</b> — precompile shader binaries for fast startup on supported OpenGL drivers; source compilation is always used on macOS
 - <b>Live shader coding</b> — saving from the Qt editor signals ACMX2 through shared memory to recompile and hot-swap only the edited shader; failures keep the previous program active and report the driver error in the interface log
-- <b>Shader workflow tools</b> — live reload and persistent cache-rebuild paths are integrated for faster iteration during shader authoring
+- <b>Shader workflow tools</b> — live reload, responsive cache rebuilding with visible progress, and cache-only cleaning are integrated for faster iteration during shader authoring
 - <b>Shader code editor</b> — line numbers, GLSL highlighting, bracket matching, automatic indentation/pairing, line operations, search/replace, and persistent display preferences
 - <b>Find in Files</b> — recursively search shader source with regular expressions and open a result directly at its matching line and column
 - <b>Custom interface themes</b> — choose from 25 built-in light and dark stylesheet presets or edit and persist custom QSS
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
-- <b>Persistent Qt session dialogs</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened, with fresh defaults of <tt>1280x720</tt> camera capture and <tt>Default</tt> display resolution
+- <b>Persistent Qt session state</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened and after application restart; input mode and the selected camera no longer revert to camera 0
+- <b>OpenCV DNN capability-aware interface</b> — startup reports whether DNN was compiled into the selected engine build and disables ONNX controls when unavailable
+- <b>Native graphics-mode window sizing</b> — when no explicit window resolution is selected, the window is created at the input image's dimensions
 - <b>Metadata viewer</b> — inspect media metadata directly from the Qt interface
 - <b>MIDI Map Tool</b> — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 - <b>Crossfade transitions</b> — smooth linear blend between old and new frames when switching playlist shaders, with configurable duration
@@ -185,7 +190,27 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 
 @subsection updates_2026_08 August 2026 (Month to Date)
 
-<b>Version 2.3.3 recording synchronization</b>
+<b>Version 2.5.0 interface, graphics, and shader-cache updates</b>
+
+- The Qt launcher restores persisted session values during application startup,
+  including input mode, camera device, input/output files, capture and window
+  resolution, FPS, recording, rotation, texture cache, ONNX, 3D, and encoding
+  selections. Relaunching no longer silently falls back to camera 0.
+- Invalid or missing stored dimensions fall back to valid resolution defaults,
+  preventing unsigned <tt>4294967295x4294967295</tt> sizes from reaching
+  FFmpeg/MXWrite encoder initialization.
+- Graphics mode probes the selected image before constructing the SDL/OpenGL
+  window, so <tt>Default</tt> Window Resolution uses the image's native size.
+- Interface startup reports <tt>OpenCV DNN: enabled</tt> or
+  <tt>OpenCV DNN: disabled</tt> for the selected engine build. Session Settings
+  disables ONNX model selection and ignores a saved ONNX choice when DNN was
+  not compiled in.
+- A full shader-cache rebuild keeps the native window event queue active and
+  displays the ACMX2 logo with completed/total shader progress.
+- <b>Playback &gt; Clean Shader Cache</b> removes current and legacy cache files
+  for all texture-cache sizes and array modes without triggering a rebuild.
+
+<b>Recording synchronization and session controls</b>
 
 - Webcam recording uses wall-clock PTS and late-frame dropping in every audio
   configuration, while No Drop is reserved for video-file and graphics input.
@@ -406,6 +431,18 @@ The Qt launcher persists the visible state of the main <b>Settings</b>, <b>Audio
 <b>GPU Filter Settings</b>, and <b>MIDI Settings</b> dialogs through <tt>QSettings</tt>.
 Closing and reopening these dialogs restores the most recent values so iterative setup does not
 reset back to factory choices each time the window is rebuilt.
+
+At application startup, the launcher also restores the saved input mode,
+camera device, input/output paths, resolutions, FPS, output and recording
+options, texture-cache settings, rotation, 3D model, ONNX model, and encoder
+configuration. Stored resolutions are validated before use; invalid camera
+dimensions fall back to <tt>1280x720</tt> and an invalid display resolution
+falls back to <tt>Default</tt>.
+
+The interface probes the configured <tt>acmx2</tt> executable at startup and
+logs whether OpenCV DNN was compiled in. If the probe reports DNN disabled,
+the ONNX checkbox, path, and browse controls are disabled and the launcher
+does not pass a previously saved ONNX selection to the engine.
 
 On a fresh configuration where no saved values exist yet, the session dialog starts with camera
 capture resolution set to <tt>1280x720</tt> and display/output resolution set to <tt>Default</tt>.
