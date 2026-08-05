@@ -12,6 +12,10 @@ The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
 the shader library without requiring NVIDIA CUDA. Download it from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
 
+Note: to use texture cache shaders enable the texture cache and sampelr2Darray in the Session settings
+otherwise if you try use the cache the shader won't apply.
+Also: You might need to prune a few shaders from the shaders repo do this by Playback -> Remove Broken to update the list
+
 @section intro Introduction
 
 <b>acidcam-gpu / ACMX2</b> is a high-performance, real-time video manipulation engine
