@@ -12,9 +12,46 @@ The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
 the shader library without requiring NVIDIA CUDA. Download it from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
 
-Note: to use texture cache shaders enable the texture cache and sampelr2Darray in the Session settings
-otherwise if you try use the cache the shader won't apply.
-Also: You might need to prune a few shaders from the shaders repo do this by Playback -> Remove Broken to update the list
+@section first_run First Run: Qt Interface and Texture Cache
+
+The Qt launcher persists these choices, so the initial setup normally needs to
+be completed only once:
+
+-# Open <b>File &gt; Properties</b>. Confirm that <b>Executable Path</b> points to
+   the <tt>acmx2</tt> binary (the default <tt>acmx2</tt> works when it is in
+   <tt>PATH</tt>), select a shader directory containing <tt>library.json</tt> or
+   the legacy <tt>index.txt</tt>, and choose the snapshot output directory.
+   <tt>library.json</tt> is the preferred manifest.
+-# Open <b>Session &gt; Session Properties</b> and select the input mode, input
+   device or file, capture resolution, FPS, and window resolution. A fresh
+   configuration defaults to a <tt>1280x720</tt> camera input and
+   <tt>Default</tt> window resolution.
+-# For current texture-history shaders, enable <b>Texture Cache</b> first and
+   then <b>Use sampler2DArray history</b>. The array control maps to
+   <tt>--texture-cache-array</tt> and remains disabled until Texture Cache is
+   checked.
+-# Keep <b>Cache Size</b> at the default of 8 for the normal shader pack, or
+   select 1 through 64 frames when a shader needs another history depth.
+   <b>Cache Delay</b> is the number of frames skipped before the next history
+   update: the UI default of 1 updates the cache every second frame, while
+   larger values spread the history farther apart in time. Increasing the cache
+   depth increases GPU-memory use, particularly at high resolutions.
+-# After installing or updating a shader pack, choose
+   <b>Playback &gt; Remove Broken</b> if shaders fail on the current OpenGL
+   driver. ACMX2 compile-checks every entry, removes failing entries from the
+   selected manifest, backs up the original as <tt>library.json.bak</tt> or
+   <tt>index.txt.bak</tt>, and reloads the list. Shader source files are not
+   deleted.
+
+The maintained <a href="https://github.com/lostjared/shaders">shader
+collection</a> uses the <tt>sampler2DArray history</tt> interface for current
+cache effects. Without both texture-cache settings, one of these shaders may
+fail to compile or appear not to apply. Legacy shaders using
+<tt>samp1</tt>...<tt>samp8</tt> or <tt>textures[SIZE]</tt> use Texture Cache
+with array mode disabled. On non-macOS systems,
+<b>Playback &gt; Rebuild Shader Cache</b> can precompile variants after the cache
+size or array mode is changed. macOS compiles shader source at runtime because
+persistent program-binary caching is unavailable there.
 
 @section intro Introduction
 
@@ -156,6 +193,8 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - Linux v4l2loopback enumeration supplements incomplete driver reporting with
   common 24...240 FPS choices. The requested rate remains authoritative for a
   loopback device, and rates above 60 FPS request a non-vsync desktop window.
+- Video-file input above 60 FPS disables the SDL swap interval so processing is
+  not capped at the display's 60 Hz vsync rate.
 - Shader Playlist Settings and Multipass Shader Settings are modeless,
   single-instance dialogs whose shader lists refresh when they are raised
   again. Double-clicking a selected multipass shader opens the code editor.

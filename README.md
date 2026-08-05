@@ -29,8 +29,42 @@ To build with it, just `uvx pcons` if you have
 [uv](docs.astral.sh/uv/), or `python -mpip install pcons;
 pcons`.
 
-## NOTE:
-Note: to use the texture cache shaders, enable texture cache and sampler2Darray in the Session Settings Dialog.
+## First Run: Qt Interface and Texture Cache
+
+The Qt launcher stores these choices, so this setup normally needs to be done
+only once:
+
+1. Open **File > Properties**. Confirm that **Executable Path** points to the
+   `acmx2` binary (the default `acmx2` is sufficient when it is installed in
+   `PATH`), then select a shader directory containing `library.json` or the
+   legacy `index.txt`. `library.json` is preferred. Also choose the directory
+   used for snapshots.
+2. Open **Session > Session Properties** and select the input mode, device or
+   input file, capture resolution, FPS, and window resolution. A fresh setup
+   defaults to `1280x720` camera input and `Default` window resolution.
+3. To use the current texture-history shaders, check **Texture Cache** first,
+   then check **Use sampler2DArray history**. The second control corresponds to
+   `--texture-cache-array` and is disabled until Texture Cache is enabled.
+4. Leave **Cache Size** at `8` for the normal shader pack, or choose `1`-`64`
+   frames when a shader needs a different history depth. **Cache Delay** is the
+   number of frames skipped before the next history update: the UI default of
+   `1` updates the cache every second frame, while a larger value spreads the
+   stored history farther apart in time. Larger caches use more GPU memory,
+   especially at high resolutions.
+5. After installing or updating a shader pack, use **Playback > Remove Broken**
+   if some shaders fail on the current OpenGL driver. ACMX2 compile-checks the
+   library, removes only failing entries from the active manifest, saves the
+   original as `library.json.bak` or `index.txt.bak`, and reloads the list. It
+   does not delete the shader source files.
+
+The maintained [shader collection](https://github.com/lostjared/shaders) uses
+the `sampler2DArray history` interface for current cache effects. If one of
+these effects is selected without both texture-cache settings, it may fail to
+compile or appear not to apply. Legacy cache shaders that use `samp1` through
+`samp8` or `textures[SIZE]` can run with Texture Cache enabled and array mode
+disabled. On non-macOS systems, **Playback > Rebuild Shader Cache** can be run
+after changing the cache size or array mode to precompile the matching shader
+variants; macOS always compiles shader source at runtime.
 
 
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
@@ -89,6 +123,7 @@ From the latest `acidcam-gpu` commits, current focus areas include:
 - **Editable window resolution**: the Qt Window Resolution control keeps its preset dropdown but also accepts a custom `WxH` value. Custom width and height must be positive even integers; invalid values show a warning and are not applied or saved.
 - **Input-frame rotation**: Qt Settings now provides a Rotate checkbox with 90° clockwise, 180°, and 90° counterclockwise choices. CPU builds use `cv::rotate`; CUDA builds use `cv::cuda::rotate` on a `GpuMat`. With the default Window Resolution, 90° rotation swaps the output dimensions to preserve orientation.
 - **High-frame-rate and loopback capture**: Linux `v4l2loopback` devices now expose common choices from 24 through 240 FPS in camera enumeration. ACMX2 preserves the requested loopback rate when the driver reports its stale producer rate, and requests a non-vsync window when the selected rate is above 60 FPS so 90/120/144/240 FPS capture is not capped by the display refresh path.
+- **High-frame-rate video playback**: video-file input above 60 FPS now disables the SDL swap interval so processing is not capped at the display's 60 Hz vsync rate.
 - **Modeless playlist and multipass dialogs**: Shader Playlist Settings and Multipass Shader Settings can remain open while the main interface is used. Reopening an existing dialog focuses it and refreshes its shader list instead of creating a duplicate.
 - **Open multipass shaders in the editor**: double-click a shader in the selected multipass list to open or focus it in the built-in GLSL editor.
 - **Unified dependency helper**: the root `install-required.sh` installs dependencies on Arch-based Linux or macOS. Arch selects `opencv-cuda` when NVIDIA hardware is detected and stock `opencv` otherwise; macOS uses Homebrew and builds without CUDA.
