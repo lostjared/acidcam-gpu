@@ -29,6 +29,9 @@ To build with it, just `uvx pcons` if you have
 [uv](docs.astral.sh/uv/), or `python -mpip install pcons;
 pcons`.
 
+## NOTE:
+Note: to use the texture cache shaders, enable texture cache and sampler2Darray in the Session Settings Dialog.
+
 
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
 
