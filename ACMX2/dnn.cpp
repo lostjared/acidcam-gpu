@@ -249,6 +249,7 @@ namespace ac_dnn {
         cv::cuda::GpuMat gpuResized;
         cv::cuda::GpuMat gpuWork;
         cv::cuda::GpuMat gpuOnes;
+        cv::cuda::GpuMat gpuNormalizedFlat;
         std::vector<cv::cuda::GpuMat> gpuPlanes{3};
         bool cudaPostprocessingFailed = false;
 #endif
@@ -477,8 +478,14 @@ namespace ac_dnn {
                     gpuPlanes[channel].upload(plane);
                 }
                 cv::cuda::merge(gpuPlanes, gpuWork);
-                cv::cuda::normalize(gpuWork, gpuConverted, 0, 255,
+                // CUDA normalize only accepts one-channel input. Reinterpret
+                // the interleaved RGB allocation as a single-channel matrix
+                // so min/max are still computed globally across all channels,
+                // matching the CPU cv::normalize behavior without a copy.
+                const cv::cuda::GpuMat flattened = gpuWork.reshape(1);
+                cv::cuda::normalize(flattened, gpuNormalizedFlat, 0, 255,
                                     cv::NORM_MINMAX, CV_8U);
+                gpuConverted = gpuNormalizedFlat.reshape(3, height);
                 finishGpuOutput(gpuConverted, image.size(),
                                 cv::COLOR_RGB2RGBA, output);
                 return true;
