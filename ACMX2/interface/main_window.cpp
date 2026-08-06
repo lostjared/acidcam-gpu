@@ -462,6 +462,18 @@ void MainWindow::initControls() {
         publishRepeatStateToRunningProcess();
     });
     playbackMenu->addAction(play_repeat);
+    normalizedTimeAction = new QAction(tr("Normalized Time"), this);
+    normalizedTimeAction->setCheckable(true);
+    normalizedTimeAction->setChecked(false);
+    normalizedTimeAction->setToolTip(
+        tr("Advance shader time by a fixed amount per output frame."));
+    connect(normalizedTimeAction, &QAction::toggled, this, [this](bool checked) {
+        normalized_time = checked;
+        QSettings settings("LostSideDead", "acmx2");
+        settings.setValue("interface/normalized_time", checked);
+        publishRuntimeSettingsToRunningProcess();
+    });
+    playbackMenu->addAction(normalizedTimeAction);
     play_stop = new QAction(tr("Stop"), this);
     play_stop->setEnabled(false);
     connect(play_stop, &QAction::triggered, this, [=]() {
@@ -789,6 +801,12 @@ void MainWindow::loadSessionSettings() {
     onnx_model = settings.value("interface/onnx_model_file", "").toString();
     cuda_device = settings.value("interface/cuda_device", 0).toInt();
     time_speed = settings.value("interface/time_speed", 1.0).toFloat();
+    normalized_time =
+        settings.value("interface/normalized_time", false).toBool();
+    if (normalizedTimeAction) {
+        QSignalBlocker blocker(normalizedTimeAction);
+        normalizedTimeAction->setChecked(normalized_time);
+    }
     duration_limit_enabled =
         settings.value("interface/duration_enabled", false).toBool();
     max_duration = settings.value("interface/duration_seconds", 60.0).toDouble();
@@ -1450,6 +1468,9 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->repeat_enabled = 0;
         shaderSelectionShm->display_filter_enabled = 0;
         shaderSelectionShm->watermark_enabled = 0;
+        shaderSelectionShm->normalized_time_enabled = 0;
+        std::fill(std::begin(shaderSelectionShm->reserved_flags),
+                  std::end(shaderSelectionShm->reserved_flags), 0);
         std::fill(std::begin(shaderSelectionShm->shader_pass_indices), std::end(shaderSelectionShm->shader_pass_indices), -1);
         shaderSelectionShm->gpu_filter_count = 0;
         shaderSelectionShm->gpu_filter_enabled = 0;
@@ -1566,6 +1587,7 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
         return;
 
     shaderSelectionShm->display_filter_enabled = display_filter_enabled ? 1 : 0;
+    shaderSelectionShm->normalized_time_enabled = normalized_time ? 1 : 0;
 
     const bool watermarkActive = watermark_enabled && !watermark_text.isEmpty();
     shaderSelectionShm->watermark_enabled = watermarkActive ? 1 : 0;
@@ -2531,8 +2553,10 @@ void MainWindow::runSelected() {
         arguments << "--cuda-device" << QString::number(cuda_device);
     }
 
-    if (time_speed != 1.0f) {
-        arguments << "--time-speed" << QString::number(static_cast<double>(time_speed), 'f', 2);
+    arguments << "--time-speed"
+              << QString::number(static_cast<double>(time_speed), 'f', 2);
+    if (normalized_time) {
+        arguments << "--normalized";
     }
 
     if (!use_shader_cache) {
@@ -2760,8 +2784,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         arguments << "--cuda-device" << QString::number(cuda_device);
     }
 
-    if (time_speed != 1.0f) {
-        arguments << "--time-speed" << QString::number(static_cast<double>(time_speed), 'f', 2);
+    arguments << "--time-speed"
+              << QString::number(static_cast<double>(time_speed), 'f', 2);
+    if (normalized_time) {
+        arguments << "--normalized";
     }
 
     if (!use_shader_cache) {

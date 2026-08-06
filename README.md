@@ -474,7 +474,7 @@ In practice, SDR jobs still follow the H.264-first path, while HDR jobs are writ
 
 `--silent` is the headless batch-processing mode for video and graphics files. It creates an off-screen OpenGL context, suppresses the visible SDL window, and skips display pacing so the file is processed as fast as decode, effects, and encode allow. Graphics input has no natural end, so silent graphics mode requires a positive `--duration`.
 
-While rendering a graphics file, headless mode prints progress after about one second of output frames or 500 ms of wall time, whichever occurs first, followed by a final 100% update.
+While recording, headless progress lines include the current encoded output file size after the elapsed time. Graphics-file mode prints progress after about one second of output frames or 500 ms of wall time, whichever occurs first, followed by a final 100% update.
 
 - Use it with `-i/--input` video files or `-g/--graphic` image files.
 - Always pair it with `-o/--output`.

@@ -2941,6 +2941,7 @@ class ShaderLibrary {
     bool time_active = true;
     float time_f = 1.0;
     float time_speed = 1.0f;
+    bool normalized_time = false;
     double video_fps = 0.0;
 #ifdef AUDIO_ENABLED
     const acmx2::audio::AudioAnalyzer *audio_analyzer = nullptr;
@@ -3903,6 +3904,11 @@ class ShaderLibrary {
         time_speed = speed;
     }
 
+    /// @brief Select fixed-per-frame or elapsed real-time advancement.
+    void setNormalizedTime(bool enabled) {
+        normalized_time = enabled;
+    }
+
 #ifdef AUDIO_ENABLED
     /**
      * @brief Configure the runtime depth of `spectrum_history`.
@@ -3928,9 +3934,10 @@ class ShaderLibrary {
     }
 #endif
 
-    /// @brief Set the video FPS for constant time_f advancement in video mode.
+    /// @brief Set the frame rate used by normalized time advancement.
     void setVideoFPS(double fps) {
-        video_fps = fps;
+        if (std::isfinite(fps) && fps > 0.0)
+            video_fps = fps;
     }
 
     /**
@@ -5775,8 +5782,9 @@ class ShaderLibrary {
      *
      * Called once per frame from ACView::draw().  This method:
      * 1. Computes delta time from SDL performance counters.
-     * 2. Advances `time_f` either by wall-clock delta (scaled by time_speed)
-     *    or by audio amplitude (when audio-reactive time is enabled).
+     * 2. Advances `time_f` either by a normalized fixed frame interval or by
+     *    wall-clock delta (scaled by time_speed), or by audio amplitude when
+     *    audio-reactive time is enabled.
      * 3. Uploads time_f, iTime, iFrame, iTimeDelta, iDate, iFrameRate,
      *    iMouse (with Shadertoy click semantics), and iResolution.
      * 4. Steps and uploads the acidcamGL-compatible oscillator uniforms.
@@ -5806,17 +5814,19 @@ class ShaderLibrary {
         frame_counter++;
 
         if (time_audio == false && time_active) {
-            float step = 0.0f;
-            if (video_fps > 0.0) {
-                step = static_cast<float>(1.0 / video_fps) * time_speed;
-            } else {
-                step = static_cast<float>(delta_time) * time_speed;
-            }
+            const double time_delta =
+                normalized_time && video_fps > 0.0 ? 1.0 / video_fps
+                                                   : delta_time;
+            const float step = static_cast<float>(time_delta) * time_speed;
             time_f += step;
         } else {
 #ifdef AUDIO_ENABLED
             if (time_audio) {
-                float dt_scalex = audio_delta ? static_cast<float>(delta_time) : 1.0f;
+                const double time_delta =
+                    normalized_time && video_fps > 0.0 ? 1.0 / video_fps
+                                                       : delta_time;
+                float dt_scalex =
+                    audio_delta ? static_cast<float>(time_delta) : 1.0f;
                 const auto audio_metrics = audio_analyzer != nullptr
                                                ? audio_analyzer->metrics()
                                                : acmx2::audio::AudioMetrics{};
@@ -6266,6 +6276,7 @@ struct MXArguments {
     bool use_shader_cache = true;
 #endif
     float time_speed = 1.0f;
+    bool normalized_time = false;
     std::string playlist_file;
     int autopilot_frames = 0;               ///< Frames between random shader switches in autopilot mode (0 = disabled).
     bool autopilot_random_interval = false; ///< When true, randomize autopilot frame interval after each switch.
@@ -7526,6 +7537,8 @@ class ACView : public gl::GLObject {
 #endif
         library.is3D(args.is3d);
         library.setTimeSpeed(args.time_speed);
+        library.setVideoFPS(args.fps_value);
+        library.setNormalizedTime(args.normalized_time);
         is3d_enabled = args.is3d;
         m_file = args.model_file;
 
@@ -7939,6 +7952,8 @@ class ACView : public gl::GLObject {
 
         repeat = (shaderSelectionShm->repeat_enabled != 0);
         display_filter = (shaderSelectionShm->display_filter_enabled != 0);
+        library.setNormalizedTime(
+            shaderSelectionShm->normalized_time_enabled != 0);
 
         const std::string requestedWatermark = readBoundedText(
             shaderSelectionShm->watermark_text,
@@ -10980,7 +10995,9 @@ class ACView : public gl::GLObject {
                               << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
                               << std::setfill('0') << std::setw(2) << minutes << ":"
                               << std::setfill('0') << std::setw(2) << seconds
-                              << std::setfill(' ') << "\n"
+                              << std::setfill(' ');
+                    appendSilentProgressFileSize(std::cout);
+                    std::cout << "\n"
                               << std::flush;
                     if (current_percent >= 100 && png_video_mode) {
                         // Drain the writer queue so all frames land on disk
@@ -11016,7 +11033,9 @@ class ACView : public gl::GLObject {
                               << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
                               << std::setfill('0') << std::setw(2) << minutes << ":"
                               << std::setfill('0') << std::setw(2) << seconds
-                              << std::setfill(' ') << "\n"
+                              << std::setfill(' ');
+                    appendSilentProgressFileSize(std::cout);
+                    std::cout << "\n"
                               << std::flush;
                 }
             }
@@ -11120,7 +11139,9 @@ class ACView : public gl::GLObject {
                   << " | Written: " << frames_written
                   << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
                   << std::setw(2) << minutes << ":" << std::setw(2) << seconds
-                  << std::setfill(' ') << "\n"
+                  << std::setfill(' ');
+        appendSilentProgressFileSize(std::cout);
+        std::cout << "\n"
                   << std::flush;
 
         last_graphics_progress_frame = processed_frames;
@@ -11198,6 +11219,22 @@ class ACView : public gl::GLObject {
         return static_cast<uintmax_t>(file_stat.st_size);
     }
 #endif
+
+    /// @brief Append the current encoded output size to a silent progress line.
+    void appendSilentProgressFileSize([[maybe_unused]] std::ostream &stream) const {
+#ifdef __linux__
+        const auto file_size_bytes = getOutputFileSizeBytes();
+        if (!file_size_bytes.has_value()) {
+            return;
+        }
+
+        constexpr double kBytesPerMB = 1024.0 * 1024.0;
+        const double file_size_mb = static_cast<double>(*file_size_bytes) / kBytesPerMB;
+        std::ostringstream size_stream;
+        size_stream << std::fixed << std::setprecision(2) << file_size_mb;
+        stream << " | Size: " << size_stream.str() << " MB";
+#endif
+    }
 
     /**
      * @brief Return the current frame count (writer count or display count).
@@ -13010,7 +13047,7 @@ namespace {
 
         printSection(out, c, "Input Source", {{"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"}, {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"}, {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"}, {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"}, {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"}, {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}});
 
-        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"--shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}, {"--rotate <mode>", "Rotate input frames clockwise, 180 degrees, or counterclockwise.", "acmx2 --rotate clockwise"}});
+        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"--shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--normalized", "Advance time_f by a fixed output-frame interval instead of wall time.", "acmx2 --normalized --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}, {"--rotate <mode>", "Rotate input frames clockwise, 180 degrees, or counterclockwise.", "acmx2 --rotate clockwise"}});
 
         printSection(out, c, "Texture Array Cache", {{"--texture-cache-array", "Store frame history in one sampler2DArray named history.", "acmx2 --texture-cache-array"}});
 
@@ -13155,6 +13192,7 @@ int main(int argc, char **argv) {
         .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)")
         .addOptionDoubleValue(416, "remove-broken", "Compile each shader in library path; remove failures from its manifest, then exit")
         .addOptionDoubleValue(409, "time-speed", "Constant time_f speed multiplier (default: 1.0)")
+        .addOptionDouble(620, "normalized", "Use deterministic output-frame time_f advancement")
         .addOptionDoubleValue(410, "playlist", "Shader playlist text file (one shader name per line, P to toggle)")
         .addOptionDoubleValue(417, "autopilot-frames", "Autopilot frame interval; switch to a random playlist shader every N frames (minimum 4, J toggles)")
         .addOptionDoubleValue(420, "autopilot-timeout", "Alias for --autopilot-frames")
@@ -13555,6 +13593,10 @@ int main(int argc, char **argv) {
             case 409:
                 args.time_speed = static_cast<float>(atof(arg.arg_value.c_str()));
                 mx::system_out << "acmx2: Time speed set to: " << args.time_speed << "\n";
+                break;
+            case 620:
+                args.normalized_time = true;
+                mx::system_out << "acmx2: Normalized time enabled\n";
                 break;
             case 410:
                 args.playlist_file = arg.arg_value;

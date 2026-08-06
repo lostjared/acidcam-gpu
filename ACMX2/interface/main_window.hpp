@@ -156,6 +156,7 @@ class MainWindow : public QMainWindow {
     QAction *runMenu_select = nullptr, *runMenu_all = nullptr;
     QAction *runMenu_copyCommand = nullptr;
     QAction *play_repeat = nullptr, *play_stop = nullptr;
+    QAction *normalizedTimeAction = nullptr;
     QAction *listMenu_new = nullptr, *listMenu_shader = nullptr, *listMenu_remove = nullptr, *listMenu_set_current = nullptr, *listMenu_up = nullptr, *listMenu_down = nullptr, *listMenu_shuffle = nullptr, *listMenu_sort = nullptr;
     QAction *helpMenu_about = nullptr;
     QAction *listMenu_findNext = nullptr;
@@ -259,6 +260,7 @@ class MainWindow : public QMainWindow {
     QString getShaderPassIndicesFromNames();
     int cuda_device = 0;
     float time_speed = 1.0f;
+    bool normalized_time = false;
     bool use_shader_cache = true;
     bool use_yuv = false;
     bool duration_limit_enabled = false;

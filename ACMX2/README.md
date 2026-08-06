@@ -567,6 +567,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | | `--build` | `<path>` | Build shader cache for specified library path and exit |
 | | `--no-cache` | | Disable shader caching (always recompile shaders) |
 | | `--time-speed` | `<float>` | Constant `time_f` speed multiplier (default: `1.0`) |
+| | `--normalized` | | Advance `time_f` by `time-speed / FPS` per rendered frame, independent of wall-clock rendering speed |
 
 ### GPU Filter Options
 
@@ -633,7 +634,7 @@ That gives you an end-to-end HDR round-trip: HDR in, effects in linear BT.2020, 
 
 `--silent` is the headless rendering mode for video and graphics-file input. It creates an off-screen context, does not open a visible SDL window, and skips playback pacing so the job runs as fast as possible instead of real time. Because a graphics file has no natural end, silent graphics mode requires a positive `--duration`.
 
-While rendering a graphics file, headless mode prints progress after about one second of output frames or 500 ms of wall time, whichever occurs first, followed by a final 100% update.
+While recording, headless progress lines include the current encoded output file size after the elapsed time. Graphics-file mode prints progress after about one second of output frames or 500 ms of wall time, whichever occurs first, followed by a final 100% update.
 
 - Use it with `-i/--input` video files or `-g/--graphic` image files.
 - Always pair it with `-o/--output`.
