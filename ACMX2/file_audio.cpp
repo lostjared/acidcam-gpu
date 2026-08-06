@@ -15,10 +15,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <vector>
 
 extern "C" {
@@ -37,6 +41,7 @@ static size_t playbackPos = 0;
 static double framePlaybackPos = 0.0;
 static std::atomic<bool> fileAudioActive{false};
 static std::atomic<bool> fileAudioRepeat{false};
+static std::vector<std::string> fileAudioSourcePaths;
 
 namespace {
 
@@ -243,6 +248,72 @@ namespace {
 
 } // namespace
 
+static void closeDecoderResources() {
+    if (swrCtx)
+        swr_free(&swrCtx);
+    if (codecCtx)
+        avcodec_free_context(&codecCtx);
+    if (fmtCtx)
+        avformat_close_input(&fmtCtx);
+    audioStreamIndex = -1;
+}
+
+static std::string trimPlaylistLine(std::string line) {
+    const std::string whitespace = " \t\r\n";
+    const std::size_t first = line.find_first_not_of(whitespace);
+    if (first == std::string::npos)
+        return {};
+    const std::size_t last = line.find_last_not_of(whitespace);
+    return line.substr(first, last - first + 1);
+}
+
+static bool isM3uPath(const std::string &filepath) {
+    std::string extension = std::filesystem::path(filepath).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char value) {
+                       return static_cast<char>(std::tolower(value));
+                   });
+    return extension == ".m3u" || extension == ".m3u8";
+}
+
+static std::vector<std::string> readM3uPlaylist(const std::string &filepath) {
+    std::ifstream input(filepath);
+    if (!input) {
+        std::cerr << "acmx2: file_audio: Cannot open M3U playlist: "
+                  << filepath << "\n";
+        return {};
+    }
+
+    const std::filesystem::path playlistDirectory =
+        std::filesystem::absolute(std::filesystem::path(filepath)).parent_path();
+    std::vector<std::string> paths;
+    std::string line;
+    bool firstLine = true;
+    while (std::getline(input, line)) {
+        if (firstLine && line.size() >= 3 &&
+            static_cast<unsigned char>(line[0]) == 0xef &&
+            static_cast<unsigned char>(line[1]) == 0xbb &&
+            static_cast<unsigned char>(line[2]) == 0xbf) {
+            line.erase(0, 3);
+        }
+        firstLine = false;
+        line = trimPlaylistLine(std::move(line));
+        if (line.empty() || line.front() == '#')
+            continue;
+
+        if (line.find("://") != std::string::npos) {
+            paths.push_back(line);
+            continue;
+        }
+
+        std::filesystem::path trackPath(line);
+        if (!trackPath.is_absolute())
+            trackPath = playlistDirectory / trackPath;
+        paths.push_back(trackPath.lexically_normal().string());
+    }
+    return paths;
+}
+
 /**
  * @brief Decode every audio packet from the open format context.
  *
@@ -309,19 +380,16 @@ static bool decodeAllSamples() {
     return true;
 }
 
-/// @brief Open and fully decode an audio file to mono float PCM at 44.1 kHz.
-bool file_audio_open(const std::string &filepath) {
-    file_audio_close();
-
-    av_log_set_level(AV_LOG_ERROR);
-
+static bool decodeAudioFile(const std::string &filepath) {
+    closeDecoderResources();
+    const std::size_t initialSampleCount = decodedSamples.size();
     if (avformat_open_input(&fmtCtx, filepath.c_str(), nullptr, nullptr) < 0) {
         std::cerr << "acmx2: file_audio: Cannot open: " << filepath << "\n";
         return false;
     }
     if (avformat_find_stream_info(fmtCtx, nullptr) < 0) {
         std::cerr << "acmx2: file_audio: Cannot find stream info\n";
-        avformat_close_input(&fmtCtx);
+        closeDecoderResources();
         return false;
     }
 
@@ -334,22 +402,21 @@ bool file_audio_open(const std::string &filepath) {
     }
     if (audioStreamIndex < 0) {
         std::cerr << "acmx2: file_audio: No audio stream found in: " << filepath << "\n";
-        avformat_close_input(&fmtCtx);
+        closeDecoderResources();
         return false;
     }
 
     const AVCodec *codec = avcodec_find_decoder(fmtCtx->streams[audioStreamIndex]->codecpar->codec_id);
     if (!codec) {
         std::cerr << "acmx2: file_audio: Unsupported audio codec\n";
-        avformat_close_input(&fmtCtx);
+        closeDecoderResources();
         return false;
     }
     codecCtx = avcodec_alloc_context3(codec);
     avcodec_parameters_to_context(codecCtx, fmtCtx->streams[audioStreamIndex]->codecpar);
     if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
         std::cerr << "acmx2: file_audio: Cannot open codec\n";
-        avcodec_free_context(&codecCtx);
-        avformat_close_input(&fmtCtx);
+        closeDecoderResources();
         return false;
     }
 
@@ -361,16 +428,56 @@ bool file_audio_open(const std::string &filepath) {
                                   0, nullptr);
     if (ret < 0 || swr_init(swrCtx) < 0) {
         std::cerr << "acmx2: file_audio: Cannot init resampler\n";
-        avcodec_free_context(&codecCtx);
-        avformat_close_input(&fmtCtx);
+        closeDecoderResources();
         return false;
     }
 
-    decodedSamples.clear();
-    decodedSamples.reserve(44100 * 300); // reserve ~5 minutes
-
     if (!decodeAllSamples()) {
         std::cerr << "acmx2: file_audio: Decode failed\n";
+        decodedSamples.resize(initialSampleCount);
+        closeDecoderResources();
+        return false;
+    }
+
+    closeDecoderResources();
+    const std::size_t decodedSampleCount = decodedSamples.size() - initialSampleCount;
+    if (decodedSampleCount == 0) {
+        std::cerr << "acmx2: file_audio: No decoded samples in: " << filepath << "\n";
+        return false;
+    }
+
+    std::cout << "acmx2: file_audio: Loaded " << decodedSampleCount
+              << " samples (" << (decodedSampleCount / 44100.0)
+              << "s) from: " << filepath << "\n";
+    return true;
+}
+
+/// @brief Open and fully decode an audio file or M3U playlist to mono float PCM at 44.1 kHz.
+bool file_audio_open(const std::string &filepath) {
+    file_audio_close();
+
+    av_log_set_level(AV_LOG_ERROR);
+    decodedSamples.reserve(44100 * 300); // reserve ~5 minutes
+
+    const bool playlist = isM3uPath(filepath);
+    const std::vector<std::string> requestedPaths =
+        playlist ? readM3uPlaylist(filepath)
+                 : std::vector<std::string>{filepath};
+    if (requestedPaths.empty()) {
+        std::cerr << "acmx2: file_audio: M3U playlist contains no tracks: "
+                  << filepath << "\n";
+        return false;
+    }
+
+    for (const std::string &trackPath : requestedPaths) {
+        if (decodeAudioFile(trackPath)) {
+            fileAudioSourcePaths.push_back(trackPath);
+        } else if (playlist) {
+            std::cerr << "acmx2: file_audio: Skipping unusable playlist track: "
+                      << trackPath << "\n";
+        }
+    }
+    if (fileAudioSourcePaths.empty()) {
         file_audio_close();
         return false;
     }
@@ -379,15 +486,18 @@ bool file_audio_open(const std::string &filepath) {
     framePlaybackPos = 0.0;
     fileAudioActive = true;
 
-    std::cout << "acmx2: file_audio: Loaded " << decodedSamples.size()
-              << " samples (" << (decodedSamples.size() / 44100.0) << "s) from: " << filepath << "\n";
-
-    // Clean up decoder resources — samples are fully buffered
-    swr_free(&swrCtx);
-    avcodec_free_context(&codecCtx);
-    avformat_close_input(&fmtCtx);
+    if (playlist) {
+        std::cout << "acmx2: file_audio: Loaded M3U playlist with "
+                  << fileAudioSourcePaths.size() << " track(s), "
+                  << (decodedSamples.size() / 44100.0) << "s total: "
+                  << filepath << "\n";
+    }
 
     return true;
+}
+
+std::vector<std::string> file_audio_source_paths() {
+    return fileAudioSourcePaths;
 }
 
 bool file_audio_enable_output(int output_device) {
@@ -481,15 +591,11 @@ bool file_audio_is_active() {
 void file_audio_close() {
     fileAudioActive = false;
     fileAudioOutput.reset();
-    if (swrCtx)
-        swr_free(&swrCtx);
-    if (codecCtx)
-        avcodec_free_context(&codecCtx);
-    if (fmtCtx)
-        avformat_close_input(&fmtCtx);
+    closeDecoderResources();
     decodedSamples.clear();
     decodedSamples.shrink_to_fit();
     playbackPos = 0;
     framePlaybackPos = 0.0;
+    fileAudioSourcePaths.clear();
     fileAudioRepeat.store(false, std::memory_order_release);
 }

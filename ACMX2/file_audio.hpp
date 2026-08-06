@@ -2,6 +2,7 @@
 #define __FILE_AUDIO__H_
 
 #include <string>
+#include <vector>
 
 namespace acmx2::audio {
     class AudioAnalyzer;
@@ -41,6 +42,14 @@ namespace acmx2::audio {
  * @return @c true on success, @c false on any decoder or I/O error.
  */
 bool file_audio_open(const std::string &filepath);
+
+/**
+ * @brief Return the successfully decoded source tracks in playback order.
+ *
+ * A single audio file returns one path. An M3U source returns each usable
+ * playlist entry with relative paths resolved against the playlist directory.
+ */
+std::vector<std::string> file_audio_source_paths();
 
 /**
  * @brief Enable or disable looping of the currently decoded audio file.

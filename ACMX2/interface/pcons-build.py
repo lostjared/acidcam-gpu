@@ -44,6 +44,7 @@ app = project.QtProgram(
     "acmx2_interface",
     env,
     sources=[
+        "audio-playlist.cpp",
         "audio-window.cpp",
         "custom-uniforms.cpp",
         "editor.cpp",

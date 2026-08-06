@@ -39,12 +39,16 @@ class AudioSettings : public QDialog {
     double getSensitivity() const;
     int getInputDeviceIndex() const;
     int getOutputDeviceIndex() const;
-    /// @brief Check whether file-based audio input is selected and a path is set.
-    /// @return @c true if the "Use Audio File" checkbox is checked and the path is non-empty.
+    /// @brief Check whether a file or M3U audio source is selected and has a path.
+    /// @return @c true when either mutually exclusive source is ready.
     bool isAudioFileEnabled() const;
-    /// @brief Get the path to the selected audio file.
-    /// @return Absolute file path, or an empty string if none selected.
+    /// @brief Get the effective audio file or M3U playlist path.
+    /// @return The selected source path, or an empty string if none is selected.
     QString getAudioFilePath() const;
+    /// @brief Check whether the M3U playlist overrides the single audio file.
+    bool isAudioPlaylistEnabled() const;
+    /// @brief Get the selected M3U playlist path.
+    QString getAudioPlaylistPath() const;
     /// @brief Check whether "stop when audio ends" is selected.
     /// @return @c true if the audio-trunc checkbox is checked.
     bool isAudioTruncEnabled() const;
@@ -65,6 +69,7 @@ class AudioSettings : public QDialog {
     void populateAudioDevices();
     void loadUiState();
     void saveUiState();
+    void updateAudioSourceControls();
 
     QCheckBox *audioReactivityCheckBox;
     QCheckBox *audioPassThroughCheckBox;
@@ -74,14 +79,18 @@ class AudioSettings : public QDialog {
     QSlider *sensitivitySlider;
     QComboBox *inputDeviceComboBox;
     QComboBox *outputDeviceComboBox;
-    QCheckBox *audioFileCheckBox;         ///< Toggle file-based audio input.
-    QLineEdit *audioFileLineEdit;         ///< Displays the selected audio file path.
-    QPushButton *audioFileBrowseButton;   ///< Opens a file dialog to choose an audio file.
-    QCheckBox *audioTruncCheckBox;        ///< Stop playback when the audio file ends.
-    QCheckBox *audioRepeatCheckBox;       ///< Restart playback when the audio file ends.
-    QCheckBox *audioBuffersCheckBox;      ///< Enable spectrum history buffer CLI option.
-    QSpinBox *audioBuffersSpinBox;        ///< Number of spectrum history frames.
-    QDoubleSpinBox *audioWarmRateSpinBox; ///< Startup warmup rate for audio intensity ramp.
+    QCheckBox *audioFileCheckBox;           ///< Toggle file-based audio input.
+    QLineEdit *audioFileLineEdit;           ///< Displays the selected audio file path.
+    QPushButton *audioFileBrowseButton;     ///< Opens a file dialog to choose an audio file.
+    QCheckBox *audioPlaylistCheckBox;       ///< Use an M3U playlist instead of the audio file.
+    QLineEdit *audioPlaylistLineEdit;       ///< Displays the selected M3U playlist path.
+    QPushButton *audioPlaylistBrowseButton; ///< Opens a file dialog to choose an M3U playlist.
+    QPushButton *audioPlaylistEditButton;   ///< Opens the M3U playlist editor.
+    QCheckBox *audioTruncCheckBox;          ///< Stop playback when the audio file ends.
+    QCheckBox *audioRepeatCheckBox;         ///< Restart playback when the audio file ends.
+    QCheckBox *audioBuffersCheckBox;        ///< Enable spectrum history buffer CLI option.
+    QSpinBox *audioBuffersSpinBox;          ///< Number of spectrum history frames.
+    QDoubleSpinBox *audioWarmRateSpinBox;   ///< Startup warmup rate for audio intensity ramp.
     QPushButton *okButton;
     QPushButton *cancelButton;
 };

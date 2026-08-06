@@ -71,6 +71,7 @@ message(STATUS "")
 
 # Launcher GUI sources
 set(LAUNCHER_GUI_HEADERS
+    audio-playlist.hpp
     audio-window.hpp
     custom-uniforms.hpp
     editor.hpp
@@ -91,6 +92,7 @@ set(LAUNCHER_GUI_HEADERS
 )
 
 set(LAUNCHER_GUI_SOURCES
+    audio-playlist.cpp
     audio-window.cpp
     custom-uniforms.cpp
     editor.cpp

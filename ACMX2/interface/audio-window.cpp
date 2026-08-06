@@ -1,4 +1,5 @@
 #include "audio-window.hpp"
+#include "audio-playlist.hpp"
 #include "custom_style.hpp"
 #include <QFileDialog>
 #include <QFileInfo>
@@ -14,7 +15,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioPassThroughCheckBox =
         new QCheckBox("Enable Audio Pass Through / File Playback", this);
     audioPassThroughCheckBox->setToolTip(
-        "Play live microphone input or the selected audio file through the output device.");
+        "Play live microphone input or the selected audio source through the output device.");
     recordAudioCheckBox = new QCheckBox("Record Audio to File", this);
 
     QLabel *recordVolumeLabel = new QLabel("Recording Volume:", this);
@@ -61,11 +62,20 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioFileLineEdit->setEnabled(false);
     audioFileBrowseButton = new QPushButton("Browse", this);
     audioFileBrowseButton->setEnabled(false);
-    audioTruncCheckBox = new QCheckBox("Stop video when audio file completes", this);
+    audioPlaylistCheckBox = new QCheckBox("Use M3U Audio Playlist", this);
+    audioPlaylistCheckBox->setToolTip(
+        "Use the tracks in an M3U playlist instead of the selected audio file.");
+    audioPlaylistLineEdit = new QLineEdit(this);
+    audioPlaylistLineEdit->setReadOnly(true);
+    audioPlaylistLineEdit->setEnabled(false);
+    audioPlaylistBrowseButton = new QPushButton("Browse", this);
+    audioPlaylistBrowseButton->setEnabled(false);
+    audioPlaylistEditButton = new QPushButton("Create / Edit...", this);
+    audioTruncCheckBox = new QCheckBox("Stop video when audio source completes", this);
     audioTruncCheckBox->setEnabled(false);
     audioRepeatCheckBox = new QCheckBox("Repeat", this);
     audioRepeatCheckBox->setToolTip(
-        "Restart the selected audio file from the beginning when it reaches the end.");
+        "Restart the audio file, or the full playlist, when it reaches the end.");
     audioRepeatCheckBox->setEnabled(false);
     audioBuffersCheckBox = new QCheckBox("Enable Audio Spectrum History Buffers", this);
     audioBuffersSpinBox = new QSpinBox(this);
@@ -85,20 +95,22 @@ AudioSettings::AudioSettings(QWidget *parent)
     });
 
     connect(audioFileCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
-        audioFileLineEdit->setEnabled(checked);
-        audioFileBrowseButton->setEnabled(checked);
-        audioTruncCheckBox->setEnabled(checked);
-        audioRepeatCheckBox->setEnabled(checked);
-        // When using file audio, disable only microphone-specific controls.
-        // Pass-through and output selection remain available for file playback.
-        channelSpinBox->setEnabled(!checked);
-        inputDeviceComboBox->setEnabled(!checked);
+        if (checked)
+            audioPlaylistCheckBox->setChecked(false);
+        updateAudioSourceControls();
     });
 
     connect(audioTruncCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         if (checked)
             audioRepeatCheckBox->setChecked(false);
     });
+
+    connect(audioPlaylistCheckBox, &QCheckBox::toggled, this,
+            [this](bool checked) {
+                if (checked)
+                    audioFileCheckBox->setChecked(false);
+                updateAudioSourceControls();
+            });
     connect(audioRepeatCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         if (checked)
             audioTruncCheckBox->setChecked(false);
@@ -113,6 +125,27 @@ AudioSettings::AudioSettings(QWidget *parent)
             appSettings.setValue("lastAudioFileDir", QFileInfo(fileName).absolutePath());
             audioFileLineEdit->setText(fileName);
         }
+    });
+
+    connect(audioPlaylistBrowseButton, &QPushButton::clicked, this, [this]() {
+        QSettings appSettings("LostSideDead");
+        QString lastDir = appSettings.value("lastAudioPlaylistDir", "").toString();
+        QString fileName = QFileDialog::getOpenFileName(
+            this, "Select M3U Audio Playlist", lastDir,
+            "M3U Playlists (*.m3u *.m3u8)");
+        if (!fileName.isEmpty()) {
+            appSettings.setValue("lastAudioPlaylistDir",
+                                 QFileInfo(fileName).absolutePath());
+            audioPlaylistLineEdit->setText(fileName);
+        }
+    });
+
+    connect(audioPlaylistEditButton, &QPushButton::clicked, this, [this]() {
+        AudioPlaylistDialog editor(audioPlaylistLineEdit->text(), this);
+        if (editor.exec() != QDialog::Accepted || editor.playlistPath().isEmpty())
+            return;
+        audioPlaylistLineEdit->setText(editor.playlistPath());
+        audioPlaylistCheckBox->setChecked(true);
     });
 
     connect(okButton, &QPushButton::clicked, this, [this]() {
@@ -161,6 +194,12 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioFileLayout->addWidget(audioFileBrowseButton);
     mainLayout->addWidget(audioFileCheckBox);
     mainLayout->addLayout(audioFileLayout);
+    QHBoxLayout *audioPlaylistLayout = new QHBoxLayout();
+    audioPlaylistLayout->addWidget(audioPlaylistLineEdit);
+    audioPlaylistLayout->addWidget(audioPlaylistBrowseButton);
+    audioPlaylistLayout->addWidget(audioPlaylistEditButton);
+    mainLayout->addWidget(audioPlaylistCheckBox);
+    mainLayout->addLayout(audioPlaylistLayout);
     mainLayout->addWidget(audioTruncCheckBox);
     mainLayout->addWidget(audioRepeatCheckBox);
 
@@ -210,6 +249,10 @@ void AudioSettings::loadUiState() {
 
     audioFileCheckBox->setChecked(appSettings.value("audio/file_enabled", false).toBool());
     audioFileLineEdit->setText(appSettings.value("audio/file_path", "").toString());
+    audioPlaylistCheckBox->setChecked(
+        appSettings.value("audio/playlist_enabled", false).toBool());
+    audioPlaylistLineEdit->setText(
+        appSettings.value("audio/playlist_path", "").toString());
     audioTruncCheckBox->setChecked(appSettings.value("audio/file_trunc", false).toBool());
     audioRepeatCheckBox->setChecked(appSettings.value("audio/file_repeat", false).toBool());
     audioBuffersCheckBox->setChecked(appSettings.value("audio/buffers_enabled", false).toBool());
@@ -230,11 +273,32 @@ void AudioSettings::saveUiState() {
     appSettings.setValue("audio/output_device", outputDeviceComboBox->currentData().toInt());
     appSettings.setValue("audio/file_enabled", audioFileCheckBox->isChecked());
     appSettings.setValue("audio/file_path", audioFileLineEdit->text());
+    appSettings.setValue("audio/playlist_enabled",
+                         audioPlaylistCheckBox->isChecked());
+    appSettings.setValue("audio/playlist_path", audioPlaylistLineEdit->text());
     appSettings.setValue("audio/file_trunc", audioTruncCheckBox->isChecked());
     appSettings.setValue("audio/file_repeat", audioRepeatCheckBox->isChecked());
     appSettings.setValue("audio/buffers_enabled", audioBuffersCheckBox->isChecked());
     appSettings.setValue("audio/buffers_frames", audioBuffersSpinBox->value());
     appSettings.setValue("audio/warm_rate", audioWarmRateSpinBox->value());
+}
+
+void AudioSettings::updateAudioSourceControls() {
+    const bool fileEnabled = audioFileCheckBox->isChecked();
+    const bool playlistEnabled = audioPlaylistCheckBox->isChecked();
+    const bool sourceEnabled = fileEnabled || playlistEnabled;
+
+    audioFileLineEdit->setEnabled(fileEnabled);
+    audioFileBrowseButton->setEnabled(fileEnabled);
+    audioPlaylistLineEdit->setEnabled(playlistEnabled);
+    audioPlaylistBrowseButton->setEnabled(playlistEnabled);
+    audioTruncCheckBox->setEnabled(sourceEnabled);
+    audioRepeatCheckBox->setEnabled(sourceEnabled);
+
+    // File and playlist audio replace microphone-specific input controls.
+    // Pass-through and output selection remain available for playback.
+    channelSpinBox->setEnabled(!sourceEnabled);
+    inputDeviceComboBox->setEnabled(!sourceEnabled);
 }
 
 void AudioSettings::populateAudioDevices() {
@@ -375,11 +439,24 @@ int AudioSettings::getOutputDeviceIndex() const {
 }
 
 bool AudioSettings::isAudioFileEnabled() const {
-    return audioFileCheckBox->isChecked() && !audioFileLineEdit->text().isEmpty();
+    return (audioFileCheckBox->isChecked() &&
+            !audioFileLineEdit->text().isEmpty()) ||
+           (audioPlaylistCheckBox->isChecked() &&
+            !audioPlaylistLineEdit->text().isEmpty());
 }
 
 QString AudioSettings::getAudioFilePath() const {
-    return audioFileLineEdit->text();
+    return isAudioPlaylistEnabled() ? audioPlaylistLineEdit->text()
+                                    : audioFileLineEdit->text();
+}
+
+bool AudioSettings::isAudioPlaylistEnabled() const {
+    return audioPlaylistCheckBox->isChecked() &&
+           !audioPlaylistLineEdit->text().isEmpty();
+}
+
+QString AudioSettings::getAudioPlaylistPath() const {
+    return audioPlaylistLineEdit->text();
 }
 
 bool AudioSettings::isAudioTruncEnabled() const {

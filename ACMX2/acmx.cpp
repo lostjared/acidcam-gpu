@@ -12796,8 +12796,37 @@ class ACView : public gl::GLObject {
         if (audio_repeat_mode) {
             cmd << " -stream_loop -1";
         }
-        cmd << " -i \"" << audio_file_path
-            << "\" -map 0:v:0? -map 1:a:0?"
+        const std::vector<std::string> audioSources =
+            file_audio_source_paths();
+        std::filesystem::path concatPath;
+        if (audioSources.size() > 1) {
+            concatPath = std::filesystem::temp_directory_path() /
+                         ("acmx2-audio-" +
+                          std::to_string(std::chrono::steady_clock::now()
+                                             .time_since_epoch()
+                                             .count()) +
+                          ".ffconcat");
+            std::ofstream concatFile(concatPath);
+            concatFile << "ffconcat version 1.0\n";
+            for (const std::string &source : audioSources) {
+                std::string escapedSource;
+                for (char value : source) {
+                    if (value == '\'')
+                        escapedSource += "'\\''";
+                    else
+                        escapedSource += value;
+                }
+                concatFile << "file '" << escapedSource << "'\n";
+            }
+            concatFile.close();
+            cmd << " -f concat -safe 0 -i \"" << concatPath.string()
+                << "\"";
+        } else {
+            const std::string audioSource =
+                audioSources.empty() ? audio_file_path : audioSources.front();
+            cmd << " -i \"" << audioSource << "\"";
+        }
+        cmd << " -map 0:v:0? -map 1:a:0?"
             << " -c:v copy -c:a aac -b:a 192k";
         if (mux_duration > 0.0) {
             cmd << " -t " << std::fixed << std::setprecision(6)
@@ -12817,6 +12846,10 @@ class ACView : public gl::GLObject {
                        << ")...\n";
         fflush(stdout);
         int ret = std::system(cmd.str().c_str());
+        if (!concatPath.empty()) {
+            std::error_code removeError;
+            std::filesystem::remove(concatPath, removeError);
+        }
         if (ret == 0) {
             std::remove(ofilename.c_str());
             std::rename(tmp_out.c_str(), ofilename.c_str());
@@ -13199,7 +13232,7 @@ namespace {
         printSection(out, c, "Advanced Encoder Parameters", {{"--encode-params <string>", "Pass additional FFmpeg-style video encoder options through MXWrite.", "acmx2 --encode-codec hevc_nvenc --encode-params \"-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p\""}});
 
 #ifdef AUDIO_ENABLED
-        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--audio-repeat", "Restart file audio from the beginning when it reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-repeat"}, {"--enable-audio-buffers <N>", "Allocate one sampler1DArray with N spectrum-history layers (GPU-limited).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
+        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file or M3U playlist as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.m3u"}, {"--audio-trunc", "Stop playback/output when the audio source reaches EOF.", "acmx2 --audio-file soundtrack.m3u --audio-trunc"}, {"--audio-repeat", "Restart file audio or the full playlist at EOF.", "acmx2 --audio-file soundtrack.m3u --audio-repeat"}, {"--enable-audio-buffers <N>", "Allocate one sampler1DArray with N spectrum-history layers (GPU-limited).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
 #endif
 
 #ifdef MIDI_ENABLED
@@ -13319,7 +13352,7 @@ int main(int argc, char **argv) {
         .addOptionDouble(302, "list-devices", "list audio devices")
         .addOptionDoubleValue(303, "record-audio", "Record captured audio to WAV file")
         .addOptionDoubleValue(304, "record-gain", "Recording volume gain 0.0-2.0 (default: 1.0)")
-        .addOptionDoubleValue(305, "audio-file", "Use audio from file (WAV/MP3/etc.) for reactivity instead of mic")
+        .addOptionDoubleValue(305, "audio-file", "Use an audio file or M3U playlist for reactivity instead of mic")
         .addOptionDouble(306, "audio-trunc", "Stop playback when the audio file reaches the end")
         .addOptionDoubleValue(307, "enable-audio-buffers", "Allocate a spectrum-history sampler1DArray with N layers")
         .addOptionDoubleValue(308, "audio-warm-rate", "Startup audio warmup rate (1/sec, default: 0.5)")
