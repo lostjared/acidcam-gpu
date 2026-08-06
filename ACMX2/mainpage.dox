@@ -194,6 +194,21 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 
 <b>August 6: audio, DeepDream, and CUDA ONNX updates</b>
 
+- <tt>--audio-file</tt> accepts M3U and M3U8 playlists. Tracks are decoded in
+  playlist order, relative entries resolve against the playlist directory,
+  invalid entries are skipped, and file-audio muxing preserves the same order.
+  Audio Repeat loops the complete playlist, while Audio Truncate stops only
+  after its final usable track.
+- Audio Settings provides a dedicated M3U editor with multi-file selection,
+  removal, move up/down, drag-and-drop reordering, alphabetical sorting,
+  shuffling, Open, Save, and Save As. Local tracks are written relative to the
+  destination playlist when possible so saved lists remain portable.
+- Single-file and M3U audio are mutually exclusive source choices. Selecting
+  either automatically enables pass-through/file playback and the output
+  device selector.
+- During audible file playback, the HUD shows
+  <tt>Track: filename.ext</tt> in purple. Only the basename is exposed, and an
+  M3U playlist updates the label at each track boundary.
 - <tt>--audio-repeat</tt> restarts file-audio playback at EOF for continuous
   shader reactivity. Qt Audio Settings adds a persisted Repeat checkbox,
   makes Repeat and Audio Truncate mutually exclusive, and forwards the state
@@ -1117,7 +1132,7 @@ appears in the dock while the application is running.
 
 <b>Process a video with audio-reactive shaders driven by a music file:</b>
 @code{.sh}
-./acmx2 -p ./data -i input.mp4 -s ./shaders --audio-file music.mp3 -o output.mp4
+./acmx2 -p ./data -i input.mp4 -s ./shaders --audio-file music.m3u -o output.mp4
 @endcode
 
 <b>Same as above, but stop when the audio track ends:</b>
@@ -1284,9 +1299,9 @@ git clone https://github.com/lostjared/shaders.git
 |       | `--list-devices` |             | List audio devices and exit |
 |       | `--record-audio` | `<file>`    | Record captured audio to WAV, mux it in sync with video, then remove it after a successful mux |
 |       | `--record-gain`  | `<float>`   | Recording volume gain (0.0–2.0) |
-|       | `--audio-file`   | `<file>`    | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
+|       | `--audio-file`   | `<file>`    | Use audio from a file or M3U/M3U8 playlist for reactivity instead of the microphone; tracks are muxed into the output video in playlist order |
 |       | `--audio-trunc`  |             | Stop playback when the audio file reaches the end |
-|       | `--audio-repeat` |             | Restart audio file playback from the beginning when it reaches the end |
+|       | `--audio-repeat` |             | Restart audio-file playback, or the complete M3U playlist, when it reaches the end |
 |       | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in 1/sec (default: 0.5; 0 disables warmup) |
 |       | `--enable-audio-buffers` | `<N>` | Allocate one FFT history `sampler1DArray` with `N` GPU-limited layers |
 

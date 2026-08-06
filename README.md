@@ -115,6 +115,22 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 
 #### August 6
 
+- **M3U audio playlist playback**: `--audio-file` now accepts `.m3u` and
+  `.m3u8` playlists. Entries play sequentially, relative paths resolve from
+  the playlist directory, unusable entries are skipped, and recorded output
+  is muxed in the same track order. Repeat loops the complete playlist; Audio
+  Truncate stops the video only after the final track.
+- **Audio playlist editor**: Audio Settings includes a **Create / Edit** M3U
+  editor for adding and removing tracks, multi-selection reordering,
+  drag-and-drop, sorting, shuffling, opening existing playlists, and Save/Save
+  As. Saved playlists use portable relative paths where possible.
+- **Unambiguous file-audio controls**: single-file and M3U sources are mutually
+  exclusive. Selecting either source automatically enables file playback and
+  its output-device selector, while retaining the selected output device and
+  other audio settings between sessions.
+- **Current-track HUD**: audible file and M3U playback displays
+  `Track: filename.ext` in purple without exposing the containing path. The
+  label advances automatically at playlist track boundaries.
 - **Repeatable file audio**: `--audio-repeat` restarts an audio file at EOF for
   continuous reactive playback. The Qt Audio Settings window exposes a
   persistent Repeat checkbox, keeps it mutually exclusive with Audio Truncate,
@@ -487,9 +503,9 @@ presets retain more detail but require more processing time and GPU memory:
 | | `--list-devices` | | List audio devices and exit |
 | | `--record-audio` | `<file>` | Record captured audio to WAV, mux it in sync with video, then remove it after a successful mux |
 | | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
-| | `--audio-file` | `<file>` | Use an audio file for shader reactivity instead of microphone input |
+| | `--audio-file` | `<file>` | Use an audio file or M3U/M3U8 playlist for shader reactivity instead of microphone input |
 | | `--audio-trunc` | | Stop playback when the audio file reaches EOF |
-| | `--audio-repeat` | | Restart audio file playback from the beginning at EOF; mutually exclusive with `--audio-trunc` in Qt |
+| | `--audio-repeat` | | Restart audio-file playback, or the complete M3U playlist, at EOF; mutually exclusive with `--audio-trunc` in Qt |
 | | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in `1/sec` (default: `0.5`; `0` disables warmup) |
 | | `--enable-audio-buffers` | `<N>` | Allocate one FFT history `sampler1DArray` with `N` GPU-limited layers |
 
