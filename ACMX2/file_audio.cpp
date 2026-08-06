@@ -42,6 +42,7 @@ static double framePlaybackPos = 0.0;
 static std::atomic<bool> fileAudioActive{false};
 static std::atomic<bool> fileAudioRepeat{false};
 static std::vector<std::string> fileAudioSourcePaths;
+static std::vector<std::size_t> fileAudioSourceEndPositions;
 
 namespace {
 
@@ -472,6 +473,7 @@ bool file_audio_open(const std::string &filepath) {
     for (const std::string &trackPath : requestedPaths) {
         if (decodeAudioFile(trackPath)) {
             fileAudioSourcePaths.push_back(trackPath);
+            fileAudioSourceEndPositions.push_back(decodedSamples.size());
         } else if (playlist) {
             std::cerr << "acmx2: file_audio: Skipping unusable playlist track: "
                       << trackPath << "\n";
@@ -498,6 +500,20 @@ bool file_audio_open(const std::string &filepath) {
 
 std::vector<std::string> file_audio_source_paths() {
     return fileAudioSourcePaths;
+}
+
+std::string file_audio_current_source_path() {
+    if (!fileAudioActive.load(std::memory_order_acquire) ||
+        fileAudioSourcePaths.empty() || fileAudioSourceEndPositions.empty())
+        return {};
+
+    const auto source = std::upper_bound(fileAudioSourceEndPositions.begin(),
+                                         fileAudioSourceEndPositions.end(),
+                                         playbackPos);
+    const std::size_t sourceIndex = std::min(
+        static_cast<std::size_t>(source - fileAudioSourceEndPositions.begin()),
+        fileAudioSourcePaths.size() - 1);
+    return fileAudioSourcePaths[sourceIndex];
 }
 
 bool file_audio_enable_output(int output_device) {
@@ -597,5 +613,6 @@ void file_audio_close() {
     playbackPos = 0;
     framePlaybackPos = 0.0;
     fileAudioSourcePaths.clear();
+    fileAudioSourceEndPositions.clear();
     fileAudioRepeat.store(false, std::memory_order_release);
 }

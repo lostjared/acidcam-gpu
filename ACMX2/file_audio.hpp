@@ -52,6 +52,12 @@ bool file_audio_open(const std::string &filepath);
 std::vector<std::string> file_audio_source_paths();
 
 /**
+ * @brief Return the source track at the current playback position.
+ * @return Current file/playlist entry path, or an empty string when inactive.
+ */
+std::string file_audio_current_source_path();
+
+/**
  * @brief Enable or disable looping of the currently decoded audio file.
  * @param enabled When true, playback restarts at the first sample at EOF.
  */

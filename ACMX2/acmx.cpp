@@ -10982,6 +10982,19 @@ class ACView : public gl::GLObject {
             win->text.setColor({0, 0, 255, 255});
             win->text.printText_Blended(overlayFont, 10, 10, cached_shader_name);
             int overlayY = 40;
+#ifdef AUDIO_ENABLED
+            if (file_audio_mode && file_audio_has_output_clock()) {
+                const std::string trackPath = file_audio_current_source_path();
+                const std::string trackName =
+                    std::filesystem::path(trackPath).filename().string();
+                if (!trackName.empty()) {
+                    win->text.setColor({255, 0, 255, 255});
+                    win->text.printText_Blended(
+                        overlayFont, 10, overlayY, "Track: " + trackName);
+                    overlayY += 30;
+                }
+            }
+#endif
             if (gpu_filter_enabled && !gpu_filters.empty()) {
                 win->text.setColor({255, 0, 255, 255});
                 std::string gpuLine = "GPU: ";
