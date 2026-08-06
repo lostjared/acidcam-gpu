@@ -48,6 +48,9 @@ class AudioSettings : public QDialog {
     /// @brief Check whether "stop when audio ends" is selected.
     /// @return @c true if the audio-trunc checkbox is checked.
     bool isAudioTruncEnabled() const;
+    /// @brief Check whether file audio should restart when it reaches the end.
+    /// @return @c true if the audio-repeat checkbox is checked.
+    bool isAudioRepeatEnabled() const;
     /// @brief Check whether spectrum history buffers are enabled.
     /// @return @c true when --enable-audio-buffers should be emitted.
     bool isAudioBuffersEnabled() const;
@@ -75,6 +78,7 @@ class AudioSettings : public QDialog {
     QLineEdit *audioFileLineEdit;         ///< Displays the selected audio file path.
     QPushButton *audioFileBrowseButton;   ///< Opens a file dialog to choose an audio file.
     QCheckBox *audioTruncCheckBox;        ///< Stop playback when the audio file ends.
+    QCheckBox *audioRepeatCheckBox;       ///< Restart playback when the audio file ends.
     QCheckBox *audioBuffersCheckBox;      ///< Enable spectrum history buffer CLI option.
     QSpinBox *audioBuffersSpinBox;        ///< Number of spectrum history frames.
     QDoubleSpinBox *audioWarmRateSpinBox; ///< Startup warmup rate for audio intensity ramp.

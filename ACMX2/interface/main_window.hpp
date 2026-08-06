@@ -231,6 +231,7 @@ class MainWindow : public QMainWindow {
     int audio_output = -1;
     QString audio_file;
     bool audio_trunc = false;
+    bool audio_repeat = false;
     bool audio_buffers_enabled = false;
     int audio_buffer_frames = 8;
     double audio_warm_rate = 0.5;

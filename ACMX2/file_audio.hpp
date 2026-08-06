@@ -43,6 +43,12 @@ namespace acmx2::audio {
 bool file_audio_open(const std::string &filepath);
 
 /**
+ * @brief Enable or disable looping of the currently decoded audio file.
+ * @param enabled When true, playback restarts at the first sample at EOF.
+ */
+void file_audio_set_repeat(bool enabled);
+
+/**
  * @brief Configure real-time playback of the decoded file through an output device.
  *
  * The stream is opened immediately and starts when file_audio_process_frame()

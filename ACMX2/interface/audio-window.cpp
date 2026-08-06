@@ -63,6 +63,10 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioFileBrowseButton->setEnabled(false);
     audioTruncCheckBox = new QCheckBox("Stop video when audio file completes", this);
     audioTruncCheckBox->setEnabled(false);
+    audioRepeatCheckBox = new QCheckBox("Repeat", this);
+    audioRepeatCheckBox->setToolTip(
+        "Restart the selected audio file from the beginning when it reaches the end.");
+    audioRepeatCheckBox->setEnabled(false);
     audioBuffersCheckBox = new QCheckBox("Enable Audio Spectrum History Buffers", this);
     audioBuffersSpinBox = new QSpinBox(this);
     audioBuffersSpinBox->setRange(1, 512);
@@ -84,10 +88,20 @@ AudioSettings::AudioSettings(QWidget *parent)
         audioFileLineEdit->setEnabled(checked);
         audioFileBrowseButton->setEnabled(checked);
         audioTruncCheckBox->setEnabled(checked);
+        audioRepeatCheckBox->setEnabled(checked);
         // When using file audio, disable only microphone-specific controls.
         // Pass-through and output selection remain available for file playback.
         channelSpinBox->setEnabled(!checked);
         inputDeviceComboBox->setEnabled(!checked);
+    });
+
+    connect(audioTruncCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        if (checked)
+            audioRepeatCheckBox->setChecked(false);
+    });
+    connect(audioRepeatCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        if (checked)
+            audioTruncCheckBox->setChecked(false);
     });
 
     connect(audioFileBrowseButton, &QPushButton::clicked, this, [this]() {
@@ -148,6 +162,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     mainLayout->addWidget(audioFileCheckBox);
     mainLayout->addLayout(audioFileLayout);
     mainLayout->addWidget(audioTruncCheckBox);
+    mainLayout->addWidget(audioRepeatCheckBox);
 
     QHBoxLayout *audioBuffersLayout = new QHBoxLayout();
     audioBuffersLayout->addWidget(audioBuffersCheckBox);
@@ -196,6 +211,7 @@ void AudioSettings::loadUiState() {
     audioFileCheckBox->setChecked(appSettings.value("audio/file_enabled", false).toBool());
     audioFileLineEdit->setText(appSettings.value("audio/file_path", "").toString());
     audioTruncCheckBox->setChecked(appSettings.value("audio/file_trunc", false).toBool());
+    audioRepeatCheckBox->setChecked(appSettings.value("audio/file_repeat", false).toBool());
     audioBuffersCheckBox->setChecked(appSettings.value("audio/buffers_enabled", false).toBool());
     audioBuffersSpinBox->setValue(appSettings.value("audio/buffers_frames", 8).toInt());
     audioBuffersSpinBox->setEnabled(audioBuffersCheckBox->isChecked());
@@ -215,6 +231,7 @@ void AudioSettings::saveUiState() {
     appSettings.setValue("audio/file_enabled", audioFileCheckBox->isChecked());
     appSettings.setValue("audio/file_path", audioFileLineEdit->text());
     appSettings.setValue("audio/file_trunc", audioTruncCheckBox->isChecked());
+    appSettings.setValue("audio/file_repeat", audioRepeatCheckBox->isChecked());
     appSettings.setValue("audio/buffers_enabled", audioBuffersCheckBox->isChecked());
     appSettings.setValue("audio/buffers_frames", audioBuffersSpinBox->value());
     appSettings.setValue("audio/warm_rate", audioWarmRateSpinBox->value());
@@ -367,6 +384,10 @@ QString AudioSettings::getAudioFilePath() const {
 
 bool AudioSettings::isAudioTruncEnabled() const {
     return audioTruncCheckBox->isChecked();
+}
+
+bool AudioSettings::isAudioRepeatEnabled() const {
+    return audioRepeatCheckBox->isChecked();
 }
 
 bool AudioSettings::isAudioBuffersEnabled() const {

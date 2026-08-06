@@ -36,6 +36,7 @@ static std::vector<float> decodedSamples; // all decoded mono float samples at 4
 static size_t playbackPos = 0;
 static double framePlaybackPos = 0.0;
 static std::atomic<bool> fileAudioActive{false};
+static std::atomic<bool> fileAudioRepeat{false};
 
 namespace {
 
@@ -79,6 +80,7 @@ namespace {
                 source_sample_count = sample_count;
                 source_position = 0.0;
                 playback_position.store(0, std::memory_order_relaxed);
+                total_playback_position.store(0, std::memory_order_relaxed);
 
                 RtAudio::StreamParameters output_parameters;
                 output_parameters.deviceId = device;
@@ -137,7 +139,9 @@ namespace {
             source_samples = nullptr;
             source_sample_count = 0;
             source_position = 0.0;
+            total_source_position = 0.0;
             playback_position.store(0, std::memory_order_relaxed);
+            total_playback_position.store(0, std::memory_order_relaxed);
         }
 
         bool is_configured() const { return configured; }
@@ -148,6 +152,10 @@ namespace {
 
         std::size_t position() const {
             return playback_position.load(std::memory_order_acquire);
+        }
+
+        std::size_t total_position() const {
+            return total_playback_position.load(std::memory_order_acquire);
         }
 
       private:
@@ -175,17 +183,31 @@ namespace {
                 static_cast<double>(output_sample_rate);
             for (unsigned int frame = 0; frame < frame_count; ++frame) {
                 float sample = 0.0f;
-                const std::size_t index = static_cast<std::size_t>(source_position);
                 if (active.load(std::memory_order_relaxed) &&
-                    index < source_sample_count) {
+                    source_position >= static_cast<double>(source_sample_count)) {
+                    if (fileAudioRepeat.load(std::memory_order_relaxed)) {
+                        source_position = std::fmod(
+                            source_position,
+                            static_cast<double>(source_sample_count));
+                    } else {
+                        active.store(false, std::memory_order_release);
+                        source_position = static_cast<double>(source_sample_count);
+                    }
+                }
+
+                const std::size_t index = static_cast<std::size_t>(source_position);
+                if (active.load(std::memory_order_relaxed) && index < source_sample_count) {
                     const std::size_t next_index =
-                        std::min(index + 1, source_sample_count - 1);
+                        fileAudioRepeat.load(std::memory_order_relaxed)
+                            ? (index + 1) % source_sample_count
+                            : std::min(index + 1, source_sample_count - 1);
                     const float fraction =
                         static_cast<float>(source_position - static_cast<double>(index));
                     sample = source_samples[index] +
                              (source_samples[next_index] - source_samples[index]) * fraction;
                     source_position += source_step;
-                } else {
+                    total_source_position += source_step;
+                } else if (!fileAudioRepeat.load(std::memory_order_relaxed)) {
                     active.store(false, std::memory_order_release);
                     source_position = static_cast<double>(source_sample_count);
                 }
@@ -197,6 +219,9 @@ namespace {
             playback_position.store(
                 std::min(static_cast<std::size_t>(source_position), source_sample_count),
                 std::memory_order_release);
+            total_playback_position.store(
+                static_cast<std::size_t>(total_source_position),
+                std::memory_order_release);
             return 0;
         }
 
@@ -204,9 +229,11 @@ namespace {
         const float *source_samples = nullptr;
         std::size_t source_sample_count = 0;
         double source_position = 0.0;
+        double total_source_position = 0.0;
         unsigned int output_channels = 0;
         unsigned int output_sample_rate = FILE_AUDIO_SAMPLE_RATE;
         std::atomic<std::size_t> playback_position{0};
+        std::atomic<std::size_t> total_playback_position{0};
         std::atomic<bool> started{false};
         std::atomic<bool> active{false};
         bool configured = false;
@@ -376,6 +403,10 @@ bool file_audio_enable_output(int output_device) {
     return true;
 }
 
+void file_audio_set_repeat(bool enabled) {
+    fileAudioRepeat.store(enabled, std::memory_order_release);
+}
+
 bool file_audio_has_output_clock() {
     return fileAudioActive.load(std::memory_order_acquire) &&
            fileAudioOutput != nullptr && fileAudioOutput->is_configured();
@@ -384,7 +415,7 @@ bool file_audio_has_output_clock() {
 double file_audio_playback_time() {
     if (!file_audio_has_output_clock())
         return 0.0;
-    return static_cast<double>(fileAudioOutput->position()) /
+    return static_cast<double>(fileAudioOutput->total_position()) /
            static_cast<double>(FILE_AUDIO_SAMPLE_RATE);
 }
 
@@ -399,8 +430,13 @@ void file_audio_process_frame(double video_fps, acmx2::audio::AudioAnalyzer &ana
         playbackPos = fileAudioOutput->position();
 
     if (playbackPos >= decodedSamples.size()) {
-        fileAudioActive = false;
-        return;
+        if (fileAudioRepeat.load(std::memory_order_acquire)) {
+            playbackPos = 0;
+            framePlaybackPos = 0.0;
+        } else {
+            fileAudioActive = false;
+            return;
+        }
     }
 
     const double samples_per_frame =
@@ -455,4 +491,5 @@ void file_audio_close() {
     decodedSamples.shrink_to_fit();
     playbackPos = 0;
     framePlaybackPos = 0.0;
+    fileAudioRepeat.store(false, std::memory_order_release);
 }

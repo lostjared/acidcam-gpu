@@ -6263,8 +6263,9 @@ struct MXArguments {
     std::string record_audio_file;
     float record_gain = 1.0f;
     std::string audio_file;
-    bool audio_trunc = false; ///< When true, stop playback when file audio reaches the end.
-    int audio_buffers = 0;    ///< Requested spectrum-history array depth.
+    bool audio_trunc = false;  ///< When true, stop playback when file audio reaches the end.
+    bool audio_repeat = false; ///< When true, restart file audio from the beginning at EOF.
+    int audio_buffers = 0;     ///< Requested spectrum-history array depth.
 #endif
     bool silent = false;
 #ifdef MIDI_ENABLED
@@ -6455,6 +6456,7 @@ class ACView : public gl::GLObject {
     bool file_audio_mode = false;         ///< True when audio comes from a file instead of RtAudio.
     std::string audio_file_path;          ///< Path to the audio file used for file_audio_mode.
     bool audio_trunc_mode = false;        ///< When true, stop playback when file audio samples are exhausted.
+    bool audio_repeat_mode = false;       ///< When true, restart file audio when its samples are exhausted.
 
     /// Reset the startup envelope used to tame initial audio intensity.
     void resetAudioWarmupEnvelope() {
@@ -7479,6 +7481,8 @@ class ACView : public gl::GLObject {
                 file_audio_mode = true;
                 audio_file_path = args.audio_file;
                 audio_trunc_mode = args.audio_trunc;
+                audio_repeat_mode = args.audio_repeat;
+                file_audio_set_repeat(audio_repeat_mode);
                 audio_engine.analyzer().reset();
                 audio_engine.analyzer().set_sample_rate(44100);
                 audio_engine.analyzer().set_sensitivity(args.audio_sensitivty);
@@ -8429,39 +8433,48 @@ class ACView : public gl::GLObject {
 
         stopCaptureThread();
 
-        if (pboIds[0] && writer.is_open() && win_w > 0 && win_h > 0) {
-            for (int i = 0; i < 2; i++) {
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[i]);
-                GLubyte *src = static_cast<GLubyte *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
+        if (pboIds[0] && (writer.is_open() || png_video_mode) &&
+            recording_pbo_primed &&
+            win_w > 0 && win_h > 0) {
+            // Double-buffered readback always leaves exactly one completed
+            // recording frame pending. Flushing both PBOs duplicated the
+            // preceding frame and could make a duration-limited silent render
+            // exceed its configured maximum by one frame.
+            const int pending_pbo_index = pboNextIndex;
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pending_pbo_index]);
+            GLubyte *src = static_cast<GLubyte *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
 
-                if (src) {
-                    std::vector<unsigned char> pixels(win_w * win_h * 4);
-                    std::memcpy(pixels.data(), src, pixels.size());
-                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            if (src) {
+                std::vector<unsigned char> pixels(win_w * win_h * 4);
+                std::memcpy(pixels.data(), src, pixels.size());
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 
-                    std::vector<unsigned char> flipped_pixels(win_w * win_h * 4);
-                    for (int y = 0; y < win_h; ++y) {
-                        int src_row_start = y * win_w * 4;
-                        int dest_row_start = (win_h - 1 - y) * win_w * 4;
-                        std::copy(pixels.begin() + src_row_start,
-                                  pixels.begin() + src_row_start + (win_w * 4),
-                                  flipped_pixels.begin() + dest_row_start);
-                    }
-
-                    FrameData fd;
-                    fd.pixels = std::move(flipped_pixels);
-                    fd.width = win_w;
-                    fd.height = win_h;
-                    fd.isSnapshot = false;
-
-                    {
-                        std::lock_guard<std::mutex> lock(queueMutex);
-                        frameQueue.push(std::move(fd));
-                    }
-                    queueCondVar.notify_one();
+                std::vector<unsigned char> flipped_pixels(win_w * win_h * 4);
+                for (int y = 0; y < win_h; ++y) {
+                    int src_row_start = y * win_w * 4;
+                    int dest_row_start = (win_h - 1 - y) * win_w * 4;
+                    std::copy(pixels.begin() + src_row_start,
+                              pixels.begin() + src_row_start + (win_w * 4),
+                              flipped_pixels.begin() + dest_row_start);
                 }
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+                FrameData fd;
+                fd.pixels = std::move(flipped_pixels);
+                fd.width = win_w;
+                fd.height = win_h;
+                fd.isSnapshot = false;
+                fd.usesTimelineClock =
+                    recording_pbo_uses_timeline_clock[pending_pbo_index];
+                fd.timelineFrame =
+                    recording_pbo_timeline_frame[pending_pbo_index];
+
+                {
+                    std::lock_guard<std::mutex> lock(queueMutex);
+                    frameQueue.push(std::move(fd));
+                }
+                queueCondVar.notify_one();
             }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
@@ -9463,7 +9476,8 @@ class ACView : public gl::GLObject {
             return;
         }
 
-        if (duration_limit > 0.0 && media_timeline_started && writer.is_open() && writerRunning) {
+        if (duration_limit > 0.0 && media_timeline_started &&
+            (writer.is_open() || png_video_mode) && writerRunning) {
             double time_passed = 0.0;
             bool has_media_clock = false;
             if (filename.empty() && graphic.empty() && !no_drop_mode &&
@@ -9487,6 +9501,8 @@ class ACView : public gl::GLObject {
             if (time_passed >= duration_limit) {
                 if (silent_mode && !graphic.empty()) {
                     emitSilentGraphicsProgress(true);
+                } else if (silent_mode && !filename.empty()) {
+                    emitSilentVideoProgress(true);
                 }
                 mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
                 fflush(stdout);
@@ -10881,7 +10897,12 @@ class ACView : public gl::GLObject {
         }
 
         if (stop_after_recording_drain) {
+            // The EOF draw consumed the last valid PBO. The replacement
+            // readback contains the already-rendered final frame, not a new
+            // source frame, so it must not be flushed again at shutdown.
+            recording_pbo_primed = false;
             if (silent_mode) {
+                emitSilentVideoProgress(true);
                 std::cout << "\n";
             }
             running = false;
@@ -11002,52 +11023,10 @@ class ACView : public gl::GLObject {
                 frame_counter = static_cast<unsigned int>(cap.get(cv::CAP_PROP_POS_FRAMES));
             }
 
-            if (silent_mode && totalFrames > 0.0) {
-                int current_percent = static_cast<int>((static_cast<double>(frame_counter) / totalFrames) * 100.0);
-                // Emit progress at least every ~500 ms, and on every percent
-                // boundary, so the user sees continuous headless progress
-                // even when stdout is piped / redirected / captured by a
-                // logger (no TTY, so carriage-return tricks don't render).
-                // We always write newline-terminated lines for headless mode
-                // to guarantee each update is flushed through line-buffered
-                // pipes and visible in real time.
-                static auto lastProgressEmit = std::chrono::steady_clock::now();
-                bool percent_changed = (current_percent > last_progress_percent && current_percent <= 100);
-                bool time_elapsed = (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastProgressEmit).count() >= 500);
-                if (percent_changed || time_elapsed) {
-                    if (percent_changed) {
-                        last_progress_percent = current_percent;
-                    }
-                    lastProgressEmit = now;
-                    int64_t frames_written = png_video_mode ? static_cast<int64_t>(png_video_frame_counter.load()) : (writer.is_open() ? writer.get_frame_count() : 0);
-                    double elapsed_secs = static_cast<double>(frame_counter) / fps;
-                    uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600);
-                    uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60) % 60;
-                    uint64_t seconds = static_cast<uint64_t>(elapsed_secs) % 60;
-
-                    std::cout << "acmx2: [" << std::setw(3) << current_percent << "%] "
-                              << "Frame " << frame_counter << "/" << static_cast<int>(totalFrames)
-                              << " | Written: " << frames_written
-                              << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
-                              << std::setfill('0') << std::setw(2) << minutes << ":"
-                              << std::setfill('0') << std::setw(2) << seconds
-                              << std::setfill(' ');
-                    appendSilentProgressFileSize(std::cout);
-                    std::cout << "\n"
-                              << std::flush;
-                    if (current_percent >= 100 && png_video_mode) {
-                        // Drain the writer queue so all frames land on disk
-                        // before the window tears down, then confirm the total.
-                        {
-                            std::unique_lock<std::mutex> lock(queueMutex);
-                            queueCondVar.wait(lock, [this] { return frameQueue.empty() || !writerRunning; });
-                        }
-                        mx::system_out << "acmx2: complete — wrote "
-                                       << png_video_frame_counter.load()
-                                       << " PNG frames to: " << png_video_dir << "\n";
-                        fflush(stdout);
-                    }
-                }
+            if (silent_mode &&
+                (totalFrames > 0.0 ||
+                 (duration_limit > 0.0 && fps > 0.0))) {
+                emitSilentVideoProgress(false);
             } else if (silent_mode) {
                 // Fallback: input reports unknown frame count (e.g. some MKV
                 // / streaming containers). No percentage possible, so emit
@@ -11120,6 +11099,84 @@ class ACView : public gl::GLObject {
             }
         }
         frame_counter++;
+    }
+
+    /**
+     * @brief Emit progress for headless video rendering.
+     *
+     * When a duration limit is active, its frame boundary becomes the
+     * progress total if it occurs before source EOF. This makes a capped
+     * silent render finish at 100% instead of stopping partway through the
+     * input video's progress range.
+     *
+     * @param complete Force the final 100% progress update.
+     */
+    void emitSilentVideoProgress(bool complete) {
+        if (!silent_mode || filename.empty() || fps <= 0.0) {
+            return;
+        }
+
+        uint64_t expected_frames = totalFrames > 0.0
+                                       ? static_cast<uint64_t>(std::ceil(totalFrames))
+                                       : 0;
+        if (duration_limit > 0.0) {
+            const uint64_t duration_frames = std::max<uint64_t>(
+                1, static_cast<uint64_t>(std::ceil(duration_limit * fps)));
+            if (repeat || expected_frames == 0) {
+                expected_frames = duration_frames;
+            } else {
+                expected_frames = std::min(expected_frames, duration_frames);
+            }
+        }
+        if (expected_frames == 0) {
+            return;
+        }
+
+        const uint64_t current_frame =
+            duration_limit > 0.0 && repeat
+                ? static_cast<uint64_t>(frames_proc) + 1
+                : static_cast<uint64_t>(frame_counter);
+        const uint64_t processed_frames = complete
+                                              ? expected_frames
+                                              : std::min(current_frame,
+                                                         expected_frames);
+        int current_percent = static_cast<int>(
+            (static_cast<double>(processed_frames) / expected_frames) * 100.0);
+        if (!complete) {
+            current_percent = std::min(current_percent, 99);
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        const bool percent_changed = current_percent > last_progress_percent;
+        const bool time_elapsed =
+            last_video_progress_emit.time_since_epoch().count() == 0 ||
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - last_video_progress_emit)
+                    .count() >= 500;
+        if (!complete && !percent_changed && !time_elapsed) {
+            return;
+        }
+
+        last_progress_percent = current_percent;
+        last_video_progress_emit = now;
+        const int64_t frames_written =
+            png_video_mode
+                ? static_cast<int64_t>(png_video_frame_counter.load())
+                : (writer.is_open() ? writer.get_frame_count() : 0);
+        const double elapsed_secs = static_cast<double>(processed_frames) / fps;
+        const uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600.0);
+        const uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60.0) % 60;
+        const uint64_t seconds = static_cast<uint64_t>(elapsed_secs) % 60;
+
+        std::cout << "acmx2: [" << std::setw(3) << current_percent << "%] "
+                  << "Frame " << processed_frames << "/" << expected_frames
+                  << " | Written: " << frames_written
+                  << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
+                  << std::setw(2) << minutes << ":" << std::setw(2) << seconds
+                  << std::setfill(' ');
+        appendSilentProgressFileSize(std::cout);
+        std::cout << "\n"
+                  << std::flush;
     }
 
     /**
@@ -11895,6 +11952,7 @@ class ACView : public gl::GLObject {
     std::chrono::steady_clock::time_point media_timeline_start_time{};
     uint64_t last_graphics_progress_frame = 0;
     std::chrono::steady_clock::time_point last_graphics_progress_emit{};
+    std::chrono::steady_clock::time_point last_video_progress_emit{};
     bool recording_pbo_primed = false;
     uint64_t decoded_video_frame_count = 0;
     std::atomic<bool> finished{false};
@@ -12694,7 +12752,11 @@ class ACView : public gl::GLObject {
                     : source_video_duration;
         }
         std::ostringstream cmd;
-        cmd << "ffmpeg -y -i \"" << ofilename << "\" -i \"" << audio_file_path
+        cmd << "ffmpeg -y -i \"" << ofilename << "\"";
+        if (audio_repeat_mode) {
+            cmd << " -stream_loop -1";
+        }
+        cmd << " -i \"" << audio_file_path
             << "\" -map 0:v:0? -map 1:a:0?"
             << " -c:v copy -c:a aac -b:a 192k";
         if (mux_duration > 0.0) {
@@ -12707,6 +12769,7 @@ class ACView : public gl::GLObject {
         }
         cmd << " \"" << tmp_out << "\" 2>&1";
         mx::system_out << "acmx2: muxing audio file into video"
+                       << (audio_repeat_mode ? " (repeating)" : "")
                        << " (shortest stream"
                        << (mux_duration > 0.0
                                ? ", max " + std::to_string(mux_duration) + "s"
@@ -13096,7 +13159,7 @@ namespace {
         printSection(out, c, "Advanced Encoder Parameters", {{"--encode-params <string>", "Pass additional FFmpeg-style video encoder options through MXWrite.", "acmx2 --encode-codec hevc_nvenc --encode-params \"-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p\""}});
 
 #ifdef AUDIO_ENABLED
-        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--enable-audio-buffers <N>", "Allocate one sampler1DArray with N spectrum-history layers (GPU-limited).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
+        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.mp3"}, {"--audio-trunc", "Stop playback/output when the audio file reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-trunc"}, {"--audio-repeat", "Restart file audio from the beginning when it reaches EOF.", "acmx2 --audio-file soundtrack.mp3 --audio-repeat"}, {"--enable-audio-buffers <N>", "Allocate one sampler1DArray with N spectrum-history layers (GPU-limited).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
 #endif
 
 #ifdef MIDI_ENABLED
@@ -13220,6 +13283,7 @@ int main(int argc, char **argv) {
         .addOptionDouble(306, "audio-trunc", "Stop playback when the audio file reaches the end")
         .addOptionDoubleValue(307, "enable-audio-buffers", "Allocate a spectrum-history sampler1DArray with N layers")
         .addOptionDoubleValue(308, "audio-warm-rate", "Startup audio warmup rate (1/sec, default: 0.5)")
+        .addOptionDouble(309, "audio-repeat", "Restart audio file playback at the end")
 #endif
         .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
         .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
@@ -13582,6 +13646,9 @@ int main(int argc, char **argv) {
                 }
                 args.audio_warm_rate = rate;
             } break;
+            case 309:
+                args.audio_repeat = true;
+                break;
 #endif
             case 405:
                 args.silent = true;

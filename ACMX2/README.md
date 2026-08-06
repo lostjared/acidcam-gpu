@@ -607,6 +607,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
 | | `--audio-file` | `<file>` | Use audio from a file for reactivity instead of the microphone; the audio track is muxed into the output video |
 | | `--audio-trunc` | | Stop playback when the audio file reaches the end |
+| | `--audio-repeat` | | Restart audio file playback from the beginning when it reaches the end |
 | | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in `1/sec` (default: `0.5`; `0` disables warmup) |
 | | `--enable-audio-buffers` | `<N>` | Allocate one FFT history `sampler1DArray` with `N` GPU-limited layers |
 

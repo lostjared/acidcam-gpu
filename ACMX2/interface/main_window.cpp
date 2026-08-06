@@ -1996,6 +1996,7 @@ void MainWindow::menuAudioSettings() {
             audio_file = "";
         }
         audio_trunc = audio_set.isAudioTruncEnabled();
+        audio_repeat = audio_set.isAudioRepeatEnabled();
         audio_buffers_enabled = audio_set.isAudioBuffersEnabled();
         audio_buffer_frames = audio_set.getAudioBufferFrames();
         audio_warm_rate = audio_set.getAudioWarmRate();
@@ -2525,6 +2526,9 @@ void MainWindow::runSelected() {
         if (audio_trunc) {
             arguments << "--audio-trunc";
         }
+        if (audio_repeat) {
+            arguments << "--audio-repeat";
+        }
     }
 
     if (audio_available && audio_buffers_enabled) {
@@ -2748,6 +2752,9 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         arguments << "--audio-file" << audio_file;
         if (audio_trunc) {
             arguments << "--audio-trunc";
+        }
+        if (audio_repeat) {
+            arguments << "--audio-repeat";
         }
     }
 
@@ -3505,6 +3512,7 @@ void MainWindow::detectFeatureSupport() {
         audio_passthrough = false;
         audio_file.clear();
         audio_trunc = false;
+        audio_repeat = false;
     }
 
     if (midiSettingsAction) {
