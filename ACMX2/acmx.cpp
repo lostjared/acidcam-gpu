@@ -8,7 +8,7 @@
  * MIDI controller input, and video recording into a single real-time pipeline.
  *
  * @section arch Architecture Overview
- * - **TextureUploader** — True zero-copy CUDA↔OpenGL image interop (direct cudaArray binding) for GPU frames.
+ * - **TextureUploader** — Host-zero-copy CUDA↔OpenGL image interop (direct cudaArray binding) for GPU frames.
  * - **ShaderCache / ShaderLibrary** — Compile, cache, and manage GLSL shader programs.
  * - **FrameCache** — Ring-buffer of recent frames for temporal ("cache") shaders.
  * - **SnapshotThreadPool** — Async PNG snapshot writer.
@@ -2307,7 +2307,7 @@ class FrameCache {
 
 /**
  * @class TextureUploader
- * @brief True zero-copy CUDA-to-OpenGL texture transfer via direct image interop.
+ * @brief Host-zero-copy CUDA-to-OpenGL texture transfer via direct image interop.
  *
  * Registers the OpenGL texture directly with CUDA (cudaGraphicsGLRegisterImage)
  * so that a cv::cuda::GpuMat can be copied straight into the texture's backing
@@ -2317,7 +2317,8 @@ class FrameCache {
  *
  * The copy is issued on a dedicated CUDA stream so it does not serialise with
  * other default-stream work (e.g. the GPU filter chain that produced the
- * GpuMat); cudaGraphicsUnmapResources provides the GL↔CUDA synchronisation
+ * GpuMat). A CUDA event orders that copy after the producer's default-stream
+ * work, while cudaGraphicsUnmapResources provides the GL↔CUDA synchronisation
  * that subsequent OpenGL draws need.
  */
 class TextureUploader {
@@ -2326,6 +2327,7 @@ class TextureUploader {
 #ifdef ACMX2_WITH_CUDA
     cudaGraphicsResource *cudaTexResource = nullptr; ///< CUDA handle to the mapped GL texture.
     cudaStream_t uploadStream = nullptr;             ///< Dedicated stream for the device→array copy.
+    cudaEvent_t inputReadyEvent = nullptr;           ///< Orders the copy after GpuMat production.
 #endif
     int width = 0;  ///< Current texture width in pixels.
     int height = 0; ///< Current texture height in pixels.
@@ -2368,12 +2370,16 @@ class TextureUploader {
         if (!uploadStream) {
             CHECK_CUDA(cudaStreamCreateWithFlags(&uploadStream, cudaStreamNonBlocking));
         }
+        if (!inputReadyEvent) {
+            CHECK_CUDA(cudaEventCreateWithFlags(&inputReadyEvent,
+                                                cudaEventDisableTiming));
+        }
 #endif
     }
 
 #ifdef ACMX2_WITH_CUDA
     /**
-     * @brief Upload a CUDA GpuMat into the OpenGL texture (true zero-copy).
+     * @brief Upload a CUDA GpuMat into the OpenGL texture without a host copy.
      *
      * Steps:
      *  1. Map the GL texture as a cudaArray (cudaGraphicsMapResources).
@@ -2393,6 +2399,11 @@ class TextureUploader {
             init(gpuFrame.cols, gpuFrame.rows);
         }
         cudaArray_t texArray = nullptr;
+        // OpenCV CUDA calls in this pipeline and launch_filter() produce their
+        // output on the default stream. The uploader stream is nonblocking, so
+        // establish the dependency explicitly before reading gpuFrame.
+        CHECK_CUDA(cudaEventRecord(inputReadyEvent, nullptr));
+        CHECK_CUDA(cudaStreamWaitEvent(uploadStream, inputReadyEvent, 0));
         CHECK_CUDA(cudaGraphicsMapResources(1, &cudaTexResource, uploadStream));
         CHECK_CUDA(cudaGraphicsSubResourceGetMappedArray(&texArray, cudaTexResource, 0, 0));
         CHECK_CUDA(cudaMemcpy2DToArrayAsync(texArray, 0, 0,
@@ -2421,6 +2432,10 @@ class TextureUploader {
         if (uploadStream) {
             cudaStreamDestroy(uploadStream);
             uploadStream = nullptr;
+        }
+        if (inputReadyEvent) {
+            cudaEventDestroy(inputReadyEvent);
+            inputReadyEvent = nullptr;
         }
 #endif
         if (textureID) {
@@ -7678,6 +7693,7 @@ class ACView : public gl::GLObject {
     cv::cuda::GpuMat gpuWorkingBuffer;
     cv::cuda::GpuMat gpu_rotation_input;
     cv::cuda::GpuMat gpu_rotation_output;
+    cv::cuda::GpuMat onnxGpuOutput;
 #endif
     cv::Mat gpuFilteredFrame;
     unsigned char **d_ptrList = nullptr;
@@ -9665,6 +9681,9 @@ class ACView : public gl::GLObject {
                 rotate_frame(newFrame);
             }
         }
+#ifdef ACMX2_WITH_CUDA
+        bool onnxGpuFrameReady = false;
+#endif
 #ifdef ACMX2_WITH_DNN
         // Human segmentation pass (PPHS):
         //  * Default (--human only): isolate the person, blacken background,
@@ -9746,13 +9765,26 @@ class ACView : public gl::GLObject {
                 mx::system_err << "acmx2: Dexined inference error: " << e.what() << "\n";
             }
         }
-        // Generic ONNX pass: OnnxWrapper::proc() returns a ready-to-use BGR frame.
+        // Generic ONNX pass. When no CUDA filter needs a host frame, keep the
+        // final normalize/resize/colour conversion in VRAM and hand RGBA
+        // directly to TextureUploader below. GPU filters currently own a
+        // host-input frame history, so retain the BGR CPU path for that case.
         if (onnx_proc_model && !isFrozen && !input_is_hdr && !newFrame.empty()) {
             try {
-                cv::Mat onnx_out;
-                onnx_proc_model->proc(newFrame, onnx_out);
-                if (!onnx_out.empty())
-                    newFrame = onnx_out;
+#ifdef ACMX2_WITH_CUDA
+                const bool gpuFiltersNeedHostFrame =
+                    gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer;
+                if (!gpuFiltersNeedHostFrame)
+                    onnxGpuFrameReady =
+                        onnx_proc_model->procGpu(newFrame, onnxGpuOutput);
+                if (!onnxGpuFrameReady)
+#endif
+                {
+                    cv::Mat onnx_out;
+                    onnx_proc_model->proc(newFrame, onnx_out);
+                    if (!onnx_out.empty())
+                        newFrame = onnx_out;
+                }
             } catch (const cv::Exception &e) {
                 mx::system_err << "acmx2: OnnxWrapper inference error: " << e.what() << "\n";
             }
@@ -9824,7 +9856,11 @@ class ACView : public gl::GLObject {
             }
         } else if (!isFrozen && !newFrame.empty()) {
 #ifdef ACMX2_WITH_CUDA
-            if (gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
+            if (onnxGpuFrameReady) {
+                tex_uploader.update(onnxGpuOutput);
+                if (camera_texture != tex_uploader.textureID)
+                    camera_texture = tex_uploader.textureID;
+            } else if (gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer) {
                 gpu_frame_buffer->update(newFrame);
 
                 if (gpuWorkingBuffer.empty() || gpuWorkingBuffer.cols != newFrame.cols || gpuWorkingBuffer.rows != newFrame.rows) {

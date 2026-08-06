@@ -7,6 +7,9 @@
 
 #include <opencv2/core/mat.hpp>
 #include <opencv2/dnn/dnn.hpp>
+#ifdef ACMX2_WITH_CUDA
+#include <opencv2/core/cuda.hpp>
+#endif
 
 namespace ac_dnn {
 
@@ -20,6 +23,13 @@ namespace ac_dnn {
         OnnxWrapper &operator=(const OnnxWrapper &) = delete;
 
         void proc(const cv::Mat &image, cv::Mat &output);
+#ifdef ACMX2_WITH_CUDA
+        /// Postprocess directly into CUDA RGBA memory for OpenGL interop.
+        /// Returns false when the output shape is unsupported or the CUDA
+        /// postprocessing path is unavailable, allowing the caller to use
+        /// proc() as a portable fallback.
+        bool procGpu(const cv::Mat &image, cv::cuda::GpuMat &output);
+#endif
 
       private:
         struct Impl;

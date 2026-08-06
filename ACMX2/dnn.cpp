@@ -16,7 +16,9 @@
 #include <opencv2/imgproc.hpp>
 #ifdef ACMX2_WITH_CUDA
 #include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaarithm.hpp>
 #include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudawarping.hpp>
 #endif
 #include <yaml-cpp/yaml.h>
 
@@ -244,6 +246,11 @@ namespace ac_dnn {
 #ifdef ACMX2_WITH_CUDA
         cv::cuda::GpuMat gpuConverted;
         cv::cuda::GpuMat gpuSmoothed;
+        cv::cuda::GpuMat gpuResized;
+        cv::cuda::GpuMat gpuWork;
+        cv::cuda::GpuMat gpuOnes;
+        std::vector<cv::cuda::GpuMat> gpuPlanes{3};
+        bool cudaPostprocessingFailed = false;
 #endif
 
         explicit Impl(const std::string &yamlPath) {
@@ -378,23 +385,119 @@ namespace ac_dnn {
             return smoothed;
         }
 
+        cv::Mat forward(const cv::Mat &image) {
+            const cv::Size frameInputSize = resolveInputSize(image.size());
+            if (frameInputSize != activeInputSize) {
+                // A backend graph is specialized for its input dimensions.
+                // Re-run selection if a dynamic source changes shape.
+                if (!activeInputSize.empty())
+                    backend.selected = false;
+                activeInputSize = frameInputSize;
+            }
+            cv::dnn::blobFromImage(image, blob, scale, frameInputSize, mean,
+                                   swapRb, false, CV_32F);
+            return selectBackendAndForward(net, backend, blob, inputName,
+                                           outputName);
+        }
+
+#ifdef ACMX2_WITH_CUDA
+        const cv::cuda::GpuMat &smoothLowResolutionOutputGpu(
+            const cv::cuda::GpuMat &source) {
+            if (!bilateralSmoothing)
+                return source;
+            cv::cuda::bilateralFilter(
+                source, gpuSmoothed, bilateralDiameter,
+                static_cast<float>(bilateralSigmaColor),
+                static_cast<float>(bilateralSigmaSpace));
+            return gpuSmoothed;
+        }
+
+        void finishGpuOutput(const cv::cuda::GpuMat &source,
+                             const cv::Size &outputSize, int colorCode,
+                             cv::cuda::GpuMat &output) {
+            const cv::cuda::GpuMat &display =
+                smoothLowResolutionOutputGpu(source);
+            cv::cuda::resize(display, gpuResized, outputSize, 0, 0,
+                             cv::INTER_LINEAR);
+            cv::cuda::cvtColor(gpuResized, output, colorCode);
+        }
+
+        bool processGpu(const cv::Mat &image, cv::cuda::GpuMat &output) {
+            if (!loaded || inferenceFailed || cudaPostprocessingFailed ||
+                image.empty())
+                return false;
+
+            try {
+                const cv::Mat raw = forward(image);
+                if (multipleOutputs) {
+                    const cv::Mat plane = spatialPlane(raw);
+                    if (plane.empty())
+                        return false;
+
+                    gpuPlanes[0].upload(plane);
+                    cv::cuda::multiplyWithScalar(gpuPlanes[0],
+                                                 cv::Scalar::all(-1.0), gpuWork);
+                    cv::cuda::exp(gpuWork, gpuWork);
+                    cv::cuda::addWithScalar(gpuWork, cv::Scalar::all(1.0),
+                                            gpuWork);
+                    gpuOnes.create(gpuWork.size(), gpuWork.type());
+                    gpuOnes.setTo(cv::Scalar::all(1.0));
+                    cv::cuda::divide(gpuOnes, gpuWork, gpuPlanes[0]);
+                    cv::cuda::normalize(gpuPlanes[0], gpuConverted, 0, 255,
+                                        cv::NORM_MINMAX, CV_8U);
+                    finishGpuOutput(gpuConverted, image.size(),
+                                    cv::COLOR_GRAY2RGBA, output);
+                    return true;
+                }
+
+                if (raw.dims != 4 || raw.size[0] != 1 ||
+                    raw.type() != CV_32F)
+                    return false;
+                const int channels = raw.size[1];
+                const int height = raw.size[2];
+                const int width = raw.size[3];
+                if (channels == 1) {
+                    const cv::Mat plane(
+                        height, width, CV_32F,
+                        const_cast<float *>(raw.ptr<float>(0, 0)));
+                    gpuPlanes[0].upload(plane);
+                    cv::cuda::normalize(gpuPlanes[0], gpuConverted, 0, 255,
+                                        cv::NORM_MINMAX, CV_8U);
+                    finishGpuOutput(gpuConverted, image.size(),
+                                    cv::COLOR_GRAY2RGBA, output);
+                    return true;
+                }
+                if (channels < 3)
+                    return false;
+
+                for (int channel = 0; channel < 3; ++channel) {
+                    const cv::Mat plane(
+                        height, width, CV_32F,
+                        const_cast<float *>(raw.ptr<float>(0, channel)));
+                    gpuPlanes[channel].upload(plane);
+                }
+                cv::cuda::merge(gpuPlanes, gpuWork);
+                cv::cuda::normalize(gpuWork, gpuConverted, 0, 255,
+                                    cv::NORM_MINMAX, CV_8U);
+                finishGpuOutput(gpuConverted, image.size(),
+                                cv::COLOR_RGB2RGBA, output);
+                return true;
+            } catch (const cv::Exception &error) {
+                cudaPostprocessingFailed = true;
+                std::cerr << "acmx2: CUDA ONNX postprocessing failed; "
+                             "using CPU: "
+                          << error.what() << '\n';
+                return false;
+            }
+        }
+#endif
+
         void process(const cv::Mat &image, cv::Mat &output) {
             if (!loaded || inferenceFailed || image.empty())
                 return;
 
             try {
-                const cv::Size frameInputSize = resolveInputSize(image.size());
-                if (frameInputSize != activeInputSize) {
-                    // A backend graph is specialized for its input dimensions.
-                    // Re-run selection if a dynamic source changes shape.
-                    if (!activeInputSize.empty())
-                        backend.selected = false;
-                    activeInputSize = frameInputSize;
-                }
-                cv::dnn::blobFromImage(image, blob, scale, frameInputSize, mean,
-                                       swapRb, false, CV_32F);
-                const cv::Mat raw =
-                    selectBackendAndForward(net, backend, blob, inputName, outputName);
+                const cv::Mat raw = forward(image);
 
                 if (multipleOutputs) {
                     const cv::Mat plane = spatialPlane(raw);
@@ -455,6 +558,13 @@ namespace ac_dnn {
     void OnnxWrapper::proc(const cv::Mat &image, cv::Mat &output) {
         impl->process(image, output);
     }
+
+#ifdef ACMX2_WITH_CUDA
+    bool OnnxWrapper::procGpu(const cv::Mat &image,
+                              cv::cuda::GpuMat &output) {
+        return impl->processGpu(image, output);
+    }
+#endif
 
     struct Dexined::Impl {
         cv::dnn::Net net;
