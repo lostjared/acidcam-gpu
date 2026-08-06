@@ -52,6 +52,12 @@ AudioSettings::AudioSettings(QWidget *parent)
     outputDeviceComboBox = new QComboBox(this);
 
     populateAudioDevices();
+    outputDeviceComboBox->setEnabled(false);
+
+    connect(audioPassThroughCheckBox, &QCheckBox::toggled, this,
+            [this](bool checked) {
+                outputDeviceComboBox->setEnabled(checked);
+            });
 
     okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
@@ -294,6 +300,10 @@ void AudioSettings::updateAudioSourceControls() {
     audioPlaylistBrowseButton->setEnabled(playlistEnabled);
     audioTruncCheckBox->setEnabled(sourceEnabled);
     audioRepeatCheckBox->setEnabled(sourceEnabled);
+    if (sourceEnabled) {
+        audioPassThroughCheckBox->setChecked(true);
+        outputDeviceComboBox->setEnabled(true);
+    }
 
     // File and playlist audio replace microphone-specific input controls.
     // Pass-through and output selection remain available for playback.
