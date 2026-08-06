@@ -7,13 +7,14 @@ namespace acmx2::ipc {
 
     inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection";
     inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
-    inline constexpr std::uint32_t kShaderSelectionVersion = 7;
+    inline constexpr std::uint32_t kShaderSelectionVersion = 8;
     inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxGpuFilterCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxWatermarkText = 256;
     inline constexpr std::uint32_t kShaderSelectionMaxReloadPath = 1024;
     inline constexpr std::uint32_t kShaderSelectionMaxCustomUniforms = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxUniformName = 64;
+    inline constexpr std::uint32_t kShaderSelectionMaxAudioFilePath = 4096;
 
     struct ShaderSelectionShmData {
         std::uint32_t magic = kShaderSelectionMagic;
@@ -43,6 +44,13 @@ namespace acmx2::ipc {
         char custom_uniform_names[kShaderSelectionMaxCustomUniforms]
                                  [kShaderSelectionMaxUniformName] = {};
         float custom_uniform_values[kShaderSelectionMaxCustomUniforms] = {};
+        char audio_file_path[kShaderSelectionMaxAudioFilePath] = {};
+        std::int32_t audio_output_device = -1;
+        std::uint8_t audio_pass_through = 0;
+        std::uint8_t audio_trunc = 0;
+        std::uint8_t audio_repeat = 0;
+        std::uint8_t audio_reserved = 0;
+        std::uint32_t audio_file_sequence = 0;
         std::uint32_t sequence = 0;
     };
 

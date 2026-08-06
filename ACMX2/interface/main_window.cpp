@@ -1492,6 +1492,14 @@ void MainWindow::initShaderSelectionSharedMemory() {
                   '\0');
         std::fill(std::begin(shaderSelectionShm->custom_uniform_values),
                   std::end(shaderSelectionShm->custom_uniform_values), 0.0f);
+        std::fill(std::begin(shaderSelectionShm->audio_file_path),
+                  std::end(shaderSelectionShm->audio_file_path), '\0');
+        shaderSelectionShm->audio_output_device = -1;
+        shaderSelectionShm->audio_pass_through = 0;
+        shaderSelectionShm->audio_trunc = 0;
+        shaderSelectionShm->audio_repeat = 0;
+        shaderSelectionShm->audio_reserved = 0;
+        shaderSelectionShm->audio_file_sequence = 0;
         shaderSelectionShm->sequence = 0;
     }
     shaderSelectionSequence = shaderSelectionShm->sequence;
@@ -1980,6 +1988,7 @@ void MainWindow::menuAudioSettings() {
                                  tr("Audio support is unavailable: acmx2 was built without audio support."));
         return;
     }
+    const QString previousAudioFile = audio_file;
     AudioSettings audio_set(this);
     if (audio_set.exec() == QDialog::Accepted) {
         audio_enabled = audio_set.isAudioReactivityEnabled();
@@ -2001,6 +2010,35 @@ void MainWindow::menuAudioSettings() {
         audio_buffer_frames = audio_set.getAudioBufferFrames();
         audio_warm_rate = audio_set.getAudioWarmRate();
         Log("Audio Settings Saved");
+#if defined(__linux__) || defined(__APPLE__)
+        if (shaderSelectionShm && process &&
+            process->state() == QProcess::Running && !audio_file.isEmpty() &&
+            QFileInfo(audio_file).absoluteFilePath() !=
+                QFileInfo(previousAudioFile).absoluteFilePath()) {
+            const QByteArray path =
+                QFileInfo(audio_file).absoluteFilePath().toUtf8();
+            if (path.size() >=
+                static_cast<int>(
+                    acmx2::ipc::kShaderSelectionMaxAudioFilePath)) {
+                Log("Audio file path is too long for live playback: " +
+                    audio_file);
+            } else {
+                std::fill(std::begin(shaderSelectionShm->audio_file_path),
+                          std::end(shaderSelectionShm->audio_file_path), '\0');
+                std::copy(path.cbegin(), path.cend(),
+                          shaderSelectionShm->audio_file_path);
+                shaderSelectionShm->audio_output_device = audio_output;
+                shaderSelectionShm->audio_pass_through =
+                    audio_passthrough ? 1 : 0;
+                shaderSelectionShm->audio_trunc = audio_trunc ? 1 : 0;
+                shaderSelectionShm->audio_repeat = audio_repeat ? 1 : 0;
+                ++shaderSelectionShm->audio_file_sequence;
+                shaderSelectionShm->sequence = ++shaderSelectionSequence;
+                Log("Requested live audio-file change: " + audio_file +
+                    "<br>");
+            }
+        }
+#endif
     }
 }
 

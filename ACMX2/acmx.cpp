@@ -7779,6 +7779,7 @@ class ACView : public gl::GLObject {
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
     uint32_t shaderSelectionLastSequence = 0;
     uint32_t shaderReloadLastSequence = 0;
+    uint32_t audioFileLastSequence = 0;
 
     std::vector<ShaderManifestData::CustomUniform>
     customUniformsFromSharedMemory() const {
@@ -7839,6 +7840,7 @@ class ACView : public gl::GLObject {
 
         shaderSelectionLastSequence = shaderSelectionShm->sequence;
         shaderReloadLastSequence = shaderSelectionShm->reload_sequence;
+        audioFileLastSequence = shaderSelectionShm->audio_file_sequence;
         library.setCustomUniformValues(customUniformsFromSharedMemory());
     }
 
@@ -7873,6 +7875,44 @@ class ACView : public gl::GLObject {
         };
 
         library.setCustomUniformValues(customUniformsFromSharedMemory());
+
+        if (shaderSelectionShm->audio_file_sequence != audioFileLastSequence) {
+            audioFileLastSequence = shaderSelectionShm->audio_file_sequence;
+#ifdef AUDIO_ENABLED
+            const std::string requestedAudioPath = readBoundedText(
+                shaderSelectionShm->audio_file_path,
+                acmx2::ipc::kShaderSelectionMaxAudioFilePath);
+            if (!file_audio_mode) {
+                mx::system_err
+                    << "acmx2: Ignoring live audio-file change because this process "
+                       "was not started in audio-file mode\n";
+            } else if (requestedAudioPath.empty()) {
+                mx::system_err << "acmx2: Ignoring empty live audio-file request\n";
+            } else if (file_audio_open(requestedAudioPath)) {
+                audio_file_path = requestedAudioPath;
+                audio_output_device = shaderSelectionShm->audio_output_device;
+                audio_trunc_mode = shaderSelectionShm->audio_trunc != 0;
+                audio_repeat_mode = shaderSelectionShm->audio_repeat != 0;
+                file_audio_set_repeat(audio_repeat_mode);
+                audio_engine.analyzer().reset();
+                audio_engine.analyzer().set_sample_rate(44100);
+                resetAudioWarmupEnvelope();
+                if (shaderSelectionShm->audio_pass_through != 0 &&
+                    !file_audio_enable_output(audio_output_device)) {
+                    mx::system_err
+                        << "acmx2: Live audio-file output could not be opened; "
+                           "continuing with visual reactivity only\n";
+                }
+                mx::system_out << "acmx2: Switched file audio to: "
+                               << requestedAudioPath << "\n";
+            } else {
+                mx::system_err << "acmx2: Could not switch file audio to: "
+                               << requestedAudioPath << "\n";
+            }
+            mx::system_out.flush();
+            mx::system_err.flush();
+#endif
+        }
 
         if (shaderSelectionShm->reload_sequence != shaderReloadLastSequence) {
             shaderReloadLastSequence = shaderSelectionShm->reload_sequence;
