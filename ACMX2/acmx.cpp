@@ -6279,12 +6279,12 @@ struct MXArguments {
     bool png_output = false;                            ///< Video-file mode only: write PNG frames to a subdirectory instead of encoding video.
     int generate_interval = 0;                          ///< Save a PNG frame every N frames to a subdirectory (video or camera mode, 0 = disabled).
     bool no_drop = false;                               ///< In video mode, pace frame production to encoder throughput.
-    bool display_filter = false; ///< Display current shader/stack and GPU filter overlay in upper-left.
-    std::string watermark_text;  ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
-    int watermark_r = 255;       ///< Watermark red channel (0-255), default magenta-pink.
-    int watermark_g = 0;         ///< Watermark green channel (0-255).
-    int watermark_b = 150;       ///< Watermark blue channel (0-255).
-    bool interface_shm = false;  ///< Enable interface shared-memory control channel (Qt launcher use).
+    bool display_filter = false;                        ///< Display current shader/stack and GPU filter overlay in upper-left.
+    std::string watermark_text;                         ///< User watermark text (--use-watermark). When non-empty, watermark is enabled.
+    int watermark_r = 255;                              ///< Watermark red channel (0-255), default magenta-pink.
+    int watermark_g = 0;                                ///< Watermark green channel (0-255).
+    int watermark_b = 150;                              ///< Watermark blue channel (0-255).
+    bool interface_shm = false;                         ///< Enable interface shared-memory control channel (Qt launcher use).
     // User-configurable encoder quality (see EncodeOptions in mxwrite.hpp).
     EncodeOptions encode_opts{};
 };
@@ -9454,6 +9454,9 @@ class ACView : public gl::GLObject {
                 time_passed = static_cast<double>(frames_proc) / fps;
             }
             if (time_passed >= duration_limit) {
+                if (silent_mode && !graphic.empty()) {
+                    emitSilentGraphicsProgress(true);
+                }
                 mx::system_out << "acmx2: Duration limit reached (" << duration_limit << "s), stopping recording...\n";
                 fflush(stdout);
                 running = false;
@@ -10926,7 +10929,9 @@ class ACView : public gl::GLObject {
         auto now = std::chrono::steady_clock::now();
 
         if (!graphic.empty()) {
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate).count() >= 250) {
+            if (silent_mode) {
+                emitSilentGraphicsProgress(false);
+            } else if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate).count() >= 250) {
                 std::string timeStr = getTimeString();
                 int64_t currentFrames = getFrameCount();
 
@@ -11060,6 +11065,66 @@ class ACView : public gl::GLObject {
             }
         }
         frame_counter++;
+    }
+
+    /**
+     * @brief Emit bounded progress updates for duration-limited headless graphics rendering.
+     *
+     * Reports after approximately one second of output frames or 500 ms of
+     * wall time, whichever happens first. The duration limit provides the
+     * expected frame count and allows a final 100% update.
+     *
+     * @param complete Force the final 100% progress update.
+     */
+    void emitSilentGraphicsProgress(bool complete) {
+        if (!silent_mode || graphic.empty() || duration_limit <= 0.0 || fps <= 0.0) {
+            return;
+        }
+
+        const uint64_t expected_frames = std::max<uint64_t>(
+            1, static_cast<uint64_t>(std::ceil(duration_limit * fps)));
+        const uint64_t processed_frames = complete
+                                              ? expected_frames
+                                              : std::min<uint64_t>(
+                                                    static_cast<uint64_t>(frame_counter) + 1,
+                                                    expected_frames);
+        const uint64_t frame_interval = std::max<uint64_t>(
+            1, static_cast<uint64_t>(std::ceil(fps)));
+        const auto now = std::chrono::steady_clock::now();
+        const bool frame_interval_elapsed =
+            processed_frames >= last_graphics_progress_frame + frame_interval;
+        const bool time_interval_elapsed =
+            last_graphics_progress_emit.time_since_epoch().count() == 0 ||
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - last_graphics_progress_emit)
+                    .count() >= 500;
+
+        if (!complete && !frame_interval_elapsed && !time_interval_elapsed) {
+            return;
+        }
+
+        int percent = static_cast<int>(
+            (static_cast<double>(processed_frames) / expected_frames) * 100.0);
+        if (!complete) {
+            percent = std::min(percent, 99);
+        }
+
+        const double elapsed_secs = static_cast<double>(processed_frames) / fps;
+        const uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600.0);
+        const uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60.0) % 60;
+        const uint64_t seconds = static_cast<uint64_t>(elapsed_secs) % 60;
+        const int64_t frames_written = writer.is_open() ? writer.get_frame_count() : 0;
+
+        std::cout << "acmx2: [" << std::setw(3) << percent << "%] "
+                  << "Frame " << processed_frames << "/" << expected_frames
+                  << " | Written: " << frames_written
+                  << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
+                  << std::setw(2) << minutes << ":" << std::setw(2) << seconds
+                  << std::setfill(' ') << "\n"
+                  << std::flush;
+
+        last_graphics_progress_frame = processed_frames;
+        last_graphics_progress_emit = now;
     }
 
     /**
@@ -11755,6 +11820,8 @@ class ACView : public gl::GLObject {
     bool source_frame_ready = false;
     bool media_timeline_started = false;
     std::chrono::steady_clock::time_point media_timeline_start_time{};
+    uint64_t last_graphics_progress_frame = 0;
+    std::chrono::steady_clock::time_point last_graphics_progress_emit{};
     bool recording_pbo_primed = false;
     uint64_t decoded_video_frame_count = 0;
     std::atomic<bool> finished{false};
@@ -12939,7 +13006,7 @@ namespace {
         out << c.title << "\nArguments" << c.reset << "\n";
         out << c.example << "Short and long forms are equivalent; values shown in <> are required." << c.reset << "\n";
 
-        printSection(out, c, "General", {{"-v, -h, --help, --version", "Show this information screen and keyboard controls.", "acmx2 --help"}, {"-p <path>, --path <path>", "Set assets root directory (shaders, data files, defaults).", "acmx2 --path ./data"}, {"-r <WxH>, --resolution <WxH>", "Set output/window resolution (for display and recording).", "acmx2 --resolution 1920x1080"}, {"-N, --fullscreen", "Start in fullscreen mode (Escape to exit fullscreen).", "acmx2 --fullscreen"}, {"--silent", "Run headless (no preview window). Intended for file-to-file rendering.", "acmx2 -i in.mp4 -o out.mp4 --silent"}, {"--duration <seconds>", "Auto-stop recording/output after elapsed seconds.", "acmx2 -i in.mp4 -o out.mp4 --duration 30"}, {"--max-size <MB>", "Auto-stop when output file size exceeds MB.", "acmx2 -i in.mp4 -o out.mp4 --max-size 500.0"}});
+        printSection(out, c, "General", {{"-v, -h, --help, --version", "Show this information screen and keyboard controls.", "acmx2 --help"}, {"-p <path>, --path <path>", "Set assets root directory (shaders, data files, defaults).", "acmx2 --path ./data"}, {"-r <WxH>, --resolution <WxH>", "Set output/window resolution (for display and recording).", "acmx2 --resolution 1920x1080"}, {"-N, --fullscreen", "Start in fullscreen mode (Escape to exit fullscreen).", "acmx2 --fullscreen"}, {"--silent", "Run video or graphics-file rendering headlessly (no preview window).", "acmx2 -g image.png -o out.mp4 --duration 10 --silent"}, {"--duration <seconds>", "Auto-stop recording/output after elapsed seconds.", "acmx2 -i in.mp4 -o out.mp4 --duration 30"}, {"--max-size <MB>", "Auto-stop when output file size exceeds MB.", "acmx2 -i in.mp4 -o out.mp4 --max-size 500.0"}});
 
         printSection(out, c, "Input Source", {{"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"}, {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"}, {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"}, {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"}, {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"}, {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}});
 
@@ -14215,9 +14282,10 @@ int main(int argc, char **argv) {
         // Texture cache works in video, graphics, and camera modes.
 
         if (args.silent) {
-            if (args.filename.empty()) {
-                mx::system_err << "acmx2: Error: --silent mode requires a video input file (-i/--input)\n";
-                mx::system_err << "       Silent mode only works with video files, not camera or graphics input.\n";
+            if (args.filename.empty() && args.graphic_file.empty()) {
+                mx::system_err << "acmx2: Error: --silent mode requires a video (-i/--input) "
+                                  "or graphics (-g/--graphic) input file\n";
+                mx::system_err << "       Silent mode does not support camera input.\n";
                 mx::system_err.flush();
                 return EXIT_FAILURE;
             }
@@ -14226,9 +14294,9 @@ int main(int argc, char **argv) {
                 mx::system_err.flush();
                 return EXIT_FAILURE;
             }
-            if (!args.graphic_file.empty()) {
-                mx::system_err << "acmx2: Error: --silent mode cannot be used with graphics input (-g/--graphic)\n";
-                mx::system_err << "       Silent mode only works with video files.\n";
+            if (!args.graphic_file.empty() && args.duration <= 0.0) {
+                mx::system_err << "acmx2: Error: silent graphics mode requires a positive "
+                                  "maximum duration (--duration <seconds>)\n";
                 mx::system_err.flush();
                 return EXIT_FAILURE;
             }

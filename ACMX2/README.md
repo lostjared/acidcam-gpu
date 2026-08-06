@@ -577,7 +577,7 @@ The `.desktop` files include `StartupWMClass` entries so the correct icon appear
 | `--list-filters` | | List available GPU filters and exit |
 | `--list-cuda-devices` | | List available CUDA devices and exit |
 | `--disable-counter` | | Disable timer and FPS counter overlay |
-| `--silent` | | Process video without window. Only valid for `-i/--input` video files and requires `-o/--output`; camera and image input are not supported. |
+| `--silent` | | Process video or a graphics file without a window. Valid for `-i/--input` video and `-g/--graphic` image files; requires `-o/--output`. Graphics input also requires a positive `--duration`. Camera input is not supported. |
 
 ### 3D / Model Options
 
@@ -631,10 +631,13 @@ That gives you an end-to-end HDR round-trip: HDR in, effects in linear BT.2020, 
 
 ## Using `--silent` for Terminal Processing
 
-`--silent` is the headless transcoding mode. It creates an off-screen context, does not open a visible SDL window, and skips playback pacing so the job runs as fast as possible instead of real time.
+`--silent` is the headless rendering mode for video and graphics-file input. It creates an off-screen context, does not open a visible SDL window, and skips playback pacing so the job runs as fast as possible instead of real time. Because a graphics file has no natural end, silent graphics mode requires a positive `--duration`.
 
-- Use it only with `-i/--input` video files.
+While rendering a graphics file, headless mode prints progress after about one second of output frames or 500 ms of wall time, whichever occurs first, followed by a final 100% update.
+
+- Use it with `-i/--input` video files or `-g/--graphic` image files.
 - Always pair it with `-o/--output`.
+- Pair graphics input with a positive `--duration`.
 - Do not use it with camera capture or `-g/--graphic` image input.
 - Audio copy and mux steps still happen at the end when requested.
 
@@ -642,6 +645,12 @@ Typical use:
 
 ```bash
 ./acmx2 -p ./data -i input.mp4 -s ./shaders --shader 12 --silent -o output.mp4
+```
+
+Render ten seconds from a still image:
+
+```bash
+./acmx2 -p ./data -g image.png -s ./shaders --shader 12 --silent --duration 10 -o output.mp4
 ```
 
 HDR files use the same flag set and automatically stay in HDR:

@@ -391,7 +391,7 @@ steps above. ACMX2's high-frame-rate path requires the current `libmx2`
 | `--list-cuda-devices` | | List available CUDA devices and exit |
 | `--enumerate-device` | `<index>` | List supported resolutions and frame rates for a camera device (Linux only) |
 | `--disable-counter` | | Disable timer and FPS counter overlay |
-| `--silent` | | Process video without window. Only valid with `-i/--input` video files and requires `-o/--output`; camera and image input are rejected. |
+| `--silent` | | Process video or a graphics file without a window. Valid with `-i/--input` video or `-g/--graphic` image input and requires `-o/--output`; graphics input also requires a positive `--duration`, and camera input is rejected. |
 
 ### Texture Cache Options
 
@@ -472,10 +472,13 @@ In practice, SDR jobs still follow the H.264-first path, while HDR jobs are writ
 
 ## Using `--silent` in the Terminal
 
-`--silent` is the headless batch-processing mode for video files. It creates an off-screen OpenGL context, suppresses the visible SDL window, and skips display pacing so the file is processed as fast as decode, effects, and encode allow.
+`--silent` is the headless batch-processing mode for video and graphics files. It creates an off-screen OpenGL context, suppresses the visible SDL window, and skips display pacing so the file is processed as fast as decode, effects, and encode allow. Graphics input has no natural end, so silent graphics mode requires a positive `--duration`.
 
-- Use it only with `-i/--input` video files.
+While rendering a graphics file, headless mode prints progress after about one second of output frames or 500 ms of wall time, whichever occurs first, followed by a final 100% update.
+
+- Use it with `-i/--input` video files or `-g/--graphic` image files.
 - Always pair it with `-o/--output`.
+- Pair graphics input with a positive `--duration`.
 - Do not use it with camera capture or `-g/--graphic` image input.
 - Audio copy and mux steps still run after frame processing when you use options such as `--copy-audio`, `--audio-file`, or `--record-audio`.
 
@@ -483,6 +486,12 @@ Typical terminal usage:
 
 ```bash
 ./acmx2 -p ./data -i input.mp4 -s ./shaders -h 12 --silent -o output.mp4
+```
+
+Render ten seconds from a still image:
+
+```bash
+./acmx2 -p ./data -g image.png -s ./shaders -h 12 --silent --duration 10 -o output.mp4
 ```
 
 Silent HDR processing uses the same flag and keeps HDR active automatically:
