@@ -2,7 +2,7 @@
 #
 # Generate with:   doxygen Doxyfile
 #
-# Version 2.5.0 (August 2026)
+# Version 2.6.0 (August 2026)
 # Recent additions: ONNX model expansion (Bubble, Cartoon, Color Splash, Pencil Sketch, 
 # Custom Style Transfer, Edge Detection), FP16 optimization, Generic ONNX loading (--onnx),
 # Generate mode, PNG frame output, Audio animation mux, --black/--white point controls
@@ -11,7 +11,7 @@
 # Project
 #---------------------------------------------------------------------------
 PROJECT_NAME           = "ACMX2"
-PROJECT_NUMBER         = "2.5.0"
+PROJECT_NUMBER         = "2.6.0"
 PROJECT_BRIEF          = "Real-Time GPU-Accelerated Video Glitch Engine"
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = docs
@@ -67,7 +67,7 @@ REFERENCES_RELATION    = YES
 # HTML output — light Delphi/Borland theme
 #---------------------------------------------------------------------------
 GENERATE_HTML          = YES
-HTML_OUTPUT            = versions/2.5.0
+HTML_OUTPUT            = versions/2.6.0
 HTML_EXTRA_STYLESHEET  = doxygen-custom.css
 HTML_COLORSTYLE        = LIGHT
 HTML_COLORSTYLE_HUE    = 220

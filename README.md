@@ -111,9 +111,41 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 
 ## Revisions
 
-### Version 2.5.0 (August 2026)
+### Version 2.6.0 (August 2026)
 
-From the latest `acidcam-gpu` commits, current focus areas include:
+#### August 6
+
+- **Repeatable file audio**: `--audio-repeat` restarts an audio file at EOF for
+  continuous reactive playback. The Qt Audio Settings window exposes a
+  persistent Repeat checkbox, keeps it mutually exclusive with Audio Truncate,
+  and forwards the option to both preview and recording runs.
+- **DeepDream model bundle**: the repository now includes `ddream.onnx` plus
+  YAML presets for 256, 512, 768, and 1024-pixel inference. The sized presets
+  use dynamic, four-pixel-aligned input dimensions so the same model can be
+  selected at different quality and performance points.
+- **Faster generic ONNX display path**: CUDA builds can keep ONNX
+  normalization, optional bilateral smoothing, resize, and RGBA conversion in
+  GPU memory, then send the result directly to the OpenGL texture uploader.
+  Models or configurations unsupported by that route automatically retain the
+  portable CPU fallback, and CUDA filters continue to use their required host
+  frame path.
+- **CUDA ONNX correctness and synchronization**: multi-channel model output is
+  flattened for global min/max normalization before its RGB shape is restored,
+  matching CPU behavior. A CUDA event now orders default-stream processing
+  before the asynchronous CUDA-to-OpenGL upload stream reads the frame.
+- **Version 2.6.0 metadata**: CMake, runtime version headers, Doxygen output,
+  release documentation, and Flatpak release metadata now identify 2.6.0.
+
+#### August 5
+
+- **Silent still-image rendering**: `--silent` now accepts `-g/--graphic`
+  input as well as video. Still images require `-o/--output` and a positive
+  `--duration`; rendering uses the off-screen context, runs without display
+  pacing, reports periodic encoded progress, and finishes with a 100% update.
+- **Deterministic normalized shader time**: `--normalized` advances `time_f`
+  by `time-speed / FPS` for each rendered frame instead of elapsed wall time.
+  Qt exposes the persistent **Playback > Normalized Time** action and can
+  toggle it live through the existing shared-memory runtime channel.
 
 - **Persistent launch settings**: camera/video/graphics mode, camera device,
   input and output files, capture and window resolution, FPS, recording,
@@ -379,6 +411,7 @@ steps above. ACMX2's high-frame-rate path requires the current `libmx2`
 | | `--build` | `<path>` | Build shader cache for specified library path and exit |
 | | `--no-cache` | | Disable shader caching (always recompile shaders) |
 | | `--time-speed` | `<float>` | Constant `time_f` speed multiplier (default: `1.0`) |
+| | `--normalized` | | Advance `time_f` by `time-speed / FPS` per rendered frame instead of elapsed wall time |
 | | `--cross-fade` | `<seconds>` | Crossfade duration in seconds when switching playlist shaders (default: `0.5`) |
 
 ### GPU Filter Options
@@ -433,6 +466,14 @@ steps above. ACMX2's high-frame-rate path requires the current `libmx2`
 | `--black` | `<point>` | Mask black point / shadow crush threshold for color adjustment (default: 0.35) |
 | `--white` | `<point>` | Mask white point / opacity saturation threshold for color adjustment (default: 0.75) |
 
+The bundled DeepDream model can be selected at several inference sizes. Larger
+presets retain more detail but require more processing time and GPU memory:
+
+```bash
+./acmx2 -i input.mp4 --onnx ../models/ddream-512.yaml -o output.mp4
+./acmx2 -g image.png --onnx ../models/ddream-1024.yaml --silent --duration 10 -o output.mp4
+```
+
 ### Audio Options (requires `AUDIO_ENABLED` build)
 
 | Short | Long | Value | Description |
@@ -446,6 +487,9 @@ steps above. ACMX2's high-frame-rate path requires the current `libmx2`
 | | `--list-devices` | | List audio devices and exit |
 | | `--record-audio` | `<file>` | Record captured audio to WAV, mux it in sync with video, then remove it after a successful mux |
 | | `--record-gain` | `<float>` | Recording volume gain `0.0`–`2.0` (default: `1.0`) |
+| | `--audio-file` | `<file>` | Use an audio file for shader reactivity instead of microphone input |
+| | `--audio-trunc` | | Stop playback when the audio file reaches EOF |
+| | `--audio-repeat` | | Restart audio file playback from the beginning at EOF; mutually exclusive with `--audio-trunc` in Qt |
 | | `--audio-warm-rate` | `<float>` | Startup audio warmup rate in `1/sec` (default: `0.5`; `0` disables warmup) |
 | | `--enable-audio-buffers` | `<N>` | Allocate one FFT history `sampler1DArray` with `N` GPU-limited layers |
 
@@ -479,7 +523,7 @@ While recording, headless progress lines include the current encoded output file
 - Use it with `-i/--input` video files or `-g/--graphic` image files.
 - Always pair it with `-o/--output`.
 - Pair graphics input with a positive `--duration`.
-- Do not use it with camera capture or `-g/--graphic` image input.
+- Do not use it with camera capture.
 - Audio copy and mux steps still run after frame processing when you use options such as `--copy-audio`, `--audio-file`, or `--record-audio`.
 
 Typical terminal usage:

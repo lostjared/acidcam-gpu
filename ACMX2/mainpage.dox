@@ -190,7 +190,41 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 
 @subsection updates_2026_08 August 2026 (Month to Date)
 
-<b>Version 2.5.0 interface, graphics, and shader-cache updates</b>
+<b>Version 2.6.0 interface, graphics, and shader-cache updates</b>
+
+<b>August 6: audio, DeepDream, and CUDA ONNX updates</b>
+
+- <tt>--audio-repeat</tt> restarts file-audio playback at EOF for continuous
+  shader reactivity. Qt Audio Settings adds a persisted Repeat checkbox,
+  makes Repeat and Audio Truncate mutually exclusive, and forwards the state
+  to preview and recording commands.
+- The model bundle includes <tt>ddream.onnx</tt> and DeepDream YAML presets for
+  256, 512, 768, and 1024-pixel inference. The sized configurations enable
+  dynamic, four-pixel-aligned input dimensions so users can select an
+  appropriate quality/performance point without changing models.
+- On CUDA builds, generic ONNX postprocessing can keep normalization, optional
+  bilateral smoothing, resize, and RGBA conversion in VRAM and pass the result
+  directly to the CUDA/OpenGL texture uploader. Unsupported output shapes or a
+  CUDA postprocessing failure fall back to the portable CPU route; an active
+  CUDA filter chain retains its required host-frame path.
+- Multi-channel CUDA ONNX output is reshaped to one channel for global min/max
+  normalization and restored to RGB afterward, matching CPU
+  <tt>cv::normalize</tt> behavior.
+- A CUDA event now orders OpenCV/default-stream frame production before the
+  nonblocking CUDA-to-OpenGL upload stream consumes the frame.
+- CMake, runtime version headers, Doxygen output, release documentation, and
+  Flatpak release metadata were advanced to version 2.6.0.
+
+<b>August 5: headless graphics and deterministic time</b>
+
+- Silent mode now renders either video input or a still image without a visible
+  window. Graphics input requires an output file and a positive
+  <tt>--duration</tt>, uses the off-screen rendering path without display
+  pacing, prints periodic encoded progress, and emits a final 100% update.
+- <tt>--normalized</tt> advances <tt>time_f</tt> by
+  <tt>time-speed / FPS</tt> once per rendered frame instead of using elapsed
+  wall time. <b>Playback &gt; Normalized Time</b> persists the Qt selection and
+  can update a running engine through shared memory.
 
 - The Qt launcher restores persisted session values during application startup,
   including input mode, camera device, input/output files, capture and window
@@ -1138,6 +1172,7 @@ appears in the dock while the application is running.
 |       | `--build`        | `<path>`    | Build shader cache and exit |
 |       | `--no-cache`     |             | Disable shader caching |
 |       | `--time-speed`   | `<float>`   | time_f speed multiplier (default: 1.0) |
+|       | `--normalized`   |             | Advance time_f by <tt>time-speed / FPS</tt> per rendered frame instead of elapsed wall time |
 |       | `--cross-fade`   | `<seconds>` | Crossfade duration when switching playlist shaders (default: 0.5) |
 
 @subsection cli_gpu GPU Filter Options
@@ -1149,7 +1184,7 @@ appears in the dock while the application is running.
 | `--list-cuda-devices` |         | List available CUDA devices and exit |
 | `--enumerate-device` | `<index>` | List supported resolutions and frame rates for a camera device (Linux only) |
 | `--disable-counter` |           | Disable timer and FPS counter overlay |
-| `--silent`        |             | Process video without window; only valid for `-i/--input` video files and requires `-o/--output` |
+| `--silent`        |             | Process video or graphics input without a visible window; requires output, and graphics input also requires a positive duration |
 
 @subsection cli_texture_cache Texture Cache Options
 | Long              | Value       | Description |
@@ -1185,6 +1220,16 @@ appears in the dock while the application is running.
 | `--onnx`          | `<file>`    | Load an ONNX model from a YAML configuration file |
 | `--black`         | `<point>`   | Mask black point / shadow crush threshold (default 0.35) |
 | `--white`         | `<point>`   | Mask white point / opacity saturation threshold (default 0.75) |
+
+The bundled DeepDream model provides dynamic, four-pixel-aligned presets at
+256, 512, 768, and 1024-pixel inference sizes. Larger sizes retain more model
+detail at a higher processing and memory cost:
+
+@code{.sh}
+./acmx2 -i input.mp4 --onnx ../models/ddream-512.yaml -o output.mp4
+./acmx2 -g image.png --onnx ../models/ddream-1024.yaml \
+        --silent --duration 10 -o output.mp4
+@endcode
 
 @subsection shader_texture_array_cache sampler2DArray Texture History
 
