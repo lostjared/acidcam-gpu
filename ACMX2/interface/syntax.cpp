@@ -2,7 +2,12 @@
 
 GlslSyntaxHighlighter::GlslSyntaxHighlighter(QTextDocument *parent)
     : QSyntaxHighlighter(parent) {
-    initHighlightingRules();
+    initHighlightingRules(false);
+}
+
+void GlslSyntaxHighlighter::setEditorPalette(const QPalette &palette) {
+    initHighlightingRules(palette.color(QPalette::Base).lightnessF() > 0.5);
+    rehighlight();
 }
 
 void GlslSyntaxHighlighter::highlightBlock(const QString &text) {
@@ -35,7 +40,9 @@ void GlslSyntaxHighlighter::highlightBlock(const QString &text) {
     }
 }
 
-void GlslSyntaxHighlighter::initHighlightingRules() {
+void GlslSyntaxHighlighter::initHighlightingRules(bool lightTheme) {
+    m_highlightingRules.clear();
+
     QStringList keywordPatterns = {
         "\\bif\\b", "\\belse\\b", "\\bfor\\b", "\\bwhile\\b", "\\bdo\\b",
         "\\bbreak\\b", "\\bcontinue\\b", "\\breturn\\b", "\\bdiscard\\b",
@@ -48,7 +55,7 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
         "\\binvariant\\b", "\\bprecise\\b"};
 
     QTextCharFormat keywordFormat;
-    keywordFormat.setForeground(QColor(86, 156, 214));
+    keywordFormat.setForeground(lightTheme ? QColor(0, 60, 180) : QColor(86, 156, 214));
     keywordFormat.setFontWeight(QFont::Bold);
 
     for (const QString &pattern : keywordPatterns) {
@@ -78,7 +85,7 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
         "\\busampler1D\\b", "\\busampler2D\\b", "\\busampler3D\\b"};
 
     QTextCharFormat typeFormat;
-    typeFormat.setForeground(QColor(78, 201, 176));
+    typeFormat.setForeground(lightTheme ? QColor(0, 105, 95) : QColor(78, 201, 176));
     typeFormat.setFontWeight(QFont::Bold);
 
     for (const QString &pattern : typePatterns) {
@@ -130,7 +137,7 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
         "\\bpackHalf2x16\\b", "\\bunpackHalf2x16\\b", "\\bpackDouble2x32\\b", "\\bunpackDouble2x32\\b"};
 
     QTextCharFormat builtinFormat;
-    builtinFormat.setForeground(QColor(220, 220, 170));
+    builtinFormat.setForeground(lightTheme ? QColor(110, 55, 150) : QColor(220, 220, 170));
 
     for (const QString &pattern : builtinPatterns) {
         HighlightingRule rule;
@@ -158,7 +165,7 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
         "\\btrue\\b", "\\bfalse\\b"};
 
     QTextCharFormat constantFormat;
-    constantFormat.setForeground(QColor(181, 206, 168));
+    constantFormat.setForeground(lightTheme ? QColor(122, 62, 0) : QColor(181, 206, 168));
 
     for (const QString &pattern : constantPatterns) {
         HighlightingRule rule;
@@ -168,7 +175,7 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
     }
 
     QTextCharFormat preprocessorFormat;
-    preprocessorFormat.setForeground(QColor(155, 155, 155));
+    preprocessorFormat.setForeground(lightTheme ? QColor(80, 80, 80) : QColor(155, 155, 155));
     preprocessorFormat.setFontWeight(QFont::Bold);
 
     {
@@ -179,7 +186,7 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
     }
 
     QTextCharFormat numberFormat;
-    numberFormat.setForeground(QColor(181, 206, 168));
+    numberFormat.setForeground(lightTheme ? QColor(0, 90, 55) : QColor(181, 206, 168));
 
     {
         HighlightingRule rule;
@@ -189,7 +196,7 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
     }
 
     QTextCharFormat stringFormat;
-    stringFormat.setForeground(QColor(206, 145, 120));
+    stringFormat.setForeground(lightTheme ? QColor(163, 21, 21) : QColor(206, 145, 120));
 
     {
         HighlightingRule rule;
@@ -199,7 +206,7 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
     }
 
     QTextCharFormat singleLineCommentFormat;
-    singleLineCommentFormat.setForeground(QColor(106, 153, 85));
+    singleLineCommentFormat.setForeground(lightTheme ? QColor(63, 111, 32) : QColor(106, 153, 85));
     singleLineCommentFormat.setFontItalic(true);
 
     {
@@ -211,6 +218,6 @@ void GlslSyntaxHighlighter::initHighlightingRules() {
 
     m_commentStartPattern = QRegularExpression("/\\*");
     m_commentEndPattern = QRegularExpression("\\*/");
-    m_multiLineCommentFormat.setForeground(QColor(106, 153, 85));
+    m_multiLineCommentFormat.setForeground(lightTheme ? QColor(63, 111, 32) : QColor(106, 153, 85));
     m_multiLineCommentFormat.setFontItalic(true);
 }

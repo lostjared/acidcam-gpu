@@ -14,6 +14,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPainter>
+#include <QPalette>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -28,6 +29,20 @@
 
 // --- CustomTextEdit ---
 
+static QColor currentLineBackground(const QPalette &palette) {
+    const QColor base = palette.color(QPalette::Base);
+    const QColor text = palette.color(QPalette::Text);
+    const qreal textMix = base.lightnessF() > 0.5 ? 0.08 : 0.15;
+
+    auto blendChannel = [textMix](int baseChannel, int textChannel) {
+        return qRound(baseChannel + (textChannel - baseChannel) * textMix);
+    };
+
+    return QColor(blendChannel(base.red(), text.red()),
+                  blendChannel(base.green(), text.green()),
+                  blendChannel(base.blue(), text.blue()));
+}
+
 CustomTextEdit::CustomTextEdit(QWidget *parent) : QPlainTextEdit(parent) {
     m_lineNumberArea = new LineNumberArea(this);
 
@@ -38,6 +53,17 @@ CustomTextEdit::CustomTextEdit(QWidget *parent) : QPlainTextEdit(parent) {
 
     updateLineNumberAreaWidth(0);
     highlightCurrentLine();
+}
+
+void CustomTextEdit::changeEvent(QEvent *event) {
+    QPlainTextEdit::changeEvent(event);
+
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange ||
+        event->type() == QEvent::ApplicationPaletteChange) {
+        matchBrackets();
+        m_lineNumberArea->update();
+        emit themeChanged();
+    }
 }
 
 int CustomTextEdit::lineNumberAreaWidth() {
@@ -100,7 +126,7 @@ void CustomTextEdit::highlightCurrentLine() {
     QList<QTextEdit::ExtraSelection> extraSelections;
 
     QTextEdit::ExtraSelection selection;
-    selection.format.setBackground(QColor(40, 40, 50));
+    selection.format.setBackground(currentLineBackground(palette()));
     selection.format.setProperty(QTextFormat::FullWidthSelection, true);
     selection.cursor = textCursor();
     selection.cursor.clearSelection();
@@ -134,7 +160,7 @@ void CustomTextEdit::matchBrackets() {
 
     // Keep current line highlight
     QTextEdit::ExtraSelection lineSelection;
-    lineSelection.format.setBackground(QColor(40, 40, 50));
+    lineSelection.format.setBackground(currentLineBackground(palette()));
     lineSelection.format.setProperty(QTextFormat::FullWidthSelection, true);
     lineSelection.cursor = textCursor();
     lineSelection.cursor.clearSelection();
@@ -771,6 +797,10 @@ void TextEditor::init() {
     layout->addWidget(m_statusBar);
 
     m_highlighter = new GlslSyntaxHighlighter(m_textEdit->document());
+    m_highlighter->setEditorPalette(m_textEdit->palette());
+    connect(m_textEdit, &CustomTextEdit::themeChanged, this, [this]() {
+        m_highlighter->setEditorPalette(m_textEdit->palette());
+    });
 
     setLayout(layout);
     if (!restoreGeometry(editorSettings.value("editor/geometry").toByteArray()))

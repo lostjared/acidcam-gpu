@@ -34,7 +34,11 @@ class CustomTextEdit : public QPlainTextEdit {
     int lineNumberAreaWidth();
     void updateLineNumberAreaWidth(int newBlockCount);
 
+  signals:
+    void themeChanged();
+
   protected:
+    void changeEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 
