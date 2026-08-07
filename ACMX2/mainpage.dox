@@ -190,6 +190,21 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 
 @subsection updates_2026_08 August 2026 (Month to Date)
 
+<b>Version 2.6.1 interface and Flatpak updates</b>
+
+<b>August 7: theme-aware editor and optimized Flatpak</b>
+
+- The shader editor derives the current-line background from the active Qt
+  palette instead of applying a fixed near-black row. GLSL token colors select
+  a high-contrast light or dark palette and refresh when the application theme
+  changes, including in editor windows that are already open.
+- The x86_64 Flatpak builds OpenCV 4.12.0 with Intel IPP 2022.1.0 and its
+  integration wrappers. OpenCV retains runtime dispatch for SSE4, AVX,
+  AVX2/FMA, and AVX-512 on compatible processors. The package remains an
+  OpenGL build and does not include the optional CUDA filter stack.
+- CMake, runtime headers, Doxygen output, AppStream metadata, and the Flatpak
+  download page identify version 2.6.1.
+
 <b>Version 2.6.0 interface, graphics, and shader-cache updates</b>
 
 <b>August 6: audio, DeepDream, and CUDA ONNX updates</b>
@@ -558,6 +573,9 @@ display. New lines retain indentation and add one level after an opening brace;
 brackets and quotes are paired automatically. Tab and Shift+Tab apply
 four-space indentation, while smart Home moves between the first non-whitespace
 column and the beginning of the line.
+The active-line background and GLSL token colors adapt to light and dark
+interface palettes. Existing editor windows refresh their highlighting when
+the application theme changes.
 
 The Edit menu includes undo/redo, find next/previous, replace, Go to Line
 (<tt>Ctrl+G</tt>), duplicate line (<tt>Ctrl+D</tt>), toggle comment
@@ -670,7 +688,9 @@ selects a different destination.
 Download the portable, no-CUDA Linux package from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
 The package includes the Qt interface, RtAudio, MIDI support, the MIDI map
-utility, runtime data, playlists, and a ready-to-use shader collection.
+utility, runtime data, playlists, and a ready-to-use shader collection. Its
+x86_64 OpenCV 4.12.0 build includes Intel IPP 2022.1.0 and runtime SIMD
+dispatch for optimized CPU processing while keeping CUDA disabled.
 
 @subsection install_linux Prerequisites for Linux (NVIDIA GPU)
 

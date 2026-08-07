@@ -59,6 +59,17 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 
 ## August 2026 Updates (Month to Date)
 
+### Version 2.6.1: Theme-Aware Editor and Optimized Flatpak
+
+- The shader editor derives its active-line background from the current theme,
+  so source text remains readable with light and dark interface palettes.
+- GLSL keywords, types, built-ins, constants, preprocessors, numbers, strings,
+  and comments use separate high-contrast light and dark color sets. Open
+  editor windows refresh these colors when the application theme changes.
+- The x86_64 Flatpak builds OpenCV 4.12.0 with Intel IPP 2022.1.0 integration
+  and runtime CPU dispatch for SSE4, AVX, AVX2/FMA, and AVX-512. It remains a
+  portable OpenGL build without the optional CUDA filter stack.
+
 ### Live Shader Coding
 
 - Saving a shader from the built-in Qt editor now publishes a shared-memory reload request to the running ACMX2 process.
@@ -212,6 +223,8 @@ and matching-bracket highlighting, and a line/column status display. It
 automatically indents new blocks, inserts matching brackets and quotes, and
 supports smart Home, four-space Tab/Shift+Tab indentation, duplicate line
 (`Ctrl+D`), toggle comment (`Ctrl+/`), and move line (`Alt+Up`/`Alt+Down`).
+The current-line and syntax colors follow the active light or dark interface
+theme, including theme changes made while an editor window is open.
 
 The Edit and View menus also provide undo/redo, find next/previous, replace, Go
 to Line (`Ctrl+G`), selection indentation, font zoom, and persistent word-wrap,

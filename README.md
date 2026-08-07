@@ -111,6 +111,22 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 
 ## Revisions
 
+### Version 2.6.1 (August 2026)
+
+#### August 7
+
+- **Theme-aware shader editor**: the current-line background is derived from
+  the active editor palette instead of using a fixed dark color. GLSL syntax
+  colors switch between high-contrast light and dark palettes and refresh when
+  the interface theme changes.
+- **Optimized Flatpak OpenCV build**: the x86_64 Flatpak builds OpenCV 4.12.0
+  with Intel IPP 2022.1.0 and its integration wrappers enabled. OpenCV also
+  retains runtime CPU dispatch for SSE4, AVX, AVX2/FMA, and AVX-512 where the
+  host supports them; the package remains an OpenGL, no-CUDA build.
+- **Flatpak release refresh**: the 2.6.1 bundle, AppStream metadata, download
+  size, SHA-256 checksum, and documentation link are current on the release
+  page.
+
 ### Version 2.6.0 (August 2026)
 
 #### August 6
@@ -285,6 +301,8 @@ This project is developed and tested on **Bazzite Linux** using **Arch Linux** c
 
 For the portable Linux build with the Qt interface, RtAudio, MIDI support, and no
 CUDA requirement, visit the [ACMX2 Flatpak download page](https://lostsidedead.biz/acmx2/release).
+This x86_64 package includes an Intel IPP-optimized OpenCV build for accelerated
+CPU image processing on supported processors.
 
 ### Prerequisites
 * **GPU:** Any GPU with working OpenGL 3.3+ drivers (NVIDIA, AMD, Intel, or Apple Silicon). NVIDIA hardware is **optional** and only required if you want to enable the CUDA GPU-filter stack at compile time.
