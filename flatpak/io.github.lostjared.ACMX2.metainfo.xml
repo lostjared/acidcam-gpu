@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.lostjared.ACMX2</id>
+  <name>ACMX2 Interface</name>
+  <summary>Real-time video shader and glitch processing interface</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>BSD-2-Clause AND GPL-3.0-only</project_license>
+  <description>
+    <p>
+      ACMX2 is a real-time OpenGL video processing engine with a Qt interface.
+      This package includes the non-CUDA engine, live audio and MIDI support,
+      and the MIDI-map companion utility.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.lostjared.ACMX2.desktop</launchable>
+  <provides>
+    <binary>acmx2</binary>
+    <binary>acmx2_interface</binary>
+    <binary>midi-map</binary>
+  </provides>
+  <url type="homepage">https://github.com/lostjared/acidcam-gpu</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="2.6.1" date="2026-08-07">
+      <description>
+        <ul>
+          <li>Make shader-editor current-line and GLSL syntax colors adapt to light and dark interface themes.</li>
+          <li>Build OpenCV with Intel IPP 2022.1.0 and runtime SIMD dispatch for optimized x86_64 CPU processing.</li>
+          <li>Add a direct documentation link to the Flatpak release page.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2.6.0" date="2026-08-06">
+      <description>
+        <ul>
+          <li>Add sequential M3U/M3U8 audio playback with full-playlist repeat.</li>
+          <li>Add a Qt M3U playlist editor with ordering, sorting, shuffling, open, and save actions.</li>
+          <li>Show the current audible track filename in the playback HUD.</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -1,0 +1,169 @@
+app-id: io.github.lostjared.ACMX2
+runtime: org.kde.Platform
+runtime-version: '6.10'
+sdk: org.kde.Sdk
+command: acmx2_interface
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=all
+  - --filesystem=home
+  - --env=ACMX2_PATH=/app/share/acmx2
+  - --env=ACMX2_SHADER_PATH=/app/share/acmx2/shaders
+
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - '*.a'
+  - '*.la'
+
+modules:
+  - name: glm
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DGLM_BUILD_TESTS=OFF
+    sources:
+      - type: git
+        url: https://github.com/g-truc/glm.git
+        commit: 0af55ccecd98d4e5a8d1fad7de25ba429d60e863
+        disable-submodules: true
+
+  - name: SDL2_ttf
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DSDL2TTF_SAMPLES=OFF
+      - -DSDL2TTF_VENDORED=OFF
+    sources:
+      - type: git
+        url: https://github.com/libsdl-org/SDL_ttf.git
+        commit: 4a318f8dfaa1bb6f10e0c5e54052e25d3c7f3440
+        disable-submodules: true
+
+  - name: rtmidi
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DRTMIDI_BUILD_TESTING=OFF
+      - -DRTMIDI_BUILD_STATIC_LIBS=OFF
+      - -DRTMIDI_API_ALSA=ON
+      - -DRTMIDI_API_JACK=OFF
+    sources:
+      - type: git
+        url: https://github.com/thestk/rtmidi.git
+        commit: 1e5b49925aa60065db52de44c366d446a902547b
+        disable-submodules: true
+
+  - name: rtaudio
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DRTAUDIO_BUILD_TESTING=OFF
+      - -DRTAUDIO_BUILD_STATIC_LIBS=OFF
+      - -DRTAUDIO_API_ALSA=ON
+      - -DRTAUDIO_API_PULSE=ON
+      - -DRTAUDIO_API_JACK=OFF
+    sources:
+      - type: git
+        url: https://github.com/thestk/rtaudio.git
+        commit: b4f04903312e0e0efffbe77655172e0f060dc085
+        disable-submodules: true
+
+  - name: opencv
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      build-args:
+        - --share=network
+    config-opts:
+      - -DBUILD_LIST=core,imgproc,imgcodecs,videoio,highgui
+      - -DBUILD_TESTS=OFF
+      - -DBUILD_PERF_TESTS=OFF
+      - -DBUILD_EXAMPLES=OFF
+      - -DBUILD_opencv_apps=OFF
+      - -DBUILD_JAVA=OFF
+      - -DBUILD_opencv_python3=OFF
+      - -DWITH_CUDA=OFF
+      - -DWITH_IPP=ON
+      - -DWITH_FFMPEG=ON
+      - -DWITH_GSTREAMER=OFF
+      - -DWITH_GTK=ON
+      - -DWITH_QT=OFF
+      - -DWITH_1394=OFF
+    sources:
+      - type: git
+        url: https://github.com/opencv/opencv.git
+        commit: cbee6841638edb6fbc8110df7cd52bb8e3d66211
+        disable-submodules: true
+
+  - name: libmx2
+    buildsystem: cmake-ninja
+    builddir: true
+    subdir: libmx
+    config-opts:
+      - -DEXAMPLES=OFF
+      - -DOPENGL=ON
+      - -DMIXER=ON
+      - -DJPEG=ON
+      - -DVULKAN=OFF
+      - -DCV=OFF
+      - -DBUILD_STATIC_LIB=OFF
+    sources:
+      - type: git
+        url: https://github.com/lostjared/libmx2.git
+        commit: 371f0f53aa32b4f6edc400178c1bddaf40b246c7
+        disable-submodules: true
+
+  - name: acmx2-shaders
+    buildsystem: simple
+    build-commands:
+      - install -d /app/share/acmx2/shaders
+      - cp -a -- * /app/share/acmx2/shaders/
+    sources:
+      - type: git
+        url: https://github.com/lostjared/shaders.git
+        commit: 40090a127ce7ad8f37f9dcde5835a43e7da51ee2
+        disable-submodules: true
+
+  - name: acmx2
+    buildsystem: simple
+    build-commands:
+      - sed -i 's/set(LAUNCHER_MINOR_VERSION 5)/set(LAUNCHER_MINOR_VERSION 6)/' ACMX2/interface/CMakeLists.txt
+      - sed -i 's|/usr/local/share/acmx2|/app/share/acmx2|g' ACMX2/acmx.cpp ACMX2/interface/main_window.cpp
+      - sed -i '/VIDEO_ACCELERATION_DRM/d' ACMX2/acmx.cpp
+      - sed -i '/qputenv("QT_QPA_PLATFORM", "xcb");/d' ACMX2/interface/main.cpp
+      - cmake -S ACMX2 -B _build-acmx2 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app -DWITH_CUDA=OFF -DWITH_OPENCV_DNN=OFF -DAUDIO=ON -DMIDI=ON -DWEBP=OFF -DTIFF=OFF
+      - cmake --build _build-acmx2
+      - cmake --install _build-acmx2
+      - cmake -S ACMX2/interface -B _build-interface -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app
+      - cmake --build _build-interface
+      - cmake --install _build-interface
+      - cmake -S ACMX2/interface/midi-map -B _build-midi-map -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app
+      - cmake --build _build-midi-map
+      - cmake --install _build-midi-map
+      - install -d /app/share/acmx2/data /app/share/acmx2/playlist /app/share/applications /app/share/icons/hicolor/512x512/apps /app/share/metainfo /app/share/licenses/acmx2
+      - cp -a ACMX2/interface/data/. /app/share/acmx2/data/
+      - cp -a ACMX2/playlist/. /app/share/acmx2/playlist/
+      - install -Dm644 io.github.lostjared.ACMX2.desktop /app/share/applications/io.github.lostjared.ACMX2.desktop
+      - install -Dm644 io.github.lostjared.ACMX2.metainfo.xml /app/share/metainfo/io.github.lostjared.ACMX2.metainfo.xml
+      - install -Dm644 io.github.lostjared.ACMX2.png /app/share/icons/hicolor/512x512/apps/io.github.lostjared.ACMX2.png
+      - install -Dm644 LICENSE /app/share/licenses/acmx2/LICENSE
+      - install -Dm644 ACMX2/interface/LICENSE /app/share/licenses/acmx2/interface-LICENSE
+    sources:
+      - type: git
+        url: https://github.com/lostjared/acidcam-gpu.git
+        commit: 8d243b9d183bc0572c88e5bead068c174cd26cd3
+        disable-submodules: true
+      - type: file
+        path: io.github.lostjared.ACMX2.desktop
+      - type: file
+        path: io.github.lostjared.ACMX2.metainfo.xml
+      - type: file
+        path: io.github.lostjared.ACMX2.png

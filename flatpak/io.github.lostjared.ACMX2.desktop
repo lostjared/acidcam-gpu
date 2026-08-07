@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ACMX2 Interface
+Comment=Real-time video shader and glitch processing interface
+Exec=acmx2_interface
+Icon=io.github.lostjared.ACMX2
+Terminal=false
+Categories=AudioVideo;Video;
+StartupWMClass=acmx2_interface
