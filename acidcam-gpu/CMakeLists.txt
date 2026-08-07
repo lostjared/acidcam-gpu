@@ -61,11 +61,23 @@ if(NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "pkg-config not found. Please install pkg-config.")
 endif()
 
-find_package(MXWrite REQUIRED CONFIG)
-if(NOT MXWrite_FOUND)
-    message(FATAL_ERROR "MXWrite not found. Please ensure MXWrite is installed and CMAKE_PREFIX_PATH is set.")
+set(ACIDCAM_GPU_LOCAL_MXWRITE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite")
+if(NOT EXISTS "${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR
+        "The local MXWrite source tree was not found at ${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}. "
+        "acidcam-gpu requires the sibling MXWrite checkout and will not use an installed copy."
+    )
 endif()
-message(STATUS "MXWrite found: ${MXWrite_DIR}")
+
+add_subdirectory(
+    "${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}"
+    "${CMAKE_BINARY_DIR}/acidcam_gpu_mxwrite_build"
+    EXCLUDE_FROM_ALL
+)
+if(NOT TARGET mxwrite)
+    message(FATAL_ERROR "The local MXWrite project did not define the expected mxwrite target.")
+endif()
+message(STATUS "Using local MXWrite source: ${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}")
 
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libavcodec
@@ -82,7 +94,6 @@ message(STATUS "FFMPEG include dirs: ${FFMPEG_INCLUDE_DIRS}")
 set(CMAKE_REQUIRED_INCLUDES 
     ${OpenCV_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
-    ${MXWrite_INCLUDE_DIRS}
     ${FFMPEG_INCLUDE_DIRS}
 )
 
@@ -120,7 +131,7 @@ message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "CUDA Version: ${CUDAToolkit_VERSION}")
 message(STATUS "OpenCV Version: ${OpenCV_VERSION}")
 message(STATUS "FFMPEG: ${FFMPEG_LIBRARIES}")
-message(STATUS "MXWrite: ${MXWrite_DIR}")
+message(STATUS "MXWrite: ${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}")
 message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "========================================")
 message(STATUS "========================================")
@@ -147,7 +158,6 @@ target_include_directories(acidcam-gpu
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${OpenCV_INCLUDE_DIRS}
-        ${MXWrite_INCLUDE_DIRS}
         ${FFMPEG_INCLUDE_DIRS}
 )
 
@@ -155,7 +165,6 @@ target_link_libraries(acidcam-gpu
     PUBLIC
         ${OpenCV_LIBS}
         CUDA::cudart
-        MXWrite::mxwrite
     PRIVATE
         Threads::Threads
 )
@@ -182,6 +191,7 @@ target_include_directories(acidcam
 target_link_libraries(acidcam
     PRIVATE
         acidcam-gpu
+        mxwrite
         ${OpenCV_LIBS}
         CUDA::cudart
 )

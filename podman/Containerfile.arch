@@ -23,7 +23,7 @@ RUN pacman -S --noconfirm --needed \
 
 # ---- Step 4: SDL2 + Qt6 ----
 RUN pacman -S --noconfirm --needed \
-    sdl2 sdl2_ttf sdl2_mixer sdl2_image \
+    sdl2-compat sdl2_ttf sdl2_mixer sdl2_image \
     qt6-base qt6-tools qt6-multimedia \
     && rm -rf /var/cache/pacman/pkg/*
 
@@ -41,11 +41,15 @@ RUN pacman -S --noconfirm --needed \
 
 # Arch installs CUDA to /opt/cuda
 ENV PATH="/opt/cuda/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/cuda/lib64:/usr/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/cuda/lib64:/usr/local/lib:/usr/lib:${LD_LIBRARY_PATH}"
 ENV CUDACXX="/opt/cuda/bin/nvcc"
 
 # Limit parallel jobs to avoid OOM during CUDA compilation
 ENV BUILDJOBS=4
+
+# Override at build time for the target GPU, for example:
+#   --build-arg CUDA_ARCHITECTURES=86
+ARG CUDA_ARCHITECTURES=75
 
 # ---- Build & install libmx2 ----
 WORKDIR /opt/src
@@ -54,7 +58,7 @@ WORKDIR /opt/src/libmx2/libmx
 RUN cmake -S . -B build -G Ninja \
       -DEXAMPLES=OFF -DOPENGL=ON \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
     && cmake --build build -j${BUILDJOBS} \
     && cmake --install build \
     && ldconfig
@@ -67,8 +71,8 @@ RUN git clone --depth=1 https://github.com/lostjared/acidcam-gpu.git
 WORKDIR /opt/src/acidcam-gpu/acidcam-gpu
 RUN cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr \
-      -DCMAKE_CUDA_ARCHITECTURES="75" \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
     && cmake --build build -j${BUILDJOBS} \
     && cmake --install build \
     && ldconfig
@@ -78,8 +82,9 @@ WORKDIR /opt/src/acidcam-gpu/ACMX2
 RUN cmake -S . -B build -G Ninja \
       -DAUDIO=ON \
       -DMIDI=ON \
+      -DWITH_CUDA=ON \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
     && cmake --build build -j${BUILDJOBS} \
     && cmake --install build \
     && ldconfig
@@ -88,7 +93,7 @@ RUN cmake -S . -B build -G Ninja \
 WORKDIR /opt/src/acidcam-gpu/ACMX2/interface
 RUN cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
     && cmake --build build -j${BUILDJOBS} \
     && cmake --install build \
     && ldconfig
@@ -97,20 +102,28 @@ RUN cmake -S . -B build -G Ninja \
 WORKDIR /opt/src/acidcam-gpu/ACMX2/interface/midi-map
 RUN cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
     && cmake --build build -j${BUILDJOBS} \
     && cmake --install build \
     && ldconfig
 
-# ---- Download shader packs & models ----
+# ---- Check out shaders and download models ----
 WORKDIR /opt/src
-RUN mkdir -p files/shaders \
-    && cd files/shaders \
-    && curl -L https://lostsidedead.biz/acmx2/shaders.zip -o shaders.zip \
-    && unzip shaders.zip \
-    && cd .. \
-    && curl -L https://lostsidedead.biz/acmx2/models.zip -o models.zip \
-    && unzip models.zip
+RUN mkdir -p files \
+    && git clone --depth=1 https://github.com/lostjared/shaders.git files/shaders \
+    && curl --fail --location --retry 3 \
+      https://lostsidedead.biz/acmx2/models.zip -o files/models.zip \
+    && unzip -q files/models.zip -d files \
+    && rm files/models.zip
+
+# Fail the image build if any requested application was not installed.
+RUN test -x /usr/local/bin/acidcam \
+    && test -x /usr/local/bin/acmx2 \
+    && test -x /usr/local/bin/acmx2_interface \
+    && test -f /opt/src/files/shaders/index.txt
+
+ENV ACMX2_PATH=/usr/local/share/acmx2
+ENV ACMX2_SHADER_PATH=/opt/src/files/shaders
 
 WORKDIR /root
 CMD ["acmx2_interface"]

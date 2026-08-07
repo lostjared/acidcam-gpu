@@ -55,5 +55,5 @@ exec podman run -it \
     chmod 700 /tmp/xdg
     echo "Checking audio connection..."
     pactl info || echo "pactl failed, continuing anyway..."
-    exec /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface
+    exec acmx2_interface
   '

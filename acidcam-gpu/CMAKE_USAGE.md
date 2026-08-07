@@ -101,7 +101,9 @@ acidcam-gpu requires:
 - OpenCV
 - CUDA Toolkit
 - FFmpeg development libraries
-- MXWrite library
+
+The repository-local sibling `MXWrite/` tree is built automatically for the
+`acidcam` CLI; a system-installed MXWrite package is not required.
 
 Install these before building acidcam-gpu.
 

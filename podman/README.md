@@ -10,7 +10,7 @@ This directory contains everything needed to build and run ACMX2 inside a rootle
 
 | File | Purpose |
 |---|---|
-| `Containerfile.arch` | Multi-stage build definition — installs all dependencies, clones repositories, compiles all components |
+| `Containerfile.arch` | Container build definition — installs all dependencies, clones repositories, compiles all components |
 | `run-acmx2-arch.sh` | Launch script — grants X11/audio access, discovers video devices, passes the GPU through, and starts the container |
 
 ---
@@ -33,6 +33,18 @@ From inside this directory:
 ```bash
 podman build -f Containerfile.arch -t acmx2-arch:latest .
 ```
+
+The default CUDA architecture is `75` (Turing). Select the architecture for
+your GPU at build time when needed:
+
+```bash
+podman build -f Containerfile.arch -t acmx2-arch:latest \
+  --build-arg CUDA_ARCHITECTURES=86 .
+```
+
+Multiple architectures can be compiled into one image by quoting a
+semicolon-separated list, for example
+`--build-arg 'CUDA_ARCHITECTURES=75;86;89'`.
 
 The build is split into labelled steps and will take 20–40 minutes on first run because it compiles CUDA kernels. Subsequent builds use the layer cache and are much faster.
 
@@ -82,7 +94,7 @@ Installs the Arch community `opencv-cuda` package, which is pre-compiled against
 ```dockerfile
 # Step 4 — SDL2 + Qt6
 RUN pacman -S --noconfirm --needed \
-    sdl2 sdl2_ttf sdl2_mixer sdl2_image \
+    sdl2-compat sdl2_ttf sdl2_mixer sdl2_image \
     qt6-base qt6-tools qt6-multimedia
 ```
 SDL2 is used for the real-time OpenGL window and audio. Qt6 is used by the `acmx2_interface` GUI frontend.
@@ -112,9 +124,10 @@ Installs fonts and rebuilds the font cache so the Qt GUI renders text correctly.
 
 ```dockerfile
 ENV PATH="/opt/cuda/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/cuda/lib64:/usr/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/cuda/lib64:/usr/local/lib:/usr/lib:${LD_LIBRARY_PATH}"
 ENV CUDACXX="/opt/cuda/bin/nvcc"
 ENV BUILDJOBS=4
+ARG CUDA_ARCHITECTURES=75
 ```
 Sets CUDA paths and limits parallel compilation jobs to 4 to avoid out-of-memory kills during `nvcc` compilation. Increase `BUILDJOBS` if your machine has plenty of RAM.
 
@@ -138,11 +151,13 @@ Fetches the main project. All subsequent build steps work from this clone.
 ---
 
 ```dockerfile
-# Build & install MXWrite
-# Build & install acidcam-gpu library (CUDA heavy)
-#   -DCMAKE_CUDA_ARCHITECTURES="75"
+# Build acidcam-gpu library and CLI with the repository-local MXWrite
+#   -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}"
 ```
-Builds the GPU filter library. Architecture `75` targets Turing (RTX 2070/2080). Change this value if you have a different GPU generation:
+The CUDA project builds the sibling `MXWrite/` source tree as a private
+dependency of the `acidcam` CLI, so no system MXWrite package is required.
+Architecture `75` targets Turing (RTX 2070/2080); pass a different
+`CUDA_ARCHITECTURES` build argument for a different GPU generation:
 
 | GPU Generation | `CUDA_ARCHITECTURES` value |
 |---|---|
@@ -151,6 +166,8 @@ Builds the GPU filter library. Architecture `75` targets Turing (RTX 2070/2080).
 | Turing (RTX 20xx) | `75` |
 | Ampere (RTX 30xx) | `86` |
 | Ada Lovelace (RTX 40xx) | `89` |
+| Hopper | `90` |
+| Blackwell (RTX 50xx) | `120` |
 
 ---
 
@@ -164,16 +181,20 @@ Builds the command-line `acmx2` tool with audio support enabled, then the `acmx2
 ---
 
 ```dockerfile
-# Download shader packs & models
-RUN curl -L https://lostsidedead.biz/acmx2/shaders.zip ...
+# Check out shaders and download models
+RUN git clone --depth=1 https://github.com/lostjared/shaders.git files/shaders
 RUN curl -L https://lostsidedead.biz/acmx2/models.zip ...
 ```
-Downloads the pre-built shader and model packs from the project server into `/opt/src/files/`. These are required at runtime.
+Checks out the shader collection directly into `/opt/src/files/shaders` and
+downloads the model pack into `/opt/src/files/models`. The image exports
+`ACMX2_SHADER_PATH` and `ACMX2_PATH` so the CLI can locate the installed assets.
+In the GUI, select `/opt/src/files/shaders` as the shader directory the first
+time it starts.
 
 ---
 
 ```dockerfile
-CMD ["/opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface"]
+CMD ["acmx2_interface"]
 ```
 The default command starts the Qt GUI. Override this with `bash` to drop into an interactive shell instead.
 
@@ -331,7 +352,7 @@ Bind mounts:
     chmod 700 /tmp/xdg
     echo "Checking audio connection..."
     pactl info || echo "pactl failed, continuing anyway..."
-    exec /opt/src/acidcam-gpu/ACMX2/interface/build/acmx2_interface
+    exec acmx2_interface
   '
 ```
 Inside the container: creates the XDG runtime directory, verifies the PulseAudio connection, then `exec`s the ACMX2 Qt interface (replacing the shell so the process has PID 1 within the container init scope).
@@ -360,7 +381,7 @@ Anything placed in `~/container_share` on your host is accessible at `/root/shar
 
 | What to change | Where |
 |---|---|
-| Target GPU architecture | `Containerfile.arch` — `-DCMAKE_CUDA_ARCHITECTURES="75"` |
+| Target GPU architecture | Pass `--build-arg CUDA_ARCHITECTURES=<value>` to `podman build` |
 | Parallel build jobs | `Containerfile.arch` — `ENV BUILDJOBS=4` |
 | Select a specific GPU | `run-acmx2-arch.sh` — `--device nvidia.com/gpu=0` |
 | Disable camera passthrough | `run-acmx2-arch.sh` — remove the `VIDEO_DEVICES` loop and `$VIDEO_DEVICES` flag |

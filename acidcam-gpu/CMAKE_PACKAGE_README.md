@@ -8,7 +8,7 @@ This directory now includes complete CMake configuration files for using the aci
 
 1. **acidcam-gpuConfig.cmake.in**
    - Main package configuration file
-   - Finds dependencies (OpenCV, MXWrite, FFmpeg)
+   - Finds public dependencies (OpenCV and CUDA)
    - Imports the acidcam-gpu target
    - Sets backward compatibility variables
 
@@ -83,7 +83,7 @@ See CMAKE_USAGE.md for detailed instructions.
 The `acidcam-gpu::acidcam-gpu` imported target provides:
 - **INTERFACE_INCLUDE_DIRECTORIES**: Points to the installed header files
 - **IMPORTED_LOCATION**: Path to libacidcam-gpu.so
-- **INTERFACE_LINK_LIBRARIES**: Automatically links OpenCV, MXWrite, and FFmpeg
+- **INTERFACE_LINK_LIBRARIES**: Automatically links the public OpenCV and CUDA dependencies
 
 ## Key Improvements
 
