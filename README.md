@@ -126,6 +126,18 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 - **Flatpak release refresh**: the 2.6.1 bundle, AppStream metadata, download
   size, SHA-256 checksum, and documentation link are current on the release
   page.
+- **Reproducible CUDA container builds**: the Arch Podman image accepts a
+  `CUDA_ARCHITECTURES` build argument (default `75`), installs every component
+  under `/usr/local`, verifies the installed executables, and launches
+  `acmx2_interface` from `PATH`.
+- **Current container assets and dependencies**: the image uses Arch's
+  `sdl2-compat`, clones the maintained shader repository, downloads and
+  extracts the model pack, and exports the runtime shader/data paths.
+- **Repository-local MXWrite for acidcam-gpu**: the standalone CUDA project
+  builds the sibling `MXWrite/` source tree for the `acidcam` CLI. Consumers of
+  the installed `acidcam-gpu::acidcam-gpu` target inherit only its public
+  OpenCV and CUDA dependencies; a separately installed MXWrite package is no
+  longer required.
 
 ### Version 2.6.0 (August 2026)
 
@@ -880,9 +892,25 @@ podman build -t acmx2-arch:latest -f Containerfile.arch .
 ```
 
 > **Note:** The default CUDA architecture is `75` (Turing / RTX 20xx / GTX 16xx).
-> Edit `Containerfile.arch` if your GPU differs:
-> - RTX 30xx (Ampere): `86`
-> - RTX 40xx (Ada Lovelace): `89`
+> Select another architecture with a build argument instead of editing the
+> Containerfile:
+>
+> ```bash
+> podman build -t acmx2-arch:latest -f Containerfile.arch \
+>   --build-arg CUDA_ARCHITECTURES=86 .
+> ```
+>
+> Common values are `86` for RTX 30xx (Ampere), `89` for RTX 40xx (Ada),
+> `90` for Hopper, and `120` for RTX 50xx (Blackwell). To create one image for
+> several GPU generations, quote a semicolon-separated value such as
+> `--build-arg 'CUDA_ARCHITECTURES=75;86;89'`.
+
+The image builds the repository-local `MXWrite/` tree together with the
+standalone `acidcam` CLI, so it does not require a system MXWrite package. It
+installs `acidcam`, `acmx2`, and `acmx2_interface` under `/usr/local`, clones
+the maintained shader collection into `/opt/src/files/shaders`, and downloads
+the model pack into `/opt/src/files/models`. The first time the GUI starts,
+select `/opt/src/files/shaders` as its shader directory.
 
 ---
 

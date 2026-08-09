@@ -204,6 +204,19 @@ for building without CUDA on systems that lack an NVIDIA GPU.
   OpenGL build and does not include the optional CUDA filter stack.
 - CMake, runtime headers, Doxygen output, AppStream metadata, and the Flatpak
   download page identify version 2.6.1.
+- The Arch Podman image accepts <tt>CUDA_ARCHITECTURES</tt> at build time,
+  defaulting to compute capability 75. It installs the CUDA library, CLI,
+  engine, interface, and MIDI map utility under <tt>/usr/local</tt>, verifies
+  the installed programs, and launches <tt>acmx2_interface</tt> from
+  <tt>PATH</tt>.
+- The container uses Arch's <tt>sdl2-compat</tt>, clones the maintained shader
+  repository, downloads the model pack, and exports <tt>ACMX2_SHADER_PATH</tt>
+  and <tt>ACMX2_PATH</tt> for runtime asset discovery.
+- The standalone <tt>acidcam-gpu</tt> CMake project builds the sibling
+  <tt>MXWrite/</tt> source tree for its <tt>acidcam</tt> CLI. The installed
+  <tt>acidcam-gpu::acidcam-gpu</tt> target exposes only its public OpenCV and
+  CUDA dependencies, so downstream consumers do not need an installed
+  MXWrite package.
 
 <b>Version 2.6.0 interface, graphics, and shader-cache updates</b>
 
@@ -2143,7 +2156,11 @@ The project requires a specific dependency stack, and not all of it is available
 - <b>NVIDIA Proprietary Drivers:</b> v535 or newer. The CUDA runtime links against driver libraries at version-specific interfaces.
 - <b>CUDA Toolkit 12.x:</b> provides <tt>nvcc</tt>, <tt>cuda_runtime.h</tt>, <tt>cudaMalloc/cudaMemcpy/cudaDeviceSynchronize</tt>, and device code compilation.
 - <b>OpenCV 5 with CUDA support:</b> use Arch Linux's <tt>opencv-cuda</tt> package, an equivalent package on another distribution, or compile OpenCV from source with CUDA enabled and matching CUDA architecture flags. Installing the CUDA toolkit alone is not sufficient. This provides <tt>cv::cuda::GpuMat</tt>, <tt>cv::cuda::cvtColor</tt>, <tt>cv::cuda::printShortCudaDeviceInfo</tt>, and the <tt>cv::VideoCapture</tt> backend used in the CLI.
-- <b>libmx2 / MXWrite:</b> the MX2 ecosystem library provides MXMOD 3D model parsing and the MXWrite encoder wrapper around FFmpeg. Build and install <tt>libmx2</tt> first; ACMX2 now builds MXWrite from the local source tree via CMake.
+- <b>libmx2 / MXWrite:</b> libmx2 provides MXMOD 3D model parsing, while the
+  repository-local <tt>MXWrite/</tt> tree provides the FFmpeg writer. Build and
+  install <tt>libmx2</tt> first. The standalone <tt>acidcam-gpu</tt> project
+  builds its sibling MXWrite source for the <tt>acidcam</tt> CLI and does not
+  look for a system MXWrite package.
 - <b>Qt6:</b> required only for the ACMX2 Qt interface, not for the library or CLI.
 - <b>C++20 compiler:</b> the project uses <tt>std::format</tt>, <tt>std::filesystem</tt>, and other C++20 features throughout <tt>main_cv.cu</tt>.
 
@@ -2158,12 +2175,27 @@ The project requires a specific dependency stack, and not all of it is available
 @subsubsection explained_container_distribution_podman Container Distribution (Podman)
 
 
-The primary distribution mechanism for end users is a Podman container image: @htmlonly <a href="https://github.com/lostjared/acidcam-gpu/tree/main/podman">Podman Container file</a> @endhtmlonly. This automates the build process. To run it:
+The CUDA-enabled Podman recipe provides a reproducible Arch Linux build:
+@htmlonly <a href="https://github.com/lostjared/acidcam-gpu/tree/main/podman">Podman container files</a> @endhtmlonly.
+It requires an NVIDIA-equipped Linux host with the NVIDIA Container Toolkit.
+Build and run it with:
 
 - Host must have NVIDIA drivers and NVIDIA Container Toolkit for Podman installed.
-- <tt>podman build -t acmx2-arch:latest -f Containerfile.arch</tt>
-- The run script (<tt>podman/run-acmx2-arch.sh</tt>) passes GPU access, camera device (<tt>/dev/video0</tt>), audio device, and X11 display socket into the container so the app appears on the host desktop with full hardware access.
-- This approach means users on Bazzite, Arch, or other NVIDIA-equipped Linux systems can run a fully GPU-accelerated visual effects tool without any build steps.
+- From <tt>podman/</tt>, run
+  <tt>podman build -f Containerfile.arch -t acmx2-arch:latest .</tt>
+- Compute capability 75 is the default. Select another target with
+  <tt>--build-arg CUDA_ARCHITECTURES=86</tt>, or quote a semicolon-separated
+  list such as <tt>--build-arg 'CUDA_ARCHITECTURES=75;86;89'</tt> for a
+  multi-architecture image. Common values include 75 (Turing), 86 (Ampere),
+  89 (Ada), 90 (Hopper), and 120 (Blackwell).
+- The image builds the repository-local MXWrite source with the
+  <tt>acidcam</tt> CLI, installs all programs under <tt>/usr/local</tt>, clones
+  shaders into <tt>/opt/src/files/shaders</tt>, and extracts models beneath
+  <tt>/opt/src/files/models</tt>. Select the shader directory in the GUI on
+  first launch.
+- The run script (<tt>podman/run-acmx2-arch.sh</tt>) passes GPU access, all
+  detected <tt>/dev/video*</tt> devices, PulseAudio, and the X11 display socket
+  into the container, then launches the installed <tt>acmx2_interface</tt>.
 
 @subsubsection explained_development_environment Development Environment
 
