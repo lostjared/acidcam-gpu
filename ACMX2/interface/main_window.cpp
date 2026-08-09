@@ -211,7 +211,7 @@ namespace {
         auto skipBytes = [&](quint32 n) -> bool { return f.skip(n) == qint64(n); };
 
         constexpr quint32 CACHE_MAGIC = 0x53484452;
-        constexpr quint32 CACHE_VERSION = 3;
+        constexpr quint32 CACHE_VERSION = 4;
 
         quint32 magic = 0, version = 0;
         if (!readU32(magic) || !readU32(version))
@@ -236,6 +236,9 @@ namespace {
         for (quint32 i = 0; i < count; ++i) {
             QString name;
             if (!readStr(name))
+                return result;
+            quint8 shader_kind = 0;
+            if (!readU8(shader_kind) || shader_kind > 2)
                 return result;
             quint8 failed_flag = 0;
             if (!readU8(failed_flag))

@@ -2614,8 +2614,10 @@ class TextureUploader {
  * @struct ShaderCacheEntry
  * @brief One shader's precompiled binary data for the on-disk cache.
  *
- * Stores the GL program binary for both 2D and 3D vertex shaders, plus an
+ * Stores the GL program binary for a fragment or compute shader, plus an
  * FNV-1a hash of the source file so stale entries are detected on load.
+ * Fragment entries can contain both 2D and 3D variants; compute entries use
+ * binary_2d for their standalone program and use a 3D passthrough slot.
  */
 struct ShaderCacheEntry {
     std::string shader_name;     ///< Stem of the .glsl filename.
@@ -2624,9 +2626,10 @@ struct ShaderCacheEntry {
     std::vector<char> binary_3d; ///< GL program binary (3D vertex shader).
     GLenum format_3d = 0;        ///< GL binary format token for 3D.
     uint64_t source_hash = 0;    ///< FNV-1a-64 hash of the fragment source.
-    bool failed = false;         ///< True if this shader failed to compile;
-                                 ///< a passthrough program is substituted at load time
-                                 ///< to preserve the user-visible shader index.
+    ShaderProgramKind kind = ShaderProgramKind::Fragment;
+    bool failed = false; ///< True if this shader failed to compile;
+                         ///< a passthrough program is substituted at load time
+                         ///< to preserve the user-visible shader index.
 };
 
 /**
@@ -2640,7 +2643,7 @@ struct ShaderCacheEntry {
  */
 struct ShaderCache {
     static constexpr uint32_t CACHE_MAGIC = 0x53484452; ///< File magic: "SHDR".
-    static constexpr uint32_t CACHE_VERSION = 3;        ///< Current format version.
+    static constexpr uint32_t CACHE_VERSION = 4;        ///< Current format version.
     std::string gl_renderer;
     std::string gl_version;
     bool dual_mode = false;
@@ -2661,7 +2664,8 @@ struct ShaderCache {
      * |        | entries…             |
      *
      * Each string is written as a `uint32` length followed by raw bytes.
-     * Each entry contains: shader_name (string), source_hash (uint64),
+     * Each entry contains: shader_name (string), kind (uint8), failed (uint8),
+     * source_hash (uint64),
      * format_2d (GLenum), binary_2d (uint32 size + raw bytes),
      * format_3d (GLenum), binary_3d (uint32 size + raw bytes).
      *
@@ -2705,6 +2709,8 @@ struct ShaderCache {
 
         for (const auto &e : entries) {
             writeString(e.shader_name);
+            const uint8_t kind = static_cast<uint8_t>(e.kind);
+            file.write(reinterpret_cast<const char *>(&kind), sizeof(kind));
             uint8_t failed_flag = e.failed ? 1 : 0;
             file.write(reinterpret_cast<const char *>(&failed_flag), sizeof(failed_flag));
             file.write(reinterpret_cast<const char *>(&e.source_hash), sizeof(e.source_hash));
@@ -2766,6 +2772,11 @@ struct ShaderCache {
 
         for (auto &e : entries) {
             e.shader_name = readString();
+            uint8_t kind = 0;
+            file.read(reinterpret_cast<char *>(&kind), sizeof(kind));
+            if (kind > static_cast<uint8_t>(ShaderProgramKind::ComputeUnavailable))
+                return false;
+            e.kind = static_cast<ShaderProgramKind>(kind);
             uint8_t failed_flag = 0;
             file.read(reinterpret_cast<char *>(&failed_flag), sizeof(failed_flag));
             e.failed = (failed_flag != 0);
@@ -3509,7 +3520,7 @@ class ShaderLibrary {
         }
         glAttachShader(program, shader);
 #if !defined(__APPLE__)
-        if (use_cache && glProgramParameteri != nullptr) {
+        if (glProgramParameteri != nullptr) {
             glProgramParameteri(program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT,
                                 GL_TRUE);
         }
@@ -4806,6 +4817,9 @@ class ShaderLibrary {
         entry = {};
         entry.shader_name = std::filesystem::path(shader_file).stem().string();
         entry.source_hash = preparedFragmentHash(full_path);
+        entry.kind = isComputeShaderFile(shader_file)
+                         ? ShaderProgramKind::Compute
+                         : ShaderProgramKind::Fragment;
 
         const auto markFailed = [&](const std::string &reason) {
             entry.failed = true;
@@ -4840,6 +4854,28 @@ class ShaderLibrary {
         };
 
         try {
+            if (entry.kind == ShaderProgramKind::Compute) {
+                if (!compute_shader_supported) {
+                    entry.kind = ShaderProgramKind::ComputeUnavailable;
+                    markFailed("OpenGL 4.3 compute shaders are unavailable");
+                    return false;
+                }
+
+                std::string compute_error;
+                auto compute_program = makeComputeProgram(full_path, compute_error);
+                if (!compute_program) {
+                    markFailed(compute_error);
+                    return false;
+                }
+                if (!extractBinary(compute_program->id(), entry.binary_2d,
+                                   entry.format_2d)) {
+                    markFailed("could not extract compute program binary");
+                    return false;
+                }
+                entry.failed = false;
+                return true;
+            }
+
             gl::ShaderProgram program2d;
             program2d.setSilent(true);
             if (!loadProgramWithSize(&program2d, vert_2d, full_path)) {
@@ -4925,51 +4961,6 @@ class ShaderLibrary {
         if (!collectShaderLibraryEntries(library_path, shader_files, manifest_error)) {
             mx::system_err << "acmx2: " << manifest_error << "\n";
             return false;
-        }
-
-        const bool has_compute_shaders = std::any_of(
-            shader_files.begin(), shader_files.end(),
-            [](const std::string &file) { return isComputeShaderFile(file); });
-        if (has_compute_shaders) {
-            mx::system_out
-                << "acmx2: Compute shader library detected; validating sources "
-                   "without writing the fragment-only binary cache\n";
-            bool all_valid = true;
-            for (const std::string &shader_file : shader_files) {
-                const std::string full_path = library_path + "/" + shader_file;
-                if (isComputeShaderFile(shader_file)) {
-                    if (!compute_shader_supported) {
-                        mx::system_out << "acmx2: Skipping unsupported compute shader: "
-                                       << shader_file << "\n";
-                        continue;
-                    }
-                    std::string compute_error;
-                    if (!makeComputeProgram(full_path, compute_error)) {
-                        mx::system_err << "acmx2: " << compute_error << "\n";
-                        all_valid = false;
-                    }
-                    continue;
-                }
-
-                gl::ShaderProgram program_2d;
-                program_2d.setSilent(true);
-                if (!loadProgramWithSize(&program_2d, vert_2d, full_path)) {
-                    mx::system_err << "acmx2: Fragment shader validation failed: "
-                                   << shader_file << "\n";
-                    all_valid = false;
-                    continue;
-                }
-                if (dual_mode) {
-                    gl::ShaderProgram program_3d;
-                    program_3d.setSilent(true);
-                    if (!loadProgramWithSize(&program_3d, vert_3d, full_path)) {
-                        mx::system_err << "acmx2: 3D fragment shader validation failed: "
-                                       << shader_file << "\n";
-                        all_valid = false;
-                    }
-                }
-            }
-            return all_valid;
         }
 
         ShaderCache cache;
@@ -5087,6 +5078,17 @@ class ShaderLibrary {
             entry.source_hash = preparedFragmentHash(full_path);
             mx::system_out << "done\n";
             fflush(stdout);
+
+            if (isComputeShaderFile(shader_file)) {
+                const bool compiled = compileShaderCacheEntry(
+                    shader_file, full_path, vert_2d, vert_3d, false, entry);
+                cache.entries.push_back(std::move(entry));
+                mx::system_out
+                    << (compiled ? "  ✔ COMPUTE SUCCESS\n"
+                                 : "  ⚠ COMPUTE SKIPPED (passthrough placeholder)\n");
+                fflush(stdout);
+                continue;
+            }
 
             auto mark_failed = [&](const char *reason) {
                 entry.failed = true;
@@ -5398,9 +5400,15 @@ class ShaderLibrary {
         for (std::size_t i = 0; i < shader_files.size(); ++i) {
             const std::string fullPath = library_path + "/" + shader_files[i];
             const uint64_t currentHash = preparedFragmentHash(fullPath);
+            const ShaderProgramKind expectedKind = isComputeShaderFile(shader_files[i])
+                                                       ? (compute_shader_supported
+                                                              ? ShaderProgramKind::Compute
+                                                              : ShaderProgramKind::ComputeUnavailable)
+                                                       : ShaderProgramKind::Fragment;
             if (currentHash != cache.entries[i].source_hash ||
                 cache.entries[i].shader_name !=
-                    std::filesystem::path(shader_files[i]).stem().string()) {
+                    std::filesystem::path(shader_files[i]).stem().string() ||
+                cache.entries[i].kind != expectedKind) {
                 staleIndices.push_back(i);
             }
         }
@@ -5428,7 +5436,7 @@ class ShaderLibrary {
 
         mx::system_out << "acmx2: Loading " << cache.entries.size() << " shaders from cache...\n";
         fflush(stdout);
-        program_kinds.assign(cache.entries.size(), ShaderProgramKind::Fragment);
+        program_kinds.resize(cache.entries.size(), ShaderProgramKind::Fragment);
 
         static constexpr const char *kLogoVertC =
             "#version 330 core\n"
@@ -5520,6 +5528,9 @@ class ShaderLibrary {
 
         for (size_t i = 0; i < cache.entries.size(); ++i) {
             const auto &entry = cache.entries[i];
+            program_kinds[i] = entry.failed && entry.kind == ShaderProgramKind::Compute
+                                   ? ShaderProgramKind::ComputeUnavailable
+                                   : entry.kind;
 
             // If this entry was marked as failed when the cache was built,
             // substitute a passthrough program so the slot index stays
@@ -5556,6 +5567,8 @@ class ShaderLibrary {
                 glDeleteProgram(prog_id_2d);
                 programs_2d.pop_back();
                 ++binary_fail_count;
+                if (entry.kind == ShaderProgramKind::Compute)
+                    program_kinds[i] = ShaderProgramKind::ComputeUnavailable;
                 // Substitute passthrough to keep slot index valid.
                 if (!push_passthrough_2d(i, "2D binary load failed")) {
                     return false;
@@ -5659,20 +5672,6 @@ class ShaderLibrary {
         if (!loadShaderManifest(text, manifest, manifest_error))
             throw mx::Exception("acmx2: " + manifest_error);
         setCustomUniformValues(manifest.custom_uniforms);
-        const bool has_compute_shaders = std::any_of(
-            manifest.entries.begin(), manifest.entries.end(),
-            [](const std::string &entry) {
-                const auto normalized = normalizeShaderIndexEntry(entry);
-                return normalized && isComputeShaderFile(*normalized);
-            });
-        if (has_compute_shaders) {
-            mx::system_out
-                << "acmx2: Compute shaders present; using separate per-program "
-                   "fragment and compute binary caches\n";
-            clear();
-            loadPrograms(win, text, loadingFont);
-            return;
-        }
         std::string vert_2d = win->util.getFilePath("data/vert.glsl");
         std::string vert_3d = win->util.getFilePath("data/vertex.glsl");
         if (loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
