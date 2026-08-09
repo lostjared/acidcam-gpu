@@ -58,11 +58,14 @@ void ShaderPassDialog::setupUI() {
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     addButton = new QPushButton("Add →", this);
+    insertButton = new QPushButton("Insert", this);
+    insertButton->setToolTip("Replace the selected pass with the available shader.");
     removeButton = new QPushButton("← Remove", this);
     upButton = new QPushButton("↑ Up", this);
     downButton = new QPushButton("↓ Down", this);
     clearButton = new QPushButton("Clear All", this);
     buttonLayout->addWidget(addButton);
+    buttonLayout->addWidget(insertButton);
     buttonLayout->addWidget(removeButton);
     buttonLayout->addWidget(upButton);
     buttonLayout->addWidget(downButton);
@@ -97,6 +100,7 @@ void ShaderPassDialog::setupUI() {
     mainLayout->addLayout(dialogButtonLayout);
 
     connect(addButton, &QPushButton::clicked, this, &ShaderPassDialog::addShader);
+    connect(insertButton, &QPushButton::clicked, this, &ShaderPassDialog::insertShader);
     connect(removeButton, &QPushButton::clicked, this, &ShaderPassDialog::removeShader);
     connect(upButton, &QPushButton::clicked, this, &ShaderPassDialog::moveUp);
     connect(downButton, &QPushButton::clicked, this, &ShaderPassDialog::moveDown);
@@ -107,6 +111,9 @@ void ShaderPassDialog::setupUI() {
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(searchLineEdit, &QLineEdit::textChanged, this, &ShaderPassDialog::filterSearchChanged);
+    connect(selectedShadersList, &QListWidget::currentRowChanged, this, [this](int row) {
+        insertButton->setEnabled(enableCheckBox->isChecked() && row >= 0);
+    });
     connect(selectedShadersList, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem *item) {
                 if (item)
@@ -118,6 +125,7 @@ void ShaderPassDialog::setupUI() {
         selectedShadersList->setEnabled(checked);
         searchLineEdit->setEnabled(checked);
         addButton->setEnabled(checked);
+        insertButton->setEnabled(checked && selectedShadersList->currentRow() >= 0);
         removeButton->setEnabled(checked);
         upButton->setEnabled(checked);
         downButton->setEnabled(checked);
@@ -131,6 +139,7 @@ void ShaderPassDialog::setupUI() {
     selectedShadersList->setEnabled(false);
     searchLineEdit->setEnabled(false);
     addButton->setEnabled(false);
+    insertButton->setEnabled(false);
     removeButton->setEnabled(false);
     upButton->setEnabled(false);
     downButton->setEnabled(false);
@@ -185,6 +194,20 @@ void ShaderPassDialog::addShader() {
         item->setData(Qt::UserRole, shaderNameToIndex[shaderName]);
     }
     selectedShadersList->addItem(item);
+}
+
+void ShaderPassDialog::insertShader() {
+    const int currentRow = selectedShadersList->currentRow();
+    if (currentRow < 0 || shaderComboBox->currentIndex() < 0) {
+        return;
+    }
+
+    const QString shaderName = shaderComboBox->currentText();
+    QListWidgetItem *item = selectedShadersList->item(currentRow);
+    item->setText(shaderName);
+    if (shaderNameToIndex.contains(shaderName)) {
+        item->setData(Qt::UserRole, shaderNameToIndex[shaderName]);
+    }
 }
 
 void ShaderPassDialog::removeShader() {

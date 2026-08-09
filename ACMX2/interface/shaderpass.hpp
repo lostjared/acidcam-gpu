@@ -50,6 +50,7 @@ class ShaderPassDialog : public QDialog {
 
   public slots:
     void addShader();
+    void insertShader();
     void removeShader();
     void moveUp();
     void moveDown();
@@ -68,6 +69,7 @@ class ShaderPassDialog : public QDialog {
     QLineEdit *searchLineEdit;
     QListWidget *selectedShadersList;
     QPushButton *addButton;
+    QPushButton *insertButton;
     QPushButton *removeButton;
     QPushButton *upButton;
     QPushButton *downButton;
