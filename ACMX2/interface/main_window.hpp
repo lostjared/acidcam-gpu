@@ -124,7 +124,7 @@ class MainWindow : public QMainWindow {
     QStringList items;
     QTextEdit *bottomTextBox;
     /// @brief Repopulate the shader tree widget from the current `items` list,
-    ///        recomputing Last Modified and Compile Health columns.
+    ///        recomputing Last Modified, Compile Health, and Type columns.
     void populateShaderTree();
     /// @brief Compile-health status for a single shader.
     enum class CompileHealth { Unknown,

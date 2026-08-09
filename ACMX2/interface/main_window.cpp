@@ -652,8 +652,9 @@ void MainWindow::initControls() {
                         QDir(shader_path).filePath(shaderName));
             });
     list_view = new QTreeWidget(this);
-    list_view->setColumnCount(4);
-    list_view->setHeaderLabels({tr("#"), tr("Name"), tr("Last Modified"), tr("Compile Health")});
+    list_view->setColumnCount(5);
+    list_view->setHeaderLabels(
+        {tr("#"), tr("Name"), tr("Last Modified"), tr("Compile Health"), tr("Type")});
     list_view->setRootIsDecorated(false);
     list_view->setUniformRowHeights(true);
     list_view->setAlternatingRowColors(false);
@@ -666,6 +667,7 @@ void MainWindow::initControls() {
     list_view->header()->setSectionResizeMode(1, QHeaderView::Stretch);
     list_view->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     list_view->header()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    list_view->header()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
 #ifdef Q_OS_MACOS
     // macOS does not support the persistent shader cache; hide the column.
     list_view->setColumnHidden(3, true);
@@ -1742,6 +1744,9 @@ void MainWindow::populateShaderTree() {
         const QString &name = items.at(i);
         QFileInfo fi(shader_path + "/" + name);
         const QString stem = QFileInfo(name).completeBaseName();
+        const bool isCompute = fi.suffix().compare(
+                                   QStringLiteral("comp"), Qt::CaseInsensitive) == 0;
+        const QString shaderType = isCompute ? tr("Compute") : tr("Fragment");
 
         QString health;
         QColor healthColor;
@@ -1767,7 +1772,8 @@ void MainWindow::populateShaderTree() {
         cols << QString("%1").arg(i, width, 10, QLatin1Char(' '))
              << name
              << (fi.exists() ? formatLastModified(fi.lastModified()) : tr("missing"))
-             << health;
+             << health
+             << shaderType;
         auto *item = new QTreeWidgetItem(list_view, cols);
         item->setTextAlignment(0, Qt::AlignRight | Qt::AlignVCenter);
         item->setForeground(3, QBrush(healthColor));
