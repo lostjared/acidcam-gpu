@@ -21,6 +21,17 @@
   <url type="homepage">https://github.com/lostjared/acidcam-gpu</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.7.0" date="2026-08-09">
+      <description>
+        <ul>
+          <li>Add OpenGL compute shaders, including mixed fragment and compute multipass chains and binary caching.</li>
+          <li>Add compute-shader authoring and shader-type display to the Qt interface.</li>
+          <li>Add a searchable built-in shader uniform reference and faster multipass replacement.</li>
+          <li>Filter duplicate secondary V4L2 camera nodes on Linux.</li>
+          <li>Retain the Intel IPP-optimized OpenCV 4.12.0 build and runtime SIMD dispatch.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.6.1" date="2026-08-07">
       <description>
         <ul>

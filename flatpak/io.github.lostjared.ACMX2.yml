@@ -135,7 +135,6 @@ modules:
   - name: acmx2
     buildsystem: simple
     build-commands:
-      - sed -i 's/set(LAUNCHER_MINOR_VERSION 5)/set(LAUNCHER_MINOR_VERSION 6)/' ACMX2/interface/CMakeLists.txt
       - sed -i 's|/usr/local/share/acmx2|/app/share/acmx2|g' ACMX2/acmx.cpp ACMX2/interface/main_window.cpp
       - sed -i '/VIDEO_ACCELERATION_DRM/d' ACMX2/acmx.cpp
       - sed -i '/qputenv("QT_QPA_PLATFORM", "xcb");/d' ACMX2/interface/main.cpp
@@ -159,7 +158,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/acidcam-gpu.git
-        commit: 8d243b9d183bc0572c88e5bead068c174cd26cd3
+        commit: 55f1f513e5bf956511378ce213dfcd82c76f17e8
         disable-submodules: true
       - type: file
         path: io.github.lostjared.ACMX2.desktop

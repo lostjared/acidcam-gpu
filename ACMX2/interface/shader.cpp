@@ -211,14 +211,14 @@ uniform vec2 iResolution;
 uniform sampler2DArray history;
 uniform int history_head;
 
-vec4 sample_oldest_frame(ivec2 pixel) {
-    return texelFetch(history, ivec3(pixel, history_head), 0);
+vec4 sample_oldest_frame(vec2 uv) {
+    return textureLod(history, vec3(uv, float(history_head)), 0.0);
 }
 #else
 uniform sampler2D textures[SIZE];
 
-vec4 sample_oldest_frame(ivec2 pixel) {
-    return texelFetch(textures[0], pixel, 0);
+vec4 sample_oldest_frame(vec2 uv) {
+    return textureLod(textures[0], uv, 0.0);
 }
 #endif
 
@@ -227,8 +227,9 @@ void main() {
     if (pixel.x >= int(iResolution.x) || pixel.y >= int(iResolution.y))
         return;
 
-    vec4 live_frame = texelFetch(samp, pixel, 0);
-    vec4 cached_frame = sample_oldest_frame(pixel);
+    vec2 uv = (vec2(pixel) + 0.5) / iResolution;
+    vec4 live_frame = textureLod(samp, uv, 0.0);
+    vec4 cached_frame = sample_oldest_frame(uv);
     imageStore(outputImage, pixel, mix(live_frame, cached_frame, 0.5));
 }
 )";

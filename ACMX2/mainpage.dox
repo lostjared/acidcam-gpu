@@ -201,7 +201,9 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - Fragment and compute programs can coexist in shader libraries and multipass
   chains. Compute stages read <tt>samp</tt>, receive the existing runtime and
   texture-cache bindings, write an RGBA16F image, and dispatch according to
-  their declared local workgroup size.
+  their declared local workgroup size. Because input/history textures may keep
+  the source video's dimensions, compute shaders use normalized output UVs and
+  explicit-LOD texture sampling when the output resolution differs.
 - Shader-cache format version 4 stores a program-kind field and compute program
   binaries alongside fragment programs. Source- and driver-specific
   per-program caches also restore unchanged compute programs without relinking.

@@ -315,6 +315,9 @@ keys, so unchanged programs can be restored without recompilation.
 A compute shader receives the same uniforms and texture bindings listed below.
 It reads the current pass from `samp` and writes to an RGBA16F image on image
 unit 0. Dispatch dimensions are derived from the declared local workgroup size.
+Input and history textures can retain the source video's dimensions when the
+output resolution differs, so compute shaders should derive normalized UVs
+from the output pixel and use `textureLod(..., uv, 0.0)` to scale those inputs.
 A minimal shader is:
 
 ```glsl
