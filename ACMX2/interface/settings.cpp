@@ -43,6 +43,48 @@ static const GUID MEDIASUBTYPE_I420 = {0x30323449, 0x0000, 0x0010, {0x80, 0x00, 
 #endif
 
 namespace {
+#ifdef __linux__
+    bool is_primary_linux_video_node(int device_index) {
+        QFile index_file(
+            QString("/sys/class/video4linux/video%1/index").arg(device_index));
+        if (!index_file.open(QIODevice::ReadOnly | QIODevice::Text))
+            return true;
+
+        bool valid_index = false;
+        const int stream_index =
+            QString::fromUtf8(index_file.readAll()).trimmed().toInt(&valid_index);
+        return !valid_index || stream_index == 0;
+    }
+
+    int primary_linux_video_node_for(int device_index) {
+        if (is_primary_linux_video_node(device_index))
+            return device_index;
+
+        const QString device_path = QFileInfo(
+                                        QString("/sys/class/video4linux/video%1/device")
+                                            .arg(device_index))
+                                        .canonicalFilePath();
+        if (device_path.isEmpty())
+            return device_index;
+
+        const QDir video_class(QStringLiteral("/sys/class/video4linux"));
+        const QStringList nodes = video_class.entryList(
+            {QStringLiteral("video*")}, QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const QString &node : nodes) {
+            bool valid_node = false;
+            const int candidate_index = node.mid(5).toInt(&valid_node);
+            if (!valid_node || !is_primary_linux_video_node(candidate_index))
+                continue;
+            const QString candidate_path =
+                QFileInfo(video_class.filePath(node + QStringLiteral("/device")))
+                    .canonicalFilePath();
+            if (candidate_path == device_path)
+                return candidate_index;
+        }
+        return device_index;
+    }
+#endif
+
     bool parse_even_resolution(const QString &text, QSize &resolution) {
         const QString trimmed = text.trimmed();
         if (trimmed.compare("Default", Qt::CaseInsensitive) == 0) {
@@ -478,7 +520,7 @@ void SettingsWindow::populateCameraDevices() {
     for (int i = 0; i < 20; ++i) {
         QString sysfs_path = QString("/sys/class/video4linux/video%1/name").arg(i);
         QFile file(sysfs_path);
-        if (file.exists()) {
+        if (file.exists() && is_primary_linux_video_node(i)) {
             QString cameraName = getCameraName(i);
             cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(i), i);
         }
@@ -1359,6 +1401,12 @@ void SettingsWindow::loadUiState() {
 
     int cameraDevice = appSettings.value("interface/camera_device", 0).toInt();
     int camIdx = cameraIndexComboBox->findData(cameraDevice);
+#ifdef __linux__
+    if (camIdx < 0) {
+        cameraDevice = primary_linux_video_node_for(cameraDevice);
+        camIdx = cameraIndexComboBox->findData(cameraDevice);
+    }
+#endif
     if (camIdx >= 0) {
         cameraIndexComboBox->setCurrentIndex(camIdx);
     }
