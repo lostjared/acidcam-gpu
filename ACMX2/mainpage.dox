@@ -190,6 +190,35 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 
 @subsection updates_2026_08 August 2026 (Month to Date)
 
+<b>Version 2.7.0 compute shader and authoring updates</b>
+
+<b>August 9: compute shaders, reference tools, and device cleanup</b>
+
+- Linux builds probe for an OpenGL 4.3 core context and execute <tt>.comp</tt>
+  files as full-frame image passes when supported. OpenGL 4.1 remains the
+  baseline; unsupported compute entries use passthrough programs so library,
+  playlist, and multipass indices remain stable.
+- Fragment and compute programs can coexist in shader libraries and multipass
+  chains. Compute stages read <tt>samp</tt>, receive the existing runtime and
+  texture-cache bindings, write an RGBA16F image, and dispatch according to
+  their declared local workgroup size.
+- Shader-cache format version 4 stores a program-kind field and compute program
+  binaries alongside fragment programs. Source- and driver-specific
+  per-program caches also restore unchanged compute programs without relinking.
+- The Qt New Shader File dialog creates fragment or compute templates, editor
+  file handling and Find in Files recognize <tt>.comp</tt>, and the shader tree
+  includes a Type column for Fragment and Compute entries.
+- <b>Help &gt; Built-in Uniform Reference...</b> opens a searchable, modeless
+  catalog with each uniform's type, category, availability, declaration,
+  description, and GLSL example. ACMX2 startup also logs the active OpenGL
+  uniform component and location limits.
+- Multipass Shader Settings includes an <b>Insert</b> action that replaces the
+  selected pass with the currently chosen shader.
+- Linux camera enumeration hides secondary V4L2 nodes for the same physical
+  device and maps a stored secondary-node choice to its primary node when
+  possible.
+- CMake, runtime headers, and versioned Doxygen output identify version 2.7.0.
+
 <b>Version 2.6.1 interface and Flatpak updates</b>
 
 <b>August 7: theme-aware editor and optimized Flatpak</b>

@@ -111,6 +111,34 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 
 ## Revisions
 
+### Version 2.7.0 (August 2026)
+
+#### August 9
+
+- **OpenGL compute shaders**: Linux builds now request an OpenGL 4.3 context
+  when available and run `.comp` files as full-frame image passes. Compute and
+  fragment shaders can share libraries, playlists, and multipass chains; an
+  OpenGL 4.1 fallback keeps unsupported compute slots as passthrough entries so
+  shader indices remain stable.
+- **Compute-aware shader caching**: the version 4 whole-library cache records
+  each shader's program type and stores compute program binaries alongside
+  fragment programs. Source and driver-specific per-program caching also
+  avoids relinking unchanged compute shaders.
+- **Compute authoring in Qt**: New Shader File can create fragment or compute
+  shaders, Find in Files and Save As recognize `.comp`, and the shader list has
+  a Type column that distinguishes Compute from Fragment entries.
+- **Built-in uniform reference**: **Help > Built-in Uniform Reference...** opens
+  a searchable, modeless guide to runtime uniforms, including types,
+  availability, declarations, descriptions, and GLSL examples. Engine startup
+  also reports the active OpenGL uniform limits.
+- **Faster multipass editing**: **Insert** replaces the selected multipass slot
+  with the currently chosen shader without removing and re-adding the pass.
+- **Cleaner Linux camera selection**: the Settings dialog hides secondary V4L2
+  nodes exposed by the same physical device and maps a saved secondary-node
+  selection back to its primary node when possible.
+- **Version 2.7.0 metadata**: engine and launcher CMake metadata, runtime version
+  headers, and versioned Doxygen output now identify 2.7.0.
+
 ### Version 2.6.1 (August 2026)
 
 #### August 7

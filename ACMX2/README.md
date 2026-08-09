@@ -52,12 +52,42 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
   font and word-wrap settings, and direct navigation to source locations
 - **Find in Files** — recursively search shader sources with regular expressions
   and open any result directly at its matching line and column
+- **OpenGL compute shaders** — run `.comp` files as full-frame image passes on
+  Linux with OpenGL 4.3 or newer, including mixed fragment/compute multipass chains
+- **Built-in uniform reference** — search runtime uniforms, availability notes,
+  declarations, and examples from the Qt Help menu
 - **Custom interface themes** — choose from 25 built-in light and dark
   stylesheet presets or edit and persist custom QSS
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
 - **MIDI Map Tool** — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 
 ## August 2026 Updates (Month to Date)
+
+### Version 2.7.0: Compute Shaders and Authoring Tools
+
+- Linux builds probe for an OpenGL 4.3 core context and enable `.comp` compute
+  shaders when supported, while retaining the OpenGL 4.1 fragment-shader
+  baseline. Unsupported compute entries become passthrough slots so library,
+  playlist, and multipass indices remain stable.
+- Compute shaders work as main shaders and multipass stages, share the runtime
+  uniforms and texture-cache bindings, and write each pass through an RGBA16F
+  image target. The engine derives dispatch counts from the shader's declared
+  local workgroup size.
+- The version 4 shader-library cache records fragment and compute program types
+  and stores binaries for both. Source- and driver-specific per-program caches
+  prevent unchanged compute programs from being relinked unnecessarily.
+- The Qt New Shader File dialog creates fragment or compute templates, `.comp`
+  files are included in editor and Find in Files workflows, and the shader
+  library displays a Fragment/Compute Type column.
+- **Help > Built-in Uniform Reference...** provides a searchable, modeless
+  catalog of engine uniforms with type, category, availability, declaration,
+  description, and GLSL example. Engine startup logs the active driver's
+  vertex/fragment component and uniform-location limits.
+- The Multipass Shader Settings dialog adds **Insert**, which replaces the
+  selected pass with the currently chosen shader.
+- On Linux, camera selection filters secondary V4L2 nodes belonging to the same
+  physical device. Previously saved secondary-node selections are mapped back
+  to the corresponding primary node when possible.
 
 ### Version 2.6.1: Theme-Aware Editor and Optimized Flatpak
 
@@ -277,11 +307,10 @@ On Linux, files ending in `.comp` are compiled as OpenGL compute shaders when
 OpenGL 4.3 or newer is available. They can be selected normally or mixed with
 fragment shaders in `--shader-pass` lists. On an OpenGL 4.1 context each
 compute entry becomes a no-op passthrough, preserving all manifest, playlist,
-and multipass indices. The existing whole-library binary cache stores only
-fragment/vertex pairs, so mixed libraries use separate per-program fragment
-and compute binary caches instead. Only new or changed programs need to be
-compiled; unchanged programs are restored using a source- and driver-specific
-cache key.
+and multipass indices. The version 4 whole-library binary cache records each
+entry's program type and stores compute binaries alongside fragment/vertex
+pairs. Per-program fragment and compute caches use source- and driver-specific
+keys, so unchanged programs can be restored without recompilation.
 
 A compute shader receives the same uniforms and texture bindings listed below.
 It reads the current pass from `samp` and writes to an RGBA16F image on image
