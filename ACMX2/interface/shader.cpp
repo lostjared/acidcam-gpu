@@ -17,6 +17,14 @@ void ShaderDialog::init() {
     shaderNameEdit->setPlaceholderText("Shader name (e.g., myshader.glsl)");
     layout->addWidget(shaderNameEdit);
 
+    QLabel *shaderTypeLabel = new QLabel("Shader type:", this);
+    layout->addWidget(shaderTypeLabel);
+
+    shaderTypeComboBox = new QComboBox(this);
+    shaderTypeComboBox->addItem("Fragment shader (.glsl)");
+    shaderTypeComboBox->addItem("Compute shader (.comp)");
+    layout->addWidget(shaderTypeComboBox);
+
     defaultCodeCheckBox = new QCheckBox("Include default shader code", this);
     defaultCodeCheckBox->setChecked(true);
     layout->addWidget(defaultCodeCheckBox);
@@ -25,6 +33,20 @@ void ShaderDialog::init() {
     cacheShaderCheckBox->setToolTip(
         "Create a texture-cache shader starter with frame-cache and spectrum-history sampling.");
     layout->addWidget(cacheShaderCheckBox);
+
+    connect(shaderTypeComboBox,
+            QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int index) {
+                const bool createComputeShader = index == 1;
+                cacheShaderCheckBox->setText(
+                    createComputeShader
+                        ? "Create as cache shader (_cache.comp)"
+                        : "Create as cache shader (_cache.glsl)");
+                shaderNameEdit->setPlaceholderText(
+                    createComputeShader
+                        ? "Shader name (e.g., myshader.comp)"
+                        : "Shader name (e.g., myshader.glsl)");
+            });
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
@@ -39,7 +61,7 @@ void ShaderDialog::init() {
 
     setLayout(layout);
     setWindowTitle("Create New Shader");
-    resize(440, 180);
+    resize(440, 230);
     acmx2::applyCustomStyleIfEnabled(this);
 }
 
@@ -52,6 +74,8 @@ void ShaderDialog::onOkButtonClicked() {
 
     if (shaderName.endsWith(".glsl", Qt::CaseInsensitive)) {
         shaderName.chop(5);
+    } else if (shaderName.endsWith(".comp", Qt::CaseInsensitive)) {
+        shaderName.chop(5);
     }
 
     if (shaderName.isEmpty()) {
@@ -59,16 +83,17 @@ void ShaderDialog::onOkButtonClicked() {
         return;
     }
 
+    const bool createComputeShader = shaderTypeComboBox->currentIndex() == 1;
     const bool createCacheShader = cacheShaderCheckBox->isChecked();
     if (createCacheShader &&
         !shaderName.endsWith("_cache", Qt::CaseInsensitive)) {
         shaderName += "_cache";
     }
-    shaderName += ".glsl";
+    shaderName += createComputeShader ? ".comp" : ".glsl";
 
     const bool includeDefaultCode = defaultCodeCheckBox->isChecked();
     if (!createShaderFile(shaderPath + "/" + shaderName, includeDefaultCode,
-                          createCacheShader)) {
+                          createCacheShader, createComputeShader)) {
         return;
     }
 
@@ -150,16 +175,79 @@ void main() {
     color.rgb *= 1.0 + live_energy * 0.2;
 }
 )";
+
+    constexpr const char *COMPUTE_SHADER_CODE = R"(#version 430 core
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba16f, binding = 0) writeonly uniform image2D outputImage;
+
+uniform sampler2D samp;
+uniform vec2 iResolution;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(iResolution.x) || pixel.y >= int(iResolution.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / iResolution;
+    imageStore(outputImage, pixel, texture(samp, uv));
+}
+)";
+
+    constexpr const char *COMPUTE_CACHE_SHADER_CODE = R"(#version 430 core
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba16f, binding = 0) writeonly uniform image2D outputImage;
+
+uniform sampler2D samp;
+uniform vec2 iResolution;
+
+#ifndef SIZE
+#define SIZE 8
+#endif
+#ifndef USE_HISTORY_TEXTURE_ARRAY
+#define USE_HISTORY_TEXTURE_ARRAY 0
+#endif
+
+#if USE_HISTORY_TEXTURE_ARRAY
+uniform sampler2DArray history;
+uniform int history_head;
+
+vec4 sample_oldest_frame(ivec2 pixel) {
+    return texelFetch(history, ivec3(pixel, history_head), 0);
+}
+#else
+uniform sampler2D textures[SIZE];
+
+vec4 sample_oldest_frame(ivec2 pixel) {
+    return texelFetch(textures[0], pixel, 0);
+}
+#endif
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(iResolution.x) || pixel.y >= int(iResolution.y))
+        return;
+
+    vec4 live_frame = texelFetch(samp, pixel, 0);
+    vec4 cached_frame = sample_oldest_frame(pixel);
+    imageStore(outputImage, pixel, mix(live_frame, cached_frame, 0.5));
+}
+)";
 } // namespace
 
 bool ShaderDialog::createShaderFile(const QString &shaderName,
                                     bool includeDefaultCode,
-                                    bool createCacheShader) {
+                                    bool createCacheShader,
+                                    bool createComputeShader) {
     QFile file(shaderName);
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&file);
         if (includeDefaultCode) {
-            out << (createCacheShader ? CACHE_SHADER_CODE : DEFAULT_SHADER_CODE);
+            if (createComputeShader) {
+                out << (createCacheShader ? COMPUTE_CACHE_SHADER_CODE
+                                          : COMPUTE_SHADER_CODE);
+            } else {
+                out << (createCacheShader ? CACHE_SHADER_CODE : DEFAULT_SHADER_CODE);
+            }
             out << "\n";
         }
         file.close();

@@ -267,8 +267,40 @@ The JSON format is:
   "version": 1,
   "shaders": [
     "plasma.glsl",
+    "edge.comp",
     "feedback_cache.glsl"
   ]
+}
+```
+
+On Linux, files ending in `.comp` are compiled as OpenGL compute shaders when
+OpenGL 4.3 or newer is available. They can be selected normally or mixed with
+fragment shaders in `--shader-pass` lists. On an OpenGL 4.1 context each
+compute entry becomes a no-op passthrough, preserving all manifest, playlist,
+and multipass indices. The existing whole-library binary cache stores only
+fragment/vertex pairs, so mixed libraries use separate per-program fragment
+and compute binary caches instead. Only new or changed programs need to be
+compiled; unchanged programs are restored using a source- and driver-specific
+cache key.
+
+A compute shader receives the same uniforms and texture bindings listed below.
+It reads the current pass from `samp` and writes to an RGBA16F image on image
+unit 0. Dispatch dimensions are derived from the declared local workgroup size.
+A minimal shader is:
+
+```glsl
+#version 430 core
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba16f, binding = 0) writeonly uniform image2D outputImage;
+uniform sampler2D samp;
+uniform vec2 iResolution;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(iResolution.x) || pixel.y >= int(iResolution.y))
+        return;
+    vec2 uv = (vec2(pixel) + 0.5) / iResolution;
+    imageStore(outputImage, pixel, texture(samp, uv));
 }
 ```
 
@@ -739,7 +771,8 @@ Because progress is printed to stdout in headless mode, `--silent` is suitable f
 
 ## Supported Shader Uniforms
 
-All fragment shaders receive the following uniforms automatically. Uniforms that are not declared in your shader are silently ignored.
+Fragment and compute shaders receive the following uniforms automatically.
+Uniforms that are not declared in a shader are silently ignored.
 
 ### Core Uniforms
 

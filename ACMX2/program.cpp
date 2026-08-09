@@ -164,6 +164,15 @@ namespace {
         return h;
     }
 
+    static uint64_t computeComputeProgramKeyFromText(const std::string &source) {
+        uint64_t hash = fnv1a64_str(source);
+        hash = mix64(hash, fnv1a64_str(glStr(GL_VENDOR)));
+        hash = mix64(hash, fnv1a64_str(glStr(GL_RENDERER)));
+        hash = mix64(hash, fnv1a64_str(glStr(GL_VERSION)));
+        hash = mix64(hash, fnv1a64_str("ComputeShaderProgramCache_v1"));
+        return hash;
+    }
+
     static bool tryLoadProgramBinary(uint64_t key, GLuint &outProg) {
         std::vector<uint8_t> data;
         std::string path = cacheFilePath(key);
@@ -232,6 +241,18 @@ namespace {
 } // namespace
 
 namespace ac {
+
+    bool loadComputeProgramBinaryFromCache(const std::string &source,
+                                           GLuint &program) {
+        return tryLoadProgramBinary(computeComputeProgramKeyFromText(source),
+                                    program);
+    }
+
+    bool saveComputeProgramBinaryToCache(const std::string &source,
+                                         GLuint program) {
+        return saveProgramBinary(computeComputeProgramKeyFromText(source),
+                                 program);
+    }
 
     bool ShaderProgram::loadProgram(const std::string &v, const std::string &f) {
         uint64_t key = computeProgramKeyFromFiles(v, f);

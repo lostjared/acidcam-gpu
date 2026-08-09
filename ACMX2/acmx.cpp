@@ -144,6 +144,110 @@ static std::string safeGLString(GLenum name) {
     return reinterpret_cast<const char *>(value);
 }
 
+struct OpenGLContextConfig {
+    int major = 4;
+    int minor = 1;
+};
+
+/** True when the active ACMX2 context can run OpenGL compute shaders. */
+static bool compute_shader_supported = false;
+
+#if defined(__linux__)
+/**
+ * @brief Test whether SDL can create a core-profile context of a given version.
+ *
+ * OpenGL capabilities cannot be queried without first creating a context, so
+ * Linux startup uses a small hidden probe window before constructing the real
+ * ACMX2 window. The probe uses the already-selected SDL video driver, including
+ * the offscreen driver selected by silent mode.
+ */
+static bool probe_open_gl_context(int major, int minor, std::string &error_message) {
+    const bool video_was_initialized = (SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) != 0;
+    if (!video_was_initialized && SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        error_message = SDL_GetError();
+        return false;
+    }
+
+    SDL_GL_ResetAttributes();
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, major);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+
+    SDL_Window *probe_window = SDL_CreateWindow(
+        "ACMX2 OpenGL Probe", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        32, 32, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+    if (!probe_window) {
+        error_message = SDL_GetError();
+        if (!video_was_initialized) {
+            SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        }
+        return false;
+    }
+
+    SDL_GLContext probe_context = SDL_GL_CreateContext(probe_window);
+    bool version_supported = false;
+    if (probe_context) {
+        int actual_major = 0;
+        int actual_minor = 0;
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &actual_major);
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &actual_minor);
+        version_supported = actual_major > major ||
+                            (actual_major == major && actual_minor >= minor);
+        if (!version_supported) {
+            error_message = "driver returned OpenGL " + std::to_string(actual_major) +
+                            "." + std::to_string(actual_minor);
+        }
+        SDL_GL_DeleteContext(probe_context);
+    } else {
+        error_message = SDL_GetError();
+    }
+
+    SDL_DestroyWindow(probe_window);
+    if (!video_was_initialized) {
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    }
+    return version_supported;
+}
+
+/** Select OpenGL 4.3 for compute shaders, falling back to ACMX2's 4.1 baseline. */
+static OpenGLContextConfig select_open_gl_context() {
+    std::string error_message;
+    if (probe_open_gl_context(4, 3, error_message)) {
+        mx::system_out << "acmx2: OpenGL 4.3 context available; compute shaders enabled\n";
+        return {4, 3};
+    }
+
+    mx::system_out << "acmx2: OpenGL 4.3 unavailable (" << error_message
+                   << "); falling back to OpenGL 4.1 with compute shaders disabled\n";
+    error_message.clear();
+    if (!probe_open_gl_context(4, 1, error_message)) {
+        throw std::runtime_error("OpenGL 4.1 or newer is required: " + error_message);
+    }
+    return {4, 1};
+}
+#else
+static OpenGLContextConfig select_open_gl_context() {
+    return {4, 1};
+}
+#endif
+
+/** Update the feature flag from the real context rather than only the probe. */
+static void update_compute_shader_support() {
+#if defined(__linux__)
+    GLint major = 0;
+    GLint minor = 0;
+    glGetIntegerv(GL_MAJOR_VERSION, &major);
+    glGetIntegerv(GL_MINOR_VERSION, &minor);
+    compute_shader_supported = major > 4 || (major == 4 && minor >= 3);
+#else
+    compute_shader_supported = false;
+#endif
+    mx::system_out << "acmx2: Compute shader support: "
+                   << (compute_shader_supported ? "enabled" : "disabled") << "\n";
+}
+
 /**
  * @brief Print the active driver's shader-uniform capacity in one line.
  *
@@ -293,6 +397,19 @@ static bool resolveShaderPathInLibrary(const std::string &library_path,
 
 enum class ShaderManifestFormat { Json,
                                   Text };
+
+enum class ShaderProgramKind { Fragment,
+                               Compute,
+                               ComputeUnavailable };
+
+static bool isComputeShaderFile(const std::string &path) {
+    std::string extension = std::filesystem::path(path).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char ch) {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    return extension == ".comp";
+}
 
 struct ShaderManifestData {
     ShaderManifestFormat format = ShaderManifestFormat::Text;
@@ -3041,6 +3158,7 @@ class ShaderLibrary {
      */
     struct ProgramData {
         std::string name;
+        GLint compute_work_group_size[3] = {1, 1, 1};
         GLint loc = -1, iTime = -1, iMouse = -1, time_f = -1, iResolution = -1;
 #ifdef AUDIO_ENABLED
         GLint amp = -1, amp_untouched = -1;
@@ -3320,6 +3438,7 @@ class ShaderLibrary {
 
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_2d;
     std::vector<std::unique_ptr<gl::ShaderProgram>> programs_3d;
+    std::vector<ShaderProgramKind> program_kinds;
     bool time_audio = false;
     bool audio_delta = false;
     std::unordered_map<int, ProgramData> program_names_2d;
@@ -3337,6 +3456,83 @@ class ShaderLibrary {
         if (use_cache)
             return std::make_unique<ac::ShaderProgram>();
         return std::make_unique<gl::ShaderProgram>();
+    }
+
+    /** Compile and link a standalone OpenGL compute program. */
+    std::unique_ptr<gl::ShaderProgram> makeComputeProgram(
+        const std::string &compute_path, std::string &error) const {
+        if (!compute_shader_supported) {
+            error = "OpenGL 4.3 compute shaders are unavailable";
+            return {};
+        }
+
+        const std::string source =
+            injectShaderSize(compute_path, cache_size, use_history_array);
+        if (source.empty()) {
+            error = "Could not read compute shader: " + compute_path;
+            return {};
+        }
+
+        if (use_cache) {
+            GLuint cached_program = 0;
+            if (ac::loadComputeProgramBinaryFromCache(source, cached_program)) {
+                mx::system_out << "acmx2: Loaded cached compute shader: "
+                               << compute_path << "\n";
+                return std::make_unique<gl::ShaderProgram>(cached_program);
+            }
+        }
+
+        const GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+        if (shader == 0) {
+            error = "Could not create compute shader object";
+            return {};
+        }
+        const char *source_ptr = source.c_str();
+        glShaderSource(shader, 1, &source_ptr, nullptr);
+        glCompileShader(shader);
+        GLint compiled = GL_FALSE;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+        if (compiled != GL_TRUE) {
+            error = "Compute shader compilation failed: " + compute_path;
+            const std::string log = shaderInfoLog(shader);
+            if (!log.empty())
+                error += "\n" + log;
+            glDeleteShader(shader);
+            return {};
+        }
+
+        const GLuint program = glCreateProgram();
+        if (program == 0) {
+            glDeleteShader(shader);
+            error = "Could not create compute program";
+            return {};
+        }
+        glAttachShader(program, shader);
+#if !defined(__APPLE__)
+        if (use_cache && glProgramParameteri != nullptr) {
+            glProgramParameteri(program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT,
+                                GL_TRUE);
+        }
+#endif
+        glLinkProgram(program);
+        GLint linked = GL_FALSE;
+        glGetProgramiv(program, GL_LINK_STATUS, &linked);
+        if (linked != GL_TRUE) {
+            error = "Compute program link failed: " + compute_path;
+            const std::string log = programInfoLog(program);
+            if (!log.empty())
+                error += "\n" + log;
+            glDeleteProgram(program);
+            glDeleteShader(shader);
+            return {};
+        }
+
+        glDetachShader(program, shader);
+        glDeleteShader(shader);
+        if (use_cache)
+            ac::saveComputeProgramBinaryToCache(source, program);
+        error.clear();
+        return std::make_unique<gl::ShaderProgram>(program);
     }
 
     static std::string shaderInfoLog(GLuint shader) {
@@ -3372,6 +3568,8 @@ class ShaderLibrary {
         const std::string &vert_path,
         const std::string &frag_path,
         std::string &error) const {
+        if (isComputeShaderFile(frag_path))
+            return makeComputeProgram(frag_path, error);
         std::ifstream vertex_file(vert_path);
         if (!vertex_file.is_open()) {
             error = "Could not read vertex shader: " + vert_path;
@@ -3610,6 +3808,7 @@ class ShaderLibrary {
     void clear() {
         programs_2d.clear();
         programs_3d.clear();
+        program_kinds.clear();
         program_names_2d.clear();
         program_names_3d.clear();
         library_index = 0;
@@ -3627,18 +3826,50 @@ class ShaderLibrary {
      * @throws mx::Exception if either compile/link stage fails.
      */
     void loadProgram(gl::GLWindow *win, const std::string text) {
-        programs_2d.push_back(makeProgram());
-        if (!loadProgramWithSize(programs_2d.back().get(),
-                                 win->util.getFilePath("data/vert.glsl"), text)) {
-            throw mx::Exception("Error loading 2D shader program: " + text);
+        const bool is_compute = isComputeShaderFile(text);
+        if (is_compute && compute_shader_supported) {
+            std::string error;
+            auto compute_program = makeComputeProgram(text, error);
+            if (!compute_program)
+                throw mx::Exception(error);
+            programs_2d.push_back(std::move(compute_program));
+            program_kinds.push_back(ShaderProgramKind::Compute);
+        } else {
+            programs_2d.push_back(makeProgram());
+            if (!is_compute &&
+                !loadProgramWithSize(programs_2d.back().get(),
+                                     win->util.getFilePath("data/vert.glsl"), text)) {
+                throw mx::Exception("Error loading 2D shader program: " + text);
+            }
+            if (is_compute) {
+                programs_2d.pop_back();
+                auto passthrough = makePassthroughProgram(
+                    win->util.getFilePath("data/vert.glsl"));
+                if (!passthrough)
+                    throw mx::Exception("Could not create compute fallback: " + text);
+                programs_2d.push_back(std::move(passthrough));
+                program_kinds.push_back(ShaderProgramKind::ComputeUnavailable);
+                mx::system_out << "acmx2: Skipping compute shader on this context: "
+                               << text << "\n";
+            } else {
+                program_kinds.push_back(ShaderProgramKind::Fragment);
+            }
         }
         setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text);
         if (dual_mode) {
-            programs_3d.push_back(makeProgram());
-            if (!loadProgramWithSize(programs_3d.back().get(),
-                                     win->util.getFilePath("data/vertex.glsl"),
-                                     text)) {
-                throw mx::Exception("Error loading 3D shader program: " + text);
+            if (is_compute) {
+                auto passthrough = makePassthroughProgram(
+                    win->util.getFilePath("data/vertex.glsl"));
+                if (!passthrough)
+                    throw mx::Exception("Could not create 3D compute passthrough: " + text);
+                programs_3d.push_back(std::move(passthrough));
+            } else {
+                programs_3d.push_back(makeProgram());
+                if (!loadProgramWithSize(programs_3d.back().get(),
+                                         win->util.getFilePath("data/vertex.glsl"),
+                                         text)) {
+                    throw mx::Exception("Error loading 3D shader program: " + text);
+                }
             }
             setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, text);
             mx::system_out << "acmx2: Compiled Shader 0 (2D+3D): " << text << " ✔ \n";
@@ -3667,6 +3898,7 @@ class ShaderLibrary {
             return false;
         }
 
+        const bool is_compute = isComputeShaderFile(fragment_path);
         auto replacement_2d = compileProgramForReload(
             win->util.getFilePath("data/vert.glsl"), fragment_path, error);
         if (!replacement_2d)
@@ -3674,8 +3906,15 @@ class ShaderLibrary {
 
         std::unique_ptr<gl::ShaderProgram> replacement_3d;
         if (dual_mode) {
-            replacement_3d = compileProgramForReload(
-                win->util.getFilePath("data/vertex.glsl"), fragment_path, error);
+            if (is_compute) {
+                replacement_3d = makePassthroughProgram(
+                    win->util.getFilePath("data/vertex.glsl"));
+                if (!replacement_3d)
+                    error = "Could not create 3D passthrough for compute shader";
+            } else {
+                replacement_3d = compileProgramForReload(
+                    win->util.getFilePath("data/vertex.glsl"), fragment_path, error);
+            }
             if (!replacement_3d)
                 return false;
         }
@@ -3727,6 +3966,11 @@ class ShaderLibrary {
         }
 
         programs_2d[shader_index].swap(replacement_2d);
+        if (shader_index < program_kinds.size()) {
+            program_kinds[shader_index] =
+                is_compute ? ShaderProgramKind::Compute
+                           : ShaderProgramKind::Fragment;
+        }
         std::swap(current_names_2d_it->second, names_2d_it->second);
         if (dual_mode) {
             programs_3d[shader_index].swap(replacement_3d);
@@ -3779,6 +4023,11 @@ class ShaderLibrary {
         std::string name = file_path.stem().string();
         if (!name.empty()) {
             names[pos].name = name;
+            if (&names == &program_names_2d && pos < program_kinds.size() &&
+                program_kinds[pos] == ShaderProgramKind::Compute) {
+                glGetProgramiv(prog->id(), GL_COMPUTE_WORK_GROUP_SIZE,
+                               names[pos].compute_work_group_size);
+            }
             names[pos].loc = glGetUniformLocation(prog->id(), "alpha");
             names[pos].iTime = glGetUniformLocation(prog->id(), "iTime");
             names[pos].iMouse = glGetUniformLocation(prog->id(), "iMouse");
@@ -4125,7 +4374,10 @@ class ShaderLibrary {
 
         size_t total_shaders = shader_files.size();
 
-        mx::system_out << "acmx2: Compiling " << total_shaders << " shaders (" << (dual_mode ? "2D+3D" : "2D") << ")...\n";
+        const char *load_action = use_cache ? "Loading" : "Compiling";
+        mx::system_out << "acmx2: " << load_action << " " << total_shaders
+                       << " shaders (" << (dual_mode ? "2D+3D" : "2D")
+                       << ")...\n";
         fflush(stdout);
 
         static constexpr const char *kLogoVert =
@@ -4179,67 +4431,69 @@ class ShaderLibrary {
             std::string vert_2d = win->util.getFilePath("data/vert.glsl");
             std::string vert_3d = win->util.getFilePath("data/vertex.glsl");
 
+            const bool is_compute = isComputeShaderFile(line_data);
             bool ok_2d = false;
-            programs_2d.push_back(makeProgram());
-            try {
-                if (loadProgramWithSize(programs_2d.back().get(), vert_2d, full_path)) {
+            if (is_compute && compute_shader_supported) {
+                std::string compute_error;
+                auto compute_program = makeComputeProgram(full_path, compute_error);
+                if (compute_program) {
+                    programs_2d.push_back(std::move(compute_program));
                     ok_2d = true;
                 } else {
-                    mx::system_out << "acmx2: ⚠ Failed to compile 2D shader: " << line_data
+                    mx::system_out << "acmx2: ⚠ " << compute_error
                                    << " — substituting passthrough placeholder\n";
-                    fflush(stdout);
                 }
-            } catch (const std::exception &e) {
-                mx::system_out << "acmx2: ⚠ Exception compiling 2D shader: " << line_data
-                               << " (" << e.what() << ") — substituting passthrough placeholder\n";
-                fflush(stdout);
-                ok_2d = false;
-            } catch (...) {
-                mx::system_out << "acmx2: ⚠ Unknown exception compiling 2D shader: " << line_data
-                               << " — substituting passthrough placeholder\n";
-                fflush(stdout);
-                ok_2d = false;
+            } else if (!is_compute) {
+                programs_2d.push_back(makeProgram());
+                try {
+                    ok_2d = loadProgramWithSize(programs_2d.back().get(),
+                                                vert_2d, full_path);
+                } catch (const std::exception &e) {
+                    mx::system_out << "acmx2: ⚠ Exception compiling 2D shader: "
+                                   << line_data << " (" << e.what() << ")\n";
+                } catch (...) {
+                    mx::system_out << "acmx2: ⚠ Unknown exception compiling 2D shader: "
+                                   << line_data << "\n";
+                }
             }
             if (!ok_2d) {
-                // Replace the broken slot with a passthrough program so the
-                // shader index stays aligned with manifest ordering.
-                programs_2d.pop_back();
+                if (!programs_2d.empty() && programs_2d.size() > shader_index)
+                    programs_2d.pop_back();
                 auto ph = makePassthroughProgram(vert_2d);
-                if (!ph) {
+                if (!ph)
                     throw mx::Exception("acmx2: Error could not build 2D passthrough placeholder for: " + line_data);
-                }
                 programs_2d.push_back(std::move(ph));
+                if (is_compute && !compute_shader_supported) {
+                    mx::system_out << "acmx2: Skipping unsupported compute shader: "
+                                   << line_data << "\n";
+                }
             }
+            program_kinds.push_back(
+                is_compute ? (ok_2d ? ShaderProgramKind::Compute
+                                    : ShaderProgramKind::ComputeUnavailable)
+                           : ShaderProgramKind::Fragment);
             setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, full_path);
             if (dual_mode) {
-                bool ok_3d = false;
-                programs_3d.push_back(makeProgram());
-                try {
-                    if (loadProgramWithSize(programs_3d.back().get(), vert_3d, full_path)) {
-                        ok_3d = true;
-                    } else {
-                        mx::system_out << "acmx2: ⚠ Failed to compile 3D shader: " << line_data
-                                       << " — substituting passthrough placeholder\n";
-                        fflush(stdout);
-                    }
-                } catch (const std::exception &e) {
-                    mx::system_out << "acmx2: ⚠ Exception compiling 3D shader: " << line_data
-                                   << " (" << e.what() << ") — substituting passthrough placeholder\n";
-                    fflush(stdout);
-                    ok_3d = false;
-                } catch (...) {
-                    mx::system_out << "acmx2: ⚠ Unknown exception compiling 3D shader: " << line_data
-                                   << " — substituting passthrough placeholder\n";
-                    fflush(stdout);
-                    ok_3d = false;
-                }
-                if (!ok_3d) {
-                    programs_3d.pop_back();
+                if (is_compute) {
                     auto ph = makePassthroughProgram(vert_3d);
-                    if (!ph) {
-                        throw mx::Exception("acmx2: Error could not build 3D passthrough placeholder for: " + line_data);
-                    }
+                    if (!ph)
+                        throw mx::Exception("acmx2: Error could not build 3D compute passthrough for: " + line_data);
                     programs_3d.push_back(std::move(ph));
+                } else {
+                    bool ok_3d = false;
+                    programs_3d.push_back(makeProgram());
+                    try {
+                        ok_3d = loadProgramWithSize(programs_3d.back().get(),
+                                                    vert_3d, full_path);
+                    } catch (...) {
+                    }
+                    if (!ok_3d) {
+                        programs_3d.pop_back();
+                        auto ph = makePassthroughProgram(vert_3d);
+                        if (!ph)
+                            throw mx::Exception("acmx2: Error could not build 3D passthrough placeholder for: " + line_data);
+                        programs_3d.push_back(std::move(ph));
+                    }
                 }
                 setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, full_path);
             }
@@ -4248,7 +4502,9 @@ class ShaderLibrary {
             int percent_bucket = (percent / 10) * 10;
             if (percent_bucket > last_percent_reported) {
                 last_percent_reported = percent_bucket;
-                mx::system_out << "acmx2: Compiling... " << percent_bucket << "% (" << (shader_index + 1) << "/" << total_shaders << " shaders)\n";
+                mx::system_out << "acmx2: " << load_action << "... "
+                               << percent_bucket << "% (" << (shader_index + 1)
+                               << "/" << total_shaders << " shaders)\n";
                 fflush(stdout);
 
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -4257,14 +4513,18 @@ class ShaderLibrary {
                     logo_sprite->draw();
                 }
                 if (loadingFont.handle().has_value()) {
-                    std::string loadingText = "Compiling Shader " + std::to_string(shader_index + 1) + "/" + std::to_string(total_shaders) + "...";
+                    std::string loadingText = std::string(load_action) + " Shader " +
+                                              std::to_string(shader_index + 1) + "/" +
+                                              std::to_string(total_shaders) + "...";
                     win->text.printText_Blended(loadingFont, 10, 10, loadingText);
                 }
                 SDL_GL_SwapWindow(win->getWindow());
                 SDL_PumpEvents();
             }
         }
-        mx::system_out << "acmx2: Compiled " << shader_files.size() << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+        mx::system_out << "acmx2: " << (use_cache ? "Loaded " : "Compiled ")
+                       << shader_files.size() << " shaders ("
+                       << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
     }
 
@@ -4421,26 +4681,38 @@ class ShaderLibrary {
                 // driver diagnostics to stderr; keep the scan log concise.
                 ScopedStderrSilence silence_stderr;
 #endif
-                gl::ShaderProgram prog_2d;
-                prog_2d.setSilent(true);
-                if (!loadProgramWithSize(&prog_2d, vert_2d, full_path)) {
-                    compiled = false;
+                if (isComputeShaderFile(entry.raw)) {
+                    if (compute_shader_supported) {
+                        std::string compute_error;
+                        compiled = static_cast<bool>(
+                            makeComputeProgram(full_path, compute_error));
+                        if (!compiled && !compute_error.empty())
+                            mx::system_out << compute_error << " ";
+                    } else {
+                        mx::system_out << "compute unavailable; kept without validation ";
+                    }
                 } else {
-                    GLint link_status = 0;
-                    glGetProgramiv(prog_2d.id(), GL_LINK_STATUS, &link_status);
-                    if (link_status != GL_TRUE)
-                        compiled = false;
-                }
-                if (compiled && dual_mode) {
-                    gl::ShaderProgram prog_3d;
-                    prog_3d.setSilent(true);
-                    if (!loadProgramWithSize(&prog_3d, vert_3d, full_path)) {
+                    gl::ShaderProgram prog_2d;
+                    prog_2d.setSilent(true);
+                    if (!loadProgramWithSize(&prog_2d, vert_2d, full_path)) {
                         compiled = false;
                     } else {
                         GLint link_status = 0;
-                        glGetProgramiv(prog_3d.id(), GL_LINK_STATUS, &link_status);
+                        glGetProgramiv(prog_2d.id(), GL_LINK_STATUS, &link_status);
                         if (link_status != GL_TRUE)
                             compiled = false;
+                    }
+                    if (compiled && dual_mode) {
+                        gl::ShaderProgram prog_3d;
+                        prog_3d.setSilent(true);
+                        if (!loadProgramWithSize(&prog_3d, vert_3d, full_path)) {
+                            compiled = false;
+                        } else {
+                            GLint link_status = 0;
+                            glGetProgramiv(prog_3d.id(), GL_LINK_STATUS, &link_status);
+                            if (link_status != GL_TRUE)
+                                compiled = false;
+                        }
                     }
                 }
             } catch (const std::exception &e) {
@@ -4653,6 +4925,51 @@ class ShaderLibrary {
         if (!collectShaderLibraryEntries(library_path, shader_files, manifest_error)) {
             mx::system_err << "acmx2: " << manifest_error << "\n";
             return false;
+        }
+
+        const bool has_compute_shaders = std::any_of(
+            shader_files.begin(), shader_files.end(),
+            [](const std::string &file) { return isComputeShaderFile(file); });
+        if (has_compute_shaders) {
+            mx::system_out
+                << "acmx2: Compute shader library detected; validating sources "
+                   "without writing the fragment-only binary cache\n";
+            bool all_valid = true;
+            for (const std::string &shader_file : shader_files) {
+                const std::string full_path = library_path + "/" + shader_file;
+                if (isComputeShaderFile(shader_file)) {
+                    if (!compute_shader_supported) {
+                        mx::system_out << "acmx2: Skipping unsupported compute shader: "
+                                       << shader_file << "\n";
+                        continue;
+                    }
+                    std::string compute_error;
+                    if (!makeComputeProgram(full_path, compute_error)) {
+                        mx::system_err << "acmx2: " << compute_error << "\n";
+                        all_valid = false;
+                    }
+                    continue;
+                }
+
+                gl::ShaderProgram program_2d;
+                program_2d.setSilent(true);
+                if (!loadProgramWithSize(&program_2d, vert_2d, full_path)) {
+                    mx::system_err << "acmx2: Fragment shader validation failed: "
+                                   << shader_file << "\n";
+                    all_valid = false;
+                    continue;
+                }
+                if (dual_mode) {
+                    gl::ShaderProgram program_3d;
+                    program_3d.setSilent(true);
+                    if (!loadProgramWithSize(&program_3d, vert_3d, full_path)) {
+                        mx::system_err << "acmx2: 3D fragment shader validation failed: "
+                                       << shader_file << "\n";
+                        all_valid = false;
+                    }
+                }
+            }
+            return all_valid;
         }
 
         ShaderCache cache;
@@ -5111,6 +5428,7 @@ class ShaderLibrary {
 
         mx::system_out << "acmx2: Loading " << cache.entries.size() << " shaders from cache...\n";
         fflush(stdout);
+        program_kinds.assign(cache.entries.size(), ShaderProgramKind::Fragment);
 
         static constexpr const char *kLogoVertC =
             "#version 330 core\n"
@@ -5315,6 +5633,7 @@ class ShaderLibrary {
                 std::filesystem::remove(cache_file, rm_ec);
                 programs_2d.clear();
                 programs_3d.clear();
+                program_kinds.clear();
                 program_names_2d.clear();
                 program_names_3d.clear();
                 return false;
@@ -5340,6 +5659,20 @@ class ShaderLibrary {
         if (!loadShaderManifest(text, manifest, manifest_error))
             throw mx::Exception("acmx2: " + manifest_error);
         setCustomUniformValues(manifest.custom_uniforms);
+        const bool has_compute_shaders = std::any_of(
+            manifest.entries.begin(), manifest.entries.end(),
+            [](const std::string &entry) {
+                const auto normalized = normalizeShaderIndexEntry(entry);
+                return normalized && isComputeShaderFile(*normalized);
+            });
+        if (has_compute_shaders) {
+            mx::system_out
+                << "acmx2: Compute shaders present; using separate per-program "
+                   "fragment and compute binary caches\n";
+            clear();
+            loadPrograms(win, text, loadingFont);
+            return;
+        }
         std::string vert_2d = win->util.getFilePath("data/vert.glsl");
         std::string vert_3d = win->util.getFilePath("data/vertex.glsl");
         if (loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
@@ -5356,6 +5689,7 @@ class ShaderLibrary {
         fflush(stdout);
         programs_2d.clear();
         programs_3d.clear();
+        program_kinds.clear();
         program_names_2d.clear();
         program_names_3d.clear();
         if (buildShaderCache(win, text, vert_2d, vert_3d, &loadingFont) &&
@@ -5394,6 +5728,66 @@ class ShaderLibrary {
         if (it == program_names_2d.end())
             return false;
         return it->second.name.find("cache") != std::string::npos;
+    }
+
+    /// Return whether a library slot contains an executable compute program.
+    bool isCompute(size_t idx) const {
+        return idx < program_kinds.size() &&
+               program_kinds[idx] == ShaderProgramKind::Compute;
+    }
+
+    /**
+     * Run a compute library slot as a full-frame image pass.
+     *
+     * Compute shaders read the input through `uniform sampler2D samp` on
+     * texture unit 0 and write an RGBA16F image on image unit 0. The image may
+     * be declared with explicit `binding = 0`, or use one of the conventional
+     * names outputImage, output_image, destTex, or img_output.
+     */
+    bool dispatchCompute2D(gl::GLWindow *win, size_t idx, GLuint input_texture,
+                           GLuint output_texture) {
+        if (!compute_shader_supported || !isCompute(idx) ||
+            idx >= programs_2d.size() || input_texture == 0 ||
+            output_texture == 0 || input_texture == output_texture) {
+            return false;
+        }
+
+        gl::ShaderProgram *program = programs_2d[idx].get();
+        while (glGetError() != GL_NO_ERROR) {
+        }
+        program->useProgram();
+        updateShaderUniforms2D(win, idx);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, input_texture);
+        const GLint input_location = glGetUniformLocation(program->id(), "samp");
+        if (input_location != -1)
+            glUniform1i(input_location, 0);
+
+        static constexpr const char *OUTPUT_IMAGE_NAMES[] = {
+            "outputImage", "output_image", "destTex", "img_output"};
+        for (const char *name : OUTPUT_IMAGE_NAMES) {
+            const GLint location = glGetUniformLocation(program->id(), name);
+            if (location != -1)
+                glUniform1i(location, 0);
+        }
+        glBindImageTexture(0, output_texture, 0, GL_FALSE, 0, GL_WRITE_ONLY,
+                           GL_RGBA16F);
+
+        const ProgramData &data = program_names_2d.at(static_cast<int>(idx));
+        const GLuint local_x = static_cast<GLuint>(
+            std::max(data.compute_work_group_size[0], 1));
+        const GLuint local_y = static_cast<GLuint>(
+            std::max(data.compute_work_group_size[1], 1));
+        const GLuint groups_x =
+            (static_cast<GLuint>(win->w) + local_x - 1) / local_x;
+        const GLuint groups_y =
+            (static_cast<GLuint>(win->h) + local_y - 1) / local_y;
+        glDispatchCompute(groups_x, groups_y, 1);
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
+                        GL_TEXTURE_FETCH_BARRIER_BIT |
+                        GL_FRAMEBUFFER_BARRIER_BIT);
+        glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+        return glGetError() == GL_NO_ERROR;
     }
 
     /**
@@ -7376,6 +7770,69 @@ class ACView : public gl::GLObject {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
+    /** Allocate the shared fragment/compute ping-pong targets on demand. */
+    void ensurePassTargets(gl::GLWindow *win) {
+        if (passFBO[0] != 0 && pass_target_width == win->w &&
+            pass_target_height == win->h) {
+            return;
+        }
+        for (int pass = 0; pass < 2; ++pass) {
+            if (passFBO[pass] != 0)
+                glDeleteFramebuffers(1, &passFBO[pass]);
+            if (passTexture[pass] != 0)
+                glDeleteTextures(1, &passTexture[pass]);
+            passFBO[pass] = 0;
+            passTexture[pass] = 0;
+        }
+        for (int pass = 0; pass < 2; ++pass) {
+            glGenFramebuffers(1, &passFBO[pass]);
+            glGenTextures(1, &passTexture[pass]);
+            glBindTexture(GL_TEXTURE_2D, passTexture[pass]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, win->w, win->h, 0,
+                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pass]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D, passTexture[pass], 0);
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
+                GL_FRAMEBUFFER_COMPLETE) {
+                throw mx::Exception("acmx2: shader pass framebuffer is not complete");
+            }
+        }
+        pass_target_width = win->w;
+        pass_target_height = win->h;
+    }
+
+    /** Bind history textures required by a cache-aware pass. */
+    void bindPassHistoryTextures(size_t shader_index) {
+        if (!texture_cache || !frame_cache.isFull() ||
+            !library.isCache2D(shader_index)) {
+            return;
+        }
+        if (texture_cache_array) {
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D_ARRAY, frame_cache.historyTexture());
+        } else {
+            for (int cache_index = 0; cache_index < library.cacheSize();
+                 ++cache_index) {
+                glActiveTexture(GL_TEXTURE1 + cache_index);
+                glBindTexture(GL_TEXTURE_2D,
+                              frame_cache.textureAt(cache_index));
+            }
+        }
+        glActiveTexture(GL_TEXTURE0);
+    }
+
+    bool runComputePass(gl::GLWindow *win, size_t shader_index,
+                        GLuint input_texture, GLuint output_texture) {
+        bindPassHistoryTextures(shader_index);
+        return library.dispatchCompute2D(win, shader_index, input_texture,
+                                         output_texture);
+    }
+
     /**
      * @brief One-time conversion of existing GL resources from SDR (8-bit)
      *        to HDR (16-bit) formats. Called the first time a video is
@@ -8637,6 +9094,8 @@ class ACView : public gl::GLObject {
                 passTexture[p] = 0;
             }
         }
+        pass_target_width = 0;
+        pass_target_height = 0;
         if (crossfadeFBO) {
             glDeleteFramebuffers(1, &crossfadeFBO);
             crossfadeFBO = 0;
@@ -10294,23 +10753,7 @@ class ACView : public gl::GLObject {
                     }
                 };
 
-                if (passFBO[0] == 0) {
-                    const GLint pass_internal = input_is_hdr ? GL_RGBA16F : GL_RGBA;
-                    const GLenum pass_type = input_is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
-                    for (int p = 0; p < 2; ++p) {
-                        glGenFramebuffers(1, &passFBO[p]);
-                        glGenTextures(1, &passTexture[p]);
-                        glBindTexture(GL_TEXTURE_2D, passTexture[p]);
-                        glTexImage2D(GL_TEXTURE_2D, 0, pass_internal, win->w, win->h, 0, GL_RGBA, pass_type, nullptr);
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                        glBindFramebuffer(GL_FRAMEBUFFER, passFBO[p]);
-                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, passTexture[p], 0);
-                        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-                            throw mx::Exception("acmx2: 3D pass framebuffer is not complete");
-                        }
-                    }
-                }
+                ensurePassTargets(win);
 
                 GLuint inputTex = input_is_hdr ? hdr_linear_video_texture : camera_texture;
                 int pingpong = 0;
@@ -10320,42 +10763,35 @@ class ACView : public gl::GLObject {
                     if (shader_idx >= 0 && shader_idx < static_cast<int>(library.size2d())) {
                         gl::ShaderProgram *pass_shader = library.getShader2D(shader_idx);
                         if (pass_shader) {
-                            glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
-                            glViewport(0, 0, win->w, win->h);
-                            glClear(GL_COLOR_BUFFER_BIT);
-                            pass_shader->useProgram();
-                            library.updateShaderUniforms2D(win, shader_idx);
-                            pass_shader->setUniform("mv_matrix", glm::mat4(1.0f));
-                            pass_shader->setUniform("proj_matrix", glm::mat4(1.0f));
-                            glActiveTexture(GL_TEXTURE0);
-                            glBindTexture(GL_TEXTURE_2D, inputTex);
-                            glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
-                            // If this pass is a texture-cache shader, bind the
-                            // cache ring to units 1..N. The main render path only
-                            // does this when the active library shader is a cache
-                            // shader; multipass passes need their own bindings.
-                            if (texture_cache && frame_cache.isFull() && library.isCache2D(static_cast<size_t>(shader_idx))) {
-                                if (texture_cache_array) {
-                                    glActiveTexture(GL_TEXTURE1);
-                                    glBindTexture(GL_TEXTURE_2D_ARRAY,
-                                                  frame_cache.historyTexture());
-                                } else {
-                                    const int n_bind = library.cacheSize();
-                                    for (int ci = 0; ci < n_bind; ++ci) {
-                                        glActiveTexture(GL_TEXTURE1 + ci);
-                                        glBindTexture(
-                                            GL_TEXTURE_2D,
-                                            frame_cache.textureAt(ci));
-                                    }
-                                }
+                            bool applied = false;
+                            if (library.isCompute(static_cast<size_t>(shader_idx))) {
+                                glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+                                applied = runComputePass(
+                                    win, static_cast<size_t>(shader_idx), inputTex,
+                                    passTexture[pingpong]);
+                            } else {
+                                glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
+                                glViewport(0, 0, win->w, win->h);
+                                glClear(GL_COLOR_BUFFER_BIT);
+                                pass_shader->useProgram();
+                                library.updateShaderUniforms2D(win, shader_idx);
+                                pass_shader->setUniform("mv_matrix", glm::mat4(1.0f));
+                                pass_shader->setUniform("proj_matrix", glm::mat4(1.0f));
                                 glActiveTexture(GL_TEXTURE0);
+                                glBindTexture(GL_TEXTURE_2D, inputTex);
+                                glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
+                                bindPassHistoryTextures(
+                                    static_cast<size_t>(shader_idx));
+                                sprite.setShader(pass_shader);
+                                sprite.setName("samp");
+                                sprite.draw(inputTex, 0, 0, win->w, win->h);
+                                applied = true;
                             }
-                            sprite.setShader(pass_shader);
-                            sprite.setName("samp");
-                            sprite.draw(inputTex, 0, 0, win->w, win->h);
-                            pass_applied = true;
-                            inputTex = passTexture[pingpong];
-                            pingpong = 1 - pingpong;
+                            if (applied) {
+                                pass_applied = true;
+                                inputTex = passTexture[pingpong];
+                                pingpong = 1 - pingpong;
+                            }
                         } else {
                             logPassWarning3D("skipping pass index " + std::to_string(shader_idx) + " (null shader)");
                         }
@@ -10376,8 +10812,24 @@ class ACView : public gl::GLObject {
                 glDepthMask(GL_TRUE);
             }
 
+            const bool active_compute = !library.isBypassed() &&
+                                        library.isCompute(library.index());
+            if (active_compute) {
+                ensurePassTargets(win);
+                const int output_index =
+                    textureForMesh == passTexture[0] ? 1 : 0;
+                if (runComputePass(win, library.index(), textureForMesh,
+                                   passTexture[output_index])) {
+                    textureForMesh = passTexture[output_index];
+                }
+                glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+                glViewport(0, 0, win->w, win->h);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                glEnable(GL_DEPTH_TEST);
+            }
+
             gl::ShaderProgram *activeShader;
-            if (library.isBypassed()) {
+            if (library.isBypassed() || active_compute) {
                 activeShader = &fshader3d;
             } else {
                 activeShader = library.shader();
@@ -10468,24 +10920,8 @@ class ACView : public gl::GLObject {
                         last_warn_tick = now_tick;
                     }
                 };
-                if (passFBO[0] == 0) {
-                    const GLint pass_internal = input_is_hdr ? GL_RGBA16F : GL_RGBA;
-                    const GLenum pass_type = input_is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
-                    for (int p = 0; p < 2; ++p) {
-                        glGenFramebuffers(1, &passFBO[p]);
-                        glGenTextures(1, &passTexture[p]);
-                        glBindTexture(GL_TEXTURE_2D, passTexture[p]);
-                        glTexImage2D(GL_TEXTURE_2D, 0, pass_internal, win->w, win->h, 0, GL_RGBA, pass_type, nullptr);
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                        glBindFramebuffer(GL_FRAMEBUFFER, passFBO[p]);
-                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, passTexture[p], 0);
-                        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-                            throw mx::Exception("acmx2: pass framebuffer is not complete");
-                        }
-                    }
-                    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
-                }
+                ensurePassTargets(win);
+                glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
 
                 GLuint inputTex = input_is_hdr ? hdr_linear_video_texture : camera_texture;
                 int pingpong = 0;
@@ -10496,42 +10932,35 @@ class ACView : public gl::GLObject {
                     if (shader_idx >= 0 && shader_idx < static_cast<int>(library.size())) {
                         gl::ShaderProgram *pass_shader = library.getShader(shader_idx);
                         if (pass_shader) {
-                            glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
-                            glViewport(0, 0, win->w, win->h);
-                            glClear(GL_COLOR_BUFFER_BIT);
-                            pass_shader->useProgram();
-                            library.updateShaderUniforms(win, shader_idx);
-                            pass_shader->setUniform("mv_matrix", glm::mat4(1.0f));
-                            pass_shader->setUniform("proj_matrix", glm::mat4(1.0f));
-                            glActiveTexture(GL_TEXTURE0);
-                            glBindTexture(GL_TEXTURE_2D, inputTex);
-                            glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
-                            // If this pass is a texture-cache shader, bind the
-                            // cache ring to units 1..N. The main render path only
-                            // does this when the active library shader is a cache
-                            // shader; multipass passes need their own bindings.
-                            if (texture_cache && frame_cache.isFull() && library.isCache2D(static_cast<size_t>(shader_idx))) {
-                                if (texture_cache_array) {
-                                    glActiveTexture(GL_TEXTURE1);
-                                    glBindTexture(GL_TEXTURE_2D_ARRAY,
-                                                  frame_cache.historyTexture());
-                                } else {
-                                    const int n_bind = library.cacheSize();
-                                    for (int ci = 0; ci < n_bind; ++ci) {
-                                        glActiveTexture(GL_TEXTURE1 + ci);
-                                        glBindTexture(
-                                            GL_TEXTURE_2D,
-                                            frame_cache.textureAt(ci));
-                                    }
-                                }
+                            bool applied = false;
+                            if (library.isCompute(static_cast<size_t>(shader_idx))) {
+                                glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+                                applied = runComputePass(
+                                    win, static_cast<size_t>(shader_idx), inputTex,
+                                    passTexture[pingpong]);
+                            } else {
+                                glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
+                                glViewport(0, 0, win->w, win->h);
+                                glClear(GL_COLOR_BUFFER_BIT);
+                                pass_shader->useProgram();
+                                library.updateShaderUniforms(win, shader_idx);
+                                pass_shader->setUniform("mv_matrix", glm::mat4(1.0f));
+                                pass_shader->setUniform("proj_matrix", glm::mat4(1.0f));
                                 glActiveTexture(GL_TEXTURE0);
+                                glBindTexture(GL_TEXTURE_2D, inputTex);
+                                glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
+                                bindPassHistoryTextures(
+                                    static_cast<size_t>(shader_idx));
+                                sprite.setShader(pass_shader);
+                                sprite.setName("samp");
+                                sprite.draw(inputTex, 0, 0, win->w, win->h);
+                                applied = true;
                             }
-                            sprite.setShader(pass_shader);
-                            sprite.setName("samp");
-                            sprite.draw(inputTex, 0, 0, win->w, win->h);
-                            pass_applied = true;
-                            inputTex = passTexture[pingpong];
-                            pingpong = 1 - pingpong;
+                            if (applied) {
+                                pass_applied = true;
+                                inputTex = passTexture[pingpong];
+                                pingpong = 1 - pingpong;
+                            }
                         } else {
                             logPassWarning2D("skipping pass index " + std::to_string(shader_idx) + " (null shader)");
                         }
@@ -10549,8 +10978,23 @@ class ACView : public gl::GLObject {
                 glClear(GL_COLOR_BUFFER_BIT);
             }
 
+            const bool active_compute = !library.isBypassed() &&
+                                        library.isCompute(library.index());
+            if (active_compute) {
+                ensurePassTargets(win);
+                const int output_index =
+                    textureForSprite == passTexture[0] ? 1 : 0;
+                if (runComputePass(win, library.index(), textureForSprite,
+                                   passTexture[output_index])) {
+                    textureForSprite = passTexture[output_index];
+                }
+                glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+                glViewport(0, 0, win->w, win->h);
+                glClear(GL_COLOR_BUFFER_BIT);
+            }
+
             gl::ShaderProgram *activeShader;
-            if (library.isBypassed()) {
+            if (library.isBypassed() || active_compute) {
                 activeShader = &fshader;
             } else {
                 activeShader = library.shader();
@@ -12004,6 +12448,8 @@ class ACView : public gl::GLObject {
     GLuint depthBuffer = 0;
     GLuint passFBO[2] = {0, 0};
     GLuint passTexture[2] = {0, 0};
+    int pass_target_width = 0;
+    int pass_target_height = 0;
     GLuint crossfadeFBO = 0;         ///< FBO used for the crossfade compositing pass.
     GLuint crossfadeTexture = 0;     ///< Colour attachment of @c crossfadeFBO (blended output).
     GLuint crossfadePrevTexture = 0; ///< Snapshot of the previous frame used as the blend source.
@@ -13077,6 +13523,7 @@ class MainWindow : public gl::GLWindow {
     }
 
     void initCommon(const MXArguments &args) {
+        update_compute_shader_support();
         util.path = args.path;
         if (!std::filesystem::exists(util.path + "/data/win-icon.png")) {
             if (std::filesystem::exists("/usr/local/share/acmx2/data"))
@@ -13108,9 +13555,10 @@ class MainWindow : public gl::GLWindow {
      *
      * @param args Parsed CLI arguments (resolution, asset path, etc.).
      */
-    MainWindow(const MXArguments &args)
+    MainWindow(const MXArguments &args, const OpenGLContextConfig &context_config)
         : gl::GLWindow("ACMX2", args.tw, args.th, false, gl::GLMode::DESKTOP,
-                       4, 1, args.fps_value <= 60.0),
+                       context_config.major, context_config.minor,
+                       args.fps_value <= 60.0),
           silent_mode(args.silent) {
         initCommon(args);
     }
@@ -13125,7 +13573,13 @@ class MainWindow : public gl::GLWindow {
      * @param args     Parsed CLI arguments.
      * @param headless Unused disambiguator parameter.
      */
-    MainWindow(const MXArguments &args, bool headless) : gl::GLWindow(args.tw, args.th, gl::GLMode::DESKTOP), silent_mode(true) {
+    MainWindow(const MXArguments &args, const OpenGLContextConfig &context_config,
+               bool headless)
+        : gl::GLWindow("ACMX2", args.tw, args.th, false, gl::GLMode::DESKTOP,
+                       context_config.major, context_config.minor, false),
+          silent_mode(true) {
+        static_cast<void>(headless);
+        SDL_HideWindow(getWindow());
         initCommon(args);
     }
 
@@ -14267,6 +14721,7 @@ int main(int argc, char **argv) {
 #endif
             mx::system_out << "acmx2: Creating scan window for remove-broken...\n";
             fflush(stdout);
+            const OpenGLContextConfig context_config = select_open_gl_context();
 
             /**
              * @brief Headless GL context used exclusively by the
@@ -14286,16 +14741,17 @@ int main(int argc, char **argv) {
                 bool done = false;
                 bool active = true;
 
-                RemoveBrokenWindow(const std::string &path, bool is3d, const std::string &assets)
-                    : gl::GLWindow("ACMX2 Remove-Broken", 640, 480, false),
+                RemoveBrokenWindow(const std::string &path, bool is3d,
+                                   const std::string &assets,
+                                   const OpenGLContextConfig &context_config,
+                                   bool headless)
+                    : gl::GLWindow("ACMX2 Remove-Broken", 640, 480, false,
+                                   gl::GLMode::DESKTOP, context_config.major,
+                                   context_config.minor, false),
                       lib_path(path), enable_3d(is3d), assets_path(assets) {
-                    util.path = assets_path;
-                    library.enableDualMode(enable_3d);
-                }
-
-                RemoveBrokenWindow(const std::string &path, bool is3d, const std::string &assets, bool)
-                    : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
-                      lib_path(path), enable_3d(is3d), assets_path(assets) {
+                    if (headless)
+                        SDL_HideWindow(getWindow());
+                    update_compute_shader_support();
                     util.path = assets_path;
                     library.enableDualMode(enable_3d);
                 }
@@ -14336,12 +14792,14 @@ int main(int argc, char **argv) {
 
 #if defined(__linux__)
             if (args.silent) {
-                RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d, args.path, true);
+                RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d,
+                                          args.path, context_config, true);
                 rb_win.scanLoop();
                 return rb_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
             }
 #endif
-            RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d, args.path);
+            RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d,
+                                      args.path, context_config, false);
             rb_win.scanLoop();
             return rb_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
         } catch (const mx::Exception &e) {
@@ -14381,6 +14839,7 @@ int main(int argc, char **argv) {
 #endif
             mx::system_out << "acmx2: Creating build window...\n";
             fflush(stdout);
+            const OpenGLContextConfig context_config = select_open_gl_context();
 
             /**
              * @brief Headless-style GLWindow used exclusively by the `--build` CLI flag.
@@ -14412,22 +14871,16 @@ int main(int argc, char **argv) {
                  */
                 BuildWindow(const std::string &path, bool is3d,
                             const std::string &assets, int tex_cache_size,
-                            bool use_array)
-                    : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false),
+                            bool use_array,
+                            const OpenGLContextConfig &context_config,
+                            bool headless)
+                    : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false,
+                                   gl::GLMode::DESKTOP, context_config.major,
+                                   context_config.minor, false),
                       lib_path(path), enable_3d(is3d), assets_path(assets) {
-                    mx::system_out << "acmx2: Window created, setting up...\n";
-                    fflush(stdout);
-                    util.path = assets_path;
-                    library.enableDualMode(enable_3d);
-                    library.setCacheSize(tex_cache_size > 0 ? tex_cache_size : 8);
-                    library.setHistoryTextureArray(use_array);
-                }
-
-                BuildWindow(const std::string &path, bool is3d,
-                            const std::string &assets, int tex_cache_size,
-                            bool use_array, bool)
-                    : gl::GLWindow(640, 480, gl::GLMode::DESKTOP),
-                      lib_path(path), enable_3d(is3d), assets_path(assets) {
+                    if (headless)
+                        SDL_HideWindow(getWindow());
+                    update_compute_shader_support();
                     mx::system_out << "acmx2: Window created, setting up...\n";
                     fflush(stdout);
                     util.path = assets_path;
@@ -14535,14 +14988,14 @@ int main(int argc, char **argv) {
             if (args.silent) {
                 BuildWindow build_win(args.build_library_path, args.is3d,
                                       args.path, args.cache_size,
-                                      args.cache_array, true);
+                                      args.cache_array, context_config, true);
                 build_win.buildLoop();
                 return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
             }
 #endif
             BuildWindow build_win(args.build_library_path, args.is3d,
                                   args.path, args.cache_size,
-                                  args.cache_array);
+                                  args.cache_array, context_config, false);
             build_win.buildLoop();
 
             return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -14647,11 +15100,13 @@ int main(int argc, char **argv) {
         SDL_SetHint("SDL_VIDEO_WAYLAND_WMCLASS", "acmx2");
         SDL_SetHint("SDL_VIDEO_X11_WMCLASS", "ACMX2");
 
+        const OpenGLContextConfig context_config = select_open_gl_context();
+
         if (args.silent) {
-            MainWindow main_window(args, true);
+            MainWindow main_window(args, context_config, true);
             main_window.loop();
         } else {
-            MainWindow main_window(args);
+            MainWindow main_window(args, context_config);
             main_window.loop();
         }
     } catch (const mx::Exception &e) {

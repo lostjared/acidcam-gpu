@@ -1,6 +1,14 @@
 #include <gl.hpp>
 
 namespace ac {
+    /** Restore a compute-only program binary keyed by source and GL driver. */
+    bool loadComputeProgramBinaryFromCache(const std::string &source,
+                                           GLuint &program);
+
+    /** Save a linked compute-only program to its stage-specific cache key. */
+    bool saveComputeProgramBinaryToCache(const std::string &source,
+                                         GLuint program);
+
     class ShaderProgram : public gl::ShaderProgram {
       public:
         ShaderProgram() = default;

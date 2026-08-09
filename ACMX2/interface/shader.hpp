@@ -7,6 +7,7 @@
  */
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialog>
 #include <QFile>
 #include <QLabel>
@@ -33,11 +34,12 @@ class ShaderDialog : public QDialog {
     QPushButton *cancelButton;
     QCheckBox *defaultCodeCheckBox;
     QCheckBox *cacheShaderCheckBox;
+    QComboBox *shaderTypeComboBox;
     QString shaderPath;
 
     void init();
     bool createShaderFile(const QString &shaderName, bool includeDefaultCode,
-                          bool createCacheShader);
+                          bool createCacheShader, bool createComputeShader);
   private slots:
     void onOkButtonClicked();
     void onCancelButtonClicked();

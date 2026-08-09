@@ -554,7 +554,7 @@ void MainWindow::initControls() {
     listMenu_new = new QAction(tr("New Shader Library"), this);
     connect(listMenu_new, &QAction::triggered, this, &MainWindow::newList);
     listMenu->addAction(listMenu_new);
-    listMenu_shader = new QAction(tr("New Shader GLSL File"), this);
+    listMenu_shader = new QAction(tr("New Shader File..."), this);
     connect(listMenu_shader, &QAction::triggered, this, &MainWindow::newShader);
     listMenu->addAction(listMenu_shader);
     customUniformsAction = new QAction(tr("Add Custom Uniforms..."), this);

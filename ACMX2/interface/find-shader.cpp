@@ -132,7 +132,7 @@ void FindShaderDialog::performSearch() {
     QApplication::setOverrideCursor(Qt::WaitCursor);
     resultsTree->setSortingEnabled(false);
 
-    const QStringList filters = {"*.glsl", "*.frag", "*.vert"};
+    const QStringList filters = {"*.glsl", "*.frag", "*.vert", "*.comp"};
     QDirIterator files(shaderPath, filters, QDir::Files | QDir::Readable,
                        QDirIterator::Subdirectories);
     int fileCount = 0;
