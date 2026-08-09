@@ -144,6 +144,54 @@ static std::string safeGLString(GLenum name) {
     return reinterpret_cast<const char *>(value);
 }
 
+/**
+ * @brief Print the active driver's shader-uniform capacity in one line.
+ *
+ * GL_MAX_UNIFORM_LOCATIONS became core in OpenGL 4.3. Older contexts still
+ * expose the per-stage component limits, so report locations as unsupported
+ * instead of issuing an invalid glGetIntegerv query.
+ */
+static void print_open_gl_uniform_limits() {
+    GLint max_vertex_components = 0;
+    GLint max_fragment_components = 0;
+    GLint max_uniform_locations = 0;
+
+    glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &max_vertex_components);
+    glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &max_fragment_components);
+
+    GLint major_version = 0;
+    GLint minor_version = 0;
+    glGetIntegerv(GL_MAJOR_VERSION, &major_version);
+    glGetIntegerv(GL_MINOR_VERSION, &minor_version);
+    bool uniform_locations_supported =
+        major_version > 4 || (major_version == 4 && minor_version >= 3);
+#ifdef GL_ARB_explicit_uniform_location
+    uniform_locations_supported =
+        uniform_locations_supported ||
+        SDL_GL_ExtensionSupported("GL_ARB_explicit_uniform_location") == SDL_TRUE;
+#endif
+
+#ifdef GL_MAX_UNIFORM_LOCATIONS
+    if (uniform_locations_supported) {
+        glGetIntegerv(GL_MAX_UNIFORM_LOCATIONS, &max_uniform_locations);
+    }
+#else
+    uniform_locations_supported = false;
+#endif
+
+    mx::system_out
+        << "acmx2: OpenGL uniform limits: vertex components="
+        << max_vertex_components << " (GL_MAX_VERTEX_UNIFORM_COMPONENTS), "
+        << "fragment components=" << max_fragment_components
+        << " (GL_MAX_FRAGMENT_UNIFORM_COMPONENTS), uniform locations=";
+    if (uniform_locations_supported) {
+        mx::system_out << max_uniform_locations;
+    } else {
+        mx::system_out << "unsupported by this OpenGL context";
+    }
+    mx::system_out << " (GL_MAX_UNIFORM_LOCATIONS)\n";
+}
+
 #ifdef __linux__
 /**
  * @brief Return whether a numbered V4L2 device is provided by v4l2loopback.
@@ -8641,6 +8689,9 @@ class ACView : public gl::GLObject {
      * @param win Pointer to the hosting GLWindow.
      */
     virtual void load(gl::GLWindow *win) override {
+        print_open_gl_uniform_limits();
+        mx::system_out.flush();
+
 #ifdef ACMX2_WITH_CUDA
         cudaError_t cuda_err = cudaSetDevice(gpu_cuda_device);
         if (cuda_err != cudaSuccess) {

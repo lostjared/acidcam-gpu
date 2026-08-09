@@ -6,6 +6,7 @@
 #include "metadata-viewer.hpp"
 #include "settings.hpp"
 #include "shader-manifest.hpp"
+#include "uniform-reference.hpp"
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
@@ -612,6 +613,12 @@ void MainWindow::initControls() {
         dialog->activateWindow();
     });
     listMenu->addAction(listMenu_findInFiles);
+    helpMenu_uniformReference = new QAction(tr("Built-in Uniform Reference..."), this);
+    connect(helpMenu_uniformReference, &QAction::triggered, this,
+            &MainWindow::menuUniformReference);
+    helpMenu->addAction(helpMenu_uniformReference);
+    helpMenu->addSeparator();
+
     helpMenu_about = new QAction("About", this);
 
     connect(helpMenu_about, &QAction::triggered, this, [=]() {
@@ -1887,6 +1894,16 @@ void MainWindow::menuCustomUniforms() {
     customUniformDialog->show();
     customUniformDialog->raise();
     customUniformDialog->activateWindow();
+}
+
+void MainWindow::menuUniformReference() {
+    if (!uniformReferenceDialog) {
+        uniformReferenceDialog = new UniformReferenceDialog(this);
+        uniformReferenceDialog->setAttribute(Qt::WA_DeleteOnClose);
+    }
+    uniformReferenceDialog->show();
+    uniformReferenceDialog->raise();
+    uniformReferenceDialog->activateWindow();
 }
 
 bool MainWindow::loadShaders(const QString &path, bool force) {

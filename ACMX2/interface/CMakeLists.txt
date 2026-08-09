@@ -88,6 +88,7 @@ set(LAUNCHER_GUI_HEADERS
     shaderlibrary.hpp
     shaderpass.hpp
     syntax.hpp
+    uniform-reference.hpp
     version_info.hpp
 )
 
@@ -110,6 +111,7 @@ set(LAUNCHER_GUI_SOURCES
     shaderlibrary.cpp
     shaderpass.cpp
     syntax.cpp
+    uniform-reference.cpp
 )
 
 set(LAUNCHER_GUI_RESOURCES

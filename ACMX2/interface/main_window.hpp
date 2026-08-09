@@ -30,6 +30,7 @@
 #include <random>
 
 class CustomUniformDialog;
+class UniformReferenceDialog;
 
 /**
  * @brief Primary ACMX2 desktop UI.
@@ -91,6 +92,7 @@ class MainWindow : public QMainWindow {
     void menuMetadataViewer();
     void menuWatermarkSettings();
     void menuCustomUniforms();
+    void menuUniformReference();
     void menuToggleDisplayFilter(bool checked);
     void openCustomStyleEditor();
 
@@ -159,6 +161,7 @@ class MainWindow : public QMainWindow {
     QAction *normalizedTimeAction = nullptr;
     QAction *listMenu_new = nullptr, *listMenu_shader = nullptr, *listMenu_remove = nullptr, *listMenu_set_current = nullptr, *listMenu_up = nullptr, *listMenu_down = nullptr, *listMenu_shuffle = nullptr, *listMenu_sort = nullptr;
     QAction *helpMenu_about = nullptr;
+    QAction *helpMenu_uniformReference = nullptr;
     QAction *listMenu_findNext = nullptr;
     QAction *listMenu_findInFiles = nullptr;
     QString lastSearchText;
@@ -290,6 +293,7 @@ class MainWindow : public QMainWindow {
     QAction *stayOnTopAction;
     QAction *customUniformsAction = nullptr;
     CustomUniformDialog *customUniformDialog = nullptr;
+    QPointer<UniformReferenceDialog> uniformReferenceDialog;
     bool playlist_enabled = false;
     QStringList playlist_names;
     QList<QPair<QString, QStringList>> playlist_tree_data;

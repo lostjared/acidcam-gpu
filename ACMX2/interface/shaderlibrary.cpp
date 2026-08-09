@@ -63,10 +63,10 @@ void LibraryWindow::onBrowseButtonClicked() {
 const char *defaultFile = R"(#version 330 core
 in vec2 tc;
 out vec4 color;
-uniform float time_f;
+
 uniform sampler2D samp;
-uniform vec2 iResolution;
-void main(void) {
+
+void main() {
     color = texture(samp, tc);
 }
 )";
