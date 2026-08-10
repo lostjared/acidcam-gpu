@@ -62,6 +62,7 @@ app = project.QtProgram(
         "shaderlibrary.cpp",
         "shaderpass.cpp",
         "syntax.cpp",
+        "uniform-reference.cpp",
         "qresource.qrc",
     ],
     link=[qt.Widgets, qt.Gui, qt.Concurrent, qt.Network, qt.Core],
