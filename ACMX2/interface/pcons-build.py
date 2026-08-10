@@ -50,6 +50,7 @@ app = project.QtProgram(
         "editor.cpp",
         "find-shader.cpp",
         "gpufilter.cpp",
+        "library-builder.cpp",
         "main.cpp",
         "main_window.cpp",
         "metadata-viewer.cpp",

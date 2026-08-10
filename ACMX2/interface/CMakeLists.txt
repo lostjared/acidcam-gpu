@@ -77,6 +77,7 @@ set(LAUNCHER_GUI_HEADERS
     editor.hpp
     find-shader.hpp
     gpufilter.hpp
+    library-builder.hpp
     main_window.hpp
     metadata-viewer.hpp
     midi-settings.hpp
@@ -99,6 +100,7 @@ set(LAUNCHER_GUI_SOURCES
     editor.cpp
     find-shader.cpp
     gpufilter.cpp
+    library-builder.cpp
     main.cpp
     main_window.cpp
     metadata-viewer.cpp

@@ -30,6 +30,7 @@
 #include <random>
 
 class CustomUniformDialog;
+class LibraryBuilderDialog;
 class UniformReferenceDialog;
 
 /**
@@ -84,6 +85,7 @@ class MainWindow : public QMainWindow {
     void menuGPUFilterSettings();
     void menuShaderPassSettings();
     void menuPlaylistSettings();
+    void menuLibraryBuilder();
     void menuBuildShaderCache();
     void menuRunFromCache();
     void menuCleanShaderCache();
@@ -160,6 +162,7 @@ class MainWindow : public QMainWindow {
     QAction *play_repeat = nullptr, *play_stop = nullptr;
     QAction *normalizedTimeAction = nullptr;
     QAction *listMenu_new = nullptr, *listMenu_shader = nullptr, *listMenu_remove = nullptr, *listMenu_set_current = nullptr, *listMenu_up = nullptr, *listMenu_down = nullptr, *listMenu_shuffle = nullptr, *listMenu_sort = nullptr;
+    QAction *libraryBuilderAction = nullptr;
     QAction *helpMenu_about = nullptr;
     QAction *helpMenu_uniformReference = nullptr;
     QAction *listMenu_findNext = nullptr;
@@ -246,6 +249,7 @@ class MainWindow : public QMainWindow {
     QAction *shaderPassAction;
     QPointer<ShaderPassDialog> shaderPassDialog;
     QPointer<PlaylistDialog> playlistDialog;
+    QPointer<LibraryBuilderDialog> libraryBuilderDialog;
     QAction *styleSheetAction;
     QAction *buildCacheAction;
     QAction *runFromCacheAction;

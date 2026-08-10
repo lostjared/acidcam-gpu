@@ -3,6 +3,7 @@
 #include "custom-uniforms.hpp"
 #include "custom_style.hpp"
 #include "find-shader.hpp"
+#include "library-builder.hpp"
 #include "metadata-viewer.hpp"
 #include "settings.hpp"
 #include "shader-manifest.hpp"
@@ -557,6 +558,10 @@ void MainWindow::initControls() {
     listMenu_new = new QAction(tr("New Shader Library"), this);
     connect(listMenu_new, &QAction::triggered, this, &MainWindow::newList);
     listMenu->addAction(listMenu_new);
+    libraryBuilderAction = new QAction(tr("Shader Library Builder..."), this);
+    connect(libraryBuilderAction, &QAction::triggered, this,
+            &MainWindow::menuLibraryBuilder);
+    listMenu->addAction(libraryBuilderAction);
     listMenu_shader = new QAction(tr("New Shader File..."), this);
     connect(listMenu_shader, &QAction::triggered, this, &MainWindow::newShader);
     listMenu->addAction(listMenu_shader);
@@ -1175,6 +1180,30 @@ void MainWindow::newList() {
         appSettings.setValue("shaders", shader_path);
         appSettings.sync();
     }
+}
+
+void MainWindow::menuLibraryBuilder() {
+    if (libraryBuilderDialog) {
+        libraryBuilderDialog->show();
+        libraryBuilderDialog->raise();
+        libraryBuilderDialog->activateWindow();
+        return;
+    }
+
+    libraryBuilderDialog = new LibraryBuilderDialog(this);
+    libraryBuilderDialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(libraryBuilderDialog, &LibraryBuilderDialog::libraryExported, this,
+            [this](const QString &directory) {
+                shader_path = directory;
+                loadShaders(shader_path, true);
+                QSettings settings("LostSideDead");
+                settings.setValue("shaders", shader_path);
+                settings.sync();
+                Log(tr("Loaded exported shader library: %1").arg(shader_path));
+            });
+    libraryBuilderDialog->show();
+    libraryBuilderDialog->raise();
+    libraryBuilderDialog->activateWindow();
 }
 
 void MainWindow::menuSearch() {
