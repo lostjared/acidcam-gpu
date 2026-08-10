@@ -65,6 +65,16 @@ only once:
    original as `library.json.bak` or `index.txt.bak`, and reloads the list. It
    does not delete the shader source files.
 
+To assemble a library from shaders stored in different locations, open
+**List > Shader Library Builder...**. Add individual `.glsl` or `.comp` files,
+or scan a complete folder with optional subfolder recursion. The builder keeps
+the list alphabetically sorted, rejects duplicate and unreadable sources,
+shows fragment/compute totals, and can reopen an existing manifest. Exporting
+creates a self-contained directory containing safe copies of the listed
+shaders and an ordered `library.json`; filename collisions are renamed instead
+of overwriting unrelated files. The exported library is loaded into the main
+interface automatically.
+
 The maintained [shader collection](https://github.com/lostjared/shaders) uses
 the `sampler2DArray history` interface for current cache effects. If one of
 these effects is selected without both texture-cache settings, it may fail to
@@ -110,6 +120,37 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 * **Command line tool** Command line tool
 
 ## Revisions
+
+### Version 2.8.0 (August 2026)
+
+#### August 10
+
+- **Shader Library Builder**: **List > Shader Library Builder...** provides a
+  theme-aware workflow for combining `.glsl` and `.comp` files from individual
+  paths or recursively scanned folders. Lists stay alphabetically sorted and
+  include duplicate, extension, readability, and missing-source validation.
+- **Portable `library.json` export**: the builder can reopen existing
+  manifests and export a self-contained shader directory. It copies sources
+  safely, assigns unique names when basenames collide, preserves unrelated
+  files in new destination folders, writes the displayed order to
+  `library.json`, and immediately loads the result in the main interface.
+- **Advanced compute-shader collection**: 25 new `code-compute-cache-*.comp`
+  effects use compute-specific techniques such as workgroup shared memory,
+  barriers, neighborhood rank operations, tile histograms/reductions,
+  prefix propagation, cellular updates, and temporal history analysis.
+- **Resolution-independent compute sampling**: compute templates and the new
+  cache effects derive normalized UV coordinates from the output pixel and use
+  explicit-LOD texture sampling. Source and history textures therefore scale
+  correctly when their dimensions differ from the output window.
+- **Correct Default video window sizing**: ACMX2 probes video stream dimensions
+  before constructing the SDL/OpenGL window when Window Resolution is
+  `Default`. Low-resolution videos now open at their native size, including in
+  the Flatpak build where resizing after context creation was unreliable.
+- **Complete interface build inputs**: the PCons interface target now includes
+  the built-in uniform reference and Shader Library Builder implementations;
+  CMake includes the builder sources as well.
+- **Version 2.8.0 metadata**: engine and launcher CMake metadata, runtime
+  version headers, and versioned Doxygen output now identify 2.8.0.
 
 ### Version 2.7.0 (August 2026)
 

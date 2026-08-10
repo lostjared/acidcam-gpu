@@ -118,6 +118,12 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Camera, video, or image input</b> with configurable resolution
 - <b>Shader library</b> — load a single fragment shader or a directory using
   <tt>library.json</tt> when present, with <tt>index.txt</tt> as a fallback
+- <b>Shader Library Builder</b> — combine individual <tt>.glsl</tt> and
+  <tt>.comp</tt> files or recursively scanned folders, keep the list sorted,
+  and export a self-contained <tt>library.json</tt> library from the Qt List menu
+- <b>OpenGL compute shaders</b> — run full-frame <tt>.comp</tt> passes on Linux
+  with OpenGL 4.3 or newer, including compute/fragment libraries, playlists,
+  multipass chains, temporal history effects, and persistent binary caching
 - <b>CUDA GPU filters</b> — apply GPU-accelerated pixel filters in addition to shaders
 - <b>3D mode</b> — render shaders onto a 3D model (`.mxmod`)
 - <b>Multipass shaders</b> — chain multiple shader passes in a single frame
@@ -149,7 +155,9 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Qt6 GUI</b> available via the `interface/` subdirectory (`acmx2_interface`)
 - <b>Persistent Qt session state</b> — Settings, Audio Settings, GPU Filter Settings, and MIDI Settings restore their last-used values when reopened and after application restart; input mode and the selected camera no longer revert to camera 0
 - <b>OpenCV DNN capability-aware interface</b> — startup reports whether DNN was compiled into the selected engine build and disables ONNX controls when unavailable
-- <b>Native graphics-mode window sizing</b> — when no explicit window resolution is selected, the window is created at the input image's dimensions
+- <b>Native file-input window sizing</b> — with no explicit window resolution,
+  image and video windows are created at the source dimensions before the
+  OpenGL context is initialized
 - <b>Metadata viewer</b> — inspect media metadata directly from the Qt interface
 - <b>MIDI Map Tool</b> — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
 - <b>Crossfade transitions</b> — smooth linear blend between old and new frames when switching playlist shaders, with configurable duration
@@ -189,6 +197,39 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 @section revisions Revisions
 
 @subsection updates_2026_08 August 2026 (Month to Date)
+
+<b>Version 2.8.0 shader-library workflow and compute collection</b>
+
+<b>August 10: portable library building, compute effects, and native video sizing</b>
+
+- <b>List &gt; Shader Library Builder...</b> opens a theme-aware, modeless tool
+  for combining individual <tt>.glsl</tt> and <tt>.comp</tt> sources or scanning
+  folders recursively. The list remains alphabetically sorted, reports
+  fragment and compute totals, and rejects duplicate, missing, unreadable, or
+  unsupported files.
+- The builder reopens existing shader manifests and exports a self-contained
+  directory containing shader copies and an ordered <tt>library.json</tt>.
+  Atomic file writes, unique-name generation for basename collisions, and
+  preservation of unrelated files make the export safe to repeat. A completed
+  export becomes the active library in the main interface automatically.
+- The compute collection adds 25 <tt>code-compute-cache-*.comp</tt> effects.
+  They use capabilities unavailable to ordinary fragment passes, including
+  workgroup shared memory and barriers, neighborhood rank operations, tile
+  histograms and reductions, prefix propagation, cellular updates, and
+  temporal-history analysis.
+- Compute templates and the new cache effects sample <tt>samp</tt> and history
+  textures using normalized output UVs with explicit LOD. Effects remain
+  correctly scaled when an input or history texture retains the source video's
+  dimensions while the output resolution differs.
+- With Window Resolution set to <tt>Default</tt>, ACMX2 probes a video's coded
+  dimensions before constructing its SDL/OpenGL window. Low-resolution video
+  now starts at its native size, fixing the Flatpak-specific case where an
+  asynchronous post-creation resize left the drawable at the fallback size.
+- The PCons interface target includes both the built-in uniform reference and
+  Shader Library Builder implementations, while CMake also tracks the new
+  builder files.
+- Engine and launcher CMake metadata, runtime version headers, and versioned
+  Doxygen output identify version 2.8.0.
 
 <b>Version 2.7.0 compute shader and authoring updates</b>
 
@@ -709,6 +750,23 @@ automatically writes an equivalent <tt>library.json</tt>, skips blank lines, and
 leaves the original text file unchanged. The newly generated JSON manifest is
 used immediately. If creation fails, the interface logs the error and continues
 loading the legacy text manifest.
+
+For libraries assembled from sources in multiple locations, choose
+<b>List &gt; Shader Library Builder...</b>. <b>Add Files...</b> accepts one or
+more fragment or compute shaders, while <b>Add Folder...</b> can scan a folder
+recursively. <b>Open Library...</b> imports an existing
+<tt>library.json</tt> or legacy <tt>index.txt</tt>. The displayed list is always
+alphabetical and can be filtered by removing selected entries or clearing the
+list.
+
+<b>Export Library...</b> copies every listed source into the destination and
+writes the sorted filenames to <tt>library.json</tt>. Exact duplicate sources
+are ignored. When different source paths share a basename, the later files
+receive a numeric suffix. A new export does not overwrite unrelated files
+already in its destination; replacing an existing JSON library requires
+confirmation. Missing or unreadable source files stop the export before the
+manifest is replaced. After a successful export, the Qt interface loads and
+persists the new library path automatically.
 
 Sorting, adding or removing shaders, live reload, shader-cache builds, and
 Remove Broken operate on the selected manifest. The standalone converter offers
