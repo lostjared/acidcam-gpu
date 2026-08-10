@@ -6659,6 +6659,42 @@ enum class FrameRotation {
 };
 
 /**
+ * @brief Read a video's coded dimensions without opening a decoder.
+ *
+ * This metadata-only probe runs before the SDL/OpenGL window is created so
+ * Default-resolution video playback can construct the window at its native
+ * size. Resizing an already-created OpenGL window is asynchronous on some
+ * window managers and can leave its drawable at the constructor's fallback
+ * size.
+ *
+ * @return Native video dimensions, or @c std::nullopt when metadata cannot be
+ * read. The normal decoder path reports the definitive error later.
+ */
+static std::optional<cv::Size> probe_video_size(const std::string &filename) {
+    AVFormatContext *format_context = nullptr;
+    if (avformat_open_input(&format_context, filename.c_str(), nullptr,
+                            nullptr) < 0) {
+        return std::nullopt;
+    }
+
+    std::optional<cv::Size> dimensions;
+    if (avformat_find_stream_info(format_context, nullptr) >= 0) {
+        const int stream_index = av_find_best_stream(
+            format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        if (stream_index >= 0) {
+            const AVCodecParameters *parameters =
+                format_context->streams[stream_index]->codecpar;
+            if (parameters->width > 0 && parameters->height > 0) {
+                dimensions = cv::Size(parameters->width, parameters->height);
+            }
+        }
+    }
+
+    avformat_close_input(&format_context);
+    return dimensions;
+}
+
+/**
  * @struct MXArguments
  * @brief Parsed command-line arguments for the ACMX2 application.
  *
@@ -13553,6 +13589,7 @@ class MainWindow : public gl::GLWindow {
      * calls initCommon() to set up the rendering pipeline.
      *
      * @param args Parsed CLI arguments (resolution, asset path, etc.).
+     * @param context_config Requested OpenGL context version.
      */
     MainWindow(const MXArguments &args, const OpenGLContextConfig &context_config)
         : gl::GLWindow("ACMX2", args.tw, args.th, false, gl::GLMode::DESKTOP,
@@ -13569,8 +13606,9 @@ class MainWindow : public gl::GLWindow {
      * visible window.  Intended for `--silent` mode where video is
      * processed and recorded without any display.
      *
-     * @param args     Parsed CLI arguments.
-     * @param headless Unused disambiguator parameter.
+     * @param args           Parsed CLI arguments.
+     * @param context_config Requested OpenGL context version.
+     * @param headless       Unused disambiguator parameter.
      */
     MainWindow(const MXArguments &args, const OpenGLContextConfig &context_config,
                bool headless)
@@ -15072,7 +15110,7 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
 
-        // Create graphics-mode windows at the image's native dimensions when
+        // Create file-input windows at the source's native dimensions when
         // --resolution was not supplied. Some window managers do not reliably
         // apply an SDL resize immediately after an OpenGL window is created,
         // so determine the initial size before constructing MainWindow.
@@ -15093,6 +15131,23 @@ int main(int argc, char **argv) {
             }
             mx::system_out << "acmx2: Graphics window initial size: "
                            << args.tw << "x" << args.th << "\n";
+        } else if (!args.filename.empty() && !args.sizev.has_value()) {
+            const std::optional<cv::Size> video_size =
+                probe_video_size(args.filename);
+            if (video_size.has_value()) {
+                args.tw = video_size->width;
+                args.th = video_size->height;
+                if (args.frame_rotation == FrameRotation::Clockwise90 ||
+                    args.frame_rotation == FrameRotation::Counterclockwise90) {
+                    std::swap(args.tw, args.th);
+                }
+                mx::system_out << "acmx2: Video window initial size: "
+                               << args.tw << "x" << args.th << "\n";
+            } else {
+                mx::system_out
+                    << "acmx2: Could not probe video dimensions before window "
+                       "creation; using the startup fallback size\n";
+            }
         }
 
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
