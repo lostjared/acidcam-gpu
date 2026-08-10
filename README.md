@@ -134,14 +134,6 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
   safely, assigns unique names when basenames collide, preserves unrelated
   files in new destination folders, writes the displayed order to
   `library.json`, and immediately loads the result in the main interface.
-- **Advanced compute-shader collection**: 25 new `code-compute-cache-*.comp`
-  effects use compute-specific techniques such as workgroup shared memory,
-  barriers, neighborhood rank operations, tile histograms/reductions,
-  prefix propagation, cellular updates, and temporal history analysis.
-- **Resolution-independent compute sampling**: compute templates and the new
-  cache effects derive normalized UV coordinates from the output pixel and use
-  explicit-LOD texture sampling. Source and history textures therefore scale
-  correctly when their dimensions differ from the output window.
 - **Correct Default video window sizing**: ACMX2 probes video stream dimensions
   before constructing the SDL/OpenGL window when Window Resolution is
   `Default`. Low-resolution videos now open at their native size, including in

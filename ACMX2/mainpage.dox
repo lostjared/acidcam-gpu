@@ -212,15 +212,6 @@ for building without CUDA on systems that lack an NVIDIA GPU.
   Atomic file writes, unique-name generation for basename collisions, and
   preservation of unrelated files make the export safe to repeat. A completed
   export becomes the active library in the main interface automatically.
-- The compute collection adds 25 <tt>code-compute-cache-*.comp</tt> effects.
-  They use capabilities unavailable to ordinary fragment passes, including
-  workgroup shared memory and barriers, neighborhood rank operations, tile
-  histograms and reductions, prefix propagation, cellular updates, and
-  temporal-history analysis.
-- Compute templates and the new cache effects sample <tt>samp</tt> and history
-  textures using normalized output UVs with explicit LOD. Effects remain
-  correctly scaled when an input or history texture retains the source video's
-  dimensions while the output resolution differs.
 - With Window Resolution set to <tt>Default</tt>, ACMX2 probes a video's coded
   dimensions before constructing its SDL/OpenGL window. Low-resolution video
   now starts at its native size, fixing the Flatpak-specific case where an
