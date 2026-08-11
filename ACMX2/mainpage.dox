@@ -14,7 +14,7 @@ designed to push the boundaries of psychedelic glitch art. Part of the <b>ACMX2<
 via CUDA, enabling fluid, high-resolution visual transformations at 60+ FPS.
 
 <b>CUDA acceleration is a compile-time option</b> (<tt>-DWITH_CUDA=ON/OFF</tt>, default
-<tt>ON</tt>). The project now requires OpenCV 5. When CUDA is enabled, OpenCV 5
+<tt>ON</tt>). The project now uses OpenCV 5. When CUDA is enabled, OpenCV 5
 must be compiled with CUDA support. When disabled, the engine builds against
 stock OpenCV 5 and runs the full GLSL/SDL2
 shader pipeline without the CUDA GPU-filter stack — see
