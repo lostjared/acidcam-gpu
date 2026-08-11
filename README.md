@@ -1,4 +1,4 @@
-# acidcam-gpu
+/# acidcam-gpu
 
 <img width="2560" height="1440" alt="screenshot3" src="https://github.com/user-attachments/assets/3af169df-abd3-49e8-84cc-70021a42e253" />
 <img width="2560" height="1440" alt="screenshot4" src="https://github.com/user-attachments/assets/35fb877a-4b2c-4bda-af6e-6dd894ae1593" />
@@ -16,7 +16,7 @@
 
 **acidcam-gpu** is a high-performance, real-time video manipulation engine designed to push the boundaries of psychedelic glitch art. Part of the **ACMX2** and **libmx2** ecosystem, it uses an OpenGL/GLSL shader pipeline as its core, with an **optional** CUDA GPU-filter path that can be enabled at compile time on NVIDIA hardware for additional accelerated effects.
 
-> **OpenCV 5 is now required.** The project has moved from OpenCV 4 to OpenCV 5. Use a stock OpenCV 5 build for the portable OpenGL configuration, or an OpenCV 5 build with CUDA support when enabling the optional CUDA pipeline.
+> **OpenCV 5 is used.** The project has moved from OpenCV 4 to OpenCV 5. Use a stock OpenCV 5 build for the portable OpenGL configuration, or an OpenCV 5 build with CUDA support when enabling the optional CUDA pipeline.
 
 > **OpenCV must include CUDA support for `WITH_CUDA=ON`.** Installing the NVIDIA CUDA toolkit by itself is not sufficient: CUDA support, including the OpenCV CUDA modules used by ACMX2, must be enabled when OpenCV is compiled. On Arch Linux, install `opencv-cuda` instead of the stock `opencv` package. On other distributions, use an equivalent CUDA-enabled OpenCV package or build OpenCV with CUDA enabled. If OpenCV has no CUDA modules, configure ACMX2 with `-DWITH_CUDA=OFF`.
 
