@@ -1518,6 +1518,11 @@ void MainWindow::initShaderSelectionSharedMemory() {
         std::fill(std::begin(shaderSelectionShm->reserved_flags),
                   std::end(shaderSelectionShm->reserved_flags), 0);
         std::fill(std::begin(shaderSelectionShm->shader_pass_indices), std::end(shaderSelectionShm->shader_pass_indices), -1);
+        std::fill(&shaderSelectionShm->shader_pass_names[0][0],
+                  &shaderSelectionShm->shader_pass_names[0][0] +
+                      acmx2::ipc::kShaderSelectionMaxPassCount *
+                          acmx2::ipc::kShaderSelectionMaxShaderName,
+                  '\0');
         shaderSelectionShm->gpu_filter_count = 0;
         shaderSelectionShm->gpu_filter_enabled = 0;
         shaderSelectionShm->gpu_buffer_size = 8;
@@ -1546,6 +1551,8 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->audio_repeat = 0;
         shaderSelectionShm->audio_reserved = 0;
         shaderSelectionShm->audio_file_sequence = 0;
+        std::fill(std::begin(shaderSelectionShm->selected_shader_name),
+                  std::end(shaderSelectionShm->selected_shader_name), '\0');
         shaderSelectionShm->sequence = 0;
     }
     shaderSelectionSequence = shaderSelectionShm->sequence;
@@ -1561,6 +1568,14 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
     if (row < 0 || row >= items.size())
         return;
     shaderSelectionShm->selected_index = row;
+    const QByteArray shaderName = items.at(row).toUtf8();
+    const qsizetype copyLength = std::min<qsizetype>(
+        shaderName.size(),
+        static_cast<qsizetype>(acmx2::ipc::kShaderSelectionMaxShaderName - 1));
+    std::fill(std::begin(shaderSelectionShm->selected_shader_name),
+              std::end(shaderSelectionShm->selected_shader_name), '\0');
+    std::copy_n(shaderName.constData(), copyLength,
+                shaderSelectionShm->selected_shader_name);
     shaderSelectionShm->sequence = ++shaderSelectionSequence;
 #endif
 }
@@ -1607,6 +1622,11 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
     passIndices.fill(-1);
 
     quint32 passCount = 0;
+    std::fill(&shaderSelectionShm->shader_pass_names[0][0],
+              &shaderSelectionShm->shader_pass_names[0][0] +
+                  acmx2::ipc::kShaderSelectionMaxPassCount *
+                      acmx2::ipc::kShaderSelectionMaxShaderName,
+              '\0');
     if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
         loadShaders(shader_path, true);
         for (const QString &name : shader_pass_names) {
@@ -1615,7 +1635,14 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
             const int idx = items.indexOf(name);
             if (idx < 0)
                 continue;
-            passIndices[passCount++] = idx;
+            passIndices[passCount] = idx;
+            const QByteArray shaderName = name.toUtf8();
+            const qsizetype copyLength = std::min<qsizetype>(
+                shaderName.size(),
+                static_cast<qsizetype>(acmx2::ipc::kShaderSelectionMaxShaderName - 1));
+            std::copy_n(shaderName.constData(), copyLength,
+                        shaderSelectionShm->shader_pass_names[passCount]);
+            ++passCount;
         }
     }
 
@@ -2887,7 +2914,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
             (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
     }
-    arguments << "--shader" << QString::number(index);
+    arguments << "--shader-file" << items.at(index);
 
     if (audio_available && audio_enabled) {
         arguments << "--enable-audio";
@@ -2957,7 +2984,23 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
     if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
         QString passIndices = getShaderPassIndicesFromNames();
         if (!passIndices.isEmpty()) {
-            arguments << "--shader-pass" << passIndices;
+            QStringList passFiles;
+            const QStringList indexValues = passIndices.split(',');
+            for (const QString &indexValue : indexValues) {
+                bool ok = false;
+                const int passIndex = indexValue.toInt(&ok);
+                if (ok && passIndex >= 0 && passIndex < items.size())
+                    passFiles.append(items.at(passIndex));
+            }
+            QByteArray passFilePayload;
+            for (const QString &passFile : passFiles) {
+                const QByteArray encodedName = passFile.toUtf8();
+                passFilePayload.append(QByteArray::number(encodedName.size()));
+                passFilePayload.append(':');
+                passFilePayload.append(encodedName);
+            }
+            arguments << "--shader-pass-files"
+                      << QString::fromUtf8(passFilePayload);
         }
     }
 

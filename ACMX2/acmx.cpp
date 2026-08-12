@@ -621,6 +621,15 @@ static std::vector<std::string> sortedShaderLibraryEntries(const std::string &li
     return shader_files;
 }
 
+static int shaderIndexForFile(const std::vector<std::string> &shader_files,
+                              const std::string &shader_file) {
+    const auto selected = std::find(shader_files.begin(), shader_files.end(),
+                                    shader_file);
+    if (selected == shader_files.end())
+        return -1;
+    return static_cast<int>(std::distance(shader_files.begin(), selected));
+}
+
 // ---------------------------------------------------------------------------
 // Graceful shutdown for headless / --silent mode.
 //
@@ -6709,6 +6718,7 @@ struct MXArguments {
     int camera_device = 0;
     std::string library;
     std::string fragment;
+    std::string shader_file;
     std::string prefix_path = ".";
     std::string model_file = "cube.mxmod.z";
     std::string human_model;            ///< PPHS human-segmentation ONNX model path (--human). Empty when disabled.
@@ -6755,6 +6765,7 @@ struct MXArguments {
     bool disable_counter = false;
     int cuda_device = 0;
     std::vector<int> shader_pass_list;
+    std::vector<std::string> shader_pass_files;
     bool shader_pass_enabled = false;
     bool build_cache = false;
     std::string build_library_path;
@@ -8413,6 +8424,10 @@ class ACView : public gl::GLObject {
             }
             return std::string(buf, len);
         };
+        const std::vector<std::string> interfaceShaderFiles =
+            std::get<0>(flib) == 1
+                ? sortedShaderLibraryEntries(std::get<1>(flib))
+                : std::vector<std::string>{};
 
         library.setCustomUniformValues(customUniformsFromSharedMemory());
 
@@ -8528,7 +8543,15 @@ class ACView : public gl::GLObject {
             shaderSelectionShm->shader_pass_count,
             acmx2::ipc::kShaderSelectionMaxPassCount);
         for (uint32_t i = 0; i < clampedPassCount; ++i) {
-            const int passIndex = shaderSelectionShm->shader_pass_indices[i];
+            int passIndex = shaderSelectionShm->shader_pass_indices[i];
+            if (std::get<0>(flib) == 1) {
+                const std::string passName = readBoundedText(
+                    shaderSelectionShm->shader_pass_names[i],
+                    acmx2::ipc::kShaderSelectionMaxShaderName);
+                if (!passName.empty())
+                    passIndex = shaderIndexForFile(interfaceShaderFiles,
+                                                   passName);
+            }
             if (passIndex < 0)
                 continue;
             if (static_cast<size_t>(passIndex) >= library.size())
@@ -8630,7 +8653,15 @@ class ACView : public gl::GLObject {
         }
 #endif
 
-        const int requestedIndex = shaderSelectionShm->selected_index;
+        int requestedIndex = shaderSelectionShm->selected_index;
+        if (std::get<0>(flib) == 1) {
+            const std::string requestedName = readBoundedText(
+                shaderSelectionShm->selected_shader_name,
+                acmx2::ipc::kShaderSelectionMaxShaderName);
+            if (!requestedName.empty())
+                requestedIndex = shaderIndexForFile(interfaceShaderFiles,
+                                                    requestedName);
+        }
         if (requestedIndex < 0)
             return;
         if (static_cast<size_t>(requestedIndex) >= library.size())
@@ -9665,6 +9696,8 @@ class ACView : public gl::GLObject {
             } else {
                 std::string line;
                 PlaylistNode *currentNode = nullptr;
+                const auto shaderFiles =
+                    sortedShaderLibraryEntries(std::get<1>(flib));
                 while (std::getline(pfile, line)) {
                     if (line.empty())
                         continue;
@@ -9673,8 +9706,12 @@ class ACView : public gl::GLObject {
                         currentNode = &playlist_tree.back();
                         continue;
                     }
-                    std::string name = std::filesystem::path(line).stem().string();
-                    int idx = library.findShaderByName(name);
+                    int idx = shaderIndexForFile(shaderFiles, line);
+                    if (idx < 0) {
+                        const std::string name =
+                            std::filesystem::path(line).stem().string();
+                        idx = library.findShaderByName(name);
+                    }
                     if (idx >= 0) {
                         playlist_indices.push_back(idx);
                         if (currentNode) {
@@ -13858,6 +13895,7 @@ int main(int argc, char **argv) {
         .addOptionSingleValue('f', "Fragment Shader")
         .addOptionDoubleValue('F', "fragment", "Fragment Shader")
         .addOptionDoubleValue('H', "shader", "Shader Index")
+        .addOptionDoubleValue(622, "shader-file", "Shader filename in the active library")
         .addOptionSingleValue('e', "Save Prefix")
         .addOptionDoubleValue('E', "prefix", "Save Prefix")
         .addOptionSingleValue('o', "output file")
@@ -13916,6 +13954,7 @@ int main(int argc, char **argv) {
         .addOptionDouble('N', "fullscreen", "Fullscreen Window (Escape to quit)")
         .addOptionDouble(405, "silent", "Silent mode - process video without window, (video files only)")
         .addOptionDoubleValue(406, "shader-pass", "Shader pass indices (comma-separated, e.g. 0,1,2)")
+        .addOptionDoubleValue(623, "shader-pass-files", "Shader pass filenames (length-prefixed)")
         .addOptionDoubleValue(407, "build", "Build shader cache for specified library path (compiles shaders and exits)")
         .addOptionDouble(408, "no-cache", "Disable shader caching (always recompile shaders)")
         .addOptionDoubleValue(416, "remove-broken", "Compile each shader in library path; remove failures from its manifest, then exit")
@@ -14064,6 +14103,9 @@ int main(int argc, char **argv) {
                 break;
             case 'H':
                 args.shader_index = atoi(arg.arg_value.c_str());
+                break;
+            case 622:
+                args.shader_file = arg.arg_value;
                 break;
             case 'e':
             case 'E':
@@ -14306,6 +14348,37 @@ int main(int argc, char **argv) {
                 if (!args.shader_pass_list.empty()) {
                     args.shader_pass_enabled = true;
                     mx::system_out << "acmx2: Shader pass list enabled with " << args.shader_pass_list.size() << " passes\n";
+                }
+                break;
+            }
+            case 623: {
+                const std::string passFiles = arg.arg_value;
+                size_t start = 0;
+                while (start < passFiles.size()) {
+                    const size_t separator = passFiles.find(':', start);
+                    if (separator == std::string::npos)
+                        break;
+                    size_t consumed = 0;
+                    size_t nameLength = 0;
+                    try {
+                        nameLength = std::stoull(
+                            passFiles.substr(start, separator - start),
+                            &consumed);
+                    } catch (...) {
+                        break;
+                    }
+                    if (consumed != separator - start ||
+                        nameLength > passFiles.size() - separator - 1)
+                        break;
+                    const size_t nameStart = separator + 1;
+                    args.shader_pass_files.push_back(
+                        passFiles.substr(nameStart, nameLength));
+                    start = nameStart + nameLength;
+                }
+                if (start != passFiles.size()) {
+                    mx::system_err
+                        << "acmx2: Invalid --shader-pass-files payload\n";
+                    return EXIT_FAILURE;
                 }
                 break;
             }
@@ -15048,6 +15121,35 @@ int main(int argc, char **argv) {
     }
 
     try {
+        const std::vector<std::string> requestedShaderFiles =
+            args.mode == 1 &&
+                    (!args.shader_file.empty() || !args.shader_pass_files.empty())
+                ? sortedShaderLibraryEntries(args.library)
+                : std::vector<std::string>{};
+        if (args.mode == 1 && !args.shader_file.empty()) {
+            const int selectedIndex = shaderIndexForFile(requestedShaderFiles,
+                                                         args.shader_file);
+            if (selectedIndex < 0) {
+                mx::system_err << "acmx2: Shader file is not present in the active library: "
+                               << args.shader_file << "\n";
+                return EXIT_FAILURE;
+            }
+            args.shader_index = selectedIndex;
+        }
+        if (args.mode == 1 && !args.shader_pass_files.empty()) {
+            args.shader_pass_list.clear();
+            for (const std::string &shaderFile : args.shader_pass_files) {
+                const int passIndex = shaderIndexForFile(requestedShaderFiles,
+                                                         shaderFile);
+                if (passIndex < 0) {
+                    mx::system_err << "acmx2: Shader pass file is not present in the active library: "
+                                   << shaderFile << "\n";
+                    return EXIT_FAILURE;
+                }
+                args.shader_pass_list.push_back(passIndex);
+            }
+            args.shader_pass_enabled = !args.shader_pass_list.empty();
+        }
         args.slib = std::make_tuple(args.mode,
                                     (args.mode == 0) ? args.fragment : args.library,
                                     (args.mode == 0) ? 0 : args.shader_index);

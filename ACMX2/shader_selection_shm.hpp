@@ -7,7 +7,7 @@ namespace acmx2::ipc {
 
     inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection";
     inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
-    inline constexpr std::uint32_t kShaderSelectionVersion = 8;
+    inline constexpr std::uint32_t kShaderSelectionVersion = 9;
     inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxGpuFilterCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxWatermarkText = 256;
@@ -15,6 +15,7 @@ namespace acmx2::ipc {
     inline constexpr std::uint32_t kShaderSelectionMaxCustomUniforms = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxUniformName = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxAudioFilePath = 4096;
+    inline constexpr std::uint32_t kShaderSelectionMaxShaderName = 1024;
 
     struct ShaderSelectionShmData {
         std::uint32_t magic = kShaderSelectionMagic;
@@ -28,6 +29,8 @@ namespace acmx2::ipc {
         std::uint8_t normalized_time_enabled = 0;
         std::uint8_t reserved_flags[3] = {0, 0, 0};
         std::int32_t shader_pass_indices[kShaderSelectionMaxPassCount] = {};
+        char shader_pass_names[kShaderSelectionMaxPassCount]
+                              [kShaderSelectionMaxShaderName] = {};
         std::uint32_t gpu_filter_count = 0;
         std::uint8_t gpu_filter_enabled = 0;
         std::uint8_t gpu_buffer_size = 8;
@@ -51,6 +54,7 @@ namespace acmx2::ipc {
         std::uint8_t audio_repeat = 0;
         std::uint8_t audio_reserved = 0;
         std::uint32_t audio_file_sequence = 0;
+        char selected_shader_name[kShaderSelectionMaxShaderName] = {};
         std::uint32_t sequence = 0;
     };
 
