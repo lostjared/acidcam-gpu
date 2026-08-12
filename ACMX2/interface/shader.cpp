@@ -189,7 +189,7 @@ void main() {
         return;
 
     vec2 uv = (vec2(pixel) + 0.5) / iResolution;
-    imageStore(outputImage, pixel, texture(samp, uv));
+    imageStore(outputImage, pixel, textureLod(samp, uv, 0.0));
 }
 )";
 

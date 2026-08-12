@@ -318,6 +318,21 @@ unit 0. Dispatch dimensions are derived from the declared local workgroup size.
 Input and history textures can retain the source video's dimensions when the
 output resolution differs, so compute shaders should derive normalized UVs
 from the output pixel and use `textureLod(..., uv, 0.0)` to scale those inputs.
+Do not pass `gl_GlobalInvocationID.xy` directly to `texelFetch(samp, ...)`
+unless the coordinates are first scaled using `textureSize(samp, 0)`. The
+invocation ID addresses the output image, not necessarily the input texture;
+using it directly renders only the source-sized lower-left region and leaves
+the rest black when a smaller video is rendered at a larger resolution. Use a
+resolution-independent helper for current-pass reads:
+
+```glsl
+vec4 sampleSource(ivec2 outputPixel, ivec2 outputSize) {
+    outputPixel = clamp(outputPixel, ivec2(0), outputSize - 1);
+    vec2 uv = (vec2(outputPixel) + 0.5) / vec2(outputSize);
+    return textureLod(samp, uv, 0.0);
+}
+```
+
 A minimal shader is:
 
 ```glsl
@@ -332,7 +347,7 @@ void main() {
     if (pixel.x >= int(iResolution.x) || pixel.y >= int(iResolution.y))
         return;
     vec2 uv = (vec2(pixel) + 0.5) / iResolution;
-    imageStore(outputImage, pixel, texture(samp, uv));
+    imageStore(outputImage, pixel, textureLod(samp, uv, 0.0));
 }
 ```
 
