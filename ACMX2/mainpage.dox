@@ -32,6 +32,13 @@ equivalent CUDA-enabled OpenCV package or build OpenCV with CUDA enabled.
 The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
 the shader library without requiring NVIDIA CUDA. Download it from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
+The current bundle is <b>ACMX2 v2.9.1</b> (22,150,448 bytes) with SHA-256
+<tt>7f0ac0215e3979da39ae54d06c5118adc60d8c69665126f995d1050c1d7a97bd</tt>.
+
+@code{.sh}
+sha256sum ACMX2.flatpak
+flatpak install --user --reinstall ./ACMX2.flatpak
+@endcode
 
 @section first_run First Run: Qt Interface and Texture Cache
 
@@ -63,6 +70,14 @@ be completed only once:
    selected manifest, backs up the original as <tt>library.json.bak</tt> or
    <tt>index.txt.bak</tt>, and reloads the list. Shader source files are not
    deleted.
+
+Starting with v2.9.1, the launcher identifies shaders by their exact path
+relative to the selected library rather than by the displayed row number.
+Initial and live selections, multipass stages, and playlists therefore keep
+loading the named effect if the manifest is sorted or filtered. Compute shader
+entries remain in <tt>library.json</tt>; systems without the required OpenGL
+support retain them as stable passthrough slots. Legacy numeric commands and
+older playlist stem names remain supported.
 
 The maintained <a href="https://github.com/lostjared/shaders">shader
 collection</a> uses the <tt>sampler2DArray history</tt> interface for current
@@ -118,6 +133,10 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 - <b>Camera, video, or image input</b> with configurable resolution
 - <b>Shader library</b> — load a single fragment shader or a directory using
   <tt>library.json</tt> when present, with <tt>index.txt</tt> as a fallback
+- <b>Filename-stable shader selection</b> — initial selection, live Qt
+  changes, multipass chains, and playlists resolve exact library-relative
+  filenames, preventing list order or filtered entries from selecting a
+  different effect
 - <b>Shader Library Builder</b> — combine individual <tt>.glsl</tt> and
   <tt>.comp</tt> files or recursively scanned folders, keep the list sorted,
   and export a self-contained <tt>library.json</tt> library from the Qt List menu
@@ -197,6 +216,37 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 @section revisions Revisions
 
 @subsection updates_2026_08 August 2026 (Month to Date)
+
+<b>Version 2.9.1 filename-stable shader selection</b>
+
+<b>August 12: exact shader identity, multipass transport, and refreshed Flatpak</b>
+
+- The Qt launcher and ACMX2 exchange exact library-relative filenames for
+  startup and live shader selection. Sorting or filtering a manifest no longer
+  causes a displayed shader name to load an effect from another numeric row.
+- Generated launch commands use <tt>--shader-file</tt> and
+  <tt>--shader-pass-files</tt> without also emitting the legacy
+  <tt>--shader</tt> and <tt>--shader-pass</tt> arguments. Multipass filenames
+  use repeated UTF-8 byte-length/name pairs rather than a delimiter, so
+  characters such as colons and newlines cannot make a chain ambiguous.
+- Playlist entries first resolve as exact relative filenames and then fall
+  back to legacy stem matching, preserving older playlists.
+- Shared-memory protocol version 9 carries the active shader filename and each
+  multipass filename for live Qt updates. Numeric fields remain available for
+  backward compatibility.
+- Compute shader entries remain in <tt>library.json</tt>. On unsupported OpenGL
+  configurations, existing passthrough programs keep their positions stable.
+- Engine and launcher CMake metadata, runtime version headers, versioned
+  Doxygen output, AppStream metadata, and the Flatpak page identify v2.9.1.
+  The verified x86_64 bundle SHA-256 is
+  <tt>7f0ac0215e3979da39ae54d06c5118adc60d8c69665126f995d1050c1d7a97bd</tt>.
+
+<b>Version 2.9.0 direct shader-library loading</b>
+
+<b>August 12: open and revisit libraries from the File menu</b>
+
+- The Qt <b>File</b> menu can open a shader-library directory directly and
+  offers a persisted <b>Load Recent</b> submenu for recently used libraries.
 
 <b>Version 2.8.0 shader-library workflow and compute collection</b>
 
@@ -1288,9 +1338,11 @@ appears in the dock while the application is running.
 |-------|------------------|-------------|-------------|
 | `-s`  | `--shaders`      | `<directory>` | Shader library directory (`library.json` preferred, `index.txt` fallback) |
 | `-f`  | `--fragment`     | `<file>`    | Single fragment shader file |
-|       | `--shader`       | `<index>`   | Initial shader index in library |
-|       | `--shader-pass`  | `<indices>` | Shader pass indices (comma-separated) |
-|       | `--playlist`     | `<file>`    | Shader playlist text file |
+|       | `--shader-file`  | `<relative-file>` | Initial shader by exact library-relative filename (preferred) |
+|       | `--shader`       | `<index>`   | Initial shader by legacy library index |
+|       | `--shader-pass-files` | `<encoded-files>` | Exact multipass filenames as repeated UTF-8 byte-length/name pairs, for example <tt>13:4ac_rand.glsl14:addup_cos.glsl</tt> |
+|       | `--shader-pass`  | `<indices>` | Legacy shader pass indices (comma-separated) |
+|       | `--playlist`     | `<file>`    | Playlist text file; exact relative filenames are preferred, with legacy stem matching as a fallback |
 |       | `--autopilot-frames` | `<N>`   | Auto-switch to a random playlist node every N rendered frames (minimum 4) |
 |       | `--autopilot-timeout` | `<N>`  | Alias for `--autopilot-frames` |
 |       | `--autopilot-random` | `<N>`   | Use a random autopilot interval in the range 4..N frames for each auto-switch |

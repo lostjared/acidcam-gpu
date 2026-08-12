@@ -26,6 +26,8 @@
 
 [Download the ACMX2 Flatpak](https://lostsidedead.biz/acmx2/release)
 
+**Current release: ACMX2 v2.9.1**
+
 [YouTube Video Tutorial](https://youtu.be/-IDAF8MMmkg)
 
 This project now builds with [pcons](https://pcons.org), a modern
@@ -75,6 +77,15 @@ shaders and an ordered `library.json`; filename collisions are renamed instead
 of overwriting unrelated files. The exported library is loaded into the main
 interface automatically.
 
+Starting with v2.9.1, the Qt launcher identifies shaders by their exact path
+relative to the selected library instead of relying on the displayed row
+number. Initial selection, live selection, multipass chains, and playlists
+therefore continue to load the named effect when a manifest is sorted,
+filtered, or contains unsupported compute shaders. Compute shader entries are
+kept in `library.json`; on systems without the required OpenGL support they
+remain stable passthrough slots rather than being removed. Existing commands
+and saved data that use numeric shader indices remain supported.
+
 The maintained [shader collection](https://github.com/lostjared/shaders) uses
 the `sampler2DArray history` interface for current cache effects. If one of
 these effects is selected without both texture-cache settings, it may fail to
@@ -120,6 +131,36 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 * **Command line tool** Command line tool
 
 ## Revisions
+
+### Version 2.9.1 (August 2026)
+
+#### August 12
+
+- **Exact shader identity**: the Qt launcher and ACMX2 now exchange exact
+  library-relative filenames for startup and live shader selection, preventing
+  the displayed shader name from drifting away from the effect that is loaded.
+- **Filename-based multipass chains**: generated commands use `--shader-file`
+  and `--shader-pass-files` instead of emitting both old numeric indices and
+  filenames. Multipass filenames use a length-prefixed UTF-8 encoding, so no
+  separator character—including `:` or a newline—can make the list ambiguous.
+- **Playlist compatibility**: playlist entries first resolve as exact relative
+  filenames, then fall back to legacy stem matching for older playlists.
+- **Shared-memory protocol 9**: live Qt control carries the selected shader
+  filename and the filename of every multipass stage while retaining numeric
+  fields for compatibility.
+- **Compute shaders preserved**: fragment and compute entries remain together
+  in `library.json`; unsupported compute programs use the existing passthrough
+  behavior rather than changing library ordering.
+- **Version 2.9.1 release**: CMake projects, runtime headers, Doxygen output,
+  AppStream metadata, and the Flatpak download page now report v2.9.1.
+
+### Version 2.9.0 (August 2026)
+
+#### August 12
+
+- **Direct library loading**: the Qt **File** menu can open a shader library
+  directory and provides a persisted **Load Recent** submenu for returning to
+  recently used libraries.
 
 ### Version 2.8.0 (August 2026)
 
@@ -377,6 +418,15 @@ CUDA requirement, visit the [ACMX2 Flatpak download page](https://lostsidedead.b
 This x86_64 package includes an Intel IPP-optimized OpenCV build for accelerated
 CPU image processing on supported processors.
 
+The current bundle is **ACMX2 v2.9.1** (22,150,448 bytes). Verify it before
+installation with:
+
+```bash
+sha256sum ACMX2.flatpak
+# 7f0ac0215e3979da39ae54d06c5118adc60d8c69665126f995d1050c1d7a97bd  ACMX2.flatpak
+flatpak install --user --reinstall ./ACMX2.flatpak
+```
+
 ### Prerequisites
 * **GPU:** Any GPU with working OpenGL 3.3+ drivers (NVIDIA, AMD, Intel, or Apple Silicon). NVIDIA hardware is **optional** and only required if you want to enable the CUDA GPU-filter stack at compile time.
 * **Drivers:** Up-to-date GPU drivers for your platform. NVIDIA proprietary drivers (v535+) are required only when building with `-DWITH_CUDA=ON`.
@@ -507,11 +557,13 @@ steps above. ACMX2's high-frame-rate path requires the current `libmx2`
 
 | Short | Long | Value | Description |
 |-------|------|-------|-------------|
-| `-s` | `--shaders` | `<file>` | Shader library index file |
+| `-s` | `--shaders` | `<directory>` | Shader library directory (`library.json` preferred, `index.txt` fallback) |
 | `-f` | `--fragment` | `<file>` | Single fragment shader file |
-| `-h` | `--shader` | `<index>` | Initial shader index in library |
-| | `--shader-pass` | `<indices>` | Shader pass indices (comma-separated, e.g. `0,1,2`) |
-| | `--playlist` | `<file>` | Shader playlist text file (one shader name per line) |
+| | `--shader-file` | `<relative-file>` | Initial shader by exact library-relative filename (preferred) |
+| | `--shader` | `<index>` | Initial shader by legacy library index |
+| | `--shader-pass-files` | `<encoded-files>` | Exact multipass filenames encoded as repeated UTF-8 byte-length/name pairs, such as `13:4ac_rand.glsl14:addup_cos.glsl` |
+| | `--shader-pass` | `<indices>` | Legacy shader pass indices (comma-separated, e.g. `0,1,2`) |
+| | `--playlist` | `<file>` | Shader playlist text file; exact relative filenames are preferred, with legacy stem matching as a fallback |
 | | `--autopilot-frames` | `<N>` | Auto-switch to a random playlist node every N rendered frames (minimum 4) |
 | | `--autopilot-timeout` | `<N>` | Alias for `--autopilot-frames` |
 | | `--autopilot-random` | `<N>` | Randomize autopilot interval to a value in the range 4..N frames for each auto-switch |
