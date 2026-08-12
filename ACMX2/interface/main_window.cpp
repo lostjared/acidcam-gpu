@@ -19,6 +19,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
@@ -55,6 +56,8 @@
 #endif
 
 namespace {
+    constexpr int RECENT_LIBRARY_LIMIT = 10;
+
     QString shellQuote(const QString &value) {
         if (value.isEmpty()) {
             return "''";
@@ -419,6 +422,15 @@ void MainWindow::initControls() {
     connect(metadataAction, &QAction::triggered, this, &MainWindow::menuMetadataViewer);
     viewMenu->addSeparator();
     viewMenu->addAction(metadataAction);
+    fileMenu_loadLibrary = new QAction(tr("Load Library..."), this);
+    connect(fileMenu_loadLibrary, &QAction::triggered, this,
+            &MainWindow::menuLoadLibrary);
+    fileMenu->addAction(fileMenu_loadLibrary);
+    loadRecentMenu = fileMenu->addMenu(tr("Load Recent"));
+    connect(loadRecentMenu, &QMenu::aboutToShow, this,
+            &MainWindow::updateRecentLibrariesMenu);
+    updateRecentLibrariesMenu();
+    fileMenu->addSeparator();
     fileMenu_prop = new QAction(tr("Properties"), this);
     fileMenu->addAction(fileMenu_prop);
     connect(fileMenu_prop, &QAction::triggered, this, &MainWindow::fileOpenProp);
@@ -746,6 +758,7 @@ void MainWindow::initControls() {
             acmx2::shader_manifest_exists(path)) {
             shader_path = path;
             loadShaders(path);
+            addRecentLibrary(path);
             Log("Successfully loaded saved shader path");
         } else {
             QString errorMsg = "Warning: Saved shader path is invalid: " + path + " - ";
@@ -1174,11 +1187,7 @@ void MainWindow::newList() {
     LibraryWindow library(this);
 
     if (library.exec() == QDialog::Accepted) {
-        shader_path = library.getShaderPath();
-        loadShaders(shader_path);
-        QSettings appSettings("LostSideDead");
-        appSettings.setValue("shaders", shader_path);
-        appSettings.sync();
+        loadLibraryPath(library.getShaderPath());
     }
 }
 
@@ -1194,12 +1203,8 @@ void MainWindow::menuLibraryBuilder() {
     libraryBuilderDialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(libraryBuilderDialog, &LibraryBuilderDialog::libraryExported, this,
             [this](const QString &directory) {
-                shader_path = directory;
-                loadShaders(shader_path, true);
-                QSettings settings("LostSideDead");
-                settings.setValue("shaders", shader_path);
-                settings.sync();
-                Log(tr("Loaded exported shader library: %1").arg(shader_path));
+                if (loadLibraryPath(directory))
+                    Log(tr("Loaded exported shader library: %1").arg(shader_path));
             });
     libraryBuilderDialog->show();
     libraryBuilderDialog->raise();
@@ -1851,6 +1856,106 @@ void MainWindow::Write(const QString &message) {
     }
 }
 
+void MainWindow::menuLoadLibrary() {
+    QSettings settings("LostSideDead");
+    QString startDirectory = settings.value("lastShaderDir").toString();
+    if (startDirectory.isEmpty())
+        startDirectory = shader_path;
+    if (startDirectory.isEmpty())
+        startDirectory = QDir::homePath();
+
+    const QString directory = QFileDialog::getExistingDirectory(
+        this, tr("Load Shader Library"), startDirectory,
+        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    if (directory.isEmpty())
+        return;
+
+    settings.setValue("lastShaderDir", directory);
+    loadLibraryPath(directory);
+}
+
+bool MainWindow::loadLibraryPath(const QString &path) {
+    const QString trimmedPath = path.trimmed();
+    if (trimmedPath.isEmpty())
+        return false;
+    const QString libraryPath = QDir::cleanPath(trimmedPath);
+    const QFileInfo libraryInfo(libraryPath);
+    if (!libraryInfo.exists()) {
+        QMessageBox::warning(this, tr("Invalid Shader Path"),
+                             tr("Shader directory does not exist:\n%1")
+                                 .arg(libraryPath));
+        return false;
+    }
+    if (!libraryInfo.isDir()) {
+        QMessageBox::warning(this, tr("Invalid Shader Path"),
+                             tr("Shader path is not a directory:\n%1")
+                                 .arg(libraryPath));
+        return false;
+    }
+    if (!acmx2::shader_manifest_exists(libraryPath)) {
+        QMessageBox::warning(
+            this, tr("Missing Shader Manifest"),
+            tr("Shader directory does not contain library.json or index.txt:\n%1")
+                .arg(libraryPath));
+        return false;
+    }
+    if (!loadShaders(libraryPath, true)) {
+        Log(tr("Warning: Could not load shaders from directory: %1")
+                .arg(libraryPath));
+        return false;
+    }
+
+    QSettings settings("LostSideDead");
+    settings.setValue("shaders", libraryPath);
+    settings.sync();
+    addRecentLibrary(libraryPath);
+    Log(tr("Successfully loaded shader library: %1").arg(libraryPath));
+    return true;
+}
+
+void MainWindow::addRecentLibrary(const QString &path) {
+    const QString trimmedPath = path.trimmed();
+    if (trimmedPath.isEmpty())
+        return;
+    const QString libraryPath = QDir::cleanPath(trimmedPath);
+
+    QSettings settings("LostSideDead");
+    QStringList recentLibraries = settings.value("recentLibraries").toStringList();
+    for (auto it = recentLibraries.begin(); it != recentLibraries.end();) {
+        if (QDir::cleanPath(*it).compare(libraryPath, Qt::CaseInsensitive) == 0)
+            it = recentLibraries.erase(it);
+        else
+            ++it;
+    }
+    recentLibraries.prepend(libraryPath);
+    while (recentLibraries.size() > RECENT_LIBRARY_LIMIT)
+        recentLibraries.removeLast();
+    settings.setValue("recentLibraries", recentLibraries);
+    settings.sync();
+    updateRecentLibrariesMenu();
+}
+
+void MainWindow::updateRecentLibrariesMenu() {
+    if (!loadRecentMenu)
+        return;
+
+    loadRecentMenu->clear();
+    QSettings settings("LostSideDead");
+    const QStringList recentLibraries =
+        settings.value("recentLibraries").toStringList();
+    if (recentLibraries.isEmpty()) {
+        QAction *emptyAction = loadRecentMenu->addAction(tr("No Recent Libraries"));
+        emptyAction->setEnabled(false);
+        return;
+    }
+
+    for (const QString &path : recentLibraries) {
+        QAction *action = loadRecentMenu->addAction(path);
+        connect(action, &QAction::triggered, this,
+                [this, path]() { loadLibraryPath(path); });
+    }
+}
+
 void MainWindow::fileOpenProp() {
     PropWindow propWindow(this);
     if (propWindow.exec() == QDialog::Accepted) {
@@ -1866,29 +1971,12 @@ void MainWindow::fileOpenProp() {
             return;
         }
 
-        QFileInfo shaderDirInfo(shaderDir);
-        if (!shaderDirInfo.exists()) {
-            QMessageBox::warning(this, "Invalid Shader Path", "Shader directory does not exist:\n" + shaderDir);
+        if (!loadLibraryPath(shaderDir))
             return;
-        }
-
-        if (!shaderDirInfo.isDir()) {
-            QMessageBox::warning(this, "Invalid Shader Path", "Shader path is not a directory:\n" + shaderDir);
-            return;
-        }
-
-        if (!acmx2::shader_manifest_exists(shaderDir)) {
-            QMessageBox::warning(
-                this, "Missing Shader Manifest",
-                "Shader directory does not contain library.json or index.txt:\n" +
-                    shaderDir);
-            return;
-        }
 
         QSettings appSettings("LostSideDead");
         appSettings.setValue("exePath", exePath);
         appSettings.setValue("prefix_path", prefix);
-        appSettings.setValue("shaders", shaderDir);
         appSettings.sync();
 
         executable_path = exePath;
@@ -1898,13 +1986,6 @@ void MainWindow::fileOpenProp() {
         Log("Prefix Path: " + prefix);
         Log("Shader Directory: " + shaderDir);
 
-        // Force a reload so the list reflects the newly selected library
-        // even if index timestamps happen to be unchanged.
-        if (loadShaders(shaderDir, true)) {
-            Log("Successfully loaded shaders from new directory<br>");
-        } else {
-            Log("Warning: Could not load shaders from new directory<br>");
-        }
     } else {
         Log("Canceled");
     }

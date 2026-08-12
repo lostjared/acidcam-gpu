@@ -63,6 +63,7 @@ class MainWindow : public QMainWindow {
     QString activeShaderManifestPath;
   public slots:
     void fileOpenProp();
+    void menuLoadLibrary();
     void fileExit();
     void runSelected();
     void runAll();
@@ -148,14 +149,22 @@ class MainWindow : public QMainWindow {
     /// @brief Open or focus an editor for a shader source location.
     void openShaderEditor(const QString &filePath, int lineNumber = 1,
                           int columnNumber = 0, int matchLength = 0);
+    /// @brief Validate, load, persist, and remember a shader library directory.
+    bool loadLibraryPath(const QString &path);
+    /// @brief Add a library directory to the persisted recent-libraries list.
+    void addRecentLibrary(const QString &path);
+    /// @brief Rebuild the File > Load Recent submenu from persisted settings.
+    void updateRecentLibrariesMenu();
     QMenu *fileMenu = nullptr;
+    QMenu *loadRecentMenu = nullptr;
     QMenu *cameraMenu = nullptr;
     QMenu *playbackMenu = nullptr;
     QMenu *runMenu = nullptr;
     QMenu *listMenu = nullptr;
     QMenu *viewMenu = nullptr;
     QMenu *helpMenu = nullptr;
-    QAction *fileMenu_prop = nullptr, *fileMenu_exit = nullptr;
+    QAction *fileMenu_loadLibrary = nullptr, *fileMenu_prop = nullptr,
+            *fileMenu_exit = nullptr;
     QAction *cameraSet = nullptr, *audioSet = nullptr;
     QAction *runMenu_select = nullptr, *runMenu_all = nullptr;
     QAction *runMenu_copyCommand = nullptr;

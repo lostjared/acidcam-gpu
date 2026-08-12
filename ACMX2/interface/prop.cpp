@@ -71,13 +71,7 @@ void PropWindow::init() {
     connect(shaderDirBrowseButton, &QPushButton::clicked, this, &PropWindow::selectShaderDirectory);
     connect(screenshotDirBrowseButton, &QPushButton::clicked, this, &PropWindow::selectScreenshotDirectory);
     connect(restoreDefaultsButton, &QPushButton::clicked, this, &PropWindow::restoreDefaults);
-    connect(okButton, &QPushButton::clicked, this, [this]() {
-        QSettings appSettings("LostSideDead");
-        appSettings.setValue("exePath", exePathLineEdit->text());
-        appSettings.setValue("shaders", shaderDirLineEdit->text());
-        appSettings.setValue("prefix_path", screenshotDirLineEdit->text());
-        accept();
-    });
+    connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     QString defaultPicturesDir = getDefaultPicturesDirectory();
     QSettings appSettings("LostSideDead");
