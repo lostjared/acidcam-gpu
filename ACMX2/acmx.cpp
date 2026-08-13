@@ -10760,14 +10760,13 @@ class ACView : public gl::GLObject {
             if (!viewRotationActive) {
                 if (keystate[SDL_SCANCODE_W]) {
                     cameraPitch += cameraRotationSpeed * 0.3f * dt * 30.0f;
-                    if (cameraPitch > 89.0f)
-                        cameraPitch = 89.0f;
                 }
                 if (keystate[SDL_SCANCODE_S]) {
                     cameraPitch -= cameraRotationSpeed * 0.33f * dt * 30.0f;
-                    if (cameraPitch < -89.0f)
-                        cameraPitch = -89.0f;
                 }
+                cameraPitch = fmod(cameraPitch, 360.0f);
+                if (cameraPitch < 0.0f)
+                    cameraPitch += 360.0f;
                 if (keystate[SDL_SCANCODE_A]) {
                     cameraYaw -= cameraRotationSpeed * 0.3f * dt * 30.0f;
                     cameraYaw = fmod(cameraYaw + 360.0f, 360.0f);
@@ -10797,6 +10796,13 @@ class ACView : public gl::GLObject {
             glm::vec3 cameraPos = cameraPosBase - glm::normalize(lookDirection) * finalOffset;
             glm::vec3 cameraTarget = cameraPos + lookDirection;
             glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+            if (!viewRotationActive) {
+                const float pitch = glm::radians(cameraPitch);
+                const float yaw = glm::radians(cameraYaw);
+                cameraUp = glm::vec3(-sin(pitch) * cos(yaw),
+                                     cos(pitch),
+                                     -sin(pitch) * sin(yaw));
+            }
             glm::mat4 viewMatrix = glm::lookAt(cameraPos, cameraTarget, cameraUp);
             glm::mat4 projectionMatrix = glm::perspective(
                 glm::radians(120.0f),
