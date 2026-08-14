@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -18,9 +19,16 @@
 #include <QSaveFile>
 #include <QSettings>
 #include <QVBoxLayout>
+#include <QtConcurrent>
 
 namespace {
     constexpr int SOURCE_PATH_ROLE = Qt::UserRole;
+
+    struct ExportResult {
+        bool success = false;
+        QStringList exportedNames;
+        QString error;
+    };
 
     bool is_shader_file(const QFileInfo &fileInfo) {
         const QString suffix = fileInfo.suffix();
@@ -33,6 +41,117 @@ namespace {
         QFileInfo fileInfo(path);
         const QString canonicalPath = fileInfo.canonicalFilePath();
         return canonicalPath.isEmpty() ? fileInfo.absoluteFilePath() : canonicalPath;
+    }
+
+    QString unique_export_name(const QString &fileName,
+                               const QStringList &usedNames) {
+        if (!usedNames.contains(fileName, Qt::CaseInsensitive))
+            return fileName;
+
+        const QFileInfo fileInfo(fileName);
+        const QString stem = fileInfo.completeBaseName();
+        const QString suffix = fileInfo.suffix();
+        for (int number = 2;; ++number) {
+            const QString candidate =
+                QString("%1-%2.%3").arg(stem).arg(number).arg(suffix);
+            if (!usedNames.contains(candidate, Qt::CaseInsensitive))
+                return candidate;
+        }
+    }
+
+    bool copy_shader(const QString &sourcePath, const QString &destinationPath,
+                     QString &error) {
+        if (normalized_path(sourcePath) == normalized_path(destinationPath))
+            return true;
+
+        QFile source(sourcePath);
+        if (!source.open(QIODevice::ReadOnly)) {
+            error = QObject::tr("Could not read %1: %2")
+                        .arg(sourcePath, source.errorString());
+            return false;
+        }
+
+        QSaveFile destination(destinationPath);
+        if (!destination.open(QIODevice::WriteOnly)) {
+            error = QObject::tr("Could not write %1: %2")
+                        .arg(destinationPath, destination.errorString());
+            return false;
+        }
+
+        while (!source.atEnd()) {
+            const QByteArray block = source.read(64 * 1024);
+            if (block.isEmpty() && source.error() != QFile::NoError) {
+                error = QObject::tr("Could not finish reading %1: %2")
+                            .arg(sourcePath, source.errorString());
+                destination.cancelWriting();
+                return false;
+            }
+            if (destination.write(block) != block.size()) {
+                error = QObject::tr("Could not finish writing %1: %2")
+                            .arg(destinationPath, destination.errorString());
+                destination.cancelWriting();
+                return false;
+            }
+        }
+
+        if (!destination.commit()) {
+            error = QObject::tr("Could not finish writing %1: %2")
+                        .arg(destinationPath, destination.errorString());
+            return false;
+        }
+        return true;
+    }
+
+    ExportResult export_shader_library(const QString &directory,
+                                       bool replacingLibrary,
+                                       const QStringList &sourcePaths) {
+        ExportResult result;
+        QStringList usedNames;
+        if (!replacingLibrary) {
+            const QDir exportDir(directory);
+            const QStringList existingFiles = exportDir.entryList(QDir::Files);
+            for (const QString &existingFile : existingFiles) {
+                const QString existingPath = exportDir.filePath(existingFile);
+                bool isSelectedSource = false;
+                for (const QString &sourcePath : sourcePaths) {
+                    if (normalized_path(existingPath) ==
+                        normalized_path(sourcePath)) {
+                        isSelectedSource = true;
+                        break;
+                    }
+                }
+                if (!isSelectedSource)
+                    usedNames.append(existingFile);
+            }
+        }
+
+        for (const QString &sourcePath : sourcePaths) {
+            const QFileInfo sourceInfo(sourcePath);
+            if (!is_shader_file(sourceInfo)) {
+                result.error =
+                    QObject::tr("A source shader is now missing or unreadable:\n%1")
+                        .arg(QDir::toNativeSeparators(sourcePath));
+                return result;
+            }
+
+            const QString exportName =
+                unique_export_name(sourceInfo.fileName(), usedNames);
+            const QString destinationPath =
+                QDir(directory).filePath(exportName);
+            if (!copy_shader(sourcePath, destinationPath, result.error))
+                return result;
+            result.exportedNames.append(exportName);
+            usedNames.append(exportName);
+        }
+
+        if (!acmx2::create_shader_manifest(directory,
+                                           acmx2::ShaderManifestFormat::Json,
+                                           result.exportedNames, result.error)) {
+            return result;
+        }
+
+        result.success = true;
+        return result;
     }
 } // namespace
 
@@ -254,66 +373,8 @@ void LibraryBuilderDialog::clearShaders() {
     }
 }
 
-QString LibraryBuilderDialog::uniqueExportName(
-    const QString &fileName, const QStringList &usedNames) const {
-    if (!usedNames.contains(fileName, Qt::CaseInsensitive))
-        return fileName;
-
-    const QFileInfo fileInfo(fileName);
-    const QString stem = fileInfo.completeBaseName();
-    const QString suffix = fileInfo.suffix();
-    for (int number = 2;; ++number) {
-        const QString candidate = QString("%1-%2.%3").arg(stem).arg(number).arg(suffix);
-        if (!usedNames.contains(candidate, Qt::CaseInsensitive))
-            return candidate;
-    }
-}
-
-bool LibraryBuilderDialog::copyShader(const QString &sourcePath,
-                                      const QString &destinationPath,
-                                      QString &error) const {
-    if (normalized_path(sourcePath) == normalized_path(destinationPath))
-        return true;
-
-    QFile source(sourcePath);
-    if (!source.open(QIODevice::ReadOnly)) {
-        error = tr("Could not read %1: %2").arg(sourcePath, source.errorString());
-        return false;
-    }
-
-    QSaveFile destination(destinationPath);
-    if (!destination.open(QIODevice::WriteOnly)) {
-        error = tr("Could not write %1: %2")
-                    .arg(destinationPath, destination.errorString());
-        return false;
-    }
-
-    while (!source.atEnd()) {
-        const QByteArray block = source.read(64 * 1024);
-        if (block.isEmpty() && source.error() != QFile::NoError) {
-            error = tr("Could not finish reading %1: %2")
-                        .arg(sourcePath, source.errorString());
-            destination.cancelWriting();
-            return false;
-        }
-        if (destination.write(block) != block.size()) {
-            error = tr("Could not finish writing %1: %2")
-                        .arg(destinationPath, destination.errorString());
-            destination.cancelWriting();
-            return false;
-        }
-    }
-
-    if (!destination.commit()) {
-        error = tr("Could not finish writing %1: %2")
-                    .arg(destinationPath, destination.errorString());
-        return false;
-    }
-    return true;
-}
-
 void LibraryBuilderDialog::exportLibrary() {
-    if (shaderList->count() == 0)
+    if (exportInProgress || shaderList->count() == 0)
         return;
 
     QSettings settings("LostSideDead");
@@ -334,67 +395,43 @@ void LibraryBuilderDialog::exportLibrary() {
         return;
     }
 
-    QStringList exportedNames;
-    QStringList usedNames;
-    if (!replacingLibrary) {
-        QDir exportDir(directory);
-        const QStringList existingFiles = exportDir.entryList(QDir::Files);
-        QStringList sourcePaths;
-        for (int row = 0; row < shaderList->count(); ++row) {
-            sourcePaths.append(
-                shaderList->item(row)->data(SOURCE_PATH_ROLE).toString());
-        }
-        for (const QString &existingFile : existingFiles) {
-            const QString existingPath = exportDir.filePath(existingFile);
-            bool isSelectedSource = false;
-            for (const QString &sourcePath : sourcePaths) {
-                if (normalized_path(existingPath) == normalized_path(sourcePath)) {
-                    isSelectedSource = true;
-                    break;
-                }
-            }
-            if (!isSelectedSource)
-                usedNames.append(existingFile);
-        }
-    }
-    QString error;
+    QStringList sourcePaths;
     for (int row = 0; row < shaderList->count(); ++row) {
-        const QString sourcePath =
-            shaderList->item(row)->data(SOURCE_PATH_ROLE).toString();
-        const QFileInfo sourceInfo(sourcePath);
-        if (!is_shader_file(sourceInfo)) {
-            QMessageBox::critical(
-                this, tr("Export Failed"),
-                tr("A source shader is now missing or unreadable:\n%1")
-                    .arg(QDir::toNativeSeparators(sourcePath)));
-            return;
-        }
-
-        const QString exportName =
-            uniqueExportName(sourceInfo.fileName(), usedNames);
-        const QString destinationPath = QDir(directory).filePath(exportName);
-        if (!copyShader(sourcePath, destinationPath, error)) {
-            QMessageBox::critical(this, tr("Export Failed"), error);
-            return;
-        }
-        exportedNames.append(exportName);
-        usedNames.append(exportName);
+        sourcePaths.append(
+            shaderList->item(row)->data(SOURCE_PATH_ROLE).toString());
     }
 
-    if (!acmx2::create_shader_manifest(directory,
-                                       acmx2::ShaderManifestFormat::Json,
-                                       exportedNames, error)) {
-        QMessageBox::critical(this, tr("Export Failed"), error);
-        return;
-    }
+    exportInProgress = true;
+    updateControls();
+    exportButton->setText(tr("Exporting..."));
 
-    settings.setValue("libraryBuilder/exportDir", directory);
-    emit libraryExported(directory);
-    QMessageBox::information(
-        this, tr("Library Exported"),
-        tr("Exported %1 shaders and library.json to:\n%2")
-            .arg(exportedNames.size())
-            .arg(QDir::toNativeSeparators(directory)));
+    auto *watcher = new QFutureWatcher<ExportResult>(this);
+    connect(watcher, &QFutureWatcher<ExportResult>::finished, this,
+            [this, watcher, directory]() {
+                const ExportResult result = watcher->result();
+                watcher->deleteLater();
+                exportInProgress = false;
+                exportButton->setText(tr("Export Library..."));
+                updateControls();
+
+                if (!result.success) {
+                    QMessageBox::critical(this, tr("Export Failed"), result.error);
+                    return;
+                }
+
+                QSettings settings("LostSideDead");
+                settings.setValue("libraryBuilder/exportDir", directory);
+                emit libraryExported(directory);
+                QMessageBox::information(
+                    this, tr("Library Exported"),
+                    tr("Exported %1 shaders and library.json to:\n%2")
+                        .arg(result.exportedNames.size())
+                        .arg(QDir::toNativeSeparators(directory)));
+            });
+    watcher->setFuture(QtConcurrent::run([directory, replacingLibrary,
+                                          sourcePaths]() {
+        return export_shader_library(directory, replacingLibrary, sourcePaths);
+    }));
 }
 
 void LibraryBuilderDialog::updateControls() {
@@ -415,5 +452,5 @@ void LibraryBuilderDialog::updateControls() {
             .arg(computeCount));
     const bool hasSelection = !shaderList->selectedItems().isEmpty();
     removeButton->setEnabled(hasSelection);
-    exportButton->setEnabled(shaderList->count() > 0);
+    exportButton->setEnabled(!exportInProgress && shaderList->count() > 0);
 }

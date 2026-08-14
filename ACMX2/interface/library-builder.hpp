@@ -40,10 +40,6 @@ class LibraryBuilderDialog : public QDialog {
     bool addShader(const QString &filePath, bool showErrors = true);
     int addShaderFiles(const QStringList &filePaths);
     QString shaderFilter() const;
-    QString uniqueExportName(const QString &fileName,
-                             const QStringList &usedNames) const;
-    bool copyShader(const QString &sourcePath, const QString &destinationPath,
-                    QString &error) const;
     QStringList selectedSourcePaths() const;
 
     QListWidget *shaderList = nullptr;
@@ -51,6 +47,7 @@ class LibraryBuilderDialog : public QDialog {
     QCheckBox *recursiveCheck = nullptr;
     QPushButton *removeButton = nullptr;
     QPushButton *exportButton = nullptr;
+    bool exportInProgress = false;
 };
 
 #endif
