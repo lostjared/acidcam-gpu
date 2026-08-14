@@ -26,7 +26,7 @@
 
 [Download the ACMX2 Flatpak](https://lostsidedead.biz/acmx2/release)
 
-**Current release: ACMX2 v2.9.1**
+**Current release: ACMX2 v2.9.2**
 
 [YouTube Video Tutorial](https://youtu.be/-IDAF8MMmkg)
 
@@ -75,7 +75,8 @@ shows fragment/compute totals, and can reopen an existing manifest. Exporting
 creates a self-contained directory containing safe copies of the listed
 shaders and an ordered `library.json`; filename collisions are renamed instead
 of overwriting unrelated files. The exported library is loaded into the main
-interface automatically.
+interface automatically. Starting with v2.9.2, the copy and manifest-writing
+work runs in the background so larger exports do not block the Qt interface.
 
 Starting with v2.9.1, the Qt launcher identifies shaders by their exact path
 relative to the selected library instead of relying on the displayed row
@@ -131,6 +132,17 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 * **Command line tool** Command line tool
 
 ## Revisions
+
+### Version 2.9.2 (August 2026)
+
+#### August 13
+
+- **Responsive library export**: shader copying and `library.json` generation
+  now run on a worker thread, keeping the Qt interface responsive while an
+  export is in progress.
+- **Full 360-degree 3D look**: free-look pitch now wraps through the complete
+  360-degree range instead of stopping at ±89 degrees, with the camera up
+  vector following the view orientation across the poles.
 
 ### Version 2.9.1 (August 2026)
 
@@ -418,12 +430,12 @@ CUDA requirement, visit the [ACMX2 Flatpak download page](https://lostsidedead.b
 This x86_64 package includes an Intel IPP-optimized OpenCV build for accelerated
 CPU image processing on supported processors.
 
-The current bundle is **ACMX2 v2.9.1** (22,150,448 bytes). Verify it before
+The current bundle is **ACMX2 v2.9.2** (24,037,160 bytes). Verify it before
 installation with:
 
 ```bash
 sha256sum ACMX2.flatpak
-# 7f0ac0215e3979da39ae54d06c5118adc60d8c69665126f995d1050c1d7a97bd  ACMX2.flatpak
+# c03aa2dc5756e7e1c4692443d42e65f50520c7f4f07f3a9a1ac8de44d5f86de0  ACMX2.flatpak
 flatpak install --user --reinstall ./ACMX2.flatpak
 ```
 

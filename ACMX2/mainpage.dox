@@ -32,8 +32,8 @@ equivalent CUDA-enabled OpenCV package or build OpenCV with CUDA enabled.
 The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
 the shader library without requiring NVIDIA CUDA. Download it from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
-The current bundle is <b>ACMX2 v2.9.1</b> (22,150,448 bytes) with SHA-256
-<tt>7f0ac0215e3979da39ae54d06c5118adc60d8c69665126f995d1050c1d7a97bd</tt>.
+The current bundle is <b>ACMX2 v2.9.2</b> (24,037,160 bytes) with SHA-256
+<tt>c03aa2dc5756e7e1c4692443d42e65f50520c7f4f07f3a9a1ac8de44d5f86de0</tt>.
 
 @code{.sh}
 sha256sum ACMX2.flatpak
@@ -216,6 +216,17 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 @section revisions Revisions
 
 @subsection updates_2026_08 August 2026 (Month to Date)
+
+<b>Version 2.9.2 responsive export and full 3D rotation</b>
+
+<b>August 13: non-blocking shader export and continuous camera pitch</b>
+
+- Shader copying and <tt>library.json</tt> generation now run on a worker
+  thread. The Qt interface remains responsive while an export is in progress,
+  and reports completion or failure when the worker finishes.
+- Free-look camera pitch in 3D mode now wraps through the complete 360-degree
+  range instead of stopping at +/-89 degrees. The camera up vector follows the
+  view orientation so movement remains continuous across the poles.
 
 <b>Version 2.9.1 filename-stable shader selection</b>
 
