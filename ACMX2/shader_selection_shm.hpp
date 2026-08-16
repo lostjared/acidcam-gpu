@@ -2,12 +2,18 @@
 #define ACMX2_SHADER_SELECTION_SHM_HPP
 
 #include <cstdint>
+#if defined(__linux__) || defined(__APPLE__)
+#include <cerrno>
+#include <semaphore.h>
+#endif
 
 namespace acmx2::ipc {
 
     inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection";
+    inline constexpr const char *kShaderSelectionSemaphoreName =
+        "/acmx2_shm_v10";
     inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
-    inline constexpr std::uint32_t kShaderSelectionVersion = 9;
+    inline constexpr std::uint32_t kShaderSelectionVersion = 10;
     inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxGpuFilterCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxWatermarkText = 256;
@@ -57,6 +63,39 @@ namespace acmx2::ipc {
         char selected_shader_name[kShaderSelectionMaxShaderName] = {};
         std::uint32_t sequence = 0;
     };
+
+#if defined(__linux__) || defined(__APPLE__)
+    class ShaderSelectionSemaphoreLock {
+      public:
+        explicit ShaderSelectionSemaphoreLock(sem_t *semaphoreValue)
+            : semaphore(semaphoreValue) {
+            if (semaphore == nullptr || semaphore == SEM_FAILED)
+                return;
+            while (::sem_wait(semaphore) != 0) {
+                if (errno != EINTR)
+                    return;
+            }
+            locked = true;
+        }
+
+        ~ShaderSelectionSemaphoreLock() {
+            if (locked)
+                ::sem_post(semaphore);
+        }
+
+        ShaderSelectionSemaphoreLock(const ShaderSelectionSemaphoreLock &) = delete;
+        ShaderSelectionSemaphoreLock &
+        operator=(const ShaderSelectionSemaphoreLock &) = delete;
+
+        explicit operator bool() const {
+            return locked;
+        }
+
+      private:
+        sem_t *semaphore = nullptr;
+        bool locked = false;
+    };
+#endif
 
 } // namespace acmx2::ipc
 

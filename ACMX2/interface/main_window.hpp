@@ -330,8 +330,7 @@ class MainWindow : public QMainWindow {
 #if defined(__linux__) || defined(__APPLE__)
     int shaderSelectionShmFd = -1;
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
-    quint32 shaderSelectionSequence = 0;
-    quint32 shaderReloadSequence = 0;
+    sem_t *shaderSelectionSemaphore = SEM_FAILED;
 #endif
 };
 

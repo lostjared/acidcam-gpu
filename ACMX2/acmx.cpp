@@ -110,6 +110,7 @@ namespace ac_gpu {
 #ifdef __linux__
 #include <fcntl.h>
 #include <linux/videodev2.h>
+#include <semaphore.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -117,6 +118,7 @@ namespace ac_gpu {
 #endif
 #if defined(__APPLE__)
 #include <fcntl.h>
+#include <semaphore.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -8328,21 +8330,21 @@ class ACView : public gl::GLObject {
 #if defined(__linux__) || defined(__APPLE__)
     int shaderSelectionShmFd = -1;
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
+    sem_t *shaderSelectionSemaphore = SEM_FAILED;
     uint32_t shaderSelectionLastSequence = 0;
     uint32_t shaderReloadLastSequence = 0;
     uint32_t audioFileLastSequence = 0;
 
     std::vector<ShaderManifestData::CustomUniform>
-    customUniformsFromSharedMemory() const {
+    customUniformsFromSharedMemory(
+        const acmx2::ipc::ShaderSelectionShmData &selection) const {
         std::vector<ShaderManifestData::CustomUniform> uniforms;
-        if (!shaderSelectionShm)
-            return uniforms;
         const uint32_t count = std::min<uint32_t>(
-            shaderSelectionShm->custom_uniform_count,
+            selection.custom_uniform_count,
             acmx2::ipc::kShaderSelectionMaxCustomUniforms);
         uniforms.reserve(count);
         for (uint32_t i = 0; i < count; ++i) {
-            const char *nameData = shaderSelectionShm->custom_uniform_names[i];
+            const char *nameData = selection.custom_uniform_names[i];
             std::size_t length = 0;
             while (length < acmx2::ipc::kShaderSelectionMaxUniformName &&
                    nameData[length] != '\0') {
@@ -8355,7 +8357,7 @@ class ACView : public gl::GLObject {
             uniform.minimum = -std::numeric_limits<double>::max();
             uniform.maximum = std::numeric_limits<double>::max();
             uniform.step = 1.0;
-            uniform.value = shaderSelectionShm->custom_uniform_values[i];
+            uniform.value = selection.custom_uniform_values[i];
             if (!std::isfinite(uniform.value))
                 uniform.value = 0.0;
             uniforms.push_back(std::move(uniform));
@@ -8363,12 +8365,34 @@ class ACView : public gl::GLObject {
         return uniforms;
     }
 
+    bool copyShaderSelectionSnapshot(
+        acmx2::ipc::ShaderSelectionShmData &snapshot) const {
+        if (!shaderSelectionShm || shaderSelectionSemaphore == SEM_FAILED)
+            return false;
+        acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+        if (!lock)
+            return false;
+        if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
+            shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
+            return false;
+        }
+        snapshot = *shaderSelectionShm;
+        return true;
+    }
+
     void initShaderSelectionSharedMemory() {
         if (shaderSelectionShm)
             return;
-        shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName, O_RDWR, 0666);
-        if (shaderSelectionShmFd < 0)
+        shaderSelectionSemaphore =
+            ::sem_open(acmx2::ipc::kShaderSelectionSemaphoreName, 0);
+        if (shaderSelectionSemaphore == SEM_FAILED)
             return;
+        shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName, O_RDWR, 0666);
+        if (shaderSelectionShmFd < 0) {
+            ::sem_close(shaderSelectionSemaphore);
+            shaderSelectionSemaphore = SEM_FAILED;
+            return;
+        }
 
         void *mapped = ::mmap(nullptr,
                               sizeof(acmx2::ipc::ShaderSelectionShmData),
@@ -8379,20 +8403,22 @@ class ACView : public gl::GLObject {
         if (mapped == MAP_FAILED) {
             ::close(shaderSelectionShmFd);
             shaderSelectionShmFd = -1;
+            ::sem_close(shaderSelectionSemaphore);
+            shaderSelectionSemaphore = SEM_FAILED;
             return;
         }
 
         shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
-        if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
-            shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
+        acmx2::ipc::ShaderSelectionShmData snapshot;
+        if (!copyShaderSelectionSnapshot(snapshot)) {
             cleanupShaderSelectionSharedMemory();
             return;
         }
 
-        shaderSelectionLastSequence = shaderSelectionShm->sequence;
-        shaderReloadLastSequence = shaderSelectionShm->reload_sequence;
-        audioFileLastSequence = shaderSelectionShm->audio_file_sequence;
-        library.setCustomUniformValues(customUniformsFromSharedMemory());
+        shaderSelectionLastSequence = snapshot.sequence;
+        shaderReloadLastSequence = snapshot.reload_sequence;
+        audioFileLastSequence = snapshot.audio_file_sequence;
+        library.setCustomUniformValues(customUniformsFromSharedMemory(snapshot));
     }
 
     void cleanupShaderSelectionSharedMemory() {
@@ -8404,19 +8430,21 @@ class ACView : public gl::GLObject {
             ::close(shaderSelectionShmFd);
             shaderSelectionShmFd = -1;
         }
+        if (shaderSelectionSemaphore != SEM_FAILED) {
+            ::sem_close(shaderSelectionSemaphore);
+            shaderSelectionSemaphore = SEM_FAILED;
+        }
     }
 
     void syncShaderSelectionFromInterface(gl::GLWindow *win) {
-        if (!shaderSelectionShm)
+        acmx2::ipc::ShaderSelectionShmData snapshot;
+        if (!copyShaderSelectionSnapshot(snapshot))
             return;
-        if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
-            shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
-            return;
-        }
-        if (shaderSelectionShm->sequence == shaderSelectionLastSequence)
+        const acmx2::ipc::ShaderSelectionShmData *selection = &snapshot;
+        if (selection->sequence == shaderSelectionLastSequence)
             return;
 
-        shaderSelectionLastSequence = shaderSelectionShm->sequence;
+        shaderSelectionLastSequence = selection->sequence;
         const auto readBoundedText = [](const char *buf, std::size_t cap) {
             std::size_t len = 0;
             while (len < cap && buf[len] != '\0') {
@@ -8429,13 +8457,13 @@ class ACView : public gl::GLObject {
                 ? sortedShaderLibraryEntries(std::get<1>(flib))
                 : std::vector<std::string>{};
 
-        library.setCustomUniformValues(customUniformsFromSharedMemory());
+        library.setCustomUniformValues(customUniformsFromSharedMemory(snapshot));
 
-        if (shaderSelectionShm->audio_file_sequence != audioFileLastSequence) {
-            audioFileLastSequence = shaderSelectionShm->audio_file_sequence;
+        if (selection->audio_file_sequence != audioFileLastSequence) {
+            audioFileLastSequence = selection->audio_file_sequence;
 #ifdef AUDIO_ENABLED
             const std::string requestedAudioPath = readBoundedText(
-                shaderSelectionShm->audio_file_path,
+                selection->audio_file_path,
                 acmx2::ipc::kShaderSelectionMaxAudioFilePath);
             if (!file_audio_mode) {
                 mx::system_err
@@ -8445,14 +8473,14 @@ class ACView : public gl::GLObject {
                 mx::system_err << "acmx2: Ignoring empty live audio-file request\n";
             } else if (file_audio_open(requestedAudioPath)) {
                 audio_file_path = requestedAudioPath;
-                audio_output_device = shaderSelectionShm->audio_output_device;
-                audio_trunc_mode = shaderSelectionShm->audio_trunc != 0;
-                audio_repeat_mode = shaderSelectionShm->audio_repeat != 0;
+                audio_output_device = selection->audio_output_device;
+                audio_trunc_mode = selection->audio_trunc != 0;
+                audio_repeat_mode = selection->audio_repeat != 0;
                 file_audio_set_repeat(audio_repeat_mode);
                 audio_engine.analyzer().reset();
                 audio_engine.analyzer().set_sample_rate(44100);
                 resetAudioWarmupEnvelope();
-                if (shaderSelectionShm->audio_pass_through != 0 &&
+                if (selection->audio_pass_through != 0 &&
                     !file_audio_enable_output(audio_output_device)) {
                     mx::system_err
                         << "acmx2: Live audio-file output could not be opened; "
@@ -8469,11 +8497,11 @@ class ACView : public gl::GLObject {
 #endif
         }
 
-        if (shaderSelectionShm->reload_sequence != shaderReloadLastSequence) {
-            shaderReloadLastSequence = shaderSelectionShm->reload_sequence;
-            const int requestedReloadIndex = shaderSelectionShm->reload_shader_index;
+        if (selection->reload_sequence != shaderReloadLastSequence) {
+            shaderReloadLastSequence = selection->reload_sequence;
+            const int requestedReloadIndex = selection->reload_shader_index;
             const std::string requestedPath = readBoundedText(
-                shaderSelectionShm->reload_shader_path,
+                selection->reload_shader_path,
                 acmx2::ipc::kShaderSelectionMaxReloadPath);
             std::string reloadPath;
             size_t reloadIndex = 0;
@@ -8538,15 +8566,15 @@ class ACView : public gl::GLObject {
         }
 
         std::vector<int> requestedPassList;
-        requestedPassList.reserve(shaderSelectionShm->shader_pass_count);
+        requestedPassList.reserve(selection->shader_pass_count);
         const uint32_t clampedPassCount = std::min<uint32_t>(
-            shaderSelectionShm->shader_pass_count,
+            selection->shader_pass_count,
             acmx2::ipc::kShaderSelectionMaxPassCount);
         for (uint32_t i = 0; i < clampedPassCount; ++i) {
-            int passIndex = shaderSelectionShm->shader_pass_indices[i];
+            int passIndex = selection->shader_pass_indices[i];
             if (std::get<0>(flib) == 1) {
                 const std::string passName = readBoundedText(
-                    shaderSelectionShm->shader_pass_names[i],
+                    selection->shader_pass_names[i],
                     acmx2::ipc::kShaderSelectionMaxShaderName);
                 if (!passName.empty())
                     passIndex = shaderIndexForFile(interfaceShaderFiles,
@@ -8558,7 +8586,7 @@ class ACView : public gl::GLObject {
                 continue;
             requestedPassList.push_back(passIndex);
         }
-        const bool requestedPassEnabled = shaderSelectionShm->shader_pass_enabled != 0 && !requestedPassList.empty();
+        const bool requestedPassEnabled = selection->shader_pass_enabled != 0 && !requestedPassList.empty();
         const bool multipassChanged = (shader_pass_enabled != requestedPassEnabled) ||
                                       (shader_pass_list != requestedPassList);
         // Playlist mode owns the active pass list. A right-click shader
@@ -8573,39 +8601,39 @@ class ACView : public gl::GLObject {
             updateShaderNameCache();
         }
 
-        repeat = (shaderSelectionShm->repeat_enabled != 0);
-        display_filter = (shaderSelectionShm->display_filter_enabled != 0);
+        repeat = (selection->repeat_enabled != 0);
+        display_filter = (selection->display_filter_enabled != 0);
         library.setNormalizedTime(
-            shaderSelectionShm->normalized_time_enabled != 0);
+            selection->normalized_time_enabled != 0);
 
         const std::string requestedWatermark = readBoundedText(
-            shaderSelectionShm->watermark_text,
+            selection->watermark_text,
             acmx2::ipc::kShaderSelectionMaxWatermarkText);
         const bool requestedWatermarkEnabled =
-            (shaderSelectionShm->watermark_enabled != 0) && !requestedWatermark.empty();
+            (selection->watermark_enabled != 0) && !requestedWatermark.empty();
         enableWatermark = requestedWatermarkEnabled;
         watermark_text = requestedWatermark;
-        watermark_r = std::clamp<int>(shaderSelectionShm->watermark_r, 0, 255);
-        watermark_g = std::clamp<int>(shaderSelectionShm->watermark_g, 0, 255);
-        watermark_b = std::clamp<int>(shaderSelectionShm->watermark_b, 0, 255);
+        watermark_r = std::clamp<int>(selection->watermark_r, 0, 255);
+        watermark_g = std::clamp<int>(selection->watermark_g, 0, 255);
+        watermark_b = std::clamp<int>(selection->watermark_b, 0, 255);
 
 #ifdef ACMX2_WITH_CUDA
         std::vector<int> requestedGpuFilters;
         const uint32_t clampedGpuCount = std::min<uint32_t>(
-            shaderSelectionShm->gpu_filter_count,
+            selection->gpu_filter_count,
             acmx2::ipc::kShaderSelectionMaxGpuFilterCount);
         requestedGpuFilters.reserve(clampedGpuCount);
         for (uint32_t i = 0; i < clampedGpuCount; ++i) {
-            const int idx = shaderSelectionShm->gpu_filter_indices[i];
+            const int idx = selection->gpu_filter_indices[i];
             if (idx < 0 || idx >= ac_gpu::AC_FILTER_MAX)
                 continue;
             requestedGpuFilters.push_back(idx);
         }
 
         const bool requestedGpuEnabled =
-            (shaderSelectionShm->gpu_filter_enabled != 0) && !requestedGpuFilters.empty();
+            (selection->gpu_filter_enabled != 0) && !requestedGpuFilters.empty();
         const int requestedGpuBufferSize =
-            std::clamp<int>(static_cast<int>(shaderSelectionShm->gpu_buffer_size), 4, 32);
+            std::clamp<int>(static_cast<int>(selection->gpu_buffer_size), 4, 32);
 
         std::vector<int> currentGpuFilters;
         currentGpuFilters.reserve(gpu_filters.size());
@@ -8653,10 +8681,10 @@ class ACView : public gl::GLObject {
         }
 #endif
 
-        int requestedIndex = shaderSelectionShm->selected_index;
+        int requestedIndex = selection->selected_index;
         if (std::get<0>(flib) == 1) {
             const std::string requestedName = readBoundedText(
-                shaderSelectionShm->selected_shader_name,
+                selection->selected_shader_name,
                 acmx2::ipc::kShaderSelectionMaxShaderName);
             if (!requestedName.empty())
                 requestedIndex = shaderIndexForFile(interfaceShaderFiles,
@@ -9685,8 +9713,12 @@ class ACView : public gl::GLObject {
             library.loadProgram(win, std::get<1>(flib));
         }
 #if defined(__linux__) || defined(__APPLE__)
-        if (shaderSelectionShm)
-            library.setCustomUniformValues(customUniformsFromSharedMemory());
+        if (shaderSelectionShm) {
+            acmx2::ipc::ShaderSelectionShmData snapshot;
+            if (copyShaderSelectionSnapshot(snapshot))
+                library.setCustomUniformValues(
+                    customUniformsFromSharedMemory(snapshot));
+        }
 #endif
         library.setIndex(std::get<2>(flib));
         if (!playlist_file.empty()) {

@@ -1478,16 +1478,25 @@ void MainWindow::initShaderSelectionSharedMemory() {
     if (shaderSelectionShm)
         return;
 
+    shaderSelectionSemaphore = ::sem_open(
+        acmx2::ipc::kShaderSelectionSemaphoreName, O_CREAT, 0666, 1);
+    if (shaderSelectionSemaphore == SEM_FAILED)
+        return;
+
     shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName,
                                       O_CREAT | O_RDWR,
                                       0666);
     if (shaderSelectionShmFd < 0) {
+        ::sem_close(shaderSelectionSemaphore);
+        shaderSelectionSemaphore = SEM_FAILED;
         return;
     }
 
     if (::ftruncate(shaderSelectionShmFd, sizeof(acmx2::ipc::ShaderSelectionShmData)) != 0) {
         ::close(shaderSelectionShmFd);
         shaderSelectionShmFd = -1;
+        ::sem_close(shaderSelectionSemaphore);
+        shaderSelectionSemaphore = SEM_FAILED;
         return;
     }
 
@@ -1500,10 +1509,17 @@ void MainWindow::initShaderSelectionSharedMemory() {
     if (mapped == MAP_FAILED) {
         ::close(shaderSelectionShmFd);
         shaderSelectionShmFd = -1;
+        ::sem_close(shaderSelectionSemaphore);
+        shaderSelectionSemaphore = SEM_FAILED;
         return;
     }
 
     shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    if (!lock) {
+        cleanupShaderSelectionSharedMemory();
+        return;
+    }
     if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
         shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
         shaderSelectionShm->magic = acmx2::ipc::kShaderSelectionMagic;
@@ -1555,8 +1571,6 @@ void MainWindow::initShaderSelectionSharedMemory() {
                   std::end(shaderSelectionShm->selected_shader_name), '\0');
         shaderSelectionShm->sequence = 0;
     }
-    shaderSelectionSequence = shaderSelectionShm->sequence;
-    shaderReloadSequence = shaderSelectionShm->reload_sequence;
 #endif
 }
 
@@ -1567,6 +1581,9 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
     const int row = currentShaderRow();
     if (row < 0 || row >= items.size())
         return;
+    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    if (!lock)
+        return;
     shaderSelectionShm->selected_index = row;
     const QByteArray shaderName = items.at(row).toUtf8();
     const qsizetype copyLength = std::min<qsizetype>(
@@ -1576,7 +1593,7 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
               std::end(shaderSelectionShm->selected_shader_name), '\0');
     std::copy_n(shaderName.constData(), copyLength,
                 shaderSelectionShm->selected_shader_name);
-    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+    ++shaderSelectionShm->sequence;
 #endif
 }
 
@@ -1602,11 +1619,14 @@ void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
         return;
     }
 
+    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    if (!lock)
+        return;
     shaderSelectionShm->reload_shader_index = shaderIndex;
     std::fill(std::begin(shaderSelectionShm->reload_shader_path), std::end(shaderSelectionShm->reload_shader_path), '\0');
     std::copy(reloadPath.cbegin(), reloadPath.cend(), shaderSelectionShm->reload_shader_path);
-    shaderSelectionShm->reload_sequence = ++shaderReloadSequence;
-    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+    ++shaderSelectionShm->reload_sequence;
+    ++shaderSelectionShm->sequence;
     Log("Requested live shader reload: " + shaderName + "<br>");
 #else
     Q_UNUSED(filePath);
@@ -1620,13 +1640,11 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
 
     std::array<qint32, acmx2::ipc::kShaderSelectionMaxPassCount> passIndices;
     passIndices.fill(-1);
+    std::array<std::array<char, acmx2::ipc::kShaderSelectionMaxShaderName>,
+               acmx2::ipc::kShaderSelectionMaxPassCount>
+        passNames{};
 
     quint32 passCount = 0;
-    std::fill(&shaderSelectionShm->shader_pass_names[0][0],
-              &shaderSelectionShm->shader_pass_names[0][0] +
-                  acmx2::ipc::kShaderSelectionMaxPassCount *
-                      acmx2::ipc::kShaderSelectionMaxShaderName,
-              '\0');
     if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
         loadShaders(shader_path, true);
         for (const QString &name : shader_pass_names) {
@@ -1641,15 +1659,22 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
                 shaderName.size(),
                 static_cast<qsizetype>(acmx2::ipc::kShaderSelectionMaxShaderName - 1));
             std::copy_n(shaderName.constData(), copyLength,
-                        shaderSelectionShm->shader_pass_names[passCount]);
+                        passNames[passCount].begin());
             ++passCount;
         }
     }
 
+    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    if (!lock)
+        return;
     shaderSelectionShm->shader_pass_enabled = (shader_pass_enabled && passCount > 0) ? 1 : 0;
     shaderSelectionShm->shader_pass_count = passCount;
     std::copy(passIndices.begin(), passIndices.end(), std::begin(shaderSelectionShm->shader_pass_indices));
-    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+    for (std::size_t i = 0; i < passNames.size(); ++i) {
+        std::copy(passNames[i].begin(), passNames[i].end(),
+                  shaderSelectionShm->shader_pass_names[i]);
+    }
+    ++shaderSelectionShm->sequence;
 #endif
 }
 
@@ -1657,8 +1682,11 @@ void MainWindow::publishRepeatStateToRunningProcess() {
 #if defined(__linux__) || defined(__APPLE__)
     if (!shaderSelectionShm)
         return;
+    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    if (!lock)
+        return;
     shaderSelectionShm->repeat_enabled = (play_repeat && play_repeat->isChecked()) ? 1 : 0;
-    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+    ++shaderSelectionShm->sequence;
 #endif
 }
 
@@ -1667,6 +1695,9 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
     if (!shaderSelectionShm)
         return;
 
+    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    if (!lock)
+        return;
     shaderSelectionShm->display_filter_enabled = display_filter_enabled ? 1 : 0;
     shaderSelectionShm->normalized_time_enabled = normalized_time ? 1 : 0;
 
@@ -1702,7 +1733,7 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
     shaderSelectionShm->gpu_buffer_size = static_cast<uint8_t>(std::clamp(gpu_buffer_size, 4, 32));
     std::copy(gpuIndices.begin(), gpuIndices.end(), std::begin(shaderSelectionShm->gpu_filter_indices));
 
-    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+    ++shaderSelectionShm->sequence;
 #endif
 }
 
@@ -1711,6 +1742,9 @@ void MainWindow::publishCustomUniformsToRunningProcess() {
     if (!shaderSelectionShm || !customUniformDialog)
         return;
 
+    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    if (!lock)
+        return;
     std::fill(&shaderSelectionShm->custom_uniform_names[0][0],
               &shaderSelectionShm->custom_uniform_names[0][0] +
                   acmx2::ipc::kShaderSelectionMaxCustomUniforms *
@@ -1737,7 +1771,7 @@ void MainWindow::publishCustomUniformsToRunningProcess() {
         ++count;
     }
     shaderSelectionShm->custom_uniform_count = count;
-    shaderSelectionShm->sequence = ++shaderSelectionSequence;
+    ++shaderSelectionShm->sequence;
 #endif
 }
 
@@ -1750,6 +1784,10 @@ void MainWindow::cleanupShaderSelectionSharedMemory() {
     if (shaderSelectionShmFd >= 0) {
         ::close(shaderSelectionShmFd);
         shaderSelectionShmFd = -1;
+    }
+    if (shaderSelectionSemaphore != SEM_FAILED) {
+        ::sem_close(shaderSelectionSemaphore);
+        shaderSelectionSemaphore = SEM_FAILED;
     }
 #endif
 }
@@ -2186,6 +2224,12 @@ void MainWindow::menuAudioSettings() {
                 Log("Audio file path is too long for live playback: " +
                     audio_file);
             } else {
+                acmx2::ipc::ShaderSelectionSemaphoreLock lock(
+                    shaderSelectionSemaphore);
+                if (!lock) {
+                    Log("Could not lock the live playback control channel");
+                    return;
+                }
                 std::fill(std::begin(shaderSelectionShm->audio_file_path),
                           std::end(shaderSelectionShm->audio_file_path), '\0');
                 std::copy(path.cbegin(), path.cend(),
@@ -2196,7 +2240,7 @@ void MainWindow::menuAudioSettings() {
                 shaderSelectionShm->audio_trunc = audio_trunc ? 1 : 0;
                 shaderSelectionShm->audio_repeat = audio_repeat ? 1 : 0;
                 ++shaderSelectionShm->audio_file_sequence;
-                shaderSelectionShm->sequence = ++shaderSelectionSequence;
+                ++shaderSelectionShm->sequence;
                 Log("Requested live audio-file change: " + audio_file +
                     "<br>");
             }
