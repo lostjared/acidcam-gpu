@@ -32,7 +32,7 @@ equivalent CUDA-enabled OpenCV package or build OpenCV with CUDA enabled.
 The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
 the shader library without requiring NVIDIA CUDA. Download it from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
-The current bundle is <b>ACMX2 v2.9.2</b> (24,037,160 bytes) with SHA-256
+The last published bundle is <b>ACMX2 v2.9.2</b> (24,037,160 bytes) with SHA-256
 <tt>c03aa2dc5756e7e1c4692443d42e65f50520c7f4f07f3a9a1ac8de44d5f86de0</tt>.
 
 @code{.sh}
@@ -216,6 +216,15 @@ for building without CUDA on systems that lack an NVIDIA GPU.
 @section revisions Revisions
 
 @subsection updates_2026_08 August 2026 (Month to Date)
+
+<b>Version 2.100.0 synchronized shared-memory controls</b>
+
+<b>August 16: coherent Qt-to-engine runtime updates</b>
+
+- The Qt launcher and rendering engine protect the shared-memory control
+  channel with a named POSIX semaphore. The engine copies each update into a
+  local snapshot before processing it, preventing partially written compound
+  state from being observed.
 
 <b>Version 2.9.2 responsive export and full 3D rotation</b>
 

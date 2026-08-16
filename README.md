@@ -26,7 +26,7 @@
 
 [Download the ACMX2 Flatpak](https://lostsidedead.biz/acmx2/release)
 
-**Current release: ACMX2 v2.9.2**
+**Current release: ACMX2 v2.100.0**
 
 [YouTube Video Tutorial](https://youtu.be/-IDAF8MMmkg)
 
@@ -132,6 +132,15 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 * **Command line tool** Command line tool
 
 ## Revisions
+
+### Version 2.100.0 (August 2026)
+
+#### August 16
+
+- **Coherent live controls**: the Qt launcher and rendering engine now protect
+  their shared-memory control channel with a named POSIX semaphore. The engine
+  processes a local snapshot, preventing partially updated shader, audio,
+  watermark, uniform, and GPU-filter state from being observed.
 
 ### Version 2.9.2 (August 2026)
 
@@ -430,7 +439,7 @@ CUDA requirement, visit the [ACMX2 Flatpak download page](https://lostsidedead.b
 This x86_64 package includes an Intel IPP-optimized OpenCV build for accelerated
 CPU image processing on supported processors.
 
-The current bundle is **ACMX2 v2.9.2** (24,037,160 bytes). Verify it before
+The last published bundle is **ACMX2 v2.9.2** (24,037,160 bytes). Verify it before
 installation with:
 
 ```bash
