@@ -404,6 +404,7 @@ void MainWindow::initControls() {
     viewMenu = menuBarPtr->addMenu(tr("View"));
     helpMenu = menuBarPtr->addMenu(tr("Help"));
     stayOnTopAction = new QAction(tr("Stay on Top"), this);
+    stayOnTopAction->setShortcut(QKeySequence("Ctrl+Alt+T"));
     stayOnTopAction->setCheckable(true);
     stayOnTopAction->setChecked(false);
     connect(stayOnTopAction, &QAction::toggled, this, [this](bool checked) {
@@ -419,36 +420,45 @@ void MainWindow::initControls() {
     });
     viewMenu->addAction(stayOnTopAction);
     QAction *metadataAction = new QAction(tr("Media Metadata Viewer..."), this);
+    metadataAction->setShortcut(QKeySequence("Ctrl+Alt+V"));
     connect(metadataAction, &QAction::triggered, this, &MainWindow::menuMetadataViewer);
     viewMenu->addSeparator();
     viewMenu->addAction(metadataAction);
     fileMenu_loadLibrary = new QAction(tr("Load Library..."), this);
+    fileMenu_loadLibrary->setShortcut(QKeySequence::Open);
     connect(fileMenu_loadLibrary, &QAction::triggered, this,
             &MainWindow::menuLoadLibrary);
     fileMenu->addAction(fileMenu_loadLibrary);
     loadRecentMenu = fileMenu->addMenu(tr("Load Recent"));
+    loadRecentMenu->menuAction()->setShortcut(QKeySequence("Ctrl+Shift+O"));
     connect(loadRecentMenu, &QMenu::aboutToShow, this,
             &MainWindow::updateRecentLibrariesMenu);
     updateRecentLibrariesMenu();
     fileMenu->addSeparator();
     fileMenu_prop = new QAction(tr("Properties"), this);
+    fileMenu_prop->setShortcut(QKeySequence("Ctrl+,"));
     fileMenu->addAction(fileMenu_prop);
     connect(fileMenu_prop, &QAction::triggered, this, &MainWindow::fileOpenProp);
     fileMenu->addSeparator();
     fileMenu_exit = new QAction(tr("Exit"), this);
+    fileMenu_exit->setShortcut(QKeySequence::Quit);
     connect(fileMenu_exit, &QAction::triggered, this, &MainWindow::fileExit);
     fileMenu->addAction(fileMenu_exit);
     cameraSet = new QAction(tr("Session Properties"), this);
+    cameraSet->setShortcut(QKeySequence("Ctrl+Shift+P"));
     connect(cameraSet, &QAction::triggered, this, &MainWindow::cameraSettings);
     cameraMenu->addAction(cameraSet);
     audioSet = new QAction(tr("Audio Settings"), this);
+    audioSet->setShortcut(QKeySequence("Ctrl+Shift+A"));
     connect(audioSet, &QAction::triggered, this, &MainWindow::menuAudioSettings);
     cameraMenu->addAction(audioSet);
     gpuFilterAction = new QAction(tr("GPU Filter Settings"), this);
+    gpuFilterAction->setShortcut(QKeySequence("Ctrl+Shift+G"));
     connect(gpuFilterAction, &QAction::triggered, this, &MainWindow::menuGPUFilterSettings);
     cameraMenu->addAction(gpuFilterAction);
     cameraMenu->addSeparator();
     styleSheetAction = new QAction(tr("Use Custom Style"), this);
+    styleSheetAction->setShortcut(QKeySequence("Ctrl+Shift+T"));
     styleSheetAction->setCheckable(true);
     styleSheetAction->setChecked(false);
     connect(styleSheetAction, &QAction::triggered, this, &MainWindow::openCustomStyleEditor);
@@ -464,15 +474,18 @@ void MainWindow::initControls() {
     runMenu->addAction(runMenu_all);
     runMenu->addSeparator();
     runMenu_copyCommand = new QAction(tr("Edit Command"), this);
+    runMenu_copyCommand->setShortcut(QKeySequence("Ctrl+Shift+C"));
     connect(runMenu_copyCommand, &QAction::triggered, this, &MainWindow::copyCommand);
     runMenu->addAction(runMenu_copyCommand);
     runMenu->addSeparator();
     QAction *runMenu_clearLog = new QAction(tr("Clear Log"), this);
+    runMenu_clearLog->setShortcut(QKeySequence("Ctrl+L"));
     connect(runMenu_clearLog, &QAction::triggered, this, [this]() {
         bottomTextBox->clear();
     });
     runMenu->addAction(runMenu_clearLog);
     play_repeat = new QAction(tr("Repeat"), this);
+    play_repeat->setShortcut(QKeySequence("Ctrl+R"));
     play_repeat->setCheckable(true);
     play_repeat->setChecked(false);
     connect(play_repeat, &QAction::toggled, this, [this](bool) {
@@ -480,6 +493,7 @@ void MainWindow::initControls() {
     });
     playbackMenu->addAction(play_repeat);
     normalizedTimeAction = new QAction(tr("Normalized Time"), this);
+    normalizedTimeAction->setShortcut(QKeySequence("Ctrl+Alt+N"));
     normalizedTimeAction->setCheckable(true);
     normalizedTimeAction->setChecked(false);
     normalizedTimeAction->setToolTip(
@@ -492,6 +506,7 @@ void MainWindow::initControls() {
     });
     playbackMenu->addAction(normalizedTimeAction);
     play_stop = new QAction(tr("Stop"), this);
+    play_stop->setShortcut(QKeySequence("Shift+F5"));
     play_stop->setEnabled(false);
     connect(play_stop, &QAction::triggered, this, [=]() {
         if (process->state() == QProcess::Running) {
@@ -504,17 +519,21 @@ void MainWindow::initControls() {
     playbackMenu->addAction(play_stop);
     playbackMenu->addSeparator();
     shaderPassAction = new QAction(tr("Multi-Pass Shader Settings..."), this);
+    shaderPassAction->setShortcut(QKeySequence("Ctrl+Alt+M"));
     connect(shaderPassAction, &QAction::triggered, this, &MainWindow::menuShaderPassSettings);
     playbackMenu->addAction(shaderPassAction);
     playbackMenu->addSeparator();
     playlistAction = new QAction(tr("Shader Playlist Settings..."), this);
+    playlistAction->setShortcut(QKeySequence("Ctrl+Alt+P"));
     connect(playlistAction, &QAction::triggered, this, &MainWindow::menuPlaylistSettings);
     playbackMenu->addAction(playlistAction);
     playbackMenu->addSeparator();
     buildCacheAction = new QAction(tr("Rebuild Shader Cache"), this);
+    buildCacheAction->setShortcut(QKeySequence("Ctrl+Alt+B"));
     connect(buildCacheAction, &QAction::triggered, this, &MainWindow::menuBuildShaderCache);
     playbackMenu->addAction(buildCacheAction);
     cleanShaderCacheAction = new QAction(tr("Clean Shader Cache"), this);
+    cleanShaderCacheAction->setShortcut(QKeySequence("Ctrl+Alt+C"));
     connect(cleanShaderCacheAction, &QAction::triggered,
             this, &MainWindow::menuCleanShaderCache);
     playbackMenu->addAction(cleanShaderCacheAction);
@@ -527,10 +546,12 @@ void MainWindow::initControls() {
 #endif
 
     removeBrokenAction = new QAction(tr("Remove Broken"), this);
+    removeBrokenAction->setShortcut(QKeySequence("Ctrl+Alt+R"));
     connect(removeBrokenAction, &QAction::triggered, this, &MainWindow::menuRemoveBroken);
     playbackMenu->addAction(removeBrokenAction);
 
     runFromCacheAction = new QAction(tr("Run from Cache"), this);
+    runFromCacheAction->setShortcut(QKeySequence("Ctrl+Alt+K"));
     runFromCacheAction->setCheckable(true);
 #ifdef Q_OS_MACOS
     use_shader_cache = false;
@@ -553,54 +574,67 @@ void MainWindow::initControls() {
 
     playbackMenu->addSeparator();
     midiSettingsAction = new QAction(tr("MIDI Settings..."), this);
+    midiSettingsAction->setShortcut(QKeySequence("Ctrl+Alt+I"));
     connect(midiSettingsAction, &QAction::triggered, this, &MainWindow::menuMidiSettings);
     playbackMenu->addAction(midiSettingsAction);
 
     playbackMenu->addSeparator();
     watermarkAction = new QAction(tr("Watermark..."), this);
+    watermarkAction->setShortcut(QKeySequence("Ctrl+Alt+W"));
     connect(watermarkAction, &QAction::triggered, this, &MainWindow::menuWatermarkSettings);
     playbackMenu->addAction(watermarkAction);
 
     displayFilterAction = new QAction(tr("Display"), this);
+    displayFilterAction->setShortcut(QKeySequence("Ctrl+Alt+D"));
     displayFilterAction->setCheckable(true);
     displayFilterAction->setChecked(false);
     connect(displayFilterAction, &QAction::toggled, this, &MainWindow::menuToggleDisplayFilter);
     playbackMenu->addAction(displayFilterAction);
 
     listMenu_new = new QAction(tr("New Shader Library"), this);
+    listMenu_new->setShortcut(QKeySequence("Ctrl+Shift+N"));
     connect(listMenu_new, &QAction::triggered, this, &MainWindow::newList);
     listMenu->addAction(listMenu_new);
     libraryBuilderAction = new QAction(tr("Shader Library Builder..."), this);
+    libraryBuilderAction->setShortcut(QKeySequence("Ctrl+Shift+B"));
     connect(libraryBuilderAction, &QAction::triggered, this,
             &MainWindow::menuLibraryBuilder);
     listMenu->addAction(libraryBuilderAction);
     listMenu_shader = new QAction(tr("New Shader File..."), this);
+    listMenu_shader->setShortcut(QKeySequence::New);
     connect(listMenu_shader, &QAction::triggered, this, &MainWindow::newShader);
     listMenu->addAction(listMenu_shader);
     customUniformsAction = new QAction(tr("Add Custom Uniforms..."), this);
+    customUniformsAction->setShortcut(QKeySequence("Ctrl+U"));
     connect(customUniformsAction, &QAction::triggered, this,
             &MainWindow::menuCustomUniforms);
     listMenu->addAction(customUniformsAction);
     listMenu->addSeparator();
     listMenu_remove = new QAction(tr("Remove Shader"), this);
+    listMenu_remove->setShortcut(QKeySequence::Delete);
     connect(listMenu_remove, &QAction::triggered, this, &MainWindow::menuRemove);
     listMenu->addAction(listMenu_remove);
     listMenu_set_current = new QAction(tr("Set Current Shader"), this);
+    listMenu_set_current->setShortcut(QKeySequence("Ctrl+Return"));
     listMenu_set_current->setEnabled(false);
     connect(listMenu_set_current, &QAction::triggered, this, &MainWindow::menuSetCurrentShader);
     listMenu->addAction(listMenu_set_current);
     listMenu->addSeparator();
     listMenu_up = new QAction(tr("Shift Shader Up"), this);
+    listMenu_up->setShortcut(QKeySequence("Alt+Up"));
     connect(listMenu_up, &QAction::triggered, this, &MainWindow::menuUp);
     listMenu->addAction(listMenu_up);
     listMenu_down = new QAction(tr("Shift Shader Down"), this);
+    listMenu_down->setShortcut(QKeySequence("Alt+Down"));
     connect(listMenu_down, &QAction::triggered, this, &MainWindow::menuDown);
     listMenu->addAction(listMenu_down);
     listMenu_shuffle = new QAction(tr("Shuffle Shaders"), this);
+    listMenu_shuffle->setShortcut(QKeySequence("Ctrl+Shift+H"));
     connect(listMenu_shuffle, &QAction::triggered, this, &MainWindow::menuShuffle);
     listMenu->addAction(listMenu_shuffle);
 
     listMenu_sort = new QAction(tr("Sort Shaders"), this);
+    listMenu_sort->setShortcut(QKeySequence("Ctrl+Shift+S"));
     connect(listMenu_sort, &QAction::triggered, this, &MainWindow::menuSort);
     listMenu->addAction(listMenu_sort);
     listMenu->addSeparator();
@@ -634,12 +668,14 @@ void MainWindow::initControls() {
     });
     listMenu->addAction(listMenu_findInFiles);
     helpMenu_uniformReference = new QAction(tr("Built-in Uniform Reference..."), this);
+    helpMenu_uniformReference->setShortcut(QKeySequence::HelpContents);
     connect(helpMenu_uniformReference, &QAction::triggered, this,
             &MainWindow::menuUniformReference);
     helpMenu->addAction(helpMenu_uniformReference);
     helpMenu->addSeparator();
 
     helpMenu_about = new QAction("About", this);
+    helpMenu_about->setShortcut(QKeySequence("Shift+F1"));
 
     connect(helpMenu_about, &QAction::triggered, this, [=]() {
         QMessageBox box(this);

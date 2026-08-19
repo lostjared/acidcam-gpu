@@ -141,6 +141,18 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
   their shared-memory control channel with a named POSIX semaphore. The engine
   processes a local snapshot, preventing partially updated shader, audio,
   watermark, uniform, and GPU-filter state from being observed.
+- **Linux and macOS IPC support**: synchronization uses `sem_open`, `sem_wait`,
+  and `sem_post` rather than process-local synchronization. The named semaphore
+  works with the existing `shm_open`/`mmap` channel on Linux and macOS,
+  including Apple Silicon.
+- **Shared-memory protocol 10**: initialization, compound writes, sequence
+  updates, and snapshot reads are all protected. Upgrade and restart the Qt
+  launcher and engine together because older protocol versions are rejected.
+- **Flatpak release refresh**: the x86_64 OpenGL build includes the Qt
+  interface, command-line engine, RtAudio, MIDI support, MIDI mapper,
+  Intel IPP-optimized OpenCV, and the pinned shader collection. CUDA is not
+  required. The bundle is 22,185,976 bytes with SHA-256
+  `252cb2417ba6e78775a149680347333200a40bdea835bf7be329fbf681d07308`.
 
 ### Version 2.9.2 (August 2026)
 
@@ -439,12 +451,12 @@ CUDA requirement, visit the [ACMX2 Flatpak download page](https://lostsidedead.b
 This x86_64 package includes an Intel IPP-optimized OpenCV build for accelerated
 CPU image processing on supported processors.
 
-The last published bundle is **ACMX2 v2.9.2** (24,037,160 bytes). Verify it before
+The current bundle is **ACMX2 v2.100.0** (22,185,976 bytes). Verify it before
 installation with:
 
 ```bash
 sha256sum ACMX2.flatpak
-# c03aa2dc5756e7e1c4692443d42e65f50520c7f4f07f3a9a1ac8de44d5f86de0  ACMX2.flatpak
+# 252cb2417ba6e78775a149680347333200a40bdea835bf7be329fbf681d07308  ACMX2.flatpak
 flatpak install --user --reinstall ./ACMX2.flatpak
 ```
 

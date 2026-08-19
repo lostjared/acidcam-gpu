@@ -32,8 +32,8 @@ equivalent CUDA-enabled OpenCV package or build OpenCV with CUDA enabled.
 The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
 the shader library without requiring NVIDIA CUDA. Download it from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
-The last published bundle is <b>ACMX2 v2.9.2</b> (24,037,160 bytes) with SHA-256
-<tt>c03aa2dc5756e7e1c4692443d42e65f50520c7f4f07f3a9a1ac8de44d5f86de0</tt>.
+The current bundle is <b>ACMX2 v2.100.0</b> (22,185,976 bytes) with SHA-256
+<tt>252cb2417ba6e78775a149680347333200a40bdea835bf7be329fbf681d07308</tt>.
 
 @code{.sh}
 sha256sum ACMX2.flatpak
@@ -225,6 +225,17 @@ for building without CUDA on systems that lack an NVIDIA GPU.
   channel with a named POSIX semaphore. The engine copies each update into a
   local snapshot before processing it, preventing partially written compound
   state from being observed.
+- Synchronization uses <tt>sem_open</tt>, <tt>sem_wait</tt>, and
+  <tt>sem_post</tt> with the existing <tt>shm_open</tt>/<tt>mmap</tt> channel.
+  This supports Linux and macOS, including Apple Silicon.
+- Shared-memory protocol version 10 protects initialization, compound writes,
+  sequence updates, and snapshot reads. Upgrade and restart the Qt launcher
+  and engine together because older protocol versions are rejected.
+- The refreshed x86_64 Flatpak includes the Qt interface, command-line engine,
+  RtAudio, MIDI support, MIDI mapper, Intel IPP-optimized OpenCV, and the
+  pinned shader collection without requiring CUDA. The bundle is 22,185,976
+  bytes with SHA-256
+  <tt>252cb2417ba6e78775a149680347333200a40bdea835bf7be329fbf681d07308</tt>.
 
 <b>Version 2.9.2 responsive export and full 3D rotation</b>
 
