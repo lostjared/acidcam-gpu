@@ -1523,16 +1523,12 @@ void MainWindow::initShaderSelectionSharedMemory() {
                                       O_CREAT | O_RDWR,
                                       0666);
     if (shaderSelectionShmFd < 0) {
-        ::sem_close(shaderSelectionSemaphore);
-        shaderSelectionSemaphore = SEM_FAILED;
+        cleanupShaderSelectionSharedMemory();
         return;
     }
 
     if (::ftruncate(shaderSelectionShmFd, sizeof(acmx2::ipc::ShaderSelectionShmData)) != 0) {
-        ::close(shaderSelectionShmFd);
-        shaderSelectionShmFd = -1;
-        ::sem_close(shaderSelectionSemaphore);
-        shaderSelectionSemaphore = SEM_FAILED;
+        cleanupShaderSelectionSharedMemory();
         return;
     }
 
@@ -1543,10 +1539,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
                           shaderSelectionShmFd,
                           0);
     if (mapped == MAP_FAILED) {
-        ::close(shaderSelectionShmFd);
-        shaderSelectionShmFd = -1;
-        ::sem_close(shaderSelectionSemaphore);
-        shaderSelectionSemaphore = SEM_FAILED;
+        cleanupShaderSelectionSharedMemory();
         return;
     }
 
@@ -1822,6 +1815,7 @@ void MainWindow::cleanupShaderSelectionSharedMemory() {
         shaderSelectionShmFd = -1;
     }
     if (shaderSelectionSemaphore != SEM_FAILED) {
+        ::sem_unlink(acmx2::ipc::kShaderSelectionSemaphoreName);
         ::sem_close(shaderSelectionSemaphore);
         shaderSelectionSemaphore = SEM_FAILED;
     }
