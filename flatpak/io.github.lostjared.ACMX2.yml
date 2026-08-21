@@ -158,7 +158,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/acidcam-gpu.git
-        commit: ae7a67e83093d74ceb05f49fb03d949f3ce53ed4
+        commit: 7727a26aee76aad9ed485a6f6fc5712bb10ce0ad
         disable-submodules: true
       - type: file
         path: io.github.lostjared.ACMX2.desktop
