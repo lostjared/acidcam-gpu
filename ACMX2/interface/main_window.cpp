@@ -15,6 +15,7 @@
 #include <QComboBox>
 #include <QDataStream>
 #include <QDateTime>
+#include <QDebug>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -333,7 +334,7 @@ void MainWindow::initControls() {
     connect(process,
             static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
             this,
-            [this](int exitCode, QProcess::ExitStatus) {
+            [this](int exitCode, QProcess::ExitStatus exitStatus) {
                 if (!stderrBuffer.isEmpty() && !stderrBuffer.contains("GStreamer")) {
                     if (stderrBuffer.contains("[ WARN:"))
                         this->Write("<b style='color:#ccaa00;'>Warning:</b> " + stderrBuffer + "<br>");
@@ -346,6 +347,12 @@ void MainWindow::initControls() {
                 stream << "acmx2: Exited with Code: " << exitCode;
                 Log(text + "<br>");
                 play_stop->setEnabled(false);
+
+                if (exitStatus == QProcess::CrashExit) {
+                    qDebug() << "acmx2 engine crashed. Executing IPC cleanup.";
+                    Log("<b style='color:red;'>acmx2 engine crashed. Cleaning up IPC locks.</b><br>");
+                    cleanupShaderSelectionSemaphore();
+                }
 
                 // Refresh the shader tree's compile-health column now that
                 // the child process has (re)written the binary shader cache.
@@ -1511,12 +1518,14 @@ int MainWindow::currentShaderRow() const {
 
 void MainWindow::initShaderSelectionSharedMemory() {
 #if defined(__linux__) || defined(__APPLE__)
-    if (shaderSelectionShm)
+    if (shaderSelectionSemaphore == SEM_FAILED) {
+        shaderSelectionSemaphore = ::sem_open(
+            acmx2::ipc::kShaderSelectionSemaphoreName, O_CREAT, 0666, 1);
+    }
+    if (shaderSelectionSemaphore == SEM_FAILED)
         return;
 
-    shaderSelectionSemaphore = ::sem_open(
-        acmx2::ipc::kShaderSelectionSemaphoreName, O_CREAT, 0666, 1);
-    if (shaderSelectionSemaphore == SEM_FAILED)
+    if (shaderSelectionShm)
         return;
 
     shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName,
@@ -1814,11 +1823,18 @@ void MainWindow::cleanupShaderSelectionSharedMemory() {
         ::close(shaderSelectionShmFd);
         shaderSelectionShmFd = -1;
     }
-    if (shaderSelectionSemaphore != SEM_FAILED) {
-        ::sem_unlink(acmx2::ipc::kShaderSelectionSemaphoreName);
-        ::sem_close(shaderSelectionSemaphore);
-        shaderSelectionSemaphore = SEM_FAILED;
-    }
+    cleanupShaderSelectionSemaphore();
+#endif
+}
+
+void MainWindow::cleanupShaderSelectionSemaphore() {
+#if defined(__linux__) || defined(__APPLE__)
+    if (shaderSelectionSemaphore == SEM_FAILED)
+        return;
+
+    ::sem_unlink(acmx2::ipc::kShaderSelectionSemaphoreName);
+    ::sem_close(shaderSelectionSemaphore);
+    shaderSelectionSemaphore = SEM_FAILED;
 #endif
 }
 
@@ -2669,6 +2685,7 @@ void MainWindow::runSelected() {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
     }
+    initShaderSelectionSharedMemory();
     publishSelectedShaderIndexToRunningProcess();
     publishRuntimeSettingsToRunningProcess();
     const QString data = currentShaderName();
@@ -3300,6 +3317,7 @@ void MainWindow::runAll() {
     QStringList arguments;
     if (!buildRunArguments(arguments))
         return;
+    initShaderSelectionSharedMemory();
     publishMultipassShadersToRunningProcess();
     publishSelectedShaderIndexToRunningProcess();
     publishRuntimeSettingsToRunningProcess();
@@ -3396,6 +3414,7 @@ void MainWindow::copyCommand() {
         QStringList shellArgs{"-c", cmdText};
 #endif
         Log("shell: " + cmdText + "<br>");
+        initShaderSelectionSharedMemory();
         process->start(shell, shellArgs);
         if (!process->waitForStarted()) {
             Log("<b style='color:red;'>Failed to start the program.</b>");
@@ -3533,6 +3552,7 @@ void MainWindow::menuBuildShaderCache() {
 
     play_stop->setEnabled(true);
     cacheBuildInProgress = true;
+    initShaderSelectionSharedMemory();
     process->start(executable_path, args);
 
     if (!process->waitForStarted()) {
