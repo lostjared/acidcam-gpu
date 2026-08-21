@@ -2,7 +2,7 @@
 #
 # Generate with:   doxygen Doxyfile
 #
-# Version 2.100.0 (August 2026)
+# Version 2.101.0 (August 2026)
 # Recent additions: OpenGL compute shaders, searchable built-in uniform reference,
 # multipass replacement controls, and Linux camera-node filtering
 
@@ -10,7 +10,7 @@
 # Project
 #---------------------------------------------------------------------------
 PROJECT_NAME           = "ACMX2"
-PROJECT_NUMBER         = "2.100.0"
+PROJECT_NUMBER         = "2.101.0"
 PROJECT_BRIEF          = "Real-Time GPU-Accelerated Video Glitch Engine"
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = docs
@@ -67,7 +67,7 @@ REFERENCES_RELATION    = YES
 # HTML output — light Delphi/Borland theme
 #---------------------------------------------------------------------------
 GENERATE_HTML          = YES
-HTML_OUTPUT            = versions/2.100.0
+HTML_OUTPUT            = versions/2.101.0
 HTML_EXTRA_STYLESHEET  = doxygen-custom.css
 HTML_COLORSTYLE        = LIGHT
 HTML_COLORSTYLE_HUE    = 220
