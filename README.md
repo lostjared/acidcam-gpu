@@ -26,7 +26,7 @@
 
 [Download the ACMX2 Flatpak](https://lostsidedead.biz/acmx2/release)
 
-**Current release: ACMX2 v2.101.0**
+**Current release: ACMX2 v2.101.1**
 
 [YouTube Video Tutorial](https://youtu.be/-IDAF8MMmkg)
 
@@ -132,6 +132,16 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
 * **Command line tool** Command line tool
 
 ## Revisions
+
+### Version 2.101.1 (August 2026)
+
+#### August 22
+
+- **Live shader reload index fix**: shader filenames containing `material`,
+  such as `material.glsl` and `purple_material.glsl`, are no longer silently
+  omitted by the rendering engine. The Qt launcher and engine now count the
+  same manifest entries, preventing later shaders from failing live reload
+  with a library-index/path mismatch.
 
 ### Version 2.101.0 (August 2026)
 
@@ -457,8 +467,8 @@ CUDA requirement, visit the [ACMX2 Flatpak download page](https://lostsidedead.b
 This x86_64 package includes an Intel IPP-optimized OpenCV build for accelerated
 CPU image processing on supported processors.
 
-The current bundle is **ACMX2 v2.101.0** (22,172,128 bytes). Verify it before
-installation with:
+The latest published bundle remains **ACMX2 v2.101.0** (22,172,128 bytes).
+Verify it before installation with:
 
 ```bash
 sha256sum ACMX2.flatpak
