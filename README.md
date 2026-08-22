@@ -142,6 +142,9 @@ Without CUDA, all shader-based features continue to work — only the CUDA GPU-f
   omitted by the rendering engine. The Qt launcher and engine now count the
   same manifest entries, preventing later shaders from failing live reload
   with a library-index/path mismatch.
+- **Flatpak refresh**: the v2.101.1 x86_64 OpenGL bundle is 24,017,976 bytes
+  with SHA-256
+  `ab8a0282aae2b6d90f8e02f69711f4609604b4810769cacb8c256d702befe886`.
 
 ### Version 2.101.0 (August 2026)
 
@@ -467,12 +470,12 @@ CUDA requirement, visit the [ACMX2 Flatpak download page](https://lostsidedead.b
 This x86_64 package includes an Intel IPP-optimized OpenCV build for accelerated
 CPU image processing on supported processors.
 
-The latest published bundle remains **ACMX2 v2.101.0** (22,172,128 bytes).
-Verify it before installation with:
+The current bundle is **ACMX2 v2.101.1** (24,017,976 bytes). Verify it before
+installation with:
 
 ```bash
 sha256sum ACMX2.flatpak
-# 84dcaa8d4b9cc692d7a93d266438c2837767a0335784b453bc81ef5bf594624a  ACMX2.flatpak
+# ab8a0282aae2b6d90f8e02f69711f4609604b4810769cacb8c256d702befe886  ACMX2.flatpak
 flatpak install --user --reinstall ./ACMX2.flatpak
 ```
 
