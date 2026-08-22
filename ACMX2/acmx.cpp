@@ -335,7 +335,7 @@ static std::optional<std::string> normalizeShaderIndexEntry(const std::string &r
     const auto last = raw.find_last_not_of(" \t\r\n");
     std::string entry = raw.substr(first, last - first + 1);
 
-    if (entry.empty() || entry.find("material") != std::string::npos) {
+    if (entry.empty()) {
         return std::nullopt;
     }
 
