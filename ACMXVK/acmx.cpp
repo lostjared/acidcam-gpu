@@ -665,7 +665,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7A)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7B)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -747,7 +747,8 @@ namespace acmxvk {
                << "  -m, --cuda-device <index>   Select CUDA device (default 0)\n"
                << "      --list-filters          List acidcam-gpu filters and exit\n"
                << "      --list-cuda-devices     List CUDA devices and exit\n"
-               << "      --check-cuda            Report compiled CUDA-filter support\n\n"
+               << "      --check-cuda            Report compiled CUDA-filter support\n"
+               << "                              Left/Right selects the active filter\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -1165,6 +1166,12 @@ namespace acmxvk {
                         selectPlaylistNode(1);
                     }
                     break;
+                case SDLK_LEFT:
+                    selectGpuFilter(-1);
+                    break;
+                case SDLK_RIGHT:
+                    selectGpuFilter(1);
+                    break;
                 case SDLK_SPACE:
                     effects_enabled = !effects_enabled;
                     applyShaderPipeline();
@@ -1402,6 +1409,18 @@ namespace acmxvk {
 #endif
         }
 
+        void selectGpuFilter(int direction) {
+#ifdef ACMXVK_WITH_CUDA
+            if (gpu_filter_engine != nullptr &&
+                gpu_filter_engine->select_relative_filter(direction) &&
+                source_kind == SourceKind::Graphic && !graphic_rgba.empty()) {
+                uploadInputFrame(graphic_rgba);
+            }
+#else
+            static_cast<void>(direction);
+#endif
+        }
+
         void openMidi() {
 #ifdef MIDI_ENABLED
             if (!options.midi_device_specified && !options.midi_monitor &&
@@ -1596,6 +1615,18 @@ namespace acmxvk {
 
         [[nodiscard]] SDL_Keycode midiActionKey(int action) const {
             switch (action) {
+            case 262:
+#ifdef ACMXVK_WITH_CUDA
+                return gpu_filter_engine != nullptr ? SDLK_RIGHT : SDLK_UNKNOWN;
+#else
+                return SDLK_UNKNOWN;
+#endif
+            case 263:
+#ifdef ACMXVK_WITH_CUDA
+                return gpu_filter_engine != nullptr ? SDLK_LEFT : SDLK_UNKNOWN;
+#else
+                return SDLK_UNKNOWN;
+#endif
             case 264:
                 return SDLK_DOWN;
             case 265:
@@ -1659,6 +1690,10 @@ namespace acmxvk {
 
         [[nodiscard]] std::string_view midiActionName(int action) const {
             switch (action) {
+            case 262:
+                return "select next CUDA filter";
+            case 263:
+                return "select previous CUDA filter";
             case 264:
                 return "next shader or playlist node";
             case 265:

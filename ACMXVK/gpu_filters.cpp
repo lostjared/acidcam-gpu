@@ -99,6 +99,24 @@ namespace acmxvk::gpu {
             return true;
         }
 
+        [[nodiscard]] bool select_relative_filter(int direction) {
+            if (direction == 0 || filters.empty()) {
+                return false;
+            }
+
+            const int step = direction < 0 ? -1 : 1;
+            const int filter_count = ac_gpu::AC_FILTER_MAX;
+            const int current_index = filters.front().index;
+            const int next_index =
+                (current_index + step + filter_count) % filter_count;
+            filters.assign(
+                1, {next_index, ac_gpu::filters[next_index].name});
+            filters_changed = true;
+            std::cout << "acmxvk: CUDA filter: " << filters.front().name
+                      << " [" << next_index << "]\n";
+            return true;
+        }
+
         void update_parameters() {
             alpha += alpha_direction > 0 ? 0.01F : -0.01F;
             if (alpha >= 3.0F) {
@@ -143,6 +161,10 @@ namespace acmxvk::gpu {
 
     bool FilterEngine::process(const cv::Mat &rgba) {
         return impl->process(rgba);
+    }
+
+    bool FilterEngine::select_relative_filter(int direction) {
+        return impl->select_relative_filter(direction);
     }
 
     const cv::cuda::GpuMat &FilterEngine::output() const {

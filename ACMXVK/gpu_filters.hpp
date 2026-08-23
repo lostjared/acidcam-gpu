@@ -19,6 +19,7 @@ namespace acmxvk::gpu {
         FilterEngine &operator=(const FilterEngine &) = delete;
 
         [[nodiscard]] bool process(const cv::Mat &rgba);
+        [[nodiscard]] bool select_relative_filter(int direction);
         [[nodiscard]] const cv::cuda::GpuMat &output() const;
         [[nodiscard]] cv::cuda::Stream &stream();
 

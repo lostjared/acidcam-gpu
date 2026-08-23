@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7A**. It is usable for video, camera, and
+The port is currently at **Increment 7B**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -29,7 +29,7 @@ ACMX2.
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live recording has independent gain, while file audio also supports repeat and stop-at-EOF behavior. |
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, and ACMXVK-equivalent playback actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
-| CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, processes RGBA frames in CUDA, and transfers the resulting `GpuMat` directly into MXVK's Vulkan texture. Runtime filter switching is not yet ported. |
+| CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, processes RGBA frames in CUDA, transfers the resulting `GpuMat` directly into MXVK's Vulkan texture, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
@@ -76,9 +76,9 @@ options are omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increments 5J through 5R, 6A through 6C, and 7A also change only
-ACMXVK. Increment 7A does require the existing MXVK and `acidcam-gpu`
-installations to have CUDA support.
+reinstall. Increments 5J through 5R, 6A through 6C, and 7A through 7B also
+change only ACMXVK. Increment 7A does require the existing MXVK and
+`acidcam-gpu` installations to have CUDA support.
 
 ### Apple Silicon and MoltenVK
 
@@ -549,21 +549,26 @@ Apply one filter to a video before its Vulkan shader pipeline:
 `--gpu-filter` accepts a comma-separated chain such as `1,7,23`. Filter indices
 must be in the range printed by `--list-filters`, and `--gpu-buffer` accepts
 4–32 temporal frames. Video and camera inputs are filtered for every captured
-frame. A still image is filtered when its source texture is initialized.
+frame. A still image is filtered when its source texture is initialized and
+reprocessed immediately when Left/Right changes the active filter.
 
 The filter engine uploads source RGBA into acidcam-gpu's temporal CUDA buffer,
 runs the selected chain, and gives MXVK the resulting CUDA `GpuMat`; MXVK then
 copies device-to-device into its Vulkan image. There is no post-filter CPU
 download. Vulkan fragment and multipass shaders operate on the filtered image.
-In Increment 7A, the optional Vulkan frame-history texture is still populated
-from the pre-filter source frame, and runtime Left/Right filter selection is not
-yet enabled. On a multi-GPU system, select the CUDA device corresponding to the
-Vulkan GPU. CUDA filters are unavailable in MoltenVK builds.
+In Increment 7B, Left/Right selects the previous or next filter with wraparound.
+This matches ACMX2: selecting a filter at runtime replaces a startup filter
+chain with that single filter. MIDI Map actions 262 (Right) and 263 (Left) drive
+the same selection when MIDI support and a GPU filter are enabled. The optional
+Vulkan frame-history texture is still populated from the pre-filter source
+frame. On a multi-GPU system, select the CUDA device corresponding to the Vulkan
+GPU. CUDA filters are unavailable in MoltenVK builds.
 
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
 - Shift+Up/Down: change the final shader while using a playlist
+- Left/Right: select the previous or next CUDA filter
 - P: toggle playlist mode
 - P without a playlist: pause or resume video input
 - L: freeze or resume both input and shader animation
@@ -588,8 +593,9 @@ and with validation enabled in both MXVK and ACMXVK. The current increment has
 been exercised with shader-library loading, multipass rendering, configurable
 history caches, MXWrite encoding, custom-uniform rendering, optional live audio
 metrics, FFmpeg-decoded file reactivity, routed-tone FFT visualization, and FFT
-spectrum history. The known duplicate vkBasalt
-implicit-layer warning is external to ACMXVK.
+spectrum history. Increment 7B was additionally tested with a CUDA+MIDI build
+and live Left/Right filter changes on an NVIDIA RTX 2070. The known duplicate
+vkBasalt implicit-layer warning is external to ACMXVK.
 
 ## Development note
 
