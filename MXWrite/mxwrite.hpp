@@ -256,6 +256,10 @@ class Writer {
      * plus one.
      */
     int64_t get_frame_count() const { return frame_count; }
+    /** @brief Return the current logical byte position of the output muxer. */
+    std::uint64_t get_bytes_written() const {
+        return bytes_written.load(std::memory_order_relaxed);
+    }
     /** @brief Return the encoded duration in seconds. */
     double get_duration() const;
     /** @brief Close the writer on destruction if it is still open. */
@@ -314,6 +318,7 @@ class Writer {
     std::mutex writer_mutex{};                ///< Guards writer state transitions.
     bool stop_requested = false;              ///< Signals encoder shutdown.
     std::atomic<bool> block_when_full{false}; ///< Queue backpressure mode.
+    std::atomic<std::uint64_t> bytes_written{0}; ///< Logical output bytes accepted by FFmpeg.
 
     /** @brief Shared implementation for open() and open_ts(). */
     bool openInternal(const std::string &filename, int w, int h, float fps, const EncodeOptions &opts, bool ts_mode);
@@ -330,6 +335,8 @@ class Writer {
     void encodeAndWriteFrame(AVFrame *in_frame);
     /** @brief Drain packets from the codec into the container. */
     void drainEncoderPackets();
+    /** @brief Refresh the logical output byte count from FFmpeg. */
+    void updateBytesWritten() noexcept;
     /** @brief Release a frame allocated for the encode queue. */
     void releaseFrame(AVFrame *f);
 };

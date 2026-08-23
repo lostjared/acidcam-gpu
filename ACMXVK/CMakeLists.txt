@@ -16,6 +16,14 @@ option(VALIDATION "Enable Vulkan validation layers" OFF)
 option(AUDIO "Enable RtAudio input and audio-reactive shader metrics" OFF)
 option(ACMXVK_USE_MOLTENVK "Link ACMXVK with MoltenVK on Apple platforms" ${APPLE})
 
+set(ACMXVK_MXWRITE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite" CACHE PATH
+    "MXWrite source directory containing the ACMXVK encoder API"
+)
+option(ACMXVK_USE_BUNDLED_MXWRITE
+    "Build the repository MXWrite source instead of using an installed package"
+    ON
+)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -41,6 +49,7 @@ if(NOT TARGET PkgConfig::FFMPEG)
         libavformat>=58.0.0
         libavutil>=56.0.0
         libswscale>=5.0.0
+        libswresample>=3.0.0
     )
 endif()
 if(NOT TARGET PkgConfig::AVCODEC)
@@ -55,8 +64,43 @@ endif()
 if(NOT TARGET PkgConfig::SWSCALE)
     pkg_check_modules(SWSCALE REQUIRED IMPORTED_TARGET libswscale>=5.0.0)
 endif()
+if(NOT TARGET PkgConfig::SWRESAMPLE)
+    pkg_check_modules(SWRESAMPLE REQUIRED IMPORTED_TARGET libswresample>=3.0.0)
+endif()
 
-find_package(MXWrite CONFIG REQUIRED)
+if(ACMXVK_USE_BUNDLED_MXWRITE)
+    if(NOT EXISTS "${ACMXVK_MXWRITE_SOURCE_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "ACMXVK_USE_BUNDLED_MXWRITE is ON, but a compatible MXWrite source "
+            "was not found. Set ACMXVK_MXWRITE_SOURCE_DIR to the MXVK/MXWrite "
+            "directory, or set ACMXVK_USE_BUNDLED_MXWRITE=OFF."
+        )
+    endif()
+    file(READ "${ACMXVK_MXWRITE_SOURCE_DIR}/mxwrite.hpp"
+        ACMXVK_MXWRITE_HEADER_CONTENT
+    )
+    if(NOT ACMXVK_MXWRITE_HEADER_CONTENT MATCHES "get_bytes_written"
+       OR NOT ACMXVK_MXWRITE_HEADER_CONTENT MATCHES "video_encoder_options")
+        message(FATAL_ERROR
+            "${ACMXVK_MXWRITE_SOURCE_DIR}/mxwrite.hpp is older than the API "
+            "required by ACMXVK. Use the MXWrite source from the current MXVK."
+        )
+    endif()
+    message(STATUS "Using MXWrite source: ${ACMXVK_MXWRITE_SOURCE_DIR}")
+    add_subdirectory(
+        "${ACMXVK_MXWRITE_SOURCE_DIR}"
+        "${CMAKE_CURRENT_BINARY_DIR}/mxwrite"
+        EXCLUDE_FROM_ALL
+    )
+    if(NOT TARGET mxwrite)
+        message(FATAL_ERROR "The repository MXWrite source did not create target mxwrite")
+    endif()
+    if(NOT TARGET MXWrite::mxwrite)
+        add_library(MXWrite::mxwrite ALIAS mxwrite)
+    endif()
+else()
+    find_package(MXWrite CONFIG REQUIRED)
+endif()
 find_package(SDL3 CONFIG REQUIRED)
 find_package(SDL3_ttf CONFIG REQUIRED)
 if(APPLE AND ACMXVK_USE_MOLTENVK AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)

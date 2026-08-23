@@ -1221,6 +1221,7 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
     stop_requested = false;
     frame_count = 0;
     last_duration = 0.0;
+    bytes_written.store(0, std::memory_order_relaxed);
     block_when_full.store(opts.block_when_full, std::memory_order_relaxed);
 
     while (!encode_queue.empty()) {
@@ -1417,6 +1418,7 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
             format_ctx = nullptr;
             return false;
         }
+        updateBytesWritten();
 
         // Allocate the 10-bit YUV staging frame used by encodeAndWriteFrame.
         frame10 = av_frame_alloc();
@@ -1809,6 +1811,7 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         format_ctx = nullptr;
         return false;
     }
+    updateBytesWritten();
 
     if (!use_hw_encode) {
         frameYUV = av_frame_alloc();
@@ -2261,6 +2264,7 @@ void Writer::drainEncoderPackets() {
             av_packet_unref(pkt);
             break;
         }
+        updateBytesWritten();
         av_packet_unref(pkt);
     }
 
@@ -2359,6 +2363,19 @@ void Writer::encodeLoop(std::stop_token stop_token) {
         }
     }
 }
+
+void Writer::updateBytesWritten() noexcept {
+    if (!format_ctx || !format_ctx->pb) {
+        return;
+    }
+
+    const int64_t position = avio_tell(format_ctx->pb);
+    if (position >= 0) {
+        bytes_written.store(static_cast<std::uint64_t>(position),
+                            std::memory_order_relaxed);
+    }
+}
+
 void Writer::close() {
     std::lock_guard<std::mutex> lock(writer_mutex);
     if (!opened) {
@@ -2374,6 +2391,7 @@ void Writer::close() {
     }
 
     av_write_trailer(format_ctx);
+    updateBytesWritten();
 
     if (!(format_ctx->oformat->flags & AVFMT_NOFILE)) {
         avio_closep(&format_ctx->pb);
