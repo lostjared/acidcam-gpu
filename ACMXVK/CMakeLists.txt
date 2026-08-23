@@ -72,6 +72,8 @@ target_compile_definitions(acmxvk PRIVATE
 install(TARGETS acmxvk RUNTIME DESTINATION bin)
 install(FILES "${ACMXVK_SPRITE_VERTEX_SHADER}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")
 
 if(NOT TARGET uninstall)
     configure_file(
