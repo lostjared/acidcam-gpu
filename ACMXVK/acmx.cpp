@@ -99,6 +99,7 @@ namespace acmxvk {
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
         std::vector<std::string> shader_pass_files;
+        std::vector<std::string> custom_uniform_overrides;
         std::string input_file;
         std::string graphic_file;
         std::string shader_directory;
@@ -223,6 +224,9 @@ namespace acmxvk {
                     parseInteger(optionValue(index, argc, argv, option), option);
             } else if (option == "--shader-file") {
                 options.shader_file = optionValue(index, argc, argv, option);
+            } else if (option == "--uniform") {
+                options.custom_uniform_overrides.push_back(
+                    optionValue(index, argc, argv, option));
             } else if (option == "--shader-pass") {
                 const std::string values = optionValue(index, argc, argv, option);
                 std::size_t start = 0;
@@ -365,6 +369,10 @@ namespace acmxvk {
         if (!options.shader_directory.empty() && !options.fragment_shader.empty()) {
             throw std::runtime_error("--shaders and --fragment cannot be used together");
         }
+        if (!options.custom_uniform_overrides.empty() &&
+            options.shader_directory.empty()) {
+            throw std::runtime_error("--uniform requires --shaders <directory>");
+        }
         if ((!options.shader_pass_indices.empty() || !options.shader_pass_files.empty() ||
              !options.playlist_file.empty() || options.enable_playlist) &&
             options.shader_directory.empty()) {
@@ -408,7 +416,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5B)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5C)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -423,7 +431,8 @@ namespace acmxvk {
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
                << "  -H, --shader-index <index>  Initial library shader index\n"
-               << "      --shader-file <name>    Initial library shader filename\n\n"
+               << "      --shader-file <name>    Initial library shader filename\n"
+               << "      --uniform <name=value>  Override a library.json custom float\n\n"
                << "  --shader-pass <indices>     Comma-separated pre-shader pass chain\n"
                << "  --shader-pass-files <data>  ACMX2 length-prefixed shader filenames\n"
                << "  --playlist <file>           Shader or named multipass playlist\n\n"
@@ -523,9 +532,31 @@ namespace acmxvk {
     }
 
     struct ShaderManifest {
+        struct CustomUniform {
+            std::string name;
+            double minimum = 0.0;
+            double maximum = 1.0;
+            double step = 0.01;
+            double value = 0.0;
+        };
+
         fs::path path;
         std::vector<std::string> entries;
+        std::vector<CustomUniform> custom_uniforms;
     };
+
+    [[nodiscard]] bool isValidCustomUniformName(const std::string &name) {
+        constexpr std::size_t MAX_CUSTOM_UNIFORM_NAME_LENGTH = 64;
+        if (name.empty() || name.size() >= MAX_CUSTOM_UNIFORM_NAME_LENGTH ||
+            name.starts_with("gl_") ||
+            !(std::isalpha(static_cast<unsigned char>(name.front())) ||
+              name.front() == '_')) {
+            return false;
+        }
+        return std::all_of(name.begin() + 1, name.end(), [](unsigned char character) {
+            return std::isalnum(character) != 0 || character == '_';
+        });
+    }
 
     [[nodiscard]] ShaderManifest loadShaderManifest(const fs::path &directory) {
         ShaderManifest manifest;
@@ -565,6 +596,64 @@ namespace acmxvk {
                             " contains a shader entry without a file name");
                     }
                     manifest.entries.push_back(std::move(filename));
+                }
+
+                const cv::FileNode custom_uniforms = storage["custom_uniforms"];
+                if (!custom_uniforms.empty()) {
+                    if (!custom_uniforms.isMap()) {
+                        throw std::runtime_error(
+                            json_path.string() +
+                            " field 'custom_uniforms' must be an object");
+                    }
+                    for (auto iterator = custom_uniforms.begin();
+                         iterator != custom_uniforms.end(); ++iterator) {
+                        if (manifest.custom_uniforms.size() >=
+                            mxvk::VK_Sprite::MAX_CUSTOM_UNIFORMS) {
+                            throw std::runtime_error(
+                                json_path.string() +
+                                " contains more than " +
+                                std::to_string(mxvk::VK_Sprite::MAX_CUSTOM_UNIFORMS) +
+                                " custom uniforms");
+                        }
+
+                        const cv::FileNode entry = *iterator;
+                        ShaderManifest::CustomUniform uniform;
+                        uniform.name = entry.name();
+                        if (!entry.isMap() ||
+                            !isValidCustomUniformName(uniform.name)) {
+                            throw std::runtime_error(
+                                json_path.string() +
+                                " contains an invalid custom uniform: " +
+                                uniform.name);
+                        }
+                        if (!entry["minimum"].empty()) {
+                            entry["minimum"] >> uniform.minimum;
+                        }
+                        if (!entry["maximum"].empty()) {
+                            entry["maximum"] >> uniform.maximum;
+                        }
+                        if (!entry["step"].empty()) {
+                            entry["step"] >> uniform.step;
+                        }
+                        uniform.value = uniform.minimum;
+                        if (!entry["value"].empty()) {
+                            entry["value"] >> uniform.value;
+                        }
+                        if (!std::isfinite(uniform.minimum) ||
+                            !std::isfinite(uniform.maximum) ||
+                            !std::isfinite(uniform.step) ||
+                            !std::isfinite(uniform.value) ||
+                            uniform.maximum <= uniform.minimum ||
+                            uniform.step <= 0.0) {
+                            throw std::runtime_error(
+                                json_path.string() +
+                                " contains an invalid range for custom uniform: " +
+                                uniform.name);
+                        }
+                        uniform.value = std::clamp(
+                            uniform.value, uniform.minimum, uniform.maximum);
+                        manifest.custom_uniforms.push_back(std::move(uniform));
+                    }
                 }
             } catch (const cv::Exception &error) {
                 throw std::runtime_error("unable to parse shader manifest " +
@@ -828,6 +917,8 @@ namespace acmxvk {
         std::vector<fs::path> configured_passes;
         std::vector<PlaylistNode> playlist;
         std::vector<mxvk::VK_Sprite *> post_process_sprites;
+        std::vector<ShaderManifest::CustomUniform> custom_uniforms;
+        std::vector<float> custom_uniform_values;
         fs::path shader_library_directory;
         fs::path shader_manifest_path;
         fs::path png_output_directory;
@@ -878,6 +969,8 @@ namespace acmxvk {
             const ShaderManifest manifest =
                 loadShaderManifest(shader_library_directory);
             shader_manifest_path = manifest.path;
+            custom_uniforms = manifest.custom_uniforms;
+            applyCustomUniformOverrides();
             for (const std::string &entry : manifest.entries) {
                 const fs::path shader =
                     resolveShaderManifestEntry(shader_library_directory, entry);
@@ -904,6 +997,7 @@ namespace acmxvk {
             }
             std::cout << "acmxvk: loaded " << shaders.size() << " shaders from "
                       << shader_manifest_path.string() << '\n';
+            printCustomUniforms();
 
             if (!options.shader_file.empty()) {
                 const auto selected = std::find_if(
@@ -924,6 +1018,51 @@ namespace acmxvk {
                 const int count = static_cast<int>(shaders.size());
                 const int wrapped_index = ((options.shader_index % count) + count) % count;
                 shader_index = static_cast<std::size_t>(wrapped_index);
+            }
+        }
+
+        void applyCustomUniformOverrides() {
+            for (const std::string &override_text :
+                 options.custom_uniform_overrides) {
+                const std::size_t separator = override_text.find('=');
+                if (separator == std::string::npos || separator == 0 ||
+                    separator + 1 >= override_text.size()) {
+                    throw std::runtime_error(
+                        "--uniform requires name=value: " + override_text);
+                }
+                const std::string name = trim(override_text.substr(0, separator));
+                const double value = parseNumber(
+                    trim(override_text.substr(separator + 1)), "--uniform");
+                const auto match = std::find_if(
+                    custom_uniforms.begin(), custom_uniforms.end(),
+                    [&](const ShaderManifest::CustomUniform &uniform) {
+                        return uniform.name == name;
+                    });
+                if (match == custom_uniforms.end()) {
+                    throw std::runtime_error(
+                        "custom uniform is not defined in library.json: " + name);
+                }
+                match->value = std::clamp(value, match->minimum, match->maximum);
+            }
+
+            custom_uniform_values.clear();
+            custom_uniform_values.reserve(custom_uniforms.size());
+            for (const ShaderManifest::CustomUniform &uniform : custom_uniforms) {
+                custom_uniform_values.push_back(static_cast<float>(uniform.value));
+            }
+        }
+
+        void printCustomUniforms() const {
+            if (custom_uniforms.empty()) {
+                return;
+            }
+            constexpr std::string_view COMPONENTS = "xyzw";
+            std::cout << "acmxvk: custom uniforms (binding 1):\n";
+            for (std::size_t index = 0; index < custom_uniforms.size(); ++index) {
+                const ShaderManifest::CustomUniform &uniform = custom_uniforms[index];
+                std::cout << "  " << uniform.name << '=' << uniform.value
+                          << " -> custom_uniforms[" << (index / 4) << "]."
+                          << COMPONENTS[index % 4] << '\n';
             }
         }
 
@@ -1267,6 +1406,7 @@ namespace acmxvk {
                 frame_sprite = createSprite(source_width, source_height);
             }
             frame_sprite->enableExtendedUBO();
+            frame_sprite->setCustomUniforms(custom_uniform_values);
             if (options.enable_texture_cache) {
                 frame_sprite->enableHistoryTexture(source_width, source_height,
                                                    static_cast<uint32_t>(
@@ -1451,6 +1591,7 @@ namespace acmxvk {
             post_process_sprites = attachPostProcessingShaders(effects);
             for (mxvk::VK_Sprite *sprite : post_process_sprites) {
                 sprite->enableExtendedUBO();
+                sprite->setCustomUniforms(custom_uniform_values);
             }
 
             std::cout << "acmxvk: Vulkan shader pipeline (" << pipeline.size() << " passes):\n";

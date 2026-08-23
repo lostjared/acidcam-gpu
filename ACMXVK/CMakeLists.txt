@@ -16,6 +16,7 @@ endif()
 
 # The installed MXVK export currently expects its dependency targets to have
 # already been loaded by the consuming project.
+find_package(CUDAToolkit QUIET)
 find_package(MXWrite CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(SDL3_ttf CONFIG REQUIRED)
@@ -23,6 +24,7 @@ find_package(Vulkan 1.4 REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(glm CONFIG REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(mxvk CONFIG REQUIRED)
 find_program(GLSLC_EXECUTABLE glslc REQUIRED)
 
@@ -40,10 +42,6 @@ if(ACMXVK_MXVK_LIBRARIES MATCHES "CUDA::")
     find_package(CUDAToolkit REQUIRED)
 endif()
 
-if(ACMXVK_MXVK_LIBRARIES MATCHES "opencv_")
-    find_package(OpenCV REQUIRED)
-endif()
-
 set(ACMXVK_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
 set(ACMXVK_SPRITE_VERTEX_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/sprite.vert.spv"
@@ -53,6 +51,9 @@ set(ACMXVK_ECHO_CACHE_SHADER
 )
 set(ACMXVK_FLIP_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/flip.frag.spv"
+)
+set(ACMXVK_CUSTOM_UNIFORM_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/custom_uniform.frag.spv"
 )
 
 add_custom_command(
@@ -88,15 +89,28 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/custom_uniform.frag"
+            -o "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/custom_uniform.frag"
+    COMMENT "Compiling ACMXVK custom-uniform test shader"
+    VERBATIM
+)
+
 add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_SPRITE_VERTEX_SHADER}"
     "${ACMXVK_ECHO_CACHE_SHADER}"
     "${ACMXVK_FLIP_SHADER}"
+    "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
 )
 
 add_executable(acmxvk acmx.cpp)
 add_dependencies(acmxvk acmxvk_shaders)
-target_link_libraries(acmxvk PRIVATE mxvk::mxvk MXWrite::mxwrite)
+target_include_directories(acmxvk PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(acmxvk PRIVATE mxvk::mxvk MXWrite::mxwrite ${OpenCV_LIBS})
 target_compile_options(acmxvk PRIVATE -Wall -Wextra -Wpedantic)
 if(VALIDATION)
     target_compile_definitions(acmxvk PRIVATE ENABLE_VALIDATION)
@@ -115,6 +129,7 @@ install(FILES
         "${ACMXVK_SPRITE_VERTEX_SHADER}"
         "${ACMXVK_ECHO_CACHE_SHADER}"
         "${ACMXVK_FLIP_SHADER}"
+        "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")
