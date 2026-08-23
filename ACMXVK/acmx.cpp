@@ -74,6 +74,8 @@ namespace acmxvk {
         int autopilot_frames = 0;
         int autopilot_random_timeout = 0;
         int generate_interval = 0;
+        int cache_delay = 1;
+        int texture_cache_size = 8;
         double requested_fps = 0.0;
         double duration = 0.0;
         double time_speed = 1.0;
@@ -84,7 +86,7 @@ namespace acmxvk {
         bool enable_vsync = false;
         bool enable_screenshot = false;
         bool enable_playlist = false;
-        bool enable_history_test = false;
+        bool enable_texture_cache = false;
         bool normalized_time = false;
         bool flip_output = false;
         bool png_output = false;
@@ -330,8 +332,22 @@ namespace acmxvk {
                 options.enable_vsync = true;
             } else if (option == "--enable-screenshot") {
                 options.enable_screenshot = true;
-            } else if (option == "--history-test") {
-                options.enable_history_test = true;
+            } else if (option == "--history-test" || option == "--texture-cache" ||
+                       option == "--texture-cache-array") {
+                options.enable_texture_cache = true;
+            } else if (option == "--cache-delay") {
+                options.cache_delay =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.cache_delay < 0) {
+                    throw std::runtime_error("--cache-delay must be zero or greater");
+                }
+            } else if (option == "--texture-cache-size") {
+                options.texture_cache_size =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.texture_cache_size < 1 || options.texture_cache_size > 64) {
+                    throw std::runtime_error(
+                        "--texture-cache-size must be between 1 and 64");
+                }
             } else if (option == "--flip") {
                 options.flip_output = true;
             } else if (option == "--rotate") {
@@ -391,7 +407,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 4B)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5A)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -417,7 +433,11 @@ namespace acmxvk {
                << "  --autopilot-timeout <N>     Alias for --autopilot-frames\n"
                << "  --autopilot-random <N>      Random playlist interval from 4..N\n\n"
                << "History cache:\n"
-               << "      --history-test          Run the converted eight-frame echo cache\n\n"
+               << "      --texture-cache         Enable Vulkan texture history\n"
+               << "      --texture-cache-array   Alias using sampler2DArray history\n"
+               << "      --texture-cache-size N  History layers, 1-64 (default 8)\n"
+               << "      --cache-delay N         Skip N frames between cache writes\n"
+               << "      --history-test          Compatibility alias for --texture-cache\n\n"
                << "Recording:\n"
                << "  -o, --output <file>         Encode processed output with MXWrite\n"
                << "      --duration <seconds>    Stop after this much output video\n"
@@ -692,8 +712,6 @@ namespace acmxvk {
                                 Video,
                                 Graphic };
 
-        static constexpr uint32_t HISTORY_LAYER_COUNT = 8;
-
         Options options;
         SourceKind source_kind = SourceKind::Camera;
         mxvk::VK_Capture capture;
@@ -723,6 +741,7 @@ namespace acmxvk {
         int recording_height = 0;
         int autopilot_counter = 0;
         int autopilot_interval_frames = 0;
+        int history_delay_counter = 0;
         double recording_fps = 0.0;
         double shader_time = 0.0;
         std::uint64_t output_frame_count = 0;
@@ -1120,13 +1139,14 @@ namespace acmxvk {
                 frame_sprite = createSprite(source_width, source_height);
             }
             frame_sprite->enableExtendedUBO();
-            if (options.enable_history_test) {
+            if (options.enable_texture_cache) {
                 frame_sprite->enableHistoryTexture(source_width, source_height,
-                                                   HISTORY_LAYER_COUNT);
+                                                   static_cast<uint32_t>(
+                                                       options.texture_cache_size));
             }
             frame_sprite->createEmptySprite(source_width, source_height, spriteVertexShader(),
-                                            options.enable_history_test ? echoCacheShader()
-                                                                        : std::string{});
+                                            options.enable_texture_cache ? echoCacheShader()
+                                                                         : std::string{});
 
             if (source_kind == SourceKind::Graphic) {
                 initial_frame_pending = false;
@@ -1330,7 +1350,7 @@ namespace acmxvk {
         }
 
         void initializeHistory(const cv::Mat &rgba) {
-            if (!options.enable_history_test || history_initialized) {
+            if (!options.enable_texture_cache || history_initialized) {
                 return;
             }
             for (uint32_t layer = 0; layer < frame_sprite->getHistoryLayerCount(); ++layer) {
@@ -1338,12 +1358,14 @@ namespace acmxvk {
                                                    static_cast<int>(rgba.step));
             }
             history_initialized = true;
+            history_delay_counter = 0;
             std::cout << "acmxvk: initialized " << frame_sprite->getHistoryLayerCount()
-                      << " Vulkan history-cache layers\n";
+                      << " Vulkan history-cache layers (delay " << options.cache_delay
+                      << ")\n";
         }
 
         [[nodiscard]] bool readInputFrame() {
-            if (!options.enable_history_test &&
+            if (!options.enable_texture_cache &&
                 options.frame_rotation == FrameRotation::None) {
                 return capture.readToSprite(*frame_sprite, false);
             }
@@ -1357,9 +1379,11 @@ namespace acmxvk {
                                         static_cast<int>(rgba.step));
             const bool history_was_initialized = history_initialized;
             initializeHistory(rgba);
-            if (history_was_initialized) {
+            if (history_was_initialized &&
+                ++history_delay_counter > options.cache_delay) {
                 frame_sprite->updateHistoryTexture(rgba.ptr(), rgba.cols, rgba.rows,
                                                    static_cast<int>(rgba.step));
+                history_delay_counter = 0;
             }
             return true;
         }
