@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7B**. It is usable for video, camera, and
+The port is currently at **Increment 7C**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -20,7 +20,7 @@ ACMX2.
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
 | Multipass and playlists | Implemented | Includes named playlist nodes, multipass chains, sequential autopilot, and random autopilot. |
-| Frame history/texture cache | Implemented | Uses a Vulkan `sampler2DArray` ring buffer with configurable size and write delay. |
+| Frame history/texture cache | Implemented | Uses a Vulkan `sampler2DArray` ring buffer with configurable size and write delay. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, and optional audio copying. |
 | PNG output | Implemented | Supports full PNG sequences and periodic generated frames. |
@@ -77,8 +77,10 @@ Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
 reinstall. Increments 5J through 5R, 6A through 6C, and 7A through 7B also
-change only ACMXVK. Increment 7A does require the existing MXVK and
-`acidcam-gpu` installations to have CUDA support.
+change only ACMXVK. Increment 7A requires the existing MXVK and `acidcam-gpu`
+installations to have CUDA support. Increment 7C adds MXVK's layered CUDA
+history upload API, so MXVK must be rebuilt and reinstalled before building
+ACMXVK 7C with `-DWITH_CUDA=ON`.
 
 ### Apple Silicon and MoltenVK
 
@@ -559,10 +561,16 @@ download. Vulkan fragment and multipass shaders operate on the filtered image.
 In Increment 7B, Left/Right selects the previous or next filter with wraparound.
 This matches ACMX2: selecting a filter at runtime replaces a startup filter
 chain with that single filter. MIDI Map actions 262 (Right) and 263 (Left) drive
-the same selection when MIDI support and a GPU filter are enabled. The optional
-Vulkan frame-history texture is still populated from the pre-filter source
-frame. On a multi-GPU system, select the CUDA device corresponding to the Vulkan
-GPU. CUDA filters are unavailable in MoltenVK builds.
+the same selection when MIDI support and a GPU filter are enabled.
+
+Increment 7C writes the filtered CUDA output into the Vulkan frame-history
+array, including its initial fill, delayed ring-buffer updates, and still-image
+filter changes. MXVK imports the layered Vulkan image into CUDA and copies the
+selected frame device-to-device. If layered external-memory import is not
+available on a driver, ACMXVK reports it once and falls back to host staging for
+history only; the primary sprite upload remains device-to-device. On a
+multi-GPU system, select the CUDA device corresponding to the Vulkan GPU. CUDA
+filters are unavailable in MoltenVK builds.
 
 ## Runtime controls
 
@@ -593,9 +601,10 @@ and with validation enabled in both MXVK and ACMXVK. The current increment has
 been exercised with shader-library loading, multipass rendering, configurable
 history caches, MXWrite encoding, custom-uniform rendering, optional live audio
 metrics, FFmpeg-decoded file reactivity, routed-tone FFT visualization, and FFT
-spectrum history. Increment 7B was additionally tested with a CUDA+MIDI build
-and live Left/Right filter changes on an NVIDIA RTX 2070. The known duplicate
-vkBasalt implicit-layer warning is external to ACMXVK.
+spectrum history. Increments 7B and 7C were additionally tested with a CUDA+MIDI
+build, live Left/Right filter changes, and filtered Vulkan frame history on an
+NVIDIA RTX 2070. The known duplicate vkBasalt implicit-layer warning is
+external to ACMXVK.
 
 ## Development note
 

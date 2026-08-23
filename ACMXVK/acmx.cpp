@@ -665,7 +665,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7B)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7C)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1333,6 +1333,8 @@ namespace acmxvk {
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
+        cv::Mat cuda_history_fallback_rgba;
+        bool cuda_history_fallback_logged = false;
 #endif
 #ifdef MIDI_ENABLED
         struct MidiCcMapping {
@@ -1415,6 +1417,10 @@ namespace acmxvk {
                 gpu_filter_engine->select_relative_filter(direction) &&
                 source_kind == SourceKind::Graphic && !graphic_rgba.empty()) {
                 uploadInputFrame(graphic_rgba);
+                if (history_initialized) {
+                    updateHistoryFrame(graphic_rgba);
+                    history_delay_counter = 0;
+                }
             }
 #else
             static_cast<void>(direction);
@@ -2716,14 +2722,45 @@ namespace acmxvk {
                 return;
             }
             for (uint32_t layer = 0; layer < frame_sprite->getHistoryLayerCount(); ++layer) {
-                frame_sprite->updateHistoryTexture(rgba.ptr(), rgba.cols, rgba.rows,
-                                                   static_cast<int>(rgba.step));
+                updateHistoryFrame(rgba);
             }
             history_initialized = true;
             history_delay_counter = 0;
             std::cout << "acmxvk: initialized " << frame_sprite->getHistoryLayerCount()
                       << " Vulkan history-cache layers (delay " << options.cache_delay
                       << ")\n";
+        }
+
+        void updateHistoryFrame(const cv::Mat &rgba) {
+#ifdef ACMXVK_WITH_CUDA
+            if (gpu_filter_engine != nullptr) {
+                if (frame_sprite->updateHistoryTextureCuda(
+                        gpu_filter_engine->output(),
+                        gpu_filter_engine->stream())) {
+                    return;
+                }
+
+                gpu_filter_engine->output().download(
+                    cuda_history_fallback_rgba,
+                    gpu_filter_engine->stream());
+                gpu_filter_engine->stream().waitForCompletion();
+                if (!cuda_history_fallback_logged) {
+                    std::cerr
+                        << "acmxvk: direct CUDA history upload unavailable; "
+                           "using a host-staging fallback\n";
+                    cuda_history_fallback_logged = true;
+                }
+                frame_sprite->updateHistoryTexture(
+                    cuda_history_fallback_rgba.ptr(),
+                    cuda_history_fallback_rgba.cols,
+                    cuda_history_fallback_rgba.rows,
+                    static_cast<int>(cuda_history_fallback_rgba.step));
+                return;
+            }
+#endif
+            frame_sprite->updateHistoryTexture(
+                rgba.ptr(), rgba.cols, rgba.rows,
+                static_cast<int>(rgba.step));
         }
 
         void uploadInputFrame(const cv::Mat &rgba) {
@@ -2767,8 +2804,7 @@ namespace acmxvk {
             initializeHistory(rgba);
             if (history_was_initialized &&
                 ++history_delay_counter > options.cache_delay) {
-                frame_sprite->updateHistoryTexture(rgba.ptr(), rgba.cols, rgba.rows,
-                                                   static_cast<int>(rgba.step));
+                updateHistoryFrame(rgba);
                 history_delay_counter = 0;
             }
             return true;
