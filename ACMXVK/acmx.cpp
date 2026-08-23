@@ -416,7 +416,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5C)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5D)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -474,8 +474,10 @@ namespace acmxvk {
                << "      --enable-vsync          Use FIFO presentation\n"
                << "      --enable-screenshot     Enable MXVK F10 screenshots\n\n"
                << "Keys: Up/Down shader or playlist node, Shift+Up/Down final shader,\n"
-               << "      P playlist, J random autopilot, Y sequential autopilot,\n"
-               << "      M multipass, Space bypass, Escape quit\n";
+               << "      P playlist/pause, L freeze, T time, U/I step time,\n"
+               << "      Page Up/Down time speed, F fullscreen, M multipass,\n"
+               << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
+               << "      Escape quit\n";
     }
 
     [[nodiscard]] std::string cleanEncoderField(std::string value) {
@@ -810,6 +812,14 @@ namespace acmxvk {
 
         void event(SDL_Event &event) override {
             mxvk::VK_Window::event(event);
+            if (event.type == SDL_EVENT_KEY_DOWN &&
+                event.key.key == SDLK_PAGEUP) {
+                adjustTimeSpeed(0.1);
+            } else if (event.type == SDL_EVENT_KEY_DOWN &&
+                       event.key.key == SDLK_PAGEDOWN) {
+                adjustTimeSpeed(-0.1);
+            }
+
             if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
                 switch (event.key.key) {
                 case SDLK_UP:
@@ -838,7 +848,27 @@ namespace acmxvk {
                         applyShaderPipeline();
                         std::cout << "acmxvk: playlist "
                                   << (playlist_enabled ? "enabled" : "disabled") << '\n';
+                    } else {
+                        togglePause();
                     }
+                    break;
+                case SDLK_L:
+                    toggleFreeze();
+                    break;
+                case SDLK_T:
+                    shader_time_active = !shader_time_active;
+                    previous_frame = std::chrono::steady_clock::now();
+                    std::cout << "acmxvk: shader time "
+                              << (shader_time_active ? "enabled" : "disabled") << '\n';
+                    break;
+                case SDLK_U:
+                    stepShaderTime(0.05);
+                    break;
+                case SDLK_I:
+                    stepShaderTime(-0.05);
+                    break;
+                case SDLK_F:
+                    toggleFullscreen();
                     break;
                 case SDLK_M:
                     if (!configured_passes.empty()) {
@@ -882,7 +912,8 @@ namespace acmxvk {
                 return;
             }
 
-            if (source_kind != SourceKind::Graphic) {
+            if (!rendering_frozen && !input_paused &&
+                source_kind != SourceKind::Graphic) {
                 if (initial_frame_pending) {
                     initial_frame_pending = false;
                 } else if (!readInputFrame()) {
@@ -892,13 +923,17 @@ namespace acmxvk {
                 }
             }
 
-            updateAutopilot();
+            if (!rendering_frozen) {
+                updateAutopilot();
+            }
             const VkExtent2D extent = getSwapchainExtent();
             const int target_width = extent.width > 0U ? static_cast<int>(extent.width) : options.width;
             const int target_height =
                 extent.height > 0U ? static_cast<int>(extent.height) : options.height;
 
-            updateShaderUniforms(target_width, target_height);
+            if (!rendering_frozen) {
+                updateShaderUniforms(target_width, target_height);
+            }
             frame_sprite->drawSpriteRect(0, 0, target_width, target_height);
         }
 
@@ -934,6 +969,9 @@ namespace acmxvk {
         bool history_initialized = false;
         bool initial_frame_pending = false;
         bool recording_complete = false;
+        bool input_paused = false;
+        bool rendering_frozen = false;
+        bool shader_time_active = true;
         bool autopilot_enabled = false;
         bool autopilot_sequential = false;
         int recording_width = 0;
@@ -1441,6 +1479,56 @@ namespace acmxvk {
             frame_count = 0;
         }
 
+        void togglePause() {
+            if (source_kind == SourceKind::Camera) {
+                std::cout << "acmxvk: pause is available for video and graphic input\n";
+                return;
+            }
+            input_paused = !input_paused;
+            std::cout << "acmxvk: input pause "
+                      << (input_paused ? "enabled" : "disabled") << '\n';
+        }
+
+        void toggleFreeze() {
+            if (source_kind == SourceKind::Camera) {
+                std::cout << "acmxvk: freeze is available for video and graphic input\n";
+                return;
+            }
+            rendering_frozen = !rendering_frozen;
+            previous_frame = std::chrono::steady_clock::now();
+            std::cout << "acmxvk: rendering freeze "
+                      << (rendering_frozen ? "enabled" : "disabled") << '\n';
+        }
+
+        void stepShaderTime(double amount) {
+            shader_time += amount;
+            std::cout << "acmxvk: shader time stepped to " << shader_time << '\n';
+        }
+
+        void adjustTimeSpeed(double amount) {
+            options.time_speed += amount;
+            if (std::abs(options.time_speed) < 0.01) {
+                options.time_speed = 0.0;
+            }
+            std::cout << "acmxvk: shader time speed " << options.time_speed << '\n';
+        }
+
+        void toggleFullscreen() {
+            SDL_Window *window = getSDLWindow();
+            if (window == nullptr) {
+                return;
+            }
+            const bool fullscreen =
+                (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+            if (!SDL_SetWindowFullscreen(window, !fullscreen)) {
+                std::cerr << "acmxvk: unable to toggle fullscreen: "
+                          << SDL_GetError() << '\n';
+                return;
+            }
+            std::cout << "acmxvk: fullscreen "
+                      << (!fullscreen ? "enabled" : "disabled") << '\n';
+        }
+
         void resetAutopilotInterval() {
             if (options.autopilot_random_timeout > 0) {
                 std::uniform_int_distribution<int> distribution(
@@ -1667,7 +1755,9 @@ namespace acmxvk {
             const float delta = options.normalized_time
                                     ? static_cast<float>(1.0 / outputFrameRate())
                                     : wall_delta;
-            shader_time += static_cast<double>(delta) * options.time_speed;
+            if (shader_time_active) {
+                shader_time += static_cast<double>(delta) * options.time_speed;
+            }
             const float elapsed = static_cast<float>(shader_time);
             const float frame_rate = delta > 0.0F ? 1.0F / delta : 0.0F;
             frame_sprite->setShaderParams(1.0F, 1.0F, 1.0F, elapsed);

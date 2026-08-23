@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5C**. It is usable for video, camera, and
+The port is currently at **Increment 5D**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -25,6 +25,7 @@ ACMX2.
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, and optional audio copying. |
 | PNG output | Implemented | Supports full PNG sequences and periodic generated frames. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
+| Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Not yet ported | Audio spectrum, amplitude, and history resources from ACMX2 remain future work. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
@@ -65,7 +66,7 @@ cmake --install build/acmxvk
 cmake --build build/acmxvk --target uninstall
 ```
 
-Increment 5C requires the matching MXVK custom-uniform changes to be installed
+Increment 5D requires the matching MXVK custom-uniform changes to be installed
 before ACMXVK is compiled against the system package.
 
 ## Examples
@@ -171,6 +172,12 @@ The remaining Vulkan bindings are:
 - Up/Down: change the shader or playlist node
 - Shift+Up/Down: change the final shader while using a playlist
 - P: toggle playlist mode
+- P without a playlist: pause or resume video input
+- L: freeze or resume both input and shader animation
+- T: enable or disable shader-time advancement
+- U/I: step shader time forward or backward by 0.05
+- Page Up/Page Down: increase or decrease shader-time speed
+- F: toggle fullscreen
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
 - Y: toggle sequential autopilot
