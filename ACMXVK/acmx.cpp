@@ -455,7 +455,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5E)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5F)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -510,7 +510,8 @@ namespace acmxvk {
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
                << "      --audio-input <device>  Input index or default\n"
                << "      --list-devices          List RtAudio devices and exit\n"
-               << "      --check-audio           Report compiled audio support\n\n"
+               << "      --check-audio           Report compiled audio support\n"
+               << "                              Provides a 256-bin FFT at binding 3\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -1066,8 +1067,8 @@ namespace acmxvk {
 
         void adjustAudioSensitivity(float amount) {
 #ifdef AUDIO_ENABLED
-            if (audio_engine != nullptr && audio_engine->isOpen()) {
-                audio_engine->setSensitivity(audio_engine->sensitivity() + amount);
+            if (audio_engine != nullptr && audio_engine->is_open()) {
+                audio_engine->set_sensitivity(audio_engine->sensitivity() + amount);
                 options.audio_sensitivity = audio_engine->sensitivity();
                 std::cout << "acmxvk: audio sensitivity "
                           << options.audio_sensitivity << '\n';
@@ -1536,6 +1537,9 @@ namespace acmxvk {
             }
             frame_sprite->enableExtendedUBO();
             frame_sprite->setCustomUniforms(custom_uniform_values);
+#ifdef AUDIO_ENABLED
+            frame_sprite->enableSpectrumTexture(audio::AudioEngine::spectrum_bin_count());
+#endif
             if (options.enable_texture_cache) {
                 frame_sprite->enableHistoryTexture(source_width, source_height,
                                                    static_cast<uint32_t>(
@@ -1765,12 +1769,20 @@ namespace acmxvk {
             std::vector<PostProcessingEffect> effects;
             effects.reserve(pipeline.size());
             for (const fs::path &shader : pipeline) {
-                effects.push_back({shader.string(), {1.0F, 1.0F, 1.0F, 0.0F}, false});
+                PostProcessingEffect effect{
+                    shader.string(), {1.0F, 1.0F, 1.0F, 0.0F}, false};
+#ifdef AUDIO_ENABLED
+                effect.spectrumBinCount = audio::AudioEngine::spectrum_bin_count();
+#endif
+                effects.push_back(effect);
             }
             post_process_sprites = attachPostProcessingShaders(effects);
             for (mxvk::VK_Sprite *sprite : post_process_sprites) {
                 sprite->enableExtendedUBO();
                 sprite->setCustomUniforms(custom_uniform_values);
+#ifdef AUDIO_ENABLED
+                sprite->enableSpectrumTexture(audio::AudioEngine::spectrum_bin_count());
+#endif
             }
 
             std::cout << "acmxvk: Vulkan shader pipeline (" << pipeline.size() << " passes):\n";
@@ -1858,7 +1870,8 @@ namespace acmxvk {
             float audio_smooth = 0.0F;
             float audio_sample_rate = 44100.0F;
 #ifdef AUDIO_ENABLED
-            if (audio_engine != nullptr && audio_engine->isOpen()) {
+            std::vector<float> spectrum_values;
+            if (audio_engine != nullptr && audio_engine->is_open()) {
                 const audio::AudioMetrics metrics = audio_engine->metrics();
                 const float sense = audio_engine->sensitivity() * 4.0F;
                 audio_amplitude = metrics.amplitude;
@@ -1866,7 +1879,8 @@ namespace acmxvk {
                 audio_peak = std::sqrt(std::max(metrics.peak, 0.0F)) * sense;
                 audio_rms = std::sqrt(std::max(metrics.rms, 0.0F)) * sense;
                 audio_smooth = std::sqrt(std::max(metrics.smooth, 0.0F)) * sense;
-                audio_sample_rate = static_cast<float>(audio_engine->sampleRate());
+                audio_sample_rate = static_cast<float>(audio_engine->sample_rate());
+                spectrum_values = audio_engine->spectrum();
             }
 #endif
             frame_sprite->setShaderParams(1.0F, 1.0F, 1.0F, elapsed);
@@ -1893,6 +1907,18 @@ namespace acmxvk {
                                     audio_sample_rate, audio_peak);
                 sprite->setUniform3(0.0F, 0.0F, audio_rms, audio_smooth);
             }
+#ifdef AUDIO_ENABLED
+            if (!spectrum_values.empty()) {
+                frame_sprite->updateSpectrumTexture(
+                    spectrum_values.data(),
+                    static_cast<std::uint32_t>(spectrum_values.size()));
+                for (mxvk::VK_Sprite *sprite : post_process_sprites) {
+                    sprite->updateSpectrumTexture(
+                        spectrum_values.data(),
+                        static_cast<std::uint32_t>(spectrum_values.size()));
+                }
+            }
+#endif
         }
     };
 } // namespace acmxvk
@@ -1910,7 +1936,7 @@ int main(int argc, char **argv) {
         }
         if (options.list_audio_devices) {
 #ifdef AUDIO_ENABLED
-            acmxvk::audio::AudioEngine::listDevices();
+            acmxvk::audio::AudioEngine::list_devices();
             return EXIT_SUCCESS;
 #else
             throw std::runtime_error(

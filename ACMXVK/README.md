@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5E**. It is usable for video, camera, and
+The port is currently at **Increment 5F**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Partial | Optional RtAudio capture provides amplitude, frequency, peak, RMS, and smoothed-amplitude data. FFT spectrum textures, frequency bands, file audio, and audio history remain future work. |
+| Audio-reactive shader data | Partial | Optional RtAudio capture provides amplitude, frequency, peak, RMS, smoothed amplitude, and a current-frame 256-bin FFT texture. Frequency-band uniforms, file audio, and audio history remain future work. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -68,8 +68,8 @@ cmake --build build/acmxvk --target uninstall
 ```
 
 Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
-Increment 5E uses the MXVK UBO already required by Increment 5C, so it does not
-require another MXVK reinstall.
+Increment 5F adds the MXVK 1-D spectrum-texture API, so the matching MXVK source
+must be rebuilt and reinstalled before compiling ACMXVK with `-DAUDIO=ON`.
 
 ## Examples
 
@@ -100,6 +100,16 @@ Preview the included shader with live audio reactivity:
 ./build/acmxvk/acmxvk \
     --graphic image.png \
     --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --enable-audio \
+    --audio-input default
+```
+
+Display the current 256-bin FFT spectrum over an image:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.png \
+    --fragment ./build/acmxvk/shaders/audio_spectrum.frag.spv \
     --enable-audio \
     --audio-input default
 ```
@@ -178,9 +188,10 @@ The remaining Vulkan bindings are:
 - Set 0, binding 0: current RGBA frame as `sampler2D`
 - Set 0, binding 1: mouse, frame state, resolution, time, history metadata, and custom floats
 - Set 0, binding 2: optional RGBA history as `sampler2DArray`
+- Set 0, binding 3: current 256-bin audio FFT as an R32 `sampler1D`
 
-With an `AUDIO=ON` build and `--enable-audio`, Increment 5E maps live audio
-metrics into otherwise-unused components of the binding-1 block:
+With an `AUDIO=ON` build and `--enable-audio`, the Increment 5E/5F audio path
+maps live audio metrics into otherwise-unused components of the binding-1 block:
 
 | ACMX2 name | MXVK field | Meaning |
 | --- | --- | --- |
@@ -193,6 +204,18 @@ metrics into otherwise-unused components of the binding-1 block:
 
 See `shaders/audio_reactive.frag` for a working shader. Audio values remain
 zero when capture is disabled or an input device cannot be opened.
+
+The FFT uses a 512-sample Hann window and exposes 256 linear-frequency bins.
+Coordinate `0.0` is DC and `1.0` approaches the Nyquist frequency. Declare it
+in a Vulkan shader as:
+
+```glsl
+layout(set = 0, binding = 3) uniform sampler1D spectrum;
+float energy = texture(spectrum, frequency).r;
+```
+
+See `shaders/audio_spectrum.frag` for a complete visualization. The descriptor
+can be used alongside binding-2 frame history in the same MXVK extended layout.
 
 ## Runtime controls
 
@@ -220,9 +243,9 @@ Run `acmxvk --help` for the complete command-line reference.
 Development builds are tested with the Vulkan SDK selected by `~/vulkan.sh`
 and with validation enabled in both MXVK and ACMXVK. The current increment has
 been exercised with shader-library loading, multipass rendering, configurable
-history caches, MXWrite encoding, custom-uniform rendering, and optional live
-audio metrics. The known duplicate vkBasalt implicit-layer warning is external
-to ACMXVK.
+history caches, MXWrite encoding, custom-uniform rendering, optional live audio
+metrics, and routed-tone FFT visualization. The known duplicate vkBasalt
+implicit-layer warning is external to ACMXVK.
 
 ## Development note
 
