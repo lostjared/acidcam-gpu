@@ -190,7 +190,7 @@ duplicate vkBasalt implicit-layer warning is external to ACMXVK.
 
 ## Development note
 
-I have been using the **Codex command-line program from OpenAI** as an
+I have been using the **Codex CLI from OpenAI** as an
 engineering aid while porting ACMX2 to MXVK. Codex has assisted with incremental
 code translation, CMake integration, shader conversion, debugging, Vulkan
 validation testing, and documentation. Project direction, testing decisions,
