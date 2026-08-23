@@ -6,6 +6,7 @@
 #include <mxvk/mxvk.hpp>
 #include <mxvk/mxvk_cv.hpp>
 #include <mxvk/mxvk_exception.hpp>
+#include <mxvk/mxvk_png.hpp>
 #include <mxwrite.hpp>
 
 #include <opencv2/imgcodecs.hpp>
@@ -20,8 +21,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -70,9 +73,11 @@ namespace acmxvk {
         int encode_crf = 18;
         int autopilot_frames = 0;
         int autopilot_random_timeout = 0;
+        int generate_interval = 0;
         double requested_fps = 0.0;
         double duration = 0.0;
         double time_speed = 1.0;
+        double max_size_mb = 0.0;
         bool resolution_specified = false;
         bool fullscreen = false;
         bool repeat = false;
@@ -82,6 +87,7 @@ namespace acmxvk {
         bool enable_history_test = false;
         bool normalized_time = false;
         bool flip_output = false;
+        bool png_output = false;
         bool encode_realtime = false;
         bool no_drop = false;
         bool show_help = false;
@@ -273,6 +279,20 @@ namespace acmxvk {
                 if (options.duration <= 0.0) {
                     throw std::runtime_error("duration must be positive");
                 }
+            } else if (option == "--max-size") {
+                options.max_size_mb =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                if (options.max_size_mb <= 0.0) {
+                    throw std::runtime_error("maximum output size must be positive");
+                }
+            } else if (option == "--png") {
+                options.png_output = true;
+            } else if (option == "--generate") {
+                options.generate_interval =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.generate_interval <= 0) {
+                    throw std::runtime_error("--generate requires a positive frame interval");
+                }
             } else if (option == "-b" || option == "--bitrate" ||
                        option == "--encode-crf") {
                 options.encode_crf =
@@ -337,6 +357,14 @@ namespace acmxvk {
         if (options.duration > 0.0 && options.output_file.empty()) {
             throw std::runtime_error("--duration requires --output <file>");
         }
+        if (options.png_output &&
+            (options.input_file.empty() || options.output_file.empty())) {
+            throw std::runtime_error("--png requires video --input and --output");
+        }
+        if (options.max_size_mb > 0.0 &&
+            (options.output_file.empty() || options.png_output)) {
+            throw std::runtime_error("--max-size requires encoded video output");
+        }
         if (!options.graphic_file.empty() && !options.output_file.empty() &&
             options.duration <= 0.0) {
             throw std::runtime_error("graphic recording requires --duration <seconds>");
@@ -345,7 +373,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 3B)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 4A)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -375,6 +403,9 @@ namespace acmxvk {
                << "Recording:\n"
                << "  -o, --output <file>         Encode processed output with MXWrite\n"
                << "      --duration <seconds>    Stop after this much output video\n"
+               << "      --max-size <MB>         Stop when encoded output exceeds this size\n"
+               << "      --png                   Write video output as a PNG sequence\n"
+               << "      --generate <N>          Save a PNG every N processed frames\n"
                << "  -b, --encode-crf <0-51>     Encoder quality (default 18)\n"
                << "      --encode-preset <name>  Encoder speed/quality preset\n"
                << "      --encode-tune <name>    Encoder content/latency tuning\n"
@@ -479,6 +510,14 @@ namespace acmxvk {
                 writer.close();
                 std::cout << "acmxvk: recording closed after " << output_frame_count
                           << " frames\n";
+            }
+            if (options.png_output) {
+                std::cout << "acmxvk: PNG sequence closed after " << png_frame_count
+                          << " frames\n";
+            }
+            if (options.generate_interval > 0) {
+                std::cout << "acmxvk: generated " << generated_frame_count
+                          << " periodic PNG frames\n";
             }
             if (capture.is_open()) {
                 capture.close();
@@ -596,6 +635,8 @@ namespace acmxvk {
         std::vector<fs::path> configured_passes;
         std::vector<PlaylistNode> playlist;
         std::vector<mxvk::VK_Sprite *> post_process_sprites;
+        fs::path png_output_directory;
+        fs::path generate_output_directory;
         std::size_t shader_index = 0;
         std::size_t playlist_index = 0;
         bool effects_enabled = true;
@@ -616,6 +657,8 @@ namespace acmxvk {
         double recording_fps = 0.0;
         double shader_time = 0.0;
         std::uint64_t output_frame_count = 0;
+        std::uint64_t png_frame_count = 0;
+        std::uint64_t generated_frame_count = 0;
         std::uint64_t frame_count = 0;
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
@@ -831,8 +874,43 @@ namespace acmxvk {
             return 30.0;
         }
 
+        [[nodiscard]] static fs::path outputFrameDirectory(const std::string &filename,
+                                                           std::string_view suffix) {
+            const fs::path output_path(filename);
+            const fs::path parent = output_path.has_parent_path()
+                                        ? output_path.parent_path()
+                                        : fs::path(".");
+            const std::string name = output_path.filename().empty()
+                                         ? std::string("output")
+                                         : output_path.filename().string();
+            return parent / ("video_file-" + name + "-" + std::string(suffix));
+        }
+
+        static void createOutputDirectory(const fs::path &directory) {
+            std::error_code error;
+            fs::create_directories(directory, error);
+            if (error || !fs::is_directory(directory)) {
+                throw std::runtime_error("unable to create PNG output directory: " +
+                                         directory.string());
+            }
+        }
+
+        [[nodiscard]] static fs::path framePath(const fs::path &directory,
+                                                std::uint64_t index) {
+            std::ostringstream filename;
+            filename << "frame-" << std::setfill('0') << std::setw(8) << index << ".png";
+            return directory / filename.str();
+        }
+
+        static void savePng(const fs::path &path, std::uint8_t *rgba, int width,
+                            int height) {
+            if (!mxvk::SavePNG_RGBA(path.string().c_str(), rgba, width, height)) {
+                throw std::runtime_error("unable to write PNG frame: " + path.string());
+            }
+        }
+
         void openOutput() {
-            if (options.output_file.empty()) {
+            if (options.output_file.empty() && options.generate_interval <= 0) {
                 return;
             }
 
@@ -842,42 +920,86 @@ namespace acmxvk {
                 extent.height > 0U ? static_cast<int>(extent.height) : options.height;
             recording_fps = outputFrameRate();
 
-            EncodeOptions encode_options;
-            encode_options.preset = options.encode_preset;
-            encode_options.tune = options.encode_tune;
-            encode_options.crf = options.encode_crf;
-            encode_options.codec = options.encode_codec;
-            encode_options.realtime = options.encode_realtime;
-            encode_options.block_when_full = options.no_drop;
-
-            if (!writer.open(options.output_file, recording_width, recording_height,
-                             static_cast<float>(recording_fps), encode_options)) {
-                throw std::runtime_error("unable to open output video: " +
-                                         options.output_file);
+            if (options.png_output) {
+                png_output_directory = outputFrameDirectory(options.output_file, "png");
+                createOutputDirectory(png_output_directory);
+                std::cout << "acmxvk: writing PNG sequence to "
+                          << png_output_directory.string() << '\n';
             }
-            writer.set_block_when_full(options.no_drop);
+
+            if (options.generate_interval > 0) {
+                if (!options.output_file.empty()) {
+                    generate_output_directory =
+                        outputFrameDirectory(options.output_file, "generate");
+                } else if (!options.input_file.empty()) {
+                    generate_output_directory =
+                        outputFrameDirectory(options.input_file, "generate");
+                } else {
+                    generate_output_directory = "camera-generate";
+                }
+                createOutputDirectory(generate_output_directory);
+                std::cout << "acmxvk: saving every " << options.generate_interval
+                          << "th frame to " << generate_output_directory.string() << '\n';
+            }
+
+            if (!options.output_file.empty() && !options.png_output) {
+                EncodeOptions encode_options;
+                encode_options.preset = options.encode_preset;
+                encode_options.tune = options.encode_tune;
+                encode_options.crf = options.encode_crf;
+                encode_options.codec = options.encode_codec;
+                encode_options.realtime = options.encode_realtime;
+                encode_options.block_when_full = options.no_drop;
+
+                if (!writer.open(options.output_file, recording_width, recording_height,
+                                 static_cast<float>(recording_fps), encode_options)) {
+                    throw std::runtime_error("unable to open output video: " +
+                                             options.output_file);
+                }
+                writer.set_block_when_full(options.no_drop);
+                std::cout << "acmxvk: recording " << recording_width << 'x'
+                          << recording_height << " at " << recording_fps << " FPS to "
+                          << options.output_file
+                          << (options.no_drop ? " (no-drop)\n" : "\n");
+            }
+
             setFrameReadbackEnabled(true);
-            std::cout << "acmxvk: recording " << recording_width << 'x' << recording_height
-                      << " at " << recording_fps << " FPS to " << options.output_file
-                      << (options.no_drop ? " (no-drop)\n" : "\n");
         }
 
         void onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width,
                              uint32_t height) override {
-            if (!writer.is_open() || recording_complete) {
+            if ((!writer.is_open() && !options.png_output &&
+                 options.generate_interval <= 0) ||
+                recording_complete) {
                 return;
             }
 
-            if (static_cast<int>(width) == recording_width &&
-                static_cast<int>(height) == recording_height) {
-                writer.write(rgba.data());
-            } else {
+            std::uint8_t *output_pixels = rgba.data();
+            cv::Mat resized;
+            if (static_cast<int>(width) != recording_width ||
+                static_cast<int>(height) != recording_height) {
                 const cv::Mat source(static_cast<int>(height), static_cast<int>(width),
                                      CV_8UC4, rgba.data());
-                cv::Mat resized;
                 cv::resize(source, resized, cv::Size(recording_width, recording_height),
                            0.0, 0.0, cv::INTER_LINEAR);
-                writer.write(resized.ptr());
+                output_pixels = resized.ptr();
+            }
+
+            if (writer.is_open()) {
+                writer.write(output_pixels);
+            }
+            if (options.png_output) {
+                savePng(framePath(png_output_directory, png_frame_count), output_pixels,
+                        recording_width, recording_height);
+                ++png_frame_count;
+            }
+            if (options.generate_interval > 0 &&
+                output_frame_count %
+                        static_cast<std::uint64_t>(options.generate_interval) ==
+                    0) {
+                savePng(framePath(generate_output_directory, generated_frame_count),
+                        output_pixels, recording_width, recording_height);
+                ++generated_frame_count;
             }
             ++output_frame_count;
 
@@ -885,6 +1007,17 @@ namespace acmxvk {
                 const auto maximum_frames = static_cast<std::uint64_t>(
                     std::ceil(options.duration * recording_fps));
                 if (output_frame_count >= maximum_frames) {
+                    recording_complete = true;
+                    exit();
+                }
+            }
+
+            if (options.max_size_mb > 0.0 && writer.is_open()) {
+                const double maximum_bytes = options.max_size_mb * 1024.0 * 1024.0;
+                if (static_cast<double>(writer.get_bytes_written()) >=
+                    maximum_bytes) {
+                    std::cout << "acmxvk: maximum output size reached ("
+                              << options.max_size_mb << " MB)\n";
                     recording_complete = true;
                     exit();
                 }
