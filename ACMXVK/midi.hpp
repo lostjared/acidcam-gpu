@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <ostream>
+#include <string>
 #include <vector>
 
 namespace acmxvk::midi {
@@ -13,6 +14,17 @@ namespace acmxvk::midi {
         std::vector<unsigned char> bytes;
         std::uint64_t sequence = 0;
     };
+
+    struct MidiMapping {
+        int primary_action = 0;
+        int secondary_action = 0;
+        unsigned char status = 0;
+        unsigned char data1 = 0;
+        unsigned char data2 = 0;
+    };
+
+    [[nodiscard]] std::vector<MidiMapping>
+    load_mapping_file(const std::string &filename);
 
     class MidiInput {
       public:

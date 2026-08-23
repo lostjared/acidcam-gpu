@@ -1,0 +1,3 @@
+# Created in the format emitted by ACMX2/interface/midi-map.
+# Slider 1 Knob: MIDI channel 1, CC 20; the live value byte is ignored.
+600:601 {176 20 0}

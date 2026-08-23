@@ -23,6 +23,7 @@
 #include <opencv2/videoio.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -133,6 +134,7 @@ namespace acmxvk {
         std::vector<int> shader_pass_indices;
         std::vector<std::string> shader_pass_files;
         std::vector<std::string> custom_uniform_overrides;
+        std::vector<std::string> midi_cc_mappings;
         std::string input_file;
         std::string graphic_file;
         std::string shader_directory;
@@ -146,6 +148,7 @@ namespace acmxvk {
         std::string encode_params;
         std::string list_encoder_options;
         std::string audio_file;
+        std::string midi_map_file;
     };
 
     [[nodiscard]] std::string optionValue(int &index, int argc, char **argv,
@@ -407,6 +410,11 @@ namespace acmxvk {
                 }
             } else if (option == "--midi-monitor") {
                 options.midi_monitor = true;
+            } else if (option == "--midi-map") {
+                options.midi_map_file = optionValue(index, argc, argv, option);
+            } else if (option == "--midi-cc") {
+                options.midi_cc_mappings.push_back(
+                    optionValue(index, argc, argv, option));
             } else if (option == "--list-midi") {
                 options.list_midi_devices = true;
             } else if (option == "--check-midi") {
@@ -499,6 +507,10 @@ namespace acmxvk {
             options.shader_directory.empty()) {
             throw std::runtime_error("--uniform requires --shaders <directory>");
         }
+        if (!options.midi_cc_mappings.empty() &&
+            options.shader_directory.empty()) {
+            throw std::runtime_error("--midi-cc requires --shaders <directory>");
+        }
         if ((!options.shader_pass_indices.empty() || !options.shader_pass_files.empty() ||
              !options.playlist_file.empty() || options.enable_playlist) &&
             options.shader_directory.empty()) {
@@ -585,7 +597,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 6A)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 6B)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -656,9 +668,11 @@ namespace acmxvk {
                << "MIDI (requires MIDI=ON build):\n"
                << "      --midi-device <index>   Open a MIDI input port (default 0)\n"
                << "      --midi-monitor          Print received MIDI messages\n"
+               << "      --midi-map <file>       Load an ACMX2 .midi_cfg mapping\n"
+               << "      --midi-cc <map>         Map [channel:]CC to a custom uniform\n"
                << "      --list-midi             List MIDI input ports and exit\n"
                << "      --check-midi            Report compiled MIDI support\n"
-               << "                              Shader/control mapping comes next\n\n"
+               << "                              Example: --midi-cc 1:20=square_size\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -972,8 +986,9 @@ namespace acmxvk {
             setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
             setEnableScreenshot(this->options.enable_screenshot);
             openAudio();
-            openMidi();
             loadShaders();
+            configureMidiMappings();
+            openMidi();
             loadShaderPasses();
             loadPlaylist();
             resetAutopilotInterval();
@@ -1234,7 +1249,17 @@ namespace acmxvk {
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef MIDI_ENABLED
+        struct MidiCcMapping {
+            int channel = -1;
+            int controller = 0;
+            std::size_t uniform_index = 0;
+            std::string uniform_name;
+        };
+
         std::unique_ptr<midi::MidiInput> midi_input;
+        std::vector<midi::MidiMapping> midi_action_mappings;
+        std::vector<MidiCcMapping> midi_cc_mappings;
+        std::array<int, 4> midi_slider_uniform_indices{-1, -1, -1, -1};
         std::uint64_t observed_midi_drops = 0;
 #endif
 #ifdef AUDIO_ENABLED
@@ -1283,7 +1308,8 @@ namespace acmxvk {
 
         void openMidi() {
 #ifdef MIDI_ENABLED
-            if (!options.midi_device_specified && !options.midi_monitor) {
+            if (!options.midi_device_specified && !options.midi_monitor &&
+                options.midi_map_file.empty() && midi_cc_mappings.empty()) {
                 return;
             }
             midi_input = std::make_unique<midi::MidiInput>();
@@ -1295,6 +1321,290 @@ namespace acmxvk {
 #endif
         }
 
+        void configureMidiMappings() {
+#ifdef MIDI_ENABLED
+            if (!options.midi_map_file.empty()) {
+                midi_action_mappings =
+                    midi::load_mapping_file(options.midi_map_file);
+                std::cout << "acmxvk: loaded " << midi_action_mappings.size()
+                          << " MIDI mapping(s) from " << options.midi_map_file
+                          << '\n';
+
+                for (int slider = 0; slider < 4; ++slider) {
+                    const int action = 600 + slider * 2;
+                    const bool mapped = std::any_of(
+                        midi_action_mappings.begin(),
+                        midi_action_mappings.end(),
+                        [&](const midi::MidiMapping &mapping) {
+                            return mapping.primary_action == action &&
+                                   mapping.secondary_action == action + 1;
+                        });
+                    if (!mapped) {
+                        continue;
+                    }
+                    const std::string name =
+                        "slider" + std::to_string(slider + 1);
+                    const auto uniform = std::find_if(
+                        custom_uniforms.begin(), custom_uniforms.end(),
+                        [&](const ShaderManifest::CustomUniform &candidate) {
+                            return candidate.name == name;
+                        });
+                    if (uniform == custom_uniforms.end()) {
+                        std::cerr << "acmxvk: MIDI " << name
+                                  << " mapping has no matching custom uniform in "
+                                     "library.json\n";
+                        continue;
+                    }
+                    midi_slider_uniform_indices[slider] = static_cast<int>(
+                        std::distance(custom_uniforms.begin(), uniform));
+                    std::cout << "acmxvk: MIDI Slider " << (slider + 1)
+                              << " -> " << name << " [" << uniform->minimum
+                              << ", " << uniform->maximum << "]\n";
+                }
+            }
+
+            for (const std::string &mapping_text : options.midi_cc_mappings) {
+                const std::size_t equals = mapping_text.find('=');
+                if (equals == std::string::npos || equals == 0 ||
+                    equals + 1 >= mapping_text.size() ||
+                    mapping_text.find('=', equals + 1) != std::string::npos) {
+                    throw std::runtime_error(
+                        "--midi-cc requires [channel:]CC=uniform: " +
+                        mapping_text);
+                }
+
+                const std::string source = trim(mapping_text.substr(0, equals));
+                const std::string uniform_name =
+                    trim(mapping_text.substr(equals + 1));
+                if (!isValidCustomUniformName(uniform_name)) {
+                    throw std::runtime_error(
+                        "--midi-cc contains an invalid uniform name: " +
+                        uniform_name);
+                }
+
+                int channel = -1;
+                int controller = 0;
+                const std::size_t colon = source.find(':');
+                if (colon == std::string::npos) {
+                    controller = parseInteger(source, "--midi-cc");
+                } else {
+                    if (colon == 0 || colon + 1 >= source.size() ||
+                        source.find(':', colon + 1) != std::string::npos) {
+                        throw std::runtime_error(
+                            "--midi-cc requires [channel:]CC=uniform: " +
+                            mapping_text);
+                    }
+                    channel = parseInteger(
+                        std::string_view(source).substr(0, colon), "--midi-cc");
+                    controller = parseInteger(
+                        std::string_view(source).substr(colon + 1), "--midi-cc");
+                    if (channel < 1 || channel > 16) {
+                        throw std::runtime_error(
+                            "--midi-cc channel must be between 1 and 16");
+                    }
+                    --channel;
+                }
+                if (controller < 0 || controller > 127) {
+                    throw std::runtime_error(
+                        "--midi-cc controller must be between 0 and 127");
+                }
+
+                const auto uniform = std::find_if(
+                    custom_uniforms.begin(), custom_uniforms.end(),
+                    [&](const ShaderManifest::CustomUniform &candidate) {
+                        return candidate.name == uniform_name;
+                    });
+                if (uniform == custom_uniforms.end()) {
+                    throw std::runtime_error(
+                        "--midi-cc target is not defined in library.json: " +
+                        uniform_name);
+                }
+                const std::size_t uniform_index = static_cast<std::size_t>(
+                    std::distance(custom_uniforms.begin(), uniform));
+                const auto duplicate = std::find_if(
+                    midi_cc_mappings.begin(), midi_cc_mappings.end(),
+                    [&](const MidiCcMapping &mapping) {
+                        return mapping.uniform_index == uniform_index;
+                    });
+                if (duplicate != midi_cc_mappings.end()) {
+                    throw std::runtime_error(
+                        "custom uniform has more than one --midi-cc mapping: " +
+                        uniform_name);
+                }
+
+                midi_cc_mappings.push_back(
+                    {channel, controller, uniform_index, uniform_name});
+                std::cout << "acmxvk: MIDI "
+                          << (channel < 0
+                                  ? std::string("any channel")
+                                  : "channel " + std::to_string(channel + 1))
+                          << " CC " << controller << " -> " << uniform_name
+                          << " [" << uniform->minimum << ", "
+                          << uniform->maximum << "]\n";
+            }
+#endif
+        }
+
+#ifdef MIDI_ENABLED
+        [[nodiscard]] bool applyMidiCc(const midi::MidiMessage &message) {
+            if (message.bytes.size() < 3 ||
+                (message.bytes[0] & 0xF0U) != 0xB0U) {
+                return false;
+            }
+            const int channel = message.bytes[0] & 0x0FU;
+            const int controller = message.bytes[1] & 0x7FU;
+            const int value = message.bytes[2] & 0x7FU;
+            bool changed = false;
+            for (const MidiCcMapping &mapping : midi_cc_mappings) {
+                if (mapping.controller != controller ||
+                    (mapping.channel >= 0 && mapping.channel != channel)) {
+                    continue;
+                }
+                const ShaderManifest::CustomUniform &uniform =
+                    custom_uniforms[mapping.uniform_index];
+                const double normalized = static_cast<double>(value) / 127.0;
+                const float mapped = static_cast<float>(
+                    uniform.minimum + normalized *
+                                          (uniform.maximum - uniform.minimum));
+                custom_uniform_values[mapping.uniform_index] = mapped;
+                changed = true;
+                if (options.midi_monitor) {
+                    std::cout << "acmxvk: MIDI CC " << controller << " -> "
+                              << mapping.uniform_name << '=' << mapped << '\n';
+                }
+            }
+            return changed;
+        }
+
+        [[nodiscard]] SDL_Keycode midiActionKey(int action) const {
+            switch (action) {
+            case 264:
+                return SDLK_DOWN;
+            case 265:
+                return SDLK_UP;
+            case 266:
+            case 504:
+                return SDLK_PAGEUP;
+            case 267:
+            case 505:
+                return SDLK_PAGEDOWN;
+            case 260:
+                return SDLK_INSERT;
+            case 261:
+                return SDLK_DELETE;
+            case 298:
+                return SDLK_F9;
+            case 500:
+                return SDLK_U;
+            case 501:
+                return SDLK_I;
+            case 32:
+                return SDLK_SPACE;
+            case 74:
+            case 78:
+                return SDLK_J;
+            case 76:
+                return SDLK_L;
+            case 77:
+                return SDLK_M;
+            case 80:
+                return SDLK_P;
+            case 84:
+                return SDLK_T;
+            case 89:
+                return SDLK_Y;
+            case 90:
+                return SDLK_F10;
+            default:
+                return SDLK_UNKNOWN;
+            }
+        }
+
+        void dispatchMidiAction(int action) {
+            const SDL_Keycode key = midiActionKey(action);
+            if (key == SDLK_UNKNOWN) {
+                return;
+            }
+            SDL_Event midi_event{};
+            midi_event.type = SDL_EVENT_KEY_DOWN;
+            midi_event.key.type = SDL_EVENT_KEY_DOWN;
+            midi_event.key.key = key;
+            midi_event.key.repeat = false;
+            event(midi_event);
+        }
+
+        [[nodiscard]] bool setMidiUniform(std::size_t uniform_index, int value,
+                                          std::string_view label) {
+            if (uniform_index >= custom_uniforms.size() ||
+                uniform_index >= custom_uniform_values.size()) {
+                return false;
+            }
+            const ShaderManifest::CustomUniform &uniform =
+                custom_uniforms[uniform_index];
+            const double normalized = static_cast<double>(value) / 127.0;
+            const float mapped = static_cast<float>(
+                uniform.minimum +
+                normalized * (uniform.maximum - uniform.minimum));
+            custom_uniform_values[uniform_index] = mapped;
+            if (options.midi_monitor) {
+                std::cout << "acmxvk: MIDI " << label << " -> "
+                          << uniform.name << '=' << mapped << '\n';
+            }
+            return true;
+        }
+
+        [[nodiscard]] bool applyMidiMap(const midi::MidiMessage &message) {
+            if (message.bytes.size() < 3) {
+                return false;
+            }
+            bool changed = false;
+            for (const midi::MidiMapping &mapping : midi_action_mappings) {
+                if (message.bytes[0] != mapping.status ||
+                    message.bytes[1] != mapping.data1) {
+                    continue;
+                }
+                const int value = message.bytes[2] & 0x7FU;
+                if (mapping.secondary_action == 0) {
+                    if (message.bytes[2] == mapping.data2) {
+                        dispatchMidiAction(mapping.primary_action);
+                    }
+                    continue;
+                }
+
+                if (mapping.primary_action >= 600 &&
+                    mapping.primary_action <= 606 &&
+                    mapping.primary_action % 2 == 0) {
+                    const int slider = (mapping.primary_action - 600) / 2;
+                    const int uniform_index =
+                        midi_slider_uniform_indices[slider];
+                    if (uniform_index >= 0) {
+                        changed =
+                            setMidiUniform(
+                                static_cast<std::size_t>(uniform_index), value,
+                                "Slider " + std::to_string(slider + 1)) ||
+                            changed;
+                    }
+                    continue;
+                }
+
+                if (value != 64) {
+                    dispatchMidiAction(value > 64 ? mapping.primary_action
+                                                  : mapping.secondary_action);
+                }
+            }
+            return changed;
+        }
+#endif
+
+        void uploadCustomUniforms() {
+            if (frame_sprite != nullptr) {
+                frame_sprite->setCustomUniforms(custom_uniform_values);
+            }
+            for (mxvk::VK_Sprite *sprite : post_process_sprites) {
+                sprite->setCustomUniforms(custom_uniform_values);
+            }
+        }
+
         void pollMidi() {
 #ifdef MIDI_ENABLED
             if (midi_input == nullptr || !midi_input->is_open()) {
@@ -1302,6 +1612,16 @@ namespace acmxvk {
             }
             const std::vector<midi::MidiMessage> messages =
                 midi_input->poll_messages();
+            bool custom_uniforms_changed = false;
+            for (const midi::MidiMessage &message : messages) {
+                custom_uniforms_changed =
+                    applyMidiCc(message) || custom_uniforms_changed;
+                custom_uniforms_changed =
+                    applyMidiMap(message) || custom_uniforms_changed;
+            }
+            if (custom_uniforms_changed) {
+                uploadCustomUniforms();
+            }
             if (options.midi_monitor) {
                 for (const midi::MidiMessage &message : messages) {
                     std::ostringstream text;
@@ -2337,7 +2657,8 @@ int main(int argc, char **argv) {
         }
 #endif
 #ifndef MIDI_ENABLED
-        if (options.midi_device_specified || options.midi_monitor) {
+        if (options.midi_device_specified || options.midi_monitor ||
+            !options.midi_map_file.empty() || !options.midi_cc_mappings.empty()) {
             throw std::runtime_error(
                 "MIDI input requires an ACMXVK build configured with -DMIDI=ON");
         }

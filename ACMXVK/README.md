@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 6A**. It is usable for video, camera, and
+The port is currently at **Increment 6B**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -28,7 +28,7 @@ ACMX2.
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live recording has independent gain, while file audio also supports repeat and stop-at-EOF behavior. |
-| MIDI controls | Partial | Optional RtMidi support can enumerate and open input ports, capture messages through a bounded callback queue, and print a live monitor. Mapping messages to shader uniforms and runtime actions is the next MIDI increment. |
+| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, and the ACMXVK-equivalent playback actions. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
@@ -73,7 +73,7 @@ options are omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increments 5J through 5R and 6A also change only ACMXVK.
+reinstall. Increments 5J through 5R, 6A, and 6B also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -428,7 +428,7 @@ float old_energy = texture(spectrum_history, vec2(0.08, float(layer))).r;
 
 See `shaders/audio_history.frag` for a current-versus-history waterfall test.
 
-### MIDI input foundation
+### MIDI input and mappings
 
 Configure with `-DMIDI=ON` to enable RtMidi. List available input ports with:
 
@@ -446,11 +446,45 @@ Open a port and print its incoming byte messages while ACMXVK runs:
     --midi-monitor
 ```
 
-When `--midi-device` is omitted, monitor mode opens port zero. RtMidi's callback
-feeds a bounded, thread-safe queue drained by the render loop; if more than 256
-unprocessed messages arrive, ACMXVK retains the newest messages and reports the
-drop count. Increment 6A intentionally does not map MIDI bytes to shader
-uniforms or keyboard actions yet.
+When `--midi-device` is omitted, MIDI monitoring or mapping opens port zero.
+RtMidi's callback feeds a bounded, thread-safe queue drained by the render loop;
+if more than 256 unprocessed messages arrive, ACMXVK retains the newest messages
+and reports the drop count.
+
+Increment 6B reads the same `.midi_cfg` format written by
+`ACMX2/interface/midi-map`. Use that tool to capture controller messages, save
+the map, and load it with `--midi-map`. Slider 1–4 actions (`600:601` through
+`606:607`) update custom uniforms named `slider1` through `slider4`. Values are
+normalized from MIDI's 0–127 range into each uniform's `minimum` and `maximum`
+range from `library.json`. Supported ACMXVK-equivalent actions include shader
+selection, bypass, playlist/pause, freeze, time stepping and speed, multipass,
+audio sensitivity, autopilot, and the MXVK screenshot key.
+
+The build shader directory now contains a small `library.json` and
+`midi_slider.frag.spv` test library. The included nanoKONTROL2 example maps the
+channel-1 CC 20 messages shown above to Slider 1:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic jared-ai.png \
+    --shaders ./build/acmxvk/shaders \
+    --midi-device 1 \
+    --midi-map ./ACMXVK/midi-examples/nanokontrol2-cc20-slider1.midi_cfg \
+    --midi-monitor \
+    --enable-vsync
+```
+
+Moving CC 20 changes image brightness and prints both the raw message and the
+mapped `slider1` value. To map a CC directly without a `.midi_cfg` file, repeat
+`--midi-cc [channel:]CC=uniform`; an omitted channel matches all channels:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic jared-ai.png \
+    --shaders ./build/acmxvk/shaders \
+    --midi-device 1 \
+    --midi-cc 1:20=slider1
+```
 
 ## Runtime controls
 

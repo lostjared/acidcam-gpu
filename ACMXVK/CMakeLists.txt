@@ -142,6 +142,9 @@ if(ACMXVK_MXVK_LIBRARIES MATCHES "CUDA::")
 endif()
 
 set(ACMXVK_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
+set(ACMXVK_TEST_SHADER_MANIFEST
+    "${ACMXVK_SHADER_OUTPUT_DIR}/library.json"
+)
 set(ACMXVK_SPRITE_VERTEX_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/sprite.vert.spv"
 )
@@ -153,6 +156,9 @@ set(ACMXVK_FLIP_SHADER
 )
 set(ACMXVK_CUSTOM_UNIFORM_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/custom_uniform.frag.spv"
+)
+set(ACMXVK_MIDI_SLIDER_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/midi_slider.frag.spv"
 )
 set(ACMXVK_AUDIO_REACTIVE_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/audio_reactive.frag.spv"
@@ -209,6 +215,24 @@ add_custom_command(
 )
 
 add_custom_command(
+    OUTPUT
+        "${ACMXVK_MIDI_SLIDER_SHADER}"
+        "${ACMXVK_TEST_SHADER_MANIFEST}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/midi_slider.frag"
+            -o "${ACMXVK_MIDI_SLIDER_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/library.json"
+            "${ACMXVK_TEST_SHADER_MANIFEST}"
+    DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/midi_slider.frag"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/library.json"
+    COMMENT "Compiling ACMXVK MIDI slider test shader"
+    VERBATIM
+)
+
+add_custom_command(
     OUTPUT "${ACMXVK_AUDIO_REACTIVE_SHADER}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
     COMMAND "${GLSLC_EXECUTABLE}"
@@ -246,6 +270,8 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_ECHO_CACHE_SHADER}"
     "${ACMXVK_FLIP_SHADER}"
     "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
+    "${ACMXVK_MIDI_SLIDER_SHADER}"
+    "${ACMXVK_TEST_SHADER_MANIFEST}"
     "${ACMXVK_AUDIO_REACTIVE_SHADER}"
     "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
     "${ACMXVK_AUDIO_HISTORY_SHADER}"
@@ -302,12 +328,16 @@ install(FILES
         "${ACMXVK_ECHO_CACHE_SHADER}"
         "${ACMXVK_FLIP_SHADER}"
         "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
+        "${ACMXVK_MIDI_SLIDER_SHADER}"
         "${ACMXVK_AUDIO_REACTIVE_SHADER}"
         "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
         "${ACMXVK_AUDIO_HISTORY_SHADER}"
+        "${ACMXVK_TEST_SHADER_MANIFEST}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/midi-examples/"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/midi-examples")
 
 if(NOT TARGET uninstall)
     configure_file(

@@ -3,13 +3,92 @@
 #include <rtmidi/RtMidi.h>
 
 #include <deque>
+#include <fstream>
 #include <iostream>
 #include <mutex>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 namespace acmxvk::midi {
+    std::vector<MidiMapping> load_mapping_file(const std::string &filename) {
+        std::ifstream input(filename);
+        if (!input) {
+            throw std::runtime_error("could not open MIDI map file: " + filename);
+        }
+
+        std::vector<MidiMapping> mappings;
+        std::string line;
+        std::size_t line_number = 0;
+        while (std::getline(input, line)) {
+            ++line_number;
+            const std::size_t first = line.find_first_not_of(" \t\r");
+            if (first == std::string::npos || line[first] == '#') {
+                continue;
+            }
+
+            std::istringstream stream(line);
+            std::string action_pair;
+            char open_brace = 0;
+            char close_brace = 0;
+            int status = 0;
+            int data1 = 0;
+            int data2 = 0;
+            if (!(stream >> action_pair >> open_brace >> status >> data1 >> data2 >>
+                  close_brace) ||
+                open_brace != '{' || close_brace != '}') {
+                throw std::runtime_error(
+                    "invalid MIDI map entry at " + filename + ':' +
+                    std::to_string(line_number));
+            }
+            stream >> std::ws;
+            if (!stream.eof()) {
+                throw std::runtime_error(
+                    "unexpected text in MIDI map at " + filename + ':' +
+                    std::to_string(line_number));
+            }
+
+            const std::size_t colon = action_pair.find(':');
+            if (colon == std::string::npos || colon == 0 ||
+                colon + 1 >= action_pair.size() ||
+                action_pair.find(':', colon + 1) != std::string::npos) {
+                throw std::runtime_error(
+                    "invalid MIDI action pair at " + filename + ':' +
+                    std::to_string(line_number));
+            }
+
+            std::size_t primary_parsed = 0;
+            std::size_t secondary_parsed = 0;
+            int primary = 0;
+            int secondary = 0;
+            try {
+                primary = std::stoi(action_pair.substr(0, colon),
+                                    &primary_parsed);
+                secondary = std::stoi(action_pair.substr(colon + 1),
+                                      &secondary_parsed);
+            } catch (const std::exception &) {
+                throw std::runtime_error(
+                    "invalid MIDI action code at " + filename + ':' +
+                    std::to_string(line_number));
+            }
+            if (primary_parsed != colon ||
+                secondary_parsed != action_pair.size() - colon - 1 ||
+                primary <= 0 || secondary < 0 || status < 0 || status > 255 ||
+                data1 < 0 || data1 > 255 || data2 < 0 || data2 > 255) {
+                throw std::runtime_error(
+                    "MIDI map value outside its valid range at " + filename +
+                    ':' + std::to_string(line_number));
+            }
+
+            mappings.push_back(
+                {primary, secondary, static_cast<unsigned char>(status),
+                 static_cast<unsigned char>(data1),
+                 static_cast<unsigned char>(data2)});
+        }
+        return mappings;
+    }
+
     class MidiInput::Impl {
       public:
         static constexpr std::size_t MAX_PENDING_MESSAGES = 256;
