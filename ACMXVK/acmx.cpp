@@ -90,6 +90,8 @@ namespace acmxvk {
         bool png_output = false;
         bool encode_realtime = false;
         bool no_drop = false;
+        bool copy_audio = false;
+        bool list_encoders = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
@@ -104,6 +106,8 @@ namespace acmxvk {
         std::string encode_preset = "medium";
         std::string encode_tune;
         std::string encode_codec = "auto";
+        std::string encode_params;
+        std::string list_encoder_options;
     };
 
     [[nodiscard]] std::string optionValue(int &index, int argc, char **argv,
@@ -306,10 +310,18 @@ namespace acmxvk {
                 options.encode_tune = optionValue(index, argc, argv, option);
             } else if (option == "--encode-codec") {
                 options.encode_codec = optionValue(index, argc, argv, option);
+            } else if (option == "--encode-params") {
+                options.encode_params = optionValue(index, argc, argv, option);
+            } else if (option == "--list-encoders") {
+                options.list_encoders = true;
+            } else if (option == "--list-encoder-options") {
+                options.list_encoder_options = optionValue(index, argc, argv, option);
             } else if (option == "--encode-realtime") {
                 options.encode_realtime = true;
             } else if (option == "--no-drop") {
                 options.no_drop = true;
+            } else if (option == "--copy-audio") {
+                options.copy_audio = true;
             } else if (option == "-n" || option == "--fullscreen") {
                 options.fullscreen = true;
             } else if (option == "-a" || option == "--repeat") {
@@ -365,6 +377,12 @@ namespace acmxvk {
             (options.output_file.empty() || options.png_output)) {
             throw std::runtime_error("--max-size requires encoded video output");
         }
+        if (options.copy_audio &&
+            (options.input_file.empty() || options.output_file.empty() ||
+             options.png_output || options.repeat)) {
+            throw std::runtime_error(
+                "--copy-audio requires non-repeating video input and encoded output");
+        }
         if (!options.graphic_file.empty() && !options.output_file.empty() &&
             options.duration <= 0.0) {
             throw std::runtime_error("graphic recording requires --duration <seconds>");
@@ -373,7 +391,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 4A)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 4B)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -410,8 +428,13 @@ namespace acmxvk {
                << "      --encode-preset <name>  Encoder speed/quality preset\n"
                << "      --encode-tune <name>    Encoder content/latency tuning\n"
                << "      --encode-codec <name>   auto, software, nvenc, or exact encoder\n"
+               << "      --encode-params <text>  Additional FFmpeg encoder options\n"
+               << "      --list-encoders         List available video encoders and exit\n"
+               << "      --list-encoder-options <name>\n"
+               << "                              List one encoder's options and exit\n"
                << "      --encode-realtime       Enable low-latency encoder settings\n"
-               << "      --no-drop               Block when the encoder queue is full\n\n"
+               << "      --no-drop               Block when the encoder queue is full\n"
+               << "      --copy-audio            Copy input audio into encoded output\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -423,6 +446,46 @@ namespace acmxvk {
                << "Keys: Up/Down shader or playlist node, Shift+Up/Down final shader,\n"
                << "      P playlist, J random autopilot, Y sequential autopilot,\n"
                << "      M multipass, Space bypass, Escape quit\n";
+    }
+
+    [[nodiscard]] std::string cleanEncoderField(std::string value) {
+        std::replace_if(value.begin(), value.end(), [](char character) { return character == '\t' || character == '\r' || character == '\n'; }, ' ');
+        return value;
+    }
+
+    void printEncoders(std::ostream &output) {
+        output << "MXWRITE_ENCODERS\t1\n";
+        for (const EncoderInfo &encoder : available_video_encoders()) {
+            output << "ENCODER\t" << cleanEncoderField(encoder.name) << '\t'
+                   << cleanEncoderField(encoder.long_name) << '\t'
+                   << cleanEncoderField(encoder.codec_name) << '\t'
+                   << (encoder.hardware ? "hardware" : "software") << '\t'
+                   << (encoder.experimental ? "experimental" : "stable") << '\t'
+                   << cleanEncoderField(encoder.pixel_formats) << '\n';
+        }
+    }
+
+    [[nodiscard]] bool printEncoderOptions(std::string_view encoder_name,
+                                           std::ostream &output,
+                                           std::ostream &error_output) {
+        const std::string name(encoder_name);
+        const std::vector<EncoderOptionInfo> options = video_encoder_options(name);
+        if (options.empty() && !avcodec_find_encoder_by_name(name.c_str())) {
+            error_output << "acmxvk: encoder not found: " << name << '\n';
+            return false;
+        }
+
+        output << "MXWRITE_ENCODER_OPTIONS\t1\t" << cleanEncoderField(name) << '\n';
+        for (const EncoderOptionInfo &option : options) {
+            output << "OPTION\t" << cleanEncoderField(option.name) << '\t'
+                   << cleanEncoderField(option.type) << '\t'
+                   << cleanEncoderField(option.default_value) << '\t'
+                   << cleanEncoderField(option.minimum) << '\t'
+                   << cleanEncoderField(option.maximum) << '\t'
+                   << cleanEncoderField(option.choices) << '\t'
+                   << cleanEncoderField(option.help) << '\n';
+        }
+        return true;
     }
 
     [[nodiscard]] std::string trim(std::string text) {
@@ -506,6 +569,7 @@ namespace acmxvk {
         }
 
         ~MainWindow() override {
+            const bool should_copy_audio = options.copy_audio && writer.is_open();
             if (writer.is_open()) {
                 writer.close();
                 std::cout << "acmxvk: recording closed after " << output_frame_count
@@ -521,6 +585,11 @@ namespace acmxvk {
             }
             if (capture.is_open()) {
                 capture.close();
+            }
+            if (should_copy_audio) {
+                transfer_audio(options.input_file, options.output_file);
+                std::cout << "acmxvk: copied audio track from " << options.input_file
+                          << " to " << options.output_file << '\n';
             }
         }
 
@@ -948,6 +1017,7 @@ namespace acmxvk {
                 encode_options.tune = options.encode_tune;
                 encode_options.crf = options.encode_crf;
                 encode_options.codec = options.encode_codec;
+                encode_options.ffmpeg_options = options.encode_params;
                 encode_options.realtime = options.encode_realtime;
                 encode_options.block_when_full = options.no_drop;
 
@@ -1339,6 +1409,16 @@ int main(int argc, char **argv) {
         if (options.show_help) {
             acmxvk::printHelp(std::cout);
             return EXIT_SUCCESS;
+        }
+        if (options.list_encoders) {
+            acmxvk::printEncoders(std::cout);
+            return EXIT_SUCCESS;
+        }
+        if (!options.list_encoder_options.empty()) {
+            return acmxvk::printEncoderOptions(options.list_encoder_options, std::cout,
+                                               std::cerr)
+                       ? EXIT_SUCCESS
+                       : EXIT_FAILURE;
         }
 
         if (!options.graphic_file.empty() && !options.resolution_specified) {
