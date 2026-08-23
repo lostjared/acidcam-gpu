@@ -93,6 +93,7 @@ namespace acmxvk {
         double max_size_mb = 0.0;
         double audio_sensitivity = 1.0;
         double audio_pass_through_gain = 1.0;
+        double audio_recording_gain = 1.0;
         bool resolution_specified = false;
         bool fullscreen = false;
         bool repeat = false;
@@ -110,6 +111,7 @@ namespace acmxvk {
         bool audio_input_specified = false;
         bool audio_output_specified = false;
         bool audio_pass_through_gain_specified = false;
+        bool audio_recording_gain_specified = false;
         bool audio_pass_through = false;
         bool audio_repeat = false;
         bool audio_trunc = false;
@@ -356,6 +358,15 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "pass-through gain must be between 0.0 and 4.0");
                 }
+            } else if (option == "--record-gain") {
+                options.audio_recording_gain =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.audio_recording_gain_specified = true;
+                if (options.audio_recording_gain < 0.0 ||
+                    options.audio_recording_gain > 2.0) {
+                    throw std::runtime_error(
+                        "recording gain must be between 0.0 and 2.0");
+                }
             } else if (option == "--audio-repeat") {
                 options.audio_repeat = true;
             } else if (option == "--audio-trunc") {
@@ -527,11 +538,18 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--pass-through-gain requires --pass-through");
         }
+        if (options.audio_recording_gain_specified &&
+            (!options.enable_audio || !options.audio_file.empty() ||
+             options.output_file.empty() || options.png_output ||
+             options.copy_audio)) {
+            throw std::runtime_error(
+                "--record-gain requires live --enable-audio and encoded output");
+        }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5P)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5Q)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -589,6 +607,7 @@ namespace acmxvk {
                << "  -y, --pass-through          Play live/file audio through an output device\n"
                << "      --audio-output <device> Output index or default\n"
                << "      --pass-through-gain N   Monitor gain, 0.0-4.0 (default 1.0)\n"
+               << "      --record-gain N         Muxed mic gain, 0.0-2.0 (default 1.0)\n"
                << "      --audio-repeat          Restart file audio at end-of-stream\n"
                << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
                << "                              Live/file audio is muxed into encoded output\n"
@@ -1204,6 +1223,7 @@ namespace acmxvk {
                 options.audio_output_device,
                 options.audio_pass_through,
                 static_cast<float>(options.audio_pass_through_gain),
+                static_cast<float>(options.audio_recording_gain),
             };
             if (!audio_engine->open(config)) {
                 std::cerr << "acmxvk: audio input could not be initialized; "

@@ -117,6 +117,7 @@ namespace acmxvk::audio {
                 pass_through = config.pass_through;
                 pass_through_gain =
                     std::clamp(config.pass_through_gain, 0.0F, 4.0F);
+                recording_gain = std::clamp(config.recording_gain, 0.0F, 2.0F);
                 output_channels = 0;
                 sensitivity_value.store(std::clamp(config.sensitivity, 0.1F, 5.0F),
                                         std::memory_order_relaxed);
@@ -378,7 +379,8 @@ namespace acmxvk::audio {
                 }
                 mono /= static_cast<float>(input_channels);
                 if (capture_recording) {
-                    recorded_samples.push_back(std::clamp(mono, -1.0F, 1.0F));
+                    recorded_samples.push_back(
+                        std::clamp(mono * recording_gain, -1.0F, 1.0F));
                 }
                 low_pass_state += low_coefficient * (mono - low_pass_state);
                 mid_pass_state += mid_coefficient * (mono - mid_pass_state);
@@ -448,7 +450,8 @@ namespace acmxvk::audio {
                                      RESERVE_SECONDS);
             recording.store(true, std::memory_order_release);
             std::cout << "acmxvk: live audio recording started ("
-                      << recording_sample_rate << " Hz, mono)\n";
+                      << recording_sample_rate << " Hz, mono, gain "
+                      << recording_gain << ")\n";
             return true;
         }
 
@@ -489,6 +492,7 @@ namespace acmxvk::audio {
         unsigned int output_channels = 0;
         bool pass_through = false;
         float pass_through_gain = 1.0F;
+        float recording_gain = 1.0F;
         float smooth_value = 0.0F;
         float low_pass_state = 0.0F;
         float mid_pass_state = 0.0F;
