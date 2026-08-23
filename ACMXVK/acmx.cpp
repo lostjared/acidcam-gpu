@@ -507,10 +507,6 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--audio-trunc requires --audio-file <media>");
         }
-        if (options.audio_pass_through && options.audio_file.empty()) {
-            throw std::runtime_error(
-                "--pass-through requires --audio-file <media>");
-        }
         if (options.audio_output_specified && !options.audio_pass_through) {
             throw std::runtime_error(
                 "--audio-output requires --pass-through");
@@ -519,7 +515,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5M)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5O)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -574,7 +570,7 @@ namespace acmxvk {
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
                << "      --audio-input <device>  Input index or default\n"
                << "      --audio-file <media>    Media file or M3U/M3U8 reactivity source\n"
-               << "  -y, --pass-through          Play file audio through an output device\n"
+               << "  -y, --pass-through          Play live/file audio through an output device\n"
                << "      --audio-output <device> Output index or default\n"
                << "      --audio-repeat          Restart file audio at end-of-stream\n"
                << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
@@ -1187,6 +1183,8 @@ namespace acmxvk {
                 static_cast<unsigned int>(options.audio_channels),
                 static_cast<float>(options.audio_sensitivity),
                 options.audio_input_device,
+                options.audio_output_device,
+                options.audio_pass_through,
             };
             if (!audio_engine->open(config)) {
                 std::cerr << "acmxvk: audio input could not be initialized; "

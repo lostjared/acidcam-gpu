@@ -23,6 +23,8 @@ namespace acmxvk::audio {
         unsigned int channels = 2;
         float sensitivity = 1.0F;
         int input_device = -1;
+        int output_device = -1;
+        bool pass_through = false;
     };
 
     struct AudioRecording {

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iostream>
 #include <mutex>
+#include <string>
 #include <vector>
 
 namespace acmxvk::audio {
@@ -113,6 +114,8 @@ namespace acmxvk::audio {
 
                 input_channels = std::min(std::max(config.channels, 1U),
                                           input_info.inputChannels);
+                pass_through = config.pass_through;
+                output_channels = 0;
                 sensitivity_value.store(std::clamp(config.sensitivity, 0.1F, 5.0F),
                                         std::memory_order_relaxed);
                 resetMetrics();
@@ -128,23 +131,94 @@ namespace acmxvk::audio {
                         selected_rate = input_info.sampleRates.front();
                     }
                 }
-                sample_rate.store(selected_rate, std::memory_order_relaxed);
 
                 RtAudio::StreamParameters input_parameters;
                 input_parameters.deviceId = input_device;
                 input_parameters.nChannels = input_channels;
                 input_parameters.firstChannel = 0;
 
+                RtAudio::StreamParameters output_parameters;
+                RtAudio::StreamParameters *output_parameters_ptr = nullptr;
+                unsigned int output_device = 0;
+                std::string output_name;
+                std::vector<unsigned int> output_sample_rates;
+                if (pass_through) {
+                    output_device =
+                        config.output_device >= 0
+                            ? static_cast<unsigned int>(config.output_device)
+                            : stream.getDefaultOutputDevice();
+                    const auto output_selected =
+                        std::find(device_ids.begin(), device_ids.end(), output_device);
+                    if (output_selected == device_ids.end()) {
+                        std::cerr << "acmxvk: audio output device " << output_device
+                                  << " was not found; live pass-through disabled\n";
+                        pass_through = false;
+                    } else {
+                        const RtAudio::DeviceInfo output_info =
+                            stream.getDeviceInfo(output_device);
+                        if (output_info.outputChannels == 0) {
+                            std::cerr << "acmxvk: audio device " << output_device
+                                      << " has no output channels; live "
+                                         "pass-through disabled\n";
+                            pass_through = false;
+                        } else {
+                            output_channels =
+                                std::min(2U, output_info.outputChannels);
+                            output_name = output_info.name;
+                            output_sample_rates = output_info.sampleRates;
+                            output_parameters.deviceId = output_device;
+                            output_parameters.nChannels = output_channels;
+                            output_parameters.firstChannel = 0;
+                            output_parameters_ptr = &output_parameters;
+                        }
+                    }
+                }
+
+                const auto supports_rate = [](const std::vector<unsigned int> &rates,
+                                              unsigned int rate) {
+                    return rates.empty() ||
+                           std::find(rates.begin(), rates.end(), rate) != rates.end();
+                };
+                if (pass_through &&
+                    !supports_rate(output_sample_rates, selected_rate)) {
+                    std::vector<unsigned int> candidates{44100, 48000};
+                    candidates.insert(candidates.end(), input_info.sampleRates.begin(),
+                                      input_info.sampleRates.end());
+                    candidates.insert(candidates.end(), output_sample_rates.begin(),
+                                      output_sample_rates.end());
+                    const auto common_rate = std::find_if(
+                        candidates.begin(), candidates.end(), [&](unsigned int rate) {
+                            return supports_rate(input_info.sampleRates, rate) &&
+                                   supports_rate(output_sample_rates, rate);
+                        });
+                    if (common_rate == candidates.end()) {
+                        std::cerr << "acmxvk: input and output devices have no "
+                                     "common sample rate; live pass-through disabled\n";
+                        pass_through = false;
+                        output_channels = 0;
+                        output_parameters_ptr = nullptr;
+                    } else {
+                        selected_rate = *common_rate;
+                    }
+                }
+                sample_rate.store(selected_rate, std::memory_order_relaxed);
+
                 unsigned int buffer_frames = 512;
-                stream.openStream(nullptr, &input_parameters, RTAUDIO_FLOAT32,
-                                  selected_rate, &buffer_frames, &Impl::audioCallback,
-                                  this);
+                stream.openStream(output_parameters_ptr, &input_parameters,
+                                  RTAUDIO_FLOAT32, selected_rate, &buffer_frames,
+                                  &Impl::audioCallback, this);
                 stream.startStream();
 
                 std::cout << "acmxvk: audio input " << input_device << ": "
                           << input_info.name << " (" << selected_rate << " Hz, "
                           << input_channels << " channel"
                           << (input_channels == 1 ? "" : "s") << ")\n";
+                if (pass_through) {
+                    std::cout << "acmxvk: live audio pass-through " << output_device
+                              << ": " << output_name << " (" << output_channels
+                              << " channel"
+                              << (output_channels == 1 ? "" : "s") << ")\n";
+                }
                 return stream.isStreamOpen();
             } catch (const std::exception &error) {
                 std::cerr << "acmxvk: audio error: " << error.what() << '\n';
@@ -230,17 +304,37 @@ namespace acmxvk::audio {
             spectrum_front.store(0, std::memory_order_release);
         }
 
-        static int audioCallback(void *, void *input_buffer,
+        static int audioCallback(void *output_buffer, void *input_buffer,
                                  unsigned int frame_count, double,
                                  RtAudioStreamStatus status, void *user_data) {
             return static_cast<Impl *>(user_data)
-                ->processSamples(static_cast<const float *>(input_buffer), frame_count,
-                                 status);
+                ->processCallback(static_cast<float *>(output_buffer),
+                                  static_cast<const float *>(input_buffer),
+                                  frame_count, status);
         }
 
-        int processSamples(const float *samples, unsigned int frame_count,
-                           RtAudioStreamStatus status) {
+        int processCallback(float *output, const float *samples,
+                            unsigned int frame_count, RtAudioStreamStatus status) {
             static_cast<void>(status);
+            if (output != nullptr && output_channels > 0) {
+                if (samples == nullptr || !pass_through) {
+                    std::fill_n(output, frame_count * output_channels, 0.0F);
+                } else {
+                    for (unsigned int frame = 0; frame < frame_count; ++frame) {
+                        for (unsigned int channel = 0; channel < output_channels;
+                             ++channel) {
+                            const unsigned int input_channel =
+                                channel < input_channels ? channel : 0;
+                            output[frame * output_channels + channel] =
+                                samples[frame * input_channels + input_channel];
+                        }
+                    }
+                }
+            }
+            return processSamples(samples, frame_count);
+        }
+
+        int processSamples(const float *samples, unsigned int frame_count) {
             if (samples == nullptr || frame_count == 0 || input_channels == 0) {
                 return 0;
             }
@@ -386,6 +480,8 @@ namespace acmxvk::audio {
         std::vector<float> recorded_samples;
         unsigned int recording_sample_rate = 44100;
         unsigned int input_channels = 0;
+        unsigned int output_channels = 0;
+        bool pass_through = false;
         float smooth_value = 0.0F;
         float low_pass_state = 0.0F;
         float mid_pass_state = 0.0F;
@@ -434,7 +530,7 @@ namespace acmxvk::audio {
         impl->input_channels = channels;
         impl->sample_rate.store(std::max(sample_rate, 1U),
                                 std::memory_order_relaxed);
-        impl->processSamples(samples, frame_count, 0);
+        impl->processSamples(samples, frame_count);
     }
 
     bool AudioEngine::start_recording() {

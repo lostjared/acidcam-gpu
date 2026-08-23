@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5N**. It is usable for video, camera, and
+The port is currently at **Increment 5O**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Partial | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports audible pass-through, repeat, and stop-at-EOF behavior; both file and live-input audio support AAC muxing into encoded output. Live-input pass-through remains future work. |
+| Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support output pass-through and AAC muxing; file audio also supports repeat and stop-at-EOF behavior. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -71,7 +71,7 @@ Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increments 5J through 5N also change only ACMXVK.
+reinstall. Increments 5J through 5O also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -287,6 +287,13 @@ or external process is required. `--copy-audio` takes precedence and disables
 live-input recording so the selected video input's original audio is copied
 instead.
 
+Add `--pass-through` to monitor live input through RtAudio's default output, or
+select an output from `--list-devices` with `--audio-output <index>`. Live
+monitoring uses one full-duplex stream, so the samples sent to the output are
+the same samples used for shader analysis and recording. ACMXVK selects a
+sample rate supported by both devices and duplicates mono input into a stereo
+output when needed. Headphones are recommended to avoid acoustic feedback.
+
 Without repeat, the muxed result is limited to the shorter of the recorded
 video and decoded audio. With `--audio-repeat`, the complete file or playlist
 is repeated to the recorded video duration. `--audio-trunc` stops recording at
@@ -331,6 +338,21 @@ Record processed video with synchronized live microphone audio:
     --audio-input default \
     --duration 5 \
     --output live-output.mp4 \
+    --enable-vsync
+```
+
+Monitor that microphone through the default output while recording:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.png \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --enable-audio \
+    --audio-input default \
+    --pass-through \
+    --audio-output default \
+    --duration 5 \
+    --output monitored-live-output.mp4 \
     --enable-vsync
 ```
 
