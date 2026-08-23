@@ -25,6 +25,7 @@ namespace acmxvk::audio {
         int input_device = -1;
         int output_device = -1;
         bool pass_through = false;
+        float pass_through_gain = 1.0F;
     };
 
     struct AudioRecording {

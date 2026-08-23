@@ -115,6 +115,8 @@ namespace acmxvk::audio {
                 input_channels = std::min(std::max(config.channels, 1U),
                                           input_info.inputChannels);
                 pass_through = config.pass_through;
+                pass_through_gain =
+                    std::clamp(config.pass_through_gain, 0.0F, 4.0F);
                 output_channels = 0;
                 sensitivity_value.store(std::clamp(config.sensitivity, 0.1F, 5.0F),
                                         std::memory_order_relaxed);
@@ -217,7 +219,8 @@ namespace acmxvk::audio {
                     std::cout << "acmxvk: live audio pass-through " << output_device
                               << ": " << output_name << " (" << output_channels
                               << " channel"
-                              << (output_channels == 1 ? "" : "s") << ")\n";
+                              << (output_channels == 1 ? "" : "s")
+                              << ", gain " << pass_through_gain << ")\n";
                 }
                 return stream.isStreamOpen();
             } catch (const std::exception &error) {
@@ -326,7 +329,10 @@ namespace acmxvk::audio {
                             const unsigned int input_channel =
                                 channel < input_channels ? channel : 0;
                             output[frame * output_channels + channel] =
-                                samples[frame * input_channels + input_channel];
+                                std::clamp(
+                                    samples[frame * input_channels + input_channel] *
+                                        pass_through_gain,
+                                    -1.0F, 1.0F);
                         }
                     }
                 }
@@ -482,6 +488,7 @@ namespace acmxvk::audio {
         unsigned int input_channels = 0;
         unsigned int output_channels = 0;
         bool pass_through = false;
+        float pass_through_gain = 1.0F;
         float smooth_value = 0.0F;
         float low_pass_state = 0.0F;
         float mid_pass_state = 0.0F;

@@ -190,7 +190,7 @@ namespace acmxvk::audio {
             }
 
             bool open(const float *source, std::size_t sample_count,
-                      int requested_device) {
+                      int requested_device, float requested_gain) {
                 close();
                 if (source == nullptr || sample_count == 0) {
                     return false;
@@ -226,6 +226,7 @@ namespace acmxvk::audio {
                     source_samples = source;
                     source_sample_count = sample_count;
                     source_position = 0.0;
+                    gain = std::clamp(requested_gain, 0.0F, 4.0F);
                     playback_position.store(0, std::memory_order_relaxed);
                     completed_loops.store(0, std::memory_order_relaxed);
                     finished.store(false, std::memory_order_relaxed);
@@ -243,7 +244,8 @@ namespace acmxvk::audio {
                     std::cout << "acmxvk: file audio output " << device << ": "
                               << info.name << " (" << output_sample_rate << " Hz, "
                               << output_channels << " channel"
-                              << (output_channels == 1 ? "" : "s") << ")\n";
+                              << (output_channels == 1 ? "" : "s") << ", gain "
+                              << gain << ")\n";
                     return true;
                 } catch (const std::exception &error) {
                     std::cerr << "acmxvk: audio output error: " << error.what()
@@ -379,10 +381,12 @@ namespace acmxvk::audio {
                                 : std::min(index + 1, source_sample_count - 1);
                         const float fraction = static_cast<float>(
                             source_position - static_cast<double>(index));
-                        sample = source_samples[index] +
-                                 (source_samples[next_index] -
-                                  source_samples[index]) *
-                                     fraction;
+                        sample = std::clamp(
+                            (source_samples[index] +
+                             (source_samples[next_index] - source_samples[index]) *
+                                 fraction) *
+                                gain,
+                            -1.0F, 1.0F);
                         source_position += source_step;
                     }
 
@@ -405,6 +409,7 @@ namespace acmxvk::audio {
             double source_position = 0.0;
             unsigned int output_channels = 0;
             unsigned int output_sample_rate = FILE_SAMPLE_RATE;
+            float gain = 1.0F;
             std::atomic<std::size_t> playback_position{0};
             std::atomic<std::uint64_t> completed_loops{0};
             std::atomic<bool> active{false};
@@ -693,13 +698,14 @@ namespace acmxvk::audio {
             }
         }
 
-        bool enable_output(int device) {
+        bool enable_output(int device, float gain) {
             if (samples.empty()) {
                 return false;
             }
             auto requested_output = std::make_unique<FileAudioOutput>();
             requested_output->set_repeat(repeat);
-            if (!requested_output->open(samples.data(), samples.size(), device)) {
+            if (!requested_output->open(samples.data(), samples.size(), device,
+                                        gain)) {
                 return false;
             }
             output = std::move(requested_output);
@@ -1228,8 +1234,8 @@ namespace acmxvk::audio {
         impl->set_repeat(enabled);
     }
 
-    bool FileAudioSource::enable_output(int device) {
-        return impl->enable_output(device);
+    bool FileAudioSource::enable_output(int device, float gain) {
+        return impl->enable_output(device, gain);
     }
 
     void FileAudioSource::stop_output() {
