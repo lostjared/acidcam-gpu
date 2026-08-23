@@ -51,6 +51,9 @@ set(ACMXVK_SPRITE_VERTEX_SHADER
 set(ACMXVK_ECHO_CACHE_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/echo_cache.frag.spv"
 )
+set(ACMXVK_FLIP_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/flip.frag.spv"
+)
 
 add_custom_command(
     OUTPUT "${ACMXVK_SPRITE_VERTEX_SHADER}"
@@ -74,9 +77,21 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${ACMXVK_FLIP_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/flip.frag"
+            -o "${ACMXVK_FLIP_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/flip.frag"
+    COMMENT "Compiling ACMXVK final-output flip shader"
+    VERBATIM
+)
+
 add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_SPRITE_VERTEX_SHADER}"
     "${ACMXVK_ECHO_CACHE_SHADER}"
+    "${ACMXVK_FLIP_SHADER}"
 )
 
 add_executable(acmxvk acmx.cpp)
@@ -91,12 +106,15 @@ target_compile_definitions(acmxvk PRIVATE
     ACMXVK_INSTALL_SPRITE_VERTEX_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/sprite.vert.spv"
     ACMXVK_BUILD_ECHO_CACHE_SHADER="${ACMXVK_ECHO_CACHE_SHADER}"
     ACMXVK_INSTALL_ECHO_CACHE_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/echo_cache.frag.spv"
+    ACMXVK_BUILD_FLIP_SHADER="${ACMXVK_FLIP_SHADER}"
+    ACMXVK_INSTALL_FLIP_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/flip.frag.spv"
 )
 
 install(TARGETS acmxvk RUNTIME DESTINATION bin)
 install(FILES
         "${ACMXVK_SPRITE_VERTEX_SHADER}"
         "${ACMXVK_ECHO_CACHE_SHADER}"
+        "${ACMXVK_FLIP_SHADER}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")

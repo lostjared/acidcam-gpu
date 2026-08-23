@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -43,8 +44,21 @@
 #define ACMXVK_INSTALL_ECHO_CACHE_SHADER "echo_cache.frag.spv"
 #endif
 
+#ifndef ACMXVK_BUILD_FLIP_SHADER
+#define ACMXVK_BUILD_FLIP_SHADER "flip.frag.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_FLIP_SHADER
+#define ACMXVK_INSTALL_FLIP_SHADER "flip.frag.spv"
+#endif
+
 namespace acmxvk {
     namespace fs = std::filesystem;
+
+    enum class FrameRotation { None,
+                               Clockwise90,
+                               Rotate180,
+                               Counterclockwise90 };
 
     struct Options {
         int width = 1280;
@@ -54,8 +68,11 @@ namespace acmxvk {
         int camera_device = 0;
         int shader_index = 0;
         int encode_crf = 18;
+        int autopilot_frames = 0;
+        int autopilot_random_timeout = 0;
         double requested_fps = 0.0;
         double duration = 0.0;
+        double time_speed = 1.0;
         bool resolution_specified = false;
         bool fullscreen = false;
         bool repeat = false;
@@ -63,9 +80,12 @@ namespace acmxvk {
         bool enable_screenshot = false;
         bool enable_playlist = false;
         bool enable_history_test = false;
+        bool normalized_time = false;
+        bool flip_output = false;
         bool encode_realtime = false;
         bool no_drop = false;
         bool show_help = false;
+        FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
         std::vector<std::string> shader_pass_files;
         std::string input_file;
@@ -133,6 +153,24 @@ namespace acmxvk {
         if (width <= 0 || height <= 0) {
             throw std::runtime_error("dimensions must be positive for " + std::string(option));
         }
+    }
+
+    [[nodiscard]] FrameRotation parseFrameRotation(std::string value) {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+        if (value == "clockwise" || value == "cw" || value == "90" || value == "90cw") {
+            return FrameRotation::Clockwise90;
+        }
+        if (value == "180") {
+            return FrameRotation::Rotate180;
+        }
+        if (value == "counterclockwise" || value == "ccw" || value == "90ccw" ||
+            value == "270") {
+            return FrameRotation::Counterclockwise90;
+        }
+        throw std::runtime_error(
+            "--rotate requires clockwise, 180, or counterclockwise");
     }
 
     [[nodiscard]] Options parseOptions(int argc, char **argv) {
@@ -211,6 +249,19 @@ namespace acmxvk {
                 options.playlist_file = optionValue(index, argc, argv, option);
             } else if (option == "--enable-playlist") {
                 options.enable_playlist = true;
+            } else if (option == "--time-speed") {
+                options.time_speed =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+            } else if (option == "--normalized") {
+                options.normalized_time = true;
+            } else if (option == "--autopilot-frames" ||
+                       option == "--autopilot-timeout") {
+                options.autopilot_frames =
+                    std::max(4, parseInteger(optionValue(index, argc, argv, option), option));
+            } else if (option == "--autopilot-random" ||
+                       option == "--autiopilot-random") {
+                options.autopilot_random_timeout =
+                    std::max(4, parseInteger(optionValue(index, argc, argv, option), option));
             } else if (option == "-u" || option == "--fps") {
                 options.requested_fps =
                     parseNumber(optionValue(index, argc, argv, option), option);
@@ -249,6 +300,11 @@ namespace acmxvk {
                 options.enable_screenshot = true;
             } else if (option == "--history-test") {
                 options.enable_history_test = true;
+            } else if (option == "--flip") {
+                options.flip_output = true;
+            } else if (option == "--rotate") {
+                options.frame_rotation =
+                    parseFrameRotation(optionValue(index, argc, argv, option));
             } else {
                 throw std::runtime_error("unknown option: " + std::string(option));
             }
@@ -269,6 +325,10 @@ namespace acmxvk {
         if (options.enable_playlist && options.playlist_file.empty()) {
             throw std::runtime_error("--enable-playlist requires --playlist <file>");
         }
+        if ((options.autopilot_frames > 0 || options.autopilot_random_timeout > 0) &&
+            options.playlist_file.empty()) {
+            throw std::runtime_error("autopilot requires --playlist <file>");
+        }
         if (!options.output_file.empty() && !options.input_file.empty() &&
             fs::absolute(options.output_file).lexically_normal() ==
                 fs::absolute(options.input_file).lexically_normal()) {
@@ -285,7 +345,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 3)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 3B)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -304,7 +364,12 @@ namespace acmxvk {
                << "  --shader-pass <indices>     Comma-separated pre-shader pass chain\n"
                << "  --shader-pass-files <data>  ACMX2 length-prefixed shader filenames\n"
                << "  --playlist <file>           Shader or named multipass playlist\n\n"
-               << "  --enable-playlist           Enable the playlist immediately\n\n"
+               << "  --enable-playlist           Enable the playlist immediately\n"
+               << "  --time-speed <mult>         Scale shader time (default 1.0)\n"
+               << "  --normalized                Use fixed output-frame shader time\n"
+               << "  --autopilot-frames <N>      Playlist switch interval (minimum 4)\n"
+               << "  --autopilot-timeout <N>     Alias for --autopilot-frames\n"
+               << "  --autopilot-random <N>      Random playlist interval from 4..N\n\n"
                << "History cache:\n"
                << "      --history-test          Run the converted eight-frame echo cache\n\n"
                << "Recording:\n"
@@ -320,10 +385,13 @@ namespace acmxvk {
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
                << "  -a, --repeat                Repeat video input\n"
+               << "      --rotate <mode>         clockwise, 180, or counterclockwise\n"
+               << "      --flip                  Flip final display/encoded output vertically\n"
                << "      --enable-vsync          Use FIFO presentation\n"
                << "      --enable-screenshot     Enable MXVK F10 screenshots\n\n"
                << "Keys: Up/Down shader or playlist node, Shift+Up/Down final shader,\n"
-               << "      P playlist, M multipass, Space bypass, Escape quit\n";
+               << "      P playlist, J random autopilot, Y sequential autopilot,\n"
+               << "      M multipass, Space bypass, Escape quit\n";
     }
 
     [[nodiscard]] std::string trim(std::string text) {
@@ -363,6 +431,27 @@ namespace acmxvk {
         return rgba;
     }
 
+    void rotateFrame(cv::Mat &frame, FrameRotation rotation) {
+        switch (rotation) {
+        case FrameRotation::None:
+            break;
+        case FrameRotation::Clockwise90:
+            cv::rotate(frame, frame, cv::ROTATE_90_CLOCKWISE);
+            break;
+        case FrameRotation::Rotate180:
+            cv::rotate(frame, frame, cv::ROTATE_180);
+            break;
+        case FrameRotation::Counterclockwise90:
+            cv::rotate(frame, frame, cv::ROTATE_90_COUNTERCLOCKWISE);
+            break;
+        }
+    }
+
+    [[nodiscard]] bool rotationSwapsDimensions(FrameRotation rotation) {
+        return rotation == FrameRotation::Clockwise90 ||
+               rotation == FrameRotation::Counterclockwise90;
+    }
+
     struct PlaylistNode {
         std::string name;
         std::vector<fs::path> shaders;
@@ -379,6 +468,7 @@ namespace acmxvk {
             loadShaders();
             loadShaderPasses();
             loadPlaylist();
+            resetAutopilotInterval();
             openInput();
             initializeSprite();
             openOutput();
@@ -435,6 +525,12 @@ namespace acmxvk {
                                   << (multipass_enabled ? "enabled" : "disabled") << '\n';
                     }
                     break;
+                case SDLK_J:
+                    toggleAutopilot(false);
+                    break;
+                case SDLK_Y:
+                    toggleAutopilot(true);
+                    break;
                 default:
                     break;
                 }
@@ -473,6 +569,7 @@ namespace acmxvk {
                 }
             }
 
+            updateAutopilot();
             const VkExtent2D extent = getSwapchainExtent();
             const int target_width = extent.width > 0U ? static_cast<int>(extent.width) : options.width;
             const int target_height =
@@ -510,13 +607,18 @@ namespace acmxvk {
         bool history_initialized = false;
         bool initial_frame_pending = false;
         bool recording_complete = false;
+        bool autopilot_enabled = false;
+        bool autopilot_sequential = false;
         int recording_width = 0;
         int recording_height = 0;
+        int autopilot_counter = 0;
+        int autopilot_interval_frames = 0;
         double recording_fps = 0.0;
+        double shader_time = 0.0;
         std::uint64_t output_frame_count = 0;
         std::uint64_t frame_count = 0;
-        std::chrono::steady_clock::time_point shader_start{std::chrono::steady_clock::now()};
-        std::chrono::steady_clock::time_point previous_frame{shader_start};
+        std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
+        std::mt19937 autopilot_rng{std::random_device{}()};
 
         void loadShaders() {
             if (!options.fragment_shader.empty()) {
@@ -681,10 +783,18 @@ namespace acmxvk {
             return ACMXVK_BUILD_ECHO_CACHE_SHADER;
         }
 
+        [[nodiscard]] fs::path flipShader() const {
+            if (fs::is_regular_file(ACMXVK_INSTALL_FLIP_SHADER)) {
+                return ACMXVK_INSTALL_FLIP_SHADER;
+            }
+            return ACMXVK_BUILD_FLIP_SHADER;
+        }
+
         void openInput() {
             if (!options.graphic_file.empty()) {
                 source_kind = SourceKind::Graphic;
                 graphic_rgba = loadRgbaImage(options.graphic_file);
+                rotateFrame(graphic_rgba, options.frame_rotation);
                 return;
             }
 
@@ -798,6 +908,9 @@ namespace acmxvk {
                     source_width = options.camera_width;
                     source_height = options.camera_height;
                 }
+                if (rotationSwapsDimensions(options.frame_rotation)) {
+                    std::swap(source_width, source_height);
+                }
             }
 
             if (frame_sprite == nullptr) {
@@ -831,6 +944,90 @@ namespace acmxvk {
             }
         }
 
+        void resetShaderTime() {
+            previous_frame = std::chrono::steady_clock::now();
+            shader_time = 0.0;
+            frame_count = 0;
+        }
+
+        void resetAutopilotInterval() {
+            if (options.autopilot_random_timeout > 0) {
+                std::uniform_int_distribution<int> distribution(
+                    4, std::max(4, options.autopilot_random_timeout));
+                autopilot_interval_frames = distribution(autopilot_rng);
+            } else {
+                autopilot_interval_frames = options.autopilot_frames;
+            }
+        }
+
+        void toggleAutopilot(bool sequential) {
+            if (!playlist_enabled) {
+                std::cout << "acmxvk: "
+                          << (sequential ? "sequential autopilot" : "autopilot")
+                          << " requires playlist mode (press P first)\n";
+                return;
+            }
+            if (playlist.empty()) {
+                std::cout << "acmxvk: autopilot has no playlist entries\n";
+                return;
+            }
+
+            if (autopilot_enabled && autopilot_sequential == sequential) {
+                autopilot_enabled = false;
+                autopilot_sequential = false;
+                std::cout << "acmxvk: autopilot disabled\n";
+                return;
+            }
+
+            autopilot_enabled = true;
+            autopilot_sequential = sequential;
+            autopilot_counter = 0;
+            if (options.autopilot_random_timeout <= 0 && options.autopilot_frames <= 0) {
+                options.autopilot_frames = 300;
+            }
+            resetAutopilotInterval();
+            std::cout << "acmxvk: " << (sequential ? "sequential " : "random ")
+                      << "autopilot enabled (";
+            if (options.autopilot_random_timeout > 0) {
+                std::cout << "random interval 4-" << options.autopilot_random_timeout
+                          << ", current " << autopilot_interval_frames;
+            } else {
+                std::cout << "every " << autopilot_interval_frames << " frames";
+            }
+            std::cout << ")\n";
+        }
+
+        void updateAutopilot() {
+            if (!autopilot_enabled || !playlist_enabled || playlist.empty() ||
+                autopilot_interval_frames <= 0) {
+                return;
+            }
+            if (++autopilot_counter < autopilot_interval_frames) {
+                return;
+            }
+            autopilot_counter = 0;
+
+            if (autopilot_sequential && options.autopilot_random_timeout <= 0) {
+                playlist_index = (playlist_index + 1) % playlist.size();
+            } else {
+                std::uniform_int_distribution<std::size_t> distribution(0,
+                                                                        playlist.size() - 1);
+                std::size_t next = distribution(autopilot_rng);
+                if (playlist.size() > 1 && next == playlist_index) {
+                    next = (next + 1) % playlist.size();
+                }
+                playlist_index = next;
+            }
+
+            applyShaderPipeline();
+            resetShaderTime();
+            if (options.autopilot_random_timeout > 0) {
+                resetAutopilotInterval();
+            }
+            std::cout << "acmxvk: autopilot -> " << playlist[playlist_index].name << " ("
+                      << (playlist_index + 1) << '/' << playlist.size() << ")\n";
+        }
+
         void selectShader(int direction) {
             if (shaders.size() < 2 || frame_sprite == nullptr) {
                 return;
@@ -841,9 +1038,8 @@ namespace acmxvk {
             shader_index = static_cast<std::size_t>(index);
 
             applyShaderPipeline();
-            shader_start = std::chrono::steady_clock::now();
-            previous_frame = shader_start;
-            frame_count = 0;
+            resetShaderTime();
+            autopilot_counter = 0;
             std::cout << "acmxvk: shader " << (shader_index + 1) << '/' << shaders.size()
                       << ": " << currentShader() << '\n';
         }
@@ -857,6 +1053,8 @@ namespace acmxvk {
             index = (index % count + count) % count;
             playlist_index = static_cast<std::size_t>(index);
             applyShaderPipeline();
+            resetShaderTime();
+            autopilot_counter = 0;
             std::cout << "acmxvk: playlist node " << (playlist_index + 1) << '/'
                       << playlist.size() << ": " << playlist[playlist_index].name << " ("
                       << playlist[playlist_index].shaders.size() << " passes)\n";
@@ -864,13 +1062,18 @@ namespace acmxvk {
 
         [[nodiscard]] std::vector<fs::path> activeShaderPipeline() const {
             std::vector<fs::path> pipeline;
-            if (playlist_enabled && !playlist.empty()) {
-                pipeline = playlist[playlist_index].shaders;
-            } else if (multipass_enabled) {
-                pipeline = configured_passes;
+            if (effects_enabled) {
+                if (playlist_enabled && !playlist.empty()) {
+                    pipeline = playlist[playlist_index].shaders;
+                } else if (multipass_enabled) {
+                    pipeline = configured_passes;
+                }
+                if (!currentShader().empty()) {
+                    pipeline.emplace_back(currentShader());
+                }
             }
-            if (!currentShader().empty()) {
-                pipeline.emplace_back(currentShader());
+            if (options.flip_output) {
+                pipeline.emplace_back(flipShader());
             }
             return pipeline;
         }
@@ -883,9 +1086,6 @@ namespace acmxvk {
             detachPostProcessingShader();
             post_process_sprites.clear();
             frame_sprite->setEffectsEnabled(effects_enabled);
-            if (!effects_enabled) {
-                return;
-            }
 
             const std::vector<fs::path> pipeline = activeShaderPipeline();
             if (pipeline.empty()) {
@@ -940,7 +1140,8 @@ namespace acmxvk {
         }
 
         [[nodiscard]] bool readInputFrame() {
-            if (!options.enable_history_test) {
+            if (!options.enable_history_test &&
+                options.frame_rotation == FrameRotation::None) {
                 return capture.readToSprite(*frame_sprite, false);
             }
 
@@ -948,6 +1149,7 @@ namespace acmxvk {
             if (!capture.readRgba(rgba, false)) {
                 return false;
             }
+            rotateFrame(rgba, options.frame_rotation);
             frame_sprite->updateTexture(rgba.ptr(), rgba.cols, rgba.rows,
                                         static_cast<int>(rgba.step));
             const bool history_was_initialized = history_initialized;
@@ -961,11 +1163,16 @@ namespace acmxvk {
 
         void updateShaderUniforms(int width, int height) {
             const auto now = std::chrono::steady_clock::now();
-            const float elapsed = std::chrono::duration<float>(now - shader_start).count();
-            const float delta = std::chrono::duration<float>(now - previous_frame).count();
+            const float wall_delta =
+                std::chrono::duration<float>(now - previous_frame).count();
             previous_frame = now;
             ++frame_count;
 
+            const float delta = options.normalized_time
+                                    ? static_cast<float>(1.0 / outputFrameRate())
+                                    : wall_delta;
+            shader_time += static_cast<double>(delta) * options.time_speed;
+            const float elapsed = static_cast<float>(shader_time);
             const float frame_rate = delta > 0.0F ? 1.0F / delta : 0.0F;
             frame_sprite->setShaderParams(1.0F, 1.0F, 1.0F, elapsed);
             frame_sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
@@ -1006,6 +1213,9 @@ int main(int argc, char **argv) {
             if (!image.empty()) {
                 options.width = image.cols;
                 options.height = image.rows;
+                if (acmxvk::rotationSwapsDimensions(options.frame_rotation)) {
+                    std::swap(options.width, options.height);
+                }
             }
         }
 
