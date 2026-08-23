@@ -25,6 +25,19 @@ namespace acmxvk::audio {
         int input_device = -1;
     };
 
+    struct AudioRecording {
+        std::vector<float> samples;
+        unsigned int sample_rate = 0;
+
+        [[nodiscard]] bool empty() const { return samples.empty(); }
+        [[nodiscard]] double duration_seconds() const {
+            return sample_rate == 0
+                       ? 0.0
+                       : static_cast<double>(samples.size()) /
+                             static_cast<double>(sample_rate);
+        }
+    };
+
     class AudioEngine {
       public:
         static constexpr std::size_t FFT_SIZE = 512;
@@ -46,6 +59,9 @@ namespace acmxvk::audio {
         [[nodiscard]] std::vector<float> spectrum() const;
         void process_samples(const float *samples, unsigned int frame_count,
                              unsigned int channels, unsigned int sample_rate);
+        bool start_recording();
+        [[nodiscard]] AudioRecording stop_recording();
+        [[nodiscard]] bool is_recording() const;
         void reset();
         static constexpr std::uint32_t spectrum_bin_count() {
             return static_cast<std::uint32_t>(FFT_SIZE / 2);

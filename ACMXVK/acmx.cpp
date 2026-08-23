@@ -578,7 +578,7 @@ namespace acmxvk {
                << "      --audio-output <device> Output index or default\n"
                << "      --audio-repeat          Restart file audio at end-of-stream\n"
                << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
-               << "                              File audio is muxed into encoded output\n"
+               << "                              Live/file audio is muxed into encoded output\n"
                << "      --enable-audio-buffers N\n"
                << "                              FFT history layers at binding 4\n"
                << "      --list-devices          List RtAudio devices and exit\n"
@@ -913,6 +913,15 @@ namespace acmxvk {
                 file_audio_source != nullptr && writer.is_open() &&
                 !options.output_file.empty() && !options.png_output &&
                 output_frame_count > 0;
+            const bool should_mux_live_audio =
+                audio_engine != nullptr && file_audio_source == nullptr &&
+                audio_engine->is_recording() && writer.is_open() &&
+                !options.output_file.empty() && !options.png_output &&
+                output_frame_count > 0;
+            audio::AudioRecording live_audio_recording;
+            if (audio_engine != nullptr && audio_engine->is_recording()) {
+                live_audio_recording = audio_engine->stop_recording();
+            }
             if (file_audio_source != nullptr) {
                 file_audio_source->stop_output();
             }
@@ -944,6 +953,19 @@ namespace acmxvk {
                 if (!file_audio_source->mux_into_video(options.output_file,
                                                        video_duration)) {
                     std::cerr << "acmxvk: file-audio mux failed; preserving the "
+                                 "encoded video without audio\n";
+                }
+            }
+            if (should_mux_live_audio) {
+                const double video_duration = writer.get_duration();
+                if (live_audio_recording.empty()) {
+                    std::cerr << "acmxvk: live audio recording was empty; preserving "
+                                 "the encoded video without audio\n";
+                } else if (!audio::FileAudioSource::mux_recording_into_video(
+                               std::move(live_audio_recording.samples),
+                               live_audio_recording.sample_rate,
+                               options.output_file, video_duration)) {
+                    std::cerr << "acmxvk: live-audio mux failed; preserving the "
                                  "encoded video without audio\n";
                 }
             }
@@ -1591,6 +1613,14 @@ namespace acmxvk {
             }
 
             if (writer.is_open()) {
+#ifdef AUDIO_ENABLED
+                if (output_frame_count == 0 && audio_engine != nullptr &&
+                    file_audio_source == nullptr && !options.copy_audio &&
+                    !audio_engine->start_recording()) {
+                    std::cerr << "acmxvk: could not start live audio recording; "
+                                 "continuing with video-only output\n";
+                }
+#endif
                 writer.write(output_pixels);
             }
             if (options.png_output) {

@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cmath>
 #include <iostream>
+#include <mutex>
 #include <vector>
 
 namespace acmxvk::audio {
@@ -153,6 +154,7 @@ namespace acmxvk::audio {
         }
 
         void close() {
+            static_cast<void>(stopRecording());
             if (!stream.isStreamOpen()) {
                 return;
             }
@@ -259,6 +261,14 @@ namespace acmxvk::audio {
             const float mid_coefficient =
                 1.0F - std::exp(-2.0F * PI * 3000.0F / rate);
 
+            std::unique_lock<std::mutex> recording_lock;
+            bool capture_recording = recording.load(std::memory_order_acquire);
+            if (capture_recording) {
+                recording_lock = std::unique_lock<std::mutex>(recording_mutex);
+                capture_recording =
+                    recording.load(std::memory_order_acquire);
+            }
+
             for (unsigned int frame = 0; frame < frame_count; ++frame) {
                 float mono = 0.0F;
                 for (unsigned int channel = 0; channel < input_channels; ++channel) {
@@ -267,6 +277,9 @@ namespace acmxvk::audio {
                     mono += sample;
                 }
                 mono /= static_cast<float>(input_channels);
+                if (capture_recording) {
+                    recorded_samples.push_back(std::clamp(mono, -1.0F, 1.0F));
+                }
                 low_pass_state += low_coefficient * (mono - low_pass_state);
                 mid_pass_state += mid_coefficient * (mono - mid_pass_state);
                 const float low_sample = low_pass_state;
@@ -320,6 +333,40 @@ namespace acmxvk::audio {
             return 0;
         }
 
+        bool startRecording() {
+            if (!stream.isStreamOpen() ||
+                recording.load(std::memory_order_acquire)) {
+                return false;
+            }
+
+            std::lock_guard<std::mutex> lock(recording_mutex);
+            recorded_samples.clear();
+            recording_sample_rate =
+                std::max(sample_rate.load(std::memory_order_relaxed), 1U);
+            constexpr unsigned int RESERVE_SECONDS = 60;
+            recorded_samples.reserve(static_cast<std::size_t>(recording_sample_rate) *
+                                     RESERVE_SECONDS);
+            recording.store(true, std::memory_order_release);
+            std::cout << "acmxvk: live audio recording started ("
+                      << recording_sample_rate << " Hz, mono)\n";
+            return true;
+        }
+
+        [[nodiscard]] AudioRecording stopRecording() {
+            recording.store(false, std::memory_order_release);
+            std::lock_guard<std::mutex> lock(recording_mutex);
+
+            AudioRecording result;
+            result.samples = std::move(recorded_samples);
+            result.sample_rate = recording_sample_rate;
+            if (!result.empty()) {
+                std::cout << "acmxvk: live audio recording stopped ("
+                          << result.duration_seconds() << " seconds)\n";
+            }
+            recorded_samples.clear();
+            return result;
+        }
+
         RtAudio stream;
         std::atomic<float> amplitude{0.0F};
         std::atomic<float> frequency{0.0F};
@@ -331,9 +378,13 @@ namespace acmxvk::audio {
         std::atomic<float> high{0.0F};
         std::atomic<float> sensitivity_value{1.0F};
         std::atomic<unsigned int> sample_rate{44100};
+        std::atomic<bool> recording{false};
         std::array<std::array<std::atomic<float>, AudioEngine::FFT_SIZE>, 2>
             spectrum_samples{};
         std::atomic<int> spectrum_front{0};
+        std::mutex recording_mutex;
+        std::vector<float> recorded_samples;
+        unsigned int recording_sample_rate = 44100;
         unsigned int input_channels = 0;
         float smooth_value = 0.0F;
         float low_pass_state = 0.0F;
@@ -384,6 +435,18 @@ namespace acmxvk::audio {
         impl->sample_rate.store(std::max(sample_rate, 1U),
                                 std::memory_order_relaxed);
         impl->processSamples(samples, frame_count, 0);
+    }
+
+    bool AudioEngine::start_recording() {
+        return impl->startRecording();
+    }
+
+    AudioRecording AudioEngine::stop_recording() {
+        return impl->stopRecording();
+    }
+
+    bool AudioEngine::is_recording() const {
+        return impl->recording.load(std::memory_order_acquire);
     }
 
     void AudioEngine::reset() {

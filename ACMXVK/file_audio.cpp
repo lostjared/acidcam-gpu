@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -36,6 +37,83 @@ namespace acmxvk::audio {
             char message[AV_ERROR_MAX_STRING_SIZE]{};
             av_strerror(error, message, sizeof(message));
             return message;
+        }
+
+        [[nodiscard]] bool resampleMonoRecording(std::vector<float> &samples,
+                                                 unsigned int source_rate) {
+            if (source_rate == FILE_SAMPLE_RATE) {
+                return true;
+            }
+            if (source_rate == 0 || samples.empty() ||
+                samples.size() > static_cast<std::size_t>(
+                                     std::numeric_limits<int>::max())) {
+                std::cerr << "acmxvk: live audio recording has an invalid sample "
+                             "rate or sample count\n";
+                return false;
+            }
+
+            const std::int64_t expected_count = av_rescale_rnd(
+                static_cast<std::int64_t>(samples.size()), FILE_SAMPLE_RATE,
+                source_rate, AV_ROUND_UP);
+            if (expected_count <= 0 ||
+                expected_count > std::numeric_limits<int>::max()) {
+                std::cerr << "acmxvk: resampled live audio is too large\n";
+                return false;
+            }
+
+            SwrContext *resampler = nullptr;
+            AVChannelLayout input_layout = AV_CHANNEL_LAYOUT_MONO;
+            AVChannelLayout output_layout = AV_CHANNEL_LAYOUT_MONO;
+            int result = swr_alloc_set_opts2(
+                &resampler, &output_layout, AV_SAMPLE_FMT_FLT, FILE_SAMPLE_RATE,
+                &input_layout, AV_SAMPLE_FMT_FLT, static_cast<int>(source_rate), 0,
+                nullptr);
+            av_channel_layout_uninit(&output_layout);
+            av_channel_layout_uninit(&input_layout);
+            if (result < 0 || resampler == nullptr ||
+                (result = swr_init(resampler)) < 0) {
+                std::cerr << "acmxvk: could not initialize live audio resampler";
+                if (result < 0) {
+                    std::cerr << ": " << ffmpegError(result);
+                }
+                std::cerr << '\n';
+                swr_free(&resampler);
+                return false;
+            }
+
+            std::vector<float> converted_samples(
+                static_cast<std::size_t>(expected_count));
+            const std::uint8_t *input_data[] = {
+                reinterpret_cast<const std::uint8_t *>(samples.data())};
+            std::uint8_t *output_data[] = {
+                reinterpret_cast<std::uint8_t *>(converted_samples.data())};
+            int converted = swr_convert(
+                resampler, output_data, static_cast<int>(expected_count), input_data,
+                static_cast<int>(samples.size()));
+            if (converted >= 0 && converted < expected_count) {
+                std::uint8_t *flush_data[] = {reinterpret_cast<std::uint8_t *>(
+                    converted_samples.data() + converted)};
+                const int flushed = swr_convert(
+                    resampler, flush_data,
+                    static_cast<int>(expected_count) - converted, nullptr, 0);
+                if (flushed < 0) {
+                    converted = flushed;
+                } else {
+                    converted += flushed;
+                }
+            }
+            swr_free(&resampler);
+            if (converted < 0) {
+                std::cerr << "acmxvk: could not resample live audio: "
+                          << ffmpegError(converted) << '\n';
+                return false;
+            }
+
+            converted_samples.resize(static_cast<std::size_t>(converted));
+            samples = std::move(converted_samples);
+            std::cout << "acmxvk: resampled live audio from " << source_rate
+                      << " Hz to " << FILE_SAMPLE_RATE << " Hz\n";
+            return !samples.empty();
         }
 
         [[nodiscard]] std::string trimPlaylistLine(std::string line) {
@@ -642,8 +720,10 @@ namespace acmxvk::audio {
             output.reset();
             if (samples.empty() || !std::isfinite(video_duration) ||
                 video_duration <= 0.0) {
-                std::cerr << "acmxvk: cannot mux file audio without decoded "
-                             "samples and a positive video duration\n";
+                std::cerr << "acmxvk: cannot mux "
+                          << (live_recording_source ? "live audio input"
+                                                    : "file audio")
+                          << " without samples and a positive video duration\n";
                 return false;
             }
 
@@ -980,7 +1060,10 @@ namespace acmxvk::audio {
             }
 
             std::cout << "acmxvk: muxed "
-                      << (track_paths.size() > 1 ? "audio playlist" : "audio file")
+                      << (live_recording_source
+                              ? "live audio input"
+                              : (track_paths.size() > 1 ? "audio playlist"
+                                                        : "audio file"))
                       << " into " << video_path.string() << " (" << mux_duration
                       << " seconds" << (repeat ? ", repeated" : "") << ")\n";
             return true;
@@ -1127,6 +1210,7 @@ namespace acmxvk::audio {
         bool repeat = false;
         bool restart_pending = false;
         bool playlist_source = false;
+        bool live_recording_source = false;
     };
 
     FileAudioSource::FileAudioSource() : impl(std::make_unique<Impl>()) {}
@@ -1159,6 +1243,20 @@ namespace acmxvk::audio {
     bool FileAudioSource::mux_into_video(const std::string &video_path,
                                          double video_duration) {
         return impl->mux_into_video(video_path, video_duration);
+    }
+
+    bool FileAudioSource::mux_recording_into_video(
+        std::vector<float> samples, unsigned int sample_rate,
+        const std::string &video_path, double video_duration) {
+        if (!resampleMonoRecording(samples, sample_rate)) {
+            return false;
+        }
+
+        FileAudioSource source;
+        source.impl->samples = std::move(samples);
+        source.impl->track_paths.emplace_back("live audio input");
+        source.impl->live_recording_source = true;
+        return source.impl->mux_into_video(video_path, video_duration);
     }
 
     bool FileAudioSource::is_open() const {

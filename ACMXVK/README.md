@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5M**. It is usable for video, camera, and
+The port is currently at **Increment 5N**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Partial | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports audible pass-through, repeat, stop-at-EOF behavior, and AAC muxing into encoded output. Live-input pass-through and recording remain future work. |
+| Audio-reactive shader data | Partial | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports audible pass-through, repeat, and stop-at-EOF behavior; both file and live-input audio support AAC muxing into encoded output. Live-input pass-through remains future work. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -71,7 +71,7 @@ Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increments 5J through 5M also change only ACMXVK.
+reinstall. Increments 5J through 5N also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -277,6 +277,16 @@ AAC-compatible containers are supported; if a selected container rejects AAC,
 ACMXVK reports the mux failure, removes the temporary file, and preserves the
 video-only recording.
 
+When live `--enable-audio` input and an encoded `--output` are active, ACMXVK
+also records the microphone automatically. Capture begins immediately before
+the first frame is submitted to MXWrite and stops before the writer closes, so
+device and shader initialization do not add leading audio. Input channels are
+downmixed to mono, resampled to 44.1 kHz when needed, encoded as AAC at 192
+kbps, and muxed through the same linked-library path as file audio. No WAV file
+or external process is required. `--copy-audio` takes precedence and disables
+live-input recording so the selected video input's original audio is copied
+instead.
+
 Without repeat, the muxed result is limited to the shorter of the recorded
 video and decoded audio. With `--audio-repeat`, the complete file or playlist
 is repeated to the recorded video duration. `--audio-trunc` stops recording at
@@ -309,6 +319,19 @@ Record five seconds of processed video and mux repeated file audio into it:
     --audio-repeat \
     --duration 5 \
     --output output.mp4
+```
+
+Record processed video with synchronized live microphone audio:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.png \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --enable-audio \
+    --audio-input default \
+    --duration 5 \
+    --output live-output.mp4 \
+    --enable-vsync
 ```
 
 M3U and M3U8 playlists are read in order. Blank lines, `#EXTM3U`, `#EXTINF`,
