@@ -219,6 +219,7 @@ namespace acmxvk::audio {
             source_path = source.string();
             playback_position = 0.0;
             active = true;
+            restart_pending = false;
             std::cout << "acmxvk: decoded audio file " << source_path << " ("
                       << duration_seconds() << " seconds, " << samples.size()
                       << " mono samples at " << FILE_SAMPLE_RATE << " Hz)\n";
@@ -231,6 +232,12 @@ namespace acmxvk::audio {
             source_path.clear();
             playback_position = 0.0;
             active = false;
+            repeat = false;
+            restart_pending = false;
+        }
+
+        void set_repeat(bool enabled) {
+            repeat = enabled;
         }
 
         [[nodiscard]] double duration_seconds() const {
@@ -242,6 +249,11 @@ namespace acmxvk::audio {
             if (samples.empty() || !active) {
                 engine.reset();
                 return false;
+            }
+            if (restart_pending) {
+                playback_position = 0.0;
+                restart_pending = false;
+                engine.reset();
             }
             const double rate =
                 std::isfinite(frames_per_second) && frames_per_second > 0.0
@@ -260,8 +272,14 @@ namespace acmxvk::audio {
                                    FILE_SAMPLE_RATE);
             playback_position = next_position;
             if (playback_position >= static_cast<double>(samples.size())) {
-                active = false;
-                std::cout << "acmxvk: audio file reached end of stream\n";
+                if (repeat) {
+                    restart_pending = true;
+                    std::cout << "acmxvk: audio file reached end of stream; "
+                                 "restarting (--audio-repeat)\n";
+                } else {
+                    active = false;
+                    std::cout << "acmxvk: audio file reached end of stream\n";
+                }
             }
             return true;
         }
@@ -270,6 +288,8 @@ namespace acmxvk::audio {
         std::string source_path;
         double playback_position = 0.0;
         bool active = false;
+        bool repeat = false;
+        bool restart_pending = false;
     };
 
     FileAudioSource::FileAudioSource() : impl(std::make_unique<Impl>()) {}
@@ -281,6 +301,10 @@ namespace acmxvk::audio {
 
     void FileAudioSource::close() {
         impl->close();
+    }
+
+    void FileAudioSource::set_repeat(bool enabled) {
+        impl->set_repeat(enabled);
     }
 
     bool FileAudioSource::is_open() const {

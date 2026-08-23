@@ -106,6 +106,8 @@ namespace acmxvk {
         bool copy_audio = false;
         bool enable_audio = false;
         bool audio_input_specified = false;
+        bool audio_repeat = false;
+        bool audio_trunc = false;
         bool list_audio_devices = false;
         bool check_audio = false;
         bool list_encoders = false;
@@ -328,6 +330,10 @@ namespace acmxvk {
             } else if (option == "--audio-file") {
                 options.audio_file = optionValue(index, argc, argv, option);
                 options.enable_audio = true;
+            } else if (option == "--audio-repeat") {
+                options.audio_repeat = true;
+            } else if (option == "--audio-trunc") {
+                options.audio_trunc = true;
             } else if (option == "--enable-audio-buffers" ||
                        option == "--audio-buffers") {
                 options.audio_buffers = std::max(
@@ -471,11 +477,19 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--audio-file and --audio-input cannot be used together");
         }
+        if (options.audio_repeat && options.audio_file.empty()) {
+            throw std::runtime_error(
+                "--audio-repeat requires --audio-file <media>");
+        }
+        if (options.audio_trunc && options.audio_file.empty()) {
+            throw std::runtime_error(
+                "--audio-trunc requires --audio-file <media>");
+        }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5I)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5J)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -530,6 +544,8 @@ namespace acmxvk {
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
                << "      --audio-input <device>  Input index or default\n"
                << "      --audio-file <media>    FFmpeg-decoded reactive audio source\n"
+               << "      --audio-repeat          Restart file audio at end-of-stream\n"
+               << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
                << "      --enable-audio-buffers N\n"
                << "                              FFT history layers at binding 4\n"
                << "      --list-devices          List RtAudio devices and exit\n"
@@ -1084,6 +1100,7 @@ namespace acmxvk {
                     throw std::runtime_error("could not decode --audio-file: " +
                                              options.audio_file);
                 }
+                file_audio_source->set_repeat(options.audio_repeat);
                 return;
             }
             const audio::AudioStreamConfig config{
@@ -1932,6 +1949,11 @@ namespace acmxvk {
             std::vector<float> spectrum_values;
             if (file_audio_source != nullptr && audio_engine != nullptr) {
                 file_audio_source->process_frame(outputFrameRate(), *audio_engine);
+                if (options.audio_trunc && !file_audio_source->is_active()) {
+                    std::cout << "acmxvk: audio file finished, stopping "
+                                 "(--audio-trunc)\n";
+                    exit();
+                }
             }
             if (audioSourceOpen()) {
                 const audio::AudioMetrics metrics = audio_engine->metrics();
