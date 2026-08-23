@@ -46,6 +46,9 @@ set(ACMXVK_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
 set(ACMXVK_SPRITE_VERTEX_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/sprite.vert.spv"
 )
+set(ACMXVK_ECHO_CACHE_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/echo_cache.frag.spv"
+)
 
 add_custom_command(
     OUTPUT "${ACMXVK_SPRITE_VERTEX_SHADER}"
@@ -58,7 +61,21 @@ add_custom_command(
     VERBATIM
 )
 
-add_custom_target(acmxvk_shaders DEPENDS "${ACMXVK_SPRITE_VERTEX_SHADER}")
+add_custom_command(
+    OUTPUT "${ACMXVK_ECHO_CACHE_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/echo_cache.frag"
+            -o "${ACMXVK_ECHO_CACHE_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/echo_cache.frag"
+    COMMENT "Compiling ACMXVK history-cache test shader"
+    VERBATIM
+)
+
+add_custom_target(acmxvk_shaders DEPENDS
+    "${ACMXVK_SPRITE_VERTEX_SHADER}"
+    "${ACMXVK_ECHO_CACHE_SHADER}"
+)
 
 add_executable(acmxvk acmx.cpp)
 add_dependencies(acmxvk acmxvk_shaders)
@@ -67,10 +84,14 @@ target_compile_options(acmxvk PRIVATE -Wall -Wextra -Wpedantic)
 target_compile_definitions(acmxvk PRIVATE
     ACMXVK_BUILD_SPRITE_VERTEX_SHADER="${ACMXVK_SPRITE_VERTEX_SHADER}"
     ACMXVK_INSTALL_SPRITE_VERTEX_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/sprite.vert.spv"
+    ACMXVK_BUILD_ECHO_CACHE_SHADER="${ACMXVK_ECHO_CACHE_SHADER}"
+    ACMXVK_INSTALL_ECHO_CACHE_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/echo_cache.frag.spv"
 )
 
 install(TARGETS acmxvk RUNTIME DESTINATION bin)
-install(FILES "${ACMXVK_SPRITE_VERTEX_SHADER}"
+install(FILES
+        "${ACMXVK_SPRITE_VERTEX_SHADER}"
+        "${ACMXVK_ECHO_CACHE_SHADER}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")

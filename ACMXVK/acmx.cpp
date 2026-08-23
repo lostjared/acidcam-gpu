@@ -33,6 +33,14 @@
 #define ACMXVK_INSTALL_SPRITE_VERTEX_SHADER "sprite.vert.spv"
 #endif
 
+#ifndef ACMXVK_BUILD_ECHO_CACHE_SHADER
+#define ACMXVK_BUILD_ECHO_CACHE_SHADER "echo_cache.frag.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_ECHO_CACHE_SHADER
+#define ACMXVK_INSTALL_ECHO_CACHE_SHADER "echo_cache.frag.spv"
+#endif
+
 namespace acmxvk {
     namespace fs = std::filesystem;
 
@@ -50,6 +58,7 @@ namespace acmxvk {
         bool enable_vsync = false;
         bool enable_screenshot = false;
         bool enable_playlist = false;
+        bool enable_history_test = false;
         bool show_help = false;
         std::vector<int> shader_pass_indices;
         std::vector<std::string> shader_pass_files;
@@ -204,6 +213,8 @@ namespace acmxvk {
                 options.enable_vsync = true;
             } else if (option == "--enable-screenshot") {
                 options.enable_screenshot = true;
+            } else if (option == "--history-test") {
+                options.enable_history_test = true;
             } else {
                 throw std::runtime_error("unknown option: " + std::string(option));
             }
@@ -248,6 +259,8 @@ namespace acmxvk {
                << "  --shader-pass-files <data>  ACMX2 length-prefixed shader filenames\n"
                << "  --playlist <file>           Shader or named multipass playlist\n\n"
                << "  --enable-playlist           Enable the playlist immediately\n\n"
+               << "History cache:\n"
+               << "      --history-test          Run the converted eight-frame echo cache\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -385,7 +398,7 @@ namespace acmxvk {
         }
 
         void proc() override {
-            if (source_kind != SourceKind::Graphic && !capture.readToSprite(*frame_sprite, false)) {
+            if (source_kind != SourceKind::Graphic && !readInputFrame()) {
                 handleCaptureEnd();
             }
 
@@ -402,6 +415,8 @@ namespace acmxvk {
         enum class SourceKind { Camera,
                                 Video,
                                 Graphic };
+
+        static constexpr uint32_t HISTORY_LAYER_COUNT = 8;
 
         Options options;
         SourceKind source_kind = SourceKind::Camera;
@@ -420,6 +435,7 @@ namespace acmxvk {
         float mouse_x = 0.0F;
         float mouse_y = 0.0F;
         bool mouse_pressed = false;
+        bool history_initialized = false;
         std::uint64_t frame_count = 0;
         std::chrono::steady_clock::time_point shader_start{std::chrono::steady_clock::now()};
         std::chrono::steady_clock::time_point previous_frame{shader_start};
@@ -580,6 +596,13 @@ namespace acmxvk {
             return ACMXVK_BUILD_SPRITE_VERTEX_SHADER;
         }
 
+        [[nodiscard]] std::string echoCacheShader() const {
+            if (fs::is_regular_file(ACMXVK_INSTALL_ECHO_CACHE_SHADER)) {
+                return ACMXVK_INSTALL_ECHO_CACHE_SHADER;
+            }
+            return ACMXVK_BUILD_ECHO_CACHE_SHADER;
+        }
+
         void openInput() {
             if (!options.graphic_file.empty()) {
                 source_kind = SourceKind::Graphic;
@@ -630,13 +653,20 @@ namespace acmxvk {
                 frame_sprite = createSprite(source_width, source_height);
             }
             frame_sprite->enableExtendedUBO();
-            frame_sprite->createEmptySprite(source_width, source_height, spriteVertexShader(), {});
+            if (options.enable_history_test) {
+                frame_sprite->enableHistoryTexture(source_width, source_height,
+                                                   HISTORY_LAYER_COUNT);
+            }
+            frame_sprite->createEmptySprite(source_width, source_height, spriteVertexShader(),
+                                            options.enable_history_test ? echoCacheShader()
+                                                                        : std::string{});
 
             if (source_kind == SourceKind::Graphic) {
                 frame_sprite->updateTexture(graphic_rgba.ptr(), graphic_rgba.cols,
                                             graphic_rgba.rows,
                                             static_cast<int>(graphic_rgba.step));
-            } else if (!capture.readToSprite(*frame_sprite, false)) {
+                initializeHistory(graphic_rgba);
+            } else if (!readInputFrame()) {
                 std::cerr << "acmxvk: capture did not provide an initial frame\n";
             }
 
@@ -698,6 +728,7 @@ namespace acmxvk {
             vkDeviceWaitIdle(getDevice());
             detachPostProcessingShader();
             post_process_sprites.clear();
+            frame_sprite->setEffectsEnabled(effects_enabled);
             if (!effects_enabled) {
                 return;
             }
@@ -734,9 +765,42 @@ namespace acmxvk {
             }
 
             capture.close();
-            if (!capture.open(options.input_file) || !capture.readToSprite(*frame_sprite, false)) {
+            if (!capture.open(options.input_file) || !readInputFrame()) {
                 throw std::runtime_error("unable to restart video input: " + options.input_file);
             }
+        }
+
+        void initializeHistory(const cv::Mat &rgba) {
+            if (!options.enable_history_test || history_initialized) {
+                return;
+            }
+            for (uint32_t layer = 0; layer < frame_sprite->getHistoryLayerCount(); ++layer) {
+                frame_sprite->updateHistoryTexture(rgba.ptr(), rgba.cols, rgba.rows,
+                                                   static_cast<int>(rgba.step));
+            }
+            history_initialized = true;
+            std::cout << "acmxvk: initialized " << frame_sprite->getHistoryLayerCount()
+                      << " Vulkan history-cache layers\n";
+        }
+
+        [[nodiscard]] bool readInputFrame() {
+            if (!options.enable_history_test) {
+                return capture.readToSprite(*frame_sprite, false);
+            }
+
+            cv::Mat rgba;
+            if (!capture.readRgba(rgba, false)) {
+                return false;
+            }
+            frame_sprite->updateTexture(rgba.ptr(), rgba.cols, rgba.rows,
+                                        static_cast<int>(rgba.step));
+            const bool history_was_initialized = history_initialized;
+            initializeHistory(rgba);
+            if (history_was_initialized) {
+                frame_sprite->updateHistoryTexture(rgba.ptr(), rgba.cols, rgba.rows,
+                                                   static_cast<int>(rgba.step));
+            }
+            return true;
         }
 
         void updateShaderUniforms(int width, int height) {
@@ -754,7 +818,9 @@ namespace acmxvk {
             frame_sprite->setUniform1(delta, 0.0F, 0.0F, frame_rate);
             frame_sprite->setUniform2(static_cast<float>(frame_count), elapsed, 48000.0F,
                                       0.0F);
-            frame_sprite->setUniform3(0.0F, 0.0F, 0.0F, 0.0F);
+            frame_sprite->setUniform3(static_cast<float>(frame_sprite->getHistoryHead()),
+                                      static_cast<float>(frame_sprite->getHistoryLayerCount()),
+                                      0.0F, 0.0F);
 
             for (std::size_t index = 0; index < post_process_sprites.size(); ++index) {
                 mxvk::VK_Sprite *sprite = post_process_sprites[index];
