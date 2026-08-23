@@ -71,6 +71,30 @@ Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
 Increment 5F adds the MXVK 1-D spectrum-texture API, so the matching MXVK source
 must be rebuilt and reinstalled before compiling ACMXVK with `-DAUDIO=ON`.
 
+### Apple Silicon and MoltenVK
+
+On an Apple Silicon Mac, source the Vulkan SDK environment and configure an
+arm64 build with MoltenVK enabled:
+
+```bash
+source ~/vulkan.sh
+cmake -S ACMXVK -B build/acmxvk-macos \
+    -DACMXVK_USE_MOLTENVK=ON \
+    -DCMAKE_OSX_ARCHITECTURES=arm64 \
+    -DCMAKE_PREFIX_PATH="$VULKAN_SDK;/opt/homebrew;/usr/local" \
+    -DVALIDATION=ON \
+    -DAUDIO=OFF \
+    -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/acmxvk-macos -j
+./build/acmxvk-macos/acmxvk --help
+```
+
+`ACMXVK_USE_MOLTENVK` defaults to `ON` on Apple platforms. The CMake project
+first uses CMake's `Vulkan::MoltenVK` target when available and otherwise finds
+`libMoltenVK` in the active Vulkan SDK, `/opt/homebrew`, or `/usr/local`.
+Explicitly setting `CMAKE_OSX_ARCHITECTURES` remains useful when CMake is run
+from a translated shell or when switching between arm64 and universal builds.
+
 ## Examples
 
 Process a video with a SPIR-V shader library:
