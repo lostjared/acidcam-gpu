@@ -90,8 +90,9 @@ cmake --build build/acmxvk-macos -j
 ```
 
 `ACMXVK_USE_MOLTENVK` defaults to `ON` on Apple platforms. The CMake project
-first uses CMake's `Vulkan::MoltenVK` target when available and otherwise finds
-`libMoltenVK` in the active Vulkan SDK, `/opt/homebrew`, or `/usr/local`.
+uses the Vulkan SDK loader, which discovers MoltenVK as its macOS Vulkan driver.
+It intentionally does not link `libMoltenVK` directly because SDL, volk, and
+validation layers must use the same Vulkan loader dispatch path.
 Explicitly setting `CMAKE_OSX_ARCHITECTURES` remains useful when CMake is run
 from a translated shell or when switching between arm64 and universal builds.
 

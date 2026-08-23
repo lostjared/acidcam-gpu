@@ -14,7 +14,7 @@ include(GNUInstallDirs)
 
 option(VALIDATION "Enable Vulkan validation layers" OFF)
 option(AUDIO "Enable RtAudio input and audio-reactive shader metrics" OFF)
-option(ACMXVK_USE_MOLTENVK "Link ACMXVK with MoltenVK on Apple platforms" ${APPLE})
+option(ACMXVK_USE_MOLTENVK "Enable MoltenVK portability support on Apple platforms" ${APPLE})
 
 set(ACMXVK_MXWRITE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite" CACHE PATH
     "MXWrite source directory containing the ACMXVK encoder API"
@@ -103,58 +103,23 @@ else()
 endif()
 find_package(SDL3 CONFIG REQUIRED)
 find_package(SDL3_ttf CONFIG REQUIRED)
-if(APPLE AND ACMXVK_USE_MOLTENVK AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
-    find_package(Vulkan 1.4 REQUIRED OPTIONAL_COMPONENTS MoltenVK)
-else()
-    find_package(Vulkan 1.4 REQUIRED)
-endif()
+find_package(Vulkan 1.4 REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(OpenCV REQUIRED)
 
-# FindVulkan did not expose Vulkan::MoltenVK until CMake 3.24. Create the same
-# dependency target for older CMake releases and Vulkan SDK layouts so the
-# installed MXVK export can be loaded reliably.
-if(APPLE AND ACMXVK_USE_MOLTENVK AND NOT TARGET Vulkan::MoltenVK)
-    set(ACMXVK_MOLTENVK_HINTS /opt/homebrew/lib /usr/local/lib)
-    if(DEFINED ENV{VULKAN_SDK})
-        list(PREPEND ACMXVK_MOLTENVK_HINTS
-            "$ENV{VULKAN_SDK}/lib"
-            "$ENV{VULKAN_SDK}/macOS/lib"
-        )
-    endif()
-
-    if(Vulkan_MoltenVK_LIBRARY AND NOT ACMXVK_MOLTENVK_LIBRARY)
-        set(ACMXVK_MOLTENVK_LIBRARY "${Vulkan_MoltenVK_LIBRARY}")
-    else()
-        find_library(ACMXVK_MOLTENVK_LIBRARY
-            NAMES MoltenVK
-            HINTS ${ACMXVK_MOLTENVK_HINTS}
-        )
-    endif()
-    if(NOT ACMXVK_MOLTENVK_LIBRARY)
-        message(FATAL_ERROR
-            "MoltenVK was not found. Source the Vulkan SDK environment or set "
-            "Vulkan_MoltenVK_LIBRARY/ACMXVK_MOLTENVK_LIBRARY to libMoltenVK."
-        )
-    endif()
-
-    add_library(Vulkan::MoltenVK INTERFACE IMPORTED)
-    set_property(TARGET Vulkan::MoltenVK PROPERTY
-        INTERFACE_LINK_LIBRARIES "${ACMXVK_MOLTENVK_LIBRARY}"
-    )
-    if(Vulkan_INCLUDE_DIRS)
-        set_property(TARGET Vulkan::MoltenVK PROPERTY
-            INTERFACE_INCLUDE_DIRECTORIES "${Vulkan_INCLUDE_DIRS}"
-        )
-    endif()
-endif()
-
 find_package(mxvk CONFIG REQUIRED)
 find_program(GLSLC_EXECUTABLE glslc REQUIRED)
 
 get_target_property(ACMXVK_MXVK_LIBRARIES mxvk::mxvk INTERFACE_LINK_LIBRARIES)
+
+if(APPLE AND ACMXVK_MXVK_LIBRARIES MATCHES "MoltenVK")
+    message(FATAL_ERROR
+        "The installed MXVK package links MoltenVK directly. Rebuild and "
+        "reinstall the current MXVK so SDL and volk both use Vulkan::Vulkan."
+    )
+endif()
 
 if(ACMXVK_MXVK_LIBRARIES MATCHES "SDL3_mixer::")
     find_package(SDL3_mixer CONFIG REQUIRED)
@@ -276,19 +241,6 @@ target_include_directories(acmxvk PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(acmxvk PRIVATE mxvk::mxvk MXWrite::mxwrite ${OpenCV_LIBS})
 target_compile_options(acmxvk PRIVATE -Wall -Wextra -Wpedantic)
 if(APPLE AND ACMXVK_USE_MOLTENVK)
-    find_library(ACMXVK_METAL_FRAMEWORK Metal REQUIRED)
-    find_library(ACMXVK_QUARTZ_CORE_FRAMEWORK QuartzCore REQUIRED)
-    find_library(ACMXVK_COCOA_FRAMEWORK Cocoa REQUIRED)
-    find_library(ACMXVK_FOUNDATION_FRAMEWORK Foundation REQUIRED)
-    find_library(ACMXVK_IOKIT_FRAMEWORK IOKit REQUIRED)
-    target_link_libraries(acmxvk PRIVATE
-        Vulkan::MoltenVK
-        "${ACMXVK_METAL_FRAMEWORK}"
-        "${ACMXVK_QUARTZ_CORE_FRAMEWORK}"
-        "${ACMXVK_COCOA_FRAMEWORK}"
-        "${ACMXVK_FOUNDATION_FRAMEWORK}"
-        "${ACMXVK_IOKIT_FRAMEWORK}"
-    )
     target_compile_definitions(acmxvk PRIVATE
         MXVK_USE_MOLTENVK
         VK_ENABLE_BETA_EXTENSIONS
