@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 6B**. It is usable for video, camera, and
+The port is currently at **Increment 6C**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -28,7 +28,7 @@ ACMX2.
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live recording has independent gain, while file audio also supports repeat and stop-at-EOF behavior. |
-| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, and the ACMXVK-equivalent playback actions. |
+| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, and ACMXVK-equivalent playback actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
@@ -73,7 +73,7 @@ options are omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increments 5J through 5R, 6A, and 6B also change only ACMXVK.
+reinstall. Increments 5J through 5R and 6A through 6C also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -485,6 +485,27 @@ mapped `slider1` value. To map a CC directly without a `.midi_cfg` file, repeat
     --midi-device 1 \
     --midi-cc 1:20=slider1
 ```
+
+Increment 6C matches ACMX2's paired-knob behavior. The most recent CC value is
+held until the controller sends neutral value `64`; distance from `64` controls
+the action rate, ranging from about once every 16 frames near center to every
+frame at either extreme. The included CC21 example controls shader-time speed:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic jared-ai.png \
+    --shaders ./build/acmxvk/shaders \
+    --midi-device 1 \
+    --midi-map ./ACMXVK/midi-examples/centered-cc21-time-speed.midi_cfg \
+    --midi-monitor \
+    --enable-vsync
+```
+
+This centered mode is intended for spring-return or relative knobs. Use a
+Slider 1–4 mapping or `--midi-cc` for an absolute knob or fader. When a map is
+loaded, ACMXVK reports how many mappings are active and how many refer to ACMX2
+features that have not yet been ported; `--midi-monitor` also names individual
+unavailable action-code pairs.
 
 ## Runtime controls
 

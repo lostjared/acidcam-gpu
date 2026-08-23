@@ -597,7 +597,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 6B)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 6C)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -672,7 +672,7 @@ namespace acmxvk {
                << "      --midi-cc <map>         Map [channel:]CC to a custom uniform\n"
                << "      --list-midi             List MIDI input ports and exit\n"
                << "      --check-midi            Report compiled MIDI support\n"
-               << "                              Example: --midi-cc 1:20=square_size\n\n"
+               << "                              Paired knobs repeat by distance from 64\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -1256,8 +1256,15 @@ namespace acmxvk {
             std::string uniform_name;
         };
 
+        struct MidiKnobState {
+            int value = 64;
+            int frame_counter = 0;
+            bool active = false;
+        };
+
         std::unique_ptr<midi::MidiInput> midi_input;
         std::vector<midi::MidiMapping> midi_action_mappings;
+        std::vector<MidiKnobState> midi_knob_states;
         std::vector<MidiCcMapping> midi_cc_mappings;
         std::array<int, 4> midi_slider_uniform_indices{-1, -1, -1, -1};
         std::uint64_t observed_midi_drops = 0;
@@ -1326,6 +1333,7 @@ namespace acmxvk {
             if (!options.midi_map_file.empty()) {
                 midi_action_mappings =
                     midi::load_mapping_file(options.midi_map_file);
+                midi_knob_states.resize(midi_action_mappings.size());
                 std::cout << "acmxvk: loaded " << midi_action_mappings.size()
                           << " MIDI mapping(s) from " << options.midi_map_file
                           << '\n';
@@ -1361,6 +1369,27 @@ namespace acmxvk {
                               << " -> " << name << " [" << uniform->minimum
                               << ", " << uniform->maximum << "]\n";
                 }
+
+                std::size_t active_mappings = 0;
+                for (const midi::MidiMapping &mapping :
+                     midi_action_mappings) {
+                    if (isMidiMappingSupported(mapping)) {
+                        ++active_mappings;
+                    } else if (options.midi_monitor) {
+                        std::cerr
+                            << "acmxvk: MIDI map action unavailable in 6C: "
+                            << mapping.primary_action << ':'
+                            << mapping.secondary_action << '\n';
+                    }
+                }
+                std::cout << "acmxvk: MIDI map has " << active_mappings
+                          << " active mapping(s)";
+                if (active_mappings != midi_action_mappings.size()) {
+                    std::cout << " and "
+                              << (midi_action_mappings.size() - active_mappings)
+                              << " mapping(s) reserved for unported ACMX2 controls";
+                }
+                std::cout << '\n';
             }
 
             for (const std::string &mapping_text : options.midi_cc_mappings) {
@@ -1492,8 +1521,6 @@ namespace acmxvk {
                 return SDLK_INSERT;
             case 261:
                 return SDLK_DELETE;
-            case 298:
-                return SDLK_F9;
             case 500:
                 return SDLK_U;
             case 501:
@@ -1520,10 +1547,77 @@ namespace acmxvk {
             }
         }
 
+        [[nodiscard]] bool isMidiSliderMapping(
+            const midi::MidiMapping &mapping) const {
+            return mapping.primary_action >= 600 &&
+                   mapping.primary_action <= 606 &&
+                   mapping.primary_action % 2 == 0 &&
+                   mapping.secondary_action == mapping.primary_action + 1;
+        }
+
+        [[nodiscard]] bool isMidiMappingSupported(
+            const midi::MidiMapping &mapping) const {
+            if (isMidiSliderMapping(mapping)) {
+                const int slider = (mapping.primary_action - 600) / 2;
+                return midi_slider_uniform_indices[slider] >= 0;
+            }
+            if (mapping.secondary_action == 0) {
+                return midiActionKey(mapping.primary_action) != SDLK_UNKNOWN;
+            }
+            return midiActionKey(mapping.primary_action) != SDLK_UNKNOWN &&
+                   midiActionKey(mapping.secondary_action) != SDLK_UNKNOWN;
+        }
+
+        [[nodiscard]] std::string_view midiActionName(int action) const {
+            switch (action) {
+            case 264:
+                return "next shader or playlist node";
+            case 265:
+                return "previous shader or playlist node";
+            case 266:
+            case 504:
+                return "increase shader time speed";
+            case 267:
+            case 505:
+                return "decrease shader time speed";
+            case 260:
+                return "increase audio sensitivity";
+            case 261:
+                return "decrease audio sensitivity";
+            case 500:
+                return "step shader time forward";
+            case 501:
+                return "step shader time backward";
+            case 32:
+                return "toggle shader bypass";
+            case 74:
+            case 78:
+                return "toggle random autopilot";
+            case 76:
+                return "toggle rendering freeze";
+            case 77:
+                return "toggle multipass";
+            case 80:
+                return "toggle playlist or input pause";
+            case 84:
+                return "toggle shader time";
+            case 89:
+                return "toggle sequential autopilot";
+            case 90:
+                return "take screenshot";
+            default:
+                return "unsupported action";
+            }
+        }
+
         void dispatchMidiAction(int action) {
             const SDL_Keycode key = midiActionKey(action);
             if (key == SDLK_UNKNOWN) {
                 return;
+            }
+            if (options.midi_monitor) {
+                std::cout << "acmxvk: MIDI action: " << midiActionName(action)
+                          << '\n';
             }
             SDL_Event midi_event{};
             midi_event.type = SDL_EVENT_KEY_DOWN;
@@ -1558,7 +1652,9 @@ namespace acmxvk {
                 return false;
             }
             bool changed = false;
-            for (const midi::MidiMapping &mapping : midi_action_mappings) {
+            for (std::size_t index = 0; index < midi_action_mappings.size();
+                 ++index) {
+                const midi::MidiMapping &mapping = midi_action_mappings[index];
                 if (message.bytes[0] != mapping.status ||
                     message.bytes[1] != mapping.data1) {
                     continue;
@@ -1571,9 +1667,7 @@ namespace acmxvk {
                     continue;
                 }
 
-                if (mapping.primary_action >= 600 &&
-                    mapping.primary_action <= 606 &&
-                    mapping.primary_action % 2 == 0) {
+                if (isMidiSliderMapping(mapping)) {
                     const int slider = (mapping.primary_action - 600) / 2;
                     const int uniform_index =
                         midi_slider_uniform_indices[slider];
@@ -1587,12 +1681,38 @@ namespace acmxvk {
                     continue;
                 }
 
-                if (value != 64) {
-                    dispatchMidiAction(value > 64 ? mapping.primary_action
-                                                  : mapping.secondary_action);
+                MidiKnobState &state = midi_knob_states[index];
+                state.value = value;
+                state.active = value != 64;
+                if (!state.active) {
+                    state.frame_counter = 0;
                 }
             }
             return changed;
+        }
+
+        void dispatchMidiKnobs() {
+            for (std::size_t index = 0; index < midi_action_mappings.size();
+                 ++index) {
+                const midi::MidiMapping &mapping = midi_action_mappings[index];
+                MidiKnobState &state = midi_knob_states[index];
+                if (!state.active || mapping.secondary_action == 0 ||
+                    isMidiSliderMapping(mapping) ||
+                    !isMidiMappingSupported(mapping)) {
+                    continue;
+                }
+
+                const int distance = std::abs(state.value - 64);
+                const int frame_skip =
+                    std::max(1, 17 - (distance * 16 / 63));
+                if (++state.frame_counter < frame_skip) {
+                    continue;
+                }
+                state.frame_counter = 0;
+                dispatchMidiAction(state.value > 64
+                                       ? mapping.primary_action
+                                       : mapping.secondary_action);
+            }
         }
 #endif
 
@@ -1619,6 +1739,7 @@ namespace acmxvk {
                 custom_uniforms_changed =
                     applyMidiMap(message) || custom_uniforms_changed;
             }
+            dispatchMidiKnobs();
             if (custom_uniforms_changed) {
                 uploadCustomUniforms();
             }

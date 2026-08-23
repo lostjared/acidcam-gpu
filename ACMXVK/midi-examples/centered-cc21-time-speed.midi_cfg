@@ -1,0 +1,3 @@
+# Created in the format emitted by ACMX2/interface/midi-map.
+# TimeSpeed Knob: channel 1, CC 21; >64 increases and <64 decreases speed.
+504:505 {176 21 0}
