@@ -9,6 +9,7 @@
 #include <mxvk/mxvk_png.hpp>
 #include <mxwrite.hpp>
 
+#include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
@@ -407,7 +408,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5A)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5B)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -419,7 +420,7 @@ namespace acmxvk {
                << "  -c, --camera-res <WxH>      Requested camera dimensions\n"
                << "  -u, --fps <rate>            Camera/output FPS\n\n"
                << "Shaders:\n"
-               << "  -s, --shaders <directory>   SPIR-V library containing index.txt\n"
+               << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
                << "  -H, --shader-index <index>  Initial library shader index\n"
                << "      --shader-file <name>    Initial library shader filename\n\n"
@@ -519,6 +520,111 @@ namespace acmxvk {
             return {};
         }
         return std::string(first, last);
+    }
+
+    struct ShaderManifest {
+        fs::path path;
+        std::vector<std::string> entries;
+    };
+
+    [[nodiscard]] ShaderManifest loadShaderManifest(const fs::path &directory) {
+        ShaderManifest manifest;
+        const fs::path json_path = directory / "library.json";
+        const fs::path text_path = directory / "index.txt";
+        if (fs::is_regular_file(json_path)) {
+            manifest.path = json_path;
+            try {
+                cv::FileStorage storage(json_path.string(),
+                                        cv::FileStorage::READ |
+                                            cv::FileStorage::FORMAT_JSON);
+                if (!storage.isOpened()) {
+                    throw std::runtime_error("unable to open shader manifest: " +
+                                             json_path.string());
+                }
+                const cv::FileNode shader_entries = storage["shaders"];
+                if (shader_entries.type() == cv::FileNode::NONE ||
+                    !shader_entries.isSeq()) {
+                    throw std::runtime_error(json_path.string() +
+                                             " must contain a 'shaders' array");
+                }
+                for (const cv::FileNode &entry : shader_entries) {
+                    std::string filename;
+                    if (entry.isString()) {
+                        entry >> filename;
+                    } else if (entry.isMap() && !entry["file"].empty()) {
+                        entry["file"] >> filename;
+                    } else {
+                        throw std::runtime_error(
+                            json_path.string() +
+                            " contains a shader entry without a file name");
+                    }
+                    filename = trim(std::move(filename));
+                    if (filename.empty()) {
+                        throw std::runtime_error(
+                            json_path.string() +
+                            " contains a shader entry without a file name");
+                    }
+                    manifest.entries.push_back(std::move(filename));
+                }
+            } catch (const cv::Exception &error) {
+                throw std::runtime_error("unable to parse shader manifest " +
+                                         json_path.string() + ": " + error.what());
+            }
+            return manifest;
+        }
+
+        if (!fs::is_regular_file(text_path)) {
+            throw std::runtime_error("no library.json or index.txt found in shader library: " +
+                                     directory.string());
+        }
+        manifest.path = text_path;
+        std::ifstream input(text_path);
+        if (!input) {
+            throw std::runtime_error("unable to open shader manifest: " +
+                                     text_path.string());
+        }
+        std::string line;
+        while (std::getline(input, line)) {
+            line = trim(std::move(line));
+            if (!line.empty() && line.front() != '#') {
+                manifest.entries.push_back(std::move(line));
+            }
+        }
+        return manifest;
+    }
+
+    [[nodiscard]] fs::path resolveShaderManifestEntry(const fs::path &directory,
+                                                      std::string entry) {
+        std::replace(entry.begin(), entry.end(), '\\', '/');
+        const fs::path relative_path(entry);
+        if (relative_path.is_absolute()) {
+            return {};
+        }
+
+        const fs::path normalized = relative_path.lexically_normal();
+        const std::string normalized_text = normalized.generic_string();
+        if (normalized_text.empty() || normalized_text == "." ||
+            normalized_text == ".." || normalized_text.starts_with("../") ||
+            normalized_text.find("/../") != std::string::npos ||
+            normalized.extension() != ".spv") {
+            return {};
+        }
+
+        std::error_code error;
+        const fs::path root = fs::weakly_canonical(directory, error);
+        if (error) {
+            return {};
+        }
+        const fs::path shader = fs::weakly_canonical(root / normalized, error);
+        if (error || !fs::is_regular_file(shader)) {
+            return {};
+        }
+        const std::string resolved_relative = shader.lexically_relative(root).generic_string();
+        if (resolved_relative.empty() || resolved_relative == ".." ||
+            resolved_relative.starts_with("../")) {
+            return {};
+        }
+        return shader;
     }
 
     [[nodiscard]] cv::Mat loadRgbaImage(const std::string &filename) {
@@ -722,6 +828,8 @@ namespace acmxvk {
         std::vector<fs::path> configured_passes;
         std::vector<PlaylistNode> playlist;
         std::vector<mxvk::VK_Sprite *> post_process_sprites;
+        fs::path shader_library_directory;
+        fs::path shader_manifest_path;
         fs::path png_output_directory;
         fs::path generate_output_directory;
         std::size_t shader_index = 0;
@@ -765,34 +873,50 @@ namespace acmxvk {
                 return;
             }
 
-            const fs::path directory = fs::absolute(options.shader_directory).lexically_normal();
-            std::ifstream index_file(directory / "index.txt");
-            if (!index_file) {
-                throw std::runtime_error("unable to open shader index: " +
-                                         (directory / "index.txt").string());
-            }
-
-            std::string line;
-            while (std::getline(index_file, line)) {
-                const std::string entry = trim(std::move(line));
-                if (entry.empty() || entry.front() == '#') {
-                    continue;
-                }
-                const fs::path shader = (directory / entry).lexically_normal();
-                if (shader.extension() == ".spv" && fs::is_regular_file(shader)) {
+            shader_library_directory =
+                fs::absolute(options.shader_directory).lexically_normal();
+            const ShaderManifest manifest =
+                loadShaderManifest(shader_library_directory);
+            shader_manifest_path = manifest.path;
+            for (const std::string &entry : manifest.entries) {
+                const fs::path shader =
+                    resolveShaderManifestEntry(shader_library_directory, entry);
+                if (!shader.empty()) {
                     shaders.push_back(shader);
                 }
             }
+            std::sort(shaders.begin(), shaders.end(), [](const fs::path &left, const fs::path &right) {
+                std::string left_text = left.generic_string();
+                std::string right_text = right.generic_string();
+                std::transform(left_text.begin(), left_text.end(), left_text.begin(),
+                               [](unsigned char character) {
+                                   return static_cast<char>(std::tolower(character));
+                               });
+                std::transform(right_text.begin(), right_text.end(), right_text.begin(),
+                               [](unsigned char character) {
+                                   return static_cast<char>(std::tolower(character));
+                               });
+                return left_text < right_text;
+            });
             if (shaders.empty()) {
-                throw std::runtime_error("shader index contains no readable SPIR-V files");
+                throw std::runtime_error("shader manifest contains no readable SPIR-V files: " +
+                                         shader_manifest_path.string());
             }
+            std::cout << "acmxvk: loaded " << shaders.size() << " shaders from "
+                      << shader_manifest_path.string() << '\n';
 
             if (!options.shader_file.empty()) {
-                const auto selected = std::find_if(shaders.begin(), shaders.end(), [&](const fs::path &path) {
-                    return path.filename() == options.shader_file;
-                });
+                const auto selected = std::find_if(
+                    shaders.begin(), shaders.end(), [&](const fs::path &path) {
+                        fs::path requested(options.shader_file);
+                        if (requested.extension() != ".spv") {
+                            requested.replace_extension(".spv");
+                        }
+                        return path.filename() == requested.filename() ||
+                               path.lexically_relative(shader_library_directory) == requested;
+                    });
                 if (selected == shaders.end()) {
-                    throw std::runtime_error("shader file is not listed in index.txt: " +
+                    throw std::runtime_error("shader file is not listed in the manifest: " +
                                              options.shader_file);
                 }
                 shader_index = static_cast<std::size_t>(std::distance(shaders.begin(), selected));
@@ -819,7 +943,11 @@ namespace acmxvk {
             }
             const auto match = std::find_if(shaders.begin(), shaders.end(),
                                             [&](const fs::path &shader) {
-                                                return shader.filename() == requested.filename();
+                                                return shader.filename() == requested.filename() ||
+                                                       (!shader_library_directory.empty() &&
+                                                        shader.lexically_relative(
+                                                            shader_library_directory) ==
+                                                            requested);
                                             });
             return match == shaders.end() ? fs::path{} : *match;
         }
@@ -835,7 +963,7 @@ namespace acmxvk {
             for (const std::string &name : options.shader_pass_files) {
                 const fs::path shader = findShader(name);
                 if (shader.empty()) {
-                    throw std::runtime_error("shader pass file is not listed in index.txt: " +
+                    throw std::runtime_error("shader pass file is not listed in the manifest: " +
                                              name);
                 }
                 configured_passes.push_back(shader);
