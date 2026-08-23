@@ -85,6 +85,7 @@ namespace acmxvk {
         int texture_cache_size = 8;
         int audio_channels = 2;
         int audio_input_device = -1;
+        int audio_output_device = -1;
         int audio_buffers = 0;
         double requested_fps = 0.0;
         double duration = 0.0;
@@ -106,6 +107,8 @@ namespace acmxvk {
         bool copy_audio = false;
         bool enable_audio = false;
         bool audio_input_specified = false;
+        bool audio_output_specified = false;
+        bool audio_pass_through = false;
         bool audio_repeat = false;
         bool audio_trunc = false;
         bool list_audio_devices = false;
@@ -330,6 +333,18 @@ namespace acmxvk {
             } else if (option == "--audio-file") {
                 options.audio_file = optionValue(index, argc, argv, option);
                 options.enable_audio = true;
+            } else if (option == "-y" || option == "--pass-through") {
+                options.audio_pass_through = true;
+                options.enable_audio = true;
+            } else if (option == "--audio-output") {
+                const std::string value = optionValue(index, argc, argv, option);
+                options.audio_output_specified = true;
+                options.audio_output_device =
+                    value == "default" ? -1 : parseInteger(value, option);
+                if (options.audio_output_device < -1) {
+                    throw std::runtime_error(
+                        "audio output must be default or a non-negative device index");
+                }
             } else if (option == "--audio-repeat") {
                 options.audio_repeat = true;
             } else if (option == "--audio-trunc") {
@@ -485,11 +500,19 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--audio-trunc requires --audio-file <media>");
         }
+        if (options.audio_pass_through && options.audio_file.empty()) {
+            throw std::runtime_error(
+                "--pass-through requires --audio-file <media>");
+        }
+        if (options.audio_output_specified && !options.audio_pass_through) {
+            throw std::runtime_error(
+                "--audio-output requires --pass-through");
+        }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5K)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5L)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -544,6 +567,8 @@ namespace acmxvk {
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
                << "      --audio-input <device>  Input index or default\n"
                << "      --audio-file <media>    Media file or M3U/M3U8 reactivity source\n"
+               << "  -y, --pass-through          Play file audio through an output device\n"
+               << "      --audio-output <device> Output index or default\n"
                << "      --audio-repeat          Restart file audio at end-of-stream\n"
                << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
                << "      --enable-audio-buffers N\n"
@@ -1101,6 +1126,12 @@ namespace acmxvk {
                                              options.audio_file);
                 }
                 file_audio_source->set_repeat(options.audio_repeat);
+                if (options.audio_pass_through &&
+                    !file_audio_source->enable_output(
+                        options.audio_output_device)) {
+                    std::cerr << "acmxvk: file audio output could not be "
+                                 "initialized; continuing with silent analysis\n";
+                }
                 return;
             }
             const audio::AudioStreamConfig config{

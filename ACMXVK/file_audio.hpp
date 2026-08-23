@@ -20,6 +20,8 @@ namespace acmxvk::audio {
         bool open(const std::string &path);
         void close();
         void set_repeat(bool enabled);
+        bool enable_output(int device = -1);
+        [[nodiscard]] bool has_output_clock() const;
         [[nodiscard]] bool is_open() const;
         [[nodiscard]] bool is_active() const;
         [[nodiscard]] double duration_seconds() const;

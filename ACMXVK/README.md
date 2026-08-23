@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5K**. It is usable for video, camera, and
+The port is currently at **Increment 5L**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Partial | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports repeat and stop-at-EOF behavior. Audible pass-through and file-audio output muxing remain future work. |
+| Audio-reactive shader data | Partial | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports audible pass-through, repeat, and stop-at-EOF behavior. File-audio output muxing remains future work. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -71,7 +71,7 @@ Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increments 5J and 5K also change only ACMXVK.
+reinstall. Increments 5J through 5L also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -260,22 +260,28 @@ binding-1 block:
 See `shaders/audio_reactive.frag` for a working shader. Audio values remain
 zero when capture is disabled or an input device cannot be opened.
 
-File audio is decoded up front to mono 44.1 kHz floating-point samples and
-advances according to ACMXVK's output frame rate. The current increment is a
-silent analysis source: it does not play the audio through an output device and
-does not automatically mux that file into a recording. At end-of-stream the
-application continues with zero-valued audio metrics by default. Add
+File audio is decoded up front to mono 44.1 kHz floating-point samples. It is a
+silent analysis source by default and advances according to ACMXVK's output
+frame rate. Add `--pass-through` to play it through RtAudio's default output;
+`--audio-output <index>` selects another output listed by `--list-devices`.
+During pass-through, the output device becomes the master audio clock and the
+shader analysis follows its playback position. This keeps visual reactivity
+aligned even when rendering runs faster or slower than the requested FPS.
+
+File audio is not yet automatically muxed into a recording. At end-of-stream
+the application continues with zero-valued audio metrics by default. Add
 `--audio-repeat` to restart the decoded source, or `--audio-trunc` to stop
 ACMXVK when the source finishes. When both are supplied, repeat keeps the
 source active, matching ACMX2 behavior.
 
-For example, loop a song as the silent reactivity source:
+For example, loop a song with audible pass-through:
 
 ```bash
 ./build/acmxvk/acmxvk \
     --graphic image.png \
     --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
     --audio-file song.mp3 \
+    --pass-through \
     --audio-repeat
 ```
 

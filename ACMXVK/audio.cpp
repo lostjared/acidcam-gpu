@@ -402,6 +402,9 @@ namespace acmxvk::audio {
                 if (info.isDefaultInput) {
                     std::cout << " [DEFAULT INPUT]";
                 }
+                if (info.isDefaultOutput) {
+                    std::cout << " [DEFAULT OUTPUT]";
+                }
                 std::cout << "\n    Input channels: " << info.inputChannels
                           << "\n    Output channels: " << info.outputChannels
                           << "\n";
