@@ -489,7 +489,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5J)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5K)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -543,7 +543,7 @@ namespace acmxvk {
                << "  -l, --channels <N>          Capture channels (default 2)\n"
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
                << "      --audio-input <device>  Input index or default\n"
-               << "      --audio-file <media>    FFmpeg-decoded reactive audio source\n"
+               << "      --audio-file <media>    Media file or M3U/M3U8 reactivity source\n"
                << "      --audio-repeat          Restart file audio at end-of-stream\n"
                << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
                << "      --enable-audio-buffers N\n"
@@ -1950,7 +1950,7 @@ namespace acmxvk {
             if (file_audio_source != nullptr && audio_engine != nullptr) {
                 file_audio_source->process_frame(outputFrameRate(), *audio_engine);
                 if (options.audio_trunc && !file_audio_source->is_active()) {
-                    std::cout << "acmxvk: audio file finished, stopping "
+                    std::cout << "acmxvk: audio source finished, stopping "
                                  "(--audio-trunc)\n";
                     exit();
                 }

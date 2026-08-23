@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5J**. It is usable for video, camera, and
+The port is currently at **Increment 5K**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Partial | RtAudio capture or an FFmpeg-decoded media file can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports repeat and stop-at-EOF behavior. Audible pass-through, M3U playlists, and file-audio output muxing remain future work. |
+| Audio-reactive shader data | Partial | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports repeat and stop-at-EOF behavior. Audible pass-through and file-audio output muxing remain future work. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -71,7 +71,7 @@ Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increment 5J also changes only ACMXVK.
+reinstall. Increments 5J and 5K also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -241,8 +241,9 @@ The remaining Vulkan bindings are:
 - Set 0, binding 4: optional 256-bin FFT history as an R32 `sampler1DArray`
 
 With an `AUDIO=ON` build, `--enable-audio` uses live RtAudio input while
-`--audio-file <media>` uses the first audio stream decoded by FFmpeg. Both paths
-map the same audio metrics into the binding-1 block:
+`--audio-file <media>` uses the first audio stream decoded by FFmpeg. It also
+accepts an M3U or M3U8 playlist. Both paths map the same audio metrics into the
+binding-1 block:
 
 | ACMX2 name | MXVK field | Meaning |
 | --- | --- | --- |
@@ -280,6 +281,20 @@ For example, loop a song as the silent reactivity source:
 
 Replace `--audio-repeat` with `--audio-trunc` to close the application at the
 end of the song.
+
+M3U and M3U8 playlists are read in order. Blank lines, `#EXTM3U`, `#EXTINF`,
+and other comment lines are ignored; relative entries are resolved against the
+playlist directory. Unusable tracks are reported and skipped as long as at
+least one entry can be decoded. `--audio-repeat` restarts the complete playlist,
+and `--audio-trunc` exits only after its final usable track.
+
+```m3u
+#EXTM3U
+#EXTINF:-1,First track
+music/first.flac
+#EXTINF:-1,Second track
+music/second.mp3
+```
 
 `audio_bands` and `audio_history` are appended after `custom_uniforms[16]`.
 This preserves every existing field and custom-float offset; older shaders may

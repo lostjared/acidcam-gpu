@@ -3,11 +3,14 @@
 #include "audio.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 extern "C" {
@@ -30,6 +33,67 @@ namespace acmxvk::audio {
             return message;
         }
 
+        [[nodiscard]] std::string trimPlaylistLine(std::string line) {
+            constexpr std::string_view WHITESPACE = " \t\r\n";
+            const std::size_t first = line.find_first_not_of(WHITESPACE);
+            if (first == std::string::npos) {
+                return {};
+            }
+            const std::size_t last = line.find_last_not_of(WHITESPACE);
+            return line.substr(first, last - first + 1);
+        }
+
+        [[nodiscard]] bool isM3uPath(const std::filesystem::path &path) {
+            std::string extension = path.extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                           [](unsigned char value) {
+                               return static_cast<char>(std::tolower(value));
+                           });
+            return extension == ".m3u" || extension == ".m3u8";
+        }
+
+        [[nodiscard]] bool isUrl(std::string_view path) {
+            return path.find("://") != std::string_view::npos;
+        }
+
+        [[nodiscard]] std::vector<std::string>
+        readM3uPlaylist(const std::filesystem::path &playlist) {
+            std::ifstream input(playlist);
+            if (!input) {
+                std::cerr << "acmxvk: could not open M3U playlist: "
+                          << playlist.string() << '\n';
+                return {};
+            }
+
+            std::vector<std::string> paths;
+            std::string line;
+            bool first_line = true;
+            while (std::getline(input, line)) {
+                if (first_line && line.size() >= 3 &&
+                    static_cast<unsigned char>(line[0]) == 0xef &&
+                    static_cast<unsigned char>(line[1]) == 0xbb &&
+                    static_cast<unsigned char>(line[2]) == 0xbf) {
+                    line.erase(0, 3);
+                }
+                first_line = false;
+                line = trimPlaylistLine(std::move(line));
+                if (line.empty() || line.front() == '#') {
+                    continue;
+                }
+                if (isUrl(line)) {
+                    paths.push_back(std::move(line));
+                    continue;
+                }
+
+                std::filesystem::path track(line);
+                if (!track.is_absolute()) {
+                    track = playlist.parent_path() / track;
+                }
+                paths.push_back(track.lexically_normal().string());
+            }
+            return paths;
+        }
+
     } // namespace
 
     class FileAudioSource::Impl {
@@ -44,7 +108,62 @@ namespace acmxvk::audio {
                 return false;
             }
 
+            const bool playlist = isM3uPath(source);
+            const std::vector<std::string> requested_tracks =
+                playlist ? readM3uPlaylist(source)
+                         : std::vector<std::string>{source.string()};
+            if (requested_tracks.empty()) {
+                std::cerr << "acmxvk: M3U playlist contains no tracks: "
+                          << source.string() << '\n';
+                return false;
+            }
+
             av_log_set_level(AV_LOG_ERROR);
+            for (const std::string &track : requested_tracks) {
+                if (decode_track(track)) {
+                    track_paths.push_back(track);
+                    track_end_positions.push_back(samples.size());
+                } else if (playlist) {
+                    std::cerr << "acmxvk: skipping unusable playlist track: "
+                              << track << '\n';
+                }
+            }
+            if (track_paths.empty()) {
+                close();
+                return false;
+            }
+
+            source_path = source.string();
+            playlist_source = playlist;
+            playback_position = 0.0;
+            current_track_index = 0;
+            active = true;
+            restart_pending = false;
+            if (playlist) {
+                std::cout << "acmxvk: loaded M3U playlist with "
+                          << track_paths.size() << " track(s), "
+                          << duration_seconds() << " seconds total: "
+                          << source_path << '\n';
+                report_current_track();
+            }
+            return true;
+        }
+
+        bool decode_track(const std::string &requested_path) {
+            const std::string source =
+                isUrl(requested_path)
+                    ? requested_path
+                    : std::filesystem::absolute(requested_path)
+                          .lexically_normal()
+                          .string();
+            if (!isUrl(source) &&
+                !std::filesystem::is_regular_file(std::filesystem::path(source))) {
+                std::cerr << "acmxvk: audio file is not readable: " << source
+                          << '\n';
+                return false;
+            }
+            const std::size_t initial_sample_count = samples.size();
+
             AVFormatContext *format = nullptr;
             AVCodecContext *codec = nullptr;
             SwrContext *resampler = nullptr;
@@ -210,18 +329,19 @@ namespace acmxvk::audio {
             }
 
             release();
-            if (!decoded || samples.empty()) {
-                std::cerr << "acmxvk: audio file produced no usable samples\n";
-                close();
+            const std::size_t decoded_sample_count =
+                samples.size() - initial_sample_count;
+            if (!decoded || decoded_sample_count == 0) {
+                samples.resize(initial_sample_count);
+                std::cerr << "acmxvk: audio file produced no usable samples: "
+                          << source << '\n';
                 return false;
             }
 
-            source_path = source.string();
-            playback_position = 0.0;
-            active = true;
-            restart_pending = false;
-            std::cout << "acmxvk: decoded audio file " << source_path << " ("
-                      << duration_seconds() << " seconds, " << samples.size()
+            std::cout << "acmxvk: decoded audio track " << source << " ("
+                      << static_cast<double>(decoded_sample_count) /
+                             static_cast<double>(FILE_SAMPLE_RATE)
+                      << " seconds, " << decoded_sample_count
                       << " mono samples at " << FILE_SAMPLE_RATE << " Hz)\n";
             return true;
         }
@@ -230,10 +350,14 @@ namespace acmxvk::audio {
             samples.clear();
             samples.shrink_to_fit();
             source_path.clear();
+            track_paths.clear();
+            track_end_positions.clear();
             playback_position = 0.0;
+            current_track_index = 0;
             active = false;
             repeat = false;
             restart_pending = false;
+            playlist_source = false;
         }
 
         void set_repeat(bool enabled) {
@@ -245,6 +369,24 @@ namespace acmxvk::audio {
                    static_cast<double>(FILE_SAMPLE_RATE);
         }
 
+        [[nodiscard]] const std::string &current_track_path() const {
+            static const std::string EMPTY_PATH;
+            if (!active || track_paths.empty() ||
+                current_track_index >= track_paths.size()) {
+                return EMPTY_PATH;
+            }
+            return track_paths[current_track_index];
+        }
+
+        void report_current_track() const {
+            if (!playlist_source || track_paths.empty()) {
+                return;
+            }
+            std::cout << "acmxvk: audio playlist track "
+                      << (current_track_index + 1) << '/' << track_paths.size()
+                      << ": " << current_track_path() << '\n';
+        }
+
         bool process_frame(double frames_per_second, AudioEngine &engine) {
             if (samples.empty() || !active) {
                 engine.reset();
@@ -252,8 +394,10 @@ namespace acmxvk::audio {
             }
             if (restart_pending) {
                 playback_position = 0.0;
+                current_track_index = 0;
                 restart_pending = false;
                 engine.reset();
+                report_current_track();
             }
             const double rate =
                 std::isfinite(frames_per_second) && frames_per_second > 0.0
@@ -271,14 +415,24 @@ namespace acmxvk::audio {
                                    static_cast<unsigned int>(last - first), 1,
                                    FILE_SAMPLE_RATE);
             playback_position = next_position;
+            while (current_track_index + 1 < track_end_positions.size() &&
+                   playback_position >= static_cast<double>(
+                                            track_end_positions[current_track_index])) {
+                ++current_track_index;
+                report_current_track();
+            }
             if (playback_position >= static_cast<double>(samples.size())) {
                 if (repeat) {
                     restart_pending = true;
-                    std::cout << "acmxvk: audio file reached end of stream; "
+                    std::cout << "acmxvk: audio "
+                              << (playlist_source ? "playlist" : "file")
+                              << " reached end of stream; "
                                  "restarting (--audio-repeat)\n";
                 } else {
                     active = false;
-                    std::cout << "acmxvk: audio file reached end of stream\n";
+                    std::cout << "acmxvk: audio "
+                              << (playlist_source ? "playlist" : "file")
+                              << " reached end of stream\n";
                 }
             }
             return true;
@@ -286,10 +440,14 @@ namespace acmxvk::audio {
 
         std::vector<float> samples;
         std::string source_path;
+        std::vector<std::string> track_paths;
+        std::vector<std::size_t> track_end_positions;
         double playback_position = 0.0;
+        std::size_t current_track_index = 0;
         bool active = false;
         bool repeat = false;
         bool restart_pending = false;
+        bool playlist_source = false;
     };
 
     FileAudioSource::FileAudioSource() : impl(std::make_unique<Impl>()) {}
@@ -321,6 +479,14 @@ namespace acmxvk::audio {
 
     const std::string &FileAudioSource::path() const {
         return impl->source_path;
+    }
+
+    std::size_t FileAudioSource::track_count() const {
+        return impl->track_paths.size();
+    }
+
+    const std::string &FileAudioSource::current_track_path() const {
+        return impl->current_track_path();
     }
 
     bool FileAudioSource::process_frame(double frames_per_second,

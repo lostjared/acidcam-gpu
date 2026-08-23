@@ -1,6 +1,7 @@
 #ifndef ACMXVK_FILE_AUDIO_HPP
 #define ACMXVK_FILE_AUDIO_HPP
 
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -23,6 +24,8 @@ namespace acmxvk::audio {
         [[nodiscard]] bool is_active() const;
         [[nodiscard]] double duration_seconds() const;
         [[nodiscard]] const std::string &path() const;
+        [[nodiscard]] std::size_t track_count() const;
+        [[nodiscard]] const std::string &current_track_path() const;
 
         bool process_frame(double frames_per_second, AudioEngine &engine);
 
