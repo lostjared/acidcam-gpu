@@ -13,6 +13,9 @@
 #include "audio.hpp"
 #include "file_audio.hpp"
 #endif
+#ifdef MIDI_ENABLED
+#include "midi.hpp"
+#endif
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -87,6 +90,7 @@ namespace acmxvk {
         int audio_input_device = -1;
         int audio_output_device = -1;
         int audio_buffers = 0;
+        int midi_device = -1;
         double requested_fps = 0.0;
         double duration = 0.0;
         double time_speed = 1.0;
@@ -119,6 +123,10 @@ namespace acmxvk {
         bool audio_trunc = false;
         bool list_audio_devices = false;
         bool check_audio = false;
+        bool midi_device_specified = false;
+        bool midi_monitor = false;
+        bool list_midi_devices = false;
+        bool check_midi = false;
         bool list_encoders = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
@@ -389,6 +397,20 @@ namespace acmxvk {
                 options.list_audio_devices = true;
             } else if (option == "--check-audio") {
                 options.check_audio = true;
+            } else if (option == "--midi-device") {
+                options.midi_device =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.midi_device_specified = true;
+                if (options.midi_device < 0) {
+                    throw std::runtime_error(
+                        "MIDI device index must be non-negative");
+                }
+            } else if (option == "--midi-monitor") {
+                options.midi_monitor = true;
+            } else if (option == "--list-midi") {
+                options.list_midi_devices = true;
+            } else if (option == "--check-midi") {
+                options.check_midi = true;
             } else if (option == "--duration") {
                 options.duration = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.duration <= 0.0) {
@@ -563,7 +585,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5R)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 6A)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -631,6 +653,12 @@ namespace acmxvk {
                << "      --list-devices          List RtAudio devices and exit\n"
                << "      --check-audio           Report compiled audio support\n"
                << "                              Provides a 256-bin FFT at binding 3\n\n"
+               << "MIDI (requires MIDI=ON build):\n"
+               << "      --midi-device <index>   Open a MIDI input port (default 0)\n"
+               << "      --midi-monitor          Print received MIDI messages\n"
+               << "      --list-midi             List MIDI input ports and exit\n"
+               << "      --check-midi            Report compiled MIDI support\n"
+               << "                              Shader/control mapping comes next\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -944,6 +972,7 @@ namespace acmxvk {
             setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
             setEnableScreenshot(this->options.enable_screenshot);
             openAudio();
+            openMidi();
             loadShaders();
             loadShaderPasses();
             loadPlaylist();
@@ -1127,6 +1156,8 @@ namespace acmxvk {
                 return;
             }
 
+            pollMidi();
+
             if (!rendering_frozen && !input_paused &&
                 source_kind != SourceKind::Graphic) {
                 if (initial_frame_pending) {
@@ -1202,6 +1233,10 @@ namespace acmxvk {
         std::uint64_t frame_count = 0;
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
+#ifdef MIDI_ENABLED
+        std::unique_ptr<midi::MidiInput> midi_input;
+        std::uint64_t observed_midi_drops = 0;
+#endif
 #ifdef AUDIO_ENABLED
         std::unique_ptr<audio::AudioEngine> audio_engine;
         std::unique_ptr<audio::FileAudioSource> file_audio_source;
@@ -1245,6 +1280,55 @@ namespace acmxvk {
             return audio_warmup_envelope;
         }
 #endif
+
+        void openMidi() {
+#ifdef MIDI_ENABLED
+            if (!options.midi_device_specified && !options.midi_monitor) {
+                return;
+            }
+            midi_input = std::make_unique<midi::MidiInput>();
+            const int port = options.midi_device_specified ? options.midi_device : 0;
+            if (!midi_input->open(port)) {
+                throw std::runtime_error("could not open MIDI input port " +
+                                         std::to_string(port));
+            }
+#endif
+        }
+
+        void pollMidi() {
+#ifdef MIDI_ENABLED
+            if (midi_input == nullptr || !midi_input->is_open()) {
+                return;
+            }
+            const std::vector<midi::MidiMessage> messages =
+                midi_input->poll_messages();
+            if (options.midi_monitor) {
+                for (const midi::MidiMessage &message : messages) {
+                    std::ostringstream text;
+                    text << "acmxvk: MIDI #" << message.sequence << " +"
+                         << std::fixed << std::setprecision(6)
+                         << message.delta_seconds << "s [";
+                    for (std::size_t index = 0; index < message.bytes.size();
+                         ++index) {
+                        if (index > 0) {
+                            text << ' ';
+                        }
+                        text << std::hex << std::uppercase << std::setfill('0')
+                             << std::setw(2)
+                             << static_cast<unsigned int>(message.bytes[index]);
+                    }
+                    text << ']';
+                    std::cout << text.str() << '\n';
+                }
+            }
+            const std::uint64_t dropped = midi_input->dropped_message_count();
+            if (dropped != observed_midi_drops) {
+                std::cerr << "acmxvk: MIDI queue dropped " << dropped
+                          << " message(s) total\n";
+                observed_midi_drops = dropped;
+            }
+#endif
+        }
 
         void openAudio() {
             if (!options.enable_audio) {
@@ -2220,6 +2304,14 @@ int main(int argc, char **argv) {
 #endif
             return EXIT_SUCCESS;
         }
+        if (options.check_midi) {
+#ifdef MIDI_ENABLED
+            std::cout << "MIDI: enabled\n";
+#else
+            std::cout << "MIDI: disabled\n";
+#endif
+            return EXIT_SUCCESS;
+        }
         if (options.list_audio_devices) {
 #ifdef AUDIO_ENABLED
             acmxvk::audio::AudioEngine::list_devices();
@@ -2229,10 +2321,25 @@ int main(int argc, char **argv) {
                 "--list-devices requires an ACMXVK build configured with -DAUDIO=ON");
 #endif
         }
+        if (options.list_midi_devices) {
+#ifdef MIDI_ENABLED
+            acmxvk::midi::MidiInput::list_ports(std::cout);
+            return EXIT_SUCCESS;
+#else
+            throw std::runtime_error(
+                "--list-midi requires an ACMXVK build configured with -DMIDI=ON");
+#endif
+        }
 #ifndef AUDIO_ENABLED
         if (options.enable_audio) {
             throw std::runtime_error(
                 "--enable-audio requires an ACMXVK build configured with -DAUDIO=ON");
+        }
+#endif
+#ifndef MIDI_ENABLED
+        if (options.midi_device_specified || options.midi_monitor) {
+            throw std::runtime_error(
+                "MIDI input requires an ACMXVK build configured with -DMIDI=ON");
         }
 #endif
         if (options.show_help) {

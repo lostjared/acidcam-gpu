@@ -14,6 +14,7 @@ include(GNUInstallDirs)
 
 option(VALIDATION "Enable Vulkan validation layers" OFF)
 option(AUDIO "Enable RtAudio input and audio-reactive shader metrics" OFF)
+option(MIDI "Enable RtMidi input support" OFF)
 option(ACMXVK_USE_MOLTENVK "Enable MoltenVK portability support on Apple platforms" ${APPLE})
 
 set(ACMXVK_MXWRITE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite" CACHE PATH
@@ -274,6 +275,14 @@ if(AUDIO)
         PkgConfig::SWRESAMPLE
     )
     target_compile_definitions(acmxvk PRIVATE AUDIO_ENABLED)
+endif()
+if(MIDI)
+    find_library(RTMIDI_LIBRARY NAMES rtmidi REQUIRED)
+    find_path(RTMIDI_INCLUDE_DIR NAMES rtmidi/RtMidi.h REQUIRED)
+    target_sources(acmxvk PRIVATE midi.cpp midi.hpp)
+    target_include_directories(acmxvk PRIVATE "${RTMIDI_INCLUDE_DIR}")
+    target_link_libraries(acmxvk PRIVATE "${RTMIDI_LIBRARY}")
+    target_compile_definitions(acmxvk PRIVATE MIDI_ENABLED)
 endif()
 if(VALIDATION)
     target_compile_definitions(acmxvk PRIVATE ENABLE_VALIDATION)

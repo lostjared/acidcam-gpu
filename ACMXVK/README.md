@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5R**. It is usable for video, camera, and
+The port is currently at **Increment 6A**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -28,7 +28,7 @@ ACMX2.
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live recording has independent gain, while file audio also supports repeat and stop-at-EOF behavior. |
-| MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
+| MIDI controls | Partial | Optional RtMidi support can enumerate and open input ports, capture messages through a bounded callback queue, and print a live monitor. Mapping messages to shader uniforms and runtime actions is the next MIDI increment. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
@@ -42,6 +42,7 @@ ACMX2.
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
 - Optional RtAudio development files when building with `-DAUDIO=ON`
+- Optional RtMidi development files when building with `-DMIDI=ON`
 
 The Vulkan environment used for this project can be loaded with:
 
@@ -55,7 +56,7 @@ From the `acidcam-gpu` repository root:
 
 ```bash
 source ~/vulkan.sh
-cmake -S ACMXVK -B build/acmxvk -DVALIDATION=ON -DAUDIO=ON -DCMAKE_BUILD_TYPE=Debug
+cmake -S ACMXVK -B build/acmxvk -DVALIDATION=ON -DAUDIO=ON -DMIDI=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/acmxvk -j
 ./build/acmxvk/acmxvk --help
 ```
@@ -67,11 +68,12 @@ cmake --install build/acmxvk
 cmake --build build/acmxvk --target uninstall
 ```
 
-Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
+Audio and MIDI support are optional and remain disabled when their CMake
+options are omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increments 5J through 5R also change only ACMXVK.
+reinstall. Increments 5J through 5R and 6A also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -425,6 +427,30 @@ float old_energy = texture(spectrum_history, vec2(0.08, float(layer))).r;
 ```
 
 See `shaders/audio_history.frag` for a current-versus-history waterfall test.
+
+### MIDI input foundation
+
+Configure with `-DMIDI=ON` to enable RtMidi. List available input ports with:
+
+```bash
+./build/acmxvk/acmxvk --list-midi
+```
+
+Open a port and print its incoming byte messages while ACMXVK runs:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.png \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --midi-device 0 \
+    --midi-monitor
+```
+
+When `--midi-device` is omitted, monitor mode opens port zero. RtMidi's callback
+feeds a bounded, thread-safe queue drained by the render loop; if more than 256
+unprocessed messages arrive, ACMXVK retains the newest messages and reports the
+drop count. Increment 6A intentionally does not map MIDI bytes to shader
+uniforms or keyboard actions yet.
 
 ## Runtime controls
 
