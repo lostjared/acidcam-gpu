@@ -92,6 +92,7 @@ namespace acmxvk {
         double time_speed = 1.0;
         double max_size_mb = 0.0;
         double audio_sensitivity = 1.0;
+        double audio_warm_rate = 0.5;
         double audio_pass_through_gain = 1.0;
         double audio_recording_gain = 1.0;
         bool resolution_specified = false;
@@ -109,6 +110,7 @@ namespace acmxvk {
         bool copy_audio = false;
         bool enable_audio = false;
         bool audio_input_specified = false;
+        bool audio_warm_rate_specified = false;
         bool audio_output_specified = false;
         bool audio_pass_through_gain_specified = false;
         bool audio_recording_gain_specified = false;
@@ -325,6 +327,14 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "audio sensitivity must be between 0.1 and 5.0");
                 }
+            } else if (option == "--audio-warm-rate") {
+                options.audio_warm_rate =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.audio_warm_rate_specified = true;
+                if (options.audio_warm_rate < 0.0) {
+                    throw std::runtime_error(
+                        "audio warmup rate must be non-negative");
+                }
             } else if (option == "--audio-input") {
                 const std::string value = optionValue(index, argc, argv, option);
                 options.audio_input_specified = true;
@@ -517,6 +527,10 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--enable-audio-buffers requires --enable-audio");
         }
+        if (options.audio_warm_rate_specified && !options.enable_audio) {
+            throw std::runtime_error(
+                "--audio-warm-rate requires an enabled audio source");
+        }
         if (!options.audio_file.empty() && options.audio_input_specified) {
             throw std::runtime_error(
                 "--audio-file and --audio-input cannot be used together");
@@ -549,7 +563,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5Q)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5R)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -602,6 +616,7 @@ namespace acmxvk {
                << "  -w, --enable-audio          Enable live audio-reactive metrics\n"
                << "  -l, --channels <N>          Capture channels (default 2)\n"
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
+               << "      --audio-warm-rate N     Shader ramp per second (default 0.5; 0 off)\n"
                << "      --audio-input <device>  Input index or default\n"
                << "      --audio-file <media>    Media file or M3U/M3U8 reactivity source\n"
                << "  -y, --pass-through          Play live/file audio through an output device\n"
@@ -1190,6 +1205,45 @@ namespace acmxvk {
 #ifdef AUDIO_ENABLED
         std::unique_ptr<audio::AudioEngine> audio_engine;
         std::unique_ptr<audio::FileAudioSource> file_audio_source;
+        float audio_warmup_envelope = 0.0F;
+        bool audio_warmup_started = false;
+        std::chrono::steady_clock::time_point audio_warmup_last_tick{};
+
+        void resetAudioWarmup() {
+            audio_warmup_envelope = 0.0F;
+            audio_warmup_started = false;
+            if (options.audio_warm_rate <= 0.0) {
+                std::cout << "acmxvk: audio shader warmup disabled\n";
+            } else {
+                std::cout << "acmxvk: audio shader warmup "
+                          << options.audio_warm_rate << "/second (~"
+                          << 1.0 / options.audio_warm_rate
+                          << " seconds to full strength)\n";
+            }
+        }
+
+        [[nodiscard]] float updateAudioWarmup(
+            std::chrono::steady_clock::time_point now) {
+            if (options.audio_warm_rate <= 0.0) {
+                audio_warmup_envelope = 1.0F;
+                return audio_warmup_envelope;
+            }
+            if (!audio_warmup_started) {
+                audio_warmup_started = true;
+                audio_warmup_last_tick = now;
+                return audio_warmup_envelope;
+            }
+
+            const float delta = std::max(
+                std::chrono::duration<float>(now - audio_warmup_last_tick).count(),
+                0.0F);
+            audio_warmup_last_tick = now;
+            audio_warmup_envelope = std::min(
+                audio_warmup_envelope +
+                    delta * static_cast<float>(options.audio_warm_rate),
+                1.0F);
+            return audio_warmup_envelope;
+        }
 #endif
 
         void openAudio() {
@@ -1214,6 +1268,7 @@ namespace acmxvk {
                     std::cerr << "acmxvk: file audio output could not be "
                                  "initialized; continuing with silent analysis\n";
                 }
+                resetAudioWarmup();
                 return;
             }
             const audio::AudioStreamConfig config{
@@ -1229,6 +1284,8 @@ namespace acmxvk {
                 std::cerr << "acmxvk: audio input could not be initialized; "
                              "continuing with zero-valued audio metrics\n";
                 audio_engine.reset();
+            } else {
+                resetAudioWarmup();
             }
 #endif
         }
@@ -2082,8 +2139,10 @@ namespace acmxvk {
             }
             if (audioSourceOpen()) {
                 const audio::AudioMetrics metrics = audio_engine->metrics();
-                const float sense = audio_engine->sensitivity() * 4.0F;
-                audio_amplitude = metrics.amplitude;
+                const float warmup = updateAudioWarmup(now);
+                const float sense =
+                    audio_engine->sensitivity() * 4.0F * warmup;
+                audio_amplitude = metrics.amplitude * warmup;
                 audio_frequency = metrics.frequency;
                 audio_peak = std::sqrt(std::max(metrics.peak, 0.0F)) * sense;
                 audio_rms = std::sqrt(std::max(metrics.rms, 0.0F)) * sense;
@@ -2093,6 +2152,9 @@ namespace acmxvk {
                 audio_high = std::sqrt(std::max(metrics.high, 0.0F)) * sense;
                 audio_sample_rate = static_cast<float>(audio_engine->sample_rate());
                 spectrum_values = audio_engine->spectrum();
+                for (float &value : spectrum_values) {
+                    value *= warmup;
+                }
             }
 #endif
             frame_sprite->setShaderParams(1.0F, 1.0F, 1.0F, elapsed);
