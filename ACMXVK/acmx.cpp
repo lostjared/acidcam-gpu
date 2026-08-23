@@ -16,6 +16,9 @@
 #ifdef MIDI_ENABLED
 #include "midi.hpp"
 #endif
+#ifdef ACMXVK_WITH_CUDA
+#include "gpu_filters.hpp"
+#endif
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -92,6 +95,8 @@ namespace acmxvk {
         int audio_output_device = -1;
         int audio_buffers = 0;
         int midi_device = -1;
+        int gpu_frame_buffer_size = 10;
+        int cuda_device = 0;
         double requested_fps = 0.0;
         double duration = 0.0;
         double time_speed = 1.0;
@@ -128,6 +133,11 @@ namespace acmxvk {
         bool midi_monitor = false;
         bool list_midi_devices = false;
         bool check_midi = false;
+        bool gpu_buffer_specified = false;
+        bool cuda_device_specified = false;
+        bool list_gpu_filters = false;
+        bool list_cuda_devices = false;
+        bool check_cuda = false;
         bool list_encoders = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
@@ -135,6 +145,7 @@ namespace acmxvk {
         std::vector<std::string> shader_pass_files;
         std::vector<std::string> custom_uniform_overrides;
         std::vector<std::string> midi_cc_mappings;
+        std::vector<int> gpu_filter_indices;
         std::string input_file;
         std::string graphic_file;
         std::string shader_directory;
@@ -189,6 +200,34 @@ namespace acmxvk {
                                      std::string(text));
         }
         return value;
+    }
+
+    [[nodiscard]] std::vector<int>
+    parseIntegerList(std::string_view text, std::string_view option) {
+        if (text.empty()) {
+            throw std::runtime_error("empty integer list for " +
+                                     std::string(option));
+        }
+        std::vector<int> values;
+        std::size_t start = 0;
+        while (start <= text.size()) {
+            const std::size_t separator = text.find(',', start);
+            const std::size_t end = separator == std::string_view::npos
+                                        ? text.size()
+                                        : separator;
+            if (end == start) {
+                throw std::runtime_error("invalid integer list for " +
+                                         std::string(option) + ": " +
+                                         std::string(text));
+            }
+            values.push_back(parseInteger(text.substr(start, end - start),
+                                          option));
+            if (separator == std::string_view::npos) {
+                break;
+            }
+            start = separator + 1;
+        }
+        return values;
     }
 
     void parseDimensions(std::string_view text, int &width, int &height,
@@ -419,6 +458,32 @@ namespace acmxvk {
                 options.list_midi_devices = true;
             } else if (option == "--check-midi") {
                 options.check_midi = true;
+            } else if (option == "--gpu-filter") {
+                options.gpu_filter_indices = parseIntegerList(
+                    optionValue(index, argc, argv, option), option);
+            } else if (option == "--gpu-buffer") {
+                options.gpu_frame_buffer_size =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.gpu_buffer_specified = true;
+                if (options.gpu_frame_buffer_size < 4 ||
+                    options.gpu_frame_buffer_size > 32) {
+                    throw std::runtime_error(
+                        "GPU frame buffer must be between 4 and 32");
+                }
+            } else if (option == "-m" || option == "--cuda-device") {
+                options.cuda_device =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.cuda_device_specified = true;
+                if (options.cuda_device < 0) {
+                    throw std::runtime_error(
+                        "CUDA device index must be non-negative");
+                }
+            } else if (option == "--list-filters") {
+                options.list_gpu_filters = true;
+            } else if (option == "--list-cuda-devices") {
+                options.list_cuda_devices = true;
+            } else if (option == "--check-cuda") {
+                options.check_cuda = true;
             } else if (option == "--duration") {
                 options.duration = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.duration <= 0.0) {
@@ -511,6 +576,9 @@ namespace acmxvk {
             options.shader_directory.empty()) {
             throw std::runtime_error("--midi-cc requires --shaders <directory>");
         }
+        if (options.gpu_buffer_specified && options.gpu_filter_indices.empty()) {
+            throw std::runtime_error("--gpu-buffer requires --gpu-filter <list>");
+        }
         if ((!options.shader_pass_indices.empty() || !options.shader_pass_files.empty() ||
              !options.playlist_file.empty() || options.enable_playlist) &&
             options.shader_directory.empty()) {
@@ -597,7 +665,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 6C)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7A)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -673,6 +741,13 @@ namespace acmxvk {
                << "      --list-midi             List MIDI input ports and exit\n"
                << "      --check-midi            Report compiled MIDI support\n"
                << "                              Paired knobs repeat by distance from 64\n\n"
+               << "CUDA filters (requires WITH_CUDA=ON build):\n"
+               << "      --gpu-filter <list>     Comma-separated acidcam-gpu indices\n"
+               << "      --gpu-buffer <4-32>     Temporal frame count (default 10)\n"
+               << "  -m, --cuda-device <index>   Select CUDA device (default 0)\n"
+               << "      --list-filters          List acidcam-gpu filters and exit\n"
+               << "      --list-cuda-devices     List CUDA devices and exit\n"
+               << "      --check-cuda            Report compiled CUDA-filter support\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -985,6 +1060,7 @@ namespace acmxvk {
               options(std::move(options)) {
             setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
             setEnableScreenshot(this->options.enable_screenshot);
+            initializeGpuFilters();
             openAudio();
             loadShaders();
             configureMidiMappings();
@@ -1248,6 +1324,9 @@ namespace acmxvk {
         std::uint64_t frame_count = 0;
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
+#ifdef ACMXVK_WITH_CUDA
+        std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
+#endif
 #ifdef MIDI_ENABLED
         struct MidiCcMapping {
             int channel = -1;
@@ -1312,6 +1391,16 @@ namespace acmxvk {
             return audio_warmup_envelope;
         }
 #endif
+
+        void initializeGpuFilters() {
+#ifdef ACMXVK_WITH_CUDA
+            if (options.gpu_filter_indices.empty()) {
+                return;
+            }
+            gpu_filter_engine = std::make_unique<gpu::FilterEngine>(
+                options.gpu_filter_indices, options.gpu_frame_buffer_size);
+#endif
+        }
 
         void openMidi() {
 #ifdef MIDI_ENABLED
@@ -2324,9 +2413,7 @@ namespace acmxvk {
 
             if (source_kind == SourceKind::Graphic) {
                 initial_frame_pending = false;
-                frame_sprite->updateTexture(graphic_rgba.ptr(), graphic_rgba.cols,
-                                            graphic_rgba.rows,
-                                            static_cast<int>(graphic_rgba.step));
+                uploadInputFrame(graphic_rgba);
                 initializeHistory(graphic_rgba);
             } else if (!readInputFrame()) {
                 std::cerr << "acmxvk: capture did not provide an initial frame\n";
@@ -2604,9 +2691,34 @@ namespace acmxvk {
                       << ")\n";
         }
 
+        void uploadInputFrame(const cv::Mat &rgba) {
+#ifdef ACMXVK_WITH_CUDA
+            if (gpu_filter_engine != nullptr) {
+                if (!gpu_filter_engine->process(rgba)) {
+                    throw std::runtime_error(
+                        "acidcam-gpu rejected the RGBA input frame");
+                }
+                if (!frame_sprite->updateTextureCuda(
+                        gpu_filter_engine->output(),
+                        gpu_filter_engine->stream())) {
+                    throw std::runtime_error(
+                        "MXVK could not upload the CUDA-filtered frame");
+                }
+                return;
+            }
+#endif
+            frame_sprite->updateTexture(rgba.ptr(), rgba.cols, rgba.rows,
+                                        static_cast<int>(rgba.step));
+        }
+
         [[nodiscard]] bool readInputFrame() {
-            if (!options.enable_texture_cache &&
-                options.frame_rotation == FrameRotation::None) {
+            bool requires_host_frame = options.enable_texture_cache ||
+                                       options.frame_rotation != FrameRotation::None;
+#ifdef ACMXVK_WITH_CUDA
+            requires_host_frame = requires_host_frame ||
+                                  gpu_filter_engine != nullptr;
+#endif
+            if (!requires_host_frame) {
                 return capture.readToSprite(*frame_sprite, false);
             }
 
@@ -2615,8 +2727,7 @@ namespace acmxvk {
                 return false;
             }
             rotateFrame(rgba, options.frame_rotation);
-            frame_sprite->updateTexture(rgba.ptr(), rgba.cols, rgba.rows,
-                                        static_cast<int>(rgba.step));
+            uploadInputFrame(rgba);
             const bool history_was_initialized = history_initialized;
             initializeHistory(rgba);
             if (history_was_initialized &&
@@ -2753,6 +2864,14 @@ int main(int argc, char **argv) {
 #endif
             return EXIT_SUCCESS;
         }
+        if (options.check_cuda) {
+#ifdef ACMXVK_WITH_CUDA
+            std::cout << "CUDA filters: enabled\n";
+#else
+            std::cout << "CUDA filters: disabled\n";
+#endif
+            return EXIT_SUCCESS;
+        }
         if (options.list_audio_devices) {
 #ifdef AUDIO_ENABLED
             acmxvk::audio::AudioEngine::list_devices();
@@ -2771,6 +2890,26 @@ int main(int argc, char **argv) {
                 "--list-midi requires an ACMXVK build configured with -DMIDI=ON");
 #endif
         }
+        if (options.list_gpu_filters) {
+#ifdef ACMXVK_WITH_CUDA
+            acmxvk::gpu::FilterEngine::list_filters(std::cout);
+            return EXIT_SUCCESS;
+#else
+            throw std::runtime_error(
+                "--list-filters requires an ACMXVK build configured with "
+                "-DWITH_CUDA=ON");
+#endif
+        }
+        if (options.list_cuda_devices) {
+#ifdef ACMXVK_WITH_CUDA
+            acmxvk::gpu::FilterEngine::list_devices(std::cout);
+            return EXIT_SUCCESS;
+#else
+            throw std::runtime_error(
+                "--list-cuda-devices requires an ACMXVK build configured with "
+                "-DWITH_CUDA=ON");
+#endif
+        }
 #ifndef AUDIO_ENABLED
         if (options.enable_audio) {
             throw std::runtime_error(
@@ -2782,6 +2921,14 @@ int main(int argc, char **argv) {
             !options.midi_map_file.empty() || !options.midi_cc_mappings.empty()) {
             throw std::runtime_error(
                 "MIDI input requires an ACMXVK build configured with -DMIDI=ON");
+        }
+#endif
+#ifndef ACMXVK_WITH_CUDA
+        if (!options.gpu_filter_indices.empty() ||
+            options.cuda_device_specified) {
+            throw std::runtime_error(
+                "CUDA filters require an ACMXVK build configured with "
+                "-DWITH_CUDA=ON");
         }
 #endif
         if (options.show_help) {
@@ -2798,6 +2945,16 @@ int main(int argc, char **argv) {
                        ? EXIT_SUCCESS
                        : EXIT_FAILURE;
         }
+
+#ifdef ACMXVK_WITH_CUDA
+        if (!options.gpu_filter_indices.empty()) {
+            acmxvk::gpu::FilterEngine::validate_filter_indices(
+                options.gpu_filter_indices);
+        }
+        if (!options.gpu_filter_indices.empty() || options.cuda_device_specified) {
+            acmxvk::gpu::FilterEngine::select_device(options.cuda_device);
+        }
+#endif
 
         if (!options.graphic_file.empty() && !options.resolution_specified) {
             const cv::Mat image = cv::imread(options.graphic_file, cv::IMREAD_UNCHANGED);

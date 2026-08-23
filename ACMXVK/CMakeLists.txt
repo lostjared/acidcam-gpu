@@ -15,6 +15,7 @@ include(GNUInstallDirs)
 option(VALIDATION "Enable Vulkan validation layers" OFF)
 option(AUDIO "Enable RtAudio input and audio-reactive shader metrics" OFF)
 option(MIDI "Enable RtMidi input support" OFF)
+option(WITH_CUDA "Enable acidcam-gpu CUDA filters" OFF)
 option(ACMXVK_USE_MOLTENVK "Enable MoltenVK portability support on Apple platforms" ${APPLE})
 
 set(ACMXVK_MXWRITE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite" CACHE PATH
@@ -139,6 +140,22 @@ if(ACMXVK_MXVK_LIBRARIES MATCHES "CUDA::")
     else()
         find_package(CUDAToolkit REQUIRED)
     endif()
+endif()
+
+if(WITH_CUDA)
+    if(APPLE)
+        message(FATAL_ERROR
+            "WITH_CUDA is not available with MoltenVK. Configure ACMXVK with "
+            "-DWITH_CUDA=OFF on Apple platforms."
+        )
+    endif()
+    if(NOT ACMXVK_MXVK_LIBRARIES MATCHES "CUDA::")
+        message(FATAL_ERROR
+            "WITH_CUDA requires an MXVK installation built with CUDA support."
+        )
+    endif()
+    find_package(CUDAToolkit REQUIRED)
+    find_package(acidcam-gpu CONFIG REQUIRED)
 endif()
 
 set(ACMXVK_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
@@ -309,6 +326,14 @@ if(MIDI)
     target_include_directories(acmxvk PRIVATE "${RTMIDI_INCLUDE_DIR}")
     target_link_libraries(acmxvk PRIVATE "${RTMIDI_LIBRARY}")
     target_compile_definitions(acmxvk PRIVATE MIDI_ENABLED)
+endif()
+if(WITH_CUDA)
+    target_sources(acmxvk PRIVATE gpu_filters.cpp gpu_filters.hpp)
+    target_link_libraries(acmxvk PRIVATE
+        acidcam-gpu::acidcam-gpu
+        CUDA::cudart
+    )
+    target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_CUDA)
 endif()
 if(VALIDATION)
     target_compile_definitions(acmxvk PRIVATE ENABLE_VALIDATION)
