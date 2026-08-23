@@ -29,6 +29,33 @@ endif()
 if(NOT APPLE)
     find_package(CUDAToolkit QUIET)
 endif()
+find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+
+# MXWrite installations exist with both a combined PkgConfig::FFMPEG target
+# and individual FFmpeg targets in their exported link interface. Define both
+# forms before loading MXWrite so either package generation can be consumed.
+if(NOT TARGET PkgConfig::FFMPEG)
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+        libavcodec>=58.0.0
+        libavformat>=58.0.0
+        libavutil>=56.0.0
+        libswscale>=5.0.0
+    )
+endif()
+if(NOT TARGET PkgConfig::AVCODEC)
+    pkg_check_modules(AVCODEC REQUIRED IMPORTED_TARGET libavcodec>=58.0.0)
+endif()
+if(NOT TARGET PkgConfig::AVFORMAT)
+    pkg_check_modules(AVFORMAT REQUIRED IMPORTED_TARGET libavformat>=58.0.0)
+endif()
+if(NOT TARGET PkgConfig::AVUTIL)
+    pkg_check_modules(AVUTIL REQUIRED IMPORTED_TARGET libavutil>=56.0.0)
+endif()
+if(NOT TARGET PkgConfig::SWSCALE)
+    pkg_check_modules(SWSCALE REQUIRED IMPORTED_TARGET libswscale>=5.0.0)
+endif()
+
 find_package(MXWrite CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(SDL3_ttf CONFIG REQUIRED)
