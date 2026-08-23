@@ -220,6 +220,12 @@ namespace acmxvk::audio {
             smooth_value = 0.0F;
             low_pass_state = 0.0F;
             mid_pass_state = 0.0F;
+            for (auto &buffer : spectrum_samples) {
+                for (std::atomic<float> &sample : buffer) {
+                    sample.store(0.0F, std::memory_order_relaxed);
+                }
+            }
+            spectrum_front.store(0, std::memory_order_release);
         }
 
         static int audioCallback(void *, void *input_buffer,
@@ -368,6 +374,20 @@ namespace acmxvk::audio {
 
     std::vector<float> AudioEngine::spectrum() const {
         return impl->spectrum();
+    }
+
+    void AudioEngine::process_samples(const float *samples,
+                                      unsigned int frame_count,
+                                      unsigned int channels,
+                                      unsigned int sample_rate) {
+        impl->input_channels = channels;
+        impl->sample_rate.store(std::max(sample_rate, 1U),
+                                std::memory_order_relaxed);
+        impl->processSamples(samples, frame_count, 0);
+    }
+
+    void AudioEngine::reset() {
+        impl->resetMetrics();
     }
 
     void AudioEngine::list_devices() {

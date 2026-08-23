@@ -11,6 +11,7 @@
 
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
+#include "file_audio.hpp"
 #endif
 
 #include <opencv2/core.hpp>
@@ -104,6 +105,7 @@ namespace acmxvk {
         bool no_drop = false;
         bool copy_audio = false;
         bool enable_audio = false;
+        bool audio_input_specified = false;
         bool list_audio_devices = false;
         bool check_audio = false;
         bool list_encoders = false;
@@ -124,6 +126,7 @@ namespace acmxvk {
         std::string encode_codec = "auto";
         std::string encode_params;
         std::string list_encoder_options;
+        std::string audio_file;
     };
 
     [[nodiscard]] std::string optionValue(int &index, int argc, char **argv,
@@ -315,12 +318,16 @@ namespace acmxvk {
                 }
             } else if (option == "--audio-input") {
                 const std::string value = optionValue(index, argc, argv, option);
+                options.audio_input_specified = true;
                 options.audio_input_device =
                     value == "default" ? -1 : parseInteger(value, option);
                 if (options.audio_input_device < -1) {
                     throw std::runtime_error(
                         "audio input must be default or a non-negative device index");
                 }
+            } else if (option == "--audio-file") {
+                options.audio_file = optionValue(index, argc, argv, option);
+                options.enable_audio = true;
             } else if (option == "--enable-audio-buffers" ||
                        option == "--audio-buffers") {
                 options.audio_buffers = std::max(
@@ -460,11 +467,15 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--enable-audio-buffers requires --enable-audio");
         }
+        if (!options.audio_file.empty() && options.audio_input_specified) {
+            throw std::runtime_error(
+                "--audio-file and --audio-input cannot be used together");
+        }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5H)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5I)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -518,6 +529,7 @@ namespace acmxvk {
                << "  -l, --channels <N>          Capture channels (default 2)\n"
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
                << "      --audio-input <device>  Input index or default\n"
+               << "      --audio-file <media>    FFmpeg-decoded reactive audio source\n"
                << "      --enable-audio-buffers N\n"
                << "                              FFT history layers at binding 4\n"
                << "      --list-devices          List RtAudio devices and exit\n"
@@ -1055,6 +1067,7 @@ namespace acmxvk {
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef AUDIO_ENABLED
         std::unique_ptr<audio::AudioEngine> audio_engine;
+        std::unique_ptr<audio::FileAudioSource> file_audio_source;
 #endif
 
         void openAudio() {
@@ -1063,6 +1076,16 @@ namespace acmxvk {
             }
 #ifdef AUDIO_ENABLED
             audio_engine = std::make_unique<audio::AudioEngine>();
+            audio_engine->set_sensitivity(
+                static_cast<float>(options.audio_sensitivity));
+            if (!options.audio_file.empty()) {
+                file_audio_source = std::make_unique<audio::FileAudioSource>();
+                if (!file_audio_source->open(options.audio_file)) {
+                    throw std::runtime_error("could not decode --audio-file: " +
+                                             options.audio_file);
+                }
+                return;
+            }
             const audio::AudioStreamConfig config{
                 static_cast<unsigned int>(options.audio_channels),
                 static_cast<float>(options.audio_sensitivity),
@@ -1078,7 +1101,7 @@ namespace acmxvk {
 
         void adjustAudioSensitivity(float amount) {
 #ifdef AUDIO_ENABLED
-            if (audio_engine != nullptr && audio_engine->is_open()) {
+            if (audioSourceOpen()) {
                 audio_engine->set_sensitivity(audio_engine->sensitivity() + amount);
                 options.audio_sensitivity = audio_engine->sensitivity();
                 std::cout << "acmxvk: audio sensitivity "
@@ -1089,6 +1112,16 @@ namespace acmxvk {
             static_cast<void>(amount);
 #endif
             std::cout << "acmxvk: audio input is not active\n";
+        }
+
+        [[nodiscard]] bool audioSourceOpen() const {
+#ifdef AUDIO_ENABLED
+            return audio_engine != nullptr &&
+                   (audio_engine->is_open() ||
+                    (file_audio_source != nullptr && file_audio_source->is_open()));
+#else
+            return false;
+#endif
         }
 
         void loadShaders() {
@@ -1897,7 +1930,10 @@ namespace acmxvk {
             float audio_sample_rate = 44100.0F;
 #ifdef AUDIO_ENABLED
             std::vector<float> spectrum_values;
-            if (audio_engine != nullptr && audio_engine->is_open()) {
+            if (file_audio_source != nullptr && audio_engine != nullptr) {
+                file_audio_source->process_frame(outputFrameRate(), *audio_engine);
+            }
+            if (audioSourceOpen()) {
                 const audio::AudioMetrics metrics = audio_engine->metrics();
                 const float sense = audio_engine->sensitivity() * 4.0F;
                 audio_amplitude = metrics.amplitude;

@@ -264,9 +264,15 @@ endif()
 if(AUDIO)
     find_library(RTAUDIO_LIBRARY NAMES rtaudio REQUIRED)
     find_path(RTAUDIO_INCLUDE_DIR NAMES rtaudio/RtAudio.h REQUIRED)
-    target_sources(acmxvk PRIVATE audio.cpp audio.hpp)
+    target_sources(acmxvk PRIVATE audio.cpp audio.hpp file_audio.cpp file_audio.hpp)
     target_include_directories(acmxvk PRIVATE "${RTAUDIO_INCLUDE_DIR}")
-    target_link_libraries(acmxvk PRIVATE "${RTAUDIO_LIBRARY}")
+    target_link_libraries(acmxvk PRIVATE
+        "${RTAUDIO_LIBRARY}"
+        PkgConfig::AVCODEC
+        PkgConfig::AVFORMAT
+        PkgConfig::AVUTIL
+        PkgConfig::SWRESAMPLE
+    )
     target_compile_definitions(acmxvk PRIVATE AUDIO_ENABLED)
 endif()
 if(VALIDATION)

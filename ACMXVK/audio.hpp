@@ -44,6 +44,9 @@ namespace acmxvk::audio {
         void set_sensitivity(float sensitivity);
         [[nodiscard]] float sensitivity() const;
         [[nodiscard]] std::vector<float> spectrum() const;
+        void process_samples(const float *samples, unsigned int frame_count,
+                             unsigned int channels, unsigned int sample_rate);
+        void reset();
         static constexpr std::uint32_t spectrum_bin_count() {
             return static_cast<std::uint32_t>(FFT_SIZE / 2);
         }
