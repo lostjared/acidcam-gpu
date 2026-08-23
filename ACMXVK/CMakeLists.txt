@@ -159,6 +159,9 @@ set(ACMXVK_AUDIO_REACTIVE_SHADER
 set(ACMXVK_AUDIO_SPECTRUM_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/audio_spectrum.frag.spv"
 )
+set(ACMXVK_AUDIO_HISTORY_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/audio_history.frag.spv"
+)
 
 add_custom_command(
     OUTPUT "${ACMXVK_SPRITE_VERTEX_SHADER}"
@@ -226,6 +229,17 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${ACMXVK_AUDIO_HISTORY_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/audio_history.frag"
+            -o "${ACMXVK_AUDIO_HISTORY_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/audio_history.frag"
+    COMMENT "Compiling ACMXVK FFT history test shader"
+    VERBATIM
+)
+
 add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_SPRITE_VERTEX_SHADER}"
     "${ACMXVK_ECHO_CACHE_SHADER}"
@@ -233,6 +247,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
     "${ACMXVK_AUDIO_REACTIVE_SHADER}"
     "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
+    "${ACMXVK_AUDIO_HISTORY_SHADER}"
 )
 
 add_executable(acmxvk acmx.cpp)
@@ -274,6 +289,7 @@ install(FILES
         "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
         "${ACMXVK_AUDIO_REACTIVE_SHADER}"
         "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
+        "${ACMXVK_AUDIO_HISTORY_SHADER}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")

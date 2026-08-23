@@ -84,6 +84,7 @@ namespace acmxvk {
         int texture_cache_size = 8;
         int audio_channels = 2;
         int audio_input_device = -1;
+        int audio_buffers = 0;
         double requested_fps = 0.0;
         double duration = 0.0;
         double time_speed = 1.0;
@@ -320,6 +321,10 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "audio input must be default or a non-negative device index");
                 }
+            } else if (option == "--enable-audio-buffers" ||
+                       option == "--audio-buffers") {
+                options.audio_buffers = std::max(
+                    parseInteger(optionValue(index, argc, argv, option), option), 0);
             } else if (option == "--list-devices") {
                 options.list_audio_devices = true;
             } else if (option == "--check-audio") {
@@ -451,11 +456,15 @@ namespace acmxvk {
             options.duration <= 0.0) {
             throw std::runtime_error("graphic recording requires --duration <seconds>");
         }
+        if (options.audio_buffers > 0 && !options.enable_audio) {
+            throw std::runtime_error(
+                "--enable-audio-buffers requires --enable-audio");
+        }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5G)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5H)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -509,6 +518,8 @@ namespace acmxvk {
                << "  -l, --channels <N>          Capture channels (default 2)\n"
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
                << "      --audio-input <device>  Input index or default\n"
+               << "      --enable-audio-buffers N\n"
+               << "                              FFT history layers at binding 4\n"
                << "      --list-devices          List RtAudio devices and exit\n"
                << "      --check-audio           Report compiled audio support\n"
                << "                              Provides a 256-bin FFT at binding 3\n\n"
@@ -1539,6 +1550,11 @@ namespace acmxvk {
             frame_sprite->setCustomUniforms(custom_uniform_values);
 #ifdef AUDIO_ENABLED
             frame_sprite->enableSpectrumTexture(audio::AudioEngine::spectrum_bin_count());
+            if (options.audio_buffers > 0) {
+                frame_sprite->enableSpectrumHistoryTexture(
+                    audio::AudioEngine::spectrum_bin_count(),
+                    static_cast<std::uint32_t>(options.audio_buffers));
+            }
 #endif
             if (options.enable_texture_cache) {
                 frame_sprite->enableHistoryTexture(source_width, source_height,
@@ -1773,6 +1789,8 @@ namespace acmxvk {
                     shader.string(), {1.0F, 1.0F, 1.0F, 0.0F}, false};
 #ifdef AUDIO_ENABLED
                 effect.spectrumBinCount = audio::AudioEngine::spectrum_bin_count();
+                effect.spectrumHistoryLayerCount =
+                    static_cast<std::uint32_t>(options.audio_buffers);
 #endif
                 effects.push_back(effect);
             }
@@ -1782,6 +1800,11 @@ namespace acmxvk {
                 sprite->setCustomUniforms(custom_uniform_values);
 #ifdef AUDIO_ENABLED
                 sprite->enableSpectrumTexture(audio::AudioEngine::spectrum_bin_count());
+                if (options.audio_buffers > 0) {
+                    sprite->enableSpectrumHistoryTexture(
+                        audio::AudioEngine::spectrum_bin_count(),
+                        static_cast<std::uint32_t>(options.audio_buffers));
+                }
 #endif
             }
 
@@ -1920,10 +1943,20 @@ namespace acmxvk {
                 frame_sprite->updateSpectrumTexture(
                     spectrum_values.data(),
                     static_cast<std::uint32_t>(spectrum_values.size()));
+                if (options.audio_buffers > 0) {
+                    frame_sprite->updateSpectrumHistoryTexture(
+                        spectrum_values.data(),
+                        static_cast<std::uint32_t>(spectrum_values.size()));
+                }
                 for (mxvk::VK_Sprite *sprite : post_process_sprites) {
                     sprite->updateSpectrumTexture(
                         spectrum_values.data(),
                         static_cast<std::uint32_t>(spectrum_values.size()));
+                    if (options.audio_buffers > 0) {
+                        sprite->updateSpectrumHistoryTexture(
+                            spectrum_values.data(),
+                            static_cast<std::uint32_t>(spectrum_values.size()));
+                    }
                 }
             }
 #endif
