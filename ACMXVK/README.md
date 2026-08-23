@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5D**. It is usable for video, camera, and
+The port is currently at **Increment 5E**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Not yet ported | Audio spectrum, amplitude, and history resources from ACMX2 remain future work. |
+| Audio-reactive shader data | Partial | Optional RtAudio capture provides amplitude, frequency, peak, RMS, and smoothed-amplitude data. FFT spectrum textures, frequency bands, file audio, and audio history remain future work. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -41,6 +41,7 @@ ACMX2.
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
+- Optional RtAudio development files when building with `-DAUDIO=ON`
 
 The Vulkan environment used for this project can be loaded with:
 
@@ -54,7 +55,7 @@ From the `acidcam-gpu` repository root:
 
 ```bash
 source ~/vulkan.sh
-cmake -S ACMXVK -B build/acmxvk -DVALIDATION=ON -DCMAKE_BUILD_TYPE=Debug
+cmake -S ACMXVK -B build/acmxvk -DVALIDATION=ON -DAUDIO=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/acmxvk -j
 ./build/acmxvk/acmxvk --help
 ```
@@ -66,8 +67,9 @@ cmake --install build/acmxvk
 cmake --build build/acmxvk --target uninstall
 ```
 
-Increment 5D requires the matching MXVK custom-uniform changes to be installed
-before ACMXVK is compiled against the system package.
+Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
+Increment 5E uses the MXVK UBO already required by Increment 5C, so it does not
+require another MXVK reinstall.
 
 ## Examples
 
@@ -90,6 +92,16 @@ Render a still image for five seconds and encode it with a software encoder:
     --encode-codec software \
     --no-drop \
     --output output.mp4
+```
+
+Preview the included shader with live audio reactivity:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.png \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --enable-audio \
+    --audio-input default
 ```
 
 Enable an eight-layer frame-history cache:
@@ -167,6 +179,21 @@ The remaining Vulkan bindings are:
 - Set 0, binding 1: mouse, frame state, resolution, time, history metadata, and custom floats
 - Set 0, binding 2: optional RGBA history as `sampler2DArray`
 
+With an `AUDIO=ON` build and `--enable-audio`, Increment 5E maps live audio
+metrics into otherwise-unused components of the binding-1 block:
+
+| ACMX2 name | MXVK field | Meaning |
+| --- | --- | --- |
+| `amp` | `ext.u1.y` | Mean absolute amplitude |
+| `iamp` | `ext.u1.z` | Zero-crossing frequency estimate in Hz |
+| `iSampleRate` | `ext.u2.z` | Active input sample rate |
+| `amp_peak` | `ext.u2.w` | Sensitivity-scaled peak level |
+| `amp_rms` | `ext.u3.z` | Sensitivity-scaled RMS level |
+| `amp_smooth` | `ext.u3.w` | Sensitivity-scaled smoothed amplitude |
+
+See `shaders/audio_reactive.frag` for a working shader. Audio values remain
+zero when capture is disabled or an input device cannot be opened.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -177,6 +204,7 @@ The remaining Vulkan bindings are:
 - T: enable or disable shader-time advancement
 - U/I: step shader time forward or backward by 0.05
 - Page Up/Page Down: increase or decrease shader-time speed
+- Insert/Delete: increase or decrease live audio sensitivity
 - F: toggle fullscreen
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
@@ -192,8 +220,9 @@ Run `acmxvk --help` for the complete command-line reference.
 Development builds are tested with the Vulkan SDK selected by `~/vulkan.sh`
 and with validation enabled in both MXVK and ACMXVK. The current increment has
 been exercised with shader-library loading, multipass rendering, configurable
-history caches, MXWrite encoding, and custom-uniform rendering. The known
-duplicate vkBasalt implicit-layer warning is external to ACMXVK.
+history caches, MXWrite encoding, custom-uniform rendering, and optional live
+audio metrics. The known duplicate vkBasalt implicit-layer warning is external
+to ACMXVK.
 
 ## Development note
 

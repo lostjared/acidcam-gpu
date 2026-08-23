@@ -5,6 +5,7 @@ project(ACMXVK VERSION 0.1.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 
 option(VALIDATION "Enable Vulkan validation layers" OFF)
+option(AUDIO "Enable RtAudio input and audio-reactive shader metrics" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,6 +56,9 @@ set(ACMXVK_FLIP_SHADER
 set(ACMXVK_CUSTOM_UNIFORM_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/custom_uniform.frag.spv"
 )
+set(ACMXVK_AUDIO_REACTIVE_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/audio_reactive.frag.spv"
+)
 
 add_custom_command(
     OUTPUT "${ACMXVK_SPRITE_VERTEX_SHADER}"
@@ -100,11 +104,23 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${ACMXVK_AUDIO_REACTIVE_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/audio_reactive.frag"
+            -o "${ACMXVK_AUDIO_REACTIVE_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/audio_reactive.frag"
+    COMMENT "Compiling ACMXVK audio-reactive test shader"
+    VERBATIM
+)
+
 add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_SPRITE_VERTEX_SHADER}"
     "${ACMXVK_ECHO_CACHE_SHADER}"
     "${ACMXVK_FLIP_SHADER}"
     "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
+    "${ACMXVK_AUDIO_REACTIVE_SHADER}"
 )
 
 add_executable(acmxvk acmx.cpp)
@@ -112,6 +128,14 @@ add_dependencies(acmxvk acmxvk_shaders)
 target_include_directories(acmxvk PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(acmxvk PRIVATE mxvk::mxvk MXWrite::mxwrite ${OpenCV_LIBS})
 target_compile_options(acmxvk PRIVATE -Wall -Wextra -Wpedantic)
+if(AUDIO)
+    find_library(RTAUDIO_LIBRARY NAMES rtaudio REQUIRED)
+    find_path(RTAUDIO_INCLUDE_DIR NAMES rtaudio/RtAudio.h REQUIRED)
+    target_sources(acmxvk PRIVATE audio.cpp audio.hpp)
+    target_include_directories(acmxvk PRIVATE "${RTAUDIO_INCLUDE_DIR}")
+    target_link_libraries(acmxvk PRIVATE "${RTAUDIO_LIBRARY}")
+    target_compile_definitions(acmxvk PRIVATE AUDIO_ENABLED)
+endif()
 if(VALIDATION)
     target_compile_definitions(acmxvk PRIVATE ENABLE_VALIDATION)
 endif()
@@ -130,6 +154,7 @@ install(FILES
         "${ACMXVK_ECHO_CACHE_SHADER}"
         "${ACMXVK_FLIP_SHADER}"
         "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
+        "${ACMXVK_AUDIO_REACTIVE_SHADER}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")

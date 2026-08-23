@@ -9,6 +9,10 @@
 #include <mxvk/mxvk_png.hpp>
 #include <mxwrite.hpp>
 
+#ifdef AUDIO_ENABLED
+#include "audio.hpp"
+#endif
+
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -24,6 +28,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -77,10 +82,13 @@ namespace acmxvk {
         int generate_interval = 0;
         int cache_delay = 1;
         int texture_cache_size = 8;
+        int audio_channels = 2;
+        int audio_input_device = -1;
         double requested_fps = 0.0;
         double duration = 0.0;
         double time_speed = 1.0;
         double max_size_mb = 0.0;
+        double audio_sensitivity = 1.0;
         bool resolution_specified = false;
         bool fullscreen = false;
         bool repeat = false;
@@ -94,6 +102,9 @@ namespace acmxvk {
         bool encode_realtime = false;
         bool no_drop = false;
         bool copy_audio = false;
+        bool enable_audio = false;
+        bool list_audio_devices = false;
+        bool check_audio = false;
         bool list_encoders = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
@@ -285,6 +296,34 @@ namespace acmxvk {
                 if (options.requested_fps <= 0.0) {
                     throw std::runtime_error("FPS must be positive");
                 }
+            } else if (option == "-w" || option == "--enable-audio") {
+                options.enable_audio = true;
+            } else if (option == "-l" || option == "--channels") {
+                options.audio_channels =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.audio_channels < 1) {
+                    throw std::runtime_error("audio channels must be positive");
+                }
+            } else if (option == "-q" || option == "--sense") {
+                options.audio_sensitivity =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                if (options.audio_sensitivity < 0.1 ||
+                    options.audio_sensitivity > 5.0) {
+                    throw std::runtime_error(
+                        "audio sensitivity must be between 0.1 and 5.0");
+                }
+            } else if (option == "--audio-input") {
+                const std::string value = optionValue(index, argc, argv, option);
+                options.audio_input_device =
+                    value == "default" ? -1 : parseInteger(value, option);
+                if (options.audio_input_device < -1) {
+                    throw std::runtime_error(
+                        "audio input must be default or a non-negative device index");
+                }
+            } else if (option == "--list-devices") {
+                options.list_audio_devices = true;
+            } else if (option == "--check-audio") {
+                options.check_audio = true;
             } else if (option == "--duration") {
                 options.duration = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.duration <= 0.0) {
@@ -416,7 +455,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5D)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5E)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -465,6 +504,13 @@ namespace acmxvk {
                << "      --encode-realtime       Enable low-latency encoder settings\n"
                << "      --no-drop               Block when the encoder queue is full\n"
                << "      --copy-audio            Copy input audio into encoded output\n\n"
+               << "Audio (requires AUDIO=ON build):\n"
+               << "  -w, --enable-audio          Enable live audio-reactive metrics\n"
+               << "  -l, --channels <N>          Capture channels (default 2)\n"
+               << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
+               << "      --audio-input <device>  Input index or default\n"
+               << "      --list-devices          List RtAudio devices and exit\n"
+               << "      --check-audio           Report compiled audio support\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -475,7 +521,8 @@ namespace acmxvk {
                << "      --enable-screenshot     Enable MXVK F10 screenshots\n\n"
                << "Keys: Up/Down shader or playlist node, Shift+Up/Down final shader,\n"
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
-               << "      Page Up/Down time speed, F fullscreen, M multipass,\n"
+               << "      Page Up/Down time speed, Insert/Delete audio sensitivity,\n"
+               << "      F fullscreen, M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
                << "      Escape quit\n";
     }
@@ -776,6 +823,7 @@ namespace acmxvk {
               options(std::move(options)) {
             setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
             setEnableScreenshot(this->options.enable_screenshot);
+            openAudio();
             loadShaders();
             loadShaderPasses();
             loadPlaylist();
@@ -869,6 +917,12 @@ namespace acmxvk {
                     break;
                 case SDLK_F:
                     toggleFullscreen();
+                    break;
+                case SDLK_INSERT:
+                    adjustAudioSensitivity(0.1F);
+                    break;
+                case SDLK_DELETE:
+                    adjustAudioSensitivity(-0.1F);
                     break;
                 case SDLK_M:
                     if (!configured_passes.empty()) {
@@ -987,6 +1041,43 @@ namespace acmxvk {
         std::uint64_t frame_count = 0;
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
+#ifdef AUDIO_ENABLED
+        std::unique_ptr<audio::AudioEngine> audio_engine;
+#endif
+
+        void openAudio() {
+            if (!options.enable_audio) {
+                return;
+            }
+#ifdef AUDIO_ENABLED
+            audio_engine = std::make_unique<audio::AudioEngine>();
+            const audio::AudioStreamConfig config{
+                static_cast<unsigned int>(options.audio_channels),
+                static_cast<float>(options.audio_sensitivity),
+                options.audio_input_device,
+            };
+            if (!audio_engine->open(config)) {
+                std::cerr << "acmxvk: audio input could not be initialized; "
+                             "continuing with zero-valued audio metrics\n";
+                audio_engine.reset();
+            }
+#endif
+        }
+
+        void adjustAudioSensitivity(float amount) {
+#ifdef AUDIO_ENABLED
+            if (audio_engine != nullptr && audio_engine->isOpen()) {
+                audio_engine->setSensitivity(audio_engine->sensitivity() + amount);
+                options.audio_sensitivity = audio_engine->sensitivity();
+                std::cout << "acmxvk: audio sensitivity "
+                          << options.audio_sensitivity << '\n';
+                return;
+            }
+#else
+            static_cast<void>(amount);
+#endif
+            std::cout << "acmxvk: audio input is not active\n";
+        }
 
         void loadShaders() {
             if (!options.fragment_shader.empty()) {
@@ -1760,16 +1851,35 @@ namespace acmxvk {
             }
             const float elapsed = static_cast<float>(shader_time);
             const float frame_rate = delta > 0.0F ? 1.0F / delta : 0.0F;
+            float audio_amplitude = 0.0F;
+            float audio_frequency = 0.0F;
+            float audio_peak = 0.0F;
+            float audio_rms = 0.0F;
+            float audio_smooth = 0.0F;
+            float audio_sample_rate = 44100.0F;
+#ifdef AUDIO_ENABLED
+            if (audio_engine != nullptr && audio_engine->isOpen()) {
+                const audio::AudioMetrics metrics = audio_engine->metrics();
+                const float sense = audio_engine->sensitivity() * 4.0F;
+                audio_amplitude = metrics.amplitude;
+                audio_frequency = metrics.frequency;
+                audio_peak = std::sqrt(std::max(metrics.peak, 0.0F)) * sense;
+                audio_rms = std::sqrt(std::max(metrics.rms, 0.0F)) * sense;
+                audio_smooth = std::sqrt(std::max(metrics.smooth, 0.0F)) * sense;
+                audio_sample_rate = static_cast<float>(audio_engine->sampleRate());
+            }
+#endif
             frame_sprite->setShaderParams(1.0F, 1.0F, 1.0F, elapsed);
             frame_sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
             frame_sprite->setUniform0(1.0F, 1.0F, static_cast<float>(width),
                                       static_cast<float>(height));
-            frame_sprite->setUniform1(delta, 0.0F, 0.0F, frame_rate);
-            frame_sprite->setUniform2(static_cast<float>(frame_count), elapsed, 48000.0F,
-                                      0.0F);
+            frame_sprite->setUniform1(delta, audio_amplitude, audio_frequency,
+                                      frame_rate);
+            frame_sprite->setUniform2(static_cast<float>(frame_count), elapsed,
+                                      audio_sample_rate, audio_peak);
             frame_sprite->setUniform3(static_cast<float>(frame_sprite->getHistoryHead()),
                                       static_cast<float>(frame_sprite->getHistoryLayerCount()),
-                                      0.0F, 0.0F);
+                                      audio_rms, audio_smooth);
 
             for (std::size_t index = 0; index < post_process_sprites.size(); ++index) {
                 mxvk::VK_Sprite *sprite = post_process_sprites[index];
@@ -1777,10 +1887,11 @@ namespace acmxvk {
                 sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
                 sprite->setUniform0(1.0F, 1.0F, static_cast<float>(width),
                                     static_cast<float>(height));
-                sprite->setUniform1(delta, 0.0F, 0.0F, frame_rate);
-                sprite->setUniform2(static_cast<float>(frame_count), elapsed, 48000.0F,
-                                    0.0F);
-                sprite->setUniform3(0.0F, 0.0F, 0.0F, 0.0F);
+                sprite->setUniform1(delta, audio_amplitude, audio_frequency,
+                                    frame_rate);
+                sprite->setUniform2(static_cast<float>(frame_count), elapsed,
+                                    audio_sample_rate, audio_peak);
+                sprite->setUniform3(0.0F, 0.0F, audio_rms, audio_smooth);
             }
         }
     };
@@ -1789,6 +1900,29 @@ namespace acmxvk {
 int main(int argc, char **argv) {
     try {
         acmxvk::Options options = acmxvk::parseOptions(argc, argv);
+        if (options.check_audio) {
+#ifdef AUDIO_ENABLED
+            std::cout << "AUDIO: enabled\n";
+#else
+            std::cout << "AUDIO: disabled\n";
+#endif
+            return EXIT_SUCCESS;
+        }
+        if (options.list_audio_devices) {
+#ifdef AUDIO_ENABLED
+            acmxvk::audio::AudioEngine::listDevices();
+            return EXIT_SUCCESS;
+#else
+            throw std::runtime_error(
+                "--list-devices requires an ACMXVK build configured with -DAUDIO=ON");
+#endif
+        }
+#ifndef AUDIO_ENABLED
+        if (options.enable_audio) {
+            throw std::runtime_error(
+                "--enable-audio requires an ACMXVK build configured with -DAUDIO=ON");
+        }
+#endif
         if (options.show_help) {
             acmxvk::printHelp(std::cout);
             return EXIT_SUCCESS;
