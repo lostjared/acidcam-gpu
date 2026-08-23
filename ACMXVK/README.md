@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5F**. It is usable for video, camera, and
+The port is currently at **Increment 5G**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Partial | Optional RtAudio capture provides amplitude, frequency, peak, RMS, smoothed amplitude, and a current-frame 256-bin FFT texture. Frequency-band uniforms, file audio, and audio history remain future work. |
+| Audio-reactive shader data | Partial | Optional RtAudio capture provides amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high frequency bands, and a current-frame 256-bin FFT texture. File audio and audio history remain future work. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -68,7 +68,7 @@ cmake --build build/acmxvk --target uninstall
 ```
 
 Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
-Increment 5F adds the MXVK 1-D spectrum-texture API, so the matching MXVK source
+Increment 5G adds the MXVK audio-band UBO suffix, so the matching MXVK source
 must be rebuilt and reinstalled before compiling ACMXVK with `-DAUDIO=ON`.
 
 ### Apple Silicon and MoltenVK
@@ -199,6 +199,7 @@ layout(set = 0, binding = 1) uniform SpriteExtended {
     vec4 u2;
     vec4 u3;
     vec4 custom_uniforms[16];
+    vec4 audio_bands;
 } ext;
 
 #define square_size ext.custom_uniforms[0].x
@@ -211,12 +212,12 @@ Uniform number `N` is stored in
 The remaining Vulkan bindings are:
 
 - Set 0, binding 0: current RGBA frame as `sampler2D`
-- Set 0, binding 1: mouse, frame state, resolution, time, history metadata, and custom floats
+- Set 0, binding 1: mouse, frame state, resolution, time, history metadata, custom floats, and audio bands
 - Set 0, binding 2: optional RGBA history as `sampler2DArray`
 - Set 0, binding 3: current 256-bin audio FFT as an R32 `sampler1D`
 
-With an `AUDIO=ON` build and `--enable-audio`, the Increment 5E/5F audio path
-maps live audio metrics into otherwise-unused components of the binding-1 block:
+With an `AUDIO=ON` build and `--enable-audio`, the Increment 5G audio path maps
+live audio metrics into the binding-1 block:
 
 | ACMX2 name | MXVK field | Meaning |
 | --- | --- | --- |
@@ -226,9 +227,16 @@ maps live audio metrics into otherwise-unused components of the binding-1 block:
 | `amp_peak` | `ext.u2.w` | Sensitivity-scaled peak level |
 | `amp_rms` | `ext.u3.z` | Sensitivity-scaled RMS level |
 | `amp_smooth` | `ext.u3.w` | Sensitivity-scaled smoothed amplitude |
+| `amp_low` | `ext.audio_bands.x` | Sensitivity-scaled energy below 300 Hz |
+| `amp_mid` | `ext.audio_bands.y` | Sensitivity-scaled energy from 300 through 3000 Hz |
+| `amp_high` | `ext.audio_bands.z` | Sensitivity-scaled energy above 3000 Hz |
 
 See `shaders/audio_reactive.frag` for a working shader. Audio values remain
 zero when capture is disabled or an input device cannot be opened.
+
+`audio_bands` is appended after `custom_uniforms[16]`. This preserves every
+existing field and custom-float offset; older shaders may stop their uniform
+block at `u3` or `custom_uniforms` without declaring the new suffix.
 
 The FFT uses a 512-sample Hann window and exposes 256 linear-frequency bins.
 Coordinate `0.0` is DC and `1.0` approaches the Nyquist frequency. Declare it

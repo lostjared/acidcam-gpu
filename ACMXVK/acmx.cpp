@@ -455,7 +455,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5F)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5G)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1868,6 +1868,9 @@ namespace acmxvk {
             float audio_peak = 0.0F;
             float audio_rms = 0.0F;
             float audio_smooth = 0.0F;
+            float audio_low = 0.0F;
+            float audio_mid = 0.0F;
+            float audio_high = 0.0F;
             float audio_sample_rate = 44100.0F;
 #ifdef AUDIO_ENABLED
             std::vector<float> spectrum_values;
@@ -1879,6 +1882,9 @@ namespace acmxvk {
                 audio_peak = std::sqrt(std::max(metrics.peak, 0.0F)) * sense;
                 audio_rms = std::sqrt(std::max(metrics.rms, 0.0F)) * sense;
                 audio_smooth = std::sqrt(std::max(metrics.smooth, 0.0F)) * sense;
+                audio_low = std::sqrt(std::max(metrics.low, 0.0F)) * sense;
+                audio_mid = std::sqrt(std::max(metrics.mid, 0.0F)) * sense;
+                audio_high = std::sqrt(std::max(metrics.high, 0.0F)) * sense;
                 audio_sample_rate = static_cast<float>(audio_engine->sample_rate());
                 spectrum_values = audio_engine->spectrum();
             }
@@ -1894,6 +1900,7 @@ namespace acmxvk {
             frame_sprite->setUniform3(static_cast<float>(frame_sprite->getHistoryHead()),
                                       static_cast<float>(frame_sprite->getHistoryLayerCount()),
                                       audio_rms, audio_smooth);
+            frame_sprite->setAudioBands(audio_low, audio_mid, audio_high);
 
             for (std::size_t index = 0; index < post_process_sprites.size(); ++index) {
                 mxvk::VK_Sprite *sprite = post_process_sprites[index];
@@ -1906,6 +1913,7 @@ namespace acmxvk {
                 sprite->setUniform2(static_cast<float>(frame_count), elapsed,
                                     audio_sample_rate, audio_peak);
                 sprite->setUniform3(0.0F, 0.0F, audio_rms, audio_smooth);
+                sprite->setAudioBands(audio_low, audio_mid, audio_high);
             }
 #ifdef AUDIO_ENABLED
             if (!spectrum_values.empty()) {

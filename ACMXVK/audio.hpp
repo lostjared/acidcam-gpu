@@ -14,6 +14,9 @@ namespace acmxvk::audio {
         float peak = 0.0F;
         float rms = 0.0F;
         float smooth = 0.0F;
+        float low = 0.0F;
+        float mid = 0.0F;
+        float high = 0.0F;
     };
 
     struct AudioStreamConfig {

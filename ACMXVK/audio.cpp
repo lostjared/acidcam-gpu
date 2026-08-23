@@ -175,6 +175,9 @@ namespace acmxvk::audio {
                 peak.load(std::memory_order_relaxed),
                 rms.load(std::memory_order_relaxed),
                 smooth.load(std::memory_order_relaxed),
+                low.load(std::memory_order_relaxed),
+                mid.load(std::memory_order_relaxed),
+                high.load(std::memory_order_relaxed),
             };
         }
 
@@ -211,7 +214,12 @@ namespace acmxvk::audio {
             peak.store(0.0F, std::memory_order_relaxed);
             rms.store(0.0F, std::memory_order_relaxed);
             smooth.store(0.0F, std::memory_order_relaxed);
+            low.store(0.0F, std::memory_order_relaxed);
+            mid.store(0.0F, std::memory_order_relaxed);
+            high.store(0.0F, std::memory_order_relaxed);
             smooth_value = 0.0F;
+            low_pass_state = 0.0F;
+            mid_pass_state = 0.0F;
         }
 
         static int audioCallback(void *, void *input_buffer,
@@ -232,10 +240,18 @@ namespace acmxvk::audio {
             float amplitude_sum = 0.0F;
             float peak_value = 0.0F;
             float square_sum = 0.0F;
+            float low_sum = 0.0F;
+            float mid_sum = 0.0F;
+            float high_sum = 0.0F;
             unsigned int crossings = 0;
             float previous = samples[0];
             const int spectrum_back =
                 1 - spectrum_front.load(std::memory_order_acquire);
+            const float rate = static_cast<float>(
+                std::max(sample_rate.load(std::memory_order_relaxed), 1U));
+            const float low_coefficient = 1.0F - std::exp(-2.0F * PI * 300.0F / rate);
+            const float mid_coefficient =
+                1.0F - std::exp(-2.0F * PI * 3000.0F / rate);
 
             for (unsigned int frame = 0; frame < frame_count; ++frame) {
                 float mono = 0.0F;
@@ -245,6 +261,14 @@ namespace acmxvk::audio {
                     mono += sample;
                 }
                 mono /= static_cast<float>(input_channels);
+                low_pass_state += low_coefficient * (mono - low_pass_state);
+                mid_pass_state += mid_coefficient * (mono - mid_pass_state);
+                const float low_sample = low_pass_state;
+                const float mid_sample = mid_pass_state - low_pass_state;
+                const float high_sample = mono - mid_pass_state;
+                low_sum += low_sample * low_sample;
+                mid_sum += mid_sample * mid_sample;
+                high_sum += high_sample * high_sample;
                 if (frame < AudioEngine::FFT_SIZE) {
                     spectrum_samples[spectrum_back][frame].store(
                         mono, std::memory_order_relaxed);
@@ -276,9 +300,15 @@ namespace acmxvk::audio {
             rms.store(std::sqrt(square_sum / static_cast<float>(frame_count)),
                       std::memory_order_relaxed);
             smooth.store(smooth_value, std::memory_order_relaxed);
+            low.store(std::sqrt(low_sum / static_cast<float>(frame_count)),
+                      std::memory_order_relaxed);
+            mid.store(std::sqrt(mid_sum / static_cast<float>(frame_count)),
+                      std::memory_order_relaxed);
+            high.store(std::sqrt(high_sum / static_cast<float>(frame_count)),
+                       std::memory_order_relaxed);
             frequency.store(
                 static_cast<float>(crossings) *
-                    static_cast<float>(sample_rate.load(std::memory_order_relaxed)) /
+                    rate /
                     (2.0F * static_cast<float>(frame_count)),
                 std::memory_order_relaxed);
             return 0;
@@ -290,6 +320,9 @@ namespace acmxvk::audio {
         std::atomic<float> peak{0.0F};
         std::atomic<float> rms{0.0F};
         std::atomic<float> smooth{0.0F};
+        std::atomic<float> low{0.0F};
+        std::atomic<float> mid{0.0F};
+        std::atomic<float> high{0.0F};
         std::atomic<float> sensitivity_value{1.0F};
         std::atomic<unsigned int> sample_rate{44100};
         std::array<std::array<std::atomic<float>, AudioEngine::FFT_SIZE>, 2>
@@ -297,6 +330,8 @@ namespace acmxvk::audio {
         std::atomic<int> spectrum_front{0};
         unsigned int input_channels = 0;
         float smooth_value = 0.0F;
+        float low_pass_state = 0.0F;
+        float mid_pass_state = 0.0F;
     };
 
     AudioEngine::AudioEngine() : impl(std::make_unique<Impl>()) {}
