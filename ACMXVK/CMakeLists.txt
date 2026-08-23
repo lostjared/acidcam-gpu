@@ -4,6 +4,8 @@ project(ACMXVK VERSION 0.1.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
+option(VALIDATION "Enable Vulkan validation layers" OFF)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -79,8 +81,11 @@ add_custom_target(acmxvk_shaders DEPENDS
 
 add_executable(acmxvk acmx.cpp)
 add_dependencies(acmxvk acmxvk_shaders)
-target_link_libraries(acmxvk PRIVATE mxvk::mxvk)
+target_link_libraries(acmxvk PRIVATE mxvk::mxvk MXWrite::mxwrite)
 target_compile_options(acmxvk PRIVATE -Wall -Wextra -Wpedantic)
+if(VALIDATION)
+    target_compile_definitions(acmxvk PRIVATE ENABLE_VALIDATION)
+endif()
 target_compile_definitions(acmxvk PRIVATE
     ACMXVK_BUILD_SPRITE_VERTEX_SHADER="${ACMXVK_SPRITE_VERTEX_SHADER}"
     ACMXVK_INSTALL_SPRITE_VERTEX_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/sprite.vert.spv"

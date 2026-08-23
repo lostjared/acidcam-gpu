@@ -6,6 +6,7 @@
 #include <mxvk/mxvk.hpp>
 #include <mxvk/mxvk_cv.hpp>
 #include <mxvk/mxvk_exception.hpp>
+#include <mxwrite.hpp>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -15,6 +16,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -51,7 +53,9 @@ namespace acmxvk {
         int camera_height = 720;
         int camera_device = 0;
         int shader_index = 0;
+        int encode_crf = 18;
         double requested_fps = 0.0;
+        double duration = 0.0;
         bool resolution_specified = false;
         bool fullscreen = false;
         bool repeat = false;
@@ -59,6 +63,8 @@ namespace acmxvk {
         bool enable_screenshot = false;
         bool enable_playlist = false;
         bool enable_history_test = false;
+        bool encode_realtime = false;
+        bool no_drop = false;
         bool show_help = false;
         std::vector<int> shader_pass_indices;
         std::vector<std::string> shader_pass_files;
@@ -68,6 +74,10 @@ namespace acmxvk {
         std::string fragment_shader;
         std::string shader_file;
         std::string playlist_file;
+        std::string output_file;
+        std::string encode_preset = "medium";
+        std::string encode_tune;
+        std::string encode_codec = "auto";
     };
 
     [[nodiscard]] std::string optionValue(int &index, int argc, char **argv,
@@ -141,6 +151,8 @@ namespace acmxvk {
                 options.input_file = optionValue(index, argc, argv, option);
             } else if (option == "-g" || option == "--graphic") {
                 options.graphic_file = optionValue(index, argc, argv, option);
+            } else if (option == "-o" || option == "--output") {
+                options.output_file = optionValue(index, argc, argv, option);
             } else if (option == "-d" || option == "--device") {
                 options.camera_device =
                     parseInteger(optionValue(index, argc, argv, option), option);
@@ -205,6 +217,28 @@ namespace acmxvk {
                 if (options.requested_fps <= 0.0) {
                     throw std::runtime_error("FPS must be positive");
                 }
+            } else if (option == "--duration") {
+                options.duration = parseNumber(optionValue(index, argc, argv, option), option);
+                if (options.duration <= 0.0) {
+                    throw std::runtime_error("duration must be positive");
+                }
+            } else if (option == "-b" || option == "--bitrate" ||
+                       option == "--encode-crf") {
+                options.encode_crf =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.encode_crf < 0 || options.encode_crf > 51) {
+                    throw std::runtime_error("encoder CRF must be between 0 and 51");
+                }
+            } else if (option == "--encode-preset") {
+                options.encode_preset = optionValue(index, argc, argv, option);
+            } else if (option == "--encode-tune") {
+                options.encode_tune = optionValue(index, argc, argv, option);
+            } else if (option == "--encode-codec") {
+                options.encode_codec = optionValue(index, argc, argv, option);
+            } else if (option == "--encode-realtime") {
+                options.encode_realtime = true;
+            } else if (option == "--no-drop") {
+                options.no_drop = true;
             } else if (option == "-n" || option == "--fullscreen") {
                 options.fullscreen = true;
             } else if (option == "-a" || option == "--repeat") {
@@ -235,11 +269,23 @@ namespace acmxvk {
         if (options.enable_playlist && options.playlist_file.empty()) {
             throw std::runtime_error("--enable-playlist requires --playlist <file>");
         }
+        if (!options.output_file.empty() && !options.input_file.empty() &&
+            fs::absolute(options.output_file).lexically_normal() ==
+                fs::absolute(options.input_file).lexically_normal()) {
+            throw std::runtime_error("output file must differ from the input file");
+        }
+        if (options.duration > 0.0 && options.output_file.empty()) {
+            throw std::runtime_error("--duration requires --output <file>");
+        }
+        if (!options.graphic_file.empty() && !options.output_file.empty() &&
+            options.duration <= 0.0) {
+            throw std::runtime_error("graphic recording requires --duration <seconds>");
+        }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 2)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 3)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -249,7 +295,7 @@ namespace acmxvk {
                << "  -g, --graphic <file>        Read a still image\n"
                << "  -d, --device <index>        Camera device (default 0)\n"
                << "  -c, --camera-res <WxH>      Requested camera dimensions\n"
-               << "  -u, --fps <rate>            Requested camera FPS\n\n"
+               << "  -u, --fps <rate>            Camera/output FPS\n\n"
                << "Shaders:\n"
                << "  -s, --shaders <directory>   SPIR-V library containing index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
@@ -261,6 +307,15 @@ namespace acmxvk {
                << "  --enable-playlist           Enable the playlist immediately\n\n"
                << "History cache:\n"
                << "      --history-test          Run the converted eight-frame echo cache\n\n"
+               << "Recording:\n"
+               << "  -o, --output <file>         Encode processed output with MXWrite\n"
+               << "      --duration <seconds>    Stop after this much output video\n"
+               << "  -b, --encode-crf <0-51>     Encoder quality (default 18)\n"
+               << "      --encode-preset <name>  Encoder speed/quality preset\n"
+               << "      --encode-tune <name>    Encoder content/latency tuning\n"
+               << "      --encode-codec <name>   auto, software, nvenc, or exact encoder\n"
+               << "      --encode-realtime       Enable low-latency encoder settings\n"
+               << "      --no-drop               Block when the encoder queue is full\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -326,9 +381,15 @@ namespace acmxvk {
             loadPlaylist();
             openInput();
             initializeSprite();
+            openOutput();
         }
 
         ~MainWindow() override {
+            if (writer.is_open()) {
+                writer.close();
+                std::cout << "acmxvk: recording closed after " << output_frame_count
+                          << " frames\n";
+            }
             if (capture.is_open()) {
                 capture.close();
             }
@@ -398,8 +459,18 @@ namespace acmxvk {
         }
 
         void proc() override {
-            if (source_kind != SourceKind::Graphic && !readInputFrame()) {
-                handleCaptureEnd();
+            if (recording_complete) {
+                return;
+            }
+
+            if (source_kind != SourceKind::Graphic) {
+                if (initial_frame_pending) {
+                    initial_frame_pending = false;
+                } else if (!readInputFrame()) {
+                    if (!handleCaptureEnd()) {
+                        return;
+                    }
+                }
             }
 
             const VkExtent2D extent = getSwapchainExtent();
@@ -421,6 +492,7 @@ namespace acmxvk {
         Options options;
         SourceKind source_kind = SourceKind::Camera;
         mxvk::VK_Capture capture;
+        Writer writer;
         mxvk::VK_Sprite *frame_sprite = nullptr;
         cv::Mat graphic_rgba;
         std::vector<fs::path> shaders;
@@ -436,6 +508,12 @@ namespace acmxvk {
         float mouse_y = 0.0F;
         bool mouse_pressed = false;
         bool history_initialized = false;
+        bool initial_frame_pending = false;
+        bool recording_complete = false;
+        int recording_width = 0;
+        int recording_height = 0;
+        double recording_fps = 0.0;
+        std::uint64_t output_frame_count = 0;
         std::uint64_t frame_count = 0;
         std::chrono::steady_clock::time_point shader_start{std::chrono::steady_clock::now()};
         std::chrono::steady_clock::time_point previous_frame{shader_start};
@@ -630,6 +708,79 @@ namespace acmxvk {
             }
         }
 
+        [[nodiscard]] double outputFrameRate() {
+            if (options.requested_fps > 0.0) {
+                return options.requested_fps;
+            }
+            if (source_kind != SourceKind::Graphic) {
+                const double source_fps = capture.get(cv::CAP_PROP_FPS);
+                if (std::isfinite(source_fps) && source_fps > 0.0) {
+                    return source_fps;
+                }
+            }
+            return 30.0;
+        }
+
+        void openOutput() {
+            if (options.output_file.empty()) {
+                return;
+            }
+
+            const VkExtent2D extent = getSwapchainExtent();
+            recording_width = extent.width > 0U ? static_cast<int>(extent.width) : options.width;
+            recording_height =
+                extent.height > 0U ? static_cast<int>(extent.height) : options.height;
+            recording_fps = outputFrameRate();
+
+            EncodeOptions encode_options;
+            encode_options.preset = options.encode_preset;
+            encode_options.tune = options.encode_tune;
+            encode_options.crf = options.encode_crf;
+            encode_options.codec = options.encode_codec;
+            encode_options.realtime = options.encode_realtime;
+            encode_options.block_when_full = options.no_drop;
+
+            if (!writer.open(options.output_file, recording_width, recording_height,
+                             static_cast<float>(recording_fps), encode_options)) {
+                throw std::runtime_error("unable to open output video: " +
+                                         options.output_file);
+            }
+            writer.set_block_when_full(options.no_drop);
+            setFrameReadbackEnabled(true);
+            std::cout << "acmxvk: recording " << recording_width << 'x' << recording_height
+                      << " at " << recording_fps << " FPS to " << options.output_file
+                      << (options.no_drop ? " (no-drop)\n" : "\n");
+        }
+
+        void onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width,
+                             uint32_t height) override {
+            if (!writer.is_open() || recording_complete) {
+                return;
+            }
+
+            if (static_cast<int>(width) == recording_width &&
+                static_cast<int>(height) == recording_height) {
+                writer.write(rgba.data());
+            } else {
+                const cv::Mat source(static_cast<int>(height), static_cast<int>(width),
+                                     CV_8UC4, rgba.data());
+                cv::Mat resized;
+                cv::resize(source, resized, cv::Size(recording_width, recording_height),
+                           0.0, 0.0, cv::INTER_LINEAR);
+                writer.write(resized.ptr());
+            }
+            ++output_frame_count;
+
+            if (options.duration > 0.0) {
+                const auto maximum_frames = static_cast<std::uint64_t>(
+                    std::ceil(options.duration * recording_fps));
+                if (output_frame_count >= maximum_frames) {
+                    recording_complete = true;
+                    exit();
+                }
+            }
+        }
+
         void initializeSprite() {
             if (!ensureRenderResources()) {
                 throw std::runtime_error("MXVK failed to initialize render resources");
@@ -662,12 +813,15 @@ namespace acmxvk {
                                                                         : std::string{});
 
             if (source_kind == SourceKind::Graphic) {
+                initial_frame_pending = false;
                 frame_sprite->updateTexture(graphic_rgba.ptr(), graphic_rgba.cols,
                                             graphic_rgba.rows,
                                             static_cast<int>(graphic_rgba.step));
                 initializeHistory(graphic_rgba);
             } else if (!readInputFrame()) {
                 std::cerr << "acmxvk: capture did not provide an initial frame\n";
+            } else {
+                initial_frame_pending = true;
             }
 
             applyShaderPipeline();
@@ -755,19 +909,21 @@ namespace acmxvk {
             }
         }
 
-        void handleCaptureEnd() {
+        [[nodiscard]] bool handleCaptureEnd() {
             if (source_kind == SourceKind::Camera) {
-                return;
+                return true;
             }
             if (!options.repeat) {
+                setFrameReadbackEnabled(false);
                 exit();
-                return;
+                return false;
             }
 
             capture.close();
             if (!capture.open(options.input_file) || !readInputFrame()) {
                 throw std::runtime_error("unable to restart video input: " + options.input_file);
             }
+            return true;
         }
 
         void initializeHistory(const cv::Mat &rgba) {
