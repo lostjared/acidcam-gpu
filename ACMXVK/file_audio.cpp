@@ -7,8 +7,10 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -627,8 +629,361 @@ namespace acmxvk::audio {
             return true;
         }
 
+        void stop_output() {
+            output.reset();
+        }
+
         [[nodiscard]] bool has_output_clock() const {
             return output != nullptr && output->is_configured();
+        }
+
+        bool mux_into_video(const std::string &requested_video_path,
+                            double video_duration) {
+            output.reset();
+            if (samples.empty() || !std::isfinite(video_duration) ||
+                video_duration <= 0.0) {
+                std::cerr << "acmxvk: cannot mux file audio without decoded "
+                             "samples and a positive video duration\n";
+                return false;
+            }
+
+            const std::filesystem::path video_path =
+                std::filesystem::absolute(requested_video_path).lexically_normal();
+            if (!std::filesystem::is_regular_file(video_path)) {
+                std::cerr << "acmxvk: encoded video is not readable for audio mux: "
+                          << video_path.string() << '\n';
+                return false;
+            }
+
+            const double source_duration = duration_seconds();
+            const double mux_duration =
+                repeat ? video_duration : std::min(video_duration, source_duration);
+            const std::int64_t target_sample_count =
+                static_cast<std::int64_t>(std::floor(
+                    mux_duration * static_cast<double>(FILE_SAMPLE_RATE)));
+            if (target_sample_count <= 0) {
+                std::cerr << "acmxvk: file audio mux duration is empty\n";
+                return false;
+            }
+
+            const auto unique_value = std::chrono::steady_clock::now()
+                                          .time_since_epoch()
+                                          .count();
+            const std::filesystem::path temporary_path =
+                video_path.parent_path() /
+                (video_path.stem().string() + ".acmxvk-mux-" +
+                 std::to_string(unique_value) + video_path.extension().string());
+
+            AVFormatContext *input_context = nullptr;
+            AVFormatContext *output_context = nullptr;
+            AVCodecContext *audio_encoder = nullptr;
+            SwrContext *resampler = nullptr;
+            AVFrame *audio_frame = nullptr;
+            AVPacket *input_packet = nullptr;
+            AVPacket *audio_packet = nullptr;
+
+            auto cleanup = [&]() {
+                av_packet_free(&audio_packet);
+                av_packet_free(&input_packet);
+                av_frame_free(&audio_frame);
+                swr_free(&resampler);
+                avcodec_free_context(&audio_encoder);
+                avformat_close_input(&input_context);
+                if (output_context != nullptr) {
+                    if ((output_context->oformat->flags & AVFMT_NOFILE) == 0) {
+                        avio_closep(&output_context->pb);
+                    }
+                    avformat_free_context(output_context);
+                    output_context = nullptr;
+                }
+            };
+
+            auto fail = [&](std::string_view message, int error) {
+                std::cerr << "acmxvk: " << message;
+                if (error < 0) {
+                    std::cerr << ": " << ffmpegError(error);
+                }
+                std::cerr << '\n';
+                cleanup();
+                std::error_code remove_error;
+                std::filesystem::remove(temporary_path, remove_error);
+                return false;
+            };
+
+            int result = avformat_open_input(&input_context, video_path.c_str(),
+                                             nullptr, nullptr);
+            if (result < 0) {
+                return fail("could not open encoded video for audio mux", result);
+            }
+            result = avformat_find_stream_info(input_context, nullptr);
+            if (result < 0) {
+                return fail("could not read encoded video stream information",
+                            result);
+            }
+            const int input_video_index = av_find_best_stream(
+                input_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+            if (input_video_index < 0) {
+                return fail("encoded output contains no video stream",
+                            input_video_index);
+            }
+
+            result = avformat_alloc_output_context2(
+                &output_context, nullptr, nullptr, temporary_path.c_str());
+            if (result < 0 || output_context == nullptr) {
+                return fail("could not create audio-mux output container", result);
+            }
+
+            AVStream *input_video = input_context->streams[input_video_index];
+            AVStream *output_video = avformat_new_stream(output_context, nullptr);
+            if (output_video == nullptr) {
+                return fail("could not create remuxed video stream", AVERROR(ENOMEM));
+            }
+            result = avcodec_parameters_copy(output_video->codecpar,
+                                             input_video->codecpar);
+            if (result < 0) {
+                return fail("could not copy encoded video parameters", result);
+            }
+            output_video->codecpar->codec_tag = 0;
+            output_video->time_base = input_video->time_base;
+            output_video->avg_frame_rate = input_video->avg_frame_rate;
+
+            const AVCodec *aac_encoder = avcodec_find_encoder(AV_CODEC_ID_AAC);
+            if (aac_encoder == nullptr) {
+                return fail("linked FFmpeg has no AAC encoder", AVERROR_ENCODER_NOT_FOUND);
+            }
+            AVStream *output_audio =
+                avformat_new_stream(output_context, aac_encoder);
+            if (output_audio == nullptr) {
+                return fail("could not create encoded audio stream", AVERROR(ENOMEM));
+            }
+            audio_encoder = avcodec_alloc_context3(aac_encoder);
+            if (audio_encoder == nullptr) {
+                return fail("could not allocate AAC encoder", AVERROR(ENOMEM));
+            }
+            audio_encoder->bit_rate = 192000;
+            audio_encoder->sample_fmt = AV_SAMPLE_FMT_FLTP;
+            audio_encoder->sample_rate = static_cast<int>(FILE_SAMPLE_RATE);
+            audio_encoder->time_base =
+                AVRational{1, static_cast<int>(FILE_SAMPLE_RATE)};
+            av_channel_layout_default(&audio_encoder->ch_layout, 1);
+            if ((output_context->oformat->flags & AVFMT_GLOBALHEADER) != 0) {
+                audio_encoder->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+            }
+            result = avcodec_open2(audio_encoder, aac_encoder, nullptr);
+            if (result < 0) {
+                return fail("could not initialize AAC encoder", result);
+            }
+            result = avcodec_parameters_from_context(output_audio->codecpar,
+                                                     audio_encoder);
+            if (result < 0) {
+                return fail("could not export AAC stream parameters", result);
+            }
+            output_audio->codecpar->codec_tag = 0;
+            output_audio->time_base = audio_encoder->time_base;
+
+            AVChannelLayout input_layout = AV_CHANNEL_LAYOUT_MONO;
+            result = swr_alloc_set_opts2(
+                &resampler, &audio_encoder->ch_layout, audio_encoder->sample_fmt,
+                audio_encoder->sample_rate, &input_layout, AV_SAMPLE_FMT_FLT,
+                static_cast<int>(FILE_SAMPLE_RATE), 0, nullptr);
+            av_channel_layout_uninit(&input_layout);
+            if (result < 0 || resampler == nullptr ||
+                (result = swr_init(resampler)) < 0) {
+                return fail("could not initialize audio mux resampler", result);
+            }
+
+            const int audio_frame_capacity =
+                audio_encoder->frame_size > 0 ? audio_encoder->frame_size : 1024;
+            audio_frame = av_frame_alloc();
+            input_packet = av_packet_alloc();
+            audio_packet = av_packet_alloc();
+            if (audio_frame == nullptr || input_packet == nullptr ||
+                audio_packet == nullptr) {
+                return fail("could not allocate audio mux frames", AVERROR(ENOMEM));
+            }
+            audio_frame->format = audio_encoder->sample_fmt;
+            audio_frame->sample_rate = audio_encoder->sample_rate;
+            audio_frame->nb_samples = audio_frame_capacity;
+            result = av_channel_layout_copy(&audio_frame->ch_layout,
+                                            &audio_encoder->ch_layout);
+            if (result < 0 || (result = av_frame_get_buffer(audio_frame, 0)) < 0) {
+                return fail("could not allocate AAC sample buffer", result);
+            }
+
+            if ((output_context->oformat->flags & AVFMT_NOFILE) == 0) {
+                result = avio_open(&output_context->pb, temporary_path.c_str(),
+                                   AVIO_FLAG_WRITE);
+                if (result < 0) {
+                    return fail("could not open temporary mux output", result);
+                }
+            }
+            result = avformat_write_header(output_context, nullptr);
+            if (result < 0) {
+                return fail("could not write audio-mux container header", result);
+            }
+
+            std::int64_t source_position = 0;
+            std::int64_t encoded_position = 0;
+            std::vector<float> input_samples(
+                static_cast<std::size_t>(audio_frame_capacity));
+
+            auto drain_audio_packets = [&]() {
+                while (true) {
+                    const int receive =
+                        avcodec_receive_packet(audio_encoder, audio_packet);
+                    if (receive == AVERROR(EAGAIN) || receive == AVERROR_EOF) {
+                        return true;
+                    }
+                    if (receive < 0) {
+                        result = receive;
+                        return false;
+                    }
+                    audio_packet->stream_index = output_audio->index;
+                    av_packet_rescale_ts(audio_packet, audio_encoder->time_base,
+                                         output_audio->time_base);
+                    const int write =
+                        av_interleaved_write_frame(output_context, audio_packet);
+                    av_packet_unref(audio_packet);
+                    if (write < 0) {
+                        result = write;
+                        return false;
+                    }
+                }
+            };
+
+            auto encode_audio_frame = [&]() {
+                const std::int64_t remaining =
+                    target_sample_count - source_position;
+                if (remaining <= 0) {
+                    return true;
+                }
+                const int source_count = static_cast<int>(
+                    std::min<std::int64_t>(remaining, audio_frame_capacity));
+                int submitted_count = source_count;
+                if (source_count < audio_frame_capacity &&
+                    (aac_encoder->capabilities &
+                     AV_CODEC_CAP_SMALL_LAST_FRAME) == 0) {
+                    submitted_count = audio_frame_capacity;
+                }
+                for (int index = 0; index < submitted_count; ++index) {
+                    if (index >= source_count) {
+                        input_samples[static_cast<std::size_t>(index)] = 0.0F;
+                        continue;
+                    }
+                    const std::size_t sample_index = repeat
+                                                         ? static_cast<std::size_t>(source_position + index) %
+                                                               samples.size()
+                                                         : static_cast<std::size_t>(source_position + index);
+                    input_samples[static_cast<std::size_t>(index)] =
+                        samples[sample_index];
+                }
+
+                audio_frame->nb_samples = submitted_count;
+                result = av_frame_make_writable(audio_frame);
+                if (result < 0) {
+                    return false;
+                }
+                const std::uint8_t *input_data[] = {
+                    reinterpret_cast<const std::uint8_t *>(input_samples.data())};
+                const int converted = swr_convert(
+                    resampler, audio_frame->data, submitted_count, input_data,
+                    submitted_count);
+                if (converted < 0) {
+                    result = converted;
+                    return false;
+                }
+                audio_frame->nb_samples = converted;
+                audio_frame->pts = encoded_position;
+                result = avcodec_send_frame(audio_encoder, audio_frame);
+                if (result < 0 || !drain_audio_packets()) {
+                    return false;
+                }
+                source_position += source_count;
+                encoded_position += converted;
+                return true;
+            };
+
+            bool video_complete = false;
+            while ((result = av_read_frame(input_context, input_packet)) >= 0) {
+                if (input_packet->stream_index != input_video_index) {
+                    av_packet_unref(input_packet);
+                    continue;
+                }
+                const std::int64_t timestamp =
+                    input_packet->pts != AV_NOPTS_VALUE ? input_packet->pts
+                                                        : input_packet->dts;
+                const double packet_time =
+                    timestamp == AV_NOPTS_VALUE
+                        ? 0.0
+                        : static_cast<double>(timestamp) *
+                              av_q2d(input_video->time_base);
+                if (timestamp != AV_NOPTS_VALUE && packet_time > mux_duration) {
+                    av_packet_unref(input_packet);
+                    video_complete = true;
+                    break;
+                }
+
+                const std::int64_t audio_target = std::min<std::int64_t>(
+                    target_sample_count,
+                    static_cast<std::int64_t>(std::ceil(
+                        (packet_time +
+                         static_cast<double>(audio_frame_capacity) /
+                             static_cast<double>(FILE_SAMPLE_RATE)) *
+                        static_cast<double>(FILE_SAMPLE_RATE))));
+                while (source_position < audio_target) {
+                    if (!encode_audio_frame()) {
+                        return fail("could not encode AAC samples", result);
+                    }
+                }
+
+                av_packet_rescale_ts(input_packet, input_video->time_base,
+                                     output_video->time_base);
+                input_packet->stream_index = output_video->index;
+                input_packet->pos = -1;
+                result = av_interleaved_write_frame(output_context, input_packet);
+                av_packet_unref(input_packet);
+                if (result < 0) {
+                    return fail("could not remux encoded video packet", result);
+                }
+            }
+            if (!video_complete && result != AVERROR_EOF) {
+                return fail("could not finish reading encoded video", result);
+            }
+
+            while (source_position < target_sample_count) {
+                if (!encode_audio_frame()) {
+                    return fail("could not finish AAC encoding", result);
+                }
+            }
+            result = avcodec_send_frame(audio_encoder, nullptr);
+            if (result < 0 || !drain_audio_packets()) {
+                return fail("could not flush AAC encoder", result);
+            }
+            result = av_write_trailer(output_context);
+            if (result < 0) {
+                return fail("could not finalize audio-mux container", result);
+            }
+            if ((output_context->oformat->flags & AVFMT_NOFILE) == 0) {
+                result = avio_closep(&output_context->pb);
+                if (result < 0) {
+                    return fail("could not flush temporary mux output", result);
+                }
+            }
+
+            cleanup();
+            if (std::rename(temporary_path.c_str(), video_path.c_str()) != 0) {
+                std::cerr << "acmxvk: could not atomically replace encoded video "
+                             "with muxed output\n";
+                std::error_code remove_error;
+                std::filesystem::remove(temporary_path, remove_error);
+                return false;
+            }
+
+            std::cout << "acmxvk: muxed "
+                      << (track_paths.size() > 1 ? "audio playlist" : "audio file")
+                      << " into " << video_path.string() << " (" << mux_duration
+                      << " seconds" << (repeat ? ", repeated" : "") << ")\n";
+            return true;
         }
 
         [[nodiscard]] double duration_seconds() const {
@@ -793,8 +1148,17 @@ namespace acmxvk::audio {
         return impl->enable_output(device);
     }
 
+    void FileAudioSource::stop_output() {
+        impl->stop_output();
+    }
+
     bool FileAudioSource::has_output_clock() const {
         return impl->has_output_clock();
+    }
+
+    bool FileAudioSource::mux_into_video(const std::string &video_path,
+                                         double video_duration) {
+        return impl->mux_into_video(video_path, video_duration);
     }
 
     bool FileAudioSource::is_open() const {

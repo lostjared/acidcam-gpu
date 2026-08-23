@@ -21,7 +21,9 @@ namespace acmxvk::audio {
         void close();
         void set_repeat(bool enabled);
         bool enable_output(int device = -1);
+        void stop_output();
         [[nodiscard]] bool has_output_clock() const;
+        bool mux_into_video(const std::string &video_path, double video_duration);
         [[nodiscard]] bool is_open() const;
         [[nodiscard]] bool is_active() const;
         [[nodiscard]] double duration_seconds() const;

@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 5L**. It is usable for video, camera, and
+The port is currently at **Increment 5M**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Partial | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports audible pass-through, repeat, and stop-at-EOF behavior. File-audio output muxing remains future work. |
+| Audio-reactive shader data | Partial | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. File audio supports audible pass-through, repeat, stop-at-EOF behavior, and AAC muxing into encoded output. Live-input pass-through and recording remain future work. |
 | MIDI controls | Not yet ported | ACMX2 MIDI uniform control is not present yet. |
 | CUDA filters and DNN effects | Not yet ported | The current pipeline uses MXVK/OpenCV input and Vulkan shader passes. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -71,7 +71,7 @@ Audio support is optional and remains disabled when `-DAUDIO=ON` is omitted.
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
-reinstall. Increments 5J through 5L also change only ACMXVK.
+reinstall. Increments 5J through 5M also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -268,11 +268,22 @@ During pass-through, the output device becomes the master audio clock and the
 shader analysis follows its playback position. This keeps visual reactivity
 aligned even when rendering runs faster or slower than the requested FPS.
 
-File audio is not yet automatically muxed into a recording. At end-of-stream
-the application continues with zero-valued audio metrics by default. Add
-`--audio-repeat` to restart the decoded source, or `--audio-trunc` to stop
-ACMXVK when the source finishes. When both are supplied, repeat keeps the
-source active, matching ACMX2 behavior.
+When an encoded `--output` is open, file audio is automatically encoded as
+mono AAC at 192 kbps and muxed into the completed video. This is implemented
+directly with the linked FFmpeg libraries; ACMXVK does not invoke the `ffmpeg`
+command-line program. The original encoded video remains untouched until the
+temporary mux output has been finalized successfully. MP4, MOV, and other
+AAC-compatible containers are supported; if a selected container rejects AAC,
+ACMXVK reports the mux failure, removes the temporary file, and preserves the
+video-only recording.
+
+Without repeat, the muxed result is limited to the shorter of the recorded
+video and decoded audio. With `--audio-repeat`, the complete file or playlist
+is repeated to the recorded video duration. `--audio-trunc` stops recording at
+the file-audio EOF; this also permits a still-image recording without an
+explicit `--duration`. At end-of-stream without truncation, preview continues
+with zero-valued audio metrics. When repeat and truncation are both supplied,
+repeat keeps the source active, matching ACMX2 behavior.
 
 For example, loop a song with audible pass-through:
 
@@ -287,6 +298,18 @@ For example, loop a song with audible pass-through:
 
 Replace `--audio-repeat` with `--audio-trunc` to close the application at the
 end of the song.
+
+Record five seconds of processed video and mux repeated file audio into it:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.png \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --audio-file song.mp3 \
+    --audio-repeat \
+    --duration 5 \
+    --output output.mp4
+```
 
 M3U and M3U8 playlists are read in order. Blank lines, `#EXTM3U`, `#EXTINF`,
 and other comment lines are ignored; relative entries are resolved against the

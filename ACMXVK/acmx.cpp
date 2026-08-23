@@ -480,9 +480,16 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--copy-audio requires non-repeating video input and encoded output");
         }
+        if (options.copy_audio && !options.audio_file.empty()) {
+            throw std::runtime_error(
+                "--copy-audio and --audio-file select different audio sources");
+        }
         if (!options.graphic_file.empty() && !options.output_file.empty() &&
-            options.duration <= 0.0) {
-            throw std::runtime_error("graphic recording requires --duration <seconds>");
+            options.duration <= 0.0 &&
+            !(options.audio_trunc && !options.audio_file.empty())) {
+            throw std::runtime_error(
+                "graphic recording requires --duration <seconds> or "
+                "--audio-file <media> --audio-trunc");
         }
         if (options.audio_buffers > 0 && !options.enable_audio) {
             throw std::runtime_error(
@@ -512,7 +519,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 5L)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 5M)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -571,6 +578,7 @@ namespace acmxvk {
                << "      --audio-output <device> Output index or default\n"
                << "      --audio-repeat          Restart file audio at end-of-stream\n"
                << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
+               << "                              File audio is muxed into encoded output\n"
                << "      --enable-audio-buffers N\n"
                << "                              FFT history layers at binding 4\n"
                << "      --list-devices          List RtAudio devices and exit\n"
@@ -900,6 +908,15 @@ namespace acmxvk {
 
         ~MainWindow() override {
             const bool should_copy_audio = options.copy_audio && writer.is_open();
+#ifdef AUDIO_ENABLED
+            const bool should_mux_file_audio =
+                file_audio_source != nullptr && writer.is_open() &&
+                !options.output_file.empty() && !options.png_output &&
+                output_frame_count > 0;
+            if (file_audio_source != nullptr) {
+                file_audio_source->stop_output();
+            }
+#endif
             if (writer.is_open()) {
                 writer.close();
                 std::cout << "acmxvk: recording closed after " << output_frame_count
@@ -921,6 +938,16 @@ namespace acmxvk {
                 std::cout << "acmxvk: copied audio track from " << options.input_file
                           << " to " << options.output_file << '\n';
             }
+#ifdef AUDIO_ENABLED
+            if (should_mux_file_audio) {
+                const double video_duration = writer.get_duration();
+                if (!file_audio_source->mux_into_video(options.output_file,
+                                                       video_duration)) {
+                    std::cerr << "acmxvk: file-audio mux failed; preserving the "
+                                 "encoded video without audio\n";
+                }
+            }
+#endif
         }
 
         void event(SDL_Event &event) override {
