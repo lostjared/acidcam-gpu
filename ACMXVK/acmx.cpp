@@ -170,6 +170,7 @@ namespace acmxvk {
         bool check_cuda = false;
         bool list_encoders = false;
         bool display_filter = false;
+        bool disable_counter = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
@@ -893,6 +894,8 @@ namespace acmxvk {
                 options.no_drop = true;
             } else if (option == "--display-filter") {
                 options.display_filter = true;
+            } else if (option == "--disable-counter") {
+                options.disable_counter = true;
             } else if (option == "--use-watermark") {
                 options.watermark_text =
                     optionValue(index, argc, argv, option);
@@ -1065,7 +1068,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7R)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7S)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1122,6 +1125,7 @@ namespace acmxvk {
                << "      --encode-realtime       Enable low-latency encoder settings\n"
                << "      --no-drop               Block when the encoder queue is full\n"
                << "      --display-filter        Show active shader/filter details\n"
+               << "      --disable-counter       Hide the shader/timer/FPS HUD at startup\n"
                << "      --use-watermark <text>  Show a text watermark in the upper-left\n"
                << "      --use-watermark-color <r,g,b>\n"
                << "                              Watermark RGB color (default 255,0,150)\n"
@@ -1177,7 +1181,7 @@ namespace acmxvk {
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
-               << "      E watermark, F fullscreen, M multipass,\n"
+               << "      E watermark, F fullscreen, F9 runtime HUD, M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
                << "      Z PNG snapshot,\n"
                << "      Escape quit\n";
@@ -1758,6 +1762,17 @@ namespace acmxvk {
                 case SDLK_F:
                     toggleFullscreen();
                     break;
+                case SDLK_F9:
+                    counter_disabled = !counter_disabled;
+                    hud_fps_frame_count = 0;
+                    hud_fps_last_tick = std::chrono::steady_clock::now();
+                    if (!counter_disabled) {
+                        initializeOverlayFont();
+                    }
+                    std::cout << "acmxvk: runtime HUD "
+                              << (counter_disabled ? "hidden" : "shown")
+                              << " (F9)\n";
+                    break;
                 case SDLK_E:
                     if (!options.watermark_text.empty()) {
                         watermark_enabled = !watermark_enabled;
@@ -1955,6 +1970,7 @@ namespace acmxvk {
         bool audio_delta_time = false;
         bool spectrum_scale_by_sensitivity = false;
         bool watermark_enabled = !options.watermark_text.empty();
+        bool counter_disabled = options.disable_counter;
         int overlay_font_size = 18;
         bool snapshot_pending = false;
         bool autopilot_enabled = false;
@@ -1974,12 +1990,18 @@ namespace acmxvk {
         std::uint64_t generated_frame_count = 0;
         std::uint64_t snapshot_count = 0;
         std::uint64_t frame_count = 0;
+        std::uint64_t hud_fps_frame_count = 0;
+        double hud_display_fps = 0.0;
         std::deque<SnapshotJob> snapshot_jobs;
         std::mutex snapshot_mutex;
         std::condition_variable snapshot_condition;
         std::thread snapshot_worker;
         std::size_t snapshot_jobs_in_flight = 0;
         bool snapshot_worker_stopping = false;
+        std::chrono::steady_clock::time_point hud_session_start{
+            std::chrono::steady_clock::now()};
+        std::chrono::steady_clock::time_point hud_fps_last_tick{
+            hud_session_start};
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
@@ -3039,7 +3061,8 @@ namespace acmxvk {
         }
 
         void initializeOverlayFont() {
-            if (!options.display_filter && options.watermark_text.empty()) {
+            if (counter_disabled && !options.display_filter &&
+                options.watermark_text.empty()) {
                 return;
             }
 
@@ -3084,8 +3107,122 @@ namespace acmxvk {
             return clipOverlayText(std::move(description));
         }
 
+        [[nodiscard]] double hudElapsedSeconds() const {
+            double media_seconds = 0.0;
+            if (media_timeline_started && mediaClockSeconds(media_seconds)) {
+                return std::max(0.0, media_seconds);
+            }
+            return std::max(
+                0.0,
+                std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                              hud_session_start)
+                    .count());
+        }
+
+        [[nodiscard]] std::string hudTimeString() const {
+            const auto elapsed = static_cast<std::uint64_t>(hudElapsedSeconds());
+            const std::uint64_t hours = elapsed / 3600U;
+            const std::uint64_t minutes = (elapsed / 60U) % 60U;
+            const std::uint64_t seconds = elapsed % 60U;
+            std::ostringstream text;
+            text << std::setfill('0') << std::setw(2) << hours << ':'
+                 << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
+            return text.str();
+        }
+
+        void updateHudFrameRate() {
+            ++hud_fps_frame_count;
+            const auto now = std::chrono::steady_clock::now();
+            const double elapsed =
+                std::chrono::duration<double>(now - hud_fps_last_tick).count();
+            if (elapsed < 0.5) {
+                return;
+            }
+            hud_display_fps = static_cast<double>(hud_fps_frame_count) / elapsed;
+            hud_fps_frame_count = 0;
+            hud_fps_last_tick = now;
+        }
+
+        void queueRuntimeHud(int &y, int line_height) {
+            if (counter_disabled) {
+                return;
+            }
+            updateHudFrameRate();
+
+            const SDL_Color shader_color{0U, 96U, 255U, 255U};
+            std::string shader = effects_enabled
+                                     ? fs::path(currentShader()).filename().string()
+                                     : "bypassed";
+            printPreviewText(clipOverlayText("Shader: " + std::move(shader)),
+                             10, y, shader_color);
+            y += line_height;
+
+#ifdef AUDIO_ENABLED
+            if (file_audio_source != nullptr && file_audio_source->is_open()) {
+                const std::string track = fs::path(
+                                              file_audio_source
+                                                  ->current_track_path())
+                                              .filename()
+                                              .string();
+                if (!track.empty()) {
+                    const SDL_Color track_color{255U, 0U, 255U, 255U};
+                    printPreviewText(clipOverlayText("Track: " + track), 10,
+                                     y, track_color);
+                    y += line_height;
+                }
+            }
+#endif
+
+#ifdef ACMXVK_WITH_CUDA
+            if (gpu_filter_engine != nullptr) {
+                const SDL_Color gpu_color{255U, 0U, 255U, 255U};
+                printPreviewText(
+                    clipOverlayText(
+                        "GPU: " +
+                        gpu_filter_engine->active_filter_description()),
+                    10, y, gpu_color);
+                y += line_height;
+            }
+#endif
+
+            if (autopilot_enabled) {
+                const int remaining =
+                    std::max(0, autopilot_interval_frames - autopilot_counter);
+                std::ostringstream status;
+                status << "Autopilot "
+                       << (autopilot_sequential ? "seq" : "rnd") << ' ';
+                if (options.autopilot_random_timeout > 0) {
+                    status << "[4-" << options.autopilot_random_timeout
+                           << "] cur=" << autopilot_interval_frames;
+                } else {
+                    status << "every " << autopilot_interval_frames << 'f';
+                }
+                status << " next=" << remaining << "f";
+                if (!playlist.empty()) {
+                    status << " idx=" << (playlist_index + 1) << '/'
+                           << playlist.size();
+                }
+                const SDL_Color autopilot_color{0U, 255U, 255U, 255U};
+                printPreviewText(clipOverlayText(status.str()), 10, y,
+                                 autopilot_color);
+                y += line_height;
+            }
+
+            const SDL_Color status_color{255U, 255U, 255U, 255U};
+            printPreviewText(hudTimeString(), 10, y, status_color);
+            y += line_height;
+            std::ostringstream fps;
+            fps << std::fixed << std::setprecision(1) << hud_display_fps
+                << " FPS";
+            printPreviewText(fps.str(), 10, y, status_color);
+            y += line_height;
+            const SDL_Color hint_color{128U, 128U, 128U, 255U};
+            printPreviewText("F9: Toggle overlay", 10, y, hint_color);
+            y += line_height;
+        }
+
         void queueOverlayText() {
-            if (!options.display_filter &&
+            if (counter_disabled && !options.display_filter &&
                 (!watermark_enabled || options.watermark_text.empty())) {
                 return;
             }
@@ -3094,6 +3231,7 @@ namespace acmxvk {
             constexpr int TOP_MARGIN = 10;
             const int line_height = overlay_font_size + 4;
             int y = TOP_MARGIN;
+            queueRuntimeHud(y, line_height);
             if (options.display_filter) {
                 const SDL_Color filter_color{255U, 0U, 255U, 255U};
                 std::string shader = effects_enabled

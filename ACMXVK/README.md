@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7R**. It is usable for video, camera, and
+The port is currently at **Increment 7S**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -25,7 +25,7 @@ ACMX2.
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, and audio-clock synchronization for file playback and live-input muxing. |
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
-| Text overlays and watermark | Implemented | Displays the active shader, playlist/pass stack, and CUDA filter; supports configurable watermark text/color and the ACMX2 `E` toggle. Overlays are included in snapshots and encoded output. |
+| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, timer, measured FPS, audio track, CUDA filter, and autopilot status. `--disable-counter` or F9 hides the HUD. The HUD is excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
@@ -41,7 +41,7 @@ ACMX2.
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.26 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.27 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -102,7 +102,9 @@ rebuilt or reinstalled. Increments 7M through 7P also change only ACMXVK.
 Increment 7Q adds MXVK's efficient capture-frame skip APIs and raises MXVK to
 0.26.0, so MXVK must be rebuilt and reinstalled before rebuilding ACMXVK;
 acidcam-gpu remains unchanged. Increment 7R changes only ACMXVK and does not
-require MXVK or acidcam-gpu to be rebuilt.
+require MXVK or acidcam-gpu to be rebuilt. Increment 7S adds MXVK's
+preview-only text queue and raises MXVK to 0.27.0, so MXVK must be rebuilt and
+reinstalled before ACMXVK; acidcam-gpu remains unchanged.
 
 ### Input validation
 
@@ -848,6 +850,14 @@ labels, and overlay text. Bounded readers prevent oversized configuration
 lines from allocating without limit, while count, numeric, decoded-image, live
 MIDI-message, and SPIR-V checks protect the corresponding non-string inputs.
 
+Increment 7S ports ACMX2's default runtime HUD. It shows the active shader,
+elapsed time, measured presentation FPS, the current file-audio track, active
+CUDA filter, and autopilot status. F9 toggles the HUD and `--disable-counter`
+starts with it hidden. MXVK composites this preview-only queue after frame
+readback, so it never appears in MXWrite video, PNG output, one-shot snapshots,
+or F10 captures. Explicit `--display-filter` and watermark text continue to be
+drawn before readback and remain part of saved output.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -864,6 +874,7 @@ MIDI-message, and SPIR-V checks protect the corresponding non-string inputs.
 - Page Up/Page Down: increase or decrease shader-time speed
 - Insert/Delete: increase or decrease live audio sensitivity
 - F: toggle fullscreen
+- F9: toggle the preview-only runtime HUD
 - E: toggle the configured watermark
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
@@ -923,7 +934,11 @@ Increment 7R passed its malformed UTF-8, control-character, identifier,
 structured-value, URL, bounded-line, and UTF-8 truncation regression suite in
 both configurations. Additional CLI probes rejected control characters,
 disallowed encoder punctuation, and oversized output dimensions before Vulkan
-initialization.
+initialization. Increment 7S built against staged CUDA and non-CUDA MXVK 0.27.0
+packages. Under Vulkan validation, two deterministic 30-frame H.264 recordings
+with the HUD shown and hidden produced identical decoded-frame SHA-256 hashes;
+an otherwise identical watermark recording produced a different hash, proving
+that preview status is excluded while explicit saved overlays remain embedded.
 
 ## Development note
 
