@@ -23,6 +23,7 @@
 #include "gpu_filters.hpp"
 #endif
 #ifdef ACMXVK_WITH_MXVK_CUDA
+#include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaarithm.hpp>
 #endif
 
@@ -671,7 +672,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7H)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7I)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -751,10 +752,10 @@ namespace acmxvk {
                << "CUDA and filters:\n"
                << "      --gpu-filter <list>     Comma-separated acidcam-gpu indices\n"
                << "      --gpu-buffer <4-32>     Temporal frame count (default 10)\n"
-               << "  -m, --cuda-device <index>   Select CUDA device (default 0)\n"
+               << "  -m, --cuda-device <index>   Select NVDEC/filter device (default 0)\n"
                << "      --list-filters          List acidcam-gpu filters and exit\n"
-               << "      --list-cuda-devices     List CUDA devices and exit\n"
-               << "      --check-cuda            Report compiled CUDA-filter support\n"
+               << "      --list-cuda-devices     List MXVK CUDA devices and exit\n"
+               << "      --check-cuda            Report interop and filter support\n"
                << "                              Left/Right selects the active filter\n"
                << "                              NVDEC interop follows the MXVK build\n"
                << "                              Filters require WITH_CUDA=ON\n"
@@ -1057,6 +1058,39 @@ namespace acmxvk {
         return rotation == FrameRotation::Clockwise90 ||
                rotation == FrameRotation::Counterclockwise90;
     }
+
+#ifdef ACMXVK_WITH_MXVK_CUDA
+    void select_cuda_device(int device_index) {
+        const int device_count = cv::cuda::getCudaEnabledDeviceCount();
+        if (device_count <= 0) {
+            throw std::runtime_error("no CUDA-capable devices are available");
+        }
+        if (device_index < 0 || device_index >= device_count) {
+            throw std::runtime_error(
+                "CUDA device index must be between 0 and " +
+                std::to_string(device_count - 1));
+        }
+        cv::cuda::setDevice(device_index);
+        const cv::cuda::DeviceInfo device(device_index);
+        std::cout << "acmxvk: CUDA device " << device_index << ": "
+                  << device.name() << '\n';
+    }
+
+    void list_cuda_devices(std::ostream &output) {
+        const int device_count = cv::cuda::getCudaEnabledDeviceCount();
+        if (device_count < 0) {
+            throw std::runtime_error(
+                "OpenCV could not query CUDA devices (error " +
+                std::to_string(device_count) + ")");
+        }
+        output << "acmxvk: found " << device_count << " CUDA device(s)\n";
+        for (int index = 0; index < device_count; ++index) {
+            const cv::cuda::DeviceInfo device(index);
+            output << "  " << index << ": " << device.name() << " ("
+                   << (device.totalMemory() / (1024U * 1024U)) << " MiB)\n";
+        }
+    }
+#endif
 
     struct PlaylistNode {
         std::string name;
@@ -2781,12 +2815,19 @@ namespace acmxvk {
 
         [[nodiscard]] bool openVideoCapture() {
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
-            if (ffmpeg_capture.open(options.input_file)) {
+            if (ffmpeg_capture.open(options.input_file, options.cuda_device)) {
                 using_ffmpeg_capture = true;
-                std::cout << "acmxvk: video capture: FFmpeg "
-                          << (ffmpeg_capture.using_hardware_decode()
-                                  ? "with CUDA/NVDEC\n"
-                                  : "software decode\n");
+                std::cout << "acmxvk: video capture: FFmpeg ";
+                if (ffmpeg_capture.using_hardware_decode()) {
+                    std::cout << "with CUDA/NVDEC";
+                    if (ffmpeg_capture.hardware_decode_device() >= 0) {
+                        std::cout << " on device "
+                                  << ffmpeg_capture.hardware_decode_device();
+                    }
+                    std::cout << '\n';
+                } else {
+                    std::cout << "software decode\n";
+                }
                 return true;
             }
 #endif
@@ -3207,10 +3248,15 @@ int main(int argc, char **argv) {
             return EXIT_SUCCESS;
         }
         if (options.check_cuda) {
-#ifdef ACMXVK_WITH_CUDA
-            std::cout << "CUDA filters: enabled\n";
+#ifdef ACMXVK_WITH_MXVK_CUDA
+            std::cout << "MXVK CUDA interop: enabled\n";
 #else
-            std::cout << "CUDA filters: disabled\n";
+            std::cout << "MXVK CUDA interop: disabled\n";
+#endif
+#ifdef ACMXVK_WITH_CUDA
+            std::cout << "acidcam-gpu filters: enabled\n";
+#else
+            std::cout << "acidcam-gpu filters: disabled\n";
 #endif
             return EXIT_SUCCESS;
         }
@@ -3243,13 +3289,12 @@ int main(int argc, char **argv) {
 #endif
         }
         if (options.list_cuda_devices) {
-#ifdef ACMXVK_WITH_CUDA
-            acmxvk::gpu::FilterEngine::list_devices(std::cout);
+#ifdef ACMXVK_WITH_MXVK_CUDA
+            acmxvk::list_cuda_devices(std::cout);
             return EXIT_SUCCESS;
 #else
             throw std::runtime_error(
-                "--list-cuda-devices requires an ACMXVK build configured with "
-                "-DWITH_CUDA=ON");
+                "--list-cuda-devices requires a CUDA-enabled MXVK installation");
 #endif
         }
 #ifndef AUDIO_ENABLED
@@ -3266,11 +3311,16 @@ int main(int argc, char **argv) {
         }
 #endif
 #ifndef ACMXVK_WITH_CUDA
-        if (!options.gpu_filter_indices.empty() ||
-            options.cuda_device_specified) {
+        if (!options.gpu_filter_indices.empty()) {
             throw std::runtime_error(
                 "CUDA filters require an ACMXVK build configured with "
                 "-DWITH_CUDA=ON");
+        }
+#endif
+#ifndef ACMXVK_WITH_MXVK_CUDA
+        if (options.cuda_device_specified) {
+            throw std::runtime_error(
+                "--cuda-device requires a CUDA-enabled MXVK installation");
         }
 #endif
         if (options.show_help) {
@@ -3293,8 +3343,10 @@ int main(int argc, char **argv) {
             acmxvk::gpu::FilterEngine::validate_filter_indices(
                 options.gpu_filter_indices);
         }
+#endif
+#ifdef ACMXVK_WITH_MXVK_CUDA
         if (!options.gpu_filter_indices.empty() || options.cuda_device_specified) {
-            acmxvk::gpu::FilterEngine::select_device(options.cuda_device);
+            acmxvk::select_cuda_device(options.cuda_device);
         }
 #endif
 
