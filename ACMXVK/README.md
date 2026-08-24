@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7M**. It is usable for video, camera, and
+The port is currently at **Increment 7N**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -23,12 +23,12 @@ ACMX2.
 | Frame history/texture cache | Implemented | Uses a Vulkan `sampler2DArray` ring buffer with configurable size and write delay. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, and optional audio copying. |
-| PNG output | Implemented | Supports full PNG sequences and periodic generated frames. |
+| PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
-| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
+| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -95,7 +95,7 @@ and reinstalled before rebuilding ACMXVK; acidcam-gpu remains unchanged.
 Increment 7K changes MXVK's internal NVDEC surface synchronization, so MXVK
 must be rebuilt and reinstalled once more; acidcam-gpu remains unchanged.
 Increment 7L changes only ACMXVK and does not require either dependency to be
-rebuilt or reinstalled. Increment 7M also changes only ACMXVK.
+rebuilt or reinstalled. Increments 7M and 7N also change only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -144,6 +144,23 @@ Render a still image for five seconds and encode it with a software encoder:
     --no-drop \
     --output output.mp4
 ```
+
+Take a processed PNG snapshot by pressing `Z`. The directory is created on the
+first request:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.png \
+    --fragment ./build/acmxvk/shaders/custom_uniform.frag.spv \
+    --prefix ./snapshots
+```
+
+Snapshots include the timestamp, rendered resolution, and a collision-safe
+sequence number in their filename. Readback is enabled for only the requested
+frame unless video or PNG output already requires continuous readback. PNG
+compression and disk writes run on a bounded background queue so the render
+loop can continue while the snapshot is saved; queued work is drained during
+shutdown.
 
 Preview the included shader with live audio reactivity:
 
@@ -679,6 +696,15 @@ time and amplitude, and `End` applies the current audio sensitivity to FFT and
 FFT-history samples. ACMX2 MIDI Map actions for all three controls use the same
 event path as the keyboard.
 
+Increment 7N ports ACMX2's `Z` PNG snapshot workflow and `-e/--prefix`
+destination. A snapshot captures the final processed swapchain image, including
+the configured shader passes and output flip. ACMX2 MIDI Map action 90 now
+dispatches the same `Z` request. MXVK readback is enabled for one frame and then
+disabled again when recording or periodic PNG generation is not active. A
+four-job background queue keeps PNG compression and disk I/O off the render
+thread and rejects excess requests instead of allowing unbounded frame-memory
+growth.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -699,6 +725,7 @@ event path as the keyboard.
 - J: toggle random autopilot
 - Y: toggle sequential autopilot
 - Space: bypass or enable shader effects
+- Z: save a processed PNG snapshot under the `--prefix` directory
 - F10: capture a screenshot when `--enable-screenshot` is active
 - Escape: quit
 
@@ -732,7 +759,12 @@ an H.264/AAC output from the same capture buffer. Both files' channel,
 sample-rate, duration, codec, and sample-format metadata were inspected.
 Increment 7M exercised all three audio controls through SDL keyboard events
 against repeating file audio and verified ACMX2 MIDI Map actions 81, 268, and
-269 as active mappings under Vulkan validation.
+269 as active mappings under Vulkan validation. Increment 7N captured and
+inspected 1280x720 RGBA PNGs with both one-shot and continuous readback, and
+verified MIDI Map action 90 as an active snapshot mapping. A 3840x2091 stress
+capture then processed another keyboard event between the snapshot's queue and
+completion messages, and an immediate-exit test drained the pending PNG before
+Vulkan teardown.
 
 ## Development note
 

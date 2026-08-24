@@ -37,18 +37,23 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -168,6 +173,7 @@ namespace acmxvk {
         std::string audio_file;
         std::string record_audio_file;
         std::string midi_map_file;
+        std::string snapshot_directory = ".";
     };
 
     [[nodiscard]] std::string optionValue(int &index, int argc, char **argv,
@@ -289,6 +295,13 @@ namespace acmxvk {
                 options.graphic_file = optionValue(index, argc, argv, option);
             } else if (option == "-o" || option == "--output") {
                 options.output_file = optionValue(index, argc, argv, option);
+            } else if (option == "-e" || option == "--prefix") {
+                options.snapshot_directory =
+                    optionValue(index, argc, argv, option);
+                if (options.snapshot_directory.empty()) {
+                    throw std::runtime_error(
+                        "snapshot directory must not be empty");
+                }
             } else if (option == "-d" || option == "--device") {
                 options.camera_device =
                     parseInteger(optionValue(index, argc, argv, option), option);
@@ -696,7 +709,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7M)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7N)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -735,6 +748,7 @@ namespace acmxvk {
                << "      --max-size <MB>         Stop when encoded output exceeds this size\n"
                << "      --png                   Write video output as a PNG sequence\n"
                << "      --generate <N>          Save a PNG every N processed frames\n"
+               << "  -e, --prefix <directory>   Directory for Z snapshots (default .)\n"
                << "  -b, --encode-crf <0-51>     Encoder quality (default 18)\n"
                << "      --encode-preset <name>  Encoder speed/quality preset\n"
                << "      --encode-tune <name>    Encoder content/latency tuning\n"
@@ -799,6 +813,7 @@ namespace acmxvk {
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
                << "      F fullscreen, M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
+               << "      Z PNG snapshot,\n"
                << "      Escape quit\n";
     }
 
@@ -1232,6 +1247,7 @@ namespace acmxvk {
                 }
             }
 #endif
+            stopSnapshotWorker();
         }
 
         void event(SDL_Event &event) override {
@@ -1353,6 +1369,9 @@ namespace acmxvk {
                 case SDLK_Y:
                     toggleAutopilot(true);
                     break;
+                case SDLK_Z:
+                    requestSnapshot();
+                    break;
                 default:
                     break;
                 }
@@ -1413,6 +1432,15 @@ namespace acmxvk {
                                 Video,
                                 Graphic };
 
+        struct SnapshotJob {
+            fs::path path;
+            std::vector<std::uint8_t> rgba;
+            std::uint32_t width = 0;
+            std::uint32_t height = 0;
+        };
+
+        static constexpr std::size_t SNAPSHOT_QUEUE_CAPACITY = 4;
+
         Options options;
         SourceKind source_kind = SourceKind::Camera;
         mxvk::VK_Capture capture;
@@ -1455,6 +1483,7 @@ namespace acmxvk {
         bool audio_time_active = false;
         bool audio_delta_time = false;
         bool spectrum_scale_by_sensitivity = false;
+        bool snapshot_pending = false;
         bool autopilot_enabled = false;
         bool autopilot_sequential = false;
         int recording_width = 0;
@@ -1467,7 +1496,14 @@ namespace acmxvk {
         std::uint64_t output_frame_count = 0;
         std::uint64_t png_frame_count = 0;
         std::uint64_t generated_frame_count = 0;
+        std::uint64_t snapshot_count = 0;
         std::uint64_t frame_count = 0;
+        std::deque<SnapshotJob> snapshot_jobs;
+        std::mutex snapshot_mutex;
+        std::condition_variable snapshot_condition;
+        std::thread snapshot_worker;
+        std::size_t snapshot_jobs_in_flight = 0;
+        bool snapshot_worker_stopping = false;
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
@@ -1832,7 +1868,7 @@ namespace acmxvk {
             case 89:
                 return SDLK_Y;
             case 90:
-                return SDLK_F10;
+                return SDLK_Z;
             default:
                 return SDLK_UNKNOWN;
             }
@@ -2487,6 +2523,144 @@ namespace acmxvk {
             }
         }
 
+        void snapshotWorkerLoop() noexcept {
+            while (true) {
+                SnapshotJob job;
+                {
+                    std::unique_lock<std::mutex> lock(snapshot_mutex);
+                    snapshot_condition.wait(lock, [&] {
+                        return snapshot_worker_stopping ||
+                               !snapshot_jobs.empty();
+                    });
+                    if (snapshot_worker_stopping && snapshot_jobs.empty()) {
+                        return;
+                    }
+                    job = std::move(snapshot_jobs.front());
+                    snapshot_jobs.pop_front();
+                }
+
+                try {
+                    savePng(job.path, job.rgba.data(),
+                            static_cast<int>(job.width),
+                            static_cast<int>(job.height));
+                    std::ostringstream message;
+                    message << "acmxvk: took PNG snapshot: "
+                            << job.path.string() << '\n';
+                    std::cout << message.str();
+                } catch (const std::exception &error) {
+                    std::ostringstream message;
+                    message << "acmxvk: snapshot failed: " << error.what()
+                            << '\n';
+                    std::cerr << message.str();
+                } catch (...) {
+                    std::cerr << "acmxvk: snapshot failed with an unknown error\n";
+                }
+
+                std::lock_guard<std::mutex> lock(snapshot_mutex);
+                if (snapshot_jobs_in_flight > 0) {
+                    --snapshot_jobs_in_flight;
+                }
+            }
+        }
+
+        [[nodiscard]] bool startSnapshotWorker() {
+            std::lock_guard<std::mutex> lock(snapshot_mutex);
+            if (snapshot_worker.joinable()) {
+                return true;
+            }
+            snapshot_worker_stopping = false;
+            try {
+                snapshot_worker =
+                    std::thread(&MainWindow::snapshotWorkerLoop, this);
+            } catch (const std::exception &error) {
+                std::cerr << "acmxvk: could not start snapshot worker: "
+                          << error.what() << '\n';
+                return false;
+            }
+            return true;
+        }
+
+        void stopSnapshotWorker() noexcept {
+            {
+                std::lock_guard<std::mutex> lock(snapshot_mutex);
+                if (!snapshot_worker.joinable()) {
+                    return;
+                }
+                snapshot_worker_stopping = true;
+            }
+            snapshot_condition.notify_one();
+            snapshot_worker.join();
+        }
+
+        [[nodiscard]] bool snapshotQueueFull() {
+            std::lock_guard<std::mutex> lock(snapshot_mutex);
+            return snapshot_jobs_in_flight >= SNAPSHOT_QUEUE_CAPACITY;
+        }
+
+        void enqueueSnapshot(SnapshotJob job) {
+            {
+                std::lock_guard<std::mutex> lock(snapshot_mutex);
+                snapshot_jobs.push_back(std::move(job));
+                ++snapshot_jobs_in_flight;
+            }
+            snapshot_condition.notify_one();
+        }
+
+        [[nodiscard]] fs::path snapshotPath(std::uint32_t width,
+                                            std::uint32_t height) {
+            const auto now = std::chrono::system_clock::now();
+            const std::time_t now_time =
+                std::chrono::system_clock::to_time_t(now);
+            std::tm local_time{};
+#ifdef _WIN32
+            localtime_s(&local_time, &now_time);
+#else
+            localtime_r(&now_time, &local_time);
+#endif
+            const fs::path directory(options.snapshot_directory);
+            while (true) {
+                std::ostringstream filename;
+                filename << "ACMXVK.Snapshot-"
+                         << std::put_time(&local_time, "%Y.%m.%d-%H.%M.%S")
+                         << '-' << width << 'x' << height << '-'
+                         << snapshot_count << ".png";
+                const fs::path candidate = directory / filename.str();
+                if (!fs::exists(candidate)) {
+                    return candidate;
+                }
+                ++snapshot_count;
+            }
+        }
+
+        void requestSnapshot() {
+            if (snapshot_pending) {
+                return;
+            }
+            if (snapshotQueueFull()) {
+                std::cerr << "acmxvk: snapshot queue is full; request ignored\n";
+                return;
+            }
+            std::error_code error;
+            const fs::path directory(options.snapshot_directory);
+            fs::create_directories(directory, error);
+            if (error || !fs::is_directory(directory)) {
+                std::cerr << "acmxvk: unable to create snapshot directory: "
+                          << directory.string() << '\n';
+                return;
+            }
+            if (!startSnapshotWorker()) {
+                return;
+            }
+            snapshot_pending = true;
+            setFrameReadbackEnabled(true);
+            std::cout << "acmxvk: PNG snapshot requested\n";
+        }
+
+        [[nodiscard]] bool continuousReadbackEnabled() const {
+            return writer.is_open() || options.png_output ||
+                   options.generate_interval > 0;
+        }
+
         void openOutput() {
             if (options.output_file.empty() && options.generate_interval <= 0) {
                 return;
@@ -2547,9 +2721,29 @@ namespace acmxvk {
 
         void onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width,
                              uint32_t height) override {
-            if ((!writer.is_open() && !options.png_output &&
-                 options.generate_interval <= 0) ||
-                recording_complete) {
+            const bool continuous_readback = continuousReadbackEnabled();
+            if (snapshot_pending) {
+                const fs::path path = snapshotPath(width, height);
+                SnapshotJob job;
+                job.path = path;
+                job.width = width;
+                job.height = height;
+                if (continuous_readback) {
+                    job.rgba = rgba;
+                } else {
+                    job.rgba = std::move(rgba);
+                }
+                enqueueSnapshot(std::move(job));
+                ++snapshot_count;
+                std::cout << "acmxvk: queued PNG snapshot: " << path.string()
+                          << '\n';
+                snapshot_pending = false;
+                if (!continuous_readback) {
+                    setFrameReadbackEnabled(false);
+                }
+            }
+
+            if (!continuous_readback || recording_complete) {
                 return;
             }
 
