@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7S**. It is usable for video, camera, and
+The port is currently at **Increment 7U**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -16,7 +16,7 @@ ACMX2.
 | Standalone CMake project | Complete | Builds against installed MXVK and MXWrite and provides an `uninstall` target. |
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
-| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. Camera devices and still images remain OpenCV-backed. |
+| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment shaders compiled to `.spv`. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
@@ -104,7 +104,9 @@ Increment 7Q adds MXVK's efficient capture-frame skip APIs and raises MXVK to
 acidcam-gpu remains unchanged. Increment 7R changes only ACMXVK and does not
 require MXVK or acidcam-gpu to be rebuilt. Increment 7S adds MXVK's
 preview-only text queue and raises MXVK to 0.27.0, so MXVK must be rebuilt and
-reinstalled before ACMXVK; acidcam-gpu remains unchanged.
+reinstalled before ACMXVK; acidcam-gpu remains unchanged. Increment 7T changes
+only ACMXVK and does not require MXVK or acidcam-gpu to be rebuilt. Increment
+7U also changes only ACMXVK.
 
 ### Input validation
 
@@ -857,6 +859,27 @@ starts with it hidden. MXVK composites this preview-only queue after frame
 readback, so it never appears in MXWrite video, PNG output, one-shot snapshots,
 or F10 captures. Explicit `--display-filter` and watermark text continue to be
 drawn before readback and remain part of saved output.
+
+Increment 7T aligns camera setup with ACMX2 by applying a one-frame capture
+buffer, requested dimensions, MJPG (or `--use-yuv` YUYV), and the requested FPS
+in a stable negotiation order. Startup output reports the dimensions, nominal
+FPS, and FourCC read back from the driver and warns when they differ from the
+request. The preview HUD labels render throughput separately and adds a camera
+rate measured from successfully delivered frames. Significant delivery-rate
+changes are also logged, making low-light automatic-exposure reductions such
+as 60-to-30 FPS visible without mistaking the driver's nominal rate for actual
+throughput.
+
+Increment 7U adds `--maximize-fps` for camera input. It requires `--fps` and
+runs camera acquisition on a bounded latest-frame worker while pacing the
+Vulkan loop at the requested rate. If a camera supplies 30 FPS and the target
+is 60 FPS, camera textures update when new frames arrive while shader time,
+custom uniforms, overlays, and presentation continue at 60 FPS. Only one
+unconsumed camera frame is retained, preventing latency and memory growth when
+capture is faster than rendering. Recording follows the render clock in this
+mode, so animated shader output can be encoded at the requested rate even when
+adjacent frames use the same camera image. VSync and hardware load can still
+cap the achieved presentation rate.
 
 ## Runtime controls
 

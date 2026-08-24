@@ -136,6 +136,8 @@ namespace acmxvk {
         double audio_pass_through_gain = 1.0;
         double audio_recording_gain = 1.0;
         bool resolution_specified = false;
+        bool use_yuv = false;
+        bool maximize_fps = false;
         bool fullscreen = false;
         bool repeat = false;
         bool enable_vsync = false;
@@ -584,6 +586,10 @@ namespace acmxvk {
             } else if (option == "-c" || option == "--camera-res") {
                 parseDimensions(optionValue(index, argc, argv, option),
                                 options.camera_width, options.camera_height, option);
+            } else if (option == "--use-yuv") {
+                options.use_yuv = true;
+            } else if (option == "--maximize-fps") {
+                options.maximize_fps = true;
             } else if (option == "-r" || option == "--resolution") {
                 parseDimensions(optionValue(index, argc, argv, option), options.width,
                                 options.height, option);
@@ -1064,11 +1070,21 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--record-gain requires live audio recording or encoded output");
         }
+        if (options.maximize_fps) {
+            if (!options.input_file.empty() || !options.graphic_file.empty()) {
+                throw std::runtime_error(
+                    "--maximize-fps is available only for camera input");
+            }
+            if (options.requested_fps <= 0.0) {
+                throw std::runtime_error(
+                    "--maximize-fps requires a target set with --fps");
+            }
+        }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7S)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7U)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1084,6 +1100,8 @@ namespace acmxvk {
                << "  -g, --graphic <file>        Read a still image\n"
                << "  -d, --device <index>        Camera device (default 0)\n"
                << "  -c, --camera-res <WxH>      Requested camera dimensions\n"
+               << "      --use-yuv               Prefer YUYV camera capture over MJPG\n"
+               << "      --maximize-fps          Render at --fps using the latest camera frame\n"
                << "  -u, --fps <rate>            Camera/output FPS\n"
                << "                              Video files prefer FFmpeg/NVDEC capture\n\n"
                << "Shaders:\n"
@@ -1549,6 +1567,112 @@ namespace acmxvk {
         std::vector<fs::path> shaders;
     };
 
+    class LatestCameraFrame {
+      public:
+        LatestCameraFrame() = default;
+        ~LatestCameraFrame() { stop(); }
+        LatestCameraFrame(const LatestCameraFrame &) = delete;
+        LatestCameraFrame &operator=(const LatestCameraFrame &) = delete;
+        LatestCameraFrame(LatestCameraFrame &&) = delete;
+        LatestCameraFrame &operator=(LatestCameraFrame &&) = delete;
+
+        void start(mxvk::VK_Capture &source) {
+            stop();
+            {
+                std::lock_guard<std::mutex> lock(frame_mutex);
+                capture_source = &source;
+                stopping = false;
+                latest_frame.release();
+                published_generation = 0;
+                consumed_generation = 0;
+            }
+            capture_thread = std::thread(&LatestCameraFrame::captureLoop, this);
+        }
+
+        void stop() noexcept {
+            {
+                std::lock_guard<std::mutex> lock(frame_mutex);
+                stopping = true;
+            }
+            frame_condition.notify_all();
+            if (capture_thread.joinable()) {
+                capture_thread.join();
+            }
+            std::lock_guard<std::mutex> lock(frame_mutex);
+            capture_source = nullptr;
+            latest_frame.release();
+            published_generation = 0;
+            consumed_generation = 0;
+        }
+
+        [[nodiscard]] bool takeLatest(cv::Mat &frame, bool wait_for_first) {
+            std::unique_lock<std::mutex> lock(frame_mutex);
+            if (wait_for_first && published_generation == 0 && !stopping) {
+                frame_condition.wait_for(lock, std::chrono::seconds(3), [&] {
+                    return stopping || published_generation > 0;
+                });
+            }
+            if (stopping || published_generation == consumed_generation ||
+                latest_frame.empty()) {
+                return false;
+            }
+            frame = latest_frame;
+            consumed_generation = published_generation;
+            return true;
+        }
+
+      private:
+        void captureLoop() noexcept {
+            while (true) {
+                mxvk::VK_Capture *source = nullptr;
+                {
+                    std::lock_guard<std::mutex> lock(frame_mutex);
+                    if (stopping) {
+                        return;
+                    }
+                    source = capture_source;
+                }
+                if (source == nullptr) {
+                    return;
+                }
+
+                cv::Mat captured;
+                bool read_frame = false;
+                try {
+                    read_frame = source->read(captured);
+                } catch (const std::exception &error) {
+                    std::cerr << "acmxvk: asynchronous camera read failed: "
+                              << error.what() << '\n';
+                } catch (...) {
+                    std::cerr << "acmxvk: asynchronous camera read failed\n";
+                }
+                if (!read_frame || captured.empty()) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    continue;
+                }
+
+                {
+                    std::lock_guard<std::mutex> lock(frame_mutex);
+                    if (stopping) {
+                        return;
+                    }
+                    latest_frame = std::move(captured);
+                    ++published_generation;
+                }
+                frame_condition.notify_one();
+            }
+        }
+
+        mxvk::VK_Capture *capture_source = nullptr;
+        cv::Mat latest_frame;
+        std::thread capture_thread;
+        std::mutex frame_mutex;
+        std::condition_variable frame_condition;
+        std::uint64_t published_generation = 0;
+        std::uint64_t consumed_generation = 0;
+        bool stopping = true;
+    };
+
     class MainWindow final : public mxvk::VK_Window {
       public:
         explicit MainWindow(Options options)
@@ -1574,6 +1698,7 @@ namespace acmxvk {
         }
 
         ~MainWindow() override {
+            latest_camera_frame.stop();
             const bool should_copy_audio = options.copy_audio && writer.is_open();
 #ifdef AUDIO_ENABLED
             const bool should_mux_file_audio =
@@ -1833,6 +1958,8 @@ namespace acmxvk {
                 return;
             }
 
+            paceMaximizedRendering();
+
             pollMidi();
 
             source_frame_received = false;
@@ -1867,7 +1994,11 @@ namespace acmxvk {
             }
 
             startMediaTimelineIfReady();
-            if (source_frame_received && !clocked_video_handled) {
+            const bool render_latest_camera_frame =
+                options.maximize_fps && source_kind == SourceKind::Camera &&
+                media_timeline_started;
+            if ((source_frame_received || render_latest_camera_frame) &&
+                !clocked_video_handled) {
                 recording_frame_due = true;
                 if (source_kind == SourceKind::Video) {
                     recording_frame_has_pts = true;
@@ -1925,6 +2056,7 @@ namespace acmxvk {
         Options options;
         SourceKind source_kind = SourceKind::Camera;
         mxvk::VK_Capture capture;
+        LatestCameraFrame latest_camera_frame;
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
         mxvk::VK_FF_Capture ffmpeg_capture;
         std::vector<std::uint8_t> ffmpeg_rgba;
@@ -1957,6 +2089,9 @@ namespace acmxvk {
         bool mouse_pressed = false;
         bool history_initialized = false;
         bool initial_frame_pending = false;
+        bool async_camera_frame_uploaded = false;
+        bool async_camera_initial_wait_completed = false;
+        bool render_pacing_started = false;
         bool media_timeline_started = false;
         bool source_frame_received = false;
         bool recording_frame_due = false;
@@ -1977,10 +2112,15 @@ namespace acmxvk {
         bool autopilot_sequential = false;
         int recording_width = 0;
         int recording_height = 0;
+        int camera_reported_width = 0;
+        int camera_reported_height = 0;
         int autopilot_counter = 0;
         int autopilot_interval_frames = 0;
         int history_delay_counter = 0;
         double recording_fps = 0.0;
+        double camera_reported_fps = 0.0;
+        double camera_delivered_fps = 0.0;
+        double camera_last_logged_fps = 0.0;
         double shader_time = 0.0;
         std::uint64_t output_frame_count = 0;
         std::uint64_t decoded_video_frame_count = 0;
@@ -1991,6 +2131,7 @@ namespace acmxvk {
         std::uint64_t snapshot_count = 0;
         std::uint64_t frame_count = 0;
         std::uint64_t hud_fps_frame_count = 0;
+        std::uint64_t camera_fps_frame_count = 0;
         double hud_display_fps = 0.0;
         std::deque<SnapshotJob> snapshot_jobs;
         std::mutex snapshot_mutex;
@@ -2002,6 +2143,8 @@ namespace acmxvk {
             std::chrono::steady_clock::now()};
         std::chrono::steady_clock::time_point hud_fps_last_tick{
             hud_session_start};
+        std::chrono::steady_clock::time_point camera_fps_last_tick{};
+        std::chrono::steady_clock::time_point next_render_tick{};
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
@@ -3143,6 +3286,75 @@ namespace acmxvk {
             hud_fps_last_tick = now;
         }
 
+        void paceMaximizedRendering() {
+            if (!options.maximize_fps || options.requested_fps <= 0.0) {
+                return;
+            }
+
+            const auto interval = std::chrono::duration_cast<
+                std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(1.0 / options.requested_fps));
+            const auto now = std::chrono::steady_clock::now();
+            if (!render_pacing_started) {
+                render_pacing_started = true;
+                next_render_tick = now;
+                return;
+            }
+
+            next_render_tick += interval;
+            if (next_render_tick > now) {
+                std::this_thread::sleep_until(next_render_tick);
+                return;
+            }
+
+            if (now - next_render_tick > interval * 4) {
+                next_render_tick = now;
+            }
+        }
+
+        void updateCameraFrameRate() {
+            if (source_kind != SourceKind::Camera) {
+                return;
+            }
+
+            const auto now = std::chrono::steady_clock::now();
+            if (camera_fps_frame_count == 0) {
+                camera_fps_frame_count = 1;
+                camera_fps_last_tick = now;
+                return;
+            }
+
+            ++camera_fps_frame_count;
+            const double elapsed = std::chrono::duration<double>(
+                                       now - camera_fps_last_tick)
+                                       .count();
+            if (elapsed < 1.0) {
+                return;
+            }
+
+            camera_delivered_fps =
+                static_cast<double>(camera_fps_frame_count - 1) / elapsed;
+            camera_fps_frame_count = 1;
+            camera_fps_last_tick = now;
+
+            const double log_threshold = std::max(
+                5.0, camera_last_logged_fps * 0.2);
+            if (camera_last_logged_fps <= 0.0 ||
+                std::abs(camera_delivered_fps - camera_last_logged_fps) >=
+                    log_threshold) {
+                std::ostringstream status;
+                status << "acmxvk: camera delivery: " << std::fixed
+                       << std::setprecision(1) << camera_delivered_fps
+                       << " FPS measured";
+                if (camera_reported_fps > 0.0) {
+                    status << " (driver reports " << camera_reported_fps
+                           << " FPS)";
+                }
+                std::cout << status.str() << '\n';
+                camera_last_logged_fps = camera_delivered_fps;
+            }
+        }
+
         void queueRuntimeHud(int &y, int line_height) {
             if (counter_disabled) {
                 return;
@@ -3212,10 +3424,22 @@ namespace acmxvk {
             printPreviewText(hudTimeString(), 10, y, status_color);
             y += line_height;
             std::ostringstream fps;
-            fps << std::fixed << std::setprecision(1) << hud_display_fps
-                << " FPS";
+            fps << "Render: " << std::fixed << std::setprecision(1)
+                << hud_display_fps << " FPS";
             printPreviewText(fps.str(), 10, y, status_color);
             y += line_height;
+            if (source_kind == SourceKind::Camera) {
+                std::ostringstream camera_fps;
+                camera_fps << "Camera: ";
+                if (camera_delivered_fps > 0.0) {
+                    camera_fps << std::fixed << std::setprecision(1)
+                               << camera_delivered_fps << " FPS measured";
+                } else {
+                    camera_fps << "measuring...";
+                }
+                printPreviewText(camera_fps.str(), 10, y, status_color);
+                y += line_height;
+            }
             const SDL_Color hint_color{128U, 128U, 128U, 255U};
             printPreviewText("F9: Toggle overlay", 10, y, hint_color);
             y += line_height;
@@ -3272,6 +3496,25 @@ namespace acmxvk {
             }
         }
 
+        [[nodiscard]] static std::string captureFourccName(double value) {
+            if (!std::isfinite(value) || value <= 0.0 ||
+                value > static_cast<double>(
+                            std::numeric_limits<std::uint32_t>::max())) {
+                return "unknown";
+            }
+            const auto fourcc = static_cast<std::uint32_t>(std::llround(value));
+            std::string name(4, ' ');
+            for (std::size_t index = 0; index < name.size(); ++index) {
+                const auto byte = static_cast<unsigned char>(
+                    (fourcc >> (index * 8U)) & 0xffU);
+                if (!std::isprint(byte)) {
+                    return "unknown";
+                }
+                name[index] = static_cast<char>(byte);
+            }
+            return name;
+        }
+
         void openInput() {
             if (!options.graphic_file.empty()) {
                 source_kind = SourceKind::Graphic;
@@ -3295,10 +3538,82 @@ namespace acmxvk {
             }
 
             if (source_kind == SourceKind::Camera) {
+                // Match ACMX2's ordering. Some V4L2 drivers renegotiate the
+                // frame interval when dimensions or pixel format change.
+                capture.set(cv::CAP_PROP_BUFFERSIZE, 1.0);
                 capture.set(cv::CAP_PROP_FRAME_WIDTH, options.camera_width);
                 capture.set(cv::CAP_PROP_FRAME_HEIGHT, options.camera_height);
+                const int requested_fourcc = options.use_yuv
+                                                 ? cv::VideoWriter::fourcc(
+                                                       'Y', 'U', 'Y', 'V')
+                                                 : cv::VideoWriter::fourcc(
+                                                       'M', 'J', 'P', 'G');
+                capture.set(cv::CAP_PROP_FOURCC,
+                            static_cast<double>(requested_fourcc));
                 if (options.requested_fps > 0.0) {
                     capture.set(cv::CAP_PROP_FPS, options.requested_fps);
+                }
+
+                camera_reported_width = static_cast<int>(
+                    std::lround(capture.get(cv::CAP_PROP_FRAME_WIDTH)));
+                camera_reported_height = static_cast<int>(
+                    std::lround(capture.get(cv::CAP_PROP_FRAME_HEIGHT)));
+                camera_reported_fps = capture.get(cv::CAP_PROP_FPS);
+                if (!std::isfinite(camera_reported_fps) ||
+                    camera_reported_fps < 0.0) {
+                    camera_reported_fps = 0.0;
+                }
+                const std::string reported_fourcc = captureFourccName(
+                    capture.get(cv::CAP_PROP_FOURCC));
+
+                std::cout << "acmxvk: camera opened: "
+                          << camera_reported_width << 'x'
+                          << camera_reported_height;
+                if (camera_reported_fps > 0.0) {
+                    std::cout << " at reported " << camera_reported_fps
+                              << " FPS";
+                } else {
+                    std::cout << " at an unreported frame rate";
+                }
+                std::cout << ", format=" << reported_fourcc << '\n';
+
+                if (camera_reported_width != options.camera_width ||
+                    camera_reported_height != options.camera_height) {
+                    std::cerr << "acmxvk: camera mode warning: requested "
+                              << options.camera_width << 'x'
+                              << options.camera_height << " but driver reports "
+                              << camera_reported_width << 'x'
+                              << camera_reported_height
+                              << '\n';
+                }
+                if (options.requested_fps > 0.0 &&
+                    camera_reported_fps > 0.0 &&
+                    std::abs(camera_reported_fps - options.requested_fps) >
+                        0.05) {
+                    std::cerr << "acmxvk: camera mode warning: requested "
+                              << options.requested_fps
+                              << " FPS but driver reports "
+                              << camera_reported_fps << " FPS\n";
+                }
+                const std::string requested_format =
+                    options.use_yuv ? "YUYV" : "MJPG";
+                if (reported_fourcc != "unknown" &&
+                    reported_fourcc != requested_format) {
+                    std::cerr << "acmxvk: camera mode warning: requested "
+                              << requested_format << " but driver reports "
+                              << reported_fourcc << '\n';
+                }
+                if (options.maximize_fps) {
+                    latest_camera_frame.start(capture);
+                    std::cout
+                        << "acmxvk: maximize FPS active: asynchronous camera "
+                           "capture, Vulkan render target "
+                        << options.requested_fps << " FPS\n";
+                    if (options.enable_vsync) {
+                        std::cout
+                            << "acmxvk: maximize FPS note: VSync may cap the "
+                               "render rate to the display refresh\n";
+                    }
                 }
             }
         }
@@ -3668,8 +3983,16 @@ namespace acmxvk {
                 } else
 #endif
                 {
-                    source_width = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_WIDTH));
-                    source_height = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_HEIGHT));
+                    if (source_kind == SourceKind::Camera &&
+                        options.maximize_fps) {
+                        source_width = camera_reported_width;
+                        source_height = camera_reported_height;
+                    } else {
+                        source_width = static_cast<int>(
+                            capture.get(cv::CAP_PROP_FRAME_WIDTH));
+                        source_height = static_cast<int>(
+                            capture.get(cv::CAP_PROP_FRAME_HEIGHT));
+                    }
                 }
                 if (source_width <= 0 || source_height <= 0) {
                     source_width = options.camera_width;
@@ -3956,6 +4279,8 @@ namespace acmxvk {
             }
             if (source_kind == SourceKind::Video) {
                 ++decoded_video_frame_count;
+            } else if (source_kind == SourceKind::Camera) {
+                updateCameraFrameRate();
             }
             return true;
         }
@@ -4259,7 +4584,49 @@ namespace acmxvk {
                                         static_cast<int>(rgba.step));
         }
 
+        [[nodiscard]] bool readLatestCameraFrame() {
+            cv::Mat bgr;
+            const bool wait_for_first = !async_camera_frame_uploaded &&
+                                        !async_camera_initial_wait_completed;
+            async_camera_initial_wait_completed = true;
+            if (!latest_camera_frame.takeLatest(bgr, wait_for_first)) {
+                return false;
+            }
+
+            cv::Mat rgba;
+            cv::cvtColor(bgr, rgba, cv::COLOR_BGR2RGBA);
+            rotateFrame(rgba, options.frame_rotation);
+            uploadInputFrame(rgba);
+            async_camera_frame_uploaded = true;
+
+#ifdef ACMXVK_WITH_CUDA
+            if (gpu_filter_engine != nullptr) {
+                const bool history_was_initialized = history_initialized;
+                initializeCudaHistory(gpu_filter_engine->output(),
+                                      gpu_filter_engine->stream(), true);
+                if (history_was_initialized &&
+                    ++history_delay_counter > options.cache_delay) {
+                    updateFilteredCudaHistoryFrame();
+                    history_delay_counter = 0;
+                }
+                return true;
+            }
+#endif
+
+            const bool history_was_initialized = history_initialized;
+            initializeHistory(rgba);
+            if (history_was_initialized &&
+                ++history_delay_counter > options.cache_delay) {
+                updateHistoryFrame(rgba);
+                history_delay_counter = 0;
+            }
+            return true;
+        }
+
         [[nodiscard]] bool readInputFrame() {
+            if (source_kind == SourceKind::Camera && options.maximize_fps) {
+                return readLatestCameraFrame();
+            }
 #ifdef ACMXVK_WITH_CUDA
             if (gpu_filter_engine != nullptr) {
                 cv::cuda::Stream *capture_stream = nullptr;
