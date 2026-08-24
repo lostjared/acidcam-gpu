@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7L**. It is usable for video, camera, and
+The port is currently at **Increment 7M**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -25,10 +25,10 @@ ACMX2.
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, and optional audio copying. |
 | PNG output | Implemented | Supports full PNG sequences and periodic generated frames. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
-| Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
+| Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
-| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, and ACMXVK-equivalent playback actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
+| Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
+| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -95,7 +95,7 @@ and reinstalled before rebuilding ACMXVK; acidcam-gpu remains unchanged.
 Increment 7K changes MXVK's internal NVDEC surface synchronization, so MXVK
 must be rebuilt and reinstalled once more; acidcam-gpu remains unchanged.
 Increment 7L changes only ACMXVK and does not require either dependency to be
-rebuilt or reinstalled.
+rebuilt or reinstalled. Increment 7M also changes only ACMXVK.
 
 ### Apple Silicon and MoltenVK
 
@@ -335,6 +335,13 @@ Audio-reactive shader values ramp from zero at startup at a default rate of
 `--audio-warm-rate 0` to disable warmup. The envelope scales amplitude,
 peak/RMS/bands, the current FFT, and FFT history. It does not alter monitoring,
 recording, frequency estimation, or the reported sample rate.
+
+The ACMX2 audio-time controls are available while a live or file audio source
+is active. Press `Q` to make audio amplitude advance shader time instead of the
+wall clock. `Home` toggles frame-delta scaling for both reactive time and the
+`amp` value, which makes their behavior less dependent on rendering frame rate.
+`End` toggles sensitivity scaling for the current FFT and FFT-history textures.
+The same actions are accepted from ACMX2 MIDI Map codes 81, 268, and 269.
 
 Without repeat, the muxed result is limited to the shorter of the recorded
 video and decoded audio. With `--audio-repeat`, the complete file or playlist
@@ -666,6 +673,12 @@ to mono PCM16 only after capture stops, and written with an explicit
 little-endian RIFF/WAVE header. Recording can run independently or alongside
 video encoding and continues to honor `--record-gain`.
 
+Increment 7M ports ACMX2's remaining audio-runtime controls. `Q` selects
+amplitude-driven shader time, `Home` applies frame-delta scaling to reactive
+time and amplitude, and `End` applies the current audio sensitivity to FFT and
+FFT-history samples. ACMX2 MIDI Map actions for all three controls use the same
+event path as the keyboard.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -675,6 +688,9 @@ video encoding and continues to honor `--record-gain`.
 - P without a playlist: pause or resume video input
 - L: freeze or resume both input and shader animation
 - T: enable or disable shader-time advancement
+- Q: toggle audio-reactive shader-time advancement
+- Home: toggle frame-delta scaling for reactive time and amplitude
+- End: toggle sensitivity scaling for FFT and FFT-history data
 - U/I: step shader time forward or backward by 0.05
 - Page Up/Page Down: increase or decrease shader-time speed
 - Insert/Delete: increase or decrease live audio sensitivity
@@ -714,6 +730,9 @@ implicit-layer warning is external to ACMXVK. Increment 7L was tested by writing
 live microphone input to a standalone PCM16 WAV, then writing the WAV alongside
 an H.264/AAC output from the same capture buffer. Both files' channel,
 sample-rate, duration, codec, and sample-format metadata were inspected.
+Increment 7M exercised all three audio controls through SDL keyboard events
+against repeating file audio and verified ACMX2 MIDI Map actions 81, 268, and
+269 as active mappings under Vulkan validation.
 
 ## Development note
 

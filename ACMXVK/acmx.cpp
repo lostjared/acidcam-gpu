@@ -696,7 +696,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7L)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7M)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -795,7 +795,8 @@ namespace acmxvk {
                << "      --enable-screenshot     Enable MXVK F10 screenshots\n\n"
                << "Keys: Up/Down shader or playlist node, Shift+Up/Down final shader,\n"
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
-               << "      Page Up/Down time speed, Insert/Delete audio sensitivity,\n"
+               << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
+               << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
                << "      F fullscreen, M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
                << "      Escape quit\n";
@@ -1290,6 +1291,39 @@ namespace acmxvk {
                     std::cout << "acmxvk: shader time "
                               << (shader_time_active ? "enabled" : "disabled") << '\n';
                     break;
+                case SDLK_Q:
+#ifdef AUDIO_ENABLED
+                    if (audioSourceOpen()) {
+                        audio_time_active = !audio_time_active;
+                        previous_frame = std::chrono::steady_clock::now();
+                        std::cout << "acmxvk: audio-reactive shader time "
+                                  << (audio_time_active ? "enabled" : "disabled")
+                                  << '\n';
+                    }
+#endif
+                    break;
+                case SDLK_HOME:
+#ifdef AUDIO_ENABLED
+                    if (audioSourceOpen()) {
+                        audio_delta_time = !audio_delta_time;
+                        std::cout << "acmxvk: audio delta-time scaling "
+                                  << (audio_delta_time ? "enabled" : "disabled")
+                                  << '\n';
+                    }
+#endif
+                    break;
+                case SDLK_END:
+#ifdef AUDIO_ENABLED
+                    if (audioSourceOpen()) {
+                        spectrum_scale_by_sensitivity =
+                            !spectrum_scale_by_sensitivity;
+                        std::cout << "acmxvk: spectrum sensitivity scaling "
+                                  << (spectrum_scale_by_sensitivity ? "enabled"
+                                                                    : "disabled")
+                                  << '\n';
+                    }
+#endif
+                    break;
                 case SDLK_U:
                     stepShaderTime(0.05);
                     break;
@@ -1418,6 +1452,9 @@ namespace acmxvk {
         bool input_paused = false;
         bool rendering_frozen = false;
         bool shader_time_active = true;
+        bool audio_time_active = false;
+        bool audio_delta_time = false;
+        bool spectrum_scale_by_sensitivity = false;
         bool autopilot_enabled = false;
         bool autopilot_sequential = false;
         int recording_width = 0;
@@ -1601,7 +1638,7 @@ namespace acmxvk {
                         ++active_mappings;
                     } else if (options.midi_monitor) {
                         std::cerr
-                            << "acmxvk: MIDI map action unavailable in 6C: "
+                            << "acmxvk: MIDI map action unavailable in this build: "
                             << mapping.primary_action << ':'
                             << mapping.secondary_action << '\n';
                     }
@@ -1753,6 +1790,18 @@ namespace acmxvk {
             case 267:
             case 505:
                 return SDLK_PAGEDOWN;
+            case 268:
+#ifdef AUDIO_ENABLED
+                return SDLK_HOME;
+#else
+                return SDLK_UNKNOWN;
+#endif
+            case 269:
+#ifdef AUDIO_ENABLED
+                return SDLK_END;
+#else
+                return SDLK_UNKNOWN;
+#endif
             case 260:
                 return SDLK_INSERT;
             case 261:
@@ -1772,6 +1821,12 @@ namespace acmxvk {
                 return SDLK_M;
             case 80:
                 return SDLK_P;
+            case 81:
+#ifdef AUDIO_ENABLED
+                return SDLK_Q;
+#else
+                return SDLK_UNKNOWN;
+#endif
             case 84:
                 return SDLK_T;
             case 89:
@@ -1820,6 +1875,10 @@ namespace acmxvk {
             case 267:
             case 505:
                 return "decrease shader time speed";
+            case 268:
+                return "toggle audio delta-time scaling";
+            case 269:
+                return "toggle spectrum sensitivity scaling";
             case 260:
                 return "increase audio sensitivity";
             case 261:
@@ -1839,6 +1898,8 @@ namespace acmxvk {
                 return "toggle multipass";
             case 80:
                 return "toggle playlist or input pause";
+            case 81:
+                return "toggle audio-reactive shader time";
             case 84:
                 return "toggle shader time";
             case 89:
@@ -3218,11 +3279,9 @@ namespace acmxvk {
             const float delta = options.normalized_time
                                     ? static_cast<float>(1.0 / outputFrameRate())
                                     : wall_delta;
-            if (shader_time_active) {
-                shader_time += static_cast<double>(delta) * options.time_speed;
-            }
-            const float elapsed = static_cast<float>(shader_time);
             const float frame_rate = delta > 0.0F ? 1.0F / delta : 0.0F;
+            float raw_audio_amplitude = 0.0F;
+            float audio_sensitivity = 1.0F;
             float audio_amplitude = 0.0F;
             float audio_frequency = 0.0F;
             float audio_peak = 0.0F;
@@ -3245,9 +3304,13 @@ namespace acmxvk {
             if (audioSourceOpen()) {
                 const audio::AudioMetrics metrics = audio_engine->metrics();
                 const float warmup = updateAudioWarmup(now);
-                const float sense =
-                    audio_engine->sensitivity() * 4.0F * warmup;
-                audio_amplitude = metrics.amplitude * warmup;
+                raw_audio_amplitude = metrics.amplitude;
+                audio_sensitivity = audio_engine->sensitivity();
+                const float delta_scale = audio_delta_time ? delta : 1.0F;
+                const float sense = audio_sensitivity * 4.0F * warmup;
+                audio_amplitude = raw_audio_amplitude * audio_sensitivity *
+                                  static_cast<float>(options.time_speed) *
+                                  delta_scale * warmup;
                 audio_frequency = metrics.frequency;
                 audio_peak = std::sqrt(std::max(metrics.peak, 0.0F)) * sense;
                 audio_rms = std::sqrt(std::max(metrics.rms, 0.0F)) * sense;
@@ -3257,11 +3320,27 @@ namespace acmxvk {
                 audio_high = std::sqrt(std::max(metrics.high, 0.0F)) * sense;
                 audio_sample_rate = static_cast<float>(audio_engine->sample_rate());
                 spectrum_values = audio_engine->spectrum();
+                const float spectrum_scale =
+                    warmup *
+                    (spectrum_scale_by_sensitivity ? audio_sensitivity : 1.0F);
                 for (float &value : spectrum_values) {
-                    value *= warmup;
+                    value *= spectrum_scale;
                 }
             }
 #endif
+            if (audio_time_active) {
+                const float delta_scale = audio_delta_time ? delta : 1.0F;
+                shader_time += static_cast<double>(raw_audio_amplitude) *
+                               static_cast<double>(audio_sensitivity) *
+                               options.time_speed *
+                               static_cast<double>(delta_scale);
+            } else if (shader_time_active) {
+                shader_time += static_cast<double>(delta) * options.time_speed;
+            }
+            if (!std::isfinite(shader_time)) {
+                shader_time = 0.0;
+            }
+            const float elapsed = static_cast<float>(shader_time);
             frame_sprite->setShaderParams(1.0F, 1.0F, 1.0F, elapsed);
             frame_sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
             frame_sprite->setUniform0(1.0F, 1.0F, static_cast<float>(width),
