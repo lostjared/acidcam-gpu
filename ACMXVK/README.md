@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7G**. It is usable for video, camera, and
+The port is currently at **Increment 7H**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -15,7 +15,7 @@ ACMX2.
 | --- | --- | --- |
 | Standalone CMake project | Complete | Builds against installed MXVK and MXWrite and provides an `uninstall` target. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
-| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; CUDA builds can send NVDEC frames directly to Vulkan without enabling an acidcam-gpu filter. Camera devices and still images remain OpenCV-backed. |
+| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. Camera devices and still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment shaders compiled to `.spv`. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
@@ -86,7 +86,8 @@ reinstalled before building ACMXVK 7D with `-DWITH_CUDA=ON`; MXVK does not need
 another reinstall for 7D. Increment 7E changes only ACMXVK, so neither MXVK nor
 acidcam-gpu needs another reinstall. Increment 7F also changes only ACMXVK and
 uses MXVK's existing FFmpeg-capture API when that feature is present. Increment
-7G changes only ACMXVK as well.
+7G changes only ACMXVK as well. Increment 7H also changes only ACMXVK and does
+not require either dependency to be reinstalled.
 
 ### Apple Silicon and MoltenVK
 
@@ -604,6 +605,13 @@ history array even when `--gpu-filter` is omitted. If direct CUDA/Vulkan interop
 is unavailable, ACMXVK reports the condition once and uses host staging. The
 7F filtered route remains unchanged.
 
+Increment 7H separates MXVK CUDA interop from ACMXVK's `WITH_CUDA` filter
+option. When the installed MXVK package was built with CUDA, an ordinary
+`-DWITH_CUDA=OFF` ACMXVK build now includes resident NVDEC upload, rotation, and
+history without locating or linking acidcam-gpu. Configure `-DWITH_CUDA=ON`
+only when the acidcam-gpu filter library is wanted. MoltenVK and non-CUDA MXVK
+installations continue compiling the portable host path.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -633,14 +641,16 @@ and with validation enabled in both MXVK and ACMXVK. The current increment has
 been exercised with shader-library loading, multipass rendering, configurable
 history caches, MXWrite encoding, custom-uniform rendering, optional live audio
 metrics, FFmpeg-decoded file reactivity, routed-tone FFT visualization, and FFT
-spectrum history. Increments 7B through 7G were additionally tested with a
+spectrum history. Increments 7B through 7H were additionally tested with a
 CUDA+MIDI build, live Left/Right filter changes, filtered Vulkan frame history,
 resident `GpuMat` video input, and CUDA-resident clockwise, 180-degree, and
 counterclockwise rotation on an NVIDIA RTX 2070. Increment 7F was tested with
 H.264 NVDEC feeding CUDA rotation, acidcam-gpu, Vulkan history, and repeated
 playback without a host-frame handoff. Increment 7G was also tested with the
 acidcam-gpu filter omitted while retaining direct NVDEC rotation, Vulkan sprite
-upload, and layered history. The known duplicate vkBasalt
+upload, and layered history. Increment 7H verified the same resident route in a
+`-DWITH_CUDA=OFF` build and separately regression-tested the optional filtered
+build. The known duplicate vkBasalt
 implicit-layer warning is external to ACMXVK.
 
 ## Development note

@@ -21,6 +21,8 @@
 #endif
 #ifdef ACMXVK_WITH_CUDA
 #include "gpu_filters.hpp"
+#endif
+#ifdef ACMXVK_WITH_MXVK_CUDA
 #include <opencv2/cudaarithm.hpp>
 #endif
 
@@ -669,7 +671,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7G)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7H)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -746,7 +748,7 @@ namespace acmxvk {
                << "      --list-midi             List MIDI input ports and exit\n"
                << "      --check-midi            Report compiled MIDI support\n"
                << "                              Paired knobs repeat by distance from 64\n\n"
-               << "CUDA filters (requires WITH_CUDA=ON build):\n"
+               << "CUDA and filters:\n"
                << "      --gpu-filter <list>     Comma-separated acidcam-gpu indices\n"
                << "      --gpu-buffer <4-32>     Temporal frame count (default 10)\n"
                << "  -m, --cuda-device <index>   Select CUDA device (default 0)\n"
@@ -754,7 +756,8 @@ namespace acmxvk {
                << "      --list-cuda-devices     List CUDA devices and exit\n"
                << "      --check-cuda            Report compiled CUDA-filter support\n"
                << "                              Left/Right selects the active filter\n"
-               << "                              NVDEC remains resident without a filter\n"
+               << "                              NVDEC interop follows the MXVK build\n"
+               << "                              Filters require WITH_CUDA=ON\n"
                << "                              Video/camera RGBA and rotation stay on GPU\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
@@ -1305,7 +1308,7 @@ namespace acmxvk {
         mxvk::VK_FF_Capture ffmpeg_capture;
         std::vector<std::uint8_t> ffmpeg_rgba;
         bool using_ffmpeg_capture = false;
-#ifdef ACMXVK_WITH_CUDA
+#ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::Stream ffmpeg_cuda_stream;
 #endif
 #endif
@@ -1353,6 +1356,8 @@ namespace acmxvk {
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
+#endif
+#ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::GpuMat cuda_input_rgba;
         cv::cuda::GpuMat cuda_rotated_rgba;
         cv::cuda::GpuMat cuda_rotation_transpose;
@@ -2838,7 +2843,7 @@ namespace acmxvk {
                 static_cast<int>(rgba.step));
         }
 
-#ifdef ACMXVK_WITH_CUDA
+#ifdef ACMXVK_WITH_MXVK_CUDA
         void updateCudaHistoryFrame(const cv::cuda::GpuMat &rgba,
                                     cv::cuda::Stream &source_stream) {
             if (frame_sprite->updateHistoryTextureCuda(rgba, source_stream)) {
@@ -2859,10 +2864,12 @@ namespace acmxvk {
                 static_cast<int>(cuda_history_fallback_rgba.step));
         }
 
+#ifdef ACMXVK_WITH_CUDA
         void updateFilteredCudaHistoryFrame() {
             updateCudaHistoryFrame(gpu_filter_engine->output(),
                                    gpu_filter_engine->stream());
         }
+#endif
 
         void initializeCudaHistory(const cv::cuda::GpuMat &rgba,
                                    cv::cuda::Stream &source_stream,
@@ -2883,6 +2890,7 @@ namespace acmxvk {
                       << options.cache_delay << ")\n";
         }
 
+#ifdef ACMXVK_WITH_CUDA
         void uploadInputFrame(const cv::cuda::GpuMat &rgba,
                               cv::cuda::Stream &source_stream) {
             if (!gpu_filter_engine->process(rgba, source_stream)) {
@@ -2896,6 +2904,7 @@ namespace acmxvk {
                     "MXVK could not upload the CUDA-filtered frame");
             }
         }
+#endif
 
         [[nodiscard]] const cv::cuda::GpuMat &
         rotateCudaFrame(const cv::cuda::GpuMat &rgba,
@@ -2993,6 +3002,8 @@ namespace acmxvk {
                 }
                 return true;
             }
+#endif
+#ifdef ACMXVK_WITH_MXVK_CUDA
 #if defined(MXVK_WITH_FFMPEG_CAPTURE)
             if (using_ffmpeg_capture &&
                 ffmpeg_capture.using_hardware_decode()) {

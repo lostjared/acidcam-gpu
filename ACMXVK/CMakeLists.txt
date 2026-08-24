@@ -109,7 +109,16 @@ find_package(Vulkan 1.4 REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(glm CONFIG REQUIRED)
-if(WITH_CUDA AND NOT APPLE)
+find_package(OpenCV REQUIRED)
+
+find_package(mxvk CONFIG REQUIRED)
+find_program(GLSLC_EXECUTABLE glslc REQUIRED)
+
+get_target_property(ACMXVK_MXVK_LIBRARIES mxvk::mxvk INTERFACE_LINK_LIBRARIES)
+
+set(ACMXVK_MXVK_CUDA_AVAILABLE OFF)
+if(NOT APPLE AND ACMXVK_MXVK_LIBRARIES MATCHES "CUDA::")
+    set(ACMXVK_MXVK_CUDA_AVAILABLE ON)
     find_package(OpenCV REQUIRED COMPONENTS
         core
         imgproc
@@ -118,14 +127,7 @@ if(WITH_CUDA AND NOT APPLE)
         videoio
         cudaarithm
     )
-else()
-    find_package(OpenCV REQUIRED)
 endif()
-
-find_package(mxvk CONFIG REQUIRED)
-find_program(GLSLC_EXECUTABLE glslc REQUIRED)
-
-get_target_property(ACMXVK_MXVK_LIBRARIES mxvk::mxvk INTERFACE_LINK_LIBRARIES)
 
 if(APPLE AND ACMXVK_MXVK_LIBRARIES MATCHES "MoltenVK")
     message(FATAL_ERROR
@@ -338,12 +340,15 @@ if(MIDI)
     target_link_libraries(acmxvk PRIVATE "${RTMIDI_LIBRARY}")
     target_compile_definitions(acmxvk PRIVATE MIDI_ENABLED)
 endif()
+if(ACMXVK_MXVK_CUDA_AVAILABLE)
+    target_link_libraries(acmxvk PRIVATE opencv_cudaarithm)
+    target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_MXVK_CUDA)
+endif()
 if(WITH_CUDA)
     target_sources(acmxvk PRIVATE gpu_filters.cpp gpu_filters.hpp)
     target_link_libraries(acmxvk PRIVATE
         acidcam-gpu::acidcam-gpu
         CUDA::cudart
-        opencv_cudaarithm
     )
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_CUDA)
 endif()
