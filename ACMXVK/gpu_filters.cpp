@@ -65,9 +65,25 @@ namespace acmxvk::gpu {
                 return false;
             }
             frame_buffer->update(rgba);
-            if (working_buffer.empty() || working_buffer.cols != rgba.cols ||
-                working_buffer.rows != rgba.rows) {
-                working_buffer.create(rgba.rows, rgba.cols, CV_8UC4);
+            return process_current_frame();
+        }
+
+        [[nodiscard]] bool process(const cv::cuda::GpuMat &rgba,
+                                   cv::cuda::Stream &source_stream) {
+            if (rgba.empty() || rgba.type() != CV_8UC4) {
+                return false;
+            }
+            frame_buffer->update(rgba, source_stream);
+            source_stream.waitForCompletion();
+            return process_current_frame();
+        }
+
+        [[nodiscard]] bool process_current_frame() {
+            if (working_buffer.empty() ||
+                working_buffer.cols != frame_buffer->w ||
+                working_buffer.rows != frame_buffer->h) {
+                working_buffer.create(frame_buffer->h, frame_buffer->w,
+                                      CV_8UC4);
             }
 
             update_parameters();
@@ -161,6 +177,11 @@ namespace acmxvk::gpu {
 
     bool FilterEngine::process(const cv::Mat &rgba) {
         return impl->process(rgba);
+    }
+
+    bool FilterEngine::process(const cv::cuda::GpuMat &rgba,
+                               cv::cuda::Stream &source_stream) {
+        return impl->process(rgba, source_stream);
     }
 
     bool FilterEngine::select_relative_filter(int direction) {

@@ -6,6 +6,7 @@
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaimgproc.hpp>
 #include <opencv2/opencv.hpp>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -86,6 +87,52 @@ namespace ac_gpu {
                     cv::cuda::cvtColor(d_uploadBuffer, deviceFrames.back(), cv::COLOR_BGR2RGBA);
                 } else {
                     d_uploadBuffer.copyTo(deviceFrames.back());
+                }
+            }
+
+            for (int i = 0; i < arraySize; ++i) {
+                rawPointers[i] = deviceFrames[i].data;
+            }
+        }
+
+        void update(const cv::cuda::GpuMat &inputFrame,
+                    cv::cuda::Stream &stream) {
+            if (inputFrame.empty() ||
+                (inputFrame.type() != CV_8UC3 &&
+                 inputFrame.type() != CV_8UC4)) {
+                throw std::invalid_argument(
+                    "DynamicFrameBuffer requires a CUDA BGR8 or RGBA8 frame");
+            }
+
+            if (inputFrame.cols != w || inputFrame.rows != h) {
+                w = inputFrame.cols;
+                h = inputFrame.rows;
+                for (int i = 0; i < arraySize; ++i) {
+                    deviceFrames[i].create(h, w, CV_8UC4);
+                }
+                framePitch = deviceFrames[0].step;
+                completedFrames = 0;
+            }
+
+            if (completedFrames == 0) {
+                if (inputFrame.channels() == 3) {
+                    cv::cuda::cvtColor(inputFrame, deviceFrames.front(),
+                                       cv::COLOR_BGR2RGBA, 0, stream);
+                } else {
+                    inputFrame.copyTo(deviceFrames.front(), stream);
+                }
+                for (int i = 1; i < arraySize; ++i) {
+                    deviceFrames.front().copyTo(deviceFrames[i], stream);
+                }
+                completedFrames = arraySize;
+            } else {
+                std::rotate(deviceFrames.begin(), deviceFrames.begin() + 1,
+                            deviceFrames.end());
+                if (inputFrame.channels() == 3) {
+                    cv::cuda::cvtColor(inputFrame, deviceFrames.back(),
+                                       cv::COLOR_BGR2RGBA, 0, stream);
+                } else {
+                    inputFrame.copyTo(deviceFrames.back(), stream);
                 }
             }
 

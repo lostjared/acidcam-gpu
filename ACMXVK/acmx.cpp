@@ -665,7 +665,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7C)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7D)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -748,7 +748,8 @@ namespace acmxvk {
                << "      --list-filters          List acidcam-gpu filters and exit\n"
                << "      --list-cuda-devices     List CUDA devices and exit\n"
                << "      --check-cuda            Report compiled CUDA-filter support\n"
-               << "                              Left/Right selects the active filter\n\n"
+               << "                              Left/Right selects the active filter\n"
+               << "                              Video/camera RGBA remains GPU-resident\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -1333,7 +1334,9 @@ namespace acmxvk {
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
+        cv::cuda::GpuMat cuda_input_rgba;
         cv::Mat cuda_history_fallback_rgba;
+        bool cuda_input_path_logged = false;
         bool cuda_history_fallback_logged = false;
 #endif
 #ifdef MIDI_ENABLED
@@ -2734,27 +2737,7 @@ namespace acmxvk {
         void updateHistoryFrame(const cv::Mat &rgba) {
 #ifdef ACMXVK_WITH_CUDA
             if (gpu_filter_engine != nullptr) {
-                if (frame_sprite->updateHistoryTextureCuda(
-                        gpu_filter_engine->output(),
-                        gpu_filter_engine->stream())) {
-                    return;
-                }
-
-                gpu_filter_engine->output().download(
-                    cuda_history_fallback_rgba,
-                    gpu_filter_engine->stream());
-                gpu_filter_engine->stream().waitForCompletion();
-                if (!cuda_history_fallback_logged) {
-                    std::cerr
-                        << "acmxvk: direct CUDA history upload unavailable; "
-                           "using a host-staging fallback\n";
-                    cuda_history_fallback_logged = true;
-                }
-                frame_sprite->updateHistoryTexture(
-                    cuda_history_fallback_rgba.ptr(),
-                    cuda_history_fallback_rgba.cols,
-                    cuda_history_fallback_rgba.rows,
-                    static_cast<int>(cuda_history_fallback_rgba.step));
+                updateCudaHistoryFrame();
                 return;
             }
 #endif
@@ -2762,6 +2745,61 @@ namespace acmxvk {
                 rgba.ptr(), rgba.cols, rgba.rows,
                 static_cast<int>(rgba.step));
         }
+
+#ifdef ACMXVK_WITH_CUDA
+        void updateCudaHistoryFrame() {
+            if (frame_sprite->updateHistoryTextureCuda(
+                    gpu_filter_engine->output(),
+                    gpu_filter_engine->stream())) {
+                return;
+            }
+
+            gpu_filter_engine->output().download(
+                cuda_history_fallback_rgba,
+                gpu_filter_engine->stream());
+            gpu_filter_engine->stream().waitForCompletion();
+            if (!cuda_history_fallback_logged) {
+                std::cerr << "acmxvk: direct CUDA history upload unavailable; "
+                             "using a host-staging fallback\n";
+                cuda_history_fallback_logged = true;
+            }
+            frame_sprite->updateHistoryTexture(
+                cuda_history_fallback_rgba.ptr(),
+                cuda_history_fallback_rgba.cols,
+                cuda_history_fallback_rgba.rows,
+                static_cast<int>(cuda_history_fallback_rgba.step));
+        }
+
+        void initializeCudaHistory() {
+            if (!options.enable_texture_cache || history_initialized) {
+                return;
+            }
+            for (uint32_t layer = 0;
+                 layer < frame_sprite->getHistoryLayerCount(); ++layer) {
+                updateCudaHistoryFrame();
+            }
+            history_initialized = true;
+            history_delay_counter = 0;
+            std::cout << "acmxvk: initialized "
+                      << frame_sprite->getHistoryLayerCount()
+                      << " filtered Vulkan history-cache layers (delay "
+                      << options.cache_delay << ")\n";
+        }
+
+        void uploadInputFrame(const cv::cuda::GpuMat &rgba,
+                              cv::cuda::Stream &source_stream) {
+            if (!gpu_filter_engine->process(rgba, source_stream)) {
+                throw std::runtime_error(
+                    "acidcam-gpu rejected the CUDA RGBA input frame");
+            }
+            if (!frame_sprite->updateTextureCuda(
+                    gpu_filter_engine->output(),
+                    gpu_filter_engine->stream())) {
+                throw std::runtime_error(
+                    "MXVK could not upload the CUDA-filtered frame");
+            }
+        }
+#endif
 
         void uploadInputFrame(const cv::Mat &rgba) {
 #ifdef ACMXVK_WITH_CUDA
@@ -2784,12 +2822,32 @@ namespace acmxvk {
         }
 
         [[nodiscard]] bool readInputFrame() {
+#ifdef ACMXVK_WITH_CUDA
+            if (gpu_filter_engine != nullptr &&
+                options.frame_rotation == FrameRotation::None) {
+                if (!capture.readGpuRgba(cuda_input_rgba, false)) {
+                    return false;
+                }
+                uploadInputFrame(cuda_input_rgba, capture.cudaStream());
+                if (!cuda_input_path_logged) {
+                    std::cout
+                        << "acmxvk: CUDA input path active: MXVK capture -> "
+                           "acidcam-gpu temporal buffer -> Vulkan texture\n";
+                    cuda_input_path_logged = true;
+                }
+                const bool history_was_initialized = history_initialized;
+                initializeCudaHistory();
+                if (history_was_initialized &&
+                    ++history_delay_counter > options.cache_delay) {
+                    updateCudaHistoryFrame();
+                    history_delay_counter = 0;
+                }
+                return true;
+            }
+#endif
+
             bool requires_host_frame = options.enable_texture_cache ||
                                        options.frame_rotation != FrameRotation::None;
-#ifdef ACMXVK_WITH_CUDA
-            requires_host_frame = requires_host_frame ||
-                                  gpu_filter_engine != nullptr;
-#endif
             if (!requires_host_frame) {
                 return capture.readToSprite(*frame_sprite, false);
             }
