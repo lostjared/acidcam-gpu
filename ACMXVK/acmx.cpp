@@ -6,6 +6,9 @@
 #include <mxvk/mxvk.hpp>
 #include <mxvk/mxvk_cv.hpp>
 #include <mxvk/mxvk_exception.hpp>
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+#include <mxvk/mxvk_ff_capture.hpp>
+#endif
 #include <mxvk/mxvk_png.hpp>
 #include <mxwrite.hpp>
 
@@ -666,7 +669,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7E)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7F)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -676,7 +679,8 @@ namespace acmxvk {
                << "  -g, --graphic <file>        Read a still image\n"
                << "  -d, --device <index>        Camera device (default 0)\n"
                << "  -c, --camera-res <WxH>      Requested camera dimensions\n"
-               << "  -u, --fps <rate>            Camera/output FPS\n\n"
+               << "  -u, --fps <rate>            Camera/output FPS\n"
+               << "                              Video files prefer FFmpeg/NVDEC capture\n\n"
                << "Shaders:\n"
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
@@ -1112,6 +1116,11 @@ namespace acmxvk {
             if (capture.is_open()) {
                 capture.close();
             }
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+            if (ffmpeg_capture.is_open()) {
+                ffmpeg_capture.close();
+            }
+#endif
             if (should_copy_audio) {
                 transfer_audio(options.input_file, options.output_file);
                 std::cout << "acmxvk: copied audio track from " << options.input_file
@@ -1291,6 +1300,14 @@ namespace acmxvk {
         Options options;
         SourceKind source_kind = SourceKind::Camera;
         mxvk::VK_Capture capture;
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+        mxvk::VK_FF_Capture ffmpeg_capture;
+        std::vector<std::uint8_t> ffmpeg_rgba;
+        bool using_ffmpeg_capture = false;
+#ifdef ACMXVK_WITH_CUDA
+        cv::cuda::Stream ffmpeg_cuda_stream;
+#endif
+#endif
         Writer writer;
         mxvk::VK_Sprite *frame_sprite = nullptr;
         cv::Mat graphic_rgba;
@@ -2223,9 +2240,12 @@ namespace acmxvk {
             }
 
             source_kind = options.input_file.empty() ? SourceKind::Camera : SourceKind::Video;
-            const bool opened = source_kind == SourceKind::Video
-                                    ? capture.open(options.input_file)
-                                    : capture.open(options.camera_device);
+            bool opened = false;
+            if (source_kind == SourceKind::Video) {
+                opened = openVideoCapture();
+            } else {
+                opened = capture.open(options.camera_device);
+            }
             if (!opened) {
                 const std::string source = source_kind == SourceKind::Video
                                                ? options.input_file
@@ -2247,7 +2267,15 @@ namespace acmxvk {
                 return options.requested_fps;
             }
             if (source_kind != SourceKind::Graphic) {
-                const double source_fps = capture.get(cv::CAP_PROP_FPS);
+                double source_fps = 0.0;
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+                if (using_ffmpeg_capture) {
+                    source_fps = ffmpeg_capture.fps();
+                } else
+#endif
+                {
+                    source_fps = capture.get(cv::CAP_PROP_FPS);
+                }
                 if (std::isfinite(source_fps) && source_fps > 0.0) {
                     return source_fps;
                 }
@@ -2425,8 +2453,16 @@ namespace acmxvk {
                 source_width = graphic_rgba.cols;
                 source_height = graphic_rgba.rows;
             } else {
-                source_width = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_WIDTH));
-                source_height = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_HEIGHT));
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+                if (using_ffmpeg_capture) {
+                    source_width = ffmpeg_capture.width();
+                    source_height = ffmpeg_capture.height();
+                } else
+#endif
+                {
+                    source_width = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_WIDTH));
+                    source_height = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_HEIGHT));
+                }
                 if (source_width <= 0 || source_height <= 0) {
                     source_width = options.camera_width;
                     source_height = options.camera_height;
@@ -2716,11 +2752,61 @@ namespace acmxvk {
                 return false;
             }
 
-            capture.close();
-            if (!capture.open(options.input_file) || !readInputFrame()) {
+            closeVideoCapture();
+            if (!openVideoCapture() || !readInputFrame()) {
                 throw std::runtime_error("unable to restart video input: " + options.input_file);
             }
             return true;
+        }
+
+        void closeVideoCapture() {
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+            if (ffmpeg_capture.is_open()) {
+                ffmpeg_capture.close();
+            }
+            using_ffmpeg_capture = false;
+#endif
+            if (capture.is_open()) {
+                capture.close();
+            }
+        }
+
+        [[nodiscard]] bool openVideoCapture() {
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+            if (ffmpeg_capture.open(options.input_file)) {
+                using_ffmpeg_capture = true;
+                std::cout << "acmxvk: video capture: FFmpeg "
+                          << (ffmpeg_capture.using_hardware_decode()
+                                  ? "with CUDA/NVDEC\n"
+                                  : "software decode\n");
+                return true;
+            }
+#endif
+            const bool opened = capture.open(options.input_file);
+            if (opened) {
+                std::cout << "acmxvk: video capture: OpenCV fallback\n";
+            }
+            return opened;
+        }
+
+        [[nodiscard]] bool readHostRgba(cv::Mat &rgba) {
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+            if (using_ffmpeg_capture) {
+                int width = 0;
+                int height = 0;
+                int pitch = 0;
+                if (!ffmpeg_capture.readRgba(ffmpeg_rgba, width, height, pitch,
+                                             false) ||
+                    ffmpeg_rgba.empty() || width <= 0 || height <= 0 ||
+                    pitch < width * 4) {
+                    return false;
+                }
+                rgba = cv::Mat(height, width, CV_8UC4, ffmpeg_rgba.data(),
+                               static_cast<std::size_t>(pitch));
+                return true;
+            }
+#endif
+            return capture.readRgba(rgba, false);
         }
 
         void initializeHistory(const cv::Mat &rgba) {
@@ -2850,15 +2936,38 @@ namespace acmxvk {
         [[nodiscard]] bool readInputFrame() {
 #ifdef ACMXVK_WITH_CUDA
             if (gpu_filter_engine != nullptr) {
-                if (!capture.readGpuRgba(cuda_input_rgba, false)) {
-                    return false;
+                cv::cuda::Stream *capture_stream = nullptr;
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+                if (using_ffmpeg_capture) {
+                    if (!ffmpeg_capture.readGpuRgba(cuda_input_rgba,
+                                                    ffmpeg_cuda_stream, false)) {
+                        return false;
+                    }
+                    capture_stream = &ffmpeg_cuda_stream;
+                } else
+#endif
+                {
+                    if (!capture.readGpuRgba(cuda_input_rgba, false)) {
+                        return false;
+                    }
+                    capture_stream = &capture.cudaStream();
                 }
-                cv::cuda::Stream &capture_stream = capture.cudaStream();
                 const cv::cuda::GpuMat &filter_input =
-                    rotateCudaFrame(cuda_input_rgba, capture_stream);
-                uploadInputFrame(filter_input, capture_stream);
+                    rotateCudaFrame(cuda_input_rgba, *capture_stream);
+                uploadInputFrame(filter_input, *capture_stream);
                 if (!cuda_input_path_logged) {
-                    std::cout << "acmxvk: CUDA input path active: MXVK capture -> ";
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+                    if (using_ffmpeg_capture) {
+                        std::cout << "acmxvk: CUDA input path active: FFmpeg "
+                                  << (ffmpeg_capture.using_hardware_decode()
+                                          ? "NVDEC -> CUDA RGBA -> "
+                                          : "software decode -> CUDA upload -> ");
+                    } else
+#endif
+                    {
+                        std::cout
+                            << "acmxvk: CUDA input path active: MXVK capture -> ";
+                    }
                     if (options.frame_rotation != FrameRotation::None) {
                         std::cout << "CUDA rotation -> ";
                     }
@@ -2879,12 +2988,16 @@ namespace acmxvk {
 
             bool requires_host_frame = options.enable_texture_cache ||
                                        options.frame_rotation != FrameRotation::None;
-            if (!requires_host_frame) {
+            if (!requires_host_frame
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+                && !using_ffmpeg_capture
+#endif
+            ) {
                 return capture.readToSprite(*frame_sprite, false);
             }
 
             cv::Mat rgba;
-            if (!capture.readRgba(rgba, false)) {
+            if (!readHostRgba(rgba)) {
                 return false;
             }
             rotateFrame(rgba, options.frame_rotation);
