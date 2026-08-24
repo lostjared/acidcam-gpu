@@ -18,6 +18,7 @@
 #endif
 #ifdef ACMXVK_WITH_CUDA
 #include "gpu_filters.hpp"
+#include <opencv2/cudaarithm.hpp>
 #endif
 
 #include <opencv2/core.hpp>
@@ -665,7 +666,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7D)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7E)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -749,7 +750,7 @@ namespace acmxvk {
                << "      --list-cuda-devices     List CUDA devices and exit\n"
                << "      --check-cuda            Report compiled CUDA-filter support\n"
                << "                              Left/Right selects the active filter\n"
-               << "                              Video/camera RGBA remains GPU-resident\n\n"
+               << "                              Video/camera RGBA and rotation stay on GPU\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
                << "  -n, --fullscreen            Start fullscreen\n"
@@ -1335,6 +1336,8 @@ namespace acmxvk {
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
         cv::cuda::GpuMat cuda_input_rgba;
+        cv::cuda::GpuMat cuda_rotated_rgba;
+        cv::cuda::GpuMat cuda_rotation_transpose;
         cv::Mat cuda_history_fallback_rgba;
         bool cuda_input_path_logged = false;
         bool cuda_history_fallback_logged = false;
@@ -2799,6 +2802,29 @@ namespace acmxvk {
                     "MXVK could not upload the CUDA-filtered frame");
             }
         }
+
+        [[nodiscard]] const cv::cuda::GpuMat &
+        rotateCudaFrame(const cv::cuda::GpuMat &rgba,
+                        cv::cuda::Stream &source_stream) {
+            switch (options.frame_rotation) {
+            case FrameRotation::None:
+                return rgba;
+            case FrameRotation::Clockwise90:
+                cv::cuda::transpose(rgba, cuda_rotation_transpose, source_stream);
+                cv::cuda::flip(cuda_rotation_transpose, cuda_rotated_rgba, 1,
+                               source_stream);
+                break;
+            case FrameRotation::Rotate180:
+                cv::cuda::flip(rgba, cuda_rotated_rgba, -1, source_stream);
+                break;
+            case FrameRotation::Counterclockwise90:
+                cv::cuda::transpose(rgba, cuda_rotation_transpose, source_stream);
+                cv::cuda::flip(cuda_rotation_transpose, cuda_rotated_rgba, 0,
+                               source_stream);
+                break;
+            }
+            return cuda_rotated_rgba;
+        }
 #endif
 
         void uploadInputFrame(const cv::Mat &rgba) {
@@ -2823,16 +2849,21 @@ namespace acmxvk {
 
         [[nodiscard]] bool readInputFrame() {
 #ifdef ACMXVK_WITH_CUDA
-            if (gpu_filter_engine != nullptr &&
-                options.frame_rotation == FrameRotation::None) {
+            if (gpu_filter_engine != nullptr) {
                 if (!capture.readGpuRgba(cuda_input_rgba, false)) {
                     return false;
                 }
-                uploadInputFrame(cuda_input_rgba, capture.cudaStream());
+                cv::cuda::Stream &capture_stream = capture.cudaStream();
+                const cv::cuda::GpuMat &filter_input =
+                    rotateCudaFrame(cuda_input_rgba, capture_stream);
+                uploadInputFrame(filter_input, capture_stream);
                 if (!cuda_input_path_logged) {
+                    std::cout << "acmxvk: CUDA input path active: MXVK capture -> ";
+                    if (options.frame_rotation != FrameRotation::None) {
+                        std::cout << "CUDA rotation -> ";
+                    }
                     std::cout
-                        << "acmxvk: CUDA input path active: MXVK capture -> "
-                           "acidcam-gpu temporal buffer -> Vulkan texture\n";
+                        << "acidcam-gpu temporal buffer -> Vulkan texture\n";
                     cuda_input_path_logged = true;
                 }
                 const bool history_was_initialized = history_initialized;

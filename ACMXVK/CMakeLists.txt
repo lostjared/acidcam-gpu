@@ -109,7 +109,18 @@ find_package(Vulkan 1.4 REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(glm CONFIG REQUIRED)
-find_package(OpenCV REQUIRED)
+if(WITH_CUDA AND NOT APPLE)
+    find_package(OpenCV REQUIRED COMPONENTS
+        core
+        imgproc
+        imgcodecs
+        highgui
+        videoio
+        cudaarithm
+    )
+else()
+    find_package(OpenCV REQUIRED)
+endif()
 
 find_package(mxvk CONFIG REQUIRED)
 find_program(GLSLC_EXECUTABLE glslc REQUIRED)
@@ -332,6 +343,7 @@ if(WITH_CUDA)
     target_link_libraries(acmxvk PRIVATE
         acidcam-gpu::acidcam-gpu
         CUDA::cudart
+        opencv_cudaarithm
     )
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_CUDA)
 endif()

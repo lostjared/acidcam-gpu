@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7D**. It is usable for video, camera, and
+The port is currently at **Increment 7E**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -29,7 +29,7 @@ ACMX2.
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live recording has independent gain, while file audio also supports repeat and stop-at-EOF behavior. |
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, and ACMXVK-equivalent playback actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
-| CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, passes unrotated video/camera RGBA as a resident `GpuMat` through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
+| CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps video/camera RGBA and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
@@ -83,7 +83,8 @@ history upload API, so MXVK must be rebuilt and reinstalled before building
 ACMXVK 7C with `-DWITH_CUDA=ON`. Increment 7D adds a CUDA `GpuMat` input overload
 to acidcam-gpu's temporal frame buffer, so acidcam-gpu must be rebuilt and
 reinstalled before building ACMXVK 7D with `-DWITH_CUDA=ON`; MXVK does not need
-another reinstall for 7D.
+another reinstall for 7D. Increment 7E changes only ACMXVK, so neither MXVK nor
+acidcam-gpu needs another reinstall.
 
 ### Apple Silicon and MoltenVK
 
@@ -579,9 +580,13 @@ Increment 7D removes the CPU RGBA handoff for unrotated video and camera input.
 MXVK returns a resident CUDA `GpuMat`, acidcam-gpu copies it device-to-device
 into its temporal buffer, and the filtered result continues directly into the
 Vulkan sprite and optional history array. This path is selected automatically
-when `--gpu-filter` is active. `--rotate` currently retains the established CPU
-rotation path before uploading into acidcam-gpu; still graphics also begin from
-their host image because they are decoded only once.
+when `--gpu-filter` is active.
+
+Increment 7E keeps `--rotate clockwise`, `--rotate 180`, and
+`--rotate counterclockwise` on that resident path. Exact CUDA transpose and
+flip operations run on MXVK's capture stream before acidcam-gpu consumes the
+frame, avoiding the former CPU rotation and upload. Still graphics continue to
+begin from their host image because they are decoded only once.
 
 ## Runtime controls
 
@@ -612,10 +617,11 @@ and with validation enabled in both MXVK and ACMXVK. The current increment has
 been exercised with shader-library loading, multipass rendering, configurable
 history caches, MXWrite encoding, custom-uniform rendering, optional live audio
 metrics, FFmpeg-decoded file reactivity, routed-tone FFT visualization, and FFT
-spectrum history. Increments 7B through 7D were additionally tested with a
+spectrum history. Increments 7B through 7E were additionally tested with a
 CUDA+MIDI build, live Left/Right filter changes, filtered Vulkan frame history,
-and resident `GpuMat` video input on an NVIDIA RTX 2070. The known duplicate
-vkBasalt implicit-layer warning is external to ACMXVK.
+resident `GpuMat` video input, and CUDA-resident clockwise, 180-degree, and
+counterclockwise rotation on an NVIDIA RTX 2070. The known duplicate vkBasalt
+implicit-layer warning is external to ACMXVK.
 
 ## Development note
 
