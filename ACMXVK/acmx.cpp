@@ -672,7 +672,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7I)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7J)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1342,6 +1342,7 @@ namespace acmxvk {
         mxvk::VK_FF_Capture ffmpeg_capture;
         std::vector<std::uint8_t> ffmpeg_rgba;
         bool using_ffmpeg_capture = false;
+        bool ffmpeg_seek_repeat_logged = false;
 #ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::Stream ffmpeg_cuda_stream;
 #endif
@@ -2794,6 +2795,23 @@ namespace acmxvk {
                 return false;
             }
 
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+            if (using_ffmpeg_capture && ffmpeg_capture.seek_start()) {
+                if (readInputFrame()) {
+                    if (!ffmpeg_seek_repeat_logged) {
+                        std::cout
+                            << "acmxvk: video repeat: in-place FFmpeg seek; "
+                            << (ffmpeg_capture.using_hardware_decode()
+                                    ? "NVDEC decoder and CUDA device preserved\n"
+                                    : "software decoder preserved\n");
+                        ffmpeg_seek_repeat_logged = true;
+                    }
+                    return true;
+                }
+                std::cerr << "acmxvk: in-place FFmpeg repeat did not produce a "
+                             "frame; reopening the input\n";
+            }
+#endif
             closeVideoCapture();
             if (!openVideoCapture() || !readInputFrame()) {
                 throw std::runtime_error("unable to restart video input: " + options.input_file);

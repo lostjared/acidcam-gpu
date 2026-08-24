@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7I**. It is usable for video, camera, and
+The port is currently at **Increment 7J**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -90,6 +90,8 @@ uses MXVK's existing FFmpeg-capture API when that feature is present. Increment
 not require either dependency to be reinstalled. Increment 7I adds MXVK's
 FFmpeg capture device-selection API, so MXVK must be rebuilt and reinstalled
 before ACMXVK is rebuilt; acidcam-gpu does not need another reinstall.
+Increment 7J adds MXVK's in-place FFmpeg seek API, so MXVK must again be rebuilt
+and reinstalled before rebuilding ACMXVK; acidcam-gpu remains unchanged.
 
 ### Apple Silicon and MoltenVK
 
@@ -622,6 +624,12 @@ its NVDEC context and optional acidcam-gpu filters use the same CUDA device.
 `--check-cuda` reports MXVK interop and acidcam-gpu filter support separately,
 and capture startup identifies the active NVDEC device.
 
+Increment 7J makes repeated FFmpeg input seek back to the first video timestamp
+without destroying the decoder. `--repeat` therefore preserves the active
+NVDEC device and CUDA hardware context across loops and avoids repeatedly
+allocating and reopening the decoder. If an input is not seekable, ACMXVK
+retains the previous close-and-reopen behavior as an automatic fallback.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -651,7 +659,7 @@ and with validation enabled in both MXVK and ACMXVK. The current increment has
 been exercised with shader-library loading, multipass rendering, configurable
 history caches, MXWrite encoding, custom-uniform rendering, optional live audio
 metrics, FFmpeg-decoded file reactivity, routed-tone FFT visualization, and FFT
-spectrum history. Increments 7B through 7I were additionally tested with a
+spectrum history. Increments 7B through 7J were additionally tested with a
 CUDA+MIDI build, live Left/Right filter changes, filtered Vulkan frame history,
 resident `GpuMat` video input, and CUDA-resident clockwise, 180-degree, and
 counterclockwise rotation on an NVIDIA RTX 2070. Increment 7F was tested with
@@ -661,8 +669,10 @@ acidcam-gpu filter omitted while retaining direct NVDEC rotation, Vulkan sprite
 upload, and layered history. Increment 7H verified the same resident route in a
 `-DWITH_CUDA=OFF` build and separately regression-tested the optional filtered
 build. Increment 7I verified explicit device 0 selection in both configurations,
-including `decode=cuda:0` from MXVK and a clean direct history path. The known
-duplicate vkBasalt
+including `decode=cuda:0` from MXVK and a clean direct history path. Increment
+7J looped an 84-frame H.264 source into a 186-frame output while retaining one
+NVDEC decoder open, direct rotation/upload/history, and clean validation. The
+known duplicate vkBasalt
 implicit-layer warning is external to ACMXVK.
 
 ## Development note
