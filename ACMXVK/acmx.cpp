@@ -894,7 +894,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7P)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7Q)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1608,13 +1608,57 @@ namespace acmxvk {
 
             pollMidi();
 
-            if (!rendering_frozen && !input_paused &&
-                source_kind != SourceKind::Graphic) {
-                if (initial_frame_pending) {
+            source_frame_received = false;
+            recording_frame_due = false;
+            recording_frame_has_pts = false;
+            bool clocked_video_handled = false;
+
+            if (!rendering_frozen && !input_paused) {
+                if (source_kind == SourceKind::Graphic) {
+                    source_frame_received = true;
+                } else if (initial_frame_pending) {
                     initial_frame_pending = false;
-                } else if (!readInputFrame()) {
-                    if (!handleCaptureEnd()) {
-                        return;
+                    source_frame_received = true;
+                } else {
+                    double clock_seconds = 0.0;
+                    if (source_kind == SourceKind::Video &&
+                        media_timeline_started &&
+                        mediaClockSeconds(clock_seconds)) {
+                        clocked_video_handled = true;
+                        if (!readClockedVideoFrame(clock_seconds)) {
+                            return;
+                        }
+                    } else {
+                        const bool read_frame = readTrackedInputFrame();
+                        if (!read_frame && !handleCaptureEnd()) {
+                            return;
+                        }
+                        source_frame_received =
+                            read_frame || source_kind == SourceKind::Video;
+                    }
+                }
+            }
+
+            startMediaTimelineIfReady();
+            if (source_frame_received && !clocked_video_handled) {
+                recording_frame_due = true;
+                if (source_kind == SourceKind::Video) {
+                    recording_frame_has_pts = true;
+                    recording_frame_pts = decoded_video_frame_count - 1;
+                } else {
+                    double clock_seconds = 0.0;
+                    if (mediaClockSeconds(clock_seconds)) {
+                        const double rate = outputFrameRate();
+                        const std::uint64_t target_frame =
+                            static_cast<std::uint64_t>(std::floor(
+                                std::max(clock_seconds, 0.0) * rate));
+                        if (target_frame < next_clock_output_frame) {
+                            recording_frame_due = false;
+                        } else {
+                            recording_frame_has_pts = true;
+                            recording_frame_pts = target_frame;
+                            next_clock_output_frame = target_frame + 1;
+                        }
                     }
                 }
             }
@@ -1632,6 +1676,9 @@ namespace acmxvk {
             }
             frame_sprite->drawSpriteRect(0, 0, target_width, target_height);
             queueOverlayText();
+            setFrameReadbackEnabled(
+                snapshot_pending ||
+                (continuousReadbackEnabled() && recording_frame_due));
         }
 
       private:
@@ -1683,6 +1730,11 @@ namespace acmxvk {
         bool mouse_pressed = false;
         bool history_initialized = false;
         bool initial_frame_pending = false;
+        bool media_timeline_started = false;
+        bool source_frame_received = false;
+        bool recording_frame_due = false;
+        bool recording_frame_has_pts = false;
+        bool media_clock_sync_logged = false;
         bool recording_complete = false;
         bool input_paused = false;
         bool rendering_frozen = false;
@@ -1703,6 +1755,9 @@ namespace acmxvk {
         double recording_fps = 0.0;
         double shader_time = 0.0;
         std::uint64_t output_frame_count = 0;
+        std::uint64_t decoded_video_frame_count = 0;
+        std::uint64_t recording_frame_pts = 0;
+        std::uint64_t next_clock_output_frame = 0;
         std::uint64_t png_frame_count = 0;
         std::uint64_t generated_frame_count = 0;
         std::uint64_t snapshot_count = 0;
@@ -2411,6 +2466,51 @@ namespace acmxvk {
 #endif
         }
 
+        void startLiveAudioRecordingIfNeeded() {
+#ifdef AUDIO_ENABLED
+            if (audio_engine == nullptr || file_audio_source != nullptr ||
+                !audio_engine->is_open() || audio_engine->is_recording() ||
+                !writer.is_open() || options.png_output ||
+                (options.copy_audio && options.record_audio_file.empty())) {
+                return;
+            }
+            if (!audio_engine->start_recording()) {
+                std::cerr << "acmxvk: could not start live audio recording; "
+                             "continuing with video-only output\n";
+            }
+#endif
+        }
+
+        void startMediaTimelineIfReady() {
+            if (media_timeline_started || !source_frame_received) {
+                return;
+            }
+            media_timeline_started = true;
+#ifdef AUDIO_ENABLED
+            resetAudioWarmup();
+#endif
+            startLiveAudioRecordingIfNeeded();
+            std::cout << "acmxvk: media timeline started on first source frame\n";
+        }
+
+        [[nodiscard]] bool mediaClockSeconds(double &seconds) const {
+#ifdef AUDIO_ENABLED
+            if (file_audio_source != nullptr &&
+                file_audio_source->has_output_clock()) {
+                seconds = file_audio_source->playback_time();
+                return true;
+            }
+            if (!options.copy_audio && writer.is_open() &&
+                audio_engine != nullptr && file_audio_source == nullptr &&
+                audio_engine->is_recording()) {
+                seconds = audio_engine->recording_time();
+                return true;
+            }
+#endif
+            seconds = 0.0;
+            return false;
+        }
+
         void loadShaders() {
             if (!options.fragment_shader.empty()) {
                 const fs::path fragment = fs::absolute(options.fragment_shader).lexically_normal();
@@ -3105,7 +3205,8 @@ namespace acmxvk {
                 }
             }
 
-            if (!continuous_readback || recording_complete) {
+            if (!continuous_readback || recording_complete ||
+                !recording_frame_due) {
                 return;
             }
 
@@ -3121,18 +3222,13 @@ namespace acmxvk {
             }
 
             if (writer.is_open()) {
-#ifdef AUDIO_ENABLED
-                if (output_frame_count == 0 && audio_engine != nullptr &&
-                    file_audio_source == nullptr &&
-                    (!options.copy_audio ||
-                     !options.record_audio_file.empty()) &&
-                    !audio_engine->is_recording() &&
-                    !audio_engine->start_recording()) {
-                    std::cerr << "acmxvk: could not start live audio recording; "
-                                 "continuing with video-only output\n";
+                if (recording_frame_has_pts) {
+                    writer.write_at_pts(
+                        output_pixels,
+                        static_cast<std::int64_t>(recording_frame_pts));
+                } else {
+                    writer.write(output_pixels);
                 }
-#endif
-                writer.write(output_pixels);
             }
             if (options.png_output) {
                 savePng(framePath(png_output_directory, png_frame_count), output_pixels,
@@ -3140,7 +3236,8 @@ namespace acmxvk {
                 ++png_frame_count;
             }
             if (options.generate_interval > 0 &&
-                output_frame_count %
+                (recording_frame_has_pts ? recording_frame_pts
+                                         : output_frame_count) %
                         static_cast<std::uint64_t>(options.generate_interval) ==
                     0) {
                 savePng(framePath(generate_output_directory, generated_frame_count),
@@ -3150,9 +3247,18 @@ namespace acmxvk {
             ++output_frame_count;
 
             if (options.duration > 0.0) {
-                const auto maximum_frames = static_cast<std::uint64_t>(
-                    std::ceil(options.duration * recording_fps));
-                if (output_frame_count >= maximum_frames) {
+                double output_duration = 0.0;
+                if (recording_frame_has_pts) {
+                    output_duration =
+                        static_cast<double>(recording_frame_pts + 1) /
+                        recording_fps;
+                } else if (writer.is_open()) {
+                    output_duration = writer.get_duration();
+                } else {
+                    output_duration =
+                        static_cast<double>(output_frame_count) / recording_fps;
+                }
+                if (output_duration >= options.duration) {
                     recording_complete = true;
                     exit();
                 }
@@ -3226,7 +3332,7 @@ namespace acmxvk {
                 initial_frame_pending = false;
                 uploadInputFrame(graphic_rgba);
                 initializeHistory(graphic_rgba);
-            } else if (!readInputFrame()) {
+            } else if (!readTrackedInputFrame()) {
                 std::cerr << "acmxvk: capture did not provide an initial frame\n";
             } else {
                 initial_frame_pending = true;
@@ -3470,7 +3576,36 @@ namespace acmxvk {
             }
         }
 
-        [[nodiscard]] bool handleCaptureEnd() {
+        [[nodiscard]] bool readTrackedInputFrame() {
+            if (!readInputFrame()) {
+                return false;
+            }
+            if (source_kind == SourceKind::Video) {
+                ++decoded_video_frame_count;
+            }
+            return true;
+        }
+
+        [[nodiscard]] bool skipInputFrame() {
+            if (source_kind != SourceKind::Video) {
+                return false;
+            }
+            bool skipped = false;
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+            if (using_ffmpeg_capture) {
+                skipped = ffmpeg_capture.skip();
+            } else
+#endif
+            {
+                skipped = capture.grab();
+            }
+            if (skipped) {
+                ++decoded_video_frame_count;
+            }
+            return skipped;
+        }
+
+        [[nodiscard]] bool handleCaptureEnd(bool discard = false) {
             if (source_kind == SourceKind::Camera) {
                 return true;
             }
@@ -3482,7 +3617,9 @@ namespace acmxvk {
 
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
             if (using_ffmpeg_capture && ffmpeg_capture.seek_start()) {
-                if (readInputFrame()) {
+                const bool restarted =
+                    discard ? skipInputFrame() : readTrackedInputFrame();
+                if (restarted) {
                     if (!ffmpeg_seek_repeat_logged) {
                         std::cout
                             << "acmxvk: video repeat: in-place FFmpeg seek; "
@@ -3498,8 +3635,62 @@ namespace acmxvk {
             }
 #endif
             closeVideoCapture();
-            if (!openVideoCapture() || !readInputFrame()) {
+            if (!openVideoCapture() ||
+                !(discard ? skipInputFrame() : readTrackedInputFrame())) {
                 throw std::runtime_error("unable to restart video input: " + options.input_file);
+            }
+            return true;
+        }
+
+        [[nodiscard]] bool readClockedVideoFrame(double clock_seconds) {
+            const double rate = outputFrameRate();
+            if (!std::isfinite(rate) || rate <= 0.0) {
+                return readTrackedInputFrame();
+            }
+
+            std::uint64_t target_frame = static_cast<std::uint64_t>(
+                std::floor(std::max(clock_seconds, 0.0) * rate));
+            if (target_frame < decoded_video_frame_count) {
+                const double next_frame_time =
+                    static_cast<double>(decoded_video_frame_count) / rate;
+                const double wait_seconds = next_frame_time - clock_seconds;
+                if (wait_seconds > 0.0) {
+                    std::this_thread::sleep_for(
+                        std::chrono::duration<double>(wait_seconds));
+                }
+                double updated_clock = 0.0;
+                if (mediaClockSeconds(updated_clock)) {
+                    target_frame = static_cast<std::uint64_t>(
+                        std::floor(std::max(updated_clock, 0.0) * rate));
+                }
+            }
+            if (target_frame < decoded_video_frame_count) {
+                return true;
+            }
+
+            const std::uint64_t frames_to_advance =
+                target_frame - decoded_video_frame_count + 1;
+            for (std::uint64_t frame = 0; frame < frames_to_advance; ++frame) {
+                const bool discard = frame + 1 < frames_to_advance;
+                bool advanced = discard ? skipInputFrame()
+                                        : readTrackedInputFrame();
+                if (!advanced) {
+                    advanced = handleCaptureEnd(discard);
+                }
+                if (!advanced) {
+                    return false;
+                }
+            }
+
+            source_frame_received = true;
+            recording_frame_due = true;
+            recording_frame_has_pts = true;
+            recording_frame_pts = decoded_video_frame_count - 1;
+            if (!media_clock_sync_logged) {
+                std::cout << "acmxvk: media-clock synchronization active; "
+                             "late video frames will be skipped and encoded "
+                             "with timeline PTS\n";
+                media_clock_sync_logged = true;
             }
             return true;
         }
@@ -3849,8 +4040,12 @@ namespace acmxvk {
             float audio_sample_rate = 44100.0F;
 #ifdef AUDIO_ENABLED
             std::vector<float> spectrum_values;
-            if (file_audio_source != nullptr && audio_engine != nullptr) {
-                file_audio_source->process_frame(outputFrameRate(), *audio_engine);
+            if (file_audio_source != nullptr && audio_engine != nullptr &&
+                media_timeline_started &&
+                (file_audio_source->has_output_clock() ||
+                 source_frame_received)) {
+                file_audio_source->process_frame(outputFrameRate(),
+                                                 *audio_engine);
                 if (options.audio_trunc && !file_audio_source->is_active()) {
                     std::cout << "acmxvk: audio source finished, stopping "
                                  "(--audio-trunc)\n";

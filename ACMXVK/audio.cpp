@@ -422,6 +422,10 @@ namespace acmxvk::audio {
                 }
                 previous = mono;
             }
+            if (capture_recording) {
+                recorded_sample_count.fetch_add(frame_count,
+                                                std::memory_order_release);
+            }
             for (std::size_t frame =
                      std::min<std::size_t>(frame_count, AudioEngine::FFT_SIZE);
                  frame < AudioEngine::FFT_SIZE; ++frame) {
@@ -465,6 +469,7 @@ namespace acmxvk::audio {
             recorded_samples.clear();
             recording_sample_rate =
                 std::max(sample_rate.load(std::memory_order_relaxed), 1U);
+            recorded_sample_count.store(0, std::memory_order_relaxed);
             constexpr unsigned int RESERVE_SECONDS = 60;
             recorded_samples.reserve(static_cast<std::size_t>(recording_sample_rate) *
                                      RESERVE_SECONDS);
@@ -473,6 +478,13 @@ namespace acmxvk::audio {
                       << recording_sample_rate << " Hz, mono, gain "
                       << recording_gain << ")\n";
             return true;
+        }
+
+        [[nodiscard]] double recordingTime() const {
+            const unsigned int rate = std::max(recording_sample_rate, 1U);
+            return static_cast<double>(
+                       recorded_sample_count.load(std::memory_order_acquire)) /
+                   static_cast<double>(rate);
         }
 
         [[nodiscard]] AudioRecording stopRecording() {
@@ -502,6 +514,7 @@ namespace acmxvk::audio {
         std::atomic<float> sensitivity_value{1.0F};
         std::atomic<unsigned int> sample_rate{44100};
         std::atomic<bool> recording{false};
+        std::atomic<std::uint64_t> recorded_sample_count{0};
         std::array<std::array<std::atomic<float>, AudioEngine::FFT_SIZE>, 2>
             spectrum_samples{};
         std::atomic<int> spectrum_front{0};
@@ -574,6 +587,10 @@ namespace acmxvk::audio {
 
     bool AudioEngine::is_recording() const {
         return impl->recording.load(std::memory_order_acquire);
+    }
+
+    double AudioEngine::recording_time() const {
+        return impl->recordingTime();
     }
 
     bool write_wav_file(const AudioRecording &recording,

@@ -70,6 +70,7 @@ namespace acmxvk::audio {
         bool start_recording();
         [[nodiscard]] AudioRecording stop_recording();
         [[nodiscard]] bool is_recording() const;
+        [[nodiscard]] double recording_time() const;
         void reset();
         static constexpr std::uint32_t spectrum_bin_count() {
             return static_cast<std::uint32_t>(FFT_SIZE / 2);

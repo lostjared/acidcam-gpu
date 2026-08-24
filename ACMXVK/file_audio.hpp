@@ -24,6 +24,7 @@ namespace acmxvk::audio {
         bool enable_output(int device = -1, float gain = 1.0F);
         void stop_output();
         [[nodiscard]] bool has_output_clock() const;
+        [[nodiscard]] double playback_time() const;
         bool mux_into_video(const std::string &video_path, double video_duration);
         static bool mux_recording_into_video(std::vector<float> samples,
                                              unsigned int sample_rate,

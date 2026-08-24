@@ -111,7 +111,7 @@ find_package(ZLIB REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(OpenCV REQUIRED)
 
-find_package(mxvk CONFIG REQUIRED)
+find_package(mxvk 0.26 CONFIG REQUIRED)
 find_program(GLSLC_EXECUTABLE glslc REQUIRED)
 
 get_target_property(ACMXVK_MXVK_LIBRARIES mxvk::mxvk INTERFACE_LINK_LIBRARIES)

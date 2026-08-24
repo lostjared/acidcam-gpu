@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7P**. It is usable for video, camera, and
+The port is currently at **Increment 7Q**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -23,7 +23,7 @@ ACMX2.
 | Multipass and playlists | Implemented | Includes named playlist nodes, multipass chains, sequential autopilot, and random autopilot. |
 | Frame history/texture cache | Implemented | Uses a Vulkan `sampler2DArray` ring buffer with configurable size and write delay. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
-| Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, and optional audio copying. |
+| Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, and audio-clock synchronization for file playback and live-input muxing. |
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
 | Text overlays and watermark | Implemented | Displays the active shader, playlist/pass stack, and CUDA filter; supports configurable watermark text/color and the ACMX2 `E` toggle. Overlays are included in snapshots and encoded output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
@@ -40,7 +40,7 @@ ACMX2.
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- A current system installation of MXVK built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.26 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -98,6 +98,9 @@ Increment 7K changes MXVK's internal NVDEC surface synchronization, so MXVK
 must be rebuilt and reinstalled once more; acidcam-gpu remains unchanged.
 Increment 7L changes only ACMXVK and does not require either dependency to be
 rebuilt or reinstalled. Increments 7M through 7P also change only ACMXVK.
+Increment 7Q adds MXVK's efficient capture-frame skip APIs and raises MXVK to
+0.26.0, so MXVK must be rebuilt and reinstalled before rebuilding ACMXVK;
+acidcam-gpu remains unchanged.
 
 ### Runtime resource paths
 
@@ -459,6 +462,24 @@ Record five seconds of processed video and mux repeated file audio into it:
     --output output.mp4
 ```
 
+For video-file input with a reactive audio track, the recorded frame PTS now
+follow the source-video timeline. Encoder queue drops therefore leave timestamp
+gaps instead of shortening the result. With `--pass-through`, the audio output
+device becomes the master clock: ACMXVK waits when video is early, efficiently
+skips decoded frames when video is late, and submits the displayed frame at the
+matching timeline PTS. Without pass-through, file-audio analysis advances by
+exactly one nominal video frame and produces the same offline alignment.
+
+```bash
+./build/acmxvk/acmxvk \
+    --input input.mp4 \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --audio-file soundtrack.mp3 \
+    --pass-through \
+    --output synchronized-output.mp4 \
+    --enable-vsync
+```
+
 Record processed video with synchronized live microphone audio:
 
 ```bash
@@ -786,6 +807,14 @@ playlists, and MIDI examples. `ACMXVK_SHADER_PATH` provides a SPIR-V-specific
 shader default without accidentally consuming ACMX2's OpenGL shader tree.
 CMake mirrors the installed `data/` and `shaders/` layout in the build tree.
 
+Increment 7Q ports ACMX2's media-timeline synchronization and extends it to
+live microphone muxing. Recording starts on the first valid source frame.
+Video-file frames retain their nominal source PTS even when MXWrite's bounded
+queue drops work, while audible file audio and muxed live input use their
+hardware sample counters as the master clock. Late file-video frames are
+decoded and discarded through MXVK without RGBA conversion, CUDA transfer, or
+Vulkan upload. Readback is requested only when a new recording frame is due.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -853,7 +882,10 @@ confirmed the `SquareBlockResize [3]` label from the live acidcam-gpu filter
 state. All runs completed under Vulkan validation without project validation
 errors. Increment 7P loaded its font, sprite shader, manifest, and selected
 effect exclusively from an isolated `--path` tree, encoded the result, then
-repeated default discovery through `ACMXVK_PATH`.
+repeated default discovery through `ACMXVK_PATH`. Increment 7Q was compiled in
+CUDA, audio, and MIDI mode and again with ACMXVK audio, MIDI, and acidcam-gpu
+filters disabled. Both configurations linked against a staged MXVK 0.26.0;
+their command-line and CUDA capability smoke checks completed successfully.
 
 ## Development note
 

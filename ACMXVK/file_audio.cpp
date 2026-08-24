@@ -226,8 +226,10 @@ namespace acmxvk::audio {
                     source_samples = source;
                     source_sample_count = sample_count;
                     source_position = 0.0;
+                    total_source_position = 0.0;
                     gain = std::clamp(requested_gain, 0.0F, 4.0F);
                     playback_position.store(0, std::memory_order_relaxed);
+                    total_playback_position.store(0, std::memory_order_relaxed);
                     completed_loops.store(0, std::memory_order_relaxed);
                     finished.store(false, std::memory_order_relaxed);
 
@@ -293,7 +295,9 @@ namespace acmxvk::audio {
                 source_samples = nullptr;
                 source_sample_count = 0;
                 source_position = 0.0;
+                total_source_position = 0.0;
                 playback_position.store(0, std::memory_order_relaxed);
+                total_playback_position.store(0, std::memory_order_relaxed);
                 completed_loops.store(0, std::memory_order_relaxed);
             }
 
@@ -315,6 +319,10 @@ namespace acmxvk::audio {
 
             [[nodiscard]] std::size_t position() const {
                 return playback_position.load(std::memory_order_acquire);
+            }
+
+            [[nodiscard]] std::uint64_t total_position() const {
+                return total_playback_position.load(std::memory_order_acquire);
             }
 
             [[nodiscard]] std::uint64_t loop_count() const {
@@ -388,6 +396,7 @@ namespace acmxvk::audio {
                                 gain,
                             -1.0F, 1.0F);
                         source_position += source_step;
+                        total_source_position += source_step;
                     }
 
                     for (unsigned int channel = 0; channel < output_channels;
@@ -400,6 +409,9 @@ namespace acmxvk::audio {
                     std::min(static_cast<std::size_t>(source_position),
                              source_sample_count),
                     std::memory_order_release);
+                total_playback_position.store(
+                    static_cast<std::uint64_t>(total_source_position),
+                    std::memory_order_release);
                 return 0;
             }
 
@@ -407,10 +419,12 @@ namespace acmxvk::audio {
             const float *source_samples = nullptr;
             std::size_t source_sample_count = 0;
             double source_position = 0.0;
+            double total_source_position = 0.0;
             unsigned int output_channels = 0;
             unsigned int output_sample_rate = FILE_SAMPLE_RATE;
             float gain = 1.0F;
             std::atomic<std::size_t> playback_position{0};
+            std::atomic<std::uint64_t> total_playback_position{0};
             std::atomic<std::uint64_t> completed_loops{0};
             std::atomic<bool> active{false};
             std::atomic<bool> started{false};
@@ -718,7 +732,15 @@ namespace acmxvk::audio {
         }
 
         [[nodiscard]] bool has_output_clock() const {
-            return output != nullptr && output->is_configured();
+            return active && output != nullptr && output->is_configured();
+        }
+
+        [[nodiscard]] double playback_time() const {
+            if (!has_output_clock()) {
+                return 0.0;
+            }
+            return static_cast<double>(output->total_position()) /
+                   static_cast<double>(FILE_SAMPLE_RATE);
         }
 
         bool mux_into_video(const std::string &requested_video_path,
@@ -1244,6 +1266,10 @@ namespace acmxvk::audio {
 
     bool FileAudioSource::has_output_clock() const {
         return impl->has_output_clock();
+    }
+
+    double FileAudioSource::playback_time() const {
+        return impl->playback_time();
     }
 
     bool FileAudioSource::mux_into_video(const std::string &video_path,
