@@ -199,6 +199,16 @@ set(ACMXVK_AUDIO_SPECTRUM_SHADER
 set(ACMXVK_AUDIO_HISTORY_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/audio_history.frag.spv"
 )
+set(ACMXVK_OVERLAY_FONT
+    "${CMAKE_CURRENT_SOURCE_DIR}/../ACMX2/data/font.ttf"
+    CACHE FILEPATH "TrueType font used by ACMXVK overlays"
+)
+if(NOT EXISTS "${ACMXVK_OVERLAY_FONT}")
+    message(FATAL_ERROR
+        "ACMXVK overlay font was not found at ${ACMXVK_OVERLAY_FONT}. "
+        "Set ACMXVK_OVERLAY_FONT to a readable TrueType font."
+    )
+endif()
 
 add_custom_command(
     OUTPUT "${ACMXVK_SPRITE_VERTEX_SHADER}"
@@ -362,6 +372,8 @@ target_compile_definitions(acmxvk PRIVATE
     ACMXVK_INSTALL_ECHO_CACHE_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/echo_cache.frag.spv"
     ACMXVK_BUILD_FLIP_SHADER="${ACMXVK_FLIP_SHADER}"
     ACMXVK_INSTALL_FLIP_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/flip.frag.spv"
+    ACMXVK_BUILD_OVERLAY_FONT="${ACMXVK_OVERLAY_FONT}"
+    ACMXVK_INSTALL_OVERLAY_FONT="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/data/font.ttf"
 )
 
 install(TARGETS acmxvk RUNTIME DESTINATION bin)
@@ -380,6 +392,9 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/midi-examples/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/midi-examples")
+install(FILES "${ACMXVK_OVERLAY_FONT}"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/data"
+        RENAME font.ttf)
 
 if(NOT TARGET uninstall)
     configure_file(

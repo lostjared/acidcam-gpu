@@ -81,6 +81,14 @@
 #define ACMXVK_INSTALL_FLIP_SHADER "flip.frag.spv"
 #endif
 
+#ifndef ACMXVK_BUILD_OVERLAY_FONT
+#define ACMXVK_BUILD_OVERLAY_FONT "font.ttf"
+#endif
+
+#ifndef ACMXVK_INSTALL_OVERLAY_FONT
+#define ACMXVK_INSTALL_OVERLAY_FONT "font.ttf"
+#endif
+
 namespace acmxvk {
     namespace fs = std::filesystem;
 
@@ -151,6 +159,7 @@ namespace acmxvk {
         bool list_cuda_devices = false;
         bool check_cuda = false;
         bool list_encoders = false;
+        bool display_filter = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
@@ -174,6 +183,8 @@ namespace acmxvk {
         std::string record_audio_file;
         std::string midi_map_file;
         std::string snapshot_directory = ".";
+        std::string watermark_text;
+        std::array<std::uint8_t, 3> watermark_color{255U, 0U, 150U};
     };
 
     [[nodiscard]] std::string optionValue(int &index, int argc, char **argv,
@@ -242,6 +253,22 @@ namespace acmxvk {
             start = separator + 1;
         }
         return values;
+    }
+
+    [[nodiscard]] std::array<std::uint8_t, 3>
+    parseColor(std::string_view text, std::string_view option) {
+        const std::vector<int> components = parseIntegerList(text, option);
+        if (components.size() != 3U) {
+            throw std::runtime_error(std::string(option) +
+                                     " requires r,g,b");
+        }
+
+        std::array<std::uint8_t, 3> color{};
+        for (std::size_t index = 0; index < color.size(); ++index) {
+            color[index] = static_cast<std::uint8_t>(
+                std::clamp(components[index], 0, 255));
+        }
+        return color;
     }
 
     void parseDimensions(std::string_view text, int &width, int &height,
@@ -551,6 +578,18 @@ namespace acmxvk {
                 options.encode_realtime = true;
             } else if (option == "--no-drop") {
                 options.no_drop = true;
+            } else if (option == "--display-filter") {
+                options.display_filter = true;
+            } else if (option == "--use-watermark") {
+                options.watermark_text =
+                    optionValue(index, argc, argv, option);
+                if (options.watermark_text.empty()) {
+                    throw std::runtime_error(
+                        "--use-watermark requires non-empty text");
+                }
+            } else if (option == "--use-watermark-color") {
+                options.watermark_color = parseColor(
+                    optionValue(index, argc, argv, option), option);
             } else if (option == "--copy-audio") {
                 options.copy_audio = true;
             } else if (option == "-n" || option == "--fullscreen") {
@@ -709,7 +748,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7N)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7O)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -759,6 +798,10 @@ namespace acmxvk {
                << "                              List one encoder's options and exit\n"
                << "      --encode-realtime       Enable low-latency encoder settings\n"
                << "      --no-drop               Block when the encoder queue is full\n"
+               << "      --display-filter        Show active shader/filter details\n"
+               << "      --use-watermark <text>  Show a text watermark in the upper-left\n"
+               << "      --use-watermark-color <r,g,b>\n"
+               << "                              Watermark RGB color (default 255,0,150)\n"
                << "      --copy-audio            Copy input audio into encoded output\n\n"
                << "Audio (requires AUDIO=ON build):\n"
                << "  -w, --enable-audio          Enable live audio-reactive metrics\n"
@@ -811,7 +854,7 @@ namespace acmxvk {
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
-               << "      F fullscreen, M multipass,\n"
+               << "      E watermark, F fullscreen, M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
                << "      Z PNG snapshot,\n"
                << "      Escape quit\n";
@@ -1156,6 +1199,7 @@ namespace acmxvk {
             resetAutopilotInterval();
             openInput();
             initializeSprite();
+            initializeOverlayFont();
             start_requested_audio_recording();
             openOutput();
         }
@@ -1349,6 +1393,14 @@ namespace acmxvk {
                 case SDLK_F:
                     toggleFullscreen();
                     break;
+                case SDLK_E:
+                    if (!options.watermark_text.empty()) {
+                        watermark_enabled = !watermark_enabled;
+                        std::cout << "acmxvk: watermark "
+                                  << (watermark_enabled ? "enabled" : "disabled")
+                                  << '\n';
+                    }
+                    break;
                 case SDLK_INSERT:
                     adjustAudioSensitivity(0.1F);
                     break;
@@ -1393,6 +1445,7 @@ namespace acmxvk {
 
         void onSwapchainRecreated() override {
             initializeSprite();
+            initializeOverlayFont();
         }
 
         void proc() override {
@@ -1425,6 +1478,7 @@ namespace acmxvk {
                 updateShaderUniforms(target_width, target_height);
             }
             frame_sprite->drawSpriteRect(0, 0, target_width, target_height);
+            queueOverlayText();
         }
 
       private:
@@ -1483,6 +1537,8 @@ namespace acmxvk {
         bool audio_time_active = false;
         bool audio_delta_time = false;
         bool spectrum_scale_by_sensitivity = false;
+        bool watermark_enabled = !options.watermark_text.empty();
+        int overlay_font_size = 18;
         bool snapshot_pending = false;
         bool autopilot_enabled = false;
         bool autopilot_sequential = false;
@@ -1848,6 +1904,8 @@ namespace acmxvk {
                 return SDLK_I;
             case 32:
                 return SDLK_SPACE;
+            case 69:
+                return options.watermark_text.empty() ? SDLK_UNKNOWN : SDLK_E;
             case 74:
             case 78:
                 return SDLK_J;
@@ -1925,6 +1983,8 @@ namespace acmxvk {
                 return "step shader time backward";
             case 32:
                 return "toggle shader bypass";
+            case 69:
+                return "toggle watermark";
             case 74:
             case 78:
                 return "toggle random autopilot";
@@ -2434,6 +2494,113 @@ namespace acmxvk {
                 return ACMXVK_INSTALL_FLIP_SHADER;
             }
             return ACMXVK_BUILD_FLIP_SHADER;
+        }
+
+        [[nodiscard]] fs::path overlayFont() const {
+            if (fs::is_regular_file(ACMXVK_INSTALL_OVERLAY_FONT)) {
+                return ACMXVK_INSTALL_OVERLAY_FONT;
+            }
+            return ACMXVK_BUILD_OVERLAY_FONT;
+        }
+
+        void initializeOverlayFont() {
+            if (!options.display_filter && options.watermark_text.empty()) {
+                return;
+            }
+
+            const fs::path font = overlayFont();
+            if (!fs::is_regular_file(font)) {
+                throw std::runtime_error("overlay font was not found: " +
+                                         font.string());
+            }
+            const VkExtent2D extent = getSwapchainExtent();
+            const int height = extent.height > 0U
+                                   ? static_cast<int>(extent.height)
+                                   : options.height;
+            overlay_font_size = std::max(12, height / 40);
+            setFont(font.string(), overlay_font_size);
+            std::cout << "acmxvk: overlay font " << font.string() << " at "
+                      << overlay_font_size << " points\n";
+        }
+
+        [[nodiscard]] static std::string clipOverlayText(std::string text) {
+            constexpr std::size_t MAX_OVERLAY_CHARACTERS = 120;
+            if (text.size() > MAX_OVERLAY_CHARACTERS) {
+                text.resize(MAX_OVERLAY_CHARACTERS - 3U);
+                text += "...";
+            }
+            return text;
+        }
+
+        [[nodiscard]] std::string activePassDescription() const {
+            const std::vector<fs::path> *passes = nullptr;
+            if (playlist_enabled && !playlist.empty()) {
+                passes = &playlist[playlist_index].shaders;
+            } else if (multipass_enabled && !configured_passes.empty()) {
+                passes = &configured_passes;
+            }
+            if (passes == nullptr || passes->empty()) {
+                return {};
+            }
+
+            std::string description = "Multipass: ";
+            for (std::size_t index = 0; index < passes->size(); ++index) {
+                if (index > 0U) {
+                    description += ", ";
+                }
+                description += (*passes)[index].filename().string();
+            }
+            return clipOverlayText(std::move(description));
+        }
+
+        void queueOverlayText() {
+            if (!options.display_filter &&
+                (!watermark_enabled || options.watermark_text.empty())) {
+                return;
+            }
+
+            constexpr int LEFT_MARGIN = 10;
+            constexpr int TOP_MARGIN = 10;
+            const int line_height = overlay_font_size + 4;
+            int y = TOP_MARGIN;
+            if (options.display_filter) {
+                const SDL_Color filter_color{255U, 0U, 255U, 255U};
+                std::string shader = effects_enabled
+                                         ? fs::path(currentShader()).filename().string()
+                                         : "bypassed";
+                printText(clipOverlayText("Shader: " + std::move(shader)),
+                          LEFT_MARGIN, y, filter_color);
+                y += line_height;
+
+                if (playlist_enabled && !playlist.empty()) {
+                    printText(clipOverlayText("Playlist: " +
+                                              playlist[playlist_index].name),
+                              LEFT_MARGIN, y, filter_color);
+                    y += line_height;
+                }
+                const std::string passes = activePassDescription();
+                if (!passes.empty()) {
+                    printText(passes, LEFT_MARGIN, y, filter_color);
+                    y += line_height;
+                }
+#ifdef ACMXVK_WITH_CUDA
+                if (gpu_filter_engine != nullptr) {
+                    printText(clipOverlayText(
+                                  "GPU: " + gpu_filter_engine
+                                                ->active_filter_description()),
+                              LEFT_MARGIN, y, filter_color);
+                    y += line_height;
+                }
+#endif
+            }
+
+            if (watermark_enabled && !options.watermark_text.empty()) {
+                const SDL_Color watermark_color{
+                    options.watermark_color[0], options.watermark_color[1],
+                    options.watermark_color[2], 255U};
+                printText(clipOverlayText(options.watermark_text), LEFT_MARGIN,
+                          y, watermark_color);
+            }
         }
 
         void openInput() {

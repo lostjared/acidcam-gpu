@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7N**. It is usable for video, camera, and
+The port is currently at **Increment 7O**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -24,11 +24,12 @@ ACMX2.
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, and optional audio copying. |
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
+| Text overlays and watermark | Implemented | Displays the active shader, playlist/pass stack, and CUDA filter; supports configurable watermark text/color and the ACMX2 `E` toggle. Overlays are included in snapshots and encoded output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
-| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
+| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
 | 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
@@ -161,6 +162,22 @@ frame unless video or PNG output already requires continuous readback. PNG
 compression and disk writes run on a bounded background queue so the render
 loop can continue while the snapshot is saved; queued work is drained during
 shutdown.
+
+Show the active shader/filter information with a yellow watermark. Press `E`
+to toggle only the watermark while the filter information remains visible:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.png \
+    --fragment ./build/acmxvk/shaders/custom_uniform.frag.spv \
+    --display-filter \
+    --use-watermark "My Channel" \
+    --use-watermark-color 255,255,0
+```
+
+The overlay font defaults to `ACMX2/data/font.ttf`, is installed with ACMXVK,
+and can be replaced at configure time with
+`-DACMXVK_OVERLAY_FONT=/path/to/font.ttf`.
 
 Preview the included shader with live audio reactivity:
 
@@ -705,6 +722,15 @@ four-job background queue keeps PNG compression and disk I/O off the render
 thread and rejects excess requests instead of allowing unbounded frame-memory
 growth.
 
+Increment 7O ports ACMX2's recording overlays through MXVK's Vulkan text
+renderer. `--display-filter` identifies the active shader, playlist node,
+multipass stack, and CUDA filter chain. `--use-watermark` and
+`--use-watermark-color` add configurable text immediately below that status,
+and `E` or ACMX2 MIDI Map action 69 toggles the watermark at runtime. The final
+MXVK compositing pass draws both overlays after the shader effect chain, keeping
+the text crisp and unmodified while preserving it in one-shot PNG snapshots,
+PNG sequences, periodic captures, and MXWrite video output.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -721,6 +747,7 @@ growth.
 - Page Up/Page Down: increase or decrease shader-time speed
 - Insert/Delete: increase or decrease live audio sensitivity
 - F: toggle fullscreen
+- E: toggle the configured watermark
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
 - Y: toggle sequential autopilot
@@ -764,7 +791,12 @@ inspected 1280x720 RGBA PNGs with both one-shot and continuous readback, and
 verified MIDI Map action 90 as an active snapshot mapping. A 3840x2091 stress
 capture then processed another keyboard event between the snapshot's queue and
 completion messages, and an immediate-exit test drained the pending PNG before
-Vulkan teardown.
+Vulkan teardown. Increment 7O rendered and inspected watermark-on and
+watermark-off 1920x1080 processed snapshots, then inspected a 640x360 H.264
+MXWrite output frame with both labels present. A second CUDA-filter encode
+confirmed the `SquareBlockResize [3]` label from the live acidcam-gpu filter
+state. All runs completed under Vulkan validation without project validation
+errors.
 
 ## Development note
 

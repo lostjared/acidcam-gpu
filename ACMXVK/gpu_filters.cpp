@@ -133,6 +133,18 @@ namespace acmxvk::gpu {
             return true;
         }
 
+        [[nodiscard]] std::string active_filter_description() const {
+            std::string description;
+            for (const ac_gpu::Filter &filter : filters) {
+                if (!description.empty()) {
+                    description += ", ";
+                }
+                description += filter.name;
+                description += " [" + std::to_string(filter.index) + "]";
+            }
+            return description;
+        }
+
         void update_parameters() {
             alpha += alpha_direction > 0 ? 0.01F : -0.01F;
             if (alpha >= 3.0F) {
@@ -186,6 +198,10 @@ namespace acmxvk::gpu {
 
     bool FilterEngine::select_relative_filter(int direction) {
         return impl->select_relative_filter(direction);
+    }
+
+    std::string FilterEngine::active_filter_description() const {
+        return impl->active_filter_description();
     }
 
     const cv::cuda::GpuMat &FilterEngine::output() const {
