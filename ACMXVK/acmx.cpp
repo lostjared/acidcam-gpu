@@ -166,6 +166,7 @@ namespace acmxvk {
         std::string encode_params;
         std::string list_encoder_options;
         std::string audio_file;
+        std::string record_audio_file;
         std::string midi_map_file;
     };
 
@@ -434,6 +435,10 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "recording gain must be between 0.0 and 2.0");
                 }
+            } else if (option == "--record-audio") {
+                options.record_audio_file =
+                    optionValue(index, argc, argv, option);
+                options.enable_audio = true;
             } else if (option == "--audio-repeat") {
                 options.audio_repeat = true;
             } else if (option == "--audio-trunc") {
@@ -625,6 +630,24 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--copy-audio and --audio-file select different audio sources");
         }
+        if (!options.record_audio_file.empty() && !options.audio_file.empty()) {
+            throw std::runtime_error(
+                "--record-audio records live input and cannot be used with --audio-file");
+        }
+        if (!options.record_audio_file.empty()) {
+            const fs::path recording_path =
+                fs::absolute(options.record_audio_file).lexically_normal();
+            const auto conflicts_with = [&](const std::string &filename) {
+                return !filename.empty() &&
+                       recording_path == fs::absolute(filename).lexically_normal();
+            };
+            if (conflicts_with(options.input_file) ||
+                conflicts_with(options.graphic_file) ||
+                conflicts_with(options.output_file)) {
+                throw std::runtime_error(
+                    "--record-audio output must differ from media input and video output");
+            }
+        }
         if (!options.graphic_file.empty() && !options.output_file.empty() &&
             options.duration <= 0.0 &&
             !(options.audio_trunc && !options.audio_file.empty())) {
@@ -663,16 +686,17 @@ namespace acmxvk {
         }
         if (options.audio_recording_gain_specified &&
             (!options.enable_audio || !options.audio_file.empty() ||
-             options.output_file.empty() || options.png_output ||
-             options.copy_audio)) {
+             (options.record_audio_file.empty() &&
+              (options.output_file.empty() || options.png_output ||
+               options.copy_audio)))) {
             throw std::runtime_error(
-                "--record-gain requires live --enable-audio and encoded output");
+                "--record-gain requires live audio recording or encoded output");
         }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7K)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7L)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -732,7 +756,8 @@ namespace acmxvk {
                << "  -y, --pass-through          Play live/file audio through an output device\n"
                << "      --audio-output <device> Output index or default\n"
                << "      --pass-through-gain N   Monitor gain, 0.0-4.0 (default 1.0)\n"
-               << "      --record-gain N         Muxed mic gain, 0.0-2.0 (default 1.0)\n"
+               << "      --record-gain N         Saved/muxed mic gain, 0.0-2.0 (default 1.0)\n"
+               << "      --record-audio <wav>    Record live microphone input as PCM16 WAV\n"
                << "      --audio-repeat          Restart file audio at end-of-stream\n"
                << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
                << "                              Live/file audio is muxed into encoded output\n"
@@ -1115,6 +1140,7 @@ namespace acmxvk {
             resetAutopilotInterval();
             openInput();
             initializeSprite();
+            start_requested_audio_recording();
             openOutput();
         }
 
@@ -1129,7 +1155,10 @@ namespace acmxvk {
                 audio_engine != nullptr && file_audio_source == nullptr &&
                 audio_engine->is_recording() && writer.is_open() &&
                 !options.output_file.empty() && !options.png_output &&
-                output_frame_count > 0;
+                !options.copy_audio && output_frame_count > 0;
+            const bool should_write_live_audio =
+                audio_engine != nullptr && audio_engine->is_recording() &&
+                !options.record_audio_file.empty();
             audio::AudioRecording live_audio_recording;
             if (audio_engine != nullptr && audio_engine->is_recording()) {
                 live_audio_recording = audio_engine->stop_recording();
@@ -1171,6 +1200,21 @@ namespace acmxvk {
                                                        video_duration)) {
                     std::cerr << "acmxvk: file-audio mux failed; preserving the "
                                  "encoded video without audio\n";
+                }
+            }
+            if (should_write_live_audio) {
+                if (live_audio_recording.empty()) {
+                    std::cerr << "acmxvk: standalone audio recording was empty; "
+                                 "no WAV file was written\n";
+                } else if (!audio::write_wav_file(live_audio_recording,
+                                                  options.record_audio_file)) {
+                    std::cerr << "acmxvk: could not write WAV recording: "
+                              << options.record_audio_file << '\n';
+                } else {
+                    std::cout << "acmxvk: wrote "
+                              << live_audio_recording.duration_seconds()
+                              << " seconds of microphone audio to "
+                              << options.record_audio_file << '\n';
                 }
             }
             if (should_mux_live_audio) {
@@ -2011,6 +2055,27 @@ namespace acmxvk {
 #endif
         }
 
+        void start_requested_audio_recording() {
+            if (options.record_audio_file.empty()) {
+                return;
+            }
+#ifdef AUDIO_ENABLED
+            if (audio_engine == nullptr || file_audio_source != nullptr ||
+                !audio_engine->is_open()) {
+                throw std::runtime_error(
+                    "--record-audio requires an active live audio input");
+            }
+            if (!options.output_file.empty() && !options.png_output) {
+                return;
+            }
+            if (!audio_engine->is_recording() &&
+                !audio_engine->start_recording()) {
+                throw std::runtime_error(
+                    "could not start standalone microphone recording");
+            }
+#endif
+        }
+
         void adjustAudioSensitivity(float amount) {
 #ifdef AUDIO_ENABLED
             if (audioSourceOpen()) {
@@ -2441,7 +2506,10 @@ namespace acmxvk {
             if (writer.is_open()) {
 #ifdef AUDIO_ENABLED
                 if (output_frame_count == 0 && audio_engine != nullptr &&
-                    file_audio_source == nullptr && !options.copy_audio &&
+                    file_audio_source == nullptr &&
+                    (!options.copy_audio ||
+                     !options.record_audio_file.empty()) &&
+                    !audio_engine->is_recording() &&
                     !audio_engine->start_recording()) {
                     std::cerr << "acmxvk: could not start live audio recording; "
                                  "continuing with video-only output\n";

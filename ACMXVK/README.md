@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7K**. It is usable for video, camera, and
+The port is currently at **Increment 7L**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader-time toggle/stepping/speed, and fullscreen switching. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live recording has independent gain, while file audio also supports repeat and stop-at-EOF behavior. |
+| Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, and configurable FFT history. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, and ACMXVK-equivalent playback actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
@@ -94,6 +94,8 @@ Increment 7J adds MXVK's in-place FFmpeg seek API, so MXVK must again be rebuilt
 and reinstalled before rebuilding ACMXVK; acidcam-gpu remains unchanged.
 Increment 7K changes MXVK's internal NVDEC surface synchronization, so MXVK
 must be rebuilt and reinstalled once more; acidcam-gpu remains unchanged.
+Increment 7L changes only ACMXVK and does not require either dependency to be
+rebuilt or reinstalled.
 
 ### Apple Silicon and MoltenVK
 
@@ -399,6 +401,25 @@ Monitor that microphone through the default output while recording:
     --enable-vsync
 ```
 
+Record live microphone input to a standalone mono PCM16 WAV while processing a
+video. `--record-audio` enables live audio capture automatically, and
+`--record-gain` is applied only to the saved or muxed microphone samples:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input clip.mp4 \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --audio-input default \
+    --record-audio microphone.wav \
+    --record-gain 1.25 \
+    --enable-vsync
+```
+
+The WAV closes when the video ends or ACMXVK exits. It can be written alongside
+an encoded `--output`; in that mode the same captured samples can also be muxed
+into the video. Standalone recording uses live input and therefore cannot be
+combined with `--audio-file`.
+
 M3U and M3U8 playlists are read in order. Blank lines, `#EXTM3U`, `#EXTINF`,
 and other comment lines are ignored; relative entries are resolved against the
 playlist directory. Unusable tracks are reported and skipped as long as at
@@ -639,6 +660,12 @@ remain queued asynchronously. This prevents FFmpeg from recycling a decode
 surface while MXVK still reads it without introducing a full capture-stream
 synchronization. MXVK reports the active barrier once per capture session.
 
+Increment 7L ports ACMX2's standalone `--record-audio <wav>` workflow. Live
+microphone samples are buffered by the existing real-time callback, converted
+to mono PCM16 only after capture stops, and written with an explicit
+little-endian RIFF/WAVE header. Recording can run independently or alongside
+video encoding and continues to honor `--record-gain`.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -681,9 +708,12 @@ build. Increment 7I verified explicit device 0 selection in both configurations,
 including `decode=cuda:0` from MXVK and a clean direct history path. Increment
 7J looped an 84-frame H.264 source into a 186-frame output while retaining one
 NVDEC decoder open, direct rotation/upload/history, and clean validation. The
-Increment 7K test repeated the same NVDEC source through the event-protected
-surface handoff with and without acidcam-gpu filters. The known duplicate vkBasalt
-implicit-layer warning is external to ACMXVK.
+Increment 7K repeated the same NVDEC source through the event-protected surface
+handoff with and without acidcam-gpu filters. The known duplicate vkBasalt
+implicit-layer warning is external to ACMXVK. Increment 7L was tested by writing
+live microphone input to a standalone PCM16 WAV, then writing the WAV alongside
+an H.264/AAC output from the same capture buffer. Both files' channel,
+sample-rate, duration, codec, and sample-format metadata were inspected.
 
 ## Development note
 

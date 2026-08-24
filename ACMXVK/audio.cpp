@@ -6,7 +6,9 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <fstream>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -15,6 +17,24 @@ namespace acmxvk::audio {
     namespace {
 
         constexpr float PI = 3.14159265358979F;
+
+        void write_u16_le(std::ostream &output, std::uint16_t value) {
+            const std::array<char, 2> bytes{
+                static_cast<char>(value & 0xFFU),
+                static_cast<char>((value >> 8U) & 0xFFU),
+            };
+            output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        }
+
+        void write_u32_le(std::ostream &output, std::uint32_t value) {
+            const std::array<char, 4> bytes{
+                static_cast<char>(value & 0xFFU),
+                static_cast<char>((value >> 8U) & 0xFFU),
+                static_cast<char>((value >> 16U) & 0xFFU),
+                static_cast<char>((value >> 24U) & 0xFFU),
+            };
+            output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        }
 
         void fft_radix2(float *data, int size) {
             for (int index = 1, reversed = 0; index < size; ++index) {
@@ -554,6 +574,77 @@ namespace acmxvk::audio {
 
     bool AudioEngine::is_recording() const {
         return impl->recording.load(std::memory_order_acquire);
+    }
+
+    bool write_wav_file(const AudioRecording &recording,
+                        const std::string &filename) {
+        constexpr std::uint16_t CHANNEL_COUNT = 1;
+        constexpr std::uint16_t BITS_PER_SAMPLE = 16;
+        constexpr std::uint16_t PCM_FORMAT = 1;
+        constexpr std::uint32_t FORMAT_CHUNK_SIZE = 16;
+        constexpr std::size_t SAMPLE_BUFFER_SIZE = 4096;
+
+        if (recording.empty() || recording.sample_rate == 0 || filename.empty()) {
+            return false;
+        }
+
+        const std::uint64_t data_size_64 =
+            static_cast<std::uint64_t>(recording.samples.size()) *
+            sizeof(std::int16_t);
+        if (data_size_64 > std::numeric_limits<std::uint32_t>::max() - 36U) {
+            std::cerr << "acmxvk: WAV recording exceeds the RIFF size limit\n";
+            return false;
+        }
+        const auto data_size = static_cast<std::uint32_t>(data_size_64);
+
+        std::ofstream output(filename, std::ios::binary | std::ios::trunc);
+        if (!output) {
+            return false;
+        }
+
+        output.write("RIFF", 4);
+        write_u32_le(output, 36U + data_size);
+        output.write("WAVE", 4);
+        output.write("fmt ", 4);
+        write_u32_le(output, FORMAT_CHUNK_SIZE);
+        write_u16_le(output, PCM_FORMAT);
+        write_u16_le(output, CHANNEL_COUNT);
+        write_u32_le(output, recording.sample_rate);
+        write_u32_le(output, recording.sample_rate * sizeof(std::int16_t));
+        write_u16_le(output, sizeof(std::int16_t));
+        write_u16_le(output, BITS_PER_SAMPLE);
+        output.write("data", 4);
+        write_u32_le(output, data_size);
+
+        std::array<char, SAMPLE_BUFFER_SIZE * sizeof(std::int16_t)>
+            sample_buffer{};
+        std::size_t offset = 0;
+        while (offset < recording.samples.size()) {
+            const std::size_t sample_count =
+                std::min(SAMPLE_BUFFER_SIZE, recording.samples.size() - offset);
+            for (std::size_t index = 0; index < sample_count; ++index) {
+                const float recorded_sample = recording.samples[offset + index];
+                const float sample = std::isfinite(recorded_sample)
+                                         ? std::clamp(recorded_sample, -1.0F, 1.0F)
+                                         : 0.0F;
+                const auto pcm_sample = static_cast<std::int16_t>(
+                    std::lround(sample * 32767.0F));
+                const auto sample_bits = static_cast<std::uint16_t>(pcm_sample);
+                sample_buffer[index * 2U] =
+                    static_cast<char>(sample_bits & 0xFFU);
+                sample_buffer[index * 2U + 1U] =
+                    static_cast<char>((sample_bits >> 8U) & 0xFFU);
+            }
+            output.write(sample_buffer.data(),
+                         static_cast<std::streamsize>(sample_count *
+                                                      sizeof(std::int16_t)));
+            if (!output) {
+                return false;
+            }
+            offset += sample_count;
+        }
+        output.flush();
+        return output.good();
     }
 
     void AudioEngine::reset() {

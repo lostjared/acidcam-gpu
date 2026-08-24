@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace acmxvk::audio {
@@ -41,6 +42,9 @@ namespace acmxvk::audio {
                              static_cast<double>(sample_rate);
         }
     };
+
+    [[nodiscard]] bool write_wav_file(const AudioRecording &recording,
+                                      const std::string &filename);
 
     class AudioEngine {
       public:
