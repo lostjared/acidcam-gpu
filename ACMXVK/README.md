@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7Q**. It is usable for video, camera, and
+The port is currently at **Increment 7R**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -28,6 +28,7 @@ ACMX2.
 | Text overlays and watermark | Implemented | Displays the active shader, playlist/pass stack, and CUDA filter; supports configurable watermark text/color and the ACMX2 `E` toggle. Overlays are included in snapshots and encoded output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
+| Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
@@ -100,7 +101,31 @@ Increment 7L changes only ACMXVK and does not require either dependency to be
 rebuilt or reinstalled. Increments 7M through 7P also change only ACMXVK.
 Increment 7Q adds MXVK's efficient capture-frame skip APIs and raises MXVK to
 0.26.0, so MXVK must be rebuilt and reinstalled before rebuilding ACMXVK;
-acidcam-gpu remains unchanged.
+acidcam-gpu remains unchanged. Increment 7R changes only ACMXVK and does not
+require MXVK or acidcam-gpu to be rebuilt.
+
+### Input validation
+
+Increment 7R routes user-controlled strings through one validation module.
+Paths and visible labels accept well-formed printable UTF-8, including spaces
+and international filenames, while rejecting embedded controls, malformed
+encoding, bidirectional overrides, noncharacters, and oversized values.
+Identifiers, encoder tokens, MIDI expressions, uniform overrides, and FFmpeg
+option strings use narrower ASCII allowlists appropriate to their grammar.
+Playlist URLs are restricted to `http`, `https`, `file`, `rtsp`, and `rtmp`
+with basic authority and percent-escape validation.
+
+Text configuration files are limited to 4 MiB; line-oriented index, playlist,
+and MIDI-map formats also have 4096-byte line limits. Shader, playlist,
+audio-playlist, and MIDI-map entry counts are bounded. User SPIR-V
+files must have a valid aligned size and SPIR-V magic word before Vulkan loads
+them. Command-line dimensions, frame rates, device indices, buffer counts,
+durations, colors, and other allocation-sensitive numbers also have explicit
+ranges. Build the regression test with the default `BUILD_TESTING=ON` and run:
+
+```bash
+ctest --test-dir build/acmxvk --output-on-failure
+```
 
 ### Runtime resource paths
 
@@ -815,6 +840,14 @@ hardware sample counters as the master clock. Late file-video frames are
 decoded and discarded through MXVK without RGBA conversion, CUDA transfer, or
 Vulkan upload. Readback is requested only when a new recording frame is due.
 
+Increment 7R hardens every ACMXVK text-input boundary with the shared
+`input_validation` module. It covers command-line arguments, relevant
+environment variables, shader JSON/index entries, shader playlists, M3U audio
+playlists, MIDI map files, custom-uniform and encoder expressions, device
+labels, and overlay text. Bounded readers prevent oversized configuration
+lines from allocating without limit, while count, numeric, decoded-image, live
+MIDI-message, and SPIR-V checks protect the corresponding non-string inputs.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -886,6 +919,11 @@ repeated default discovery through `ACMXVK_PATH`. Increment 7Q was compiled in
 CUDA, audio, and MIDI mode and again with ACMXVK audio, MIDI, and acidcam-gpu
 filters disabled. Both configurations linked against a staged MXVK 0.26.0;
 their command-line and CUDA capability smoke checks completed successfully.
+Increment 7R passed its malformed UTF-8, control-character, identifier,
+structured-value, URL, bounded-line, and UTF-8 truncation regression suite in
+both configurations. Additional CLI probes rejected control characters,
+disallowed encoder punctuation, and oversized output dimensions before Vulkan
+initialization.
 
 ## Development note
 

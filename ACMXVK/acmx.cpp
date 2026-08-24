@@ -22,6 +22,7 @@
 #ifdef ACMXVK_WITH_CUDA
 #include "gpu_filters.hpp"
 #endif
+#include "input_validation.hpp"
 #ifdef ACMXVK_WITH_MXVK_CUDA
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaarithm.hpp>
@@ -46,6 +47,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -247,10 +249,82 @@ namespace acmxvk {
         if (++index >= argc) {
             throw std::runtime_error("missing value for " + std::string(option));
         }
-        return argv[index];
+        const std::string value(argv[index]);
+        input::validate_string(value, input::StringKind::Argument,
+                               std::string(option) + " value");
+        return value;
+    }
+
+    void validateLocator(std::string_view value, std::string_view context,
+                         bool allow_empty = false) {
+        if (value.empty() && allow_empty) {
+            return;
+        }
+        const input::StringKind kind =
+            value.find("://") == std::string_view::npos
+                ? input::StringKind::Path
+                : input::StringKind::Url;
+        input::validate_string(value, kind, context, allow_empty);
+    }
+
+    void validateOptionStrings(const Options &options) {
+        validateLocator(options.input_file, "--input", true);
+        input::validate_string(options.graphic_file, input::StringKind::Path,
+                               "--graphic", true);
+        input::validate_string(options.audio_file, input::StringKind::Path,
+                               "--audio-file", true);
+        input::validate_string(options.output_file, input::StringKind::Path,
+                               "--output", true);
+        input::validate_string(options.record_audio_file,
+                               input::StringKind::Path, "--record-audio", true);
+        input::validate_string(options.resource_directory,
+                               input::StringKind::Path, "--path", true);
+        input::validate_string(options.snapshot_directory,
+                               input::StringKind::Path, "--prefix");
+        input::validate_string(options.shader_directory,
+                               input::StringKind::Path, "--shaders", true);
+        input::validate_string(options.fragment_shader,
+                               input::StringKind::Path, "--fragment", true);
+        input::validate_string(options.shader_file, input::StringKind::Path,
+                               "--shader-file", true);
+        input::validate_string(options.playlist_file, input::StringKind::Path,
+                               "--playlist", true);
+        input::validate_string(options.midi_map_file, input::StringKind::Path,
+                               "--midi-map", true);
+
+        for (const std::string &path : options.shader_pass_files) {
+            input::validate_string(path, input::StringKind::Path,
+                                   "--shader-pass-files entry");
+        }
+        for (const std::string &value : options.custom_uniform_overrides) {
+            input::validate_string(value, input::StringKind::StructuredValue,
+                                   "--uniform");
+        }
+        for (const std::string &value : options.midi_cc_mappings) {
+            input::validate_string(value, input::StringKind::StructuredValue,
+                                   "--midi-cc");
+        }
+
+        input::validate_string(options.encode_preset, input::StringKind::Token,
+                               "--encode-preset");
+        input::validate_string(options.encode_tune, input::StringKind::Token,
+                               "--encode-tune", true);
+        input::validate_string(options.encode_codec, input::StringKind::Token,
+                               "--encode-codec");
+        input::validate_string(options.encode_params,
+                               input::StringKind::StructuredValue,
+                               "--encode-params", true);
+        input::validate_string(options.list_encoder_options,
+                               input::StringKind::Token,
+                               "--list-encoder-options", true);
+        input::validate_string(options.watermark_text,
+                               input::StringKind::DisplayText,
+                               "--use-watermark", true);
     }
 
     [[nodiscard]] int parseInteger(std::string_view text, std::string_view option) {
+        input::validate_string(text, input::StringKind::StructuredValue,
+                               option);
         std::size_t parsed = 0;
         int value = 0;
         try {
@@ -267,6 +341,8 @@ namespace acmxvk {
     }
 
     [[nodiscard]] double parseNumber(std::string_view text, std::string_view option) {
+        input::validate_string(text, input::StringKind::StructuredValue,
+                               option);
         std::size_t parsed = 0;
         double value = 0.0;
         try {
@@ -284,6 +360,8 @@ namespace acmxvk {
 
     [[nodiscard]] std::vector<int>
     parseIntegerList(std::string_view text, std::string_view option) {
+        input::validate_string(text, input::StringKind::StructuredValue,
+                               option);
         if (text.empty()) {
             throw std::runtime_error("empty integer list for " +
                                      std::string(option));
@@ -320,14 +398,19 @@ namespace acmxvk {
 
         std::array<std::uint8_t, 3> color{};
         for (std::size_t index = 0; index < color.size(); ++index) {
-            color[index] = static_cast<std::uint8_t>(
-                std::clamp(components[index], 0, 255));
+            if (components[index] < 0 || components[index] > 255) {
+                throw std::runtime_error(std::string(option) +
+                                         " components must be between 0 and 255");
+            }
+            color[index] = static_cast<std::uint8_t>(components[index]);
         }
         return color;
     }
 
     void parseDimensions(std::string_view text, int &width, int &height,
                          std::string_view option) {
+        constexpr int MAX_DIMENSION = 16384;
+        constexpr std::int64_t MAX_PIXELS = 67108864;
         const std::size_t separator = text.find_first_of("xX");
         if (separator == std::string_view::npos) {
             throw std::runtime_error("invalid dimensions for " + std::string(option) +
@@ -336,12 +419,17 @@ namespace acmxvk {
 
         width = parseInteger(text.substr(0, separator), option);
         height = parseInteger(text.substr(separator + 1), option);
-        if (width <= 0 || height <= 0) {
-            throw std::runtime_error("dimensions must be positive for " + std::string(option));
+        if (width <= 0 || height <= 0 || width > MAX_DIMENSION ||
+            height > MAX_DIMENSION ||
+            static_cast<std::int64_t>(width) * height > MAX_PIXELS) {
+            throw std::runtime_error(
+                "dimensions are outside the supported range for " +
+                std::string(option));
         }
     }
 
     [[nodiscard]] FrameRotation parseFrameRotation(std::string value) {
+        input::validate_string(value, input::StringKind::Token, "--rotate");
         std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
             return static_cast<char>(std::tolower(character));
         });
@@ -377,10 +465,14 @@ namespace acmxvk {
             resource_source = "--path";
         } else if (const char *environment = std::getenv("ACMXVK_PATH");
                    environment != nullptr && environment[0] != '\0') {
+            input::validate_string(environment, input::StringKind::Path,
+                                   "ACMXVK_PATH");
             options.resource_directory = environment;
             resource_source = "ACMXVK_PATH";
         } else if (const char *environment = std::getenv("ACMX2_PATH");
                    environment != nullptr && environment[0] != '\0') {
+            input::validate_string(environment, input::StringKind::Path,
+                                   "ACMX2_PATH");
             const fs::path compatibility_directory =
                 fs::absolute(environment).lexically_normal();
             if (fs::is_directory(compatibility_directory)) {
@@ -412,6 +504,8 @@ namespace acmxvk {
 
         if (const char *environment = std::getenv("ACMXVK_SHADER_PATH");
             environment != nullptr && environment[0] != '\0') {
+            input::validate_string(environment, input::StringKind::Path,
+                                   "ACMXVK_SHADER_PATH");
             fs::path directory = fs::absolute(environment).lexically_normal();
             if (fs::is_regular_file(directory) &&
                 (directory.filename() == "library.json" ||
@@ -443,6 +537,10 @@ namespace acmxvk {
 
     [[nodiscard]] Options parseOptions(int argc, char **argv) {
         Options options;
+        if (argc < 0 || argv == nullptr || argc > 4096) {
+            throw std::runtime_error(
+                "command line contains an invalid number of arguments");
+        }
         if (argc == 1) {
             options.show_help = true;
             return options;
@@ -450,6 +548,8 @@ namespace acmxvk {
 
         for (int index = 1; index < argc; ++index) {
             const std::string_view option(argv[index]);
+            input::validate_string(option, input::StringKind::Token,
+                                   "command-line option");
             if (option == "-h" || option == "-v" || option == "--help" ||
                 option == "--version") {
                 options.show_help = true;
@@ -476,6 +576,10 @@ namespace acmxvk {
             } else if (option == "-d" || option == "--device") {
                 options.camera_device =
                     parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.camera_device < 0 || options.camera_device > 65535) {
+                    throw std::runtime_error(
+                        "camera device index must be between 0 and 65535");
+                }
             } else if (option == "-c" || option == "--camera-res") {
                 parseDimensions(optionValue(index, argc, argv, option),
                                 options.camera_width, options.camera_height, option);
@@ -490,11 +594,21 @@ namespace acmxvk {
             } else if (option == "-H" || option == "--shader-index") {
                 options.shader_index =
                     parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.shader_index < 0 ||
+                    options.shader_index >=
+                        static_cast<int>(input::MAX_SHADER_ENTRIES)) {
+                    throw std::runtime_error("shader index is outside the supported range");
+                }
             } else if (option == "--shader-file") {
                 options.shader_file = optionValue(index, argc, argv, option);
             } else if (option == "--uniform") {
                 options.custom_uniform_overrides.push_back(
                     optionValue(index, argc, argv, option));
+                if (options.custom_uniform_overrides.size() >
+                    mxvk::VK_Sprite::MAX_CUSTOM_UNIFORMS) {
+                    throw std::runtime_error(
+                        "too many --uniform overrides were supplied");
+                }
             } else if (option == "--shader-pass") {
                 const std::string values = optionValue(index, argc, argv, option);
                 std::size_t start = 0;
@@ -503,8 +617,16 @@ namespace acmxvk {
                     const std::string_view value(
                         values.data() + start,
                         (separator == std::string::npos ? values.size() : separator) - start);
-                    if (!value.empty()) {
-                        options.shader_pass_indices.push_back(parseInteger(value, option));
+                    if (value.empty()) {
+                        throw std::runtime_error(
+                            "shader pass list contains an empty entry");
+                    }
+                    options.shader_pass_indices.push_back(parseInteger(value, option));
+                    if (options.shader_pass_indices.back() < 0 ||
+                        options.shader_pass_indices.size() >
+                            input::MAX_SHADER_ENTRIES) {
+                        throw std::runtime_error(
+                            "shader pass list is outside the supported range");
                     }
                     if (separator == std::string::npos) {
                         break;
@@ -528,6 +650,11 @@ namespace acmxvk {
                     }
                     options.shader_pass_files.push_back(
                         payload.substr(name_start, static_cast<std::size_t>(length)));
+                    if (options.shader_pass_files.size() >
+                        input::MAX_SHADER_ENTRIES) {
+                        throw std::runtime_error(
+                            "shader pass file list contains too many entries");
+                    }
                     start = name_start + static_cast<std::size_t>(length);
                 }
             } else if (option == "--playlist") {
@@ -537,29 +664,48 @@ namespace acmxvk {
             } else if (option == "--time-speed") {
                 options.time_speed =
                     parseNumber(optionValue(index, argc, argv, option), option);
+                if (options.time_speed < -1000.0 ||
+                    options.time_speed > 1000.0) {
+                    throw std::runtime_error(
+                        "time speed must be between -1000 and 1000");
+                }
             } else if (option == "--normalized") {
                 options.normalized_time = true;
             } else if (option == "--autopilot-frames" ||
                        option == "--autopilot-timeout") {
-                options.autopilot_frames =
-                    std::max(4, parseInteger(optionValue(index, argc, argv, option), option));
+                options.autopilot_frames = parseInteger(
+                    optionValue(index, argc, argv, option), option);
+                if (options.autopilot_frames < 4 ||
+                    options.autopilot_frames > 1000000000) {
+                    throw std::runtime_error(
+                        "autopilot frame interval must be between 4 and 1000000000");
+                }
             } else if (option == "--autopilot-random" ||
                        option == "--autiopilot-random") {
-                options.autopilot_random_timeout =
-                    std::max(4, parseInteger(optionValue(index, argc, argv, option), option));
+                options.autopilot_random_timeout = parseInteger(
+                    optionValue(index, argc, argv, option), option);
+                if (options.autopilot_random_timeout < 4 ||
+                    options.autopilot_random_timeout > 1000000000) {
+                    throw std::runtime_error(
+                        "autopilot random interval must be between 4 and 1000000000");
+                }
             } else if (option == "-u" || option == "--fps") {
                 options.requested_fps =
                     parseNumber(optionValue(index, argc, argv, option), option);
-                if (options.requested_fps <= 0.0) {
-                    throw std::runtime_error("FPS must be positive");
+                if (options.requested_fps <= 0.0 ||
+                    options.requested_fps > 1000.0) {
+                    throw std::runtime_error(
+                        "FPS must be between 0 and 1000");
                 }
             } else if (option == "-w" || option == "--enable-audio") {
                 options.enable_audio = true;
             } else if (option == "-l" || option == "--channels") {
                 options.audio_channels =
                     parseInteger(optionValue(index, argc, argv, option), option);
-                if (options.audio_channels < 1) {
-                    throw std::runtime_error("audio channels must be positive");
+                if (options.audio_channels < 1 ||
+                    options.audio_channels > 32) {
+                    throw std::runtime_error(
+                        "audio channels must be between 1 and 32");
                 }
             } else if (option == "-q" || option == "--sense") {
                 options.audio_sensitivity =
@@ -573,16 +719,18 @@ namespace acmxvk {
                 options.audio_warm_rate =
                     parseNumber(optionValue(index, argc, argv, option), option);
                 options.audio_warm_rate_specified = true;
-                if (options.audio_warm_rate < 0.0) {
+                if (options.audio_warm_rate < 0.0 ||
+                    options.audio_warm_rate > 1000.0) {
                     throw std::runtime_error(
-                        "audio warmup rate must be non-negative");
+                        "audio warmup rate must be between 0 and 1000");
                 }
             } else if (option == "--audio-input") {
                 const std::string value = optionValue(index, argc, argv, option);
                 options.audio_input_specified = true;
                 options.audio_input_device =
                     value == "default" ? -1 : parseInteger(value, option);
-                if (options.audio_input_device < -1) {
+                if (options.audio_input_device < -1 ||
+                    options.audio_input_device > 65535) {
                     throw std::runtime_error(
                         "audio input must be default or a non-negative device index");
                 }
@@ -597,7 +745,8 @@ namespace acmxvk {
                 options.audio_output_specified = true;
                 options.audio_output_device =
                     value == "default" ? -1 : parseInteger(value, option);
-                if (options.audio_output_device < -1) {
+                if (options.audio_output_device < -1 ||
+                    options.audio_output_device > 65535) {
                     throw std::runtime_error(
                         "audio output must be default or a non-negative device index");
                 }
@@ -629,8 +778,12 @@ namespace acmxvk {
                 options.audio_trunc = true;
             } else if (option == "--enable-audio-buffers" ||
                        option == "--audio-buffers") {
-                options.audio_buffers = std::max(
-                    parseInteger(optionValue(index, argc, argv, option), option), 0);
+                options.audio_buffers = parseInteger(
+                    optionValue(index, argc, argv, option), option);
+                if (options.audio_buffers < 0 || options.audio_buffers > 64) {
+                    throw std::runtime_error(
+                        "audio history buffers must be between 0 and 64");
+                }
             } else if (option == "--list-devices") {
                 options.list_audio_devices = true;
             } else if (option == "--check-audio") {
@@ -639,9 +792,9 @@ namespace acmxvk {
                 options.midi_device =
                     parseInteger(optionValue(index, argc, argv, option), option);
                 options.midi_device_specified = true;
-                if (options.midi_device < 0) {
+                if (options.midi_device < 0 || options.midi_device > 65535) {
                     throw std::runtime_error(
-                        "MIDI device index must be non-negative");
+                        "MIDI device index must be between 0 and 65535");
                 }
             } else if (option == "--midi-monitor") {
                 options.midi_monitor = true;
@@ -650,6 +803,11 @@ namespace acmxvk {
             } else if (option == "--midi-cc") {
                 options.midi_cc_mappings.push_back(
                     optionValue(index, argc, argv, option));
+                if (options.midi_cc_mappings.size() >
+                    mxvk::VK_Sprite::MAX_CUSTOM_UNIFORMS) {
+                    throw std::runtime_error(
+                        "too many --midi-cc mappings were supplied");
+                }
             } else if (option == "--list-midi") {
                 options.list_midi_devices = true;
             } else if (option == "--check-midi") {
@@ -657,6 +815,14 @@ namespace acmxvk {
             } else if (option == "--gpu-filter") {
                 options.gpu_filter_indices = parseIntegerList(
                     optionValue(index, argc, argv, option), option);
+                if (options.gpu_filter_indices.size() > 256U ||
+                    std::any_of(options.gpu_filter_indices.begin(),
+                                options.gpu_filter_indices.end(), [](int value) {
+                                    return value < 0 || value > 65535;
+                                })) {
+                    throw std::runtime_error(
+                        "GPU filter list is outside the supported range");
+                }
             } else if (option == "--gpu-buffer") {
                 options.gpu_frame_buffer_size =
                     parseInteger(optionValue(index, argc, argv, option), option);
@@ -670,9 +836,9 @@ namespace acmxvk {
                 options.cuda_device =
                     parseInteger(optionValue(index, argc, argv, option), option);
                 options.cuda_device_specified = true;
-                if (options.cuda_device < 0) {
+                if (options.cuda_device < 0 || options.cuda_device > 1024) {
                     throw std::runtime_error(
-                        "CUDA device index must be non-negative");
+                        "CUDA device index must be between 0 and 1024");
                 }
             } else if (option == "--list-filters") {
                 options.list_gpu_filters = true;
@@ -682,14 +848,17 @@ namespace acmxvk {
                 options.check_cuda = true;
             } else if (option == "--duration") {
                 options.duration = parseNumber(optionValue(index, argc, argv, option), option);
-                if (options.duration <= 0.0) {
-                    throw std::runtime_error("duration must be positive");
+                if (options.duration <= 0.0 || options.duration > 604800.0) {
+                    throw std::runtime_error(
+                        "duration must be between 0 and 604800 seconds");
                 }
             } else if (option == "--max-size") {
                 options.max_size_mb =
                     parseNumber(optionValue(index, argc, argv, option), option);
-                if (options.max_size_mb <= 0.0) {
-                    throw std::runtime_error("maximum output size must be positive");
+                if (options.max_size_mb <= 0.0 ||
+                    options.max_size_mb > 1048576.0) {
+                    throw std::runtime_error(
+                        "maximum output size must be between 0 and 1048576 MB");
                 }
             } else if (option == "--png") {
                 options.png_output = true;
@@ -750,8 +919,9 @@ namespace acmxvk {
             } else if (option == "--cache-delay") {
                 options.cache_delay =
                     parseInteger(optionValue(index, argc, argv, option), option);
-                if (options.cache_delay < 0) {
-                    throw std::runtime_error("--cache-delay must be zero or greater");
+                if (options.cache_delay < 0 || options.cache_delay > 1000000) {
+                    throw std::runtime_error(
+                        "--cache-delay must be between 0 and 1000000");
                 }
             } else if (option == "--texture-cache-size") {
                 options.texture_cache_size =
@@ -770,6 +940,7 @@ namespace acmxvk {
             }
         }
 
+        validateOptionStrings(options);
         applyResourceDefaults(options);
 
         if (!options.input_file.empty() && !options.graphic_file.empty()) {
@@ -894,7 +1065,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7Q)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7R)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1080,16 +1251,16 @@ namespace acmxvk {
     };
 
     [[nodiscard]] bool isValidCustomUniformName(const std::string &name) {
-        constexpr std::size_t MAX_CUSTOM_UNIFORM_NAME_LENGTH = 64;
-        if (name.empty() || name.size() >= MAX_CUSTOM_UNIFORM_NAME_LENGTH ||
-            name.starts_with("gl_") ||
-            !(std::isalpha(static_cast<unsigned char>(name.front())) ||
-              name.front() == '_')) {
+        if (name.starts_with("gl_")) {
             return false;
         }
-        return std::all_of(name.begin() + 1, name.end(), [](unsigned char character) {
-            return std::isalnum(character) != 0 || character == '_';
-        });
+        try {
+            input::validate_string(name, input::StringKind::Identifier,
+                                   "custom uniform name");
+            return true;
+        } catch (const std::runtime_error &) {
+            return false;
+        }
     }
 
     [[nodiscard]] ShaderManifest loadShaderManifest(const fs::path &directory) {
@@ -1098,6 +1269,7 @@ namespace acmxvk {
         const fs::path text_path = directory / "index.txt";
         if (fs::is_regular_file(json_path)) {
             manifest.path = json_path;
+            input::validate_text_file(json_path, "shader library.json");
             try {
                 cv::FileStorage storage(json_path.string(),
                                         cv::FileStorage::READ |
@@ -1113,6 +1285,12 @@ namespace acmxvk {
                                              " must contain a 'shaders' array");
                 }
                 for (const cv::FileNode &entry : shader_entries) {
+                    if (manifest.entries.size() >=
+                        input::MAX_SHADER_ENTRIES) {
+                        throw std::runtime_error(
+                            json_path.string() +
+                            " contains too many shader entries");
+                    }
                     std::string filename;
                     if (entry.isString()) {
                         entry >> filename;
@@ -1129,6 +1307,9 @@ namespace acmxvk {
                             json_path.string() +
                             " contains a shader entry without a file name");
                     }
+                    input::validate_string(
+                        filename, input::StringKind::Path,
+                        json_path.string() + " shader file");
                     manifest.entries.push_back(std::move(filename));
                 }
 
@@ -1178,7 +1359,15 @@ namespace acmxvk {
                             !std::isfinite(uniform.step) ||
                             !std::isfinite(uniform.value) ||
                             uniform.maximum <= uniform.minimum ||
-                            uniform.step <= 0.0) {
+                            uniform.step <= 0.0 ||
+                            std::abs(uniform.minimum) >
+                                std::numeric_limits<float>::max() ||
+                            std::abs(uniform.maximum) >
+                                std::numeric_limits<float>::max() ||
+                            std::abs(uniform.step) >
+                                std::numeric_limits<float>::max() ||
+                            std::abs(uniform.value) >
+                                std::numeric_limits<float>::max()) {
                             throw std::runtime_error(
                                 json_path.string() +
                                 " contains an invalid range for custom uniform: " +
@@ -1201,15 +1390,27 @@ namespace acmxvk {
                                      directory.string());
         }
         manifest.path = text_path;
-        std::ifstream input(text_path);
-        if (!input) {
+        input::validate_file_size(text_path, "shader index.txt");
+        std::ifstream manifest_input(text_path);
+        if (!manifest_input) {
             throw std::runtime_error("unable to open shader manifest: " +
                                      text_path.string());
         }
         std::string line;
-        while (std::getline(input, line)) {
+        std::size_t line_number = 1;
+        while (input::read_bounded_line(manifest_input, line,
+                                        "shader index.txt", line_number++)) {
             line = trim(std::move(line));
             if (!line.empty() && line.front() != '#') {
+                if (manifest.entries.size() >=
+                    input::MAX_SHADER_ENTRIES) {
+                    throw std::runtime_error(
+                        text_path.string() +
+                        " contains too many shader entries");
+                }
+                input::validate_string(
+                    line, input::StringKind::Path,
+                    text_path.string() + " shader file");
                 manifest.entries.push_back(std::move(line));
             }
         }
@@ -1251,9 +1452,20 @@ namespace acmxvk {
     }
 
     [[nodiscard]] cv::Mat loadRgbaImage(const std::string &filename) {
+        constexpr std::uintmax_t MAX_IMAGE_FILE_BYTES =
+            512U * 1024U * 1024U;
+        constexpr std::int64_t MAX_IMAGE_PIXELS = 67108864;
+        input::validate_file_size(filename, "graphic input",
+                                  MAX_IMAGE_FILE_BYTES);
         const cv::Mat source = cv::imread(filename, cv::IMREAD_UNCHANGED);
         if (source.empty()) {
             throw std::runtime_error("unable to load image: " + filename);
+        }
+        if (source.cols <= 0 || source.rows <= 0 ||
+            static_cast<std::int64_t>(source.cols) * source.rows >
+                MAX_IMAGE_PIXELS) {
+            throw std::runtime_error(
+                "graphic input dimensions exceed the supported limit");
         }
 
         cv::Mat rgba;
@@ -2518,6 +2730,7 @@ namespace acmxvk {
                     throw std::runtime_error("fragment shader is not a readable .spv file: " +
                                              fragment.string());
                 }
+                input::validate_spirv_file(fragment, "fragment shader");
                 shaders.push_back(fragment);
                 return;
             }
@@ -2536,6 +2749,8 @@ namespace acmxvk {
                 const fs::path shader =
                     resolveShaderManifestEntry(shader_library_directory, entry);
                 if (!shader.empty()) {
+                    input::validate_spirv_file(shader,
+                                               "shader manifest entry");
                     shaders.push_back(shader);
                 }
             }
@@ -2676,24 +2891,49 @@ namespace acmxvk {
                 return;
             }
 
-            std::ifstream input(options.playlist_file);
-            if (!input) {
+            input::validate_file_size(options.playlist_file,
+                                      "shader playlist");
+            std::ifstream playlist_input(options.playlist_file);
+            if (!playlist_input) {
                 throw std::runtime_error("unable to open playlist: " + options.playlist_file);
             }
 
             PlaylistNode *current_node = nullptr;
             std::vector<fs::path> default_entries;
             std::string line;
-            while (std::getline(input, line)) {
+            std::size_t line_number = 1;
+            std::size_t entry_count = 0;
+            while (input::read_bounded_line(
+                playlist_input, line, "shader playlist", line_number++)) {
                 line = trim(std::move(line));
                 if (line.empty() || line.front() == '#') {
                     continue;
                 }
                 if (line.size() >= 2 && line.front() == '[' && line.back() == ']') {
-                    playlist.push_back({line.substr(1, line.size() - 2), {}});
+                    if (playlist.size() >= input::MAX_PLAYLIST_NODES) {
+                        throw std::runtime_error(
+                            "shader playlist contains too many nodes");
+                    }
+                    std::string node_name =
+                        trim(line.substr(1, line.size() - 2));
+                    input::validate_string(node_name,
+                                           input::StringKind::DisplayText,
+                                           "shader playlist node");
+                    playlist.push_back({std::move(node_name), {}});
                     current_node = &playlist.back();
                     continue;
                 }
+                if (line.front() == '[' || line.back() == ']') {
+                    throw std::runtime_error(
+                        "malformed shader playlist node at line " +
+                        std::to_string(line_number - 1));
+                }
+                if (++entry_count > input::MAX_PLAYLIST_ENTRIES) {
+                    throw std::runtime_error(
+                        "shader playlist contains too many entries");
+                }
+                input::validate_string(line, input::StringKind::Path,
+                                       "shader playlist entry");
 
                 const fs::path shader = findShader(line);
                 if (shader.empty()) {
@@ -2820,11 +3060,7 @@ namespace acmxvk {
 
         [[nodiscard]] static std::string clipOverlayText(std::string text) {
             constexpr std::size_t MAX_OVERLAY_CHARACTERS = 120;
-            if (text.size() > MAX_OVERLAY_CHARACTERS) {
-                text.resize(MAX_OVERLAY_CHARACTERS - 3U);
-                text += "...";
-            }
-            return text;
+            return input::truncate_utf8(text, MAX_OVERLAY_CHARACTERS);
         }
 
         [[nodiscard]] std::string activePassDescription() const {

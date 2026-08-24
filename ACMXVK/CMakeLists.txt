@@ -11,6 +11,7 @@ endif()
 project(ACMXVK VERSION 0.1.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
+include(CTest)
 
 option(VALIDATION "Enable Vulkan validation layers" OFF)
 option(AUDIO "Enable RtAudio input and audio-reactive shader metrics" OFF)
@@ -326,7 +327,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_AUDIO_HISTORY_SHADER}"
 )
 
-add_executable(acmxvk acmx.cpp)
+add_executable(acmxvk acmx.cpp input_validation.cpp input_validation.hpp)
 add_dependencies(acmxvk acmxvk_shaders)
 target_include_directories(acmxvk PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(acmxvk PRIVATE mxvk::mxvk MXWrite::mxwrite ${OpenCV_LIBS})
@@ -386,6 +387,20 @@ target_compile_definitions(acmxvk PRIVATE
     ACMXVK_BUILD_OVERLAY_FONT="${ACMXVK_BUILD_OVERLAY_FONT}"
     ACMXVK_INSTALL_OVERLAY_FONT="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/data/font.ttf"
 )
+
+if(BUILD_TESTING)
+    add_executable(acmxvk_input_validation_tests
+        input_validation_tests.cpp
+        input_validation.cpp
+        input_validation.hpp
+    )
+    target_compile_options(acmxvk_input_validation_tests PRIVATE
+        -Wall -Wextra -Wpedantic
+    )
+    add_test(NAME acmxvk_input_validation
+        COMMAND acmxvk_input_validation_tests
+    )
+endif()
 
 install(TARGETS acmxvk RUNTIME DESTINATION bin)
 install(FILES

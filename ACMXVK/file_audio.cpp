@@ -1,6 +1,7 @@
 #include "file_audio.hpp"
 
 #include "audio.hpp"
+#include "input_validation.hpp"
 
 #include <rtaudio/RtAudio.h>
 
@@ -141,8 +142,9 @@ namespace acmxvk::audio {
 
         [[nodiscard]] std::vector<std::string>
         readM3uPlaylist(const std::filesystem::path &playlist) {
-            std::ifstream input(playlist);
-            if (!input) {
+            input::validate_file_size(playlist, "M3U playlist");
+            std::ifstream playlist_input(playlist);
+            if (!playlist_input) {
                 std::cerr << "acmxvk: could not open M3U playlist: "
                           << playlist.string() << '\n';
                 return {};
@@ -150,23 +152,26 @@ namespace acmxvk::audio {
 
             std::vector<std::string> paths;
             std::string line;
-            bool first_line = true;
-            while (std::getline(input, line)) {
-                if (first_line && line.size() >= 3 &&
-                    static_cast<unsigned char>(line[0]) == 0xef &&
-                    static_cast<unsigned char>(line[1]) == 0xbb &&
-                    static_cast<unsigned char>(line[2]) == 0xbf) {
-                    line.erase(0, 3);
-                }
-                first_line = false;
+            std::size_t line_number = 1;
+            while (input::read_bounded_line(playlist_input, line,
+                                            "M3U playlist", line_number++)) {
                 line = trimPlaylistLine(std::move(line));
                 if (line.empty() || line.front() == '#') {
                     continue;
                 }
+                if (paths.size() >= input::MAX_AUDIO_PLAYLIST_ENTRIES) {
+                    throw std::runtime_error(
+                        "M3U playlist contains too many entries");
+                }
                 if (isUrl(line)) {
+                    input::validate_string(line, input::StringKind::Url,
+                                           "M3U URL");
                     paths.push_back(std::move(line));
                     continue;
                 }
+
+                input::validate_string(line, input::StringKind::Path,
+                                       "M3U path");
 
                 std::filesystem::path track(line);
                 if (!track.is_absolute()) {
@@ -215,6 +220,9 @@ namespace acmxvk::audio {
                         return false;
                     }
                     const RtAudio::DeviceInfo info = stream.getDeviceInfo(device);
+                    input::validate_string(info.name,
+                                           input::StringKind::DisplayText,
+                                           "audio output device name");
                     if (info.outputChannels == 0) {
                         std::cerr << "acmxvk: audio device " << device
                                   << " has no output channels\n";
@@ -443,6 +451,8 @@ namespace acmxvk::audio {
 
         bool open(const std::string &requested_path) {
             close();
+            input::validate_string(requested_path, input::StringKind::Path,
+                                   "audio file path");
             const std::filesystem::path source =
                 std::filesystem::absolute(requested_path).lexically_normal();
             if (!std::filesystem::is_regular_file(source)) {
@@ -493,6 +503,11 @@ namespace acmxvk::audio {
         }
 
         bool decode_track(const std::string &requested_path) {
+            input::validate_string(
+                requested_path,
+                isUrl(requested_path) ? input::StringKind::Url
+                                      : input::StringKind::Path,
+                "audio track");
             const std::string source =
                 isUrl(requested_path)
                     ? requested_path

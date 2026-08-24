@@ -1,5 +1,7 @@
 #include "audio.hpp"
 
+#include "input_validation.hpp"
+
 #include <rtaudio/RtAudio.h>
 
 #include <algorithm>
@@ -126,6 +128,9 @@ namespace acmxvk::audio {
 
                 const RtAudio::DeviceInfo input_info =
                     stream.getDeviceInfo(input_device);
+                input::validate_string(input_info.name,
+                                       input::StringKind::DisplayText,
+                                       "audio input device name");
                 if (input_info.inputChannels == 0) {
                     std::cerr << "acmxvk: audio device " << input_device
                               << " has no input channels\n";
@@ -179,6 +184,9 @@ namespace acmxvk::audio {
                     } else {
                         const RtAudio::DeviceInfo output_info =
                             stream.getDeviceInfo(output_device);
+                        input::validate_string(output_info.name,
+                                               input::StringKind::DisplayText,
+                                               "audio output device name");
                         if (output_info.outputChannels == 0) {
                             std::cerr << "acmxvk: audio device " << output_device
                                       << " has no output channels; live "
@@ -676,6 +684,9 @@ namespace acmxvk::audio {
                       << " audio device(s)\n";
             for (const unsigned int id : device_ids) {
                 const RtAudio::DeviceInfo info = stream.getDeviceInfo(id);
+                input::validate_string(info.name,
+                                       input::StringKind::DisplayText,
+                                       "audio device name");
                 std::cout << "  Device " << id << ": " << info.name;
                 if (info.isDefaultInput) {
                     std::cout << " [DEFAULT INPUT]";
