@@ -669,7 +669,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7F)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7G)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -754,6 +754,7 @@ namespace acmxvk {
                << "      --list-cuda-devices     List CUDA devices and exit\n"
                << "      --check-cuda            Report compiled CUDA-filter support\n"
                << "                              Left/Right selects the active filter\n"
+               << "                              NVDEC remains resident without a filter\n"
                << "                              Video/camera RGBA and rotation stay on GPU\n\n"
                << "Window:\n"
                << "  -r, --resolution <WxH>      Window resolution\n"
@@ -1355,8 +1356,10 @@ namespace acmxvk {
         cv::cuda::GpuMat cuda_input_rgba;
         cv::cuda::GpuMat cuda_rotated_rgba;
         cv::cuda::GpuMat cuda_rotation_transpose;
+        cv::Mat cuda_input_fallback_rgba;
         cv::Mat cuda_history_fallback_rgba;
         bool cuda_input_path_logged = false;
+        bool cuda_input_fallback_logged = false;
         bool cuda_history_fallback_logged = false;
 #endif
 #ifdef MIDI_ENABLED
@@ -2826,7 +2829,7 @@ namespace acmxvk {
         void updateHistoryFrame(const cv::Mat &rgba) {
 #ifdef ACMXVK_WITH_CUDA
             if (gpu_filter_engine != nullptr) {
-                updateCudaHistoryFrame();
+                updateFilteredCudaHistoryFrame();
                 return;
             }
 #endif
@@ -2836,17 +2839,14 @@ namespace acmxvk {
         }
 
 #ifdef ACMXVK_WITH_CUDA
-        void updateCudaHistoryFrame() {
-            if (frame_sprite->updateHistoryTextureCuda(
-                    gpu_filter_engine->output(),
-                    gpu_filter_engine->stream())) {
+        void updateCudaHistoryFrame(const cv::cuda::GpuMat &rgba,
+                                    cv::cuda::Stream &source_stream) {
+            if (frame_sprite->updateHistoryTextureCuda(rgba, source_stream)) {
                 return;
             }
 
-            gpu_filter_engine->output().download(
-                cuda_history_fallback_rgba,
-                gpu_filter_engine->stream());
-            gpu_filter_engine->stream().waitForCompletion();
+            rgba.download(cuda_history_fallback_rgba, source_stream);
+            source_stream.waitForCompletion();
             if (!cuda_history_fallback_logged) {
                 std::cerr << "acmxvk: direct CUDA history upload unavailable; "
                              "using a host-staging fallback\n";
@@ -2859,19 +2859,27 @@ namespace acmxvk {
                 static_cast<int>(cuda_history_fallback_rgba.step));
         }
 
-        void initializeCudaHistory() {
+        void updateFilteredCudaHistoryFrame() {
+            updateCudaHistoryFrame(gpu_filter_engine->output(),
+                                   gpu_filter_engine->stream());
+        }
+
+        void initializeCudaHistory(const cv::cuda::GpuMat &rgba,
+                                   cv::cuda::Stream &source_stream,
+                                   bool filtered) {
             if (!options.enable_texture_cache || history_initialized) {
                 return;
             }
             for (uint32_t layer = 0;
                  layer < frame_sprite->getHistoryLayerCount(); ++layer) {
-                updateCudaHistoryFrame();
+                updateCudaHistoryFrame(rgba, source_stream);
             }
             history_initialized = true;
             history_delay_counter = 0;
             std::cout << "acmxvk: initialized "
                       << frame_sprite->getHistoryLayerCount()
-                      << " filtered Vulkan history-cache layers (delay "
+                      << (filtered ? " filtered" : " NVDEC")
+                      << " Vulkan history-cache layers (delay "
                       << options.cache_delay << ")\n";
         }
 
@@ -2976,14 +2984,64 @@ namespace acmxvk {
                     cuda_input_path_logged = true;
                 }
                 const bool history_was_initialized = history_initialized;
-                initializeCudaHistory();
+                initializeCudaHistory(gpu_filter_engine->output(),
+                                      gpu_filter_engine->stream(), true);
                 if (history_was_initialized &&
                     ++history_delay_counter > options.cache_delay) {
-                    updateCudaHistoryFrame();
+                    updateFilteredCudaHistoryFrame();
                     history_delay_counter = 0;
                 }
                 return true;
             }
+#if defined(MXVK_WITH_FFMPEG_CAPTURE)
+            if (using_ffmpeg_capture &&
+                ffmpeg_capture.using_hardware_decode()) {
+                if (!ffmpeg_capture.readGpuRgba(cuda_input_rgba,
+                                                ffmpeg_cuda_stream, false)) {
+                    return false;
+                }
+                const cv::cuda::GpuMat &render_input =
+                    rotateCudaFrame(cuda_input_rgba, ffmpeg_cuda_stream);
+                if (!frame_sprite->updateTextureCuda(render_input,
+                                                     ffmpeg_cuda_stream)) {
+                    render_input.download(cuda_input_fallback_rgba,
+                                          ffmpeg_cuda_stream);
+                    ffmpeg_cuda_stream.waitForCompletion();
+                    if (!cuda_input_fallback_logged) {
+                        std::cerr
+                            << "acmxvk: direct NVDEC/Vulkan upload unavailable; "
+                               "using host staging\n";
+                        cuda_input_fallback_logged = true;
+                    }
+                    frame_sprite->updateTexture(
+                        cuda_input_fallback_rgba.ptr(),
+                        cuda_input_fallback_rgba.cols,
+                        cuda_input_fallback_rgba.rows,
+                        static_cast<int>(cuda_input_fallback_rgba.step));
+                }
+                if (!cuda_input_path_logged) {
+                    std::cout << "acmxvk: CUDA input path active: FFmpeg "
+                                 "NVDEC -> CUDA RGBA -> ";
+                    if (options.frame_rotation != FrameRotation::None) {
+                        std::cout << "CUDA rotation -> ";
+                    }
+                    std::cout << "Vulkan texture";
+                    if (cuda_input_fallback_logged) {
+                        std::cout << " (host-staging fallback)";
+                    }
+                    std::cout << '\n';
+                    cuda_input_path_logged = true;
+                }
+                const bool history_was_initialized = history_initialized;
+                initializeCudaHistory(render_input, ffmpeg_cuda_stream, false);
+                if (history_was_initialized &&
+                    ++history_delay_counter > options.cache_delay) {
+                    updateCudaHistoryFrame(render_input, ffmpeg_cuda_stream);
+                    history_delay_counter = 0;
+                }
+                return true;
+            }
+#endif
 #endif
 
             bool requires_host_frame = options.enable_texture_cache ||
