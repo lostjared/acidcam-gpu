@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7O**. It is usable for video, camera, and
+The port is currently at **Increment 7P**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -14,6 +14,7 @@ ACMX2.
 | Area | Status | Notes |
 | --- | --- | --- |
 | Standalone CMake project | Complete | Builds against installed MXVK and MXWrite and provides an `uninstall` target. |
+| Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
 | Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. Camera devices and still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment shaders compiled to `.spv`. |
@@ -96,7 +97,54 @@ and reinstalled before rebuilding ACMXVK; acidcam-gpu remains unchanged.
 Increment 7K changes MXVK's internal NVDEC surface synchronization, so MXVK
 must be rebuilt and reinstalled once more; acidcam-gpu remains unchanged.
 Increment 7L changes only ACMXVK and does not require either dependency to be
-rebuilt or reinstalled. Increments 7M and 7N also change only ACMXVK.
+rebuilt or reinstalled. Increments 7M through 7P also change only ACMXVK.
+
+### Runtime resource paths
+
+`-p/--path` accepts an ACMXVK resource root with this layout:
+
+```text
+resource-root/
+├── data/font.ttf
+├── shaders/library.json
+├── shaders/*.spv
+├── playlists/*.txt
+└── midi-examples/*.midi_cfg
+```
+
+When neither `--shaders` nor `--fragment` is supplied, ACMXVK automatically
+uses `shaders/library.json` (or `index.txt`) from the selected resource root.
+Relative playlist and MIDI-map names are also searched beneath their matching
+resource subdirectories. Media input and output arguments remain relative to
+the current working directory.
+
+Resource precedence is:
+
+1. Explicit `-p/--path`.
+2. `ACMXVK_PATH`.
+3. `ACMX2_PATH` as a compatibility fallback for shared data such as fonts.
+4. Installed, build-tree, and current-working-directory resources.
+
+Explicit `--shaders` or `--fragment` always wins. Otherwise,
+`ACMXVK_SHADER_PATH` can name a SPIR-V library directory or its `library.json`
+or `index.txt` file. `ACMX2_SHADER_PATH` is intentionally not consumed because
+ACMX2 libraries contain OpenGL GLSL rather than MXVK SPIR-V.
+
+For example:
+
+```bash
+./build/acmxvk/acmxvk \
+    --path ./build/acmxvk \
+    --graphic image.png \
+    --shader-file midi_slider.frag.spv
+```
+
+The equivalent environment setup is:
+
+```bash
+export ACMXVK_PATH=/usr/local/share/acmxvk
+export ACMXVK_SHADER_PATH=/path/to/spv-library
+```
 
 ### Apple Silicon and MoltenVK
 
@@ -175,9 +223,9 @@ to toggle only the watermark while the filter information remains visible:
     --use-watermark-color 255,255,0
 ```
 
-The overlay font defaults to `ACMX2/data/font.ttf`, is installed with ACMXVK,
-and can be replaced at configure time with
-`-DACMXVK_OVERLAY_FONT=/path/to/font.ttf`.
+The source overlay font defaults to `ACMX2/data/font.ttf`, is copied into the
+build resource tree, and is installed with ACMXVK. It can be replaced at
+configure time with `-DACMXVK_OVERLAY_FONT=/path/to/font.ttf`.
 
 Preview the included shader with live audio reactivity:
 
@@ -731,6 +779,13 @@ MXVK compositing pass draws both overlays after the shader effect chain, keeping
 the text crisp and unmodified while preserving it in one-shot PNG snapshots,
 PNG sequences, periodic captures, and MXWrite video output.
 
+Increment 7P ports ACMX2's runtime asset-root workflow. `-p/--path`,
+`ACMXVK_PATH`, and the compatible `ACMX2_PATH` fallback now feed one ordered
+resource resolver for fonts, internal shaders, default shader libraries,
+playlists, and MIDI examples. `ACMXVK_SHADER_PATH` provides a SPIR-V-specific
+shader default without accidentally consuming ACMX2's OpenGL shader tree.
+CMake mirrors the installed `data/` and `shaders/` layout in the build tree.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -796,7 +851,9 @@ watermark-off 1920x1080 processed snapshots, then inspected a 640x360 H.264
 MXWrite output frame with both labels present. A second CUDA-filter encode
 confirmed the `SquareBlockResize [3]` label from the live acidcam-gpu filter
 state. All runs completed under Vulkan validation without project validation
-errors.
+errors. Increment 7P loaded its font, sprite shader, manifest, and selected
+effect exclusively from an isolated `--path` tree, encoded the result, then
+repeated default discovery through `ACMXVK_PATH`.
 
 ## Development note
 

@@ -89,6 +89,14 @@
 #define ACMXVK_INSTALL_OVERLAY_FONT "font.ttf"
 #endif
 
+#ifndef ACMXVK_BUILD_RESOURCE_DIRECTORY
+#define ACMXVK_BUILD_RESOURCE_DIRECTORY "."
+#endif
+
+#ifndef ACMXVK_INSTALL_RESOURCE_DIRECTORY
+#define ACMXVK_INSTALL_RESOURCE_DIRECTORY "."
+#endif
+
 namespace acmxvk {
     namespace fs = std::filesystem;
 
@@ -183,9 +191,56 @@ namespace acmxvk {
         std::string record_audio_file;
         std::string midi_map_file;
         std::string snapshot_directory = ".";
+        std::string resource_directory;
         std::string watermark_text;
         std::array<std::uint8_t, 3> watermark_color{255U, 0U, 150U};
     };
+
+    [[nodiscard]] std::vector<fs::path>
+    resourceDirectories(const Options &options) {
+        std::vector<fs::path> directories;
+        const auto append = [&](const fs::path &directory) {
+            if (directory.empty()) {
+                return;
+            }
+            const fs::path normalized = fs::absolute(directory).lexically_normal();
+            if (std::find(directories.begin(), directories.end(), normalized) ==
+                directories.end()) {
+                directories.push_back(normalized);
+            }
+        };
+        append(options.resource_directory);
+        append(ACMXVK_INSTALL_RESOURCE_DIRECTORY);
+        append(ACMXVK_BUILD_RESOURCE_DIRECTORY);
+        append(fs::current_path());
+        return directories;
+    }
+
+    [[nodiscard]] fs::path findResource(const Options &options,
+                                        const fs::path &relative_path) {
+        if (relative_path.empty() || relative_path.is_absolute()) {
+            return {};
+        }
+        const fs::path normalized_relative = relative_path.lexically_normal();
+        const std::string relative_text = normalized_relative.generic_string();
+        if (relative_text == ".." || relative_text.starts_with("../") ||
+            relative_text.find("/../") != std::string::npos) {
+            return {};
+        }
+        for (const fs::path &directory : resourceDirectories(options)) {
+            const fs::path candidate =
+                (directory / normalized_relative).lexically_normal();
+            if (fs::is_regular_file(candidate)) {
+                return candidate;
+            }
+        }
+        return {};
+    }
+
+    [[nodiscard]] bool hasShaderManifest(const fs::path &directory) {
+        return fs::is_regular_file(directory / "library.json") ||
+               fs::is_regular_file(directory / "index.txt");
+    }
 
     [[nodiscard]] std::string optionValue(int &index, int argc, char **argv,
                                           std::string_view option) {
@@ -304,6 +359,88 @@ namespace acmxvk {
             "--rotate requires clockwise, 180, or counterclockwise");
     }
 
+    [[nodiscard]] bool isUtilityRequest(const Options &options) {
+        return options.show_help || options.list_audio_devices ||
+               options.check_audio || options.list_midi_devices ||
+               options.check_midi || options.list_gpu_filters ||
+               options.list_cuda_devices || options.check_cuda ||
+               options.list_encoders || !options.list_encoder_options.empty();
+    }
+
+    void applyResourceDefaults(Options &options) {
+        if (isUtilityRequest(options)) {
+            return;
+        }
+
+        std::string resource_source;
+        if (!options.resource_directory.empty()) {
+            resource_source = "--path";
+        } else if (const char *environment = std::getenv("ACMXVK_PATH");
+                   environment != nullptr && environment[0] != '\0') {
+            options.resource_directory = environment;
+            resource_source = "ACMXVK_PATH";
+        } else if (const char *environment = std::getenv("ACMX2_PATH");
+                   environment != nullptr && environment[0] != '\0') {
+            const fs::path compatibility_directory =
+                fs::absolute(environment).lexically_normal();
+            if (fs::is_directory(compatibility_directory)) {
+                options.resource_directory = compatibility_directory.string();
+                resource_source = "ACMX2_PATH compatibility fallback";
+            } else {
+                std::cerr << "acmxvk: ignoring unavailable ACMX2_PATH: "
+                          << compatibility_directory.string() << '\n';
+            }
+        }
+
+        if (!options.resource_directory.empty()) {
+            const fs::path directory =
+                fs::absolute(options.resource_directory).lexically_normal();
+            if (!fs::is_directory(directory)) {
+                throw std::runtime_error(resource_source +
+                                         " is not a readable resource directory: " +
+                                         directory.string());
+            }
+            options.resource_directory = directory.string();
+            std::cout << "acmxvk: resource path (" << resource_source
+                      << "): " << options.resource_directory << '\n';
+        }
+
+        if (!options.shader_directory.empty() ||
+            !options.fragment_shader.empty()) {
+            return;
+        }
+
+        if (const char *environment = std::getenv("ACMXVK_SHADER_PATH");
+            environment != nullptr && environment[0] != '\0') {
+            fs::path directory = fs::absolute(environment).lexically_normal();
+            if (fs::is_regular_file(directory) &&
+                (directory.filename() == "library.json" ||
+                 directory.filename() == "index.txt")) {
+                directory = directory.parent_path();
+            }
+            if (!fs::is_directory(directory) || !hasShaderManifest(directory)) {
+                throw std::runtime_error(
+                    "ACMXVK_SHADER_PATH does not contain library.json or index.txt: " +
+                    directory.string());
+            }
+            options.shader_directory = directory.string();
+            std::cout << "acmxvk: shader library (ACMXVK_SHADER_PATH): "
+                      << options.shader_directory << '\n';
+            return;
+        }
+
+        for (const fs::path &resource_directory :
+             resourceDirectories(options)) {
+            const fs::path shader_directory = resource_directory / "shaders";
+            if (hasShaderManifest(shader_directory)) {
+                options.shader_directory = shader_directory.string();
+                std::cout << "acmxvk: shader library (resource path): "
+                          << options.shader_directory << '\n';
+                return;
+            }
+        }
+    }
+
     [[nodiscard]] Options parseOptions(int argc, char **argv) {
         Options options;
         if (argc == 1) {
@@ -316,6 +453,13 @@ namespace acmxvk {
             if (option == "-h" || option == "-v" || option == "--help" ||
                 option == "--version") {
                 options.show_help = true;
+            } else if (option == "-p" || option == "--path") {
+                options.resource_directory =
+                    optionValue(index, argc, argv, option);
+                if (options.resource_directory.empty()) {
+                    throw std::runtime_error(
+                        "resource path must not be empty");
+                }
             } else if (option == "-i" || option == "--input") {
                 options.input_file = optionValue(index, argc, argv, option);
             } else if (option == "-g" || option == "--graphic") {
@@ -626,6 +770,8 @@ namespace acmxvk {
             }
         }
 
+        applyResourceDefaults(options);
+
         if (!options.input_file.empty() && !options.graphic_file.empty()) {
             throw std::runtime_error("--input and --graphic cannot be used together");
         }
@@ -748,11 +894,17 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7O)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7P)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
                << "  acmxvk -d 0 -s shader-directory [options]\n\n"
+               << "Resources:\n"
+               << "  -p, --path <directory>      Assets root containing data/, shaders/,\n"
+               << "                              playlists/, and midi-examples/\n"
+               << "      ACMXVK_PATH             Default resource root when --path is absent\n"
+               << "      ACMXVK_SHADER_PATH      Default SPIR-V library when -s/-f are absent\n"
+               << "                              ACMX2_PATH is accepted as a data fallback\n\n"
                << "Input:\n"
                << "  -i, --input <file>          Read a video file\n"
                << "  -g, --graphic <file>        Read a still image\n"
@@ -1189,6 +1341,7 @@ namespace acmxvk {
               options(std::move(options)) {
             setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
             setEnableScreenshot(this->options.enable_screenshot);
+            resolveConfiguredResourcePaths();
             initializeGpuFilters();
             openAudio();
             loadShaders();
@@ -2476,6 +2629,11 @@ namespace acmxvk {
         }
 
         [[nodiscard]] std::string spriteVertexShader() const {
+            const fs::path resource =
+                findResource(options, "shaders/sprite.vert.spv");
+            if (!resource.empty()) {
+                return resource.string();
+            }
             if (fs::is_regular_file(ACMXVK_INSTALL_SPRITE_VERTEX_SHADER)) {
                 return ACMXVK_INSTALL_SPRITE_VERTEX_SHADER;
             }
@@ -2483,6 +2641,11 @@ namespace acmxvk {
         }
 
         [[nodiscard]] std::string echoCacheShader() const {
+            const fs::path resource =
+                findResource(options, "shaders/echo_cache.frag.spv");
+            if (!resource.empty()) {
+                return resource.string();
+            }
             if (fs::is_regular_file(ACMXVK_INSTALL_ECHO_CACHE_SHADER)) {
                 return ACMXVK_INSTALL_ECHO_CACHE_SHADER;
             }
@@ -2490,6 +2653,11 @@ namespace acmxvk {
         }
 
         [[nodiscard]] fs::path flipShader() const {
+            const fs::path resource =
+                findResource(options, "shaders/flip.frag.spv");
+            if (!resource.empty()) {
+                return resource;
+            }
             if (fs::is_regular_file(ACMXVK_INSTALL_FLIP_SHADER)) {
                 return ACMXVK_INSTALL_FLIP_SHADER;
             }
@@ -2497,10 +2665,37 @@ namespace acmxvk {
         }
 
         [[nodiscard]] fs::path overlayFont() const {
+            const fs::path resource = findResource(options, "data/font.ttf");
+            if (!resource.empty()) {
+                return resource;
+            }
             if (fs::is_regular_file(ACMXVK_INSTALL_OVERLAY_FONT)) {
                 return ACMXVK_INSTALL_OVERLAY_FONT;
             }
             return ACMXVK_BUILD_OVERLAY_FONT;
+        }
+
+        void resolveConfiguredResourcePaths() {
+            const auto resolve = [&](std::string &path,
+                                     const fs::path &resource_subdirectory,
+                                     std::string_view label) {
+                if (path.empty() || fs::is_regular_file(path) ||
+                    fs::path(path).is_absolute()) {
+                    return;
+                }
+                fs::path resolved = findResource(options, fs::path(path));
+                if (resolved.empty()) {
+                    resolved = findResource(
+                        options, resource_subdirectory / fs::path(path));
+                }
+                if (!resolved.empty()) {
+                    path = resolved.string();
+                    std::cout << "acmxvk: " << label << " (resource path): "
+                              << path << '\n';
+                }
+            };
+            resolve(options.playlist_file, "playlists", "playlist");
+            resolve(options.midi_map_file, "midi-examples", "MIDI map");
         }
 
         void initializeOverlayFont() {
