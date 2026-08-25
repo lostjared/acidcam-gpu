@@ -2219,6 +2219,10 @@ namespace acmxvk {
         double camera_delivered_fps = 0.0;
         double camera_last_logged_fps = 0.0;
         double shader_time = 0.0;
+        float legacy_alpha = 0.1F;
+        bool legacy_alpha_increasing = true;
+        std::chrono::steady_clock::time_point compatibility_clock_start =
+            std::chrono::steady_clock::now();
         std::uint64_t output_frame_count = 0;
         std::uint64_t decoded_video_frame_count = 0;
         std::uint64_t video_source_frame_count = 0;
@@ -5202,10 +5206,27 @@ namespace acmxvk {
             if (!std::isfinite(shader_time)) {
                 shader_time = 0.0;
             }
+            if (legacy_alpha_increasing) {
+                legacy_alpha += 0.1F;
+                if (legacy_alpha >= 6.0F) {
+                    legacy_alpha = 6.0F;
+                    legacy_alpha_increasing = false;
+                }
+            } else {
+                legacy_alpha -= 0.1F;
+                if (legacy_alpha <= 1.0F) {
+                    legacy_alpha = 1.0F;
+                    legacy_alpha_increasing = true;
+                }
+            }
             const float elapsed = static_cast<float>(shader_time);
+            const float compatibility_time =
+                std::chrono::duration<float>(now - compatibility_clock_start)
+                    .count();
             frame_sprite->setShaderParams(1.0F, 1.0F, 1.0F, elapsed);
             frame_sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
-            frame_sprite->setUniform0(1.0F, 1.0F, static_cast<float>(width),
+            frame_sprite->setUniform0(legacy_alpha, compatibility_time,
+                                      static_cast<float>(width),
                                       static_cast<float>(height));
             frame_sprite->setUniform1(delta, audio_amplitude, audio_frequency,
                                       frame_rate);
@@ -5220,7 +5241,8 @@ namespace acmxvk {
                 mxvk::VK_Sprite *sprite = post_process_sprites[index];
                 setPostProcessingShaderParams(index, 1.0F, 1.0F, 1.0F, elapsed);
                 sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
-                sprite->setUniform0(1.0F, 1.0F, static_cast<float>(width),
+                sprite->setUniform0(legacy_alpha, compatibility_time,
+                                    static_cast<float>(width),
                                     static_cast<float>(height));
                 sprite->setUniform1(delta, audio_amplitude, audio_frequency,
                                     frame_rate);

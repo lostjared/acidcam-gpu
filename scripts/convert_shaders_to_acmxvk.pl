@@ -69,7 +69,7 @@ die "No fragment or compute shader sources found in $input\n"
   if !@shader_entries;
 
 my %builtin_uniform = map { $_ => 1 } qw(
-  amp amp_high amp_low amp_mid amp_peak amp_rms amp_smooth history_head
+  alpha amp amp_high amp_low amp_mid amp_peak amp_rms amp_smooth history_head
   iFrame iFrameRate iMouse iMouseClick iResolution iSampleRate iTime
   iTimeDelta iamp spectrum_history_head spectrum_history_size time_f uamp
 );
@@ -369,6 +369,7 @@ sub convert_source {
         $source = "#version 450\n" . $source;
     }
 
+    $source =~ s/;[ \t]+(?=uniform\s+)/;\n/g;
     $source =~ s{^\s*#define\s+USE_HISTORY_TEXTURE_ARRAY\s+0\s*$}{#define USE_HISTORY_TEXTURE_ARRAY 1}gm;
 
     if ($stage eq 'frag') {
@@ -436,8 +437,9 @@ sub convert_uniform_declaration {
 sub builtin_alias {
     my ($type, $name) = @_;
     my %float_alias = (
+        alpha     => 'ext.u0.x',
         time_f    => 'ext.u2.y',
-        iTime     => 'ext.u2.y',
+        iTime     => 'ext.u0.y',
         iTimeDelta => 'ext.u1.x',
         amp       => 'ext.u1.y',
         uamp      => 'ext.u1.y',

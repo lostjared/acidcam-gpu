@@ -507,7 +507,8 @@ The complete field map is:
 | `mouse` | 0 | `.x`, `.y` | Mouse position in window pixels. SDL supplies a top-left-origin position. |
 |  |  | `.z` | `1.0` while the left mouse button is held, otherwise `0.0`. |
 |  |  | `.w` | Reserved; currently `0.0`. |
-| `u0` | 16 | `.x`, `.y` | Compatibility constants; currently both `1.0`. Reserve them for ACMXVK rather than treating them as custom values. |
+| `u0` | 16 | `.x` | ACMX2-compatible animated `alpha`, advanced by `0.1` per rendered frame and reflected between `1.0` and `6.0` after its initial `0.1` value. |
+|  |  | `.y` | Wall-clock elapsed seconds for the ACMX2/Shadertoy-compatible `iTime`; unlike shader time, this does not pause, scale, or reset when the selected effect changes. |
 |  |  | `.z`, `.w` | Render width and height in pixels. A convenient alias is `vec2 resolution = ext.u0.zw`. |
 | `u1` | 32 | `.x` | Frame delta in seconds. With `--normalized`, this is exactly `1.0 / output_fps`; otherwise it is measured wall-clock delta. |
 |  |  | `.y` | `amp`: processed mean audio amplitude after sensitivity, warmup, time-speed, and optional delta scaling. Zero without active audio. |
@@ -544,12 +545,13 @@ Useful aliases can make a port from an ACMX2 shader easier to read:
 
 ```glsl
 #define iResolution ext.u0.zw
+#define alpha ext.u0.x
+#define iTime ext.u0.y
 #define iTimeDelta ext.u1.x
 #define amp ext.u1.y
 #define iamp ext.u1.z
 #define iFrameRate ext.u1.w
 #define iFrame ext.u2.x
-#define iTime ext.u2.y
 #define iSampleRate ext.u2.z
 #define amp_peak ext.u2.w
 #define amp_rms ext.u3.z
