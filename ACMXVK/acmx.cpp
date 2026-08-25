@@ -12,6 +12,11 @@
 #include <mxvk/mxvk_png.hpp>
 #include <mxwrite.hpp>
 
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+}
+
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
 #include "file_audio.hpp"
@@ -138,6 +143,7 @@ namespace acmxvk {
         bool resolution_specified = false;
         bool use_yuv = false;
         bool maximize_fps = false;
+        bool use_source_fps = false;
         bool fullscreen = false;
         bool repeat = false;
         bool enable_vsync = false;
@@ -594,6 +600,8 @@ namespace acmxvk {
                 options.use_yuv = true;
             } else if (option == "--maximize-fps") {
                 options.maximize_fps = true;
+            } else if (option == "--use-source-fps") {
+                options.use_source_fps = true;
             } else if (option == "-r" || option == "--resolution") {
                 parseDimensions(optionValue(index, argc, argv, option), options.width,
                                 options.height, option);
@@ -1091,6 +1099,16 @@ namespace acmxvk {
                     "--maximize-fps requires a target set with --fps");
             }
         }
+        if (options.use_source_fps) {
+            if (options.input_file.empty()) {
+                throw std::runtime_error(
+                    "--use-source-fps requires --input <video>");
+            }
+            if (options.requested_fps > 0.0) {
+                throw std::runtime_error(
+                    "--use-source-fps cannot be combined with --fps");
+            }
+        }
         return options;
     }
 
@@ -1113,6 +1131,7 @@ namespace acmxvk {
                << "  -c, --camera-res <WxH>      Requested camera dimensions\n"
                << "      --use-yuv               Prefer YUYV camera capture over MJPG\n"
                << "      --maximize-fps          Render at --fps using the latest camera frame\n"
+               << "      --use-source-fps        Play video on its reported source clock\n"
                << "  -u, --fps <rate>            Camera/output FPS\n"
                << "                              Video files prefer FFmpeg/NVDEC capture\n\n"
                << "Shaders:\n"
@@ -1518,6 +1537,47 @@ namespace acmxvk {
                                      std::to_string(source.channels()));
         }
         return rgba;
+    }
+
+    [[nodiscard]] double probeVideoDuration(const std::string &filename) {
+        if (filename.empty() || filename.find("://") != std::string::npos) {
+            return 0.0;
+        }
+
+        AVFormatContext *format = nullptr;
+        if (avformat_open_input(&format, filename.c_str(), nullptr, nullptr) < 0) {
+            return 0.0;
+        }
+        const auto close_format = [&format] {
+            if (format != nullptr) {
+                avformat_close_input(&format);
+            }
+        };
+        if (avformat_find_stream_info(format, nullptr) < 0) {
+            close_format();
+            return 0.0;
+        }
+
+        double duration = 0.0;
+        if (format->duration != AV_NOPTS_VALUE && format->duration > 0) {
+            duration = static_cast<double>(format->duration) /
+                       static_cast<double>(AV_TIME_BASE);
+        } else {
+            const int stream_index = av_find_best_stream(
+                format, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+            if (stream_index >= 0) {
+                const AVStream *stream = format->streams[stream_index];
+                if (stream->duration != AV_NOPTS_VALUE &&
+                    stream->duration > 0 && stream->time_base.num > 0 &&
+                    stream->time_base.den > 0) {
+                    duration = static_cast<double>(stream->duration) *
+                               static_cast<double>(stream->time_base.num) /
+                               static_cast<double>(stream->time_base.den);
+                }
+            }
+        }
+        close_format();
+        return std::isfinite(duration) && duration > 0.0 ? duration : 0.0;
     }
 
     void rotateFrame(cv::Mat &frame, FrameRotation rotation) {
@@ -2126,6 +2186,7 @@ namespace acmxvk {
         bool recording_complete = false;
         bool input_paused = false;
         bool rendering_frozen = false;
+        bool source_playback_clock_paused = false;
         bool shader_time_active = true;
         bool audio_time_active = false;
         bool audio_delta_time = false;
@@ -2144,12 +2205,15 @@ namespace acmxvk {
         int autopilot_interval_frames = 0;
         int history_delay_counter = 0;
         double recording_fps = 0.0;
+        double video_source_fps = 0.0;
+        double video_duration_seconds = 0.0;
         double camera_reported_fps = 0.0;
         double camera_delivered_fps = 0.0;
         double camera_last_logged_fps = 0.0;
         double shader_time = 0.0;
         std::uint64_t output_frame_count = 0;
         std::uint64_t decoded_video_frame_count = 0;
+        std::uint64_t video_source_frame_count = 0;
         std::uint64_t recording_frame_pts = 0;
         std::uint64_t next_clock_output_frame = 0;
         std::uint64_t png_frame_count = 0;
@@ -2172,6 +2236,9 @@ namespace acmxvk {
             hud_session_start};
         std::chrono::steady_clock::time_point camera_fps_last_tick{};
         std::chrono::steady_clock::time_point next_render_tick{};
+        std::chrono::steady_clock::time_point source_playback_clock_start{};
+        std::chrono::steady_clock::time_point source_playback_pause_start{};
+        std::chrono::steady_clock::duration source_playback_paused_duration{};
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
@@ -2890,11 +2957,35 @@ namespace acmxvk {
                 return;
             }
             media_timeline_started = true;
+            hud_session_start = std::chrono::steady_clock::now();
+            hud_fps_last_tick = hud_session_start;
+            hud_fps_frame_count = 0;
+            source_playback_clock_start = hud_session_start;
+            source_playback_pause_start = {};
+            source_playback_paused_duration = {};
+            source_playback_clock_paused = false;
 #ifdef AUDIO_ENABLED
             resetAudioWarmup();
 #endif
             startLiveAudioRecordingIfNeeded();
             std::cout << "acmxvk: media timeline started on first source frame\n";
+        }
+
+        void setSourcePlaybackClockPaused(bool paused) {
+            if (!options.use_source_fps || source_kind != SourceKind::Video ||
+                !media_timeline_started ||
+                paused == source_playback_clock_paused) {
+                return;
+            }
+
+            const auto now = std::chrono::steady_clock::now();
+            if (paused) {
+                source_playback_pause_start = now;
+            } else {
+                source_playback_paused_duration +=
+                    now - source_playback_pause_start;
+            }
+            source_playback_clock_paused = paused;
         }
 
         [[nodiscard]] bool mediaClockSeconds(double &seconds) const {
@@ -2911,6 +3002,18 @@ namespace acmxvk {
                 return true;
             }
 #endif
+            if (options.use_source_fps && source_kind == SourceKind::Video &&
+                media_timeline_started) {
+                const auto clock_end = source_playback_clock_paused
+                                           ? source_playback_pause_start
+                                           : std::chrono::steady_clock::now();
+                const auto active_time =
+                    clock_end - source_playback_clock_start -
+                    source_playback_paused_duration;
+                seconds = std::max(
+                    0.0, std::chrono::duration<double>(active_time).count());
+                return true;
+            }
             seconds = 0.0;
             return false;
         }
@@ -3295,20 +3398,11 @@ namespace acmxvk {
             return clipOverlayText(std::move(description));
         }
 
-        [[nodiscard]] double hudElapsedSeconds() const {
-            double media_seconds = 0.0;
-            if (media_timeline_started && mediaClockSeconds(media_seconds)) {
-                return std::max(0.0, media_seconds);
-            }
-            return std::max(
-                0.0,
-                std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                              hud_session_start)
-                    .count());
-        }
-
-        [[nodiscard]] std::string hudTimeString() const {
-            const auto elapsed = static_cast<std::uint64_t>(hudElapsedSeconds());
+        [[nodiscard]] static std::string formatHudTime(double seconds_value) {
+            const double finite_seconds =
+                std::isfinite(seconds_value) ? seconds_value : 0.0;
+            const auto elapsed = static_cast<std::uint64_t>(
+                std::floor(std::max(0.0, finite_seconds)));
             const std::uint64_t hours = elapsed / 3600U;
             const std::uint64_t minutes = (elapsed / 60U) % 60U;
             const std::uint64_t seconds = elapsed % 60U;
@@ -3316,6 +3410,42 @@ namespace acmxvk {
             text << std::setfill('0') << std::setw(2) << hours << ':'
                  << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
             return text.str();
+        }
+
+        [[nodiscard]] double hudWallElapsedSeconds() const {
+            return std::max(
+                0.0,
+                std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                              hud_session_start)
+                    .count());
+        }
+
+        [[nodiscard]] double hudVideoPositionSeconds() const {
+            if (source_kind != SourceKind::Video ||
+                video_source_frame_count == 0U || video_source_fps <= 0.0) {
+                return 0.0;
+            }
+            double position =
+                static_cast<double>(video_source_frame_count - 1U) /
+                video_source_fps;
+            if (video_duration_seconds > 0.0) {
+                position = std::min(position, video_duration_seconds);
+            }
+            return std::max(0.0, position);
+        }
+
+        [[nodiscard]] std::string hudVideoTimeString() const {
+            std::string text = "Video: " +
+                               formatHudTime(hudVideoPositionSeconds()) +
+                               " / ";
+            text += video_duration_seconds > 0.0
+                        ? formatHudTime(video_duration_seconds)
+                        : "--:--:--";
+            return text;
+        }
+
+        [[nodiscard]] std::string hudElapsedTimeString() const {
+            return "Elapsed: " + formatHudTime(hudWallElapsedSeconds());
         }
 
         void updateHudFrameRate() {
@@ -3472,7 +3602,11 @@ namespace acmxvk {
             }
 
             const SDL_Color status_color{255U, 255U, 255U, 255U};
-            printPreviewText(hudTimeString(), 10, y, status_color);
+            if (source_kind == SourceKind::Video) {
+                printPreviewText(hudVideoTimeString(), 10, y, status_color);
+                y += line_height;
+            }
+            printPreviewText(hudElapsedTimeString(), 10, y, status_color);
             y += line_height;
             std::ostringstream fps;
             fps << "Render: " << std::fixed << std::setprecision(1)
@@ -3586,6 +3720,28 @@ namespace acmxvk {
                                                ? options.input_file
                                                : std::to_string(options.camera_device);
                 throw std::runtime_error("unable to open capture source: " + source);
+            }
+
+            if (source_kind == SourceKind::Video) {
+                video_duration_seconds =
+                    probeVideoDuration(options.input_file);
+                std::ostringstream timeline;
+                timeline << "acmxvk: video timeline: " << std::fixed
+                         << std::setprecision(3) << video_source_fps
+                         << " FPS";
+                if (video_duration_seconds > 0.0) {
+                    timeline << ", " << video_duration_seconds
+                             << " seconds";
+                } else {
+                    timeline << ", duration unavailable";
+                }
+                std::cout << timeline.str() << '\n';
+                if (options.use_source_fps) {
+                    std::cout
+                        << "acmxvk: source-FPS playback enabled at "
+                        << video_source_fps
+                        << " FPS; early frames wait and late frames are skipped\n";
+                }
             }
 
             if (source_kind == SourceKind::Camera) {
@@ -4122,6 +4278,7 @@ namespace acmxvk {
                 return;
             }
             input_paused = !input_paused;
+            setSourcePlaybackClockPaused(input_paused || rendering_frozen);
             std::cout << "acmxvk: input pause "
                       << (input_paused ? "enabled" : "disabled") << '\n';
         }
@@ -4132,6 +4289,7 @@ namespace acmxvk {
                 return;
             }
             rendering_frozen = !rendering_frozen;
+            setSourcePlaybackClockPaused(input_paused || rendering_frozen);
             previous_frame = std::chrono::steady_clock::now();
             std::cout << "acmxvk: rendering freeze "
                       << (rendering_frozen ? "enabled" : "disabled") << '\n';
@@ -4352,6 +4510,7 @@ namespace acmxvk {
             }
             if (source_kind == SourceKind::Video) {
                 ++decoded_video_frame_count;
+                ++video_source_frame_count;
             } else if (source_kind == SourceKind::Camera) {
                 updateCameraFrameRate();
             }
@@ -4373,6 +4532,7 @@ namespace acmxvk {
             }
             if (skipped) {
                 ++decoded_video_frame_count;
+                ++video_source_frame_count;
             }
             return skipped;
         }
@@ -4389,6 +4549,7 @@ namespace acmxvk {
 
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
             if (using_ffmpeg_capture && ffmpeg_capture.seek_start()) {
+                video_source_frame_count = 0;
                 const bool restarted =
                     discard ? skipInputFrame() : readTrackedInputFrame();
                 if (restarted) {
@@ -4480,9 +4641,12 @@ namespace acmxvk {
         }
 
         [[nodiscard]] bool openVideoCapture() {
+            video_source_frame_count = 0;
+            video_source_fps = 0.0;
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
             if (ffmpeg_capture.open(options.input_file, options.cuda_device)) {
                 using_ffmpeg_capture = true;
+                video_source_fps = ffmpeg_capture.fps();
                 std::cout << "acmxvk: video capture: FFmpeg ";
                 if (ffmpeg_capture.using_hardware_decode()) {
                     std::cout << "with CUDA/NVDEC";
@@ -4499,7 +4663,11 @@ namespace acmxvk {
 #endif
             const bool opened = capture.open(options.input_file);
             if (opened) {
+                video_source_fps = capture.get(cv::CAP_PROP_FPS);
                 std::cout << "acmxvk: video capture: OpenCV fallback\n";
+            }
+            if (!std::isfinite(video_source_fps) || video_source_fps <= 0.0) {
+                video_source_fps = 30.0;
             }
             return opened;
         }

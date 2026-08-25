@@ -345,7 +345,13 @@ add_custom_target(acmxvk_shaders DEPENDS
 add_executable(acmxvk acmx.cpp input_validation.cpp input_validation.hpp)
 add_dependencies(acmxvk acmxvk_shaders)
 target_include_directories(acmxvk PRIVATE ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(acmxvk PRIVATE mxvk::mxvk MXWrite::mxwrite ${OpenCV_LIBS})
+target_link_libraries(acmxvk PRIVATE
+    mxvk::mxvk
+    MXWrite::mxwrite
+    PkgConfig::AVFORMAT
+    PkgConfig::AVUTIL
+    ${OpenCV_LIBS}
+)
 target_compile_options(acmxvk PRIVATE -Wall -Wextra -Wpedantic)
 if(APPLE AND ACMXVK_USE_MOLTENVK)
     target_compile_definitions(acmxvk PRIVATE

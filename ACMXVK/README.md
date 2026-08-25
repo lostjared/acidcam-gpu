@@ -16,7 +16,7 @@ ACMX2.
 | Standalone CMake project | Complete | Builds against installed MXVK and MXWrite and provides an `uninstall` target. |
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
-| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Still images remain OpenCV-backed. |
+| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
@@ -25,7 +25,7 @@ ACMX2.
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
-| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, timer, measured FPS, audio track, CUDA filter, and autopilot status. `--disable-counter` or F9 hides the HUD. The HUD is excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
+| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD is excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
@@ -220,6 +220,27 @@ Process a video with a SPIR-V shader library:
     --shaders /path/to/spv-library \
     --shader-file effect.spv
 ```
+
+Play a video with effects at its reported source rate instead of processing it
+as quickly as possible:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input input.mp4 \
+    --shaders /path/to/spv-library \
+    --shader-file effect.spv \
+    --use-source-fps \
+    --enable-vsync
+```
+
+This is a real-time playback mode. Frames wait when processing is ahead of the
+source clock. If an effect cannot render fast enough, ACMXVK skips late source
+frames so the displayed video position does not drift into slow motion. The
+mode cannot be combined with `--fps`, because the reported source rate is the
+requested clock. `P` pause and `L` freeze suspend this clock and resume without
+jumping over the paused interval. To hear a video's audio during playback,
+also use `--audio-file input.mp4 --pass-through` with an `AUDIO=ON` build; the
+audio device then remains the more accurate A/V master clock.
 
 Render a still image for five seconds and encode it with a software encoder:
 
@@ -1259,6 +1280,22 @@ starts with it hidden. MXVK composites this preview-only queue after frame
 readback, so it never appears in MXWrite video, PNG output, one-shot snapshots,
 or F10 captures. Explicit `--display-filter` and watermark text continue to be
 drawn before readback and remain part of saved output.
+
+For video-file input the HUD now separates media position from processing
+time. `Video: HH:MM:SS / HH:MM:SS` advances from the decoded source-frame
+position and reports the container duration, while `Elapsed: HH:MM:SS` follows
+the real processing clock. A high-resolution effect can therefore run slower
+than real time without making the media-position counter run ahead. Camera and
+still-image modes show only the elapsed processing timer. Repeating a video
+resets the displayed source position after each in-place seek while recording
+PTS remain continuous.
+
+`--use-source-fps` turns that source timeline into a playback clock. ACMXVK
+waits before decoding an early frame and uses MXVK's decode-only skip path to
+catch up when rendering is late, avoiding unnecessary RGBA conversion and GPU
+upload for discarded frames. Pause and rendering-freeze time are subtracted
+from the playback clock. Without this option, video input retains ACMXVK's
+offline behavior and processes frames as quickly as the machine permits.
 
 Increment 7T aligns camera setup with ACMX2 by applying a one-frame capture
 buffer, requested dimensions, MJPG (or `--use-yuv` YUYV), and the requested FPS
