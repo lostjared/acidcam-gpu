@@ -111,7 +111,6 @@ my @converted;
 my @report;
 my $failed = 0;
 my $history_count = 0;
-my $manifest_omitted = 0;
 
 for my $entry (@shader_entries) {
     my $relative = $entry->{relative};
@@ -137,16 +136,8 @@ for my $entry (@shader_entries) {
     }
 
     if (!$force && -f $output_path && -f $spirv_path) {
-        my $uses_history = grep { /history binding 2/ } @{$warnings};
-        if ($uses_history) {
-            ++$manifest_omitted;
-            push @report,
-              report_entry($relative, 'existing-not-listed', $warnings,
-                           'existing SPIR-V omitted from library.json');
-        } else {
-            push @converted, $spirv_relative;
-            push @report, report_entry($relative, 'existing', $warnings, '');
-        }
+        push @converted, $spirv_relative;
+        push @report, report_entry($relative, 'existing', $warnings, '');
         print "kept $spirv_relative\n";
         next;
     }
@@ -174,16 +165,8 @@ for my $entry (@shader_entries) {
         next;
     }
 
-    my $uses_history = grep { /history binding 2/ } @{$warnings};
-    if ($uses_history) {
-        ++$manifest_omitted;
-        push @report,
-          report_entry($relative, 'compiled-not-listed', $warnings,
-                       'SPIR-V was generated but omitted from library.json');
-    } else {
-        push @converted, $spirv_relative;
-        push @report, report_entry($relative, 'converted', $warnings, '');
-    }
+    push @converted, $spirv_relative;
+    push @report, report_entry($relative, 'converted', $warnings, '');
     print "converted $relative -> $spirv_relative\n";
 }
 
@@ -218,8 +201,6 @@ my $verb = $dry_run ? 'would inspect' : 'inspected';
 print "$verb " . scalar(@shader_entries) . " shader(s); ";
 print scalar(@converted) . " listed, $failed failed or skipped";
 print ", $history_count use history binding 2" if $history_count;
-print ", $manifest_omitted compiled but omitted from library.json"
-  if $manifest_omitted;
 print "\n";
 print "Output: $output\n" if !$dry_run;
 
@@ -246,8 +227,8 @@ Options:
 The converter never modifies the input directory. It writes converted .frag or
 .comp source, compiled .spv files, library.json, and conversion-report.txt.
 Only successfully compiled modules are placed in library.json.
-History-binding modules are compiled but omitted because ordinary ACMXVK
-post-processing passes do not expose binding 2 yet.
+History-binding modules are listed normally. ACMXVK detects binding 2 and
+enables its shared input-frame history cache automatically.
 USAGE
     exit $status;
 }
@@ -378,7 +359,7 @@ sub convert_source {
     }
 
     $source =~ s{^\s*(?:layout\s*\([^;]*\)\s*)?uniform\s+sampler2D\s+(samp|input_image)\s*;}{'layout(set = 0, binding = 0) uniform sampler2D ' . $1 . ';'}gme;
-    $source =~ s{^\s*(?:layout\s*\([^;]*\)\s*)?uniform\s+sampler2DArray\s+history\s*;}{do { push @warnings, 'uses history binding 2; ordinary ACMXVK post-process passes do not expose it yet'; 'layout(set = 0, binding = 2) uniform sampler2DArray history;' }}gme;
+    $source =~ s{^\s*(?:layout\s*\([^;]*\)\s*)?uniform\s+sampler2DArray\s+history\s*;}{do { push @warnings, 'uses shared input-frame history binding 2'; 'layout(set = 0, binding = 2) uniform sampler2DArray history;' }}gme;
     $source =~ s{^\s*(?:layout\s*\([^;]*\)\s*)?uniform\s+sampler1D\s+(spectrum|spectrum0)\s*;}{'layout(set = 0, binding = 3) uniform sampler1D ' . $1 . ';'}gme;
     $source =~ s{^\s*(?:layout\s*\([^;]*\)\s*)?uniform\s+sampler1DArray\s+spectrum_history\s*;}{layout(set = 0, binding = 4) uniform sampler1DArray spectrum_history;}gm;
 

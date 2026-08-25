@@ -1118,7 +1118,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8B)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8C)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -2177,6 +2177,7 @@ namespace acmxvk {
         bool effects_enabled = true;
         bool multipass_enabled = false;
         bool playlist_enabled = false;
+        bool shader_history_required = false;
         float mouse_x = 0.0F;
         float mouse_y = 0.0F;
         bool mouse_pressed = false;
@@ -3056,6 +3057,11 @@ namespace acmxvk {
                         label + " SPIR-V entry point has the wrong shader stage: " +
                         shader.string());
                 }
+                if (module_info.usesHistoryTexture &&
+                    !shader_history_required) {
+                    shader_history_required = true;
+                    std::cout << "acmxvk: enabled shared history for shader binding 2\n";
+                }
                 shaders.push_back(shader);
                 return;
             }
@@ -3076,6 +3082,13 @@ namespace acmxvk {
                 if (!shader.empty()) {
                     input::validate_spirv_file(shader,
                                                "shader manifest entry");
+                    const mxvk::ShaderModuleInfo module_info =
+                        mxvk::inspect_spirv(mxvk::load_spv(shader.string()));
+                    if (module_info.usesHistoryTexture &&
+                        !shader_history_required) {
+                        shader_history_required = true;
+                        std::cout << "acmxvk: enabled shared history for shader library binding 2\n";
+                    }
                     shaders.push_back(shader);
                 }
             }
@@ -3169,6 +3182,10 @@ namespace acmxvk {
 
         [[nodiscard]] std::string currentShader() const {
             return shaders.empty() ? std::string{} : shaders[shader_index].string();
+        }
+
+        [[nodiscard]] bool historyCacheEnabled() const {
+            return options.enable_texture_cache || shader_history_required;
         }
 
         [[nodiscard]] fs::path findShader(std::string name) const {
@@ -4373,7 +4390,7 @@ namespace acmxvk {
                     static_cast<std::uint32_t>(options.audio_buffers));
             }
 #endif
-            if (options.enable_texture_cache) {
+            if (historyCacheEnabled()) {
                 frame_sprite->enableHistoryTexture(source_width, source_height,
                                                    static_cast<uint32_t>(
                                                        options.texture_cache_size));
@@ -4604,6 +4621,9 @@ namespace acmxvk {
             for (const fs::path &shader : pipeline) {
                 PostProcessingEffect effect{
                     shader.string(), {1.0F, 1.0F, 1.0F, 0.0F}, false};
+                if (historyCacheEnabled()) {
+                    effect.historySource = frame_sprite;
+                }
 #ifdef AUDIO_ENABLED
                 effect.spectrumBinCount = audio::AudioEngine::spectrum_bin_count();
                 effect.spectrumHistoryLayerCount =
@@ -4826,7 +4846,7 @@ namespace acmxvk {
         }
 
         void initializeHistory(const cv::Mat &rgba) {
-            if (!options.enable_texture_cache || history_initialized) {
+            if (!historyCacheEnabled() || history_initialized) {
                 return;
             }
             for (uint32_t layer = 0; layer < frame_sprite->getHistoryLayerCount(); ++layer) {
@@ -4882,7 +4902,7 @@ namespace acmxvk {
         void initializeCudaHistory(const cv::cuda::GpuMat &rgba,
                                    cv::cuda::Stream &source_stream,
                                    bool filtered) {
-            if (!options.enable_texture_cache || history_initialized) {
+            if (!historyCacheEnabled() || history_initialized) {
                 return;
             }
             for (uint32_t layer = 0;
@@ -5105,7 +5125,7 @@ namespace acmxvk {
 #endif
 #endif
 
-            bool requires_host_frame = options.enable_texture_cache ||
+            bool requires_host_frame = historyCacheEnabled() ||
                                        options.frame_rotation != FrameRotation::None;
             if (!requires_host_frame
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
@@ -5248,7 +5268,10 @@ namespace acmxvk {
                                     frame_rate);
                 sprite->setUniform2(static_cast<float>(frame_count), elapsed,
                                     audio_sample_rate, audio_peak);
-                sprite->setUniform3(0.0F, 0.0F, audio_rms, audio_smooth);
+                sprite->setUniform3(
+                    static_cast<float>(frame_sprite->getHistoryHead()),
+                    static_cast<float>(frame_sprite->getHistoryLayerCount()),
+                    audio_rms, audio_smooth);
                 sprite->setAudioBands(audio_low, audio_mid, audio_high);
             }
 #ifdef AUDIO_ENABLED

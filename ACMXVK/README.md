@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8B**. It is usable for video, camera, and
+The port is currently at **Increment 8C**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -21,7 +21,7 @@ ACMX2.
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
 | Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
-| Frame history/texture cache | Implemented | Uses a Vulkan `sampler2DArray` ring buffer with configurable size and write delay. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
+| Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
@@ -41,7 +41,7 @@ ACMX2.
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.30.0 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.31.0 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -131,6 +131,12 @@ MXVK must be rebuilt and reinstalled; acidcam-gpu remains unchanged.
 Increment 8B changes only ACMXVK. All overlay and HUD font sizing now follows
 the preview window height at a smaller 1/60 scale instead of using the source
 image or video height. MXVK does not need another rebuild or reinstall.
+Increment 8C adds MXVK 0.31.0's non-owning shared history descriptor for
+fragment and compute post-processing passes. ACMXVK reflects binding 2 from
+SPIR-V, enables one input-frame history ring automatically, and supplies its
+live head/layer metadata to every pass. Converted history shaders are now
+included in `library.json`. MXVK must be rebuilt and reinstalled; acidcam-gpu
+remains unchanged.
 
 ### Input validation
 
@@ -418,8 +424,8 @@ to replace previously generated outputs, or use `--input`, `--output`,
 `--compute-input`, and `--glslc` to select other locations. Converted compute
 sources and modules are placed beneath `shaders_acmxvk/compute`. `--dry-run`
 lists candidates without writing anything. The converter reports history-cache shaders separately
-because ordinary ACMXVK post-processing passes do not currently expose history
-binding 2.
+and includes them in the manifest. ACMXVK detects their binding 2 directly
+from SPIR-V and enables the shared input-frame history cache automatically.
 
 ACMXVK shaders are full-frame post-processing stages. The application renders
 the input image, camera, or video first, then executes the configured pass list
@@ -467,7 +473,7 @@ when their feature is unavailable.
 | --- | --- | --- | --- |
 | 0 | `uniform sampler2D input_image;` | Fragment and compute | Always present. The image produced by the preceding stage. The name may be `samp`, `input_image`, or any other valid identifier. |
 | 1 | `uniform SpriteExtended { ... } ext;` | Fragment and compute | Always present. Per-frame state, mouse, timing, audio values, and custom library uniforms. |
-| 2 | `uniform sampler2DArray history;` | Fragment and compute in MXVK | Optional RGBA frame-history ring. In current ACMXVK, `--texture-cache` binds this resource to the built-in input-stage `echo_cache.frag`; ordinary library/post-processing passes must not declare binding 2 yet. |
+| 2 | `uniform sampler2DArray history;` | Fragment and compute | Optional shared RGBA input-frame history ring. `--texture-cache` enables it explicitly; ACMXVK also enables it automatically when a directly loaded shader or any entry in `library.json` declares set 0, binding 2. Every pass in the active fragment/compute chain shares the same ring. |
 | 3 | `uniform sampler1D spectrum;` | Fragment and compute | Current 256-bin R32 floating-point FFT. Present in builds configured with `AUDIO=ON`; values are zero without an active audio source. |
 | 4 | `uniform sampler1DArray spectrum_history;` | Fragment and compute | Circular FFT history. Present only in an `AUDIO=ON` build when `--enable-audio-buffers N` requests one or more layers. |
 | 5 | `layout(rgba8) writeonly uniform image2D output_image;` | Compute only | Compute destination. Always required by an ACMXVK compute shader and unavailable to fragment shaders. |
@@ -518,7 +524,7 @@ The complete field map is:
 |  |  | `.y` | Shader time in seconds. It follows `--time-speed`, normalized time, the `T/U/I/Page Up/Page Down` controls, and audio-reactive time when enabled. |
 |  |  | `.z` | `iSampleRate`: active audio sample rate in Hz; the compatibility default is `44100.0`. |
 |  |  | `.w` | `amp_peak`: sensitivity- and warmup-scaled peak audio level. |
-| `u3` | 64 | `.x`, `.y` | Frame-history write head and layer count on the internal cache-enabled input sprite. They are currently `0.0, 0.0` for ordinary user post-processing passes. |
+| `u3` | 64 | `.x`, `.y` | Frame-history write head and layer count. The values are supplied to every fragment and compute pass when the shared input history cache is active. |
 |  |  | `.z` | `amp_rms`: sensitivity- and warmup-scaled RMS audio level. |
 |  |  | `.w` | `amp_smooth`: sensitivity- and warmup-scaled smoothed audio amplitude. |
 | `custom_uniforms` | 80 | 16 `vec4`s | Up to 64 user floats from `library.json`, packed in declaration order. Unused slots are `0.0`. The array occupies byte offsets 80 through 335. |
@@ -804,7 +810,7 @@ Common shader problems are:
 - omitting `set = 0` or using a binding with the wrong descriptor type;
 - reordering or shortening `SpriteExtended` before a field that the shader reads;
 - declaring optional binding 3 or 4 without the required audio build/runtime option;
-- declaring binding 2 in a normal user pass in the current ACMXVK implementation;
+- declaring binding 2 with a type other than `sampler2DArray`;
 - declaring fragment push constants in a compute shader;
 - using a non-`main` entry point or specialization-ID compute local sizes;
 - forgetting the compute edge bounds check or failing to write every valid output pixel;
@@ -1045,9 +1051,9 @@ float energy = texture(spectrum, frequency).r;
 ```
 
 See `shaders/audio_spectrum.frag` for a complete visualization. MXVK's extended
-ABI permits the descriptor alongside binding-2 frame history, although current
-ACMXVK user post-processing passes do not expose binding 2; `--texture-cache`
-uses it in the built-in input-stage cache shader.
+ABI permits the descriptor alongside binding-2 frame history. ACMXVK shares
+the input sprite's single history array with every user post-processing pass,
+avoiding a duplicate ring allocation per pass.
 
 `--enable-audio-buffers N` allocates binding 4 as a circular FFT-history array.
 The requested depth is clamped to the Vulkan device's maximum image-array-layer
