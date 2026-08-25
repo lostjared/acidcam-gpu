@@ -25,7 +25,7 @@ ACMX2.
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
-| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, timer, measured FPS, audio track, CUDA filter, and autopilot status. `--disable-counter` or F9 hides the HUD. The HUD is excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
+| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, timer, measured FPS, audio track, CUDA filter, and autopilot status. `--disable-counter` or F9 hides the HUD. The HUD is excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
@@ -362,11 +362,233 @@ chains work through `--shader-pass`, `--shader-pass-files`, and playlists
 without stage metadata in the manifest. Vertex and unsupported shader stages
 are rejected before a pipeline is attached.
 
-Custom uniforms are packed in manifest declaration order. A Vulkan shader can
-append the custom array to MXVK's binding-1 block:
+## Writing fragment and compute shaders
+
+ACMXVK shaders are full-frame post-processing stages. The application renders
+the input image, camera, or video first, then executes the configured pass list
+in order. Each pass samples the preceding result. A fragment or compute shader
+can be the first, middle, or final pass, and a chain can mix both stages. MXVK
+reads the stage and compute workgroup size from the SPIR-V module; the filename
+suffix is only a naming convention.
+
+ACMXVK supplies `sprite.vert.spv` for every fragment pass. A shader library
+therefore contains fragment and compute modules, not user vertex modules. The
+first configured pre-pass runs first, the shader selected by `--shader-file`
+runs after the pre-passes, and the internal vertical-flip pass runs last when
+`--flip` is enabled.
+
+### Image size, coordinates, color, and pass order
+
+Every user pass operates at the current render/swapchain resolution, not
+necessarily at the camera or source-file resolution. The output dimensions are
+available as `ext.u0.zw`. The sampled input at binding 0 and compute output at
+binding 5 have those same dimensions.
+
+Fragment shaders receive `tc` from ACMXVK's vertex shader. It is a normalized
+texture coordinate, normally in the inclusive range from `0.0` through `1.0`.
+`gl_FragCoord.xy` is also available when integer pixel coordinates are more
+convenient. Compute shaders do not receive `tc`; derive it from
+`gl_GlobalInvocationID.xy` and `imageSize(output_image)` as shown below.
+
+The pass images use normalized RGBA8 color. Sampled values are floating-point
+RGBA in the `0.0` through `1.0` range, and storage-image writes outside that
+range are clamped by the RGBA8 target. Binding-0 sampling uses normalized
+coordinates, linear filtering, clamp-to-edge addressing, and no mipmaps. A
+full-screen fragment effect should normally write alpha `1.0`; fragment
+pipelines enable alpha blending, and intermediate attachments do not preserve
+a defined destination color for partial-alpha composition. Do not rely on an
+alpha below `1.0` unless the particular pass has been designed and tested for
+that behavior.
+
+### Descriptor-set bindings
+
+All resources use descriptor set 0. A shader should declare only resources it
+actually needs because optional bindings are absent from the pipeline layout
+when their feature is unavailable.
+
+| Binding | GLSL declaration | Stages | Contents and availability |
+| --- | --- | --- | --- |
+| 0 | `uniform sampler2D input_image;` | Fragment and compute | Always present. The image produced by the preceding stage. The name may be `samp`, `input_image`, or any other valid identifier. |
+| 1 | `uniform SpriteExtended { ... } ext;` | Fragment and compute | Always present. Per-frame state, mouse, timing, audio values, and custom library uniforms. |
+| 2 | `uniform sampler2DArray history;` | Fragment and compute in MXVK | Optional RGBA frame-history ring. In current ACMXVK, `--texture-cache` binds this resource to the built-in input-stage `echo_cache.frag`; ordinary library/post-processing passes must not declare binding 2 yet. |
+| 3 | `uniform sampler1D spectrum;` | Fragment and compute | Current 256-bin R32 floating-point FFT. Present in builds configured with `AUDIO=ON`; values are zero without an active audio source. |
+| 4 | `uniform sampler1DArray spectrum_history;` | Fragment and compute | Circular FFT history. Present only in an `AUDIO=ON` build when `--enable-audio-buffers N` requests one or more layers. |
+| 5 | `layout(rgba8) writeonly uniform image2D output_image;` | Compute only | Compute destination. Always required by an ACMXVK compute shader and unavailable to fragment shaders. |
+
+Binding numbers, descriptor types, array lengths, and block-member order are
+part of the ABI and must match exactly. Resource and member names are not part
+of the ABI and may be renamed.
+
+### Complete `SpriteExtended` uniform block
+
+Binding 1 uses `std140` layout. Declaring `std140` explicitly is recommended so
+the offsets are obvious and stable:
 
 ```glsl
-layout(set = 0, binding = 1) uniform SpriteExtended {
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+```
+
+Every entry is a `vec4` aligned to 16 bytes. A shader may stop the declaration
+after the last field it uses. For example, a shader which needs only time and
+resolution may stop after `u2`. It must not remove or reorder earlier fields:
+declaring `audio_bands` immediately after `u3` would read custom-uniform memory,
+not the audio bands.
+
+The complete field map is:
+
+| Field | Offset | Components | Value |
+| --- | ---: | --- | --- |
+| `mouse` | 0 | `.x`, `.y` | Mouse position in window pixels. SDL supplies a top-left-origin position. |
+|  |  | `.z` | `1.0` while the left mouse button is held, otherwise `0.0`. |
+|  |  | `.w` | Reserved; currently `0.0`. |
+| `u0` | 16 | `.x`, `.y` | Compatibility constants; currently both `1.0`. Reserve them for ACMXVK rather than treating them as custom values. |
+|  |  | `.z`, `.w` | Render width and height in pixels. A convenient alias is `vec2 resolution = ext.u0.zw`. |
+| `u1` | 32 | `.x` | Frame delta in seconds. With `--normalized`, this is exactly `1.0 / output_fps`; otherwise it is measured wall-clock delta. |
+|  |  | `.y` | `amp`: processed mean audio amplitude after sensitivity, warmup, time-speed, and optional delta scaling. Zero without active audio. |
+|  |  | `.z` | `iamp`: zero-crossing frequency estimate in Hz. |
+|  |  | `.w` | Instantaneous render rate, calculated as `1.0 / u1.x`. |
+| `u2` | 48 | `.x` | Rendered frame counter, stored as a float. It resets when shader time is reset or a new shader/playlist node is selected. |
+|  |  | `.y` | Shader time in seconds. It follows `--time-speed`, normalized time, the `T/U/I/Page Up/Page Down` controls, and audio-reactive time when enabled. |
+|  |  | `.z` | `iSampleRate`: active audio sample rate in Hz; the compatibility default is `44100.0`. |
+|  |  | `.w` | `amp_peak`: sensitivity- and warmup-scaled peak audio level. |
+| `u3` | 64 | `.x`, `.y` | Frame-history write head and layer count on the internal cache-enabled input sprite. They are currently `0.0, 0.0` for ordinary user post-processing passes. |
+|  |  | `.z` | `amp_rms`: sensitivity- and warmup-scaled RMS audio level. |
+|  |  | `.w` | `amp_smooth`: sensitivity- and warmup-scaled smoothed audio amplitude. |
+| `custom_uniforms` | 80 | 16 `vec4`s | Up to 64 user floats from `library.json`, packed in declaration order. Unused slots are `0.0`. The array occupies byte offsets 80 through 335. |
+| `audio_bands` | 336 | `.x`, `.y`, `.z` | `amp_low`, `amp_mid`, and `amp_high`: scaled energy below 300 Hz, from 300 through 3000 Hz, and above 3000 Hz. |
+|  |  | `.w` | Reserved; currently `0.0`. |
+| `audio_history` | 352 | `.x` | Physical array layer containing the newest FFT spectrum. |
+|  |  | `.y` | Number of allocated FFT-history layers. |
+|  |  | `.z` | Number of bins per layer, currently `256.0`. |
+|  |  | `.w` | Reserved; currently `0.0`. |
+
+The entire `audio_history` vector is zero when FFT history is not enabled.
+The audio scalar fields remain safe to declare in any build because they are
+part of binding 1; they simply remain zero when no audio source is active.
+Bindings 3 and 4 are separate optional descriptors and follow the availability
+rules in the descriptor table.
+
+`mouse.xy` uses output-window pixels rather than normalized coordinates. A
+typical conversion is
+`vec2 mouse_uv = ext.mouse.xy / max(ext.u0.zw, vec2(1.0));`. Unlike the
+Shadertoy `iMouse` convention, `mouse.z` is only a pressed/not-pressed value
+and `mouse.w` does not contain a click position.
+
+Useful aliases can make a port from an ACMX2 shader easier to read:
+
+```glsl
+#define iResolution ext.u0.zw
+#define iTimeDelta ext.u1.x
+#define amp ext.u1.y
+#define iamp ext.u1.z
+#define iFrameRate ext.u1.w
+#define iFrame ext.u2.x
+#define iTime ext.u2.y
+#define iSampleRate ext.u2.z
+#define amp_peak ext.u2.w
+#define amp_rms ext.u3.z
+#define amp_smooth ext.u3.w
+#define amp_low ext.audio_bands.x
+#define amp_mid ext.audio_bands.y
+#define amp_high ext.audio_bands.z
+```
+
+### Minimal fragment shader
+
+A fragment shader needs one normalized input coordinate, one RGBA output, and
+binding 0. Binding 1 is optional when none of its values are needed:
+
+```glsl
+#version 450
+
+layout(location = 0) in vec2 tc;
+layout(location = 0) out vec4 color;
+
+layout(set = 0, binding = 0) uniform sampler2D input_image;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+} ext;
+
+void main() {
+    vec2 resolution = max(ext.u0.zw, vec2(1.0));
+    vec2 one_pixel = 1.0 / resolution;
+    float wave = sin(ext.u2.y * 2.0 + tc.y * 20.0) * 4.0;
+    vec2 sample_uv = clamp(tc + vec2(wave * one_pixel.x, 0.0),
+                           vec2(0.0), vec2(1.0));
+    color = vec4(texture(input_image, sample_uv).rgb, 1.0);
+}
+```
+
+The fragment-stage names are conventional, but their locations and types are
+fixed:
+
+| Fragment value | Meaning |
+| --- | --- |
+| `layout(location = 0) in vec2 tc` | Interpolated normalized coordinate from ACMXVK's full-screen vertex shader. The variable may be renamed. |
+| `layout(location = 0) out vec4 color` | RGBA result for this pixel. The variable may be renamed. |
+| `gl_FragCoord.xy` | Pixel-center position in framebuffer coordinates. Useful for grids and effects which must align exactly to output pixels. |
+| `texture(input_image, uv)` | Filtered sample using normalized coordinates. Coordinates are clamped at the image edges. |
+| `texelFetch(input_image, pixel, 0)` | Exact unfiltered integer-pixel sample from mip level zero. Clamp `pixel` before fetching. |
+| `textureSize(input_image, 0)` | Integer dimensions of the preceding pass image. They normally equal `ivec2(ext.u0.zw)`. |
+
+Fragment shaders may also declare MXVK's 48-byte push-constant block. This
+block is not available to compute shaders:
+
+```glsl
+layout(push_constant) uniform SpritePushConstants {
+    float screen_width;
+    float screen_height;
+    float sprite_pos_x;
+    float sprite_pos_y;
+    float sprite_size_w;
+    float sprite_size_h;
+    float effects_on;
+    float rotation_degrees;
+    vec4 params;
+} pc;
+```
+
+| Push-constant field | ACMXVK value for a full-frame user pass |
+| --- | --- |
+| `screen_width`, `screen_height` | Current render dimensions in pixels. |
+| `sprite_pos_x`, `sprite_pos_y` | `0.0, 0.0`. |
+| `sprite_size_w`, `sprite_size_h` | Current render dimensions in pixels. |
+| `effects_on` | `1.0` while effects are active. Pressing Space bypasses the user pipeline entirely. |
+| `rotation_degrees` | `0.0` for the full-screen post-process quad. |
+| `params.xyz` | Compatibility constants, currently `1.0, 1.0, 1.0`. |
+| `params.w` | Shader time in seconds, equivalent to `ext.u2.y`. |
+
+`shaders/custom_uniform.frag`, `shaders/audio_reactive.frag`,
+`shaders/audio_spectrum.frag`, and `shaders/audio_history.frag` demonstrate
+progressively larger parts of the fragment ABI.
+
+### Minimal compute shader
+
+An ACMXVK compute shader samples binding 0 and writes binding 5. Compute
+pipelines have no push-constant range, so use `SpriteExtended` for time,
+resolution, mouse, audio, and custom values.
+
+```glsl
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D input_image;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
     vec4 mouse;
     vec4 u0;
     vec4 u1;
@@ -377,27 +599,159 @@ layout(set = 0, binding = 1) uniform SpriteExtended {
     vec4 audio_history;
 } ext;
 
+layout(set = 0, binding = 5, rgba8) writeonly uniform image2D output_image;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(output_image);
+
+    // MXVK rounds the workgroup count up, so edge workgroups contain
+    // invocations outside the image.
+    if (any(greaterThanEqual(pixel, size))) {
+        return;
+    }
+
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(size);
+    vec4 source = texture(input_image, uv);
+    float pulse = 0.5 + 0.5 * sin(ext.u2.y * 2.0);
+    imageStore(output_image, pixel,
+               vec4(source.rgb * mix(0.5, 1.5, pulse), source.a));
+}
+```
+
+The standard compute built-ins are useful for effects which operate on tiles
+or share data within a workgroup:
+
+| Compute built-in | Meaning |
+| --- | --- |
+| `gl_GlobalInvocationID` | Absolute unsigned invocation coordinate. `.xy` is the output pixel in the usual one-invocation-per-pixel design. |
+| `gl_WorkGroupID` | Workgroup coordinate within the dispatch. |
+| `gl_LocalInvocationID` | 3-D coordinate of the invocation inside its workgroup. |
+| `gl_LocalInvocationIndex` | Flattened one-dimensional index inside the workgroup. |
+| `gl_NumWorkGroups` | Number of dispatched workgroups in each dimension. MXVK calculates `.xy` by rounding the output size up to the declared local size; `.z` is one. |
+| `gl_WorkGroupSize` | Compile-time `uvec3` matching `local_size_x`, `local_size_y`, and `local_size_z`. |
+
+Use `texture(input_image, uv)` for filtered sampling or
+`texelFetch(input_image, pixel, 0)` for an exact input texel. Use
+`imageSize(output_image)` for bounds. Because `output_image` is declared
+`writeonly`, read the old color from `input_image`, not with `imageLoad`.
+
+MXVK dispatches
+`ceil(width / local_size_x)` by `ceil(height / local_size_y)` by one workgroup.
+Always bounds-check `gl_GlobalInvocationID.xy`, declare
+`local_size_z = 1`, and write every in-range pixel. Input and output are
+different ping-pong images, so reading binding 0 and writing binding 5 never
+aliases the same image. MXVK inserts the required barriers before the next
+fragment or compute pass. If the final pass is compute, MXVK presents its
+result with an internal full-screen copy.
+
+Use literal `local_size_x`, `local_size_y`, and `local_size_z` values as in the
+example. MXVK currently reads SPIR-V `LocalSize` metadata; specialization-ID
+forms such as `local_size_x_id` are not supported for dispatch sizing.
+
+`shaders/compute_test.comp` is the complete working reference. Workgroups of
+`8x8` or `16x16` are sensible starting points; performance depends on the
+shader and GPU.
+
+### Custom variables from `library.json`
+
+Custom uniforms are packed in manifest declaration order. Uniform number `N`
+is stored in `ext.custom_uniforms[N / 4][N % 4]`. For example, the first five
+entries map as follows:
+
+| Declaration index | Shader location |
+| ---: | --- |
+| 0 | `ext.custom_uniforms[0].x` |
+| 1 | `ext.custom_uniforms[0].y` |
+| 2 | `ext.custom_uniforms[0].z` |
+| 3 | `ext.custom_uniforms[0].w` |
+| 4 | `ext.custom_uniforms[1].x` |
+
+Given the earlier `square_size` manifest entry, the shader can use:
+
+```glsl
 #define square_size ext.custom_uniforms[0].x
 ```
 
-Uniform number `N` is stored in
-`ext.custom_uniforms[N / 4][N % 4]`. See
-`shaders/custom_uniform.frag` for a working reference shader.
+The manifest's `minimum`, `maximum`, `step`, and `value` fields define the
+accepted range, adjustment step, and initial value. Repeat
+`--uniform name=value` to override initial values. ACMX2 MIDI Slider 1 through
+Slider 4 target custom uniforms named `slider1` through `slider4`; their packed
+positions depend on declaration order. Keep that order stable after compiling
+a shader which uses fixed array positions. See `shaders/custom_uniform.frag`
+and `shaders/midi_slider.frag`.
 
-The remaining Vulkan bindings are:
+### FFT textures
 
-- Set 0, binding 0: current RGBA frame as `sampler2D`
-- Set 0, binding 1: mouse, frame state, resolution, time, history metadata, custom floats, and audio bands
-- Set 0, binding 2: optional RGBA history as `sampler2DArray`
-- Set 0, binding 3: current 256-bin audio FFT as an R32 `sampler1D`
-- Set 0, binding 4: optional 256-bin FFT history as an R32 `sampler1DArray`
-- Set 0, binding 5: compute-pass output as a write-only `rgba8 image2D`
+In an `AUDIO=ON` build, binding 3 contains 256 non-negative FFT magnitudes in
+an `R32_SFLOAT` 1-D texture:
 
-Compute passes read the current pass image from binding 0 and write every
-output pixel to binding 5. MXVK dispatches using the shader's declared local
-size, synchronizes storage writes, and makes the result available to the next
-fragment or compute pass. If the last pass is compute, an internal full-screen
-copy presents its result. See `shaders/compute_test.comp` for the complete ABI.
+```glsl
+layout(set = 0, binding = 3) uniform sampler1D spectrum;
+
+float normalized_frequency = 0.25;
+float magnitude = texture(spectrum, normalized_frequency).r;
+```
+
+Coordinate `0.0` is the lowest-frequency/DC end and `1.0` is the Nyquist end.
+The texture uses linear filtering, so coordinates between bins interpolate.
+Squaring a normalized coordinate before sampling, as in
+`audio_spectrum.frag`, devotes more screen space to lower frequencies.
+
+With `--enable-audio-buffers N`, binding 4 stores previous FFTs in a circular
+`sampler1DArray`. `ext.audio_history.x` identifies the newest physical layer
+and `.y` gives the allocated count:
+
+```glsl
+layout(set = 0, binding = 4) uniform sampler1DArray spectrum_history;
+
+int history_layer(int age, int count, int newest) {
+    return (newest - (age % count) + count) % count;
+}
+
+int count = max(int(ext.audio_history.y + 0.5), 1);
+int newest = clamp(int(ext.audio_history.x + 0.5), 0, count - 1);
+int layer = history_layer(0, count, newest);
+float newest_magnitude =
+    texture(spectrum_history, vec2(normalized_frequency, float(layer))).r;
+```
+
+Age zero is newest, age one is the preceding FFT, and so on. The requested
+history depth may be clamped to the GPU's maximum image-array layer count.
+
+### Compile, validate, and load a shader
+
+Source the Vulkan SDK used by the project, compile GLSL to SPIR-V, and validate
+the result before adding it to `library.json`:
+
+```bash
+source ~/vulkan.sh
+
+glslc my_effect.frag -o my_effect.frag.spv
+glslc my_effect.comp -o my_effect.comp.spv
+
+spirv-val my_effect.frag.spv
+spirv-val my_effect.comp.spv
+```
+
+For a filename without a recognized stage suffix, specify it explicitly with
+`glslc -fshader-stage=fragment` or `glslc -fshader-stage=compute`. Test a single
+module with `--fragment` or `--compute`; use `--shaders` after adding it to a
+manifest. Validation builds report descriptor-layout, storage-image, and
+synchronization mistakes at runtime.
+
+Common shader problems are:
+
+- omitting `set = 0` or using a binding with the wrong descriptor type;
+- reordering or shortening `SpriteExtended` before a field that the shader reads;
+- declaring optional binding 3 or 4 without the required audio build/runtime option;
+- declaring binding 2 in a normal user pass in the current ACMXVK implementation;
+- declaring fragment push constants in a compute shader;
+- using a non-`main` entry point or specialization-ID compute local sizes;
+- forgetting the compute edge bounds check or failing to write every valid output pixel;
+- using a compute storage-image format other than `rgba8`;
+- relying on fragment alpha below `1.0` even though the pass destination is not preserved for partial-alpha composition;
+- adding a vertex module or unsupported SPIR-V stage to `library.json`.
 
 Test the standalone compute path after reinstalling MXVK 0.29.0:
 
@@ -429,7 +783,7 @@ binding-1 block:
 
 | ACMX2 name | MXVK field | Meaning |
 | --- | --- | --- |
-| `amp` | `ext.u1.y` | Mean absolute amplitude |
+| `amp` | `ext.u1.y` | Processed mean amplitude after sensitivity, warmup, time-speed, and optional delta scaling |
 | `iamp` | `ext.u1.z` | Zero-crossing frequency estimate in Hz |
 | `iSampleRate` | `ext.u2.z` | Active input sample rate |
 | `amp_peak` | `ext.u2.w` | Sensitivity-scaled peak level |
@@ -631,8 +985,10 @@ layout(set = 0, binding = 3) uniform sampler1D spectrum;
 float energy = texture(spectrum, frequency).r;
 ```
 
-See `shaders/audio_spectrum.frag` for a complete visualization. The descriptor
-can be used alongside binding-2 frame history in the same MXVK extended layout.
+See `shaders/audio_spectrum.frag` for a complete visualization. MXVK's extended
+ABI permits the descriptor alongside binding-2 frame history, although current
+ACMXVK user post-processing passes do not expose binding 2; `--texture-cache`
+uses it in the built-in input-stage cache shader.
 
 `--enable-audio-buffers N` allocates binding 4 as a circular FFT-history array.
 The requested depth is clamped to the Vulkan device's maximum image-array-layer
