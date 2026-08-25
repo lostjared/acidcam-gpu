@@ -1118,7 +1118,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8A)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8B)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -3370,21 +3370,19 @@ namespace acmxvk {
                 throw std::runtime_error("overlay font was not found: " +
                                          font.string());
             }
-            const VkExtent2D render_extent = getRenderExtent();
             const VkExtent2D preview_extent = getSwapchainExtent();
-            const int output_height = render_extent.height > 0U
-                                          ? static_cast<int>(render_extent.height)
-                                          : options.height;
             const int preview_height = preview_extent.height > 0U
                                            ? static_cast<int>(preview_extent.height)
-                                           : output_height;
-            overlay_font_size = std::max(12, output_height / 40);
-            preview_overlay_font_size = std::max(12, preview_height / 40);
+                                           : options.height;
+            constexpr int FONT_HEIGHT_DIVISOR = 60;
+            overlay_font_size =
+                std::max(12, preview_height / FONT_HEIGHT_DIVISOR);
+            preview_overlay_font_size = overlay_font_size;
             setFont(font.string(), overlay_font_size);
             setPreviewFont(font.string(), preview_overlay_font_size);
-            std::cout << "acmxvk: output font " << font.string() << " at "
-                      << overlay_font_size << " points; preview HUD at "
-                      << preview_overlay_font_size << " points\n";
+            std::cout << "acmxvk: window-scaled output/HUD font "
+                      << font.string() << " at " << overlay_font_size
+                      << " points\n";
         }
 
         [[nodiscard]] static std::string clipOverlayText(std::string text) {

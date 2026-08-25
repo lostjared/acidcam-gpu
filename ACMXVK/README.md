@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8A**. It is usable for video, camera, and
+The port is currently at **Increment 8B**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -128,6 +128,9 @@ watermark/output text, snapshots, and recording readback remain at the source
 dimensions while a separate aspect-preserving copy is fitted into the preview
 swapchain. Output text and preview-only HUD fonts are sized independently.
 MXVK must be rebuilt and reinstalled; acidcam-gpu remains unchanged.
+Increment 8B changes only ACMXVK. All overlay and HUD font sizing now follows
+the preview window height at a smaller 1/60 scale instead of using the source
+image or video height. MXVK does not need another rebuild or reinstall.
 
 ### Input validation
 
@@ -1373,9 +1376,12 @@ MXVK renders the scene and every ordered fragment/compute pass into
 source-sized offscreen images, reads the completed source-sized frame for
 encoding, then scales only the presentation copy into the window with
 letterboxing if necessary. Resizing or maximizing the preview therefore cannot
-change shader resolution or encoded geometry. ACMXVK sizes output overlays from
-the native render height and the runtime HUD from the preview height, avoiding
-oversized HUD text when a tall source is fitted to the display.
+change shader resolution or encoded geometry.
+
+Increment 8B sizes both output overlays and the preview-only runtime HUD from
+the actual preview-window height. The 1/60 scale keeps long shader, multipass,
+timer, and FPS lines readable when a high-resolution or portrait source is
+fitted into a smaller window; the minimum remains 12 points.
 
 ## Runtime controls
 
