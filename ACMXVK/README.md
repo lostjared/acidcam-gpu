@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7X**. It is usable for video, camera, and
+The port is currently at **Increment 8A**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -16,7 +16,7 @@ ACMX2.
 | Standalone CMake project | Complete | Builds against installed MXVK and MXWrite and provides an `uninstall` target. |
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
-| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Still images remain OpenCV-backed. |
+| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--maximize-fps` decouples camera acquisition from Vulkan presentation. When `--resolution` is omitted, encoded output follows the negotiated source dimensions, including a width/height swap for 90-degree input rotation; oversized previews are fitted to the usable display while preserving that aspect ratio. Still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
@@ -41,7 +41,7 @@ ACMX2.
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.29.0 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.30.0 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -114,6 +114,20 @@ raises MXVK to 0.28.1, so MXVK must be rebuilt and reinstalled before ACMXVK.
 Increment 7X adds compute post-processing pipelines and raises MXVK to 0.29.0,
 so MXVK must again be rebuilt and reinstalled before ACMXVK; acidcam-gpu is
 unchanged.
+Increment 7Y changes only ACMXVK. It selects the video, negotiated camera, or
+still-image dimensions when `--resolution` is omitted and applies input
+rotation before choosing the automatic width and height. Neither MXVK nor
+acidcam-gpu needs to be rebuilt or reinstalled.
+Increment 7Z changes only ACMXVK. It prevents the desktop compositor from
+maximizing an oversized source window to a different aspect ratio by fitting
+the preview within the usable display and locking its aspect. Recording and
+generated output retain the automatic source dimensions. Neither dependency
+needs to be rebuilt or reinstalled.
+Increment 8A adds MXVK 0.30.0's fixed native render extent. Shader passes,
+watermark/output text, snapshots, and recording readback remain at the source
+dimensions while a separate aspect-preserving copy is fitted into the preview
+swapchain. Output text and preview-only HUD fonts are sized independently.
+MXVK must be rebuilt and reinstalled; acidcam-gpu remains unchanged.
 
 ### Input validation
 
@@ -1337,6 +1351,31 @@ pass chain. MXVK 0.29.0 reflects fragment versus compute entry points from
 SPIR-V, uses synchronized RGBA8 storage-image ping-pong targets, and preserves
 the existing binding-1 uniforms plus optional history and audio descriptors.
 Fragment-only commands and manifests remain compatible.
+
+Increment 7Y makes source-sized rendering the default. After a video or camera
+is opened, ACMXVK uses the decoder or camera driver's negotiated dimensions to
+size the window before MXVK creates its swapchain. Clockwise and
+counterclockwise 90-degree input rotation swap those dimensions. A still image
+uses its decoded dimensions in the same way. Passing `--resolution` keeps the
+requested fixed window/output size; fullscreen presentation continues to use
+the active display extent.
+
+Increment 7Z separates automatic output geometry from the physical preview
+window geometry. Sources that fit within 90 percent of the usable display keep
+their native preview dimensions. Larger 16:9, 9:16, square, and rotated inputs
+are uniformly scaled down and centered with a locked aspect ratio, preventing
+the window manager from stretching them when they exceed the desktop. Video
+and generated output still use the full source width and height. An explicit
+`--resolution` continues to control both the window and output directly.
+
+Increment 8A removes the remaining preview-resolution processing compromise.
+MXVK renders the scene and every ordered fragment/compute pass into
+source-sized offscreen images, reads the completed source-sized frame for
+encoding, then scales only the presentation copy into the window with
+letterboxing if necessary. Resizing or maximizing the preview therefore cannot
+change shader resolution or encoded geometry. ACMXVK sizes output overlays from
+the native render height and the runtime HUD from the preview height, avoiding
+oversized HUD text when a tall source is fitted to the display.
 
 ## Runtime controls
 

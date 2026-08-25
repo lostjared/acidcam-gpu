@@ -107,6 +107,15 @@ extern "C" {
 namespace acmxvk {
     namespace fs = std::filesystem;
 
+    constexpr int MAX_FRAME_DIMENSION = 16384;
+    constexpr std::int64_t MAX_FRAME_PIXELS = 67108864;
+
+    [[nodiscard]] bool dimensions_supported(int width, int height) {
+        return width > 0 && height > 0 && width <= MAX_FRAME_DIMENSION &&
+               height <= MAX_FRAME_DIMENSION &&
+               static_cast<std::int64_t>(width) * height <= MAX_FRAME_PIXELS;
+    }
+
     enum class FrameRotation { None,
                                Clockwise90,
                                Rotate180,
@@ -421,8 +430,6 @@ namespace acmxvk {
 
     void parseDimensions(std::string_view text, int &width, int &height,
                          std::string_view option) {
-        constexpr int MAX_DIMENSION = 16384;
-        constexpr std::int64_t MAX_PIXELS = 67108864;
         const std::size_t separator = text.find_first_of("xX");
         if (separator == std::string_view::npos) {
             throw std::runtime_error("invalid dimensions for " + std::string(option) +
@@ -431,9 +438,7 @@ namespace acmxvk {
 
         width = parseInteger(text.substr(0, separator), option);
         height = parseInteger(text.substr(separator + 1), option);
-        if (width <= 0 || height <= 0 || width > MAX_DIMENSION ||
-            height > MAX_DIMENSION ||
-            static_cast<std::int64_t>(width) * height > MAX_PIXELS) {
+        if (!dimensions_supported(width, height)) {
             throw std::runtime_error(
                 "dimensions are outside the supported range for " +
                 std::string(option));
@@ -1113,7 +1118,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7X)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8A)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1219,7 +1224,8 @@ namespace acmxvk {
                << "                              Filters require WITH_CUDA=ON\n"
                << "                              Video/camera RGBA and rotation stay on GPU\n\n"
                << "Window:\n"
-               << "  -r, --resolution <WxH>      Window resolution\n"
+               << "  -r, --resolution <WxH>      Window/output resolution override\n"
+               << "                              Default output follows source; preview may fit display\n"
                << "  -n, --fullscreen            Start fullscreen\n"
                << "  -a, --repeat                Repeat video input\n"
                << "      --rotate <mode>         clockwise, 180, or counterclockwise\n"
@@ -1763,6 +1769,7 @@ namespace acmxvk {
             loadPlaylist();
             resetAutopilotInterval();
             openInput();
+            apply_automatic_resolution();
             initializeSprite();
             initializeOverlayFont();
             start_requested_audio_recording();
@@ -2102,7 +2109,7 @@ namespace acmxvk {
             if (!rendering_frozen) {
                 updateAutopilot();
             }
-            const VkExtent2D extent = getSwapchainExtent();
+            const VkExtent2D extent = getRenderExtent();
             const int target_width = extent.width > 0U ? static_cast<int>(extent.width) : options.width;
             const int target_height =
                 extent.height > 0U ? static_cast<int>(extent.height) : options.height;
@@ -2194,6 +2201,7 @@ namespace acmxvk {
         bool watermark_enabled = !options.watermark_text.empty();
         bool counter_disabled = options.disable_counter;
         int overlay_font_size = 18;
+        int preview_overlay_font_size = 18;
         bool snapshot_pending = false;
         bool autopilot_enabled = false;
         bool autopilot_sequential = false;
@@ -3362,14 +3370,21 @@ namespace acmxvk {
                 throw std::runtime_error("overlay font was not found: " +
                                          font.string());
             }
-            const VkExtent2D extent = getSwapchainExtent();
-            const int height = extent.height > 0U
-                                   ? static_cast<int>(extent.height)
-                                   : options.height;
-            overlay_font_size = std::max(12, height / 40);
+            const VkExtent2D render_extent = getRenderExtent();
+            const VkExtent2D preview_extent = getSwapchainExtent();
+            const int output_height = render_extent.height > 0U
+                                          ? static_cast<int>(render_extent.height)
+                                          : options.height;
+            const int preview_height = preview_extent.height > 0U
+                                           ? static_cast<int>(preview_extent.height)
+                                           : output_height;
+            overlay_font_size = std::max(12, output_height / 40);
+            preview_overlay_font_size = std::max(12, preview_height / 40);
             setFont(font.string(), overlay_font_size);
-            std::cout << "acmxvk: overlay font " << font.string() << " at "
-                      << overlay_font_size << " points\n";
+            setPreviewFont(font.string(), preview_overlay_font_size);
+            std::cout << "acmxvk: output font " << font.string() << " at "
+                      << overlay_font_size << " points; preview HUD at "
+                      << preview_overlay_font_size << " points\n";
         }
 
         [[nodiscard]] static std::string clipOverlayText(std::string text) {
@@ -3639,8 +3654,9 @@ namespace acmxvk {
             constexpr int LEFT_MARGIN = 10;
             constexpr int TOP_MARGIN = 10;
             const int line_height = overlay_font_size + 4;
+            int preview_y = TOP_MARGIN;
+            queueRuntimeHud(preview_y, preview_overlay_font_size + 4);
             int y = TOP_MARGIN;
-            queueRuntimeHud(y, line_height);
             if (options.display_filter) {
                 const SDL_Color filter_color{255U, 0U, 255U, 255U};
                 std::string shader = effects_enabled
@@ -3823,6 +3839,144 @@ namespace acmxvk {
                     }
                 }
             }
+        }
+
+        [[nodiscard]] std::pair<int, int> source_dimensions() {
+            int source_width = options.width;
+            int source_height = options.height;
+            if (source_kind == SourceKind::Graphic) {
+                source_width = graphic_rgba.cols;
+                source_height = graphic_rgba.rows;
+            } else {
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+                if (using_ffmpeg_capture) {
+                    source_width = ffmpeg_capture.width();
+                    source_height = ffmpeg_capture.height();
+                } else
+#endif
+                {
+                    if (source_kind == SourceKind::Camera &&
+                        camera_reported_width > 0 &&
+                        camera_reported_height > 0) {
+                        source_width = camera_reported_width;
+                        source_height = camera_reported_height;
+                    } else {
+                        source_width = static_cast<int>(
+                            std::lround(capture.get(cv::CAP_PROP_FRAME_WIDTH)));
+                        source_height = static_cast<int>(
+                            std::lround(capture.get(cv::CAP_PROP_FRAME_HEIGHT)));
+                    }
+                }
+                if (source_width <= 0 || source_height <= 0) {
+                    source_width = source_kind == SourceKind::Camera
+                                       ? options.camera_width
+                                       : options.width;
+                    source_height = source_kind == SourceKind::Camera
+                                        ? options.camera_height
+                                        : options.height;
+                }
+                if (rotationSwapsDimensions(options.frame_rotation)) {
+                    std::swap(source_width, source_height);
+                }
+            }
+            return {source_width, source_height};
+        }
+
+        void apply_automatic_resolution() {
+            if (options.resolution_specified) {
+                return;
+            }
+
+            const auto [source_width, source_height] = source_dimensions();
+            if (!dimensions_supported(source_width, source_height)) {
+                throw std::runtime_error(
+                    "input source dimensions are outside the supported range");
+            }
+
+            options.width = source_width;
+            options.height = source_height;
+            setRenderExtent(static_cast<std::uint32_t>(source_width),
+                            static_cast<std::uint32_t>(source_height));
+            const char *source_name = source_kind == SourceKind::Video
+                                          ? "video"
+                                      : source_kind == SourceKind::Camera
+                                          ? "camera"
+                                          : "graphic";
+            std::cout << "acmxvk: automatic output resolution: " << source_width
+                      << 'x' << source_height << " from " << source_name;
+            if (rotationSwapsDimensions(options.frame_rotation)) {
+                std::cout << " after input rotation";
+            }
+            std::cout << '\n';
+
+            if (options.fullscreen) {
+                std::cout << "acmxvk: fullscreen presentation uses the display "
+                             "extent instead of the automatic window extent\n";
+                return;
+            }
+
+            SDL_Window *window = getSDLWindow();
+            if (window == nullptr) {
+                throw std::runtime_error(
+                    "unable to apply automatic resolution without an SDL window");
+            }
+
+            int preview_width = source_width;
+            int preview_height = source_height;
+            SDL_Rect usable_bounds{};
+            SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+            if (display == 0) {
+                display = SDL_GetPrimaryDisplay();
+            }
+            if (display != 0 &&
+                SDL_GetDisplayUsableBounds(display, &usable_bounds) &&
+                usable_bounds.w > 0 && usable_bounds.h > 0) {
+                constexpr double PREVIEW_DISPLAY_FRACTION = 0.9;
+                const double width_scale =
+                    (static_cast<double>(usable_bounds.w) *
+                     PREVIEW_DISPLAY_FRACTION) /
+                    source_width;
+                const double height_scale =
+                    (static_cast<double>(usable_bounds.h) *
+                     PREVIEW_DISPLAY_FRACTION) /
+                    source_height;
+                const double preview_scale =
+                    std::min({1.0, width_scale, height_scale});
+                preview_width = std::max(
+                    1, static_cast<int>(std::lround(source_width * preview_scale)));
+                preview_height = std::max(
+                    1, static_cast<int>(std::lround(source_height * preview_scale)));
+            }
+
+            const float source_aspect = static_cast<float>(source_width) /
+                                        static_cast<float>(source_height);
+            if (!SDL_SetWindowAspectRatio(window, source_aspect,
+                                          source_aspect)) {
+                std::cerr << "acmxvk: unable to lock preview aspect ratio: "
+                          << SDL_GetError() << '\n';
+            }
+            if (!SDL_SetWindowSize(window, preview_width, preview_height)) {
+                throw std::runtime_error(
+                    std::string("unable to apply automatic preview resolution: ") +
+                    SDL_GetError());
+            }
+            SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED,
+                                  SDL_WINDOWPOS_CENTERED);
+            if (!SDL_SyncWindow(window)) {
+                std::cerr << "acmxvk: automatic window resize sync warning: "
+                          << SDL_GetError() << '\n';
+            }
+
+            int actual_width = 0;
+            int actual_height = 0;
+            SDL_GetWindowSizeInPixels(window, &actual_width, &actual_height);
+            std::cout << "acmxvk: preview resolution: " << actual_width << 'x'
+                      << actual_height;
+            if (preview_width != source_width ||
+                preview_height != source_height) {
+                std::cout << " (source-sized output, preview fitted to display)";
+            }
+            std::cout << '\n';
         }
 
         [[nodiscard]] double outputFrameRate() {
@@ -4024,10 +4178,18 @@ namespace acmxvk {
                 return;
             }
 
-            const VkExtent2D extent = getSwapchainExtent();
-            recording_width = extent.width > 0U ? static_cast<int>(extent.width) : options.width;
-            recording_height =
-                extent.height > 0U ? static_cast<int>(extent.height) : options.height;
+            const VkExtent2D extent = getRenderExtent();
+            if (options.resolution_specified) {
+                recording_width = extent.width > 0U
+                                      ? static_cast<int>(extent.width)
+                                      : options.width;
+                recording_height = extent.height > 0U
+                                       ? static_cast<int>(extent.height)
+                                       : options.height;
+            } else {
+                recording_width = options.width;
+                recording_height = options.height;
+            }
             recording_fps = outputFrameRate();
 
             if (options.png_output) {
@@ -4194,38 +4356,7 @@ namespace acmxvk {
                 throw std::runtime_error("MXVK failed to initialize render resources");
             }
 
-            int source_width = options.width;
-            int source_height = options.height;
-            if (source_kind == SourceKind::Graphic) {
-                source_width = graphic_rgba.cols;
-                source_height = graphic_rgba.rows;
-            } else {
-#ifdef MXVK_WITH_FFMPEG_CAPTURE
-                if (using_ffmpeg_capture) {
-                    source_width = ffmpeg_capture.width();
-                    source_height = ffmpeg_capture.height();
-                } else
-#endif
-                {
-                    if (source_kind == SourceKind::Camera &&
-                        options.maximize_fps) {
-                        source_width = camera_reported_width;
-                        source_height = camera_reported_height;
-                    } else {
-                        source_width = static_cast<int>(
-                            capture.get(cv::CAP_PROP_FRAME_WIDTH));
-                        source_height = static_cast<int>(
-                            capture.get(cv::CAP_PROP_FRAME_HEIGHT));
-                    }
-                }
-                if (source_width <= 0 || source_height <= 0) {
-                    source_width = options.camera_width;
-                    source_height = options.camera_height;
-                }
-                if (rotationSwapsDimensions(options.frame_rotation)) {
-                    std::swap(source_width, source_height);
-                }
-            }
+            const auto [source_width, source_height] = source_dimensions();
 
             if (frame_sprite == nullptr) {
                 frame_sprite = createSprite(source_width, source_height);
