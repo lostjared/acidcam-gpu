@@ -159,6 +159,7 @@ namespace acmxvk {
         bool enable_screenshot = false;
         bool enable_playlist = false;
         bool enable_texture_cache = false;
+        bool history_test = false;
         bool normalized_time = false;
         bool flip_output = false;
         bool png_output = false;
@@ -941,7 +942,10 @@ namespace acmxvk {
                 options.enable_vsync = true;
             } else if (option == "--enable-screenshot") {
                 options.enable_screenshot = true;
-            } else if (option == "--history-test" || option == "--texture-cache" ||
+            } else if (option == "--history-test") {
+                options.history_test = true;
+                options.enable_texture_cache = true;
+            } else if (option == "--texture-cache" ||
                        option == "--texture-cache-array") {
                 options.enable_texture_cache = true;
             } else if (option == "--cache-delay") {
@@ -1160,7 +1164,7 @@ namespace acmxvk {
                << "      --texture-cache-array   Alias using sampler2DArray history\n"
                << "      --texture-cache-size N  History layers, 1-64 (default 8)\n"
                << "      --cache-delay N         Skip N frames between cache writes\n"
-               << "      --history-test          Compatibility alias for --texture-cache\n\n"
+               << "      --history-test          Enable history and the built-in echo demo\n\n"
                << "Recording:\n"
                << "  -o, --output <file>         Encode processed output with MXWrite\n"
                << "      --duration <seconds>    Stop after this much output video\n"
@@ -1769,7 +1773,7 @@ namespace acmxvk {
             loadPlaylist();
             resetAutopilotInterval();
             openInput();
-            apply_automatic_resolution();
+            configureRenderResolution();
             initializeSprite();
             initializeOverlayFont();
             start_requested_audio_recording();
@@ -2109,6 +2113,7 @@ namespace acmxvk {
             if (!rendering_frozen) {
                 updateAutopilot();
             }
+            updateCameraHistory();
             const VkExtent2D extent = getRenderExtent();
             const int target_width = extent.width > 0U ? static_cast<int>(extent.width) : options.width;
             const int target_height =
@@ -2163,6 +2168,7 @@ namespace acmxvk {
         Writer writer;
         mxvk::VK_Sprite *frame_sprite = nullptr;
         cv::Mat graphic_rgba;
+        cv::Mat latest_camera_history_rgba;
         std::vector<fs::path> shaders;
         std::vector<fs::path> configured_passes;
         std::vector<PlaylistNode> playlist;
@@ -2216,6 +2222,7 @@ namespace acmxvk {
         int autopilot_counter = 0;
         int autopilot_interval_frames = 0;
         int history_delay_counter = 0;
+        bool camera_history_clock_started = false;
         double recording_fps = 0.0;
         double video_source_fps = 0.0;
         double video_duration_seconds = 0.0;
@@ -2251,6 +2258,7 @@ namespace acmxvk {
         std::chrono::steady_clock::time_point hud_fps_last_tick{
             hud_session_start};
         std::chrono::steady_clock::time_point camera_fps_last_tick{};
+        std::chrono::steady_clock::time_point camera_history_next_update{};
         std::chrono::steady_clock::time_point next_render_tick{};
         std::chrono::steady_clock::time_point source_playback_clock_start{};
         std::chrono::steady_clock::time_point source_playback_pause_start{};
@@ -3942,8 +3950,10 @@ namespace acmxvk {
             return {source_width, source_height};
         }
 
-        void apply_automatic_resolution() {
+        void configureRenderResolution() {
             if (options.resolution_specified) {
+                setRenderExtent(static_cast<std::uint32_t>(options.width),
+                                static_cast<std::uint32_t>(options.height));
                 return;
             }
 
@@ -4436,9 +4446,9 @@ namespace acmxvk {
                                                    static_cast<uint32_t>(
                                                        options.texture_cache_size));
             }
-            frame_sprite->createEmptySprite(source_width, source_height, spriteVertexShader(),
-                                            options.enable_texture_cache ? echoCacheShader()
-                                                                         : std::string{});
+            frame_sprite->createEmptySprite(
+                source_width, source_height, spriteVertexShader(),
+                options.history_test ? echoCacheShader() : std::string{});
 
             if (source_kind == SourceKind::Graphic) {
                 initial_frame_pending = false;
@@ -4897,6 +4907,7 @@ namespace acmxvk {
             }
             history_initialized = true;
             history_delay_counter = 0;
+            camera_history_clock_started = false;
             std::cout << "acmxvk: initialized " << frame_sprite->getHistoryLayerCount()
                       << " Vulkan history-cache layers (delay " << options.cache_delay
                       << ")\n";
@@ -4912,6 +4923,50 @@ namespace acmxvk {
             frame_sprite->updateHistoryTexture(
                 rgba.ptr(), rgba.cols, rgba.rows,
                 static_cast<int>(rgba.step));
+        }
+
+        void updateCameraHistory() {
+            if (source_kind != SourceKind::Camera || rendering_frozen ||
+                input_paused || !history_initialized) {
+                return;
+            }
+
+            const double rate = outputFrameRate();
+            if (!std::isfinite(rate) || rate <= 0.0) {
+                return;
+            }
+            const auto interval = std::chrono::duration_cast<
+                std::chrono::steady_clock::duration>(std::chrono::duration<double>(
+                static_cast<double>(options.cache_delay + 1) / rate));
+            const auto now = std::chrono::steady_clock::now();
+            if (!camera_history_clock_started) {
+                camera_history_next_update = now + interval;
+                camera_history_clock_started = true;
+                return;
+            }
+            if (now < camera_history_next_update) {
+                return;
+            }
+
+            bool history_updated = false;
+#ifdef ACMXVK_WITH_CUDA
+            if (gpu_filter_engine != nullptr) {
+                updateFilteredCudaHistoryFrame();
+                history_updated = true;
+            }
+#endif
+            if (!history_updated && !latest_camera_history_rgba.empty()) {
+                updateHistoryFrame(latest_camera_history_rgba);
+                history_updated = true;
+            }
+            if (!history_updated) {
+                return;
+            }
+
+            camera_history_next_update += interval;
+            if (camera_history_next_update <= now) {
+                camera_history_next_update = now + interval;
+            }
         }
 
 #ifdef ACMXVK_WITH_MXVK_CUDA
@@ -4954,6 +5009,7 @@ namespace acmxvk {
             }
             history_initialized = true;
             history_delay_counter = 0;
+            camera_history_clock_started = false;
             std::cout << "acmxvk: initialized "
                       << frame_sprite->getHistoryLayerCount()
                       << (filtered ? " filtered" : " NVDEC")
@@ -5034,29 +5090,18 @@ namespace acmxvk {
             cv::cvtColor(bgr, rgba, cv::COLOR_BGR2RGBA);
             rotateFrame(rgba, options.frame_rotation);
             uploadInputFrame(rgba);
+            latest_camera_history_rgba = rgba;
             async_camera_frame_uploaded = true;
 
 #ifdef ACMXVK_WITH_CUDA
             if (gpu_filter_engine != nullptr) {
-                const bool history_was_initialized = history_initialized;
                 initializeCudaHistory(gpu_filter_engine->output(),
                                       gpu_filter_engine->stream(), true);
-                if (history_was_initialized &&
-                    ++history_delay_counter > options.cache_delay) {
-                    updateFilteredCudaHistoryFrame();
-                    history_delay_counter = 0;
-                }
                 return true;
             }
 #endif
 
-            const bool history_was_initialized = history_initialized;
             initializeHistory(rgba);
-            if (history_was_initialized &&
-                ++history_delay_counter > options.cache_delay) {
-                updateHistoryFrame(rgba);
-                history_delay_counter = 0;
-            }
             return true;
         }
 
@@ -5108,7 +5153,8 @@ namespace acmxvk {
                 const bool history_was_initialized = history_initialized;
                 initializeCudaHistory(gpu_filter_engine->output(),
                                       gpu_filter_engine->stream(), true);
-                if (history_was_initialized &&
+                if (source_kind != SourceKind::Camera &&
+                    history_was_initialized &&
                     ++history_delay_counter > options.cache_delay) {
                     updateFilteredCudaHistoryFrame();
                     history_delay_counter = 0;
@@ -5184,9 +5230,12 @@ namespace acmxvk {
             }
             rotateFrame(rgba, options.frame_rotation);
             uploadInputFrame(rgba);
+            if (source_kind == SourceKind::Camera) {
+                latest_camera_history_rgba = rgba;
+            }
             const bool history_was_initialized = history_initialized;
             initializeHistory(rgba);
-            if (history_was_initialized &&
+            if (source_kind != SourceKind::Camera && history_was_initialized &&
                 ++history_delay_counter > options.cache_delay) {
                 updateHistoryFrame(rgba);
                 history_delay_counter = 0;
