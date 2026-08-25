@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7U**. It is usable for video, camera, and
+The port is currently at **Increment 7W**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -23,7 +23,7 @@ ACMX2.
 | Multipass and playlists | Implemented | Includes named playlist nodes, multipass chains, sequential autopilot, and random autopilot. |
 | Frame history/texture cache | Implemented | Uses a Vulkan `sampler2DArray` ring buffer with configurable size and write delay. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
-| Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, and audio-clock synchronization for file playback and live-input muxing. |
+| Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, timer, measured FPS, audio track, CUDA filter, and autopilot status. `--disable-counter` or F9 hides the HUD. The HUD is excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
@@ -41,7 +41,7 @@ ACMX2.
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.27 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.28.1 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -106,7 +106,11 @@ require MXVK or acidcam-gpu to be rebuilt. Increment 7S adds MXVK's
 preview-only text queue and raises MXVK to 0.27.0, so MXVK must be rebuilt and
 reinstalled before ACMXVK; acidcam-gpu remains unchanged. Increment 7T changes
 only ACMXVK and does not require MXVK or acidcam-gpu to be rebuilt. Increment
-7U also changes only ACMXVK.
+7U also changes only ACMXVK. Increment 7V pipelines rendered-frame readback and
+raises MXVK to 0.28.0, so MXVK must be rebuilt and reinstalled before ACMXVK;
+acidcam-gpu remains unchanged. Increment 7W fixes discrete-GPU readback memory
+selection and moves hardware-encoder upload work off the render thread. It
+raises MXVK to 0.28.1, so MXVK must be rebuilt and reinstalled before ACMXVK.
 
 ### Input validation
 
@@ -881,6 +885,20 @@ mode, so animated shader output can be encoded at the requested rate even when
 adjacent frames use the same camera image. VSync and hardware load can still
 cap the achieved presentation rate.
 
+Increment 7V removes MXVK's same-frame recording fence wait. Each frame in
+flight now has its own persistently mapped Vulkan readback buffer; ACMXVK
+consumes a completed buffer when that slot's normal fence is reached and keeps
+the original snapshot intent and recording PTS attached to the delayed frame.
+Pending buffers are flushed before MXWrite closes, so the final submitted
+frames are not lost.
+
+Increment 7W makes the pipelined path practical on discrete GPUs. MXVK now
+prefers host-cached coherent memory for readback instead of accepting the first
+host-visible type, which can be an uncached PCIe mapping on NVIDIA hardware.
+The repository MXWrite also queues host RGBA frames immediately and performs
+conversion plus hardware-frame upload on its encoder thread. Devices without a
+host-cached coherent type retain the portable coherent-memory fallback.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -962,6 +980,15 @@ packages. Under Vulkan validation, two deterministic 30-frame H.264 recordings
 with the HUD shown and hidden produced identical decoded-frame SHA-256 hashes;
 an otherwise identical watermark recording produced a different hash, proving
 that preview status is excluded while explicit saved overlays remain embedded.
+Increment 7V built with CUDA, audio, MIDI, and validation against a staged MXVK
+0.28.0 package. A CUDA/NVDEC input and NVENC output run completed without
+validation errors, and its destructor flush produced all 30 expected frames in
+the one-second H.264 test clip. MXVK and ACMXVK also compiled cleanly in the
+non-CUDA configuration used by portable and Apple builds. Increment 7W then
+repeated a 1920x1080 NVDEC/NVENC recording driven by live-audio PTS. Selecting
+the RTX 2070's host-cached memory type increased delivery from 6–7 frames to 59
+frames over two seconds; the resulting H.264 and AAC streams both measured
+exactly two seconds, with a 29.5 FPS average video rate.
 
 ## Development note
 

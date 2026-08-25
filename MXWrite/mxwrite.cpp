@@ -1878,7 +1878,7 @@ void Writer::write_at_pts(void *rgba_buffer, int64_t pts) {
         return;
     }
 
-    if (use_hw_encode) {
+    if (use_hw_encode && hdr_output) {
         queued_frame->format = codec_ctx->pix_fmt;
         queued_frame->width = width;
         queued_frame->height = height;
@@ -2277,6 +2277,7 @@ void Writer::encodeAndWriteFrame(AVFrame *in_frame) {
     }
 
     AVFrame *encode_frame = in_frame;
+    AVFrame *uploaded_frame = nullptr;
     if (hdr_output) {
         if (in_frame->format == AV_PIX_FMT_YUV420P10LE) {
             // Frame has already been converted to BT.2020 PQ YUV420P10LE
@@ -2311,6 +2312,49 @@ void Writer::encodeAndWriteFrame(AVFrame *in_frame) {
                 hdr_info.color_range ? hdr_info.color_range : AVCOL_RANGE_MPEG);
             encode_frame = frame10;
         }
+    } else if (use_hw_encode && in_frame->format == AV_PIX_FMT_RGBA) {
+        uploaded_frame = av_frame_alloc();
+        if (!uploaded_frame) {
+            std::cerr << "Writer: failed to allocate hardware upload frame\n";
+            return;
+        }
+        uploaded_frame->format = codec_ctx->pix_fmt;
+        uploaded_frame->width = width;
+        uploaded_frame->height = height;
+        if (av_hwframe_get_buffer(hw_frames_ctx, uploaded_frame, 0) < 0) {
+            std::cerr << "Writer: failed to allocate frame from hardware pool\n";
+            releaseFrame(uploaded_frame);
+            return;
+        }
+        if (av_frame_make_writable(upload_sw_frame) < 0) {
+            std::cerr << "Writer: software upload frame not writable\n";
+            releaseFrame(uploaded_frame);
+            return;
+        }
+
+        if (upload_sw_frame->format == AV_PIX_FMT_RGBA) {
+            for (int y = 0; y < height; ++y) {
+                std::memcpy(
+                    upload_sw_frame->data[0] +
+                        static_cast<size_t>(y) * upload_sw_frame->linesize[0],
+                    in_frame->data[0] +
+                        static_cast<size_t>(y) * in_frame->linesize[0],
+                    static_cast<size_t>(width) * 4);
+            }
+        } else {
+            const uint8_t *source_data[1] = {in_frame->data[0]};
+            const int source_linesize[1] = {in_frame->linesize[0]};
+            sws_scale(sws_ctx, source_data, source_linesize, 0, height,
+                      upload_sw_frame->data, upload_sw_frame->linesize);
+        }
+
+        if (av_hwframe_transfer_data(uploaded_frame, upload_sw_frame, 0) < 0) {
+            std::cerr << "Writer: failed to transfer system frame to hardware frame\n";
+            releaseFrame(uploaded_frame);
+            return;
+        }
+        uploaded_frame->pts = in_frame->pts;
+        encode_frame = uploaded_frame;
     } else if (!use_hw_encode) {
         const uint8_t *src_data[1] = {in_frame->data[0]};
         int src_linesize[1] = {in_frame->linesize[0]};
@@ -2327,10 +2371,12 @@ void Writer::encodeAndWriteFrame(AVFrame *in_frame) {
     }
     if (ret < 0) {
         std::cerr << "Writer: error sending frame to encoder: " << ret << "\n";
+        releaseFrame(uploaded_frame);
         return;
     }
 
     drainEncoderPackets();
+    releaseFrame(uploaded_frame);
 }
 
 void Writer::encodeLoop(std::stop_token stop_token) {

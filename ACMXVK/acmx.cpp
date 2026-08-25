@@ -1084,7 +1084,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7U)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7W)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1699,6 +1699,12 @@ namespace acmxvk {
 
         ~MainWindow() override {
             latest_camera_frame.stop();
+            try {
+                flushFrameReadbacks();
+            } catch (const std::exception &error) {
+                std::cerr << "acmxvk: unable to flush pending frame readbacks: "
+                          << error.what() << '\n';
+            }
             const bool should_copy_audio = options.copy_audio && writer.is_open();
 #ifdef AUDIO_ENABLED
             const bool should_mux_file_audio =
@@ -2051,6 +2057,14 @@ namespace acmxvk {
             std::uint32_t height = 0;
         };
 
+        struct ReadbackRequest {
+            bool snapshot = false;
+            bool continuous = false;
+            bool frame_due = false;
+            bool has_pts = false;
+            std::uint64_t pts = 0;
+        };
+
         static constexpr std::size_t SNAPSHOT_QUEUE_CAPACITY = 4;
 
         Options options;
@@ -2139,6 +2153,7 @@ namespace acmxvk {
         std::thread snapshot_worker;
         std::size_t snapshot_jobs_in_flight = 0;
         bool snapshot_worker_stopping = false;
+        std::deque<ReadbackRequest> readback_requests;
         std::chrono::steady_clock::time_point hud_session_start{
             std::chrono::steady_clock::now()};
         std::chrono::steady_clock::time_point hud_fps_last_tick{
@@ -3870,16 +3885,39 @@ namespace acmxvk {
             setFrameReadbackEnabled(true);
         }
 
+        void onFrameReadbackScheduled() override {
+            ReadbackRequest request;
+            request.snapshot = snapshot_pending;
+            request.continuous = continuousReadbackEnabled();
+            request.frame_due = recording_frame_due;
+            request.has_pts = recording_frame_has_pts;
+            request.pts = recording_frame_pts;
+            readback_requests.push_back(request);
+
+            if (snapshot_pending) {
+                snapshot_pending = false;
+                if (!request.continuous) {
+                    setFrameReadbackEnabled(false);
+                }
+            }
+        }
+
         void onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width,
                              uint32_t height) override {
-            const bool continuous_readback = continuousReadbackEnabled();
-            if (snapshot_pending) {
+            if (readback_requests.empty()) {
+                std::cerr << "acmxvk: received frame readback without queued metadata\n";
+                return;
+            }
+            const ReadbackRequest request = readback_requests.front();
+            readback_requests.pop_front();
+
+            if (request.snapshot) {
                 const fs::path path = snapshotPath(width, height);
                 SnapshotJob job;
                 job.path = path;
                 job.width = width;
                 job.height = height;
-                if (continuous_readback) {
+                if (request.continuous) {
                     job.rgba = rgba;
                 } else {
                     job.rgba = std::move(rgba);
@@ -3888,14 +3926,10 @@ namespace acmxvk {
                 ++snapshot_count;
                 std::cout << "acmxvk: queued PNG snapshot: " << path.string()
                           << '\n';
-                snapshot_pending = false;
-                if (!continuous_readback) {
-                    setFrameReadbackEnabled(false);
-                }
             }
 
-            if (!continuous_readback || recording_complete ||
-                !recording_frame_due) {
+            if (!request.continuous || recording_complete ||
+                !request.frame_due) {
                 return;
             }
 
@@ -3911,10 +3945,10 @@ namespace acmxvk {
             }
 
             if (writer.is_open()) {
-                if (recording_frame_has_pts) {
+                if (request.has_pts) {
                     writer.write_at_pts(
                         output_pixels,
-                        static_cast<std::int64_t>(recording_frame_pts));
+                        static_cast<std::int64_t>(request.pts));
                 } else {
                     writer.write(output_pixels);
                 }
@@ -3925,8 +3959,7 @@ namespace acmxvk {
                 ++png_frame_count;
             }
             if (options.generate_interval > 0 &&
-                (recording_frame_has_pts ? recording_frame_pts
-                                         : output_frame_count) %
+                (request.has_pts ? request.pts : output_frame_count) %
                         static_cast<std::uint64_t>(options.generate_interval) ==
                     0) {
                 savePng(framePath(generate_output_directory, generated_frame_count),
@@ -3937,10 +3970,9 @@ namespace acmxvk {
 
             if (options.duration > 0.0) {
                 double output_duration = 0.0;
-                if (recording_frame_has_pts) {
+                if (request.has_pts) {
                     output_duration =
-                        static_cast<double>(recording_frame_pts + 1) /
-                        recording_fps;
+                        static_cast<double>(request.pts + 1) / recording_fps;
                 } else if (writer.is_open()) {
                     output_duration = writer.get_duration();
                 } else {
