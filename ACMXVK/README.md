@@ -402,6 +402,25 @@ are rejected before a pipeline is attached.
 
 ## Writing fragment and compute shaders
 
+The repository includes `scripts/convert_shaders_to_acmxvk.pl` for bulk
+conversion of ACMX2/OpenGL shader libraries. By default it reads fragment
+shaders from `shaders_new`, compute shaders from `compute`, and writes a
+separate `shaders_acmxvk` directory, leaving every original file untouched:
+
+```bash
+perl scripts/convert_shaders_to_acmxvk.pl
+```
+
+The output contains Vulkan-compatible `.frag` and `.comp` source files,
+compiled `.spv` modules, `library.json`, and `conversion-report.txt`. Only
+successfully compiled shaders are added to the manifest. Re-run with `--force`
+to replace previously generated outputs, or use `--input`, `--output`,
+`--compute-input`, and `--glslc` to select other locations. Converted compute
+sources and modules are placed beneath `shaders_acmxvk/compute`. `--dry-run`
+lists candidates without writing anything. The converter reports history-cache shaders separately
+because ordinary ACMXVK post-processing passes do not currently expose history
+binding 2.
+
 ACMXVK shaders are full-frame post-processing stages. The application renders
 the input image, camera, or video first, then executes the configured pass list
 in order. Each pass samples the preceding result. A fragment or compute shader
