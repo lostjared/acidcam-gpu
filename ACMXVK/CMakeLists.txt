@@ -112,7 +112,7 @@ find_package(ZLIB REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(OpenCV REQUIRED)
 
-find_package(mxvk 0.28.1 CONFIG REQUIRED)
+find_package(mxvk 0.29.0 CONFIG REQUIRED)
 find_program(GLSLC_EXECUTABLE glslc REQUIRED)
 
 get_target_property(ACMXVK_MXVK_LIBRARIES mxvk::mxvk INTERFACE_LINK_LIBRARIES)
@@ -197,6 +197,9 @@ set(ACMXVK_AUDIO_REACTIVE_SHADER
 set(ACMXVK_AUDIO_SPECTRUM_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/audio_spectrum.frag.spv"
 )
+set(ACMXVK_COMPUTE_TEST_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/compute_test.comp.spv"
+)
 set(ACMXVK_AUDIO_HISTORY_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/audio_history.frag.spv"
 )
@@ -218,6 +221,17 @@ configure_file(
     "${ACMXVK_OVERLAY_FONT}"
     "${ACMXVK_BUILD_OVERLAY_FONT}"
     COPYONLY
+)
+
+add_custom_command(
+    OUTPUT "${ACMXVK_COMPUTE_TEST_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/compute_test.comp"
+            -o "${ACMXVK_COMPUTE_TEST_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/compute_test.comp"
+    COMMENT "Compiling ACMXVK compute-pass test shader"
+    VERBATIM
 )
 
 add_custom_command(
@@ -324,6 +338,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_TEST_SHADER_MANIFEST}"
     "${ACMXVK_AUDIO_REACTIVE_SHADER}"
     "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
+    "${ACMXVK_COMPUTE_TEST_SHADER}"
     "${ACMXVK_AUDIO_HISTORY_SHADER}"
 )
 
@@ -411,6 +426,7 @@ install(FILES
         "${ACMXVK_MIDI_SLIDER_SHADER}"
         "${ACMXVK_AUDIO_REACTIVE_SHADER}"
         "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
+        "${ACMXVK_COMPUTE_TEST_SHADER}"
         "${ACMXVK_AUDIO_HISTORY_SHADER}"
         "${ACMXVK_TEST_SHADER_MANIFEST}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")

@@ -9,6 +9,7 @@
         }
     },
     "shaders": [
-        "midi_slider.frag.spv"
+        "midi_slider.frag.spv",
+        "compute_test.comp.spv"
     ]
 }

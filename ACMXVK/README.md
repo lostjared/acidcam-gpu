@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 7W**. It is usable for video, camera, and
+The port is currently at **Increment 7X**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -17,10 +17,10 @@ ACMX2.
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
 | Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Still images remain OpenCV-backed. |
-| Basic shader playback | Complete | Loads Vulkan fragment shaders compiled to `.spv`. |
+| Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
-| Multipass and playlists | Implemented | Includes named playlist nodes, multipass chains, sequential autopilot, and random autopilot. |
+| Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
 | Frame history/texture cache | Implemented | Uses a Vulkan `sampler2DArray` ring buffer with configurable size and write delay. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
@@ -41,7 +41,7 @@ ACMX2.
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.28.1 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.29.0 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -111,6 +111,9 @@ raises MXVK to 0.28.0, so MXVK must be rebuilt and reinstalled before ACMXVK;
 acidcam-gpu remains unchanged. Increment 7W fixes discrete-GPU readback memory
 selection and moves hardware-encoder upload work off the render thread. It
 raises MXVK to 0.28.1, so MXVK must be rebuilt and reinstalled before ACMXVK.
+Increment 7X adds compute post-processing pipelines and raises MXVK to 0.29.0,
+so MXVK must again be rebuilt and reinstalled before ACMXVK; acidcam-gpu is
+unchanged.
 
 ### Input validation
 
@@ -148,7 +151,7 @@ resource-root/
 └── midi-examples/*.midi_cfg
 ```
 
-When neither `--shaders` nor `--fragment` is supplied, ACMXVK automatically
+When none of `--shaders`, `--fragment`, or `--compute` is supplied, ACMXVK automatically
 uses `shaders/library.json` (or `index.txt`) from the selected resource root.
 Relative playlist and MIDI-map names are also searched beneath their matching
 resource subdirectories. Media input and output arguments remain relative to
@@ -161,7 +164,7 @@ Resource precedence is:
 3. `ACMX2_PATH` as a compatibility fallback for shared data such as fonts.
 4. Installed, build-tree, and current-working-directory resources.
 
-Explicit `--shaders` or `--fragment` always wins. Otherwise,
+An explicit `--shaders`, `--fragment`, or `--compute` always wins. Otherwise,
 `ACMXVK_SHADER_PATH` can name a SPIR-V library directory or its `library.json`
 or `index.txt` file. `ACMX2_SHADER_PATH` is intentionally not consumed because
 ACMX2 libraries contain OpenGL GLSL rather than MXVK SPIR-V.
@@ -343,6 +346,7 @@ ACMXVK accepts `library.json` entries as strings or objects containing a
     },
     "shaders": [
         "basic.spv",
+        "compute/block_pixelate.comp.spv",
         { "file": "history/echo.spv" }
     ]
 }
@@ -351,6 +355,12 @@ ACMXVK accepts `library.json` entries as strings or objects containing a
 When `library.json` is absent, `index.txt` is read as one relative `.spv` path
 per line. Absolute paths, parent-directory traversal, files outside the library,
 and non-SPIR-V entries are rejected.
+
+Each entry can contain either a fragment or compute entry point. ACMXVK reads
+the execution model and compute local size directly from SPIR-V, so mixed
+chains work through `--shader-pass`, `--shader-pass-files`, and playlists
+without stage metadata in the manifest. Vertex and unsupported shader stages
+are rejected before a pipeline is attached.
 
 Custom uniforms are packed in manifest declaration order. A Vulkan shader can
 append the custom array to MXVK's binding-1 block:
@@ -381,6 +391,36 @@ The remaining Vulkan bindings are:
 - Set 0, binding 2: optional RGBA history as `sampler2DArray`
 - Set 0, binding 3: current 256-bin audio FFT as an R32 `sampler1D`
 - Set 0, binding 4: optional 256-bin FFT history as an R32 `sampler1DArray`
+- Set 0, binding 5: compute-pass output as a write-only `rgba8 image2D`
+
+Compute passes read the current pass image from binding 0 and write every
+output pixel to binding 5. MXVK dispatches using the shader's declared local
+size, synchronizes storage writes, and makes the result available to the next
+fragment or compute pass. If the last pass is compute, an internal full-screen
+copy presents its result. See `shaders/compute_test.comp` for the complete ABI.
+
+Test the standalone compute path after reinstalling MXVK 0.29.0:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic acmx-vk/jared-ai.png \
+    --compute ./build/acmxvk/shaders/compute_test.comp.spv \
+    --resolution 1280x720 \
+    --enable-vsync
+```
+
+The generated test library already contains the compute pass and MIDI-slider
+fragment pass. Select compute as the pre-pass and fragment as the active shader:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic acmx-vk/jared-ai.png \
+    --shaders ./build/acmxvk/shaders \
+    --shader-pass-files 21:compute_test.comp.spv \
+    --shader-file midi_slider.frag.spv \
+    --resolution 1280x720 \
+    --enable-vsync
+```
 
 With an `AUDIO=ON` build, `--enable-audio` uses live RtAudio input while
 `--audio-file <media>` uses the first audio stream decoded by FFmpeg. It also
@@ -898,6 +938,12 @@ host-visible type, which can be an uncached PCIe mapping on NVIDIA hardware.
 The repository MXWrite also queues host RGBA frames immediately and performs
 conversion plus hardware-frame upload on its encoder thread. Devices without a
 host-cached coherent type retain the portable coherent-memory fallback.
+
+Increment 7X ports ACMX2-style compute image effects into the ordered Vulkan
+pass chain. MXVK 0.29.0 reflects fragment versus compute entry points from
+SPIR-V, uses synchronized RGBA8 storage-image ping-pong targets, and preserves
+the existing binding-1 uniforms plus optional history and audio descriptors.
+Fragment-only commands and manifests remain compatible.
 
 ## Runtime controls
 

@@ -184,6 +184,7 @@ namespace acmxvk {
         std::string graphic_file;
         std::string shader_directory;
         std::string fragment_shader;
+        std::string compute_shader;
         std::string shader_file;
         std::string playlist_file;
         std::string output_file;
@@ -288,6 +289,8 @@ namespace acmxvk {
                                input::StringKind::Path, "--shaders", true);
         input::validate_string(options.fragment_shader,
                                input::StringKind::Path, "--fragment", true);
+        input::validate_string(options.compute_shader,
+                               input::StringKind::Path, "--compute", true);
         input::validate_string(options.shader_file, input::StringKind::Path,
                                "--shader-file", true);
         input::validate_string(options.playlist_file, input::StringKind::Path,
@@ -501,7 +504,8 @@ namespace acmxvk {
         }
 
         if (!options.shader_directory.empty() ||
-            !options.fragment_shader.empty()) {
+            !options.fragment_shader.empty() ||
+            !options.compute_shader.empty()) {
             return;
         }
 
@@ -598,6 +602,8 @@ namespace acmxvk {
                 options.shader_directory = optionValue(index, argc, argv, option);
             } else if (option == "-f" || option == "--fragment") {
                 options.fragment_shader = optionValue(index, argc, argv, option);
+            } else if (option == "--compute") {
+                options.compute_shader = optionValue(index, argc, argv, option);
             } else if (option == "-H" || option == "--shader-index") {
                 options.shader_index =
                     parseInteger(optionValue(index, argc, argv, option), option);
@@ -955,8 +961,13 @@ namespace acmxvk {
         if (!options.input_file.empty() && !options.graphic_file.empty()) {
             throw std::runtime_error("--input and --graphic cannot be used together");
         }
-        if (!options.shader_directory.empty() && !options.fragment_shader.empty()) {
-            throw std::runtime_error("--shaders and --fragment cannot be used together");
+        const int shader_source_count =
+            static_cast<int>(!options.shader_directory.empty()) +
+            static_cast<int>(!options.fragment_shader.empty()) +
+            static_cast<int>(!options.compute_shader.empty());
+        if (shader_source_count > 1) {
+            throw std::runtime_error(
+                "--shaders, --fragment, and --compute are mutually exclusive");
         }
         if (!options.custom_uniform_overrides.empty() &&
             options.shader_directory.empty()) {
@@ -1084,7 +1095,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 7W)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 7X)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1093,7 +1104,7 @@ namespace acmxvk {
                << "  -p, --path <directory>      Assets root containing data/, shaders/,\n"
                << "                              playlists/, and midi-examples/\n"
                << "      ACMXVK_PATH             Default resource root when --path is absent\n"
-               << "      ACMXVK_SHADER_PATH      Default SPIR-V library when -s/-f are absent\n"
+               << "      ACMXVK_SHADER_PATH      Default SPIR-V library when shader input is absent\n"
                << "                              ACMX2_PATH is accepted as a data fallback\n\n"
                << "Input:\n"
                << "  -i, --input <file>          Read a video file\n"
@@ -1107,10 +1118,11 @@ namespace acmxvk {
                << "Shaders:\n"
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
+               << "      --compute <file.spv>    Use one SPIR-V compute shader\n"
                << "  -H, --shader-index <index>  Initial library shader index\n"
                << "      --shader-file <name>    Initial library shader filename\n"
                << "      --uniform <name=value>  Override a library.json custom float\n\n"
-               << "  --shader-pass <indices>     Comma-separated pre-shader pass chain\n"
+               << "  --shader-pass <indices>     Mixed fragment/compute pre-pass chain\n"
                << "  --shader-pass-files <data>  ACMX2 length-prefixed shader filenames\n"
                << "  --playlist <file>           Shader or named multipass playlist\n\n"
                << "  --enable-playlist           Enable the playlist immediately\n"
@@ -2904,14 +2916,32 @@ namespace acmxvk {
         }
 
         void loadShaders() {
-            if (!options.fragment_shader.empty()) {
-                const fs::path fragment = fs::absolute(options.fragment_shader).lexically_normal();
-                if (fragment.extension() != ".spv" || !fs::is_regular_file(fragment)) {
-                    throw std::runtime_error("fragment shader is not a readable .spv file: " +
-                                             fragment.string());
+            if (!options.fragment_shader.empty() ||
+                !options.compute_shader.empty()) {
+                const bool compute = !options.compute_shader.empty();
+                const fs::path shader = fs::absolute(
+                                            compute ? options.compute_shader : options.fragment_shader)
+                                            .lexically_normal();
+                const std::string label =
+                    compute ? "compute shader" : "fragment shader";
+                if (shader.extension() != ".spv" ||
+                    !fs::is_regular_file(shader)) {
+                    throw std::runtime_error(
+                        label + " is not a readable .spv file: " +
+                        shader.string());
                 }
-                input::validate_spirv_file(fragment, "fragment shader");
-                shaders.push_back(fragment);
+                input::validate_spirv_file(shader, label);
+                const mxvk::ShaderModuleInfo module_info =
+                    mxvk::inspect_spirv(mxvk::load_spv(shader.string()));
+                const mxvk::ShaderStage expected_stage =
+                    compute ? mxvk::ShaderStage::Compute
+                            : mxvk::ShaderStage::Fragment;
+                if (module_info.stage != expected_stage) {
+                    throw std::runtime_error(
+                        label + " SPIR-V entry point has the wrong shader stage: " +
+                        shader.string());
+                }
+                shaders.push_back(shader);
                 return;
             }
             if (options.shader_directory.empty()) {
@@ -3383,6 +3413,12 @@ namespace acmxvk {
             printPreviewText(clipOverlayText("Shader: " + std::move(shader)),
                              10, y, shader_color);
             y += line_height;
+
+            const std::string passes = activePassDescription();
+            if (!passes.empty()) {
+                printPreviewText(passes, 10, y, shader_color);
+                y += line_height;
+            }
 
 #ifdef AUDIO_ENABLED
             if (file_audio_source != nullptr && file_audio_source->is_open()) {
@@ -4300,8 +4336,13 @@ namespace acmxvk {
 
             std::cout << "acmxvk: Vulkan shader pipeline (" << pipeline.size() << " passes):\n";
             for (std::size_t index = 0; index < pipeline.size(); ++index) {
-                std::cout << "  " << (index + 1) << ": " << pipeline[index].filename().string()
-                          << '\n';
+                const bool compute =
+                    index < post_process_effect_stages.size() &&
+                    post_process_effect_stages[index] ==
+                        mxvk::ShaderStage::Compute;
+                std::cout << "  " << (index + 1) << ": "
+                          << pipeline[index].filename().string() << " ["
+                          << (compute ? "compute" : "fragment") << "]\n";
             }
         }
 
