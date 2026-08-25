@@ -41,7 +41,7 @@ ACMX2.
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.31.0 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.31.1 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -131,12 +131,14 @@ MXVK must be rebuilt and reinstalled; acidcam-gpu remains unchanged.
 Increment 8B changes only ACMXVK. All overlay and HUD font sizing now follows
 the preview window height at a smaller 1/60 scale instead of using the source
 image or video height. MXVK does not need another rebuild or reinstall.
-Increment 8C adds MXVK 0.31.0's non-owning shared history descriptor for
+Increment 8C adds MXVK 0.31.1's non-owning shared history descriptor for
 fragment and compute post-processing passes. ACMXVK reflects binding 2 from
 SPIR-V, enables one input-frame history ring automatically, and supplies its
 live head/layer metadata to every pass. Converted history shaders are now
-included in `library.json`. MXVK must be rebuilt and reinstalled; acidcam-gpu
-remains unchanged.
+included in `library.json`. Bindings 3 and 4 are reflected as well, allowing
+spectrum shaders to receive zero-initialized safe descriptors even without
+explicit audio-buffer flags. MXVK must be rebuilt and reinstalled;
+acidcam-gpu remains unchanged.
 
 ### Input validation
 
@@ -474,8 +476,8 @@ when their feature is unavailable.
 | 0 | `uniform sampler2D input_image;` | Fragment and compute | Always present. The image produced by the preceding stage. The name may be `samp`, `input_image`, or any other valid identifier. |
 | 1 | `uniform SpriteExtended { ... } ext;` | Fragment and compute | Always present. Per-frame state, mouse, timing, audio values, and custom library uniforms. |
 | 2 | `uniform sampler2DArray history;` | Fragment and compute | Optional shared RGBA input-frame history ring. `--texture-cache` enables it explicitly; ACMXVK also enables it automatically when a directly loaded shader or any entry in `library.json` declares set 0, binding 2. Every pass in the active fragment/compute chain shares the same ring. |
-| 3 | `uniform sampler1D spectrum;` | Fragment and compute | Current 256-bin R32 floating-point FFT. Present in builds configured with `AUDIO=ON`; values are zero without an active audio source. |
-| 4 | `uniform sampler1DArray spectrum_history;` | Fragment and compute | Circular FFT history. Present only in an `AUDIO=ON` build when `--enable-audio-buffers N` requests one or more layers. |
+| 3 | `uniform sampler1D spectrum;` | Fragment and compute | Current 256-bin R32 floating-point FFT. ACMXVK detects this binding from SPIR-V and supplies a zero-initialized descriptor when audio support or an active audio source is unavailable. |
+| 4 | `uniform sampler1DArray spectrum_history;` | Fragment and compute | Circular FFT history. ACMXVK detects this binding from SPIR-V and automatically allocates eight zero-initialized layers when `--enable-audio-buffers N` was not supplied. |
 | 5 | `layout(rgba8) writeonly uniform image2D output_image;` | Compute only | Compute destination. Always required by an ACMXVK compute shader and unavailable to fragment shaders. |
 
 Binding numbers, descriptor types, array lengths, and block-member order are
@@ -809,7 +811,7 @@ Common shader problems are:
 
 - omitting `set = 0` or using a binding with the wrong descriptor type;
 - reordering or shortening `SpriteExtended` before a field that the shader reads;
-- declaring optional binding 3 or 4 without the required audio build/runtime option;
+- declaring binding 3 or 4 with a descriptor type other than the documented sampler type;
 - declaring binding 2 with a type other than `sampler2DArray`;
 - declaring fragment push constants in a compute shader;
 - using a non-`main` entry point or specialization-ID compute local sizes;

@@ -2145,6 +2145,7 @@ namespace acmxvk {
         };
 
         static constexpr std::size_t SNAPSHOT_QUEUE_CAPACITY = 4;
+        static constexpr std::uint32_t COMPATIBILITY_SPECTRUM_BIN_COUNT = 256;
 
         Options options;
         SourceKind source_kind = SourceKind::Camera;
@@ -2178,6 +2179,8 @@ namespace acmxvk {
         bool multipass_enabled = false;
         bool playlist_enabled = false;
         bool shader_history_required = false;
+        bool shader_spectrum_required = false;
+        bool shader_spectrum_history_required = false;
         float mouse_x = 0.0F;
         float mouse_y = 0.0F;
         bool mouse_pressed = false;
@@ -3057,11 +3060,7 @@ namespace acmxvk {
                         label + " SPIR-V entry point has the wrong shader stage: " +
                         shader.string());
                 }
-                if (module_info.usesHistoryTexture &&
-                    !shader_history_required) {
-                    shader_history_required = true;
-                    std::cout << "acmxvk: enabled shared history for shader binding 2\n";
-                }
+                recordShaderResources(module_info, "shader");
                 shaders.push_back(shader);
                 return;
             }
@@ -3084,11 +3083,7 @@ namespace acmxvk {
                                                "shader manifest entry");
                     const mxvk::ShaderModuleInfo module_info =
                         mxvk::inspect_spirv(mxvk::load_spv(shader.string()));
-                    if (module_info.usesHistoryTexture &&
-                        !shader_history_required) {
-                        shader_history_required = true;
-                        std::cout << "acmxvk: enabled shared history for shader library binding 2\n";
-                    }
+                    recordShaderResources(module_info, "shader library");
                     shaders.push_back(shader);
                 }
             }
@@ -3186,6 +3181,52 @@ namespace acmxvk {
 
         [[nodiscard]] bool historyCacheEnabled() const {
             return options.enable_texture_cache || shader_history_required;
+        }
+
+        void recordShaderResources(const mxvk::ShaderModuleInfo &module_info,
+                                   std::string_view source) {
+            if (module_info.usesHistoryTexture &&
+                !shader_history_required) {
+                shader_history_required = true;
+                std::cout << "acmxvk: enabled shared history for " << source
+                          << " binding 2\n";
+            }
+            if (module_info.usesSpectrumTexture &&
+                !shader_spectrum_required) {
+                shader_spectrum_required = true;
+                std::cout << "acmxvk: enabled spectrum descriptor for " << source
+                          << " binding 3\n";
+            }
+            if (module_info.usesSpectrumHistoryTexture &&
+                !shader_spectrum_history_required) {
+                shader_spectrum_history_required = true;
+                if (options.audio_buffers == 0) {
+                    options.audio_buffers = 8;
+                }
+                std::cout << "acmxvk: enabled " << options.audio_buffers
+                          << " spectrum-history layers for " << source
+                          << " binding 4\n";
+            }
+        }
+
+        [[nodiscard]] std::uint32_t spectrumBinCount() const {
+#ifdef AUDIO_ENABLED
+            return audio::AudioEngine::spectrum_bin_count();
+#else
+            return COMPATIBILITY_SPECTRUM_BIN_COUNT;
+#endif
+        }
+
+        [[nodiscard]] bool spectrumTextureEnabledForShaders() const {
+#ifdef AUDIO_ENABLED
+            return true;
+#else
+            return shader_spectrum_required;
+#endif
+        }
+
+        [[nodiscard]] bool spectrumHistoryEnabledForShaders() const {
+            return options.audio_buffers > 0;
         }
 
         [[nodiscard]] fs::path findShader(std::string name) const {
@@ -4382,14 +4423,14 @@ namespace acmxvk {
             }
             frame_sprite->enableExtendedUBO();
             frame_sprite->setCustomUniforms(custom_uniform_values);
-#ifdef AUDIO_ENABLED
-            frame_sprite->enableSpectrumTexture(audio::AudioEngine::spectrum_bin_count());
-            if (options.audio_buffers > 0) {
+            if (spectrumTextureEnabledForShaders()) {
+                frame_sprite->enableSpectrumTexture(spectrumBinCount());
+            }
+            if (spectrumHistoryEnabledForShaders()) {
                 frame_sprite->enableSpectrumHistoryTexture(
-                    audio::AudioEngine::spectrum_bin_count(),
+                    spectrumBinCount(),
                     static_cast<std::uint32_t>(options.audio_buffers));
             }
-#endif
             if (historyCacheEnabled()) {
                 frame_sprite->enableHistoryTexture(source_width, source_height,
                                                    static_cast<uint32_t>(
@@ -4624,25 +4665,27 @@ namespace acmxvk {
                 if (historyCacheEnabled()) {
                     effect.historySource = frame_sprite;
                 }
-#ifdef AUDIO_ENABLED
-                effect.spectrumBinCount = audio::AudioEngine::spectrum_bin_count();
-                effect.spectrumHistoryLayerCount =
-                    static_cast<std::uint32_t>(options.audio_buffers);
-#endif
+                if (spectrumTextureEnabledForShaders()) {
+                    effect.spectrumBinCount = spectrumBinCount();
+                }
+                if (spectrumHistoryEnabledForShaders()) {
+                    effect.spectrumHistoryLayerCount =
+                        static_cast<std::uint32_t>(options.audio_buffers);
+                }
                 effects.push_back(effect);
             }
             post_process_sprites = attachPostProcessingShaders(effects);
             for (mxvk::VK_Sprite *sprite : post_process_sprites) {
                 sprite->enableExtendedUBO();
                 sprite->setCustomUniforms(custom_uniform_values);
-#ifdef AUDIO_ENABLED
-                sprite->enableSpectrumTexture(audio::AudioEngine::spectrum_bin_count());
-                if (options.audio_buffers > 0) {
+                if (spectrumTextureEnabledForShaders()) {
+                    sprite->enableSpectrumTexture(spectrumBinCount());
+                }
+                if (spectrumHistoryEnabledForShaders()) {
                     sprite->enableSpectrumHistoryTexture(
-                        audio::AudioEngine::spectrum_bin_count(),
+                        spectrumBinCount(),
                         static_cast<std::uint32_t>(options.audio_buffers));
                 }
-#endif
             }
 
             std::cout << "acmxvk: Vulkan shader pipeline (" << pipeline.size() << " passes):\n";
