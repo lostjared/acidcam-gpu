@@ -1,0 +1,53 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Binding 0: Previous stage output
+layout(set = 0, binding = 0) uniform sampler2D input_image;
+
+// Binding 1: MXVK Engine State
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+// Binding 5: Compute Destination
+layout(set = 0, binding = 5, rgba8) writeonly uniform image2D output_image;
+
+// ACMXVK / MX2 Compatibility Aliases
+#define iResolution max(ext.u0.zw, vec2(1.0))
+#define iTime ext.u2.y
+#define iTimeDelta ext.u1.x
+#define iFrame ext.u2.x
+#define amp_low ext.audio_bands.x
+#define amp_mid ext.audio_bands.y
+#define amp_high ext.audio_bands.z
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(output_image);
+
+    // MXVK rounds workgroup count up; must bounds-check edge invocations
+    if (any(greaterThanEqual(pixel, size))) {
+        return;
+    }
+
+    // Calculate normalized UV coordinates
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(size);
+    
+    // Read input pixel
+    vec4 source_color = texture(input_image, uv);
+
+    // --- GLITCH / ART LOGIC HERE ---
+    vec3 final_color = source_color.rgb;
+    // -------------------------------
+
+    // Write output pixel
+    imageStore(output_image, pixel, vec4(final_color, source_color.a));
+}
