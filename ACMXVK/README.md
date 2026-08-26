@@ -50,18 +50,16 @@ ACMX2.
 - Optional CUDA Toolkit, CUDA-enabled OpenCV and MXVK, and an installed
   `acidcam-gpu` CMake package when building with `-DWITH_CUDA=ON`
 
-The Vulkan environment used for this project can be loaded with:
-
-```bash
-source ~/vulkan.sh
-```
+Ensure the selected Vulkan SDK's `bin` directory is on `PATH` so CMake can
+find tools such as `glslc`. If the SDK is installed outside the platform's
+standard search paths, set `VULKAN_SDK` or add its prefix to
+`CMAKE_PREFIX_PATH` using the setup instructions supplied with that SDK.
 
 ## Build
 
 From the `acidcam-gpu` repository root:
 
 ```bash
-source ~/vulkan.sh
 cmake -S ACMXVK -B build/acmxvk -DVALIDATION=ON -DAUDIO=ON -DMIDI=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/acmxvk -j
 ./build/acmxvk/acmxvk --help
@@ -231,11 +229,10 @@ export ACMXVK_SHADER_PATH=/path/to/spv-library
 
 ### Apple Silicon and MoltenVK
 
-On an Apple Silicon Mac, source the Vulkan SDK environment and configure an
-arm64 build with MoltenVK enabled:
+On an Apple Silicon Mac, configure the Vulkan SDK environment according to its
+installation instructions, then configure an arm64 build with MoltenVK enabled:
 
 ```bash
-source ~/vulkan.sh
 cmake -S ACMXVK -B build/acmxvk-macos \
     -DACMXVK_USE_MOLTENVK=ON \
     -DCMAKE_OSX_ARCHITECTURES=arm64 \
@@ -824,8 +821,6 @@ Source the Vulkan SDK used by the project, compile GLSL to SPIR-V, and validate
 the result before adding it to `library.json`:
 
 ```bash
-source ~/vulkan.sh
-
 glslc my_effect.frag -o my_effect.frag.spv
 glslc my_effect.comp -o my_effect.comp.spv
 
@@ -1192,7 +1187,6 @@ Increment 7A adds the first `acidcam-gpu` processing path. Configure a separate
 CUDA build on Linux with an NVIDIA GPU:
 
 ```bash
-source ~/vulkan.sh
 cmake -S ACMXVK -B build/acmxvk-cuda \
     -DWITH_CUDA=ON \
     -DVALIDATION=ON \
@@ -1474,8 +1468,8 @@ Run `acmxvk --help` for the complete command-line reference.
 
 ## Validation and current testing
 
-Development builds are tested with the Vulkan SDK selected by `~/vulkan.sh`
-and with validation enabled in both MXVK and ACMXVK. The current increment has
+Development builds are tested with Vulkan SDK 1.4 and with validation enabled
+in both MXVK and ACMXVK. The current increment has
 been exercised with shader-library loading, multipass rendering, configurable
 history caches, MXWrite encoding, custom-uniform rendering, optional live audio
 metrics, FFmpeg-decoded file reactivity, routed-tone FFT visualization, and FFT
