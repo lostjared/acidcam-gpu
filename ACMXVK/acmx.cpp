@@ -1189,7 +1189,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8J)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8K)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -2217,6 +2217,25 @@ namespace acmxvk {
 
         void onRecordCustomRendering(VkCommandBuffer command_buffer,
                                      std::uint32_t image_index) override {
+            if (model_texture_prepass_active) {
+                return;
+            }
+            recordModel(command_buffer, image_index, VK_NULL_HANDLE);
+        }
+
+        void onRecordPostProcessingTexture(
+            VkCommandBuffer command_buffer, std::uint32_t image_index,
+            VkImageView texture_view,
+            [[maybe_unused]] VkExtent2D texture_extent) override {
+            if (!model_texture_prepass_active) {
+                return;
+            }
+            recordModel(command_buffer, image_index, texture_view);
+        }
+
+        void recordModel(VkCommandBuffer command_buffer,
+                         std::uint32_t image_index,
+                         VkImageView texture_view) {
             if (!model_3d_active || !model_initialized) {
                 return;
             }
@@ -2292,8 +2311,14 @@ namespace acmxvk {
                 1.0F, 1.0F, 1.0F, static_cast<float>(shader_time));
             input_model.setFragmentPushConstants(fragment_constants);
 
-            input_model.renderWithPushConstants(
-                command_buffer, image_index, 0U, uniforms, false);
+            if (texture_view != VK_NULL_HANDLE) {
+                input_model.renderWithExternalTexture(
+                    command_buffer, image_index, texture_view, uniforms,
+                    false);
+            } else {
+                input_model.renderWithPushConstants(
+                    command_buffer, image_index, 0U, uniforms, false);
+            }
         }
 
         void proc() override {
@@ -2376,7 +2401,7 @@ namespace acmxvk {
             if (!rendering_frozen) {
                 updateShaderUniforms(target_width, target_height);
             }
-            if (!model_3d_active) {
+            if (!model_3d_active || model_texture_prepass_active) {
                 frame_sprite->drawSpriteRect(0, 0, target_width,
                                              target_height);
             }
@@ -2446,6 +2471,7 @@ namespace acmxvk {
         bool shader_locked = false;
         bool model_initialized = false;
         bool model_3d_active = false;
+        bool model_texture_prepass_active = false;
         bool model_auto_rotate = false;
         bool model_mouse_dragging = false;
         bool shader_history_required = false;
@@ -5208,6 +5234,10 @@ namespace acmxvk {
             frame_sprite->setEffectsEnabled(effects_enabled);
 
             const fs::path direct_model_shader = directModelFragmentShader();
+            model_texture_prepass_active =
+                model_3d_active && direct_model_shader.empty();
+            setPostProcessingTextureConsumerEnabled(
+                model_texture_prepass_active);
             if (model_initialized) {
                 const fs::path desired_model_shader =
                     direct_model_shader.empty() ? modelFragmentShader()
@@ -5234,9 +5264,8 @@ namespace acmxvk {
                           << " [fragment, evaluated on model UVs]\n";
             } else if (model_3d_active && effects_enabled &&
                        !currentShader().empty()) {
-                std::cout
-                    << "acmxvk: 3D texture prepass fallback: shader requires "
-                       "compute/history/audio descriptors or an active pass chain\n";
+                std::cout << "acmxvk: 3D texture prepass: fragment/compute "
+                             "chain output mapped onto model UVs\n";
             }
             if (pipeline.empty()) {
                 return;
