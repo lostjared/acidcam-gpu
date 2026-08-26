@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8G**. It is usable for video, camera, and
+The port is currently at **Increment 8H**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -27,7 +27,7 @@ ACMX2.
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
-| Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
+| Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader locking, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, an M3U/M3U8 playlist, or `--use-source-audio` with real-time source-FPS video playback can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Source-video analysis follows the media clock even when late video frames are skipped. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
@@ -156,6 +156,11 @@ post-processing pass instead of removing MXVK's source-sized offscreen chain.
 This keeps its Vulkan image barriers and presentation target valid when Space
 disables the selected shader, fixing the MoltenVK crash in video and camera
 modes. The identity pass is also used when no visual shader is active.
+Increment 8H changes only ACMXVK. `K` now toggles ACMX2-compatible shader
+locking. While locked, manual shader and playlist-node selection and both
+autopilot modes retain the current pipeline; autopilot resumes its existing
+countdown after unlocking. The runtime HUD marks the shader as locked, and
+ACMX2 MIDI-map action code 75 can toggle the same state.
 
 ### Input validation
 
@@ -1458,6 +1463,7 @@ fitted into a smaller window; the minimum remains 12 points.
 - E: toggle the configured watermark
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
+- K: lock or unlock shader and playlist selection
 - Y: toggle sequential autopilot
 - Space: bypass or enable shader effects
 - Z: save a processed PNG snapshot under the `--prefix` directory

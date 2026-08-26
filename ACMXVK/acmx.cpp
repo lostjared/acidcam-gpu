@@ -1151,7 +1151,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8G)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8H)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1270,7 +1270,8 @@ namespace acmxvk {
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
-               << "      E watermark, F fullscreen, F9 runtime HUD, M multipass,\n"
+               << "      E watermark, F fullscreen, F9 runtime HUD, K shader lock,\n"
+               << "      M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
                << "      Z PNG snapshot,\n"
                << "      Escape quit\n";
@@ -2043,6 +2044,12 @@ namespace acmxvk {
                 case SDLK_J:
                     toggleAutopilot(false);
                     break;
+                case SDLK_K:
+                    shader_locked = !shader_locked;
+                    std::cout << "acmxvk: shader lock "
+                              << (shader_locked ? "enabled" : "disabled")
+                              << '\n';
+                    break;
                 case SDLK_Y:
                     toggleAutopilot(true);
                     break;
@@ -2216,6 +2223,7 @@ namespace acmxvk {
         bool effects_enabled = true;
         bool multipass_enabled = false;
         bool playlist_enabled = false;
+        bool shader_locked = false;
         bool shader_history_required = false;
         bool shader_spectrum_required = false;
         bool shader_spectrum_history_required = false;
@@ -2645,6 +2653,8 @@ namespace acmxvk {
             case 74:
             case 78:
                 return SDLK_J;
+            case 75:
+                return SDLK_K;
             case 76:
                 return SDLK_L;
             case 77:
@@ -2724,6 +2734,8 @@ namespace acmxvk {
             case 74:
             case 78:
                 return "toggle random autopilot";
+            case 75:
+                return "toggle shader lock";
             case 76:
                 return "toggle rendering freeze";
             case 77:
@@ -3753,6 +3765,9 @@ namespace acmxvk {
             std::string shader = effects_enabled
                                      ? fs::path(currentShader()).filename().string()
                                      : "bypassed";
+            if (shader_locked) {
+                shader += " [locked]";
+            }
             printPreviewText(clipOverlayText("Shader: " + std::move(shader)),
                              10, y, shader_color);
             y += line_height;
@@ -4703,8 +4718,8 @@ namespace acmxvk {
         }
 
         void updateAutopilot() {
-            if (!autopilot_enabled || !playlist_enabled || playlist.empty() ||
-                autopilot_interval_frames <= 0) {
+            if (shader_locked || !autopilot_enabled || !playlist_enabled ||
+                playlist.empty() || autopilot_interval_frames <= 0) {
                 return;
             }
             if (++autopilot_counter < autopilot_interval_frames) {
@@ -4734,7 +4749,7 @@ namespace acmxvk {
         }
 
         void selectShader(int direction) {
-            if (shaders.size() < 2 || frame_sprite == nullptr) {
+            if (shader_locked || shaders.size() < 2 || frame_sprite == nullptr) {
                 return;
             }
             const auto count = static_cast<std::ptrdiff_t>(shaders.size());
@@ -4750,7 +4765,7 @@ namespace acmxvk {
         }
 
         void selectPlaylistNode(int direction) {
-            if (playlist.empty()) {
+            if (shader_locked || playlist.empty()) {
                 return;
             }
             const auto count = static_cast<std::ptrdiff_t>(playlist.size());
