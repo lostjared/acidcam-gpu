@@ -1143,7 +1143,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8E)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8F)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1800,6 +1800,7 @@ namespace acmxvk {
             initializeOverlayFont();
             start_requested_audio_recording();
             openOutput();
+            updateWindowTitle(true);
         }
 
         ~MainWindow() override {
@@ -2146,6 +2147,7 @@ namespace acmxvk {
             }
             frame_sprite->drawSpriteRect(0, 0, target_width, target_height);
             queueOverlayText();
+            updateWindowTitle();
             setFrameReadbackEnabled(
                 snapshot_pending ||
                 (continuousReadbackEnabled() && recording_frame_due));
@@ -2281,6 +2283,7 @@ namespace acmxvk {
             hud_session_start};
         std::chrono::steady_clock::time_point camera_fps_last_tick{};
         std::chrono::steady_clock::time_point camera_history_next_update{};
+        std::chrono::steady_clock::time_point window_title_last_update{};
         std::chrono::steady_clock::time_point next_render_tick{};
         std::chrono::steady_clock::time_point source_playback_clock_start{};
         std::chrono::steady_clock::time_point source_playback_pause_start{};
@@ -3531,6 +3534,75 @@ namespace acmxvk {
             text << std::setfill('0') << std::setw(2) << hours << ':'
                  << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
             return text.str();
+        }
+
+        void updateWindowTitle(bool force = false) {
+            SDL_Window *window = getSDLWindow();
+            if (window == nullptr) {
+                return;
+            }
+
+            const auto now = std::chrono::steady_clock::now();
+            constexpr auto UPDATE_INTERVAL = std::chrono::milliseconds(500);
+            if (!force && window_title_last_update.time_since_epoch().count() != 0 &&
+                now - window_title_last_update < UPDATE_INTERVAL) {
+                return;
+            }
+            window_title_last_update = now;
+
+            const bool recording = writer.is_open() || options.png_output;
+            double elapsed_seconds = hudWallElapsedSeconds();
+            std::uint64_t displayed_frames = frame_count;
+            if (recording && recording_fps > 0.0) {
+                displayed_frames = output_frame_count;
+                elapsed_seconds =
+                    static_cast<double>(output_frame_count) / recording_fps;
+            } else if (source_kind == SourceKind::Video) {
+                displayed_frames = video_source_frame_count;
+                elapsed_seconds = hudVideoPositionSeconds();
+            }
+
+            std::ostringstream title;
+            if (source_kind == SourceKind::Graphic) {
+                title << "ACMXVK - Graphics Mode - "
+                      << formatHudTime(elapsed_seconds) << " ["
+                      << displayed_frames << " frames]";
+            } else if (source_kind == SourceKind::Video) {
+                const std::uint64_t total_frames =
+                    video_duration_seconds > 0.0 && video_source_fps > 0.0
+                        ? static_cast<std::uint64_t>(std::llround(
+                              video_duration_seconds * video_source_fps))
+                        : 0U;
+                title << "ACMXVK - [" << video_source_frame_count << '/';
+                if (total_frames > 0U) {
+                    title << total_frames;
+                } else {
+                    title << '?';
+                }
+                title << "] - " << formatHudTime(elapsed_seconds)
+                      << " - Video Mode";
+            } else {
+                title << "ACMXVK - Capture Mode - "
+                      << formatHudTime(elapsed_seconds) << " ["
+                      << displayed_frames << " frames]";
+            }
+
+            if (recording) {
+                title << " (Recording)";
+                if (writer.is_open()) {
+                    constexpr double BYTES_PER_MEGABYTE = 1024.0 * 1024.0;
+                    const double file_size_mb =
+                        static_cast<double>(writer.get_bytes_written()) /
+                        BYTES_PER_MEGABYTE;
+                    title << " [File: " << std::fixed << std::setprecision(2)
+                          << file_size_mb << " MB]";
+                }
+            } else {
+                title << " (Preview)";
+            }
+
+            const std::string text = title.str();
+            SDL_SetWindowTitle(window, text.c_str());
         }
 
         [[nodiscard]] double hudWallElapsedSeconds() const {

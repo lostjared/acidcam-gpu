@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8E**. It is usable for video, camera, and
+The port is currently at **Increment 8F**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -25,7 +25,7 @@ ACMX2.
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
 | PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
-| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD is excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
+| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
@@ -148,6 +148,11 @@ Increment 8E also changes only ACMXVK. A video without a decodable audio track
 now continues with zero-valued audio-reactive inputs instead of aborting;
 requested pass-through is disabled with a warning. An explicitly selected
 `--audio-file` remains a hard error when it cannot be decoded.
+Increment 8F changes only ACMXVK. Its native title bar now follows ACMX2's
+graphics/video/capture mode format, explicitly reports preview or recording
+state, and refreshes recording time, frame count, and MXWrite's encoded file
+size twice per second. PNG sequences report recording state without a
+single-file size.
 
 ### Input validation
 
