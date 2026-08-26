@@ -88,6 +88,14 @@ extern "C" {
 #define ACMXVK_INSTALL_FLIP_SHADER "flip.frag.spv"
 #endif
 
+#ifndef ACMXVK_BUILD_PASSTHROUGH_SHADER
+#define ACMXVK_BUILD_PASSTHROUGH_SHADER "passthrough.frag.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_PASSTHROUGH_SHADER
+#define ACMXVK_INSTALL_PASSTHROUGH_SHADER "passthrough.frag.spv"
+#endif
+
 #ifndef ACMXVK_BUILD_OVERLAY_FONT
 #define ACMXVK_BUILD_OVERLAY_FONT "font.ttf"
 #endif
@@ -1143,7 +1151,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8F)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8G)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -3436,6 +3444,18 @@ namespace acmxvk {
             return ACMXVK_BUILD_FLIP_SHADER;
         }
 
+        [[nodiscard]] fs::path passthroughShader() const {
+            const fs::path resource =
+                findResource(options, "shaders/passthrough.frag.spv");
+            if (!resource.empty()) {
+                return resource;
+            }
+            if (fs::is_regular_file(ACMXVK_INSTALL_PASSTHROUGH_SHADER)) {
+                return ACMXVK_INSTALL_PASSTHROUGH_SHADER;
+            }
+            return ACMXVK_BUILD_PASSTHROUGH_SHADER;
+        }
+
         [[nodiscard]] fs::path overlayFont() const {
             const fs::path resource = findResource(options, "data/font.ttf");
             if (!resource.empty()) {
@@ -4759,6 +4779,9 @@ namespace acmxvk {
             }
             if (options.flip_output) {
                 pipeline.emplace_back(flipShader());
+            }
+            if (pipeline.empty()) {
+                pipeline.emplace_back(passthroughShader());
             }
             return pipeline;
         }

@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8F**. It is usable for video, camera, and
+The port is currently at **Increment 8G**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -153,6 +153,11 @@ graphics/video/capture mode format, explicitly reports preview or recording
 state, and refreshes recording time, frame count, and MXWrite's encoded file
 size twice per second. PNG sequences report recording state without a
 single-file size.
+Increment 8G changes only ACMXVK. Shader bypass now retains a compiled identity
+post-processing pass instead of removing MXVK's source-sized offscreen chain.
+This keeps its Vulkan image barriers and presentation target valid when Space
+disables the selected shader, fixing the MoltenVK crash in video and camera
+modes. The identity pass is also used when no visual shader is active.
 
 ### Input validation
 
