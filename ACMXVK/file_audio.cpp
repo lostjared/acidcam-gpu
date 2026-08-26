@@ -1241,6 +1241,54 @@ namespace acmxvk::audio {
             return true;
         }
 
+        bool process_at_time(double seconds, double frames_per_second,
+                             AudioEngine &engine) {
+            if (samples.empty() || !std::isfinite(seconds) || seconds < 0.0) {
+                engine.reset();
+                return false;
+            }
+
+            const double rate =
+                std::isfinite(frames_per_second) && frames_per_second > 0.0
+                    ? frames_per_second
+                    : 60.0;
+            double target_position =
+                seconds * static_cast<double>(FILE_SAMPLE_RATE);
+            if (repeat) {
+                target_position = std::fmod(
+                    target_position, static_cast<double>(samples.size()));
+                if (target_position < playback_position) {
+                    current_track_index = 0;
+                }
+                active = true;
+            } else if (target_position >= static_cast<double>(samples.size())) {
+                active = false;
+                playback_position = static_cast<double>(samples.size());
+                engine.reset();
+                return false;
+            }
+
+            playback_position = std::max(0.0, target_position);
+            update_current_track(playback_position);
+            const double samples_per_frame =
+                static_cast<double>(FILE_SAMPLE_RATE) / rate;
+            const std::size_t first = std::min(
+                static_cast<std::size_t>(playback_position), samples.size());
+            const std::size_t last = std::min(
+                std::max(first + 1,
+                         static_cast<std::size_t>(playback_position +
+                                                  samples_per_frame)),
+                samples.size());
+            if (first >= last) {
+                engine.reset();
+                return false;
+            }
+            engine.process_samples(samples.data() + first,
+                                   static_cast<unsigned int>(last - first), 1,
+                                   FILE_SAMPLE_RATE);
+            return true;
+        }
+
         std::vector<float> samples;
         std::string source_path;
         std::vector<std::string> track_paths;
@@ -1333,6 +1381,12 @@ namespace acmxvk::audio {
     bool FileAudioSource::process_frame(double frames_per_second,
                                         AudioEngine &engine) {
         return impl->process_frame(frames_per_second, engine);
+    }
+
+    bool FileAudioSource::process_at_time(double seconds,
+                                          double frames_per_second,
+                                          AudioEngine &engine) {
+        return impl->process_at_time(seconds, frames_per_second, engine);
     }
 
 } // namespace acmxvk::audio

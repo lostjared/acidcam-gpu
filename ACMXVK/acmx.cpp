@@ -153,6 +153,7 @@ namespace acmxvk {
         bool use_yuv = false;
         bool maximize_fps = false;
         bool use_source_fps = false;
+        bool use_source_audio = false;
         bool fullscreen = false;
         bool repeat = false;
         bool enable_vsync = false;
@@ -608,6 +609,9 @@ namespace acmxvk {
                 options.maximize_fps = true;
             } else if (option == "--use-source-fps") {
                 options.use_source_fps = true;
+            } else if (option == "--use-source-audio") {
+                options.use_source_audio = true;
+                options.enable_audio = true;
             } else if (option == "-r" || option == "--resolution") {
                 parseDimensions(optionValue(index, argc, argv, option), options.width,
                                 options.height, option);
@@ -972,6 +976,23 @@ namespace acmxvk {
             }
         }
 
+        if (options.use_source_audio) {
+            if (options.input_file.empty()) {
+                throw std::runtime_error(
+                    "--use-source-audio requires --input <video>");
+            }
+            if (!options.use_source_fps) {
+                throw std::runtime_error(
+                    "--use-source-audio requires --use-source-fps");
+            }
+            if (!options.audio_file.empty()) {
+                throw std::runtime_error(
+                    "--use-source-audio cannot be combined with --audio-file");
+            }
+            options.audio_file = options.input_file;
+            options.audio_repeat = options.audio_repeat || options.repeat;
+        }
+
         validateOptionStrings(options);
         applyResourceDefaults(options);
 
@@ -1122,7 +1143,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8C)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8D)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1141,6 +1162,7 @@ namespace acmxvk {
                << "      --use-yuv               Prefer YUYV camera capture over MJPG\n"
                << "      --maximize-fps          Render at --fps using the latest camera frame\n"
                << "      --use-source-fps        Play video on its reported source clock\n"
+               << "      --use-source-audio      Use the video's audio for shader reactivity\n"
                << "  -u, --fps <rate>            Camera/output FPS\n"
                << "                              Video files prefer FFmpeg/NVDEC capture\n\n"
                << "Shaders:\n"
@@ -2884,6 +2906,10 @@ namespace acmxvk {
                 if (!file_audio_source->open(options.audio_file)) {
                     throw std::runtime_error("could not decode --audio-file: " +
                                              options.audio_file);
+                }
+                if (options.use_source_audio) {
+                    std::cout << "acmxvk: source video audio drives shader "
+                                 "reactivity\n";
                 }
                 file_audio_source->set_repeat(options.audio_repeat);
                 if (options.audio_pass_through &&
@@ -5271,8 +5297,16 @@ namespace acmxvk {
                 media_timeline_started &&
                 (file_audio_source->has_output_clock() ||
                  source_frame_received)) {
-                file_audio_source->process_frame(outputFrameRate(),
-                                                 *audio_engine);
+                double source_audio_time = 0.0;
+                if (options.use_source_audio &&
+                    !file_audio_source->has_output_clock() &&
+                    mediaClockSeconds(source_audio_time)) {
+                    file_audio_source->process_at_time(
+                        source_audio_time, outputFrameRate(), *audio_engine);
+                } else {
+                    file_audio_source->process_frame(outputFrameRate(),
+                                                     *audio_engine);
+                }
                 if (options.audio_trunc && !file_audio_source->is_active()) {
                     std::cout << "acmxvk: audio source finished, stopping "
                                  "(--audio-trunc)\n";

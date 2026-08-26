@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8C**. It is usable for video, camera, and
+The port is currently at **Increment 8D**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -30,7 +30,7 @@ ACMX2.
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
-| Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, or an M3U/M3U8 playlist can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
+| Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, an M3U/M3U8 playlist, or `--use-source-audio` with real-time source-FPS video playback can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Source-video analysis follows the media clock even when late video frames are skipped. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
@@ -139,6 +139,11 @@ included in `library.json`. Bindings 3 and 4 are reflected as well, allowing
 spectrum shaders to receive zero-initialized safe descriptors even without
 explicit audio-buffer flags. MXVK must be rebuilt and reinstalled;
 acidcam-gpu remains unchanged.
+Increment 8D changes only ACMXVK. `--use-source-audio` selects the input
+video's embedded audio track for shader reactivity during `--use-source-fps`
+playback. Optional pass-through uses the selected RtAudio output as the A/V
+master clock; silent analysis follows the video media clock directly. Neither
+MXVK nor acidcam-gpu needs to be rebuilt or reinstalled.
 
 ### Input validation
 
@@ -263,9 +268,20 @@ source clock. If an effect cannot render fast enough, ACMXVK skips late source
 frames so the displayed video position does not drift into slow motion. The
 mode cannot be combined with `--fps`, because the reported source rate is the
 requested clock. `P` pause and `L` freeze suspend this clock and resume without
-jumping over the paused interval. To hear a video's audio during playback,
-also use `--audio-file input.mp4 --pass-through` with an `AUDIO=ON` build; the
-audio device then remains the more accurate A/V master clock.
+jumping over the paused interval. Add `--use-source-audio` with an `AUDIO=ON`
+build to use the video's embedded audio track for shader reactivity. Add
+`--pass-through` to hear it; `--audio-output <index>` selects the output device,
+which then becomes the more accurate A/V master clock.
+
+```bash
+./build/acmxvk/acmxvk \
+    --input input.mp4 \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --use-source-fps \
+    --use-source-audio \
+    --pass-through \
+    --audio-output default
+```
 
 Render a still image for five seconds and encode it with a software encoder:
 

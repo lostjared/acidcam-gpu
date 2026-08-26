@@ -38,6 +38,8 @@ namespace acmxvk::audio {
         [[nodiscard]] const std::string &current_track_path() const;
 
         bool process_frame(double frames_per_second, AudioEngine &engine);
+        bool process_at_time(double seconds, double frames_per_second,
+                             AudioEngine &engine);
 
       private:
         class Impl;
