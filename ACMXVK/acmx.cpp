@@ -1189,7 +1189,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8K)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8L)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1316,6 +1316,7 @@ namespace acmxvk {
                << "      E watermark, F fullscreen, F9 runtime HUD, K shader lock,\n"
                << "      M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
+               << "      W/A/S/D 3D look, +/- 3D zoom, 1/2 zoom sensitivity,\n"
                << "      Z PNG snapshot, [/] model scale, mouse drag/wheel look/move,\n"
                << "      Escape quit\n";
     }
@@ -2253,6 +2254,59 @@ namespace acmxvk {
                     360.0F);
             }
 
+            const bool *keyboard = SDL_GetKeyboardState(nullptr);
+            if (keyboard[SDL_SCANCODE_1]) {
+                model_camera_movement_speed = std::clamp(
+                    model_camera_movement_speed + 0.1F * delta * 30.0F,
+                    0.01F, 20.0F);
+            }
+            if (keyboard[SDL_SCANCODE_2]) {
+                model_camera_movement_speed = std::clamp(
+                    model_camera_movement_speed - 0.1F * delta * 30.0F,
+                    0.01F, 20.0F);
+            }
+            if (keyboard[SDL_SCANCODE_EQUALS] ||
+                keyboard[SDL_SCANCODE_KP_PLUS]) {
+                model_camera_distance = std::clamp(
+                    model_camera_distance +
+                        model_camera_movement_speed * delta,
+                    -20.0F, 20.0F);
+            }
+            if (keyboard[SDL_SCANCODE_MINUS] ||
+                keyboard[SDL_SCANCODE_KP_MINUS]) {
+                model_camera_distance = std::clamp(
+                    model_camera_distance -
+                        model_camera_movement_speed * delta,
+                    -20.0F, 20.0F);
+            }
+            if (!model_auto_rotate) {
+                if (keyboard[SDL_SCANCODE_W]) {
+                    model_pitch_degrees +=
+                        model_camera_rotation_speed * 0.3F * delta * 30.0F;
+                }
+                if (keyboard[SDL_SCANCODE_S]) {
+                    model_pitch_degrees -=
+                        model_camera_rotation_speed * 0.33F * delta * 30.0F;
+                }
+                model_pitch_degrees =
+                    std::fmod(model_pitch_degrees, 360.0F);
+                if (model_pitch_degrees < 0.0F) {
+                    model_pitch_degrees += 360.0F;
+                }
+                if (keyboard[SDL_SCANCODE_A]) {
+                    model_yaw_degrees -=
+                        model_camera_rotation_speed * 0.3F * delta * 30.0F;
+                }
+                if (keyboard[SDL_SCANCODE_D]) {
+                    model_yaw_degrees +=
+                        model_camera_rotation_speed * 0.3F * delta * 30.0F;
+                }
+                model_yaw_degrees = std::fmod(model_yaw_degrees, 360.0F);
+                if (model_yaw_degrees < 0.0F) {
+                    model_yaw_degrees += 360.0F;
+                }
+            }
+
             const VkExtent2D extent = getRenderExtent();
             const float aspect = extent.height > 0U
                                      ? static_cast<float>(extent.width) /
@@ -2524,6 +2578,8 @@ namespace acmxvk {
         float model_pitch_degrees = 0.0F;
         float model_yaw_degrees = 270.0F;
         float model_camera_distance = 0.0F;
+        float model_camera_movement_speed = 0.1F;
+        float model_camera_rotation_speed = 5.0F;
         float model_scale = 1.0F;
         float model_rotation_speed = 18.0F;
         float model_view_rotation_degrees = 0.0F;

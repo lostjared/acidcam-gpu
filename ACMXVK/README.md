@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8K**. It is usable for video, camera, and
+The port is currently at **Increment 8L**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -179,6 +179,10 @@ Increment 8K adds MXVK 0.33.0's post-processing texture-consumer stage.
 Compute shaders, history/spectrum shaders, `--shader-pass`, and playlist
 chains now finish in an offscreen image that is sampled by the model. They no
 longer appear as a flat screen-space layer over the completed 3D object.
+Increment 8L changes only ACMXVK. Its 3D camera now accepts ACMX2's continuous
+W/A/S/D look controls, plus/minus movement along the view direction, and 1/2
+movement-sensitivity controls. MXVK and acidcam-gpu do not need to be rebuilt
+or reinstalled.
 
 ### Input validation
 
@@ -1502,6 +1506,10 @@ The main 3D controls are:
 
 - Left mouse drag: look around from the camera
 - Mouse wheel: move backward or forward along the view direction
+- `W` / `S`: look up or down
+- `A` / `D`: look left or right
+- `+` / `-`: move backward or forward along the view direction
+- `1` / `2`: increase or decrease keyboard movement sensitivity
 - `3`: switch between 3D model and 2D sprite rendering
 - `V`: toggle automatic view rotation
 - `X`: reset the centered skybox view and scale
@@ -1533,6 +1541,9 @@ extensions, and limited to 1 GiB before reaching MXVK's loader.
 - 3: toggle 2D sprite or 3D model rendering
 - V: toggle automatic 3D view rotation
 - X: reset the centered skybox view and model scale
+- W/A/S/D: look around in the 3D view
+- Plus/Minus: move backward or forward along the 3D view direction
+- 1/2: increase or decrease 3D keyboard movement sensitivity
 - Left mouse drag / wheel: look around or move along the view direction
 - Left bracket / Right bracket: decrease or increase model scale
 - Comma / Period: decrease or increase 3D view-rotation speed
