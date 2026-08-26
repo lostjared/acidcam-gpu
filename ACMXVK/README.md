@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8I**. It is usable for video, camera, and
+The port is currently at **Increment 8J**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -34,14 +34,14 @@ ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
-| 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer before the existing fragment/compute effect chain. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse orbit/zoom, automatic rotation, scale/speed controls, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. ACMX2's wave deformation and free-look camera remain to be ported. |
+| 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragment effects execute directly on model UVs, matching ACMX2 instead of filtering the completed 3D scene. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic view rotation, scale/speed controls, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. ACMX2's wave deformation remains to be ported. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
 
 ## Requirements
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.31.1 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.32.0 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -168,6 +168,13 @@ result enters the same ordered fragment/compute pipeline used by 2D input.
 The bundled `cube.obj` is selected when `--model` is omitted. MXVK 0.31.1
 already provides the required public model API, so it does not need to be
 rebuilt or reinstalled for this increment.
+Increment 8J changes the 3D render order and camera defaults to match ACMX2.
+The active compatible fragment shader is now the model fragment shader, so
+the effect evaluates against the source texture in model UV space. The camera
+starts at the normalized object center with yaw 270, pitch 0, distance 0, a
+120-degree field of view, and automatic view rotation disabled. MXVK's model
+fragment UBO now includes ACMXVK's 64 custom-uniform slots and audio-band
+fields, so MXVK 0.32.0 must be rebuilt and reinstalled for this increment.
 
 ### Input validation
 
@@ -1473,21 +1480,28 @@ submeshes receive the same live input across every surface. CUDA-enabled MXVK
 builds use direct CUDA/Vulkan model-texture interop for NVDEC and filtered
 frames, with host staging as a reported fallback.
 
-The 3D scene is rendered into ACMXVK's native-resolution offscreen target
-before its ordered fragment/compute passes. Shader effects, output overlays,
-history, snapshots, and encoded video therefore operate on the completed 3D
-image. The preview-only HUD remains excluded from saved output and identifies
-the active model or reports when the 2D sprite path is selected.
+For a compatible single fragment shader, ACMXVK installs that shader directly
+on MXVK's model pipeline. The shader samples the live source at the mesh UVs,
+which matches ACMX2's 3D path and avoids applying the effect as a flat
+screen-space filter after rasterization. Compute shaders, history/spectrum
+descriptor shaders, and active multipass/playlist chains currently use the
+safe full-frame fallback until MXVK exposes a pre-model offscreen-chain input.
+Output overlays, snapshots, and encoded video still operate on the completed
+3D image. The preview-only HUD remains excluded from saved output.
+
+The initial view is a skybox-style camera at the normalized model center. It
+uses ACMX2's yaw 270 degrees, pitch 0, distance 0, and 120-degree field of
+view. Automatic view rotation is disabled at startup.
 
 The main 3D controls are:
 
-- Left mouse drag: rotate the model
-- Mouse wheel: zoom
+- Left mouse drag: look around from the camera
+- Mouse wheel: move backward or forward along the view direction
 - `3`: switch between 3D model and 2D sprite rendering
-- `V`: toggle automatic model rotation
-- `X`: reset rotation, zoom, and scale
+- `V`: toggle automatic view rotation
+- `X`: reset the centered skybox view and scale
 - `[` / `]`: decrease or increase model scale
-- `,` / `.`: decrease or increase automatic rotation speed
+- `,` / `.`: decrease or increase automatic view-rotation speed
 
 ACMX2 MIDI-map action codes 44, 46, 51, 86, 88, 91, and 93 drive the same
 controls. Model paths are centrally validated, restricted to the supported
@@ -1512,11 +1526,11 @@ extensions, and limited to 1 GiB before reaching MXVK's loader.
 - F9: toggle the preview-only runtime HUD
 - E: toggle the configured watermark
 - 3: toggle 2D sprite or 3D model rendering
-- V: toggle automatic model rotation
-- X: reset the model view
-- Left mouse drag / wheel: rotate or zoom the model
+- V: toggle automatic 3D view rotation
+- X: reset the centered skybox view and model scale
+- Left mouse drag / wheel: look around or move along the view direction
 - Left bracket / Right bracket: decrease or increase model scale
-- Comma / Period: decrease or increase model rotation speed
+- Comma / Period: decrease or increase 3D view-rotation speed
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
 - K: lock or unlock shader and playlist selection
@@ -1596,6 +1610,9 @@ encoded the source-sized 3D render through the existing Vulkan post-process
 and pipelined readback path. A separate bundled-OBJ run completed with the
 Vulkan SDK validation layer enabled and no project validation errors; the
 duplicate vkBasalt implicit-layer warning remained external to ACMXVK.
+Increment 8J then verified the centered skybox transform and direct model-UV
+fragment pipeline in the portable build; the active fragment was removed from
+the later screen-space chain so it was evaluated exactly once.
 
 ## Development note
 

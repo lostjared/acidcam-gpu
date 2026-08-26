@@ -7,7 +7,10 @@ layout(location = 2) in vec3 in_normal;
 layout(location = 0) out vec2 frag_tex_coord;
 layout(location = 1) out vec3 frag_normal;
 
-layout(set = 0, binding = 1) uniform UniformBufferObject {
+// Binding 1 is reserved for the same fragment-uniform block used by ACMXVK's
+// 2D shaders.  MXVK places the model transforms at binding 2 when extended
+// model fragment uniforms are enabled.
+layout(set = 0, binding = 2) uniform UniformBufferObject {
     mat4 model;
     mat4 view;
     mat4 projection;

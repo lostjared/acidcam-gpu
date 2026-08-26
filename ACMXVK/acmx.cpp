@@ -1189,7 +1189,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8I)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8J)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1312,11 +1312,11 @@ namespace acmxvk {
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
-               << "      3 toggle 2D/3D, V model rotation, X reset model view,\n"
+               << "      3 toggle 2D/3D, V 3D view rotation, X reset skybox view,\n"
                << "      E watermark, F fullscreen, F9 runtime HUD, K shader lock,\n"
                << "      M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
-               << "      Z PNG snapshot, [/] model scale, mouse drag/wheel orbit/zoom,\n"
+               << "      Z PNG snapshot, [/] model scale, mouse drag/wheel look/move,\n"
                << "      Escape quit\n";
     }
 
@@ -2104,6 +2104,7 @@ namespace acmxvk {
                         model_3d_active = !model_3d_active;
                         model_last_render_time =
                             std::chrono::steady_clock::now();
+                        applyShaderPipeline();
                         std::cout << "acmxvk: "
                                   << (model_3d_active ? "3D model" : "2D sprite")
                                   << " rendering enabled\n";
@@ -2112,17 +2113,18 @@ namespace acmxvk {
                 case SDLK_V:
                     if (model_initialized) {
                         model_auto_rotate = !model_auto_rotate;
-                        std::cout << "acmxvk: model rotation "
+                        std::cout << "acmxvk: 3D view rotation "
                                   << (model_auto_rotate ? "enabled" : "disabled")
                                   << '\n';
                     }
                     break;
                 case SDLK_X:
                     if (model_initialized) {
-                        model_pitch_degrees = 12.0F;
-                        model_yaw_degrees = 0.0F;
-                        model_camera_distance = 4.2F;
+                        model_pitch_degrees = 0.0F;
+                        model_yaw_degrees = 270.0F;
+                        model_camera_distance = 0.0F;
                         model_scale = 1.0F;
+                        model_view_rotation_degrees = 0.0F;
                         std::cout << "acmxvk: model view reset\n";
                     }
                     break;
@@ -2144,7 +2146,7 @@ namespace acmxvk {
                     if (model_initialized) {
                         model_rotation_speed =
                             std::max(0.0F, model_rotation_speed - 5.0F);
-                        std::cout << "acmxvk: model rotation speed "
+                        std::cout << "acmxvk: 3D view rotation speed "
                                   << model_rotation_speed << " degrees/second\n";
                     }
                     break;
@@ -2152,7 +2154,7 @@ namespace acmxvk {
                     if (model_initialized) {
                         model_rotation_speed =
                             std::min(360.0F, model_rotation_speed + 5.0F);
-                        std::cout << "acmxvk: model rotation speed "
+                        std::cout << "acmxvk: 3D view rotation speed "
                                   << model_rotation_speed << " degrees/second\n";
                     }
                     break;
@@ -2201,7 +2203,7 @@ namespace acmxvk {
                                         : static_cast<float>(
                                               event.wheel.integer_y);
                 model_camera_distance = std::clamp(
-                    model_camera_distance - wheel * 0.4F, 1.5F, 20.0F);
+                    model_camera_distance - wheel * 0.2F, -20.0F, 20.0F);
             }
         }
 
@@ -2226,8 +2228,9 @@ namespace acmxvk {
             model_last_render_time = now;
             delta = std::clamp(delta, 0.0F, 0.1F);
             if (model_auto_rotate && !rendering_frozen) {
-                model_yaw_degrees = std::fmod(
-                    model_yaw_degrees + model_rotation_speed * delta,
+                model_view_rotation_degrees = std::fmod(
+                    model_view_rotation_degrees +
+                        model_rotation_speed * delta,
                     360.0F);
             }
 
@@ -2238,25 +2241,56 @@ namespace acmxvk {
                                      : 1.0F;
 
             mxvk::UniformBufferObject uniforms{};
-            uniforms.model = glm::rotate(
-                glm::mat4(1.0F), glm::radians(model_pitch_degrees),
-                glm::vec3(1.0F, 0.0F, 0.0F));
-            uniforms.model = glm::rotate(
-                uniforms.model, glm::radians(model_yaw_degrees),
-                glm::vec3(0.0F, 1.0F, 0.0F));
             uniforms.model = glm::scale(
-                uniforms.model,
+                glm::mat4(1.0F),
                 glm::vec3(input_model.modelRenderScale() * model_scale));
             uniforms.model = glm::translate(
                 uniforms.model, input_model.modelCenterOffset());
-            uniforms.view = glm::lookAt(
-                glm::vec3(0.0F, 0.0F, model_camera_distance),
-                glm::vec3(0.0F), glm::vec3(0.0F, 1.0F, 0.0F));
+
+            glm::vec3 look_direction{};
+            glm::vec3 camera_up(0.0F, 1.0F, 0.0F);
+            if (model_auto_rotate) {
+                const float rotation =
+                    glm::radians(model_view_rotation_degrees);
+                look_direction = glm::vec3(
+                    0.48F * std::sin(rotation),
+                    0.48F * std::sin(rotation * 0.7F),
+                    0.48F * std::cos(rotation));
+            } else {
+                const float pitch = glm::radians(model_pitch_degrees);
+                const float yaw = glm::radians(model_yaw_degrees);
+                look_direction = glm::normalize(glm::vec3(
+                                     std::cos(pitch) * std::cos(yaw),
+                                     std::sin(pitch),
+                                     std::cos(pitch) * std::sin(yaw))) *
+                                 0.48F;
+                camera_up = glm::vec3(-std::sin(pitch) * std::cos(yaw),
+                                      std::cos(pitch),
+                                      -std::sin(pitch) * std::sin(yaw));
+            }
+            const glm::vec3 camera_position =
+                -glm::normalize(look_direction) * model_camera_distance;
+            uniforms.view = glm::lookAt(camera_position,
+                                        camera_position + look_direction,
+                                        camera_up);
             uniforms.proj = glm::perspective(
-                glm::radians(50.0F), aspect, 0.1F, 100.0F);
+                glm::radians(120.0F), aspect, 0.01F, 1000.0F);
             uniforms.proj[1][1] *= -1.0F;
             uniforms.fx = glm::vec4(static_cast<float>(shader_time), 0.0F,
                                     0.0F, 0.0F);
+
+            input_model.updateFragmentUBO(image_index,
+                                          model_fragment_uniforms);
+
+            mxvk::ModelFragmentPushConstants fragment_constants{};
+            fragment_constants.screenWidth = static_cast<float>(extent.width);
+            fragment_constants.screenHeight = static_cast<float>(extent.height);
+            fragment_constants.spriteSizeW = static_cast<float>(extent.width);
+            fragment_constants.spriteSizeH = static_cast<float>(extent.height);
+            fragment_constants.effectsOn = effects_enabled ? 1.0F : 0.0F;
+            fragment_constants.params = glm::vec4(
+                1.0F, 1.0F, 1.0F, static_cast<float>(shader_time));
+            input_model.setFragmentPushConstants(fragment_constants);
 
             input_model.renderWithPushConstants(
                 command_buffer, image_index, 0U, uniforms, false);
@@ -2412,7 +2446,7 @@ namespace acmxvk {
         bool shader_locked = false;
         bool model_initialized = false;
         bool model_3d_active = false;
-        bool model_auto_rotate = true;
+        bool model_auto_rotate = false;
         bool model_mouse_dragging = false;
         bool shader_history_required = false;
         bool shader_spectrum_required = false;
@@ -2461,11 +2495,14 @@ namespace acmxvk {
         double camera_last_logged_fps = 0.0;
         double shader_time = 0.0;
         float legacy_alpha = 0.1F;
-        float model_pitch_degrees = 12.0F;
-        float model_yaw_degrees = 0.0F;
-        float model_camera_distance = 4.2F;
+        float model_pitch_degrees = 0.0F;
+        float model_yaw_degrees = 270.0F;
+        float model_camera_distance = 0.0F;
         float model_scale = 1.0F;
-        float model_rotation_speed = 35.0F;
+        float model_rotation_speed = 18.0F;
+        float model_view_rotation_degrees = 0.0F;
+        fs::path model_effect_shader;
+        mxvk::ModelFragmentUniforms model_fragment_uniforms{};
         bool legacy_alpha_increasing = true;
         int model_last_mouse_x = 0;
         int model_last_mouse_y = 0;
@@ -2945,9 +2982,9 @@ namespace acmxvk {
             case 32:
                 return "toggle shader bypass";
             case 44:
-                return "decrease model rotation speed";
+                return "decrease 3D view rotation speed";
             case 46:
-                return "increase model rotation speed";
+                return "increase 3D view rotation speed";
             case 51:
                 return "toggle 2D/3D rendering";
             case 91:
@@ -2972,7 +3009,7 @@ namespace acmxvk {
             case 84:
                 return "toggle shader time";
             case 86:
-                return "toggle model rotation";
+                return "toggle 3D view rotation";
             case 88:
                 return "reset model view";
             case 89:
@@ -4878,10 +4915,12 @@ namespace acmxvk {
             }
 
             try {
+                input_model.enableExtendedFragmentUniforms();
                 input_model.load(this, options.model_file, "", "", 1.0F);
                 input_model.setShaders(
                     this, modelVertexShader().string(),
                     modelFragmentShader().string());
+                model_effect_shader = modelFragmentShader();
                 input_model.setBackfaceCulling(false);
                 model_initialized = true;
                 model_3d_active = true;
@@ -4891,7 +4930,9 @@ namespace acmxvk {
                           << input_model.model().vertices().size()
                           << " vertices, "
                           << input_model.model().indexCount()
-                          << " indices)\n";
+                          << " indices; skybox camera centered; view rotation "
+                          << (model_auto_rotate ? "enabled" : "disabled")
+                          << ")\n";
             } catch (...) {
                 if (getDevice() != VK_NULL_HANDLE) {
                     vkDeviceWaitIdle(getDevice());
@@ -5138,6 +5179,25 @@ namespace acmxvk {
             return pipeline;
         }
 
+        [[nodiscard]] fs::path directModelFragmentShader() const {
+            if (!model_3d_active || !model_initialized || !effects_enabled ||
+                playlist_enabled || multipass_enabled ||
+                currentShader().empty()) {
+                return {};
+            }
+
+            const fs::path shader(currentShader());
+            const mxvk::ShaderModuleInfo module_info =
+                mxvk::inspect_spirv(mxvk::load_spv(shader.string()));
+            if (module_info.stage != mxvk::ShaderStage::Fragment ||
+                module_info.usesHistoryTexture ||
+                module_info.usesSpectrumTexture ||
+                module_info.usesSpectrumHistoryTexture) {
+                return {};
+            }
+            return shader;
+        }
+
         void applyShaderPipeline() {
             if (getDevice() == VK_NULL_HANDLE) {
                 return;
@@ -5147,7 +5207,37 @@ namespace acmxvk {
             post_process_sprites.clear();
             frame_sprite->setEffectsEnabled(effects_enabled);
 
-            const std::vector<fs::path> pipeline = activeShaderPipeline();
+            const fs::path direct_model_shader = directModelFragmentShader();
+            if (model_initialized) {
+                const fs::path desired_model_shader =
+                    direct_model_shader.empty() ? modelFragmentShader()
+                                                : direct_model_shader;
+                if (desired_model_shader != model_effect_shader) {
+                    input_model.setShaders(this, modelVertexShader().string(),
+                                           desired_model_shader.string());
+                    model_effect_shader = desired_model_shader;
+                }
+            }
+
+            std::vector<fs::path> pipeline = activeShaderPipeline();
+            if (!direct_model_shader.empty()) {
+                const auto selected = std::find(
+                    pipeline.begin(), pipeline.end(), direct_model_shader);
+                if (selected != pipeline.end()) {
+                    pipeline.erase(selected);
+                }
+                if (pipeline.empty()) {
+                    pipeline.emplace_back(passthroughShader());
+                }
+                std::cout << "acmxvk: 3D texture effect: "
+                          << direct_model_shader.filename().string()
+                          << " [fragment, evaluated on model UVs]\n";
+            } else if (model_3d_active && effects_enabled &&
+                       !currentShader().empty()) {
+                std::cout
+                    << "acmxvk: 3D texture prepass fallback: shader requires "
+                       "compute/history/audio descriptors or an active pass chain\n";
+            }
             if (pipeline.empty()) {
                 return;
             }
@@ -5880,6 +5970,33 @@ namespace acmxvk {
                                       static_cast<float>(frame_sprite->getHistoryLayerCount()),
                                       audio_rms, audio_smooth);
             frame_sprite->setAudioBands(audio_low, audio_mid, audio_high);
+
+            model_fragment_uniforms = {};
+            model_fragment_uniforms.mouse = glm::vec4(
+                mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F, 0.0F);
+            model_fragment_uniforms.u0 =
+                glm::vec4(legacy_alpha, compatibility_time,
+                          static_cast<float>(width),
+                          static_cast<float>(height));
+            model_fragment_uniforms.u1 =
+                glm::vec4(delta, audio_amplitude, audio_frequency,
+                          frame_rate);
+            model_fragment_uniforms.u2 = glm::vec4(
+                static_cast<float>(frame_count), elapsed,
+                audio_sample_rate, audio_peak);
+            model_fragment_uniforms.u3 = glm::vec4(
+                static_cast<float>(frame_sprite->getHistoryHead()),
+                static_cast<float>(frame_sprite->getHistoryLayerCount()),
+                audio_rms, audio_smooth);
+            for (std::size_t index = 0;
+                 index < custom_uniform_values.size() && index < 64U;
+                 ++index) {
+                model_fragment_uniforms.custom_uniforms[index / 4U]
+                                                       [index % 4U] =
+                    custom_uniform_values[index];
+            }
+            model_fragment_uniforms.audio_bands =
+                glm::vec4(audio_low, audio_mid, audio_high, 0.0F);
 
             for (std::size_t index = 0; index < post_process_sprites.size(); ++index) {
                 mxvk::VK_Sprite *sprite = post_process_sprites[index];
