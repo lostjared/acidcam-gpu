@@ -4,6 +4,7 @@
  */
 
 #include <mxvk/mxvk.hpp>
+#include <mxvk/mxvk_abstract_model.hpp>
 #include <mxvk/mxvk_cv.hpp>
 #include <mxvk/mxvk_exception.hpp>
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
@@ -37,6 +38,10 @@ extern "C" {
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
+
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/glm.hpp>
 
 #include <algorithm>
 #include <array>
@@ -94,6 +99,30 @@ extern "C" {
 
 #ifndef ACMXVK_INSTALL_PASSTHROUGH_SHADER
 #define ACMXVK_INSTALL_PASSTHROUGH_SHADER "passthrough.frag.spv"
+#endif
+
+#ifndef ACMXVK_BUILD_MODEL_VERTEX_SHADER
+#define ACMXVK_BUILD_MODEL_VERTEX_SHADER "model.vert.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_MODEL_VERTEX_SHADER
+#define ACMXVK_INSTALL_MODEL_VERTEX_SHADER "model.vert.spv"
+#endif
+
+#ifndef ACMXVK_BUILD_MODEL_FRAGMENT_SHADER
+#define ACMXVK_BUILD_MODEL_FRAGMENT_SHADER "model.frag.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_MODEL_FRAGMENT_SHADER
+#define ACMXVK_INSTALL_MODEL_FRAGMENT_SHADER "model.frag.spv"
+#endif
+
+#ifndef ACMXVK_BUILD_DEFAULT_MODEL
+#define ACMXVK_BUILD_DEFAULT_MODEL "cube.obj"
+#endif
+
+#ifndef ACMXVK_INSTALL_DEFAULT_MODEL
+#define ACMXVK_INSTALL_DEFAULT_MODEL "cube.obj"
 #endif
 
 #ifndef ACMXVK_BUILD_OVERLAY_FONT
@@ -169,6 +198,7 @@ namespace acmxvk {
         bool enable_playlist = false;
         bool enable_texture_cache = false;
         bool history_test = false;
+        bool enable_3d = false;
         bool normalized_time = false;
         bool flip_output = false;
         bool png_output = false;
@@ -211,6 +241,7 @@ namespace acmxvk {
         std::string fragment_shader;
         std::string compute_shader;
         std::string shader_file;
+        std::string model_file;
         std::string playlist_file;
         std::string output_file;
         std::string encode_preset = "medium";
@@ -318,6 +349,8 @@ namespace acmxvk {
                                input::StringKind::Path, "--compute", true);
         input::validate_string(options.shader_file, input::StringKind::Path,
                                "--shader-file", true);
+        input::validate_string(options.model_file, input::StringKind::Path,
+                               "--model", true);
         input::validate_string(options.playlist_file, input::StringKind::Path,
                                "--playlist", true);
         input::validate_string(options.midi_map_file, input::StringKind::Path,
@@ -630,6 +663,11 @@ namespace acmxvk {
                 options.fragment_shader = optionValue(index, argc, argv, option);
             } else if (option == "--compute") {
                 options.compute_shader = optionValue(index, argc, argv, option);
+            } else if (option == "--enable-3d") {
+                options.enable_3d = true;
+            } else if (option == "--model") {
+                options.model_file = optionValue(index, argc, argv, option);
+                options.enable_3d = true;
             } else if (option == "-H" || option == "--shader-index") {
                 options.shader_index =
                     parseInteger(optionValue(index, argc, argv, option), option);
@@ -1151,7 +1189,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8H)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8I)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1180,6 +1218,10 @@ namespace acmxvk {
                << "  -H, --shader-index <index>  Initial library shader index\n"
                << "      --shader-file <name>    Initial library shader filename\n"
                << "      --uniform <name=value>  Override a library.json custom float\n\n"
+               << "3D model:\n"
+               << "      --enable-3d             Map input frames onto a 3D model\n"
+               << "      --model <file>          OBJ, MXMOD, or compressed MXMOD model\n"
+               << "                              Defaults to the bundled cube.obj\n\n"
                << "  --shader-pass <indices>     Mixed fragment/compute pre-pass chain\n"
                << "  --shader-pass-files <data>  ACMX2 length-prefixed shader filenames\n"
                << "  --playlist <file>           Shader or named multipass playlist\n\n"
@@ -1270,10 +1312,11 @@ namespace acmxvk {
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
+               << "      3 toggle 2D/3D, V model rotation, X reset model view,\n"
                << "      E watermark, F fullscreen, F9 runtime HUD, K shader lock,\n"
                << "      M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
-               << "      Z PNG snapshot,\n"
+               << "      Z PNG snapshot, [/] model scale, mouse drag/wheel orbit/zoom,\n"
                << "      Escape quit\n";
     }
 
@@ -1820,6 +1863,12 @@ namespace acmxvk {
                 std::cerr << "acmxvk: unable to flush pending frame readbacks: "
                           << error.what() << '\n';
             }
+            if (model_initialized && getDevice() != VK_NULL_HANDLE) {
+                vkDeviceWaitIdle(getDevice());
+                input_model.cleanup(this);
+                model_initialized = false;
+                std::cout << "acmxvk: released 3D model resources\n";
+            }
             const bool should_copy_audio = options.copy_audio && writer.is_open();
 #ifdef AUDIO_ENABLED
             const bool should_mux_file_audio =
@@ -2050,6 +2099,63 @@ namespace acmxvk {
                               << (shader_locked ? "enabled" : "disabled")
                               << '\n';
                     break;
+                case SDLK_3:
+                    if (model_initialized) {
+                        model_3d_active = !model_3d_active;
+                        model_last_render_time =
+                            std::chrono::steady_clock::now();
+                        std::cout << "acmxvk: "
+                                  << (model_3d_active ? "3D model" : "2D sprite")
+                                  << " rendering enabled\n";
+                    }
+                    break;
+                case SDLK_V:
+                    if (model_initialized) {
+                        model_auto_rotate = !model_auto_rotate;
+                        std::cout << "acmxvk: model rotation "
+                                  << (model_auto_rotate ? "enabled" : "disabled")
+                                  << '\n';
+                    }
+                    break;
+                case SDLK_X:
+                    if (model_initialized) {
+                        model_pitch_degrees = 12.0F;
+                        model_yaw_degrees = 0.0F;
+                        model_camera_distance = 4.2F;
+                        model_scale = 1.0F;
+                        std::cout << "acmxvk: model view reset\n";
+                    }
+                    break;
+                case SDLK_LEFTBRACKET:
+                    if (model_initialized) {
+                        model_scale = std::max(0.05F, model_scale - 0.05F);
+                        std::cout << "acmxvk: model scale " << model_scale
+                                  << '\n';
+                    }
+                    break;
+                case SDLK_RIGHTBRACKET:
+                    if (model_initialized) {
+                        model_scale = std::min(20.0F, model_scale + 0.05F);
+                        std::cout << "acmxvk: model scale " << model_scale
+                                  << '\n';
+                    }
+                    break;
+                case SDLK_COMMA:
+                    if (model_initialized) {
+                        model_rotation_speed =
+                            std::max(0.0F, model_rotation_speed - 5.0F);
+                        std::cout << "acmxvk: model rotation speed "
+                                  << model_rotation_speed << " degrees/second\n";
+                    }
+                    break;
+                case SDLK_PERIOD:
+                    if (model_initialized) {
+                        model_rotation_speed =
+                            std::min(360.0F, model_rotation_speed + 5.0F);
+                        std::cout << "acmxvk: model rotation speed "
+                                  << model_rotation_speed << " degrees/second\n";
+                    }
+                    break;
                 case SDLK_Y:
                     toggleAutopilot(true);
                     break;
@@ -2062,22 +2168,98 @@ namespace acmxvk {
             } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
                 mouse_x = event.motion.x;
                 mouse_y = event.motion.y;
+                if (model_mouse_dragging && model_initialized) {
+                    const int x = static_cast<int>(event.motion.x);
+                    const int y = static_cast<int>(event.motion.y);
+                    model_yaw_degrees +=
+                        static_cast<float>(x - model_last_mouse_x) * 0.35F;
+                    model_pitch_degrees = std::clamp(
+                        model_pitch_degrees +
+                            static_cast<float>(y - model_last_mouse_y) * 0.35F,
+                        -89.0F, 89.0F);
+                    model_last_mouse_x = x;
+                    model_last_mouse_y = y;
+                }
             } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
                        event.button.button == SDL_BUTTON_LEFT) {
                 mouse_pressed = true;
                 mouse_x = event.button.x;
                 mouse_y = event.button.y;
+                model_mouse_dragging = model_initialized;
+                model_last_mouse_x = static_cast<int>(event.button.x);
+                model_last_mouse_y = static_cast<int>(event.button.y);
             } else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP &&
                        event.button.button == SDL_BUTTON_LEFT) {
                 mouse_pressed = false;
+                model_mouse_dragging = false;
                 mouse_x = event.button.x;
                 mouse_y = event.button.y;
+            } else if (event.type == SDL_EVENT_MOUSE_WHEEL &&
+                       model_initialized) {
+                const float wheel = event.wheel.y != 0.0F
+                                        ? event.wheel.y
+                                        : static_cast<float>(
+                                              event.wheel.integer_y);
+                model_camera_distance = std::clamp(
+                    model_camera_distance - wheel * 0.4F, 1.5F, 20.0F);
             }
         }
 
         void onSwapchainRecreated() override {
             initializeSprite();
+            if (model_initialized) {
+                input_model.resize(this);
+            }
             initializeOverlayFont();
+        }
+
+        void onRecordCustomRendering(VkCommandBuffer command_buffer,
+                                     std::uint32_t image_index) override {
+            if (!model_3d_active || !model_initialized) {
+                return;
+            }
+
+            const auto now = std::chrono::steady_clock::now();
+            float delta = std::chrono::duration<float>(
+                              now - model_last_render_time)
+                              .count();
+            model_last_render_time = now;
+            delta = std::clamp(delta, 0.0F, 0.1F);
+            if (model_auto_rotate && !rendering_frozen) {
+                model_yaw_degrees = std::fmod(
+                    model_yaw_degrees + model_rotation_speed * delta,
+                    360.0F);
+            }
+
+            const VkExtent2D extent = getRenderExtent();
+            const float aspect = extent.height > 0U
+                                     ? static_cast<float>(extent.width) /
+                                           static_cast<float>(extent.height)
+                                     : 1.0F;
+
+            mxvk::UniformBufferObject uniforms{};
+            uniforms.model = glm::rotate(
+                glm::mat4(1.0F), glm::radians(model_pitch_degrees),
+                glm::vec3(1.0F, 0.0F, 0.0F));
+            uniforms.model = glm::rotate(
+                uniforms.model, glm::radians(model_yaw_degrees),
+                glm::vec3(0.0F, 1.0F, 0.0F));
+            uniforms.model = glm::scale(
+                uniforms.model,
+                glm::vec3(input_model.modelRenderScale() * model_scale));
+            uniforms.model = glm::translate(
+                uniforms.model, input_model.modelCenterOffset());
+            uniforms.view = glm::lookAt(
+                glm::vec3(0.0F, 0.0F, model_camera_distance),
+                glm::vec3(0.0F), glm::vec3(0.0F, 1.0F, 0.0F));
+            uniforms.proj = glm::perspective(
+                glm::radians(50.0F), aspect, 0.1F, 100.0F);
+            uniforms.proj[1][1] *= -1.0F;
+            uniforms.fx = glm::vec4(static_cast<float>(shader_time), 0.0F,
+                                    0.0F, 0.0F);
+
+            input_model.renderWithPushConstants(
+                command_buffer, image_index, 0U, uniforms, false);
         }
 
         void proc() override {
@@ -2160,7 +2342,10 @@ namespace acmxvk {
             if (!rendering_frozen) {
                 updateShaderUniforms(target_width, target_height);
             }
-            frame_sprite->drawSpriteRect(0, 0, target_width, target_height);
+            if (!model_3d_active) {
+                frame_sprite->drawSpriteRect(0, 0, target_width,
+                                             target_height);
+            }
             queueOverlayText();
             updateWindowTitle();
             setFrameReadbackEnabled(
@@ -2205,6 +2390,7 @@ namespace acmxvk {
 #endif
 #endif
         Writer writer;
+        mxvk::VKAbstractModel input_model;
         mxvk::VK_Sprite *frame_sprite = nullptr;
         cv::Mat graphic_rgba;
         cv::Mat latest_camera_history_rgba;
@@ -2224,6 +2410,10 @@ namespace acmxvk {
         bool multipass_enabled = false;
         bool playlist_enabled = false;
         bool shader_locked = false;
+        bool model_initialized = false;
+        bool model_3d_active = false;
+        bool model_auto_rotate = true;
+        bool model_mouse_dragging = false;
         bool shader_history_required = false;
         bool shader_spectrum_required = false;
         bool shader_spectrum_history_required = false;
@@ -2271,8 +2461,17 @@ namespace acmxvk {
         double camera_last_logged_fps = 0.0;
         double shader_time = 0.0;
         float legacy_alpha = 0.1F;
+        float model_pitch_degrees = 12.0F;
+        float model_yaw_degrees = 0.0F;
+        float model_camera_distance = 4.2F;
+        float model_scale = 1.0F;
+        float model_rotation_speed = 35.0F;
         bool legacy_alpha_increasing = true;
+        int model_last_mouse_x = 0;
+        int model_last_mouse_y = 0;
         std::chrono::steady_clock::time_point compatibility_clock_start =
+            std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point model_last_render_time =
             std::chrono::steady_clock::now();
         std::uint64_t output_frame_count = 0;
         std::uint64_t decoded_video_frame_count = 0;
@@ -2315,9 +2514,11 @@ namespace acmxvk {
         cv::cuda::GpuMat cuda_rotation_transpose;
         cv::Mat cuda_input_fallback_rgba;
         cv::Mat cuda_history_fallback_rgba;
+        cv::Mat cuda_model_fallback_rgba;
         bool cuda_input_path_logged = false;
         bool cuda_input_fallback_logged = false;
         bool cuda_history_fallback_logged = false;
+        bool cuda_model_fallback_logged = false;
 #endif
 #ifdef MIDI_ENABLED
         struct MidiCcMapping {
@@ -2648,6 +2849,16 @@ namespace acmxvk {
                 return SDLK_I;
             case 32:
                 return SDLK_SPACE;
+            case 44:
+                return options.enable_3d ? SDLK_COMMA : SDLK_UNKNOWN;
+            case 46:
+                return options.enable_3d ? SDLK_PERIOD : SDLK_UNKNOWN;
+            case 51:
+                return options.enable_3d ? SDLK_3 : SDLK_UNKNOWN;
+            case 91:
+                return options.enable_3d ? SDLK_LEFTBRACKET : SDLK_UNKNOWN;
+            case 93:
+                return options.enable_3d ? SDLK_RIGHTBRACKET : SDLK_UNKNOWN;
             case 69:
                 return options.watermark_text.empty() ? SDLK_UNKNOWN : SDLK_E;
             case 74:
@@ -2669,6 +2880,10 @@ namespace acmxvk {
 #endif
             case 84:
                 return SDLK_T;
+            case 86:
+                return options.enable_3d ? SDLK_V : SDLK_UNKNOWN;
+            case 88:
+                return options.enable_3d ? SDLK_X : SDLK_UNKNOWN;
             case 89:
                 return SDLK_Y;
             case 90:
@@ -2729,6 +2944,16 @@ namespace acmxvk {
                 return "step shader time backward";
             case 32:
                 return "toggle shader bypass";
+            case 44:
+                return "decrease model rotation speed";
+            case 46:
+                return "increase model rotation speed";
+            case 51:
+                return "toggle 2D/3D rendering";
+            case 91:
+                return "decrease model scale";
+            case 93:
+                return "increase model scale";
             case 69:
                 return "toggle watermark";
             case 74:
@@ -2746,6 +2971,10 @@ namespace acmxvk {
                 return "toggle audio-reactive shader time";
             case 84:
                 return "toggle shader time";
+            case 86:
+                return "toggle model rotation";
+            case 88:
+                return "reset model view";
             case 89:
                 return "toggle sequential autopilot";
             case 90:
@@ -3468,6 +3697,41 @@ namespace acmxvk {
             return ACMXVK_BUILD_PASSTHROUGH_SHADER;
         }
 
+        [[nodiscard]] fs::path modelVertexShader() const {
+            const fs::path resource =
+                findResource(options, "shaders/model.vert.spv");
+            if (!resource.empty()) {
+                return resource;
+            }
+            if (fs::is_regular_file(ACMXVK_INSTALL_MODEL_VERTEX_SHADER)) {
+                return ACMXVK_INSTALL_MODEL_VERTEX_SHADER;
+            }
+            return ACMXVK_BUILD_MODEL_VERTEX_SHADER;
+        }
+
+        [[nodiscard]] fs::path modelFragmentShader() const {
+            const fs::path resource =
+                findResource(options, "shaders/model.frag.spv");
+            if (!resource.empty()) {
+                return resource;
+            }
+            if (fs::is_regular_file(ACMXVK_INSTALL_MODEL_FRAGMENT_SHADER)) {
+                return ACMXVK_INSTALL_MODEL_FRAGMENT_SHADER;
+            }
+            return ACMXVK_BUILD_MODEL_FRAGMENT_SHADER;
+        }
+
+        [[nodiscard]] fs::path defaultModel() const {
+            const fs::path resource = findResource(options, "models/cube.obj");
+            if (!resource.empty()) {
+                return resource;
+            }
+            if (fs::is_regular_file(ACMXVK_INSTALL_DEFAULT_MODEL)) {
+                return ACMXVK_INSTALL_DEFAULT_MODEL;
+            }
+            return ACMXVK_BUILD_DEFAULT_MODEL;
+        }
+
         [[nodiscard]] fs::path overlayFont() const {
             const fs::path resource = findResource(options, "data/font.ttf");
             if (!resource.empty()) {
@@ -3500,6 +3764,37 @@ namespace acmxvk {
             };
             resolve(options.playlist_file, "playlists", "playlist");
             resolve(options.midi_map_file, "midi-examples", "MIDI map");
+            if (options.enable_3d) {
+                if (options.model_file.empty()) {
+                    options.model_file = defaultModel().string();
+                    std::cout << "acmxvk: 3D model (default): "
+                              << options.model_file << '\n';
+                } else {
+                    resolve(options.model_file, "models", "3D model");
+                }
+
+                std::string model_name =
+                    fs::path(options.model_file).filename().string();
+                std::transform(
+                    model_name.begin(), model_name.end(), model_name.begin(),
+                    [](unsigned char character) {
+                        return static_cast<char>(std::tolower(character));
+                    });
+                if (!model_name.ends_with(".obj") &&
+                    !model_name.ends_with(".mxmod") &&
+                    !model_name.ends_with(".mxmod.z")) {
+                    throw std::runtime_error(
+                        "--model requires an .obj, .mxmod, or .mxmod.z file");
+                }
+                if (!fs::is_regular_file(options.model_file)) {
+                    throw std::runtime_error(
+                        "3D model was not found: " + options.model_file);
+                }
+                constexpr std::uintmax_t MAX_MODEL_BYTES =
+                    1024U * 1024U * 1024U;
+                input::validate_file_size(options.model_file, "3D model",
+                                          MAX_MODEL_BYTES);
+            }
         }
 
         void initializeOverlayFont() {
@@ -3775,6 +4070,17 @@ namespace acmxvk {
             const std::string passes = activePassDescription();
             if (!passes.empty()) {
                 printPreviewText(passes, 10, y, shader_color);
+                y += line_height;
+            }
+
+            if (model_initialized) {
+                const SDL_Color model_color{0U, 220U, 180U, 255U};
+                std::string model_status =
+                    model_3d_active ? "Model: " : "Model (2D bypass): ";
+                model_status +=
+                    fs::path(options.model_file).filename().string();
+                printPreviewText(clipOverlayText(std::move(model_status)), 10,
+                                 y, model_color);
                 y += line_height;
             }
 
@@ -4566,6 +4872,35 @@ namespace acmxvk {
             }
         }
 
+        void initializeModel() {
+            if (!options.enable_3d || model_initialized) {
+                return;
+            }
+
+            try {
+                input_model.load(this, options.model_file, "", "", 1.0F);
+                input_model.setShaders(
+                    this, modelVertexShader().string(),
+                    modelFragmentShader().string());
+                input_model.setBackfaceCulling(false);
+                model_initialized = true;
+                model_3d_active = true;
+                model_last_render_time = std::chrono::steady_clock::now();
+                std::cout << "acmxvk: loaded 3D model: "
+                          << options.model_file << " ("
+                          << input_model.model().vertices().size()
+                          << " vertices, "
+                          << input_model.model().indexCount()
+                          << " indices)\n";
+            } catch (...) {
+                if (getDevice() != VK_NULL_HANDLE) {
+                    vkDeviceWaitIdle(getDevice());
+                    input_model.cleanup(this);
+                }
+                throw;
+            }
+        }
+
         void initializeSprite() {
             if (!ensureRenderResources()) {
                 throw std::runtime_error("MXVK failed to initialize render resources");
@@ -4594,6 +4929,8 @@ namespace acmxvk {
             frame_sprite->createEmptySprite(
                 source_width, source_height, spriteVertexShader(),
                 options.history_test ? echoCacheShader() : std::string{});
+
+            initializeModel();
 
             if (source_kind == SourceKind::Graphic) {
                 initial_frame_pending = false;
@@ -5118,6 +5455,32 @@ namespace acmxvk {
         }
 
 #ifdef ACMXVK_WITH_MXVK_CUDA
+        void updateModelTextureCuda(const cv::cuda::GpuMat &rgba,
+                                    cv::cuda::Stream &source_stream) {
+            if (!model_initialized) {
+                return;
+            }
+            if (input_model.updatePrimaryTextureCuda(rgba, source_stream)) {
+                return;
+            }
+
+            rgba.download(cuda_model_fallback_rgba, source_stream);
+            source_stream.waitForCompletion();
+            if (!cuda_model_fallback_logged) {
+                std::cerr << "acmxvk: direct CUDA model-texture upload "
+                             "unavailable; using host staging\n";
+                cuda_model_fallback_logged = true;
+            }
+            if (!input_model.updatePrimaryTexture(
+                    cuda_model_fallback_rgba.ptr(),
+                    cuda_model_fallback_rgba.cols,
+                    cuda_model_fallback_rgba.rows,
+                    static_cast<int>(cuda_model_fallback_rgba.step))) {
+                throw std::runtime_error(
+                    "MXVK could not update the 3D model texture");
+            }
+        }
+
         void updateCudaHistoryFrame(const cv::cuda::GpuMat &rgba,
                                     cv::cuda::Stream &source_stream) {
             if (frame_sprite->updateHistoryTextureCuda(rgba, source_stream)) {
@@ -5178,6 +5541,8 @@ namespace acmxvk {
                 throw std::runtime_error(
                     "MXVK could not upload the CUDA-filtered frame");
             }
+            updateModelTextureCuda(gpu_filter_engine->output(),
+                                   gpu_filter_engine->stream());
         }
 #endif
 
@@ -5218,11 +5583,20 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "MXVK could not upload the CUDA-filtered frame");
                 }
+                updateModelTextureCuda(gpu_filter_engine->output(),
+                                       gpu_filter_engine->stream());
                 return;
             }
 #endif
             frame_sprite->updateTexture(rgba.ptr(), rgba.cols, rgba.rows,
                                         static_cast<int>(rgba.step));
+            if (model_initialized &&
+                !input_model.updatePrimaryTexture(
+                    rgba.ptr(), rgba.cols, rgba.rows,
+                    static_cast<int>(rgba.step))) {
+                throw std::runtime_error(
+                    "MXVK could not update the 3D model texture");
+            }
         }
 
         [[nodiscard]] bool readLatestCameraFrame() {
@@ -5337,6 +5711,7 @@ namespace acmxvk {
                         cuda_input_fallback_rgba.rows,
                         static_cast<int>(cuda_input_fallback_rgba.step));
                 }
+                updateModelTextureCuda(render_input, ffmpeg_cuda_stream);
                 if (!cuda_input_path_logged) {
                     std::cout << "acmxvk: CUDA input path active: FFmpeg "
                                  "NVDEC -> CUDA RGBA -> ";
@@ -5363,7 +5738,8 @@ namespace acmxvk {
 #endif
 
             bool requires_host_frame = historyCacheEnabled() ||
-                                       options.frame_rotation != FrameRotation::None;
+                                       options.frame_rotation != FrameRotation::None ||
+                                       model_initialized;
             if (!requires_host_frame
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
                 && !using_ffmpeg_capture

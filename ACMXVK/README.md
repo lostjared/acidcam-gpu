@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8H**. It is usable for video, camera, and
+The port is currently at **Increment 8I**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -34,7 +34,7 @@ ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
-| 3D model pipeline | Not yet ported | ACMX2 model rendering remains outside the current increment. |
+| 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer before the existing fragment/compute effect chain. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse orbit/zoom, automatic rotation, scale/speed controls, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. ACMX2's wave deformation and free-look camera remain to be ported. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
 
 ## Requirements
@@ -161,6 +161,13 @@ locking. While locked, manual shader and playlist-node selection and both
 autopilot modes retain the current pipeline; autopilot resumes its existing
 countdown after unlocking. The runtime HUD marks the shader as locked, and
 ACMX2 MIDI-map action code 75 can toggle the same state.
+Increment 8I changes only ACMXVK. It uses MXVK's `VKAbstractModel` and
+`MXModel` loader to render OBJ, MXMOD, and compressed MXMOD models. Each input
+frame replaces texture slot zero across the complete model draw, and the
+result enters the same ordered fragment/compute pipeline used by 2D input.
+The bundled `cube.obj` is selected when `--model` is omitted. MXVK 0.31.1
+already provides the required public model API, so it does not need to be
+rebuilt or reinstalled for this increment.
 
 ### Input validation
 
@@ -1443,6 +1450,49 @@ the actual preview-window height. The 1/60 scale keeps long shader, multipass,
 timer, and FPS lines readable when a high-resolution or portrait source is
 fitted into a smaller window; the minimum remains 12 points.
 
+## 3D model rendering
+
+Enable the MXVK model renderer with `--enable-3d`. Without `--model`, ACMXVK
+loads its bundled `models/cube.obj`. Supplying `--model` also enables 3D mode
+and accepts Wavefront OBJ, MXMOD, or compressed MXMOD (`.mxmod.z`) input:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input video.mp4 \
+    --use-source-fps \
+    --model /path/to/model.mxmod.z \
+    --fragment ./build/acmxvk/shaders/passthrough.frag.spv \
+    --resolution 1280x720 \
+    --enable-vsync
+```
+
+MXVK normalizes the model from its bounds and ACMXVK uploads each decoded
+RGBA input frame into the model's primary Vulkan texture. The primary texture
+is explicitly selected for the complete draw, so models containing multiple
+submeshes receive the same live input across every surface. CUDA-enabled MXVK
+builds use direct CUDA/Vulkan model-texture interop for NVDEC and filtered
+frames, with host staging as a reported fallback.
+
+The 3D scene is rendered into ACMXVK's native-resolution offscreen target
+before its ordered fragment/compute passes. Shader effects, output overlays,
+history, snapshots, and encoded video therefore operate on the completed 3D
+image. The preview-only HUD remains excluded from saved output and identifies
+the active model or reports when the 2D sprite path is selected.
+
+The main 3D controls are:
+
+- Left mouse drag: rotate the model
+- Mouse wheel: zoom
+- `3`: switch between 3D model and 2D sprite rendering
+- `V`: toggle automatic model rotation
+- `X`: reset rotation, zoom, and scale
+- `[` / `]`: decrease or increase model scale
+- `,` / `.`: decrease or increase automatic rotation speed
+
+ACMX2 MIDI-map action codes 44, 46, 51, 86, 88, 91, and 93 drive the same
+controls. Model paths are centrally validated, restricted to the supported
+extensions, and limited to 1 GiB before reaching MXVK's loader.
+
 ## Runtime controls
 
 - Up/Down: change the shader or playlist node
@@ -1461,6 +1511,12 @@ fitted into a smaller window; the minimum remains 12 points.
 - F: toggle fullscreen
 - F9: toggle the preview-only runtime HUD
 - E: toggle the configured watermark
+- 3: toggle 2D sprite or 3D model rendering
+- V: toggle automatic model rotation
+- X: reset the model view
+- Left mouse drag / wheel: rotate or zoom the model
+- Left bracket / Right bracket: decrease or increase model scale
+- Comma / Period: decrease or increase model rotation speed
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
 - K: lock or unlock shader and playlist selection
@@ -1534,6 +1590,12 @@ repeated a 1920x1080 NVDEC/NVENC recording driven by live-audio PTS. Selecting
 the RTX 2070's host-cached memory type increased delivery from 6–7 frames to 59
 frames over two seconds; the resulting H.264 and AAC streams both measured
 exactly two seconds, with a 29.5 FPS average video rate.
+Increment 8I loaded both the bundled OBJ and MXVK's compressed
+`cube.mxmod.z`, mapped a 1920x1080 still image over the complete mesh, and
+encoded the source-sized 3D render through the existing Vulkan post-process
+and pipelined readback path. A separate bundled-OBJ run completed with the
+Vulkan SDK validation layer enabled and no project validation errors; the
+duplicate vkBasalt implicit-layer warning remained external to ACMXVK.
 
 ## Development note
 
