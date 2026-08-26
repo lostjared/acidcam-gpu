@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8D**. It is usable for video, camera, and
+The port is currently at **Increment 8E**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -144,6 +144,10 @@ video's embedded audio track for shader reactivity during `--use-source-fps`
 playback. Optional pass-through uses the selected RtAudio output as the A/V
 master clock; silent analysis follows the video media clock directly. Neither
 MXVK nor acidcam-gpu needs to be rebuilt or reinstalled.
+Increment 8E also changes only ACMXVK. A video without a decodable audio track
+now continues with zero-valued audio-reactive inputs instead of aborting;
+requested pass-through is disabled with a warning. An explicitly selected
+`--audio-file` remains a hard error when it cannot be decoded.
 
 ### Input validation
 
@@ -271,7 +275,9 @@ requested clock. `P` pause and `L` freeze suspend this clock and resume without
 jumping over the paused interval. Add `--use-source-audio` with an `AUDIO=ON`
 build to use the video's embedded audio track for shader reactivity. Add
 `--pass-through` to hear it; `--audio-output <index>` selects the output device,
-which then becomes the more accurate A/V master clock.
+which then becomes the more accurate A/V master clock. If the video has no
+decodable audio track, ACMXVK warns once, continues with zero-valued audio
+inputs, and disables pass-through.
 
 ```bash
 ./build/acmxvk/acmxvk \

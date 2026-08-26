@@ -1143,7 +1143,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8D)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8E)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -2904,6 +2904,18 @@ namespace acmxvk {
             if (!options.audio_file.empty()) {
                 file_audio_source = std::make_unique<audio::FileAudioSource>();
                 if (!file_audio_source->open(options.audio_file)) {
+                    if (options.use_source_audio) {
+                        std::cerr
+                            << "acmxvk: source video has no decodable audio "
+                               "track; continuing with silent audio-reactive "
+                               "values";
+                        if (options.audio_pass_through) {
+                            std::cerr << " and pass-through disabled";
+                        }
+                        std::cerr << '\n';
+                        file_audio_source.reset();
+                        return;
+                    }
                     throw std::runtime_error("could not decode --audio-file: " +
                                              options.audio_file);
                 }
