@@ -1,0 +1,40 @@
+# Cartoon mushroom material library
+newmtl Cap
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.060 0.060 0.060
+Ns 12.000
+illum 2
+map_Kd mushroom_cap.png
+
+newmtl Stem
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.040 0.040 0.040
+Ns 8.000
+illum 2
+map_Kd mushroom_stem.png
+
+newmtl Gills
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.030 0.030 0.030
+Ns 4.000
+illum 2
+map_Kd mushroom_gills.png
+
+newmtl Ring
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.040 0.040 0.040
+Ns 8.000
+illum 2
+map_Kd mushroom_stem.png
+
+newmtl Spot
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.020 0.020 0.020
+Ns 4.000
+illum 2
+map_Kd mushroom_spot.png
