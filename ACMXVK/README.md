@@ -1580,6 +1580,9 @@ supported extensions, and limited to 1 GiB before reaching MXVK's loader.
 
 ## Runtime controls
 
+See [Controls.md](Controls.md) for the complete keyboard, mouse, 3D, and MIDI
+control reference.
+
 - Up/Down: change the shader or playlist node
 - Shift+Up/Down: change the final shader while using a playlist
 - Left/Right: select the previous or next CUDA filter
