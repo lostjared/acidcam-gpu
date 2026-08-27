@@ -141,11 +141,38 @@ extern "C" {
 #define ACMXVK_INSTALL_RESOURCE_DIRECTORY "."
 #endif
 
+#ifndef ACMXVK_BUILD_CROSSFADE_DIRECTORY
+#define ACMXVK_BUILD_CROSSFADE_DIRECTORY "shaders/xfade"
+#endif
+
+#ifndef ACMXVK_INSTALL_CROSSFADE_DIRECTORY
+#define ACMXVK_INSTALL_CROSSFADE_DIRECTORY "shaders/xfade"
+#endif
+
 namespace acmxvk {
     namespace fs = std::filesystem;
 
     constexpr int MAX_FRAME_DIMENSION = 16384;
     constexpr std::int64_t MAX_FRAME_PIXELS = 67108864;
+    constexpr std::array<std::string_view, 35> CROSSFADE_NAMES{
+        "xfade_01_linear", "xfade_02_block",
+        "xfade_03_wipe", "xfade_04_radial",
+        "xfade_05_pixelate", "xfade_06_dissolve",
+        "xfade_07_swirl", "xfade_08_glitch",
+        "xfade_09_diamond", "xfade_10_burn",
+        "xfade_11_fade_black", "xfade_12_fade_white",
+        "xfade_13_slide_left", "xfade_14_slide_right",
+        "xfade_15_slide_up", "xfade_16_slide_down",
+        "xfade_17_diagonal_wipe", "xfade_18_iris_open",
+        "xfade_19_iris_close", "xfade_20_checker",
+        "xfade_21_blinds_h", "xfade_22_blinds_v",
+        "xfade_23_zoom_in", "xfade_24_zoom_out",
+        "xfade_25_rotate", "xfade_26_ripple",
+        "xfade_27_wave", "xfade_28_chroma",
+        "xfade_29_invert", "xfade_30_flash",
+        "xfade_31_explode", "xfade_32_mosaic",
+        "xfade_33_shutter", "xfade_34_luma",
+        "xfade_35_noise"};
 
     [[nodiscard]] bool dimensions_supported(int width, int height) {
         return width > 0 && height > 0 && width <= MAX_FRAME_DIMENSION &&
@@ -180,6 +207,7 @@ namespace acmxvk {
         int cuda_device = 0;
         double requested_fps = 0.0;
         double duration = 0.0;
+        double cross_fade_duration = 0.5;
         double time_speed = 1.0;
         double max_size_mb = 0.0;
         double audio_sensitivity = 1.0;
@@ -738,6 +766,14 @@ namespace acmxvk {
                 options.playlist_file = optionValue(index, argc, argv, option);
             } else if (option == "--enable-playlist") {
                 options.enable_playlist = true;
+            } else if (option == "--cross-fade") {
+                options.cross_fade_duration =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                if (options.cross_fade_duration < 0.0 ||
+                    options.cross_fade_duration > 60.0) {
+                    throw std::runtime_error(
+                        "crossfade duration must be between 0 and 60 seconds");
+                }
             } else if (option == "--time-speed") {
                 options.time_speed =
                     parseNumber(optionValue(index, argc, argv, option), option);
@@ -1189,7 +1225,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8L)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8M)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1225,6 +1261,7 @@ namespace acmxvk {
                << "  --shader-pass <indices>     Mixed fragment/compute pre-pass chain\n"
                << "  --shader-pass-files <data>  ACMX2 length-prefixed shader filenames\n"
                << "  --playlist <file>           Shader or named multipass playlist\n\n"
+               << "      --cross-fade <seconds>  Shader transition duration (default 0.5)\n\n"
                << "  --enable-playlist           Enable the playlist immediately\n"
                << "  --time-speed <mult>         Scale shader time (default 1.0)\n"
                << "  --normalized                Use fixed output-frame shader time\n"
@@ -1315,9 +1352,10 @@ namespace acmxvk {
                << "      3 toggle 2D/3D, V 3D view rotation, X reset skybox view,\n"
                << "      E watermark, F fullscreen, F9 runtime HUD, K shader lock,\n"
                << "      M multipass,\n"
-               << "      J random autopilot, Y sequential autopilot, Space bypass,\n"
+               << "      J random autopilot, Y sequential autopilot, N random crossfade,\n"
+               << "      [/] crossfade effect (and 3D model scale), Space bypass,\n"
                << "      W/A/S/D 3D look, +/- 3D zoom, 1/2 zoom sensitivity,\n"
-               << "      Z PNG snapshot, [/] model scale, mouse drag/wheel look/move,\n"
+               << "      Z PNG snapshot, mouse drag/wheel 3D look/move,\n"
                << "      Escape quit\n";
     }
 
@@ -1992,6 +2030,7 @@ namespace acmxvk {
                     selectGpuFilter(1);
                     break;
                 case SDLK_SPACE:
+                    beginCrossfade();
                     effects_enabled = !effects_enabled;
                     applyShaderPipeline();
                     std::cout << "acmxvk: shader effects "
@@ -1999,6 +2038,7 @@ namespace acmxvk {
                     break;
                 case SDLK_P:
                     if (!playlist.empty()) {
+                        beginCrossfade();
                         playlist_enabled = !playlist_enabled;
                         applyShaderPipeline();
                         std::cout << "acmxvk: playlist "
@@ -2085,6 +2125,7 @@ namespace acmxvk {
                     break;
                 case SDLK_M:
                     if (!configured_passes.empty()) {
+                        beginCrossfade();
                         multipass_enabled = !multipass_enabled;
                         applyShaderPipeline();
                         std::cout << "acmxvk: multipass "
@@ -2093,6 +2134,14 @@ namespace acmxvk {
                     break;
                 case SDLK_J:
                     toggleAutopilot(false);
+                    break;
+                case SDLK_N:
+                    autopilot_random_crossfade =
+                        !autopilot_random_crossfade;
+                    std::cout << "acmxvk: random autopilot crossfade "
+                              << (autopilot_random_crossfade ? "enabled"
+                                                             : "disabled")
+                              << '\n';
                     break;
                 case SDLK_K:
                     shader_locked = !shader_locked;
@@ -2130,6 +2179,7 @@ namespace acmxvk {
                     }
                     break;
                 case SDLK_LEFTBRACKET:
+                    cycleCrossfade(-1);
                     if (model_initialized) {
                         model_scale = std::max(0.05F, model_scale - 0.05F);
                         std::cout << "acmxvk: model scale " << model_scale
@@ -2137,6 +2187,7 @@ namespace acmxvk {
                     }
                     break;
                 case SDLK_RIGHTBRACKET:
+                    cycleCrossfade(1);
                     if (model_initialized) {
                         model_scale = std::min(20.0F, model_scale + 0.05F);
                         std::cout << "acmxvk: model scale " << model_scale
@@ -2505,6 +2556,7 @@ namespace acmxvk {
         Writer writer;
         mxvk::VKAbstractModel input_model;
         mxvk::VK_Sprite *frame_sprite = nullptr;
+        mxvk::VK_Sprite *crossfade_previous_sprite = nullptr;
         cv::Mat graphic_rgba;
         cv::Mat latest_camera_history_rgba;
         std::vector<fs::path> shaders;
@@ -2559,6 +2611,8 @@ namespace acmxvk {
         bool snapshot_pending = false;
         bool autopilot_enabled = false;
         bool autopilot_sequential = false;
+        bool autopilot_random_crossfade = false;
+        bool crossfade_active = false;
         int recording_width = 0;
         int recording_height = 0;
         int camera_reported_width = 0;
@@ -2566,6 +2620,7 @@ namespace acmxvk {
         int autopilot_counter = 0;
         int autopilot_interval_frames = 0;
         int history_delay_counter = 0;
+        std::size_t crossfade_shader_index = 0;
         bool camera_history_clock_started = false;
         double recording_fps = 0.0;
         double video_source_fps = 0.0;
@@ -2575,6 +2630,7 @@ namespace acmxvk {
         double camera_last_logged_fps = 0.0;
         double shader_time = 0.0;
         float legacy_alpha = 0.1F;
+        float crossfade_alpha = 1.0F;
         float model_pitch_degrees = 0.0F;
         float model_yaw_degrees = 270.0F;
         float model_camera_distance = 0.0F;
@@ -2591,6 +2647,8 @@ namespace acmxvk {
         std::chrono::steady_clock::time_point compatibility_clock_start =
             std::chrono::steady_clock::now();
         std::chrono::steady_clock::time_point model_last_render_time =
+            std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point crossfade_start_time =
             std::chrono::steady_clock::now();
         std::uint64_t output_frame_count = 0;
         std::uint64_t decoded_video_frame_count = 0;
@@ -3816,6 +3874,29 @@ namespace acmxvk {
             return ACMXVK_BUILD_PASSTHROUGH_SHADER;
         }
 
+        [[nodiscard]] fs::path crossfadeShader() const {
+            const std::string filename =
+                std::string(CROSSFADE_NAMES[crossfade_shader_index]) +
+                ".frag.spv";
+            const fs::path resource =
+                findResource(options, fs::path("shaders/xfade") / filename);
+            if (!resource.empty()) {
+                return resource;
+            }
+            const fs::path installed =
+                fs::path(ACMXVK_INSTALL_CROSSFADE_DIRECTORY) / filename;
+            if (fs::is_regular_file(installed)) {
+                return installed;
+            }
+            const fs::path built =
+                fs::path(ACMXVK_BUILD_CROSSFADE_DIRECTORY) / filename;
+            if (fs::is_regular_file(built)) {
+                return built;
+            }
+            throw std::runtime_error("crossfade shader was not found: " +
+                                     filename);
+        }
+
         [[nodiscard]] fs::path modelVertexShader() const {
             const fs::path resource =
                 findResource(options, "shaders/model.vert.spv");
@@ -4184,6 +4265,15 @@ namespace acmxvk {
             }
             printPreviewText(clipOverlayText("Shader: " + std::move(shader)),
                              10, y, shader_color);
+            y += line_height;
+
+            const SDL_Color crossfade_color{255U, 192U, 0U, 255U};
+            std::ostringstream crossfade_status;
+            crossfade_status << "XFade [" << (crossfade_shader_index + 1)
+                             << '/' << CROSSFADE_NAMES.size() << "]: "
+                             << CROSSFADE_NAMES[crossfade_shader_index];
+            printPreviewText(clipOverlayText(crossfade_status.str()), 10, y,
+                             crossfade_color);
             y += line_height;
 
             const std::string passes = activePassDescription();
@@ -5078,6 +5168,124 @@ namespace acmxvk {
             frame_count = 0;
         }
 
+        void beginCrossfade() {
+            if (options.cross_fade_duration <= 0.0 || frame_count == 0 ||
+                getDevice() == VK_NULL_HANDLE) {
+                crossfade_active = false;
+                crossfade_alpha = 1.0F;
+                return;
+            }
+
+            try {
+                std::vector<std::uint8_t> captured;
+                std::uint32_t captured_width = 0;
+                std::uint32_t captured_height = 0;
+                captureSnapshotPixels(captured, captured_width,
+                                      captured_height);
+                const VkExtent2D extent = getRenderExtent();
+                if (captured.empty() || captured_width == 0U ||
+                    captured_height == 0U || extent.width == 0U ||
+                    extent.height == 0U) {
+                    throw std::runtime_error(
+                        "the previous rendered frame is unavailable");
+                }
+
+                cv::Mat captured_rgba(static_cast<int>(captured_height),
+                                      static_cast<int>(captured_width),
+                                      CV_8UC4, captured.data());
+                cv::Mat previous_rgba;
+                if (captured_width == extent.width &&
+                    captured_height == extent.height) {
+                    previous_rgba = captured_rgba;
+                } else {
+                    const double captured_aspect =
+                        static_cast<double>(captured_width) / captured_height;
+                    const double target_aspect =
+                        static_cast<double>(extent.width) / extent.height;
+                    cv::Rect crop(0, 0, static_cast<int>(captured_width),
+                                  static_cast<int>(captured_height));
+                    if (captured_aspect > target_aspect) {
+                        crop.width = std::max(
+                            1, static_cast<int>(std::lround(
+                                   captured_height * target_aspect)));
+                        crop.x =
+                            (static_cast<int>(captured_width) - crop.width) / 2;
+                    } else if (captured_aspect < target_aspect) {
+                        crop.height = std::max(
+                            1, static_cast<int>(std::lround(
+                                   captured_width / target_aspect)));
+                        crop.y = (static_cast<int>(captured_height) -
+                                  crop.height) /
+                                 2;
+                    }
+                    cv::resize(captured_rgba(crop), previous_rgba,
+                               cv::Size(static_cast<int>(extent.width),
+                                        static_cast<int>(extent.height)),
+                               0.0, 0.0, cv::INTER_LINEAR);
+                }
+
+                if (crossfade_previous_sprite == nullptr) {
+                    crossfade_previous_sprite = createSprite(1, 1);
+                }
+                crossfade_previous_sprite->enableHistoryTexture(
+                    extent.width, extent.height, 1U);
+                crossfade_previous_sprite->updateHistoryTexture(
+                    previous_rgba.ptr(), static_cast<int>(extent.width),
+                    static_cast<int>(extent.height),
+                    static_cast<int>(previous_rgba.step));
+                crossfade_alpha = 0.0F;
+                crossfade_active = true;
+                crossfade_start_time = std::chrono::steady_clock::now();
+            } catch (const std::exception &error) {
+                crossfade_active = false;
+                crossfade_alpha = 1.0F;
+                std::cerr << "acmxvk: crossfade snapshot unavailable: "
+                          << error.what() << "; switching immediately\n";
+            }
+        }
+
+        void updateCrossfade(const std::chrono::steady_clock::time_point now) {
+            if (!crossfade_active) {
+                return;
+            }
+            const double elapsed =
+                std::chrono::duration<double>(now - crossfade_start_time)
+                    .count();
+            crossfade_alpha = static_cast<float>(std::clamp(
+                elapsed / options.cross_fade_duration, 0.0, 1.0));
+            if (crossfade_alpha >= 1.0F) {
+                crossfade_active = false;
+                applyShaderPipeline();
+            }
+        }
+
+        void cycleCrossfade(int direction) {
+            const auto count =
+                static_cast<std::ptrdiff_t>(CROSSFADE_NAMES.size());
+            auto index =
+                static_cast<std::ptrdiff_t>(crossfade_shader_index) + direction;
+            index = (index % count + count) % count;
+            crossfade_shader_index = static_cast<std::size_t>(index);
+            std::cout << "acmxvk: crossfade shader: "
+                      << CROSSFADE_NAMES[crossfade_shader_index] << " ("
+                      << (crossfade_shader_index + 1) << '/'
+                      << CROSSFADE_NAMES.size() << ")\n";
+        }
+
+        void maybeRandomizeCrossfade() {
+            if (!autopilot_random_crossfade || CROSSFADE_NAMES.empty()) {
+                return;
+            }
+            std::uniform_int_distribution<std::size_t> distribution(
+                0, CROSSFADE_NAMES.size() - 1);
+            std::size_t next = distribution(autopilot_rng);
+            if (CROSSFADE_NAMES.size() > 1 &&
+                next == crossfade_shader_index) {
+                next = (next + 1) % CROSSFADE_NAMES.size();
+            }
+            crossfade_shader_index = next;
+        }
+
         void togglePause() {
             if (source_kind == SourceKind::Camera) {
                 std::cout << "acmxvk: pause is available for video and graphic input\n";
@@ -5187,6 +5395,8 @@ namespace acmxvk {
             }
             autopilot_counter = 0;
 
+            maybeRandomizeCrossfade();
+            beginCrossfade();
             if (autopilot_sequential && options.autopilot_random_timeout <= 0) {
                 playlist_index = (playlist_index + 1) % playlist.size();
             } else {
@@ -5213,6 +5423,7 @@ namespace acmxvk {
                 return;
             }
             const auto count = static_cast<std::ptrdiff_t>(shaders.size());
+            beginCrossfade();
             auto index = static_cast<std::ptrdiff_t>(shader_index) + direction;
             index = (index % count + count) % count;
             shader_index = static_cast<std::size_t>(index);
@@ -5229,6 +5440,7 @@ namespace acmxvk {
                 return;
             }
             const auto count = static_cast<std::ptrdiff_t>(playlist.size());
+            beginCrossfade();
             auto index = static_cast<std::ptrdiff_t>(playlist_index) + direction;
             index = (index % count + count) % count;
             playlist_index = static_cast<std::size_t>(index);
@@ -5254,6 +5466,9 @@ namespace acmxvk {
             }
             if (options.flip_output) {
                 pipeline.emplace_back(flipShader());
+            }
+            if (crossfade_active) {
+                pipeline.emplace_back(crossfadeShader());
             }
             if (pipeline.empty()) {
                 pipeline.emplace_back(passthroughShader());
@@ -5332,7 +5547,10 @@ namespace acmxvk {
             for (const fs::path &shader : pipeline) {
                 PostProcessingEffect effect{
                     shader.string(), {1.0F, 1.0F, 1.0F, 0.0F}, false};
-                if (historyCacheEnabled()) {
+                if (crossfade_active && shader == crossfadeShader()) {
+                    effect.historySource = crossfade_previous_sprite;
+                    effect.params[0] = crossfade_alpha;
+                } else if (historyCacheEnabled()) {
                     effect.historySource = frame_sprite;
                 }
                 if (spectrumTextureEnabledForShaders()) {
@@ -5944,6 +6162,7 @@ namespace acmxvk {
 
         void updateShaderUniforms(int width, int height) {
             const auto now = std::chrono::steady_clock::now();
+            updateCrossfade(now);
             const float wall_delta =
                 std::chrono::duration<float>(now - previous_frame).count();
             previous_frame = now;
@@ -6085,7 +6304,14 @@ namespace acmxvk {
 
             for (std::size_t index = 0; index < post_process_sprites.size(); ++index) {
                 mxvk::VK_Sprite *sprite = post_process_sprites[index];
-                setPostProcessingShaderParams(index, 1.0F, 1.0F, 1.0F, elapsed);
+                if (crossfade_active &&
+                    index + 1U == post_process_sprites.size()) {
+                    setPostProcessingShaderParams(index, crossfade_alpha, 0.0F,
+                                                  0.0F, 0.0F);
+                } else {
+                    setPostProcessingShaderParams(index, 1.0F, 1.0F, 1.0F,
+                                                  elapsed);
+                }
                 sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
                 sprite->setUniform0(legacy_alpha, compatibility_time,
                                     static_cast<float>(width),

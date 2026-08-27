@@ -112,7 +112,7 @@ find_package(ZLIB REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(OpenCV REQUIRED)
 
-find_package(mxvk 0.33.0 CONFIG REQUIRED)
+find_package(mxvk 0.33.1 CONFIG REQUIRED)
 find_program(GLSLC_EXECUTABLE glslc REQUIRED)
 
 get_target_property(ACMXVK_MXVK_LIBRARIES mxvk::mxvk INTERFACE_LINK_LIBRARIES)
@@ -212,6 +212,36 @@ set(ACMXVK_COMPUTE_TEST_SHADER
 set(ACMXVK_AUDIO_HISTORY_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/audio_history.frag.spv"
 )
+set(ACMXVK_CROSSFADE_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/xfade"
+)
+set(ACMXVK_CROSSFADE_OUTPUT_DIR
+    "${ACMXVK_SHADER_OUTPUT_DIR}/xfade"
+)
+file(GLOB ACMXVK_CROSSFADE_SHADER_SOURCES CONFIGURE_DEPENDS
+    "${ACMXVK_CROSSFADE_SOURCE_DIR}/xfade_*.glsl"
+)
+set(ACMXVK_CROSSFADE_SHADERS)
+foreach(ACMXVK_CROSSFADE_SOURCE IN LISTS ACMXVK_CROSSFADE_SHADER_SOURCES)
+    get_filename_component(ACMXVK_CROSSFADE_NAME
+        "${ACMXVK_CROSSFADE_SOURCE}" NAME_WE
+    )
+    set(ACMXVK_CROSSFADE_OUTPUT
+        "${ACMXVK_CROSSFADE_OUTPUT_DIR}/${ACMXVK_CROSSFADE_NAME}.frag.spv"
+    )
+    add_custom_command(
+        OUTPUT "${ACMXVK_CROSSFADE_OUTPUT}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "${ACMXVK_CROSSFADE_OUTPUT_DIR}"
+        COMMAND "${GLSLC_EXECUTABLE}" -fshader-stage=fragment
+                "${ACMXVK_CROSSFADE_SOURCE}"
+                -o "${ACMXVK_CROSSFADE_OUTPUT}"
+        DEPENDS "${ACMXVK_CROSSFADE_SOURCE}"
+        COMMENT "Compiling ACMXVK crossfade ${ACMXVK_CROSSFADE_NAME}"
+        VERBATIM
+    )
+    list(APPEND ACMXVK_CROSSFADE_SHADERS "${ACMXVK_CROSSFADE_OUTPUT}")
+endforeach()
 set(ACMXVK_OVERLAY_FONT
     "${CMAKE_CURRENT_SOURCE_DIR}/../ACMX2/data/font.ttf"
     CACHE FILEPATH "TrueType font used by ACMXVK overlays"
@@ -385,6 +415,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
     "${ACMXVK_COMPUTE_TEST_SHADER}"
     "${ACMXVK_AUDIO_HISTORY_SHADER}"
+    ${ACMXVK_CROSSFADE_SHADERS}
 )
 
 add_executable(acmxvk acmx.cpp input_validation.cpp input_validation.hpp)
@@ -460,6 +491,8 @@ target_compile_definitions(acmxvk PRIVATE
     ACMXVK_INSTALL_RESOURCE_DIRECTORY="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk"
     ACMXVK_BUILD_OVERLAY_FONT="${ACMXVK_BUILD_OVERLAY_FONT}"
     ACMXVK_INSTALL_OVERLAY_FONT="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/data/font.ttf"
+    ACMXVK_BUILD_CROSSFADE_DIRECTORY="${ACMXVK_CROSSFADE_OUTPUT_DIR}"
+    ACMXVK_INSTALL_CROSSFADE_DIRECTORY="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/xfade"
 )
 
 if(BUILD_TESTING)
@@ -492,6 +525,8 @@ install(FILES
         "${ACMXVK_AUDIO_HISTORY_SHADER}"
         "${ACMXVK_TEST_SHADER_MANIFEST}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")
+install(FILES ${ACMXVK_CROSSFADE_SHADERS}
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders/xfade")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/midi-examples/"

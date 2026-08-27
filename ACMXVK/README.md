@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8L**. It is usable for video, camera, and
+The port is currently at **Increment 8M**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -20,6 +20,7 @@ ACMX2.
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
+| Shader crossfades | Implemented | Shader, playlist, multipass, and bypass changes crossfade from a snapshot of the preceding rendered result. All 35 ACMX2 transition styles are bundled as Vulkan SPIR-V shaders, with selectable duration/style and optional random transition selection during autopilot. |
 | Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
@@ -41,7 +42,7 @@ ACMX2.
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.33.0 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.33.1 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -183,6 +184,14 @@ Increment 8L changes only ACMXVK. Its 3D camera now accepts ACMX2's continuous
 W/A/S/D look controls, plus/minus movement along the view direction, and 1/2
 movement-sensitivity controls. MXVK and acidcam-gpu do not need to be rebuilt
 or reinstalled.
+Increment 8M ports ACMX2's complete 35-effect crossfade set to Vulkan. Shader,
+playlist-node, multipass, and bypass changes snapshot the preceding rendered
+result and blend it into the new result for the requested wall-clock duration.
+The selected transition is shown in the HUD; brackets select its style, and
+`N` optionally randomizes it for autopilot changes. MXVK 0.33.1 changes the
+synchronous snapshot path to read MXVK's owned source-sized offscreen image,
+avoiding an invalid post-presentation swapchain transition. MXVK must be
+rebuilt and reinstalled before rebuilding ACMXVK; acidcam-gpu is unchanged.
 
 ### Input validation
 
@@ -429,6 +438,33 @@ Override a custom float declared by `library.json`:
     --duration 2 \
     --output output.mp4
 ```
+
+### Shader crossfades
+
+Shader changes use a 0.5-second crossfade by default. Set the duration in
+seconds with `--cross-fade`; use `0` to switch immediately:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input video.mp4 \
+    --shaders ./shaders_acmxvk \
+    --shader-file first.frag.spv \
+    --cross-fade 1.25
+```
+
+Press `[` or `]` to select the previous or next transition. In 3D mode those
+keys retain ACMX2's model-scale action as well. Press `N` to toggle random
+transition selection for sequential or random autopilot changes. The HUD
+reports the current one as `XFade [index/35]: name`.
+
+The bundled set matches ACMX2: linear, block, wipe, radial, pixelate,
+dissolve, swirl, glitch, diamond, burn, fade-to-black, fade-to-white, four
+slides, diagonal wipe, iris open/close, checker, horizontal/vertical blinds,
+zoom in/out, rotate, ripple, wave, chroma, invert, flash, explode, mosaic,
+shutter, luma, and noise. Crossfading is the final stage of the active Vulkan
+chain, so it also works with fragment shaders, compute shaders, mixed
+multipass playlists, final-output flipping, bypass, and the 3D model texture
+pipeline.
 
 ## SPIR-V shader-library format
 
@@ -1513,7 +1549,7 @@ The main 3D controls are:
 - `3`: switch between 3D model and 2D sprite rendering
 - `V`: toggle automatic view rotation
 - `X`: reset the centered skybox view and scale
-- `[` / `]`: decrease or increase model scale
+- `[` / `]`: select the crossfade style and decrease or increase model scale
 - `,` / `.`: decrease or increase automatic view-rotation speed
 
 ACMX2 MIDI-map action codes 44, 46, 51, 86, 88, 91, and 93 drive the same
@@ -1545,10 +1581,12 @@ extensions, and limited to 1 GiB before reaching MXVK's loader.
 - Plus/Minus: move backward or forward along the 3D view direction
 - 1/2: increase or decrease 3D keyboard movement sensitivity
 - Left mouse drag / wheel: look around or move along the view direction
-- Left bracket / Right bracket: decrease or increase model scale
+- Left bracket / Right bracket: select the crossfade style; in 3D mode also
+  decrease or increase model scale
 - Comma / Period: decrease or increase 3D view-rotation speed
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
+- N: toggle random crossfade selection for autopilot changes
 - K: lock or unlock shader and playlist selection
 - Y: toggle sequential autopilot
 - Space: bypass or enable shader effects
@@ -1634,6 +1672,12 @@ selected-fragment pass chain against MXVK 0.33.0. Both produced encoded cube
 interiors with the processed image following the cube faces, and Vulkan
 validation reported no project errors. CUDA and non-CUDA builds and the input
 validation test also passed.
+Increment 8M compiled all 35 crossfade modules with `glslc`, built against a
+staged MXVK 0.33.1, and triggered a fragment-to-compute transition during
+video playback. The previous source-sized Vulkan result was captured, bound
+as the transition texture, blended for the configured duration, and released
+without Vulkan validation errors. The portable input-validation test also
+passed.
 
 ## Development note
 
