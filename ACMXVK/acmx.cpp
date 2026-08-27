@@ -237,6 +237,7 @@ namespace acmxvk {
         bool encode_realtime = false;
         bool no_drop = false;
         bool copy_audio = false;
+        bool mute_output = false;
         bool enable_audio = false;
         bool audio_input_specified = false;
         bool audio_warm_rate_specified = false;
@@ -1024,6 +1025,8 @@ namespace acmxvk {
                     optionValue(index, argc, argv, option), option);
             } else if (option == "--copy-audio") {
                 options.copy_audio = true;
+            } else if (option == "--mute-output") {
+                options.mute_output = true;
             } else if (option == "-n" || option == "--fullscreen") {
                 options.fullscreen = true;
             } else if (option == "-a" || option == "--repeat") {
@@ -1201,7 +1204,7 @@ namespace acmxvk {
             (!options.enable_audio || !options.audio_file.empty() ||
              (options.record_audio_file.empty() &&
               (options.output_file.empty() || options.png_output ||
-               options.copy_audio)))) {
+               options.copy_audio || options.mute_output)))) {
             throw std::runtime_error(
                 "--record-gain requires live audio recording or encoded output");
         }
@@ -1229,7 +1232,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8Q)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8R)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1300,7 +1303,8 @@ namespace acmxvk {
                << "      --use-watermark <text>  Show a text watermark in the upper-left\n"
                << "      --use-watermark-color <r,g,b>\n"
                << "                              Watermark RGB color (default 255,0,150)\n"
-               << "      --copy-audio            Copy input audio into encoded output\n\n"
+               << "      --copy-audio            Copy input audio into encoded output\n"
+               << "      --mute-output           Keep recorded video audio-free\n\n"
                << "Audio (requires AUDIO=ON build):\n"
                << "  -w, --enable-audio          Enable live audio-reactive metrics\n"
                << "  -l, --channels <N>          Capture channels (default 2)\n"
@@ -1315,7 +1319,7 @@ namespace acmxvk {
                << "      --record-audio <wav>    Record live microphone input as PCM16 WAV\n"
                << "      --audio-repeat          Restart file audio at end-of-stream\n"
                << "      --audio-trunc           Stop ACMXVK when file audio finishes\n"
-               << "                              Live/file audio is muxed into encoded output\n"
+               << "                              Live/file audio is muxed unless --mute-output\n"
                << "      --enable-audio-buffers N\n"
                << "                              FFT history layers at binding 4\n"
                << "      --list-devices          List RtAudio devices and exit\n"
@@ -1916,17 +1920,19 @@ namespace acmxvk {
                 model_initialized = false;
                 std::cout << "acmxvk: released 3D model resources\n";
             }
-            const bool should_copy_audio = options.copy_audio && writer.is_open();
+            const bool should_copy_audio =
+                options.copy_audio && !options.mute_output && writer.is_open();
 #ifdef AUDIO_ENABLED
             const bool should_mux_file_audio =
                 file_audio_source != nullptr && writer.is_open() &&
                 !options.output_file.empty() && !options.png_output &&
-                output_frame_count > 0;
+                !options.mute_output && output_frame_count > 0;
             const bool should_mux_live_audio =
                 audio_engine != nullptr && file_audio_source == nullptr &&
                 audio_engine->is_recording() && writer.is_open() &&
                 !options.output_file.empty() && !options.png_output &&
-                !options.copy_audio && output_frame_count > 0;
+                !options.copy_audio && !options.mute_output &&
+                output_frame_count > 0;
             const bool should_write_live_audio =
                 audio_engine != nullptr && audio_engine->is_recording() &&
                 !options.record_audio_file.empty();
@@ -3541,7 +3547,8 @@ namespace acmxvk {
             if (audio_engine == nullptr || file_audio_source != nullptr ||
                 !audio_engine->is_open() || audio_engine->is_recording() ||
                 !writer.is_open() || options.png_output ||
-                (options.copy_audio && options.record_audio_file.empty())) {
+                (options.copy_audio && !options.mute_output &&
+                 options.record_audio_file.empty())) {
                 return;
             }
             if (!audio_engine->start_recording()) {
@@ -3594,7 +3601,7 @@ namespace acmxvk {
                 seconds = file_audio_source->playback_time();
                 return true;
             }
-            if (!options.copy_audio && writer.is_open() &&
+            if ((!options.copy_audio || options.mute_output) && writer.is_open() &&
                 audio_engine != nullptr && file_audio_source == nullptr &&
                 audio_engine->is_recording()) {
                 seconds = audio_engine->recording_time();
@@ -5144,6 +5151,11 @@ namespace acmxvk {
                           << recording_height << " at " << recording_fps << " FPS to "
                           << options.output_file
                           << (options.no_drop ? " (no-drop)\n" : "\n");
+                if (options.mute_output) {
+                    std::cout
+                        << "acmxvk: recorded video audio disabled (--mute-output); "
+                           "reactivity and pass-through remain active\n";
+                }
             }
 
             setFrameReadbackEnabled(true);

@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8Q**. It is usable for video, camera, and
+The port is currently at **Increment 8R**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -24,7 +24,7 @@ ACMX2.
 | Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
-| Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
+| Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
 | Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, and optional lossless WebP snapshots on `5` when configured with `-DWEBP=ON`. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
@@ -217,6 +217,11 @@ Increment 8Q adds optional lossless WebP snapshots. Configure ACMXVK with
 WebP through the same bounded background queue and `--prefix` destination used
 by `Z` PNG snapshots. WebP remains disabled by default, and this increment
 changes only ACMXVK.
+Increment 8R adds `--mute-output`. Audio input, source/file decoding, shader
+reactivity, pass-through monitoring, audio-clock synchronization, and optional
+standalone `--record-audio` WAV output remain active, while copying or muxing
+audio into the encoded video is suppressed. This increment changes only
+ACMXVK.
 
 ### Input validation
 
@@ -1003,7 +1008,9 @@ command-line program. The original encoded video remains untouched until the
 temporary mux output has been finalized successfully. MP4, MOV, and other
 AAC-compatible containers are supported; if a selected container rejects AAC,
 ACMXVK reports the mux failure, removes the temporary file, and preserves the
-video-only recording.
+video-only recording. Add `--mute-output` to keep file audio available for
+reactivity, playback timing, and pass-through while leaving the recorded video
+audio-free.
 
 When live `--enable-audio` input and an encoded `--output` are active, ACMXVK
 also records the microphone automatically. Capture begins immediately before
@@ -1032,6 +1039,11 @@ are encoded into the final video's AAC stream. Recording gain is independent
 from `--pass-through-gain` and `--sense`: it does not change headphone volume
 or shader response. Unity gain remains the default, and amplified samples are
 clamped to the floating-point audio range before encoding.
+
+`--mute-output` suppresses every encoded-video audio path: automatic file-audio
+muxing, automatic live-input muxing, and `--copy-audio`. It does not mute an
+RtAudio pass-through device, disable shader reactivity, alter the audio master
+clock, or disable a separately requested `--record-audio` WAV file.
 
 Audio-reactive shader values ramp from zero at startup at a default rate of
 `0.5` per second, reaching full strength in about two seconds. Set
@@ -1079,6 +1091,21 @@ Record five seconds of processed video and mux repeated file audio into it:
     --audio-repeat \
     --duration 5 \
     --output output.mp4
+```
+
+Use source-video audio for synchronized reactivity and audible pass-through,
+but create a video-only recording:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input input.mp4 \
+    --fragment ./build/acmxvk/shaders/audio_reactive.frag.spv \
+    --use-source-fps \
+    --use-source-audio \
+    --pass-through \
+    --audio-output default \
+    --mute-output \
+    --output silent-output.mp4
 ```
 
 For video-file input with a reactive audio track, the recorded frame PTS now
@@ -1733,6 +1760,9 @@ Increment 8P built in portable and CUDA/audio/MIDI configurations. Runtime
 keyboard injection verified that brackets change only XFade, shifted
 plus/minus change only model scale, plain plus/minus retain camera zoom, and
 MIDI actions 91/93 use the isolated model-scale path.
+Increment 8R built in both portable and audio-enabled configurations, including
+the optional WebP feature. The input-validation test passed in each build, and
+the command-line smoke test accepted and reported `--mute-output`.
 
 ## Development note
 
