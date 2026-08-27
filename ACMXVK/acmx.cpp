@@ -1225,7 +1225,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8M)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8N)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1349,7 +1349,8 @@ namespace acmxvk {
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
-               << "      3 toggle 2D/3D, V 3D view rotation, X reset skybox view,\n"
+               << "      3 toggle 2D/3D, V 3D view rotation, C 3D wave,\n"
+               << "      X reset skybox view,\n"
                << "      E watermark, F fullscreen, F9 runtime HUD, K shader lock,\n"
                << "      M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, N random crossfade,\n"
@@ -2168,6 +2169,15 @@ namespace acmxvk {
                                   << '\n';
                     }
                     break;
+                case SDLK_C:
+                    if (model_initialized) {
+                        model_wave_active = !model_wave_active;
+                        std::cout << "acmxvk: 3D wave effect "
+                                  << (model_wave_active ? "enabled"
+                                                        : "disabled")
+                                  << '\n';
+                    }
+                    break;
                 case SDLK_X:
                     if (model_initialized) {
                         model_pitch_degrees = 0.0F;
@@ -2304,6 +2314,33 @@ namespace acmxvk {
                         model_rotation_speed * delta,
                     360.0F);
             }
+            if (model_wave_active) {
+                model_wave_phase +=
+                    audio_time_active && audioSourceOpen()
+                        ? model_wave_audio_step
+                        : 0.05F;
+                if (model_wave_phase > 360.0F) {
+                    model_wave_phase -= 360.0F;
+                }
+
+                const auto advance_amplitude = [](float &amplitude,
+                                                  float &direction) {
+                    amplitude += 0.005F * direction;
+                    if (amplitude >= 0.5F) {
+                        amplitude = 0.5F;
+                        direction = -1.0F;
+                    } else if (amplitude <= 0.0F) {
+                        amplitude = 0.0F;
+                        direction = 1.0F;
+                    }
+                };
+                advance_amplitude(model_wave_amplitude_x,
+                                  model_wave_direction_x);
+                advance_amplitude(model_wave_amplitude_y,
+                                  model_wave_direction_y);
+                advance_amplitude(model_wave_amplitude_z,
+                                  model_wave_direction_z);
+            }
 
             const bool *keyboard = SDL_GetKeyboardState(nullptr);
             if (keyboard[SDL_SCANCODE_1]) {
@@ -2400,8 +2437,12 @@ namespace acmxvk {
             uniforms.proj = glm::perspective(
                 glm::radians(120.0F), aspect, 0.01F, 1000.0F);
             uniforms.proj[1][1] *= -1.0F;
-            uniforms.fx = glm::vec4(static_cast<float>(shader_time), 0.0F,
-                                    0.0F, 0.0F);
+            uniforms.fx =
+                model_wave_active
+                    ? glm::vec4(model_wave_amplitude_x,
+                                model_wave_amplitude_y,
+                                model_wave_amplitude_z, model_wave_phase)
+                    : glm::vec4(0.0F);
 
             input_model.updateFragmentUBO(image_index,
                                           model_fragment_uniforms);
@@ -2579,6 +2620,7 @@ namespace acmxvk {
         bool model_3d_active = false;
         bool model_texture_prepass_active = false;
         bool model_auto_rotate = false;
+        bool model_wave_active = false;
         bool model_mouse_dragging = false;
         bool shader_history_required = false;
         bool shader_spectrum_required = false;
@@ -2639,6 +2681,14 @@ namespace acmxvk {
         float model_scale = 1.0F;
         float model_rotation_speed = 18.0F;
         float model_view_rotation_degrees = 0.0F;
+        float model_wave_amplitude_x = 0.0F;
+        float model_wave_amplitude_y = 0.0F;
+        float model_wave_amplitude_z = 0.0F;
+        float model_wave_direction_x = 1.0F;
+        float model_wave_direction_y = 1.0F;
+        float model_wave_direction_z = 1.0F;
+        float model_wave_phase = 0.0F;
+        float model_wave_audio_step = 0.0F;
         fs::path model_effect_shader;
         mxvk::ModelFragmentUniforms model_fragment_uniforms{};
         bool legacy_alpha_increasing = true;
@@ -3032,6 +3082,8 @@ namespace acmxvk {
                 return options.enable_3d ? SDLK_PERIOD : SDLK_UNKNOWN;
             case 51:
                 return options.enable_3d ? SDLK_3 : SDLK_UNKNOWN;
+            case 67:
+                return options.enable_3d ? SDLK_C : SDLK_UNKNOWN;
             case 91:
                 return options.enable_3d ? SDLK_LEFTBRACKET : SDLK_UNKNOWN;
             case 93:
@@ -3127,6 +3179,8 @@ namespace acmxvk {
                 return "increase 3D view rotation speed";
             case 51:
                 return "toggle 2D/3D rendering";
+            case 67:
+                return "toggle 3D wave effect";
             case 91:
                 return "decrease model scale";
             case 93:
@@ -4288,6 +4342,9 @@ namespace acmxvk {
                     model_3d_active ? "Model: " : "Model (2D bypass): ";
                 model_status +=
                     fs::path(options.model_file).filename().string();
+                if (model_wave_active) {
+                    model_status += " [wave]";
+                }
                 printPreviewText(clipOverlayText(std::move(model_status)), 10,
                                  y, model_color);
                 y += line_height;
@@ -6244,6 +6301,8 @@ namespace acmxvk {
             if (!std::isfinite(shader_time)) {
                 shader_time = 0.0;
             }
+            model_wave_audio_step =
+                audio_amplitude * raw_audio_amplitude;
             if (legacy_alpha_increasing) {
                 legacy_alpha += 0.1F;
                 if (legacy_alpha >= 6.0F) {
