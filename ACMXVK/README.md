@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8N**. It is usable for video, camera, and
+The port is currently at **Increment 8P**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -35,7 +35,7 @@ ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
-| 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. ACMX2's scale oscillation remains to be ported. |
+| 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
 
 ## Requirements
@@ -199,6 +199,18 @@ The deformation runs in the model vertex shader and analytically transforms
 normals through the sequential X/Y/Z displacement, avoiding per-frame CPU
 mesh uploads. The HUD reports `[wave]`, and ACMX2 MIDI-map action 67 toggles
 the same state. MXVK and acidcam-gpu do not need another rebuild or reinstall.
+Increment 8O also changes only ACMXVK. `O` toggles ACMX2's historically named
+"scale oscillation," which advances by 0.016 per rendered 3D frame and replaces
+the active camera offset with `0.3 * sin(phase)`. Manual zoom speed, zoom,
+mouse-wheel movement, and model-scale changes are suspended while oscillation
+is active; disabling it restores the stored manual camera distance. The HUD
+reports `[oscillate]`, and ACMX2 MIDI-map action 79 toggles the same state.
+Increment 8P separates model scaling from crossfade selection. Plain `[` and
+`]` now change only the crossfade style; `Shift`+`-` and `Shift`+`+` decrease
+or increase model scale, while unmodified minus/plus retain camera zoom.
+MIDI-map actions 91 and 93 are routed directly to the shifted scale controls
+and no longer change the selected crossfade. MXVK and acidcam-gpu are
+unchanged.
 
 ### Input validation
 
@@ -1552,17 +1564,19 @@ The main 3D controls are:
 - `W` / `S`: look up or down
 - `A` / `D`: look left or right
 - `+` / `-`: move backward or forward along the view direction
+- `Shift`+`+` / `Shift`+`-`: increase or decrease model scale
 - `1` / `2`: increase or decrease keyboard movement sensitivity
 - `3`: switch between 3D model and 2D sprite rendering
 - `V`: toggle automatic view rotation
+- `O`: toggle ACMX2-compatible camera-distance oscillation
 - `C`: toggle ACMX2-compatible three-axis model wave deformation
 - `X`: reset the centered skybox view and scale
-- `[` / `]`: select the crossfade style and decrease or increase model scale
+- `[` / `]`: select the previous or next crossfade style
 - `,` / `.`: decrease or increase automatic view-rotation speed
 
-ACMX2 MIDI-map action codes 44, 46, 51, 67, 86, 88, 91, and 93 drive the same
-controls. Model paths are centrally validated, restricted to the supported
-extensions, and limited to 1 GiB before reaching MXVK's loader.
+ACMX2 MIDI-map action codes 44, 46, 51, 67, 79, 86, 88, 91, and 93 drive the
+same controls. Model paths are centrally validated, restricted to the
+supported extensions, and limited to 1 GiB before reaching MXVK's loader.
 
 ## Runtime controls
 
@@ -1584,14 +1598,15 @@ extensions, and limited to 1 GiB before reaching MXVK's loader.
 - E: toggle the configured watermark
 - 3: toggle 2D sprite or 3D model rendering
 - V: toggle automatic 3D view rotation
+- O: toggle 3D camera-distance oscillation
 - C: toggle three-axis 3D model wave deformation
 - X: reset the centered skybox view and model scale
 - W/A/S/D: look around in the 3D view
 - Plus/Minus: move backward or forward along the 3D view direction
+- Shift+Plus/Shift+Minus: increase or decrease model scale
 - 1/2: increase or decrease 3D keyboard movement sensitivity
 - Left mouse drag / wheel: look around or move along the view direction
-- Left bracket / Right bracket: select the crossfade style; in 3D mode also
-  decrease or increase model scale
+- Left bracket / Right bracket: select the crossfade style
 - Comma / Period: decrease or increase 3D view-rotation speed
 - M: toggle the configured multipass chain
 - J: toggle random autopilot
@@ -1691,6 +1706,13 @@ Increment 8N compiled the wave-enabled model vertex shader and complete
 portable and CUDA/audio/MIDI configurations against MXVK 0.33.1. The
 input-validation test passed; the 3D model path was exercised with the wave
 toggled through `C` under Vulkan validation.
+Increment 8O built in both portable and CUDA/audio/MIDI configurations. Its
+input-validation test passed, and the 3D model path was exercised with `O`
+oscillation and `C` wave deformation active together under Vulkan validation.
+Increment 8P built in portable and CUDA/audio/MIDI configurations. Runtime
+keyboard injection verified that brackets change only XFade, shifted
+plus/minus change only model scale, plain plus/minus retain camera zoom, and
+MIDI actions 91/93 use the isolated model-scale path.
 
 ## Development note
 

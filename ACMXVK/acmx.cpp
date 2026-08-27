@@ -1225,7 +1225,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8N)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8P)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1349,13 +1349,15 @@ namespace acmxvk {
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
-               << "      3 toggle 2D/3D, V 3D view rotation, C 3D wave,\n"
+               << "      3 toggle 2D/3D, V 3D view rotation, O 3D oscillation,\n"
+               << "      C 3D wave,\n"
                << "      X reset skybox view,\n"
                << "      E watermark, F fullscreen, F9 runtime HUD, K shader lock,\n"
                << "      M multipass,\n"
                << "      J random autopilot, Y sequential autopilot, N random crossfade,\n"
-               << "      [/] crossfade effect (and 3D model scale), Space bypass,\n"
-               << "      W/A/S/D 3D look, +/- 3D zoom, 1/2 zoom sensitivity,\n"
+               << "      [/] crossfade effect, Space bypass,\n"
+               << "      W/A/S/D 3D look, +/- 3D zoom, Shift+/- 3D scale,\n"
+               << "      1/2 zoom sensitivity,\n"
                << "      Z PNG snapshot, mouse drag/wheel 3D look/move,\n"
                << "      Escape quit\n";
     }
@@ -2178,6 +2180,17 @@ namespace acmxvk {
                                   << '\n';
                     }
                     break;
+                case SDLK_O:
+                    if (model_initialized) {
+                        model_scale_oscillation_active =
+                            !model_scale_oscillation_active;
+                        std::cout << "acmxvk: 3D scale oscillation "
+                                  << (model_scale_oscillation_active
+                                          ? "enabled"
+                                          : "disabled")
+                                  << '\n';
+                    }
+                    break;
                 case SDLK_X:
                     if (model_initialized) {
                         model_pitch_degrees = 0.0F;
@@ -2190,18 +2203,22 @@ namespace acmxvk {
                     break;
                 case SDLK_LEFTBRACKET:
                     cycleCrossfade(-1);
-                    if (model_initialized) {
-                        model_scale = std::max(0.05F, model_scale - 0.05F);
-                        std::cout << "acmxvk: model scale " << model_scale
-                                  << '\n';
-                    }
                     break;
                 case SDLK_RIGHTBRACKET:
                     cycleCrossfade(1);
-                    if (model_initialized) {
-                        model_scale = std::min(20.0F, model_scale + 0.05F);
-                        std::cout << "acmxvk: model scale " << model_scale
-                                  << '\n';
+                    break;
+                case SDLK_MINUS:
+                case SDLK_UNDERSCORE:
+                case SDLK_KP_MINUS:
+                    if ((event.key.mod & SDL_KMOD_SHIFT) != 0) {
+                        adjustModelScale(-0.05F);
+                    }
+                    break;
+                case SDLK_PLUS:
+                case SDLK_EQUALS:
+                case SDLK_KP_PLUS:
+                    if ((event.key.mod & SDL_KMOD_SHIFT) != 0) {
+                        adjustModelScale(0.05F);
                     }
                     break;
                 case SDLK_COMMA:
@@ -2259,7 +2276,8 @@ namespace acmxvk {
                 mouse_x = event.button.x;
                 mouse_y = event.button.y;
             } else if (event.type == SDL_EVENT_MOUSE_WHEEL &&
-                       model_initialized) {
+                       model_initialized &&
+                       !model_scale_oscillation_active) {
                 const float wheel = event.wheel.y != 0.0F
                                         ? event.wheel.y
                                         : static_cast<float>(
@@ -2341,27 +2359,36 @@ namespace acmxvk {
                 advance_amplitude(model_wave_amplitude_z,
                                   model_wave_direction_z);
             }
+            if (model_scale_oscillation_active) {
+                model_scale_oscillation_phase += 0.016F;
+            }
 
             const bool *keyboard = SDL_GetKeyboardState(nullptr);
-            if (keyboard[SDL_SCANCODE_1]) {
+            const bool model_scale_modifier =
+                (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+            if (!model_scale_oscillation_active &&
+                keyboard[SDL_SCANCODE_1]) {
                 model_camera_movement_speed = std::clamp(
                     model_camera_movement_speed + 0.1F * delta * 30.0F,
                     0.01F, 20.0F);
             }
-            if (keyboard[SDL_SCANCODE_2]) {
+            if (!model_scale_oscillation_active &&
+                keyboard[SDL_SCANCODE_2]) {
                 model_camera_movement_speed = std::clamp(
                     model_camera_movement_speed - 0.1F * delta * 30.0F,
                     0.01F, 20.0F);
             }
-            if (keyboard[SDL_SCANCODE_EQUALS] ||
-                keyboard[SDL_SCANCODE_KP_PLUS]) {
+            if (!model_scale_oscillation_active && !model_scale_modifier &&
+                (keyboard[SDL_SCANCODE_EQUALS] ||
+                 keyboard[SDL_SCANCODE_KP_PLUS])) {
                 model_camera_distance = std::clamp(
                     model_camera_distance +
                         model_camera_movement_speed * delta,
                     -20.0F, 20.0F);
             }
-            if (keyboard[SDL_SCANCODE_MINUS] ||
-                keyboard[SDL_SCANCODE_KP_MINUS]) {
+            if (!model_scale_oscillation_active && !model_scale_modifier &&
+                (keyboard[SDL_SCANCODE_MINUS] ||
+                 keyboard[SDL_SCANCODE_KP_MINUS])) {
                 model_camera_distance = std::clamp(
                     model_camera_distance -
                         model_camera_movement_speed * delta,
@@ -2429,8 +2456,12 @@ namespace acmxvk {
                                       std::cos(pitch),
                                       -std::sin(pitch) * std::sin(yaw));
             }
+            const float camera_offset =
+                model_scale_oscillation_active
+                    ? 0.3F * std::sin(model_scale_oscillation_phase)
+                    : model_camera_distance;
             const glm::vec3 camera_position =
-                -glm::normalize(look_direction) * model_camera_distance;
+                -glm::normalize(look_direction) * camera_offset;
             uniforms.view = glm::lookAt(camera_position,
                                         camera_position + look_direction,
                                         camera_up);
@@ -2621,6 +2652,7 @@ namespace acmxvk {
         bool model_texture_prepass_active = false;
         bool model_auto_rotate = false;
         bool model_wave_active = false;
+        bool model_scale_oscillation_active = false;
         bool model_mouse_dragging = false;
         bool shader_history_required = false;
         bool shader_spectrum_required = false;
@@ -2689,6 +2721,7 @@ namespace acmxvk {
         float model_wave_direction_z = 1.0F;
         float model_wave_phase = 0.0F;
         float model_wave_audio_step = 0.0F;
+        float model_scale_oscillation_phase = 0.0F;
         fs::path model_effect_shader;
         mxvk::ModelFragmentUniforms model_fragment_uniforms{};
         bool legacy_alpha_increasing = true;
@@ -3084,10 +3117,12 @@ namespace acmxvk {
                 return options.enable_3d ? SDLK_3 : SDLK_UNKNOWN;
             case 67:
                 return options.enable_3d ? SDLK_C : SDLK_UNKNOWN;
+            case 79:
+                return options.enable_3d ? SDLK_O : SDLK_UNKNOWN;
             case 91:
-                return options.enable_3d ? SDLK_LEFTBRACKET : SDLK_UNKNOWN;
+                return options.enable_3d ? SDLK_MINUS : SDLK_UNKNOWN;
             case 93:
-                return options.enable_3d ? SDLK_RIGHTBRACKET : SDLK_UNKNOWN;
+                return options.enable_3d ? SDLK_EQUALS : SDLK_UNKNOWN;
             case 69:
                 return options.watermark_text.empty() ? SDLK_UNKNOWN : SDLK_E;
             case 74:
@@ -3181,6 +3216,8 @@ namespace acmxvk {
                 return "toggle 2D/3D rendering";
             case 67:
                 return "toggle 3D wave effect";
+            case 79:
+                return "toggle 3D scale oscillation";
             case 91:
                 return "decrease model scale";
             case 93:
@@ -3228,6 +3265,9 @@ namespace acmxvk {
             midi_event.type = SDL_EVENT_KEY_DOWN;
             midi_event.key.type = SDL_EVENT_KEY_DOWN;
             midi_event.key.key = key;
+            midi_event.key.mod =
+                action == 91 || action == 93 ? SDL_KMOD_SHIFT
+                                             : SDL_KMOD_NONE;
             midi_event.key.repeat = false;
             event(midi_event);
         }
@@ -4345,6 +4385,9 @@ namespace acmxvk {
                 if (model_wave_active) {
                     model_status += " [wave]";
                 }
+                if (model_scale_oscillation_active) {
+                    model_status += " [oscillate]";
+                }
                 printPreviewText(clipOverlayText(std::move(model_status)), 10,
                                  y, model_color);
                 y += line_height;
@@ -5327,6 +5370,14 @@ namespace acmxvk {
                       << CROSSFADE_NAMES[crossfade_shader_index] << " ("
                       << (crossfade_shader_index + 1) << '/'
                       << CROSSFADE_NAMES.size() << ")\n";
+        }
+
+        void adjustModelScale(float amount) {
+            if (!model_initialized || model_scale_oscillation_active) {
+                return;
+            }
+            model_scale = std::clamp(model_scale + amount, 0.05F, 20.0F);
+            std::cout << "acmxvk: model scale " << model_scale << '\n';
         }
 
         void maybeRandomizeCrossfade() {
