@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8R**. It is usable for video, camera, and
+The port is currently at **Increment 8T**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -16,7 +16,7 @@ ACMX2.
 | Standalone CMake project | Complete | Builds against installed MXVK and MXWrite and provides an `uninstall` target. |
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
-| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--maximize-fps` decouples camera acquisition from Vulkan presentation. When `--resolution` is omitted, encoded output follows the negotiated source dimensions, including a width/height swap for 90-degree input rotation; oversized previews are fitted to the usable display while preserving that aspect ratio. Still images remain OpenCV-backed. |
+| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. When `--resolution` is omitted, encoded output follows the negotiated source dimensions, including a width/height swap for 90-degree input rotation; oversized previews are fitted to the usable display while preserving that aspect ratio. Still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
@@ -25,7 +25,7 @@ ACMX2.
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
-| Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, and optional lossless WebP snapshots on `5` when configured with `-DWEBP=ON`. |
+| Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, and optional lossless WebP snapshots on `5`. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader locking, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
@@ -45,6 +45,7 @@ ACMX2.
 - MXVK 0.33.1 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
+- Optional libtiff development files for `-DTIFF=ON` lossless snapshots
 - Optional libwebp development files for `-DWEBP=ON` lossless snapshots
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
 - Optional RtAudio development files when building with `-DAUDIO=ON`
@@ -222,6 +223,16 @@ reactivity, pass-through monitoring, audio-clock synchronization, and optional
 standalone `--record-audio` WAV output remain active, while copying or muxing
 audio into the encoded video is suppressed. This increment changes only
 ACMXVK.
+Increment 8S adds optional lossless TIFF snapshots. Configure ACMXVK with
+`-DTIFF=ON` to link libtiff, then press `4` to save the final processed frame as
+an LZW-compressed 8-bit RGBA TIFF through the same background queue and
+`--prefix` destination used by PNG and WebP snapshots. TIFF remains disabled
+by default, and this increment changes only ACMXVK.
+Increment 8T corrects live camera recording timestamps. Camera frames now use
+the active audio clock when available and otherwise use elapsed capture time to
+derive explicit output PTS. When 4K rendering or encoding delivers fewer frames
+than the nominal camera rate, the resulting video retains its real capture
+duration instead of playing fast. This increment changes only ACMXVK.
 
 ### Input validation
 
@@ -398,6 +409,16 @@ queue, and shutdown draining behavior as PNG:
 
 ```bash
 cmake -S ACMXVK -B build/acmxvk -DWEBP=ON
+cmake --build build/acmxvk -j
+```
+
+To enable lossless TIFF snapshots, install the libtiff development package and
+configure with `-DTIFF=ON`. Press `4` to capture an LZW-compressed 8-bit RGBA
+TIFF using the same processed frame, naming scheme, `--prefix` directory, and
+background queue:
+
+```bash
+cmake -S ACMXVK -B build/acmxvk -DTIFF=ON
 cmake --build build/acmxvk -j
 ```
 
@@ -1661,6 +1682,7 @@ control reference.
 - Y: toggle sequential autopilot
 - Space: bypass or enable shader effects
 - Z: save a processed PNG snapshot under the `--prefix` directory
+- 4: save a processed lossless TIFF snapshot when built with `-DTIFF=ON`
 - 5: save a processed lossless WebP snapshot when built with `-DWEBP=ON`
 - F10: capture a screenshot when `--enable-screenshot` is active
 - Escape: quit
@@ -1763,6 +1785,15 @@ MIDI actions 91/93 use the isolated model-scale path.
 Increment 8R built in both portable and audio-enabled configurations, including
 the optional WebP feature. The input-validation test passed in each build, and
 the command-line smoke test accepted and reported `--mute-output`.
+Increment 8S built with TIFF/WebP/audio enabled and in a portable build with
+both optional image formats disabled. The input-validation test passed in both
+configurations; the enabled executable linked libtiff, while the disabled
+executable had no direct libtiff dependency.
+Increment 8T built in the full CUDA/audio/MIDI/validation configuration and in
+a portable audio-disabled configuration. Both input-validation tests passed.
+Runtime camera recordings now announce when real-time PTS preservation becomes
+active so reduced 4K delivery rates can be verified from the log and resulting
+media duration.
 
 ## Development note
 

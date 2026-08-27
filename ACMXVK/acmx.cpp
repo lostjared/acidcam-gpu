@@ -16,6 +16,9 @@
 #ifdef ACMXVK_WITH_WEBP
 #include <webp/encode.h>
 #endif
+#ifdef ACMXVK_WITH_TIFF
+#include <tiffio.h>
+#endif
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -1232,7 +1235,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8R)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8T)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1366,7 +1369,7 @@ namespace acmxvk {
                << "      [/] crossfade effect, Space bypass,\n"
                << "      W/A/S/D 3D look, +/- 3D zoom, Shift+/- 3D scale,\n"
                << "      1/2 zoom sensitivity,\n"
-               << "      Z PNG snapshot, 5 WebP snapshot (WEBP=ON),\n"
+               << "      Z PNG, 4 TIFF (TIFF=ON), 5 WebP (WEBP=ON) snapshot,\n"
                << "      mouse drag/wheel 3D look/move,\n"
                << "      Escape quit\n";
     }
@@ -2254,6 +2257,9 @@ namespace acmxvk {
                 case SDLK_Z:
                     requestSnapshot(SnapshotFormat::Png);
                     break;
+                case SDLK_4:
+                    requestSnapshot(SnapshotFormat::Tiff);
+                    break;
                 case SDLK_5:
                     requestSnapshot(SnapshotFormat::WebP);
                     break;
@@ -2575,6 +2581,14 @@ namespace acmxvk {
                             recording_frame_has_pts = true;
                             recording_frame_pts = target_frame;
                             next_clock_output_frame = target_frame + 1;
+                            if (source_kind == SourceKind::Camera &&
+                                writer.is_open() &&
+                                !camera_recording_clock_logged) {
+                                std::cout
+                                    << "acmxvk: camera recording uses real-time "
+                                       "PTS; slow frames preserve capture duration\n";
+                                camera_recording_clock_logged = true;
+                            }
                         }
                     }
                 }
@@ -2609,7 +2623,8 @@ namespace acmxvk {
                                 Graphic };
 
         enum class SnapshotFormat { Png,
-                                    WebP };
+                                    WebP,
+                                    Tiff };
 
         struct SnapshotJob {
             fs::path path;
@@ -2689,6 +2704,7 @@ namespace acmxvk {
         bool recording_frame_due = false;
         bool recording_frame_has_pts = false;
         bool media_clock_sync_logged = false;
+        bool camera_recording_clock_logged = false;
         bool recording_complete = false;
         bool input_paused = false;
         bool rendering_frozen = false;
@@ -3608,6 +3624,11 @@ namespace acmxvk {
                 return true;
             }
 #endif
+            if (source_kind == SourceKind::Camera &&
+                media_timeline_started) {
+                seconds = hudWallElapsedSeconds();
+                return true;
+            }
             if (options.use_source_fps && source_kind == SourceKind::Video &&
                 media_timeline_started) {
                 const auto clock_end = source_playback_clock_paused
@@ -4197,8 +4218,10 @@ namespace acmxvk {
             std::uint64_t displayed_frames = frame_count;
             if (recording && recording_fps > 0.0) {
                 displayed_frames = output_frame_count;
-                elapsed_seconds =
-                    static_cast<double>(output_frame_count) / recording_fps;
+                elapsed_seconds = writer.is_open()
+                                      ? writer.get_duration()
+                                      : static_cast<double>(output_frame_count) /
+                                            recording_fps;
             } else if (source_kind == SourceKind::Video) {
                 displayed_frames = video_source_frame_count;
                 elapsed_seconds = hudVideoPositionSeconds();
@@ -4920,14 +4943,89 @@ namespace acmxvk {
         }
 #endif
 
+#ifdef ACMXVK_WITH_TIFF
+        static void saveTiff(const fs::path &path, const std::uint8_t *rgba,
+                             int width, int height) {
+            if (rgba == nullptr || width <= 0 || height <= 0 ||
+                width > std::numeric_limits<int>::max() / 4) {
+                throw std::runtime_error(
+                    "invalid image dimensions for TIFF snapshot: " +
+                    path.string());
+            }
+
+            const std::unique_ptr<TIFF, decltype(&TIFFClose)> output(
+                TIFFOpen(path.string().c_str(), "w"), &TIFFClose);
+            if (output == nullptr) {
+                throw std::runtime_error("unable to open TIFF snapshot: " +
+                                         path.string());
+            }
+
+            const std::uint16_t extra_sample = EXTRASAMPLE_UNASSALPHA;
+            const bool configured =
+                TIFFSetField(output.get(), TIFFTAG_IMAGEWIDTH,
+                             static_cast<std::uint32_t>(width)) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_IMAGELENGTH,
+                             static_cast<std::uint32_t>(height)) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_SAMPLESPERPIXEL, 4) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_BITSPERSAMPLE, 8) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_ORIENTATION,
+                             ORIENTATION_TOPLEFT) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_PLANARCONFIG,
+                             PLANARCONFIG_CONTIG) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_PHOTOMETRIC,
+                             PHOTOMETRIC_RGB) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_SAMPLEFORMAT,
+                             SAMPLEFORMAT_UINT) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_COMPRESSION,
+                             COMPRESSION_LZW) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_ROWSPERSTRIP,
+                             TIFFDefaultStripSize(output.get(), 0)) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_EXTRASAMPLES, 1,
+                             &extra_sample) != 0 &&
+                TIFFSetField(output.get(), TIFFTAG_IMAGEDESCRIPTION,
+                             "ACMXVK processed snapshot: 8-bit RGBA TIFF") != 0;
+            if (!configured) {
+                throw std::runtime_error(
+                    "unable to configure TIFF snapshot: " + path.string());
+            }
+
+            const std::size_t row_bytes = static_cast<std::size_t>(width) * 4U;
+            for (int row = 0; row < height; ++row) {
+                auto *row_pixels = const_cast<std::uint8_t *>(
+                    rgba + static_cast<std::size_t>(row) * row_bytes);
+                if (TIFFWriteScanline(output.get(), row_pixels,
+                                      static_cast<std::uint32_t>(row), 0) < 0) {
+                    throw std::runtime_error(
+                        "unable to write TIFF snapshot: " + path.string());
+                }
+            }
+        }
+#endif
+
         [[nodiscard]] static std::string_view
         snapshotFormatName(SnapshotFormat format) {
-            return format == SnapshotFormat::WebP ? "WebP" : "PNG";
+            switch (format) {
+            case SnapshotFormat::WebP:
+                return "WebP";
+            case SnapshotFormat::Tiff:
+                return "TIFF";
+            case SnapshotFormat::Png:
+                return "PNG";
+            }
+            return "snapshot";
         }
 
         [[nodiscard]] static std::string_view
         snapshotExtension(SnapshotFormat format) {
-            return format == SnapshotFormat::WebP ? ".webp" : ".png";
+            switch (format) {
+            case SnapshotFormat::WebP:
+                return ".webp";
+            case SnapshotFormat::Tiff:
+                return ".tiff";
+            case SnapshotFormat::Png:
+                return ".png";
+            }
+            return ".snapshot";
         }
 
         void snapshotWorkerLoop() noexcept {
@@ -4947,7 +5045,16 @@ namespace acmxvk {
                 }
 
                 try {
-                    if (job.format == SnapshotFormat::WebP) {
+                    if (job.format == SnapshotFormat::Tiff) {
+#ifdef ACMXVK_WITH_TIFF
+                        saveTiff(job.path, job.rgba.data(),
+                                 static_cast<int>(job.width),
+                                 static_cast<int>(job.height));
+#else
+                        throw std::runtime_error(
+                            "TIFF snapshot support is not compiled in");
+#endif
+                    } else if (job.format == SnapshotFormat::WebP) {
 #ifdef ACMXVK_WITH_WEBP
                         saveWebP(job.path, job.rgba.data(),
                                  static_cast<int>(job.width),
@@ -5053,6 +5160,13 @@ namespace acmxvk {
         }
 
         void requestSnapshot(SnapshotFormat format) {
+#ifndef ACMXVK_WITH_TIFF
+            if (format == SnapshotFormat::Tiff) {
+                std::cerr << "acmxvk: TIFF snapshots require a build configured "
+                             "with -DTIFF=ON\n";
+                return;
+            }
+#endif
 #ifndef ACMXVK_WITH_WEBP
             if (format == SnapshotFormat::WebP) {
                 std::cerr << "acmxvk: WebP snapshots require a build configured "
