@@ -13,6 +13,10 @@
 #include <mxvk/mxvk_png.hpp>
 #include <mxwrite.hpp>
 
+#ifdef ACMXVK_WITH_WEBP
+#include <webp/encode.h>
+#endif
+
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
@@ -1225,7 +1229,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8P)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8Q)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1358,7 +1362,8 @@ namespace acmxvk {
                << "      [/] crossfade effect, Space bypass,\n"
                << "      W/A/S/D 3D look, +/- 3D zoom, Shift+/- 3D scale,\n"
                << "      1/2 zoom sensitivity,\n"
-               << "      Z PNG snapshot, mouse drag/wheel 3D look/move,\n"
+               << "      Z PNG snapshot, 5 WebP snapshot (WEBP=ON),\n"
+               << "      mouse drag/wheel 3D look/move,\n"
                << "      Escape quit\n";
     }
 
@@ -2241,7 +2246,10 @@ namespace acmxvk {
                     toggleAutopilot(true);
                     break;
                 case SDLK_Z:
-                    requestSnapshot();
+                    requestSnapshot(SnapshotFormat::Png);
+                    break;
+                case SDLK_5:
+                    requestSnapshot(SnapshotFormat::WebP);
                     break;
                 default:
                     break;
@@ -2594,15 +2602,20 @@ namespace acmxvk {
                                 Video,
                                 Graphic };
 
+        enum class SnapshotFormat { Png,
+                                    WebP };
+
         struct SnapshotJob {
             fs::path path;
             std::vector<std::uint8_t> rgba;
             std::uint32_t width = 0;
             std::uint32_t height = 0;
+            SnapshotFormat format = SnapshotFormat::Png;
         };
 
         struct ReadbackRequest {
             bool snapshot = false;
+            SnapshotFormat snapshot_format = SnapshotFormat::Png;
             bool continuous = false;
             bool frame_due = false;
             bool has_pts = false;
@@ -2683,6 +2696,7 @@ namespace acmxvk {
         int overlay_font_size = 18;
         int preview_overlay_font_size = 18;
         bool snapshot_pending = false;
+        SnapshotFormat pending_snapshot_format = SnapshotFormat::Png;
         bool autopilot_enabled = false;
         bool autopilot_sequential = false;
         bool autopilot_random_crossfade = false;
@@ -4865,6 +4879,50 @@ namespace acmxvk {
             }
         }
 
+#ifdef ACMXVK_WITH_WEBP
+        static void saveWebP(const fs::path &path, const std::uint8_t *rgba,
+                             int width, int height) {
+            if (rgba == nullptr || width <= 0 || height <= 0 ||
+                width > std::numeric_limits<int>::max() / 4) {
+                throw std::runtime_error(
+                    "invalid image dimensions for WebP snapshot: " +
+                    path.string());
+            }
+
+            std::uint8_t *encoded_pixels = nullptr;
+            const std::size_t encoded_size = WebPEncodeLosslessRGBA(
+                rgba, width, height, width * 4, &encoded_pixels);
+            const std::unique_ptr<std::uint8_t, decltype(&WebPFree)>
+                encoded_data(encoded_pixels, &WebPFree);
+            if (encoded_size == 0 || encoded_data == nullptr) {
+                throw std::runtime_error("unable to encode WebP snapshot: " +
+                                         path.string());
+            }
+
+            std::ofstream output(path, std::ios::binary);
+            if (!output) {
+                throw std::runtime_error("unable to open WebP snapshot: " +
+                                         path.string());
+            }
+            output.write(reinterpret_cast<const char *>(encoded_data.get()),
+                         static_cast<std::streamsize>(encoded_size));
+            if (!output) {
+                throw std::runtime_error("unable to write WebP snapshot: " +
+                                         path.string());
+            }
+        }
+#endif
+
+        [[nodiscard]] static std::string_view
+        snapshotFormatName(SnapshotFormat format) {
+            return format == SnapshotFormat::WebP ? "WebP" : "PNG";
+        }
+
+        [[nodiscard]] static std::string_view
+        snapshotExtension(SnapshotFormat format) {
+            return format == SnapshotFormat::WebP ? ".webp" : ".png";
+        }
+
         void snapshotWorkerLoop() noexcept {
             while (true) {
                 SnapshotJob job;
@@ -4882,11 +4940,23 @@ namespace acmxvk {
                 }
 
                 try {
-                    savePng(job.path, job.rgba.data(),
-                            static_cast<int>(job.width),
-                            static_cast<int>(job.height));
+                    if (job.format == SnapshotFormat::WebP) {
+#ifdef ACMXVK_WITH_WEBP
+                        saveWebP(job.path, job.rgba.data(),
+                                 static_cast<int>(job.width),
+                                 static_cast<int>(job.height));
+#else
+                        throw std::runtime_error(
+                            "WebP snapshot support is not compiled in");
+#endif
+                    } else {
+                        savePng(job.path, job.rgba.data(),
+                                static_cast<int>(job.width),
+                                static_cast<int>(job.height));
+                    }
                     std::ostringstream message;
-                    message << "acmxvk: took PNG snapshot: "
+                    message << "acmxvk: took "
+                            << snapshotFormatName(job.format) << " snapshot: "
                             << job.path.string() << '\n';
                     std::cout << message.str();
                 } catch (const std::exception &error) {
@@ -4949,7 +5019,8 @@ namespace acmxvk {
         }
 
         [[nodiscard]] fs::path snapshotPath(std::uint32_t width,
-                                            std::uint32_t height) {
+                                            std::uint32_t height,
+                                            SnapshotFormat format) {
             const auto now = std::chrono::system_clock::now();
             const std::time_t now_time =
                 std::chrono::system_clock::to_time_t(now);
@@ -4965,7 +5036,7 @@ namespace acmxvk {
                 filename << "ACMXVK.Snapshot-"
                          << std::put_time(&local_time, "%Y.%m.%d-%H.%M.%S")
                          << '-' << width << 'x' << height << '-'
-                         << snapshot_count << ".png";
+                         << snapshot_count << snapshotExtension(format);
                 const fs::path candidate = directory / filename.str();
                 if (!fs::exists(candidate)) {
                     return candidate;
@@ -4974,7 +5045,14 @@ namespace acmxvk {
             }
         }
 
-        void requestSnapshot() {
+        void requestSnapshot(SnapshotFormat format) {
+#ifndef ACMXVK_WITH_WEBP
+            if (format == SnapshotFormat::WebP) {
+                std::cerr << "acmxvk: WebP snapshots require a build configured "
+                             "with -DWEBP=ON\n";
+                return;
+            }
+#endif
             if (snapshot_pending) {
                 return;
             }
@@ -4994,8 +5072,10 @@ namespace acmxvk {
                 return;
             }
             snapshot_pending = true;
+            pending_snapshot_format = format;
             setFrameReadbackEnabled(true);
-            std::cout << "acmxvk: PNG snapshot requested\n";
+            std::cout << "acmxvk: " << snapshotFormatName(format)
+                      << " snapshot requested\n";
         }
 
         [[nodiscard]] bool continuousReadbackEnabled() const {
@@ -5072,6 +5152,7 @@ namespace acmxvk {
         void onFrameReadbackScheduled() override {
             ReadbackRequest request;
             request.snapshot = snapshot_pending;
+            request.snapshot_format = pending_snapshot_format;
             request.continuous = continuousReadbackEnabled();
             request.frame_due = recording_frame_due;
             request.has_pts = recording_frame_has_pts;
@@ -5096,11 +5177,13 @@ namespace acmxvk {
             readback_requests.pop_front();
 
             if (request.snapshot) {
-                const fs::path path = snapshotPath(width, height);
+                const fs::path path =
+                    snapshotPath(width, height, request.snapshot_format);
                 SnapshotJob job;
                 job.path = path;
                 job.width = width;
                 job.height = height;
+                job.format = request.snapshot_format;
                 if (request.continuous) {
                     job.rgba = rgba;
                 } else {
@@ -5108,8 +5191,9 @@ namespace acmxvk {
                 }
                 enqueueSnapshot(std::move(job));
                 ++snapshot_count;
-                std::cout << "acmxvk: queued PNG snapshot: " << path.string()
-                          << '\n';
+                std::cout << "acmxvk: queued "
+                          << snapshotFormatName(request.snapshot_format)
+                          << " snapshot: " << path.string() << '\n';
             }
 
             if (!request.continuous || recording_complete ||

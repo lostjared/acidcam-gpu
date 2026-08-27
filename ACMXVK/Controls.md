@@ -43,6 +43,7 @@ controls respond while a key is held.
 | `F12` | Show or hide MXVK's FPS counter | This is the renderer-level counter supplied by MXVK. |
 | `E` | Show or hide the watermark | Available when watermark text was configured. The watermark is part of the encoded result. |
 | `Z` | Save a processed PNG snapshot | Saves beneath the directory selected by `--prefix`. Snapshot writing runs in the background. |
+| `5` | Save a processed lossless WebP snapshot | Requires a build configured with `-DWEBP=ON`; uses the same destination and background queue as PNG snapshots. |
 | `F10` | Save an MXVK screenshot | Requires `--enable-screenshot`. |
 | `Escape` | Quit ACMXVK | Closing the window also quits. |
 
@@ -132,6 +133,7 @@ controller's `0`-`127` range into the custom uniform range declared by
 | 3D controls | Start with `--enable-3d --model <file>`. |
 | Playlist and autopilot | Load a playlist and enable playlist mode with `P`. |
 | Multipass toggle | Configure one or more shader passes. |
+| `5` WebP snapshot | Configure with `-DWEBP=ON` and install libwebp development files. |
 | `F10` screenshot | Start ACMXVK with `--enable-screenshot`. |
 
 Run `acmxvk --help` for the full command-line option reference.

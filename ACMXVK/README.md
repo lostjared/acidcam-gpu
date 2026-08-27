@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8P**. It is usable for video, camera, and
+The port is currently at **Increment 8Q**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -25,7 +25,7 @@ ACMX2.
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
-| PNG output | Implemented | Supports full PNG sequences, periodic generated frames, and ACMX2-compatible one-shot `Z` snapshots with a configurable destination. |
+| Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, and optional lossless WebP snapshots on `5` when configured with `-DWEBP=ON`. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader locking, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
@@ -45,6 +45,7 @@ ACMX2.
 - MXVK 0.33.1 or newer, built with `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
+- Optional libwebp development files for `-DWEBP=ON` lossless snapshots
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
 - Optional RtAudio development files when building with `-DAUDIO=ON`
 - Optional RtMidi development files when building with `-DMIDI=ON`
@@ -211,6 +212,11 @@ or increase model scale, while unmodified minus/plus retain camera zoom.
 MIDI-map actions 91 and 93 are routed directly to the shifted scale controls
 and no longer change the selected crossfade. MXVK and acidcam-gpu are
 unchanged.
+Increment 8Q adds optional lossless WebP snapshots. Configure ACMXVK with
+`-DWEBP=ON` to link libwebp, then press `5` to save the final processed frame as
+WebP through the same bounded background queue and `--prefix` destination used
+by `Z` PNG snapshots. WebP remains disabled by default, and this increment
+changes only ACMXVK.
 
 ### Input validation
 
@@ -379,6 +385,16 @@ frame unless video or PNG output already requires continuous readback. PNG
 compression and disk writes run on a bounded background queue so the render
 loop can continue while the snapshot is saved; queued work is drained during
 shutdown.
+
+To enable lossless WebP snapshots, install the libwebp development package and
+configure ACMXVK with `-DWEBP=ON`. Press `5` to capture WebP instead of `Z`; it
+uses the same processed frame, naming scheme, `--prefix` directory, background
+queue, and shutdown draining behavior as PNG:
+
+```bash
+cmake -S ACMXVK -B build/acmxvk -DWEBP=ON
+cmake --build build/acmxvk -j
+```
 
 Show the active shader/filter information with a yellow watermark. Press `E`
 to toggle only the watermark while the filter information remains visible:
@@ -1618,6 +1634,7 @@ control reference.
 - Y: toggle sequential autopilot
 - Space: bypass or enable shader effects
 - Z: save a processed PNG snapshot under the `--prefix` directory
+- 5: save a processed lossless WebP snapshot when built with `-DWEBP=ON`
 - F10: capture a screenshot when `--enable-screenshot` is active
 - Escape: quit
 
