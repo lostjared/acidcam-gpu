@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8X**. It is usable for video, camera, and
+The port is currently at **Increment 8Y**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -370,6 +370,13 @@ shapes, optional tensor names, scale/mean/channel preprocessing, output-shape
 conversion, and bilateral smoothing. Generic inference uses the same automatic
 OpenCV CPU/CUDA backend selection and remains independent of
 `libacidcam-gpu.so`. This increment changes only ACMXVK.
+Increment 8Y makes video shader animation deterministic with respect to the
+decoded media timeline. Shader delta, shader time advancement, compatibility
+`iTime`, reported shader FPS, and the exposed frame index now come from source
+video frames rather than processing wall time. A video therefore produces the
+same shader animation whether it is processed faster or slower than real time;
+`--normalized` remains available for deterministic camera and still-image
+rendering. This increment changes only ACMXVK.
 
 ### Input validation
 
@@ -475,6 +482,11 @@ Process a video with a SPIR-V shader library:
     --shaders /path/to/spv-library \
     --shader-file effect.spv
 ```
+
+Video shaders automatically use decoded source-frame time. The same input
+frame therefore receives the same `iTime`, shader-time delta, compatibility
+frame index, and animated `alpha` regardless of whether processing is faster
+or slower than real time. `--normalized` is not required for video files.
 
 Play a video with effects at its reported source rate instead of processing it
 as quickly as possible:
@@ -814,14 +826,14 @@ The complete field map is:
 | `mouse` | 0 | `.x`, `.y` | Mouse position in window pixels. SDL supplies a top-left-origin position. |
 |  |  | `.z` | `1.0` while the left mouse button is held, otherwise `0.0`. |
 |  |  | `.w` | Reserved; currently `0.0`. |
-| `u0` | 16 | `.x` | ACMX2-compatible animated `alpha`, advanced by `0.1` per rendered frame and reflected between `1.0` and `6.0` after its initial `0.1` value. |
-|  |  | `.y` | Wall-clock elapsed seconds for the ACMX2/Shadertoy-compatible `iTime`; unlike shader time, this does not pause, scale, or reset when the selected effect changes. |
+| `u0` | 16 | `.x` | ACMX2-compatible animated `alpha`, advanced by `0.1` and reflected between `1.0` and `6.0`. Video mode derives it from the decoded source-frame index; other modes advance it per rendered frame. |
+|  |  | `.y` | ACMX2/Shadertoy-compatible `iTime`. Video input uses decoded source-video time, making effects independent of processing speed. Camera and still-image modes use elapsed wall time. |
 |  |  | `.z`, `.w` | Render width and height in pixels. A convenient alias is `vec2 resolution = ext.u0.zw`. |
-| `u1` | 32 | `.x` | Frame delta in seconds. With `--normalized`, this is exactly `1.0 / output_fps`; otherwise it is measured wall-clock delta. |
+| `u1` | 32 | `.x` | Frame delta in seconds. Video input uses the decoded source-frame difference, including skipped source frames. Outside video mode, `--normalized` uses exactly `1.0 / output_fps`; otherwise this is measured wall-clock delta. |
 |  |  | `.y` | `amp`: processed mean audio amplitude after sensitivity, warmup, time-speed, and optional delta scaling. Zero without active audio. |
 |  |  | `.z` | `iamp`: zero-crossing frequency estimate in Hz. |
-|  |  | `.w` | Instantaneous render rate, calculated as `1.0 / u1.x`. |
-| `u2` | 48 | `.x` | Rendered frame counter, stored as a float. It resets when shader time is reset or a new shader/playlist node is selected. |
+|  |  | `.w` | Source-video FPS in video mode; otherwise the instantaneous render rate calculated as `1.0 / u1.x`. |
+| `u2` | 48 | `.x` | Decoded source-frame index in video mode. Camera and still-image modes use the rendered-frame counter, which resets with shader time. |
 |  |  | `.y` | Shader time in seconds. It follows `--time-speed`, normalized time, the `T/U/I/Page Up/Page Down` controls, and audio-reactive time when enabled. |
 |  |  | `.z` | `iSampleRate`: active audio sample rate in Hz; the compatibility default is `44100.0`. |
 |  |  | `.w` | `amp_peak`: sensitivity- and warmup-scaled peak audio level. |

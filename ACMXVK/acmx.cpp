@@ -1306,7 +1306,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8X)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8Y)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1354,7 +1354,7 @@ namespace acmxvk {
                << "      --cross-fade <seconds>  Shader transition duration (default 0.5)\n\n"
                << "  --enable-playlist           Enable the playlist immediately\n"
                << "  --time-speed <mult>         Scale shader time (default 1.0)\n"
-               << "  --normalized                Use fixed output-frame shader time\n"
+               << "  --normalized                Use fixed frame time outside video mode\n"
                << "  --autopilot-frames <N>      Playlist switch interval (minimum 4)\n"
                << "  --autopilot-timeout <N>     Alias for --autopilot-frames\n"
                << "  --autopilot-random <N>      Random playlist interval from 4..N\n\n"
@@ -2890,6 +2890,9 @@ namespace acmxvk {
         std::chrono::steady_clock::time_point source_playback_pause_start{};
         std::chrono::steady_clock::duration source_playback_paused_duration{};
         std::chrono::steady_clock::time_point previous_frame{std::chrono::steady_clock::now()};
+        double previous_video_shader_timeline = 0.0;
+        bool video_shader_timeline_initialized = false;
+        bool video_shader_clock_logged = false;
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
@@ -5819,6 +5822,8 @@ namespace acmxvk {
 
         void resetShaderTime() {
             previous_frame = std::chrono::steady_clock::now();
+            previous_video_shader_timeline = 0.0;
+            video_shader_timeline_initialized = false;
             shader_time = 0.0;
             frame_count = 0;
         }
@@ -6853,10 +6858,44 @@ namespace acmxvk {
             previous_frame = now;
             ++frame_count;
 
-            const float delta = options.normalized_time
-                                    ? static_cast<float>(1.0 / outputFrameRate())
-                                    : wall_delta;
-            const float frame_rate = delta > 0.0F ? 1.0F / delta : 0.0F;
+            const bool video_timeline_available =
+                source_kind == SourceKind::Video &&
+                video_source_frame_count > 0U &&
+                std::isfinite(video_source_fps) && video_source_fps > 0.0;
+            const double video_timeline =
+                video_timeline_available
+                    ? static_cast<double>(video_source_frame_count - 1U) /
+                          video_source_fps
+                    : 0.0;
+            float delta = wall_delta;
+            if (video_timeline_available) {
+                if (!video_shader_clock_logged) {
+                    std::cout
+                        << "acmxvk: shader clock: decoded video timeline; "
+                           "effects are independent of processing speed\n";
+                    video_shader_clock_logged = true;
+                }
+                if (!video_shader_timeline_initialized ||
+                    video_timeline < previous_video_shader_timeline) {
+                    if (video_shader_timeline_initialized &&
+                        video_timeline < previous_video_shader_timeline) {
+                        shader_time = 0.0;
+                        frame_count = 1;
+                    }
+                    delta = 0.0F;
+                    video_shader_timeline_initialized = true;
+                } else {
+                    delta = static_cast<float>(
+                        video_timeline - previous_video_shader_timeline);
+                }
+                previous_video_shader_timeline = video_timeline;
+            } else if (options.normalized_time) {
+                delta = static_cast<float>(1.0 / outputFrameRate());
+            }
+            const float frame_rate =
+                video_timeline_available
+                    ? static_cast<float>(video_source_fps)
+                    : (delta > 0.0F ? 1.0F / delta : 0.0F);
             float raw_audio_amplitude = 0.0F;
             float audio_sensitivity = 1.0F;
             float audio_amplitude = 0.0F;
@@ -6931,7 +6970,21 @@ namespace acmxvk {
             }
             model_wave_audio_step =
                 audio_amplitude * raw_audio_amplitude;
-            if (legacy_alpha_increasing) {
+            if (video_timeline_available) {
+                const std::uint64_t source_frame =
+                    video_source_frame_count - 1U;
+                if (source_frame <= 58U) {
+                    legacy_alpha =
+                        0.2F + 0.1F * static_cast<float>(source_frame);
+                } else {
+                    const std::uint64_t phase = (source_frame - 59U) % 100U;
+                    legacy_alpha =
+                        phase < 50U
+                            ? 5.9F - 0.1F * static_cast<float>(phase)
+                            : 1.1F +
+                                  0.1F * static_cast<float>(phase - 50U);
+                }
+            } else if (legacy_alpha_increasing) {
                 legacy_alpha += 0.1F;
                 if (legacy_alpha >= 6.0F) {
                     legacy_alpha = 6.0F;
@@ -6945,9 +6998,16 @@ namespace acmxvk {
                 }
             }
             const float elapsed = static_cast<float>(shader_time);
-            const float compatibility_time =
-                std::chrono::duration<float>(now - compatibility_clock_start)
-                    .count();
+            const float compatibility_time = video_timeline_available
+                                                 ? static_cast<float>(
+                                                       video_timeline)
+                                                 : std::chrono::duration<float>(
+                                                       now - compatibility_clock_start)
+                                                       .count();
+            const float shader_frame =
+                video_timeline_available
+                    ? static_cast<float>(video_source_frame_count - 1U)
+                    : static_cast<float>(frame_count);
             frame_sprite->setShaderParams(1.0F, 1.0F, 1.0F, elapsed);
             frame_sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
             frame_sprite->setUniform0(legacy_alpha, compatibility_time,
@@ -6955,7 +7015,7 @@ namespace acmxvk {
                                       static_cast<float>(height));
             frame_sprite->setUniform1(delta, audio_amplitude, audio_frequency,
                                       frame_rate);
-            frame_sprite->setUniform2(static_cast<float>(frame_count), elapsed,
+            frame_sprite->setUniform2(shader_frame, elapsed,
                                       audio_sample_rate, audio_peak);
             frame_sprite->setUniform3(static_cast<float>(frame_sprite->getHistoryHead()),
                                       static_cast<float>(frame_sprite->getHistoryLayerCount()),
@@ -6973,8 +7033,7 @@ namespace acmxvk {
                 glm::vec4(delta, audio_amplitude, audio_frequency,
                           frame_rate);
             model_fragment_uniforms.u2 = glm::vec4(
-                static_cast<float>(frame_count), elapsed,
-                audio_sample_rate, audio_peak);
+                shader_frame, elapsed, audio_sample_rate, audio_peak);
             model_fragment_uniforms.u3 = glm::vec4(
                 static_cast<float>(frame_sprite->getHistoryHead()),
                 static_cast<float>(frame_sprite->getHistoryLayerCount()),
@@ -7005,7 +7064,7 @@ namespace acmxvk {
                                     static_cast<float>(height));
                 sprite->setUniform1(delta, audio_amplitude, audio_frequency,
                                     frame_rate);
-                sprite->setUniform2(static_cast<float>(frame_count), elapsed,
+                sprite->setUniform2(shader_frame, elapsed,
                                     audio_sample_rate, audio_peak);
                 sprite->setUniform3(
                     static_cast<float>(frame_sprite->getHistoryHead()),
