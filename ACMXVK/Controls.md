@@ -45,6 +45,7 @@ controls respond while a key is held.
 | `Z` | Save a processed PNG snapshot | Saves beneath the directory selected by `--prefix`. Snapshot writing runs in the background. |
 | `4` | Save a processed lossless TIFF snapshot | Requires a build configured with `-DTIFF=ON`; uses the same destination and background queue as PNG snapshots. |
 | `5` | Save a processed lossless WebP snapshot | Requires a build configured with `-DWEBP=ON`; uses the same destination and background queue as PNG snapshots. |
+| `6` | Save a processed raw RGBA snapshot | Writes tightly packed, top-to-bottom RGBA8 pixels to a headerless `.raw` file using the same destination and background queue. The resolution is included in the filename. |
 | `F10` | Save an MXVK screenshot | Requires `--enable-screenshot`. |
 | `Escape` | Quit ACMXVK | Closing the window also quits. |
 
@@ -116,6 +117,7 @@ ACMXVK recognizes the following ACMX2 MIDI-map action codes:
 | `84` | `T` | Toggle normal shader time |
 | `89` | `Y` | Toggle sequential autopilot |
 | `90` | `Z` | Save a processed PNG snapshot |
+| `54` | `6` | Save a processed raw RGBA snapshot |
 | `600:601` through `606:607` | Custom uniform sliders 1-4 | Map absolute MIDI values to `slider1` through `slider4`. |
 
 Paired action mappings use a centered controller value: `64` is neutral, and
@@ -136,6 +138,7 @@ controller's `0`-`127` range into the custom uniform range declared by
 | Multipass toggle | Configure one or more shader passes. |
 | `4` TIFF snapshot | Configure with `-DTIFF=ON` and install libtiff development files. |
 | `5` WebP snapshot | Configure with `-DWEBP=ON` and install libwebp development files. |
+| `6` raw RGBA snapshot | No optional build dependency is required. |
 | `F10` screenshot | Start ACMXVK with `--enable-screenshot`. |
 
 Run `acmxvk --help` for the full command-line option reference.

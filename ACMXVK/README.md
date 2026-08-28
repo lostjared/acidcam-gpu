@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8T**. It is usable for video, camera, and
+The port is currently at **Increment 8U**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -25,7 +25,7 @@ ACMX2.
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
-| Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, and optional lossless WebP snapshots on `5`. |
+| Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, optional lossless WebP snapshots on `5`, and headerless RGBA8 snapshots on `6`. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader locking, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
@@ -233,6 +233,12 @@ the active audio clock when available and otherwise use elapsed capture time to
 derive explicit output PTS. When 4K rendering or encoding delivers fewer frames
 than the nominal camera rate, the resulting video retains its real capture
 duration instead of playing fast. This increment changes only ACMXVK.
+Increment 8U completes ACMX2's core snapshot-key set. Press `6` to save the
+final processed frame as tightly packed, top-to-bottom, 8-bit RGBA pixels in a
+headerless `.raw` file. Raw capture uses the same rendered-resolution naming,
+`--prefix` destination, bounded background queue, and shutdown draining as the
+encoded snapshot formats. It requires no optional build dependency and changes
+only ACMXVK. ACMX2 MIDI-map action code 54 triggers the same capture.
 
 ### Input validation
 
@@ -420,6 +426,15 @@ background queue:
 ```bash
 cmake -S ACMXVK -B build/acmxvk -DTIFF=ON
 cmake --build build/acmxvk -j
+```
+
+Press `6` to save the same final processed frame as a headerless RGBA8 `.raw`
+file. Its dimensions are embedded in the filename. Supply those dimensions
+when opening it with a raw-video tool, for example:
+
+```bash
+ffplay -f rawvideo -pixel_format rgba -video_size 1920x1080 \
+    snapshots/ACMXVK.Snapshot-2026.08.27-12.00.00-1920x1080-0.raw
 ```
 
 Show the active shader/filter information with a yellow watermark. Press `E`
@@ -1684,6 +1699,7 @@ control reference.
 - Z: save a processed PNG snapshot under the `--prefix` directory
 - 4: save a processed lossless TIFF snapshot when built with `-DTIFF=ON`
 - 5: save a processed lossless WebP snapshot when built with `-DWEBP=ON`
+- 6: save a processed, headerless RGBA8 snapshot
 - F10: capture a screenshot when `--enable-screenshot` is active
 - Escape: quit
 
@@ -1794,6 +1810,9 @@ a portable audio-disabled configuration. Both input-validation tests passed.
 Runtime camera recordings now announce when real-time PTS preservation becomes
 active so reduced 4K delivery rates can be verified from the log and resulting
 media duration.
+Increment 8U built in full-featured and portable configurations. The raw RGBA8
+writer uses the shared snapshot worker without an optional image library, and
+the input-validation test passes in both configurations.
 
 ## Development note
 

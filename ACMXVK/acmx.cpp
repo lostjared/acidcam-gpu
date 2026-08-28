@@ -1235,7 +1235,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8T)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8U)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1369,7 +1369,8 @@ namespace acmxvk {
                << "      [/] crossfade effect, Space bypass,\n"
                << "      W/A/S/D 3D look, +/- 3D zoom, Shift+/- 3D scale,\n"
                << "      1/2 zoom sensitivity,\n"
-               << "      Z PNG, 4 TIFF (TIFF=ON), 5 WebP (WEBP=ON) snapshot,\n"
+               << "      Z PNG, 4 TIFF (TIFF=ON), 5 WebP (WEBP=ON),\n"
+               << "      6 raw RGBA snapshot,\n"
                << "      mouse drag/wheel 3D look/move,\n"
                << "      Escape quit\n";
     }
@@ -2263,6 +2264,9 @@ namespace acmxvk {
                 case SDLK_5:
                     requestSnapshot(SnapshotFormat::WebP);
                     break;
+                case SDLK_6:
+                    requestSnapshot(SnapshotFormat::Raw);
+                    break;
                 default:
                     break;
                 }
@@ -2624,7 +2628,8 @@ namespace acmxvk {
 
         enum class SnapshotFormat { Png,
                                     WebP,
-                                    Tiff };
+                                    Tiff,
+                                    Raw };
 
         struct SnapshotJob {
             fs::path path;
@@ -3151,6 +3156,8 @@ namespace acmxvk {
                 return options.enable_3d ? SDLK_PERIOD : SDLK_UNKNOWN;
             case 51:
                 return options.enable_3d ? SDLK_3 : SDLK_UNKNOWN;
+            case 54:
+                return SDLK_6;
             case 67:
                 return options.enable_3d ? SDLK_C : SDLK_UNKNOWN;
             case 79:
@@ -3250,6 +3257,8 @@ namespace acmxvk {
                 return "increase 3D view rotation speed";
             case 51:
                 return "toggle 2D/3D rendering";
+            case 54:
+                return "take raw RGBA snapshot";
             case 67:
                 return "toggle 3D wave effect";
             case 79:
@@ -4909,6 +4918,39 @@ namespace acmxvk {
             }
         }
 
+        static void saveRaw(const fs::path &path,
+                            const std::vector<std::uint8_t> &rgba,
+                            std::uint32_t width, std::uint32_t height) {
+            if (width == 0U || height == 0U) {
+                throw std::runtime_error(
+                    "invalid image dimensions for raw RGBA snapshot: " +
+                    path.string());
+            }
+
+            const std::uint64_t byte_count =
+                static_cast<std::uint64_t>(width) *
+                static_cast<std::uint64_t>(height) * 4U;
+            if (byte_count > rgba.size() ||
+                byte_count > static_cast<std::uint64_t>(
+                                 std::numeric_limits<std::streamsize>::max())) {
+                throw std::runtime_error(
+                    "invalid pixel buffer for raw RGBA snapshot: " +
+                    path.string());
+            }
+
+            std::ofstream output(path, std::ios::binary);
+            if (!output) {
+                throw std::runtime_error("unable to open raw RGBA snapshot: " +
+                                         path.string());
+            }
+            output.write(reinterpret_cast<const char *>(rgba.data()),
+                         static_cast<std::streamsize>(byte_count));
+            if (!output) {
+                throw std::runtime_error("unable to write raw RGBA snapshot: " +
+                                         path.string());
+            }
+        }
+
 #ifdef ACMXVK_WITH_WEBP
         static void saveWebP(const fs::path &path, const std::uint8_t *rgba,
                              int width, int height) {
@@ -5009,6 +5051,8 @@ namespace acmxvk {
                 return "WebP";
             case SnapshotFormat::Tiff:
                 return "TIFF";
+            case SnapshotFormat::Raw:
+                return "raw RGBA";
             case SnapshotFormat::Png:
                 return "PNG";
             }
@@ -5022,6 +5066,8 @@ namespace acmxvk {
                 return ".webp";
             case SnapshotFormat::Tiff:
                 return ".tiff";
+            case SnapshotFormat::Raw:
+                return ".raw";
             case SnapshotFormat::Png:
                 return ".png";
             }
@@ -5045,7 +5091,9 @@ namespace acmxvk {
                 }
 
                 try {
-                    if (job.format == SnapshotFormat::Tiff) {
+                    if (job.format == SnapshotFormat::Raw) {
+                        saveRaw(job.path, job.rgba, job.width, job.height);
+                    } else if (job.format == SnapshotFormat::Tiff) {
 #ifdef ACMXVK_WITH_TIFF
                         saveTiff(job.path, job.rgba.data(),
                                  static_cast<int>(job.width),
