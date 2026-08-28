@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8Y**. It is usable for video, camera, and
+The port is currently at **Increment 8Z**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -377,6 +377,14 @@ video frames rather than processing wall time. A video therefore produces the
 same shader animation whether it is processed faster or slower than real time;
 `--normalized` remains available for deterministic camera and still-image
 rendering. This increment changes only ACMXVK.
+Increment 8Z extends decoded-video timing to crossfades and built-in 3D model
+animation. Crossfade duration, automatic model rotation, vertex wave motion,
+and scale oscillation now advance from decoded source frames in video mode, so
+their appearance does not depend on processing speed. Pausing a video pauses
+these animations, skipped source frames advance them by the corresponding
+source duration, and a repeated video resets their autonomous animation state.
+Camera and still-image modes retain live render-clock behavior. This increment
+changes only ACMXVK.
 
 ### Input validation
 

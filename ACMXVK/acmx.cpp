@@ -70,6 +70,7 @@ extern "C" {
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <numbers>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -1306,7 +1307,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8Y)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8Z)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -2251,6 +2252,7 @@ namespace acmxvk {
                 case SDLK_3:
                     if (model_initialized) {
                         model_3d_active = !model_3d_active;
+                        model_video_timeline_initialized = false;
                         model_last_render_time =
                             std::chrono::steady_clock::now();
                         applyShaderPipeline();
@@ -2431,41 +2433,90 @@ namespace acmxvk {
                               .count();
             model_last_render_time = now;
             delta = std::clamp(delta, 0.0F, 0.1F);
+
+            float animation_delta = delta;
+            std::uint64_t animation_steps = 1U;
+            double video_timeline = 0.0;
+            std::uint64_t video_frame_index = 0U;
+            if (currentVideoTimeline(video_timeline, &video_frame_index)) {
+                if (!model_video_timeline_initialized ||
+                    video_frame_index < previous_model_video_frame) {
+                    if (model_video_timeline_initialized &&
+                        video_frame_index < previous_model_video_frame) {
+                        model_wave_phase = 0.0F;
+                        model_wave_amplitude_x = 0.0F;
+                        model_wave_amplitude_y = 0.0F;
+                        model_wave_amplitude_z = 0.0F;
+                        model_wave_direction_x = 1.0F;
+                        model_wave_direction_y = 1.0F;
+                        model_wave_direction_z = 1.0F;
+                        model_scale_oscillation_phase = 0.0F;
+                        if (model_auto_rotate) {
+                            model_view_rotation_degrees = 0.0F;
+                        }
+                    }
+                    animation_delta = 0.0F;
+                    animation_steps = 0U;
+                    model_video_timeline_initialized = true;
+                } else {
+                    animation_steps =
+                        video_frame_index - previous_model_video_frame;
+                    animation_delta = static_cast<float>(
+                        static_cast<double>(animation_steps) /
+                        video_source_fps);
+                }
+                previous_model_video_frame = video_frame_index;
+            } else {
+                model_video_timeline_initialized = false;
+            }
             if (model_auto_rotate && !rendering_frozen) {
                 model_view_rotation_degrees = std::fmod(
                     model_view_rotation_degrees +
-                        model_rotation_speed * delta,
+                        model_rotation_speed * animation_delta,
                     360.0F);
             }
             if (model_wave_active) {
-                model_wave_phase +=
+                const float wave_step =
                     audio_time_active && audioSourceOpen()
                         ? model_wave_audio_step
                         : 0.05F;
-                if (model_wave_phase > 360.0F) {
-                    model_wave_phase -= 360.0F;
-                }
+                model_wave_phase = std::fmod(
+                    model_wave_phase +
+                        wave_step * static_cast<float>(animation_steps),
+                    360.0F);
 
                 const auto advance_amplitude = [](float &amplitude,
-                                                  float &direction) {
-                    amplitude += 0.005F * direction;
-                    if (amplitude >= 0.5F) {
-                        amplitude = 0.5F;
-                        direction = -1.0F;
-                    } else if (amplitude <= 0.0F) {
-                        amplitude = 0.0F;
+                                                  float &direction,
+                                                  std::uint64_t steps) {
+                    constexpr float AMPLITUDE_RANGE = 0.5F;
+                    constexpr float AMPLITUDE_PERIOD =
+                        AMPLITUDE_RANGE * 2.0F;
+                    float phase = direction >= 0.0F
+                                      ? amplitude
+                                      : AMPLITUDE_PERIOD - amplitude;
+                    phase = std::fmod(
+                        phase + 0.005F * static_cast<float>(steps),
+                        AMPLITUDE_PERIOD);
+                    if (phase < AMPLITUDE_RANGE) {
+                        amplitude = phase;
                         direction = 1.0F;
+                    } else {
+                        amplitude = AMPLITUDE_PERIOD - phase;
+                        direction = -1.0F;
                     }
                 };
                 advance_amplitude(model_wave_amplitude_x,
-                                  model_wave_direction_x);
+                                  model_wave_direction_x, animation_steps);
                 advance_amplitude(model_wave_amplitude_y,
-                                  model_wave_direction_y);
+                                  model_wave_direction_y, animation_steps);
                 advance_amplitude(model_wave_amplitude_z,
-                                  model_wave_direction_z);
+                                  model_wave_direction_z, animation_steps);
             }
             if (model_scale_oscillation_active) {
-                model_scale_oscillation_phase += 0.016F;
+                model_scale_oscillation_phase = std::fmod(
+                    model_scale_oscillation_phase +
+                        0.016F * static_cast<float>(animation_steps),
+                    2.0F * std::numbers::pi_v<float>);
             }
 
             const bool *keyboard = SDL_GetKeyboardState(nullptr);
@@ -2859,6 +2910,7 @@ namespace acmxvk {
             std::chrono::steady_clock::now();
         std::chrono::steady_clock::time_point crossfade_start_time =
             std::chrono::steady_clock::now();
+        double crossfade_start_video_timeline = 0.0;
         std::uint64_t output_frame_count = 0;
         std::uint64_t decoded_video_frame_count = 0;
         std::uint64_t video_source_frame_count = 0;
@@ -2868,6 +2920,7 @@ namespace acmxvk {
         std::uint64_t generated_frame_count = 0;
         std::uint64_t snapshot_count = 0;
         std::uint64_t frame_count = 0;
+        std::uint64_t previous_model_video_frame = 0;
         std::uint64_t hud_fps_frame_count = 0;
         std::uint64_t camera_fps_frame_count = 0;
         double hud_display_fps = 0.0;
@@ -2893,6 +2946,8 @@ namespace acmxvk {
         double previous_video_shader_timeline = 0.0;
         bool video_shader_timeline_initialized = false;
         bool video_shader_clock_logged = false;
+        bool model_video_timeline_initialized = false;
+        bool crossfade_uses_video_timeline = false;
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
@@ -4422,14 +4477,27 @@ namespace acmxvk {
                     .count());
         }
 
-        [[nodiscard]] double hudVideoPositionSeconds() const {
+        [[nodiscard]] bool currentVideoTimeline(
+            double &timeline,
+            std::uint64_t *frame_index = nullptr) const {
             if (source_kind != SourceKind::Video ||
-                video_source_frame_count == 0U || video_source_fps <= 0.0) {
+                video_source_frame_count == 0U ||
+                !std::isfinite(video_source_fps) || video_source_fps <= 0.0) {
+                return false;
+            }
+            const std::uint64_t index = video_source_frame_count - 1U;
+            timeline = static_cast<double>(index) / video_source_fps;
+            if (frame_index != nullptr) {
+                *frame_index = index;
+            }
+            return true;
+        }
+
+        [[nodiscard]] double hudVideoPositionSeconds() const {
+            double position = 0.0;
+            if (!currentVideoTimeline(position)) {
                 return 0.0;
             }
-            double position =
-                static_cast<double>(video_source_frame_count - 1U) /
-                video_source_fps;
             if (video_duration_seconds > 0.0) {
                 position = std::min(position, video_duration_seconds);
             }
@@ -5833,6 +5901,7 @@ namespace acmxvk {
                 getDevice() == VK_NULL_HANDLE) {
                 crossfade_active = false;
                 crossfade_alpha = 1.0F;
+                crossfade_uses_video_timeline = false;
                 return;
             }
 
@@ -5896,9 +5965,12 @@ namespace acmxvk {
                 crossfade_alpha = 0.0F;
                 crossfade_active = true;
                 crossfade_start_time = std::chrono::steady_clock::now();
+                crossfade_uses_video_timeline = currentVideoTimeline(
+                    crossfade_start_video_timeline);
             } catch (const std::exception &error) {
                 crossfade_active = false;
                 crossfade_alpha = 1.0F;
+                crossfade_uses_video_timeline = false;
                 std::cerr << "acmxvk: crossfade snapshot unavailable: "
                           << error.what() << "; switching immediately\n";
             }
@@ -5908,13 +5980,24 @@ namespace acmxvk {
             if (!crossfade_active) {
                 return;
             }
-            const double elapsed =
-                std::chrono::duration<double>(now - crossfade_start_time)
-                    .count();
+            double elapsed = 0.0;
+            double video_timeline = 0.0;
+            if (crossfade_uses_video_timeline &&
+                currentVideoTimeline(video_timeline)) {
+                if (video_timeline < crossfade_start_video_timeline) {
+                    crossfade_start_video_timeline = video_timeline;
+                }
+                elapsed = video_timeline - crossfade_start_video_timeline;
+            } else {
+                elapsed = std::chrono::duration<double>(
+                              now - crossfade_start_time)
+                              .count();
+            }
             crossfade_alpha = static_cast<float>(std::clamp(
                 elapsed / options.cross_fade_duration, 0.0, 1.0));
             if (crossfade_alpha >= 1.0F) {
                 crossfade_active = false;
+                crossfade_uses_video_timeline = false;
                 applyShaderPipeline();
             }
         }
@@ -6858,15 +6941,9 @@ namespace acmxvk {
             previous_frame = now;
             ++frame_count;
 
+            double video_timeline = 0.0;
             const bool video_timeline_available =
-                source_kind == SourceKind::Video &&
-                video_source_frame_count > 0U &&
-                std::isfinite(video_source_fps) && video_source_fps > 0.0;
-            const double video_timeline =
-                video_timeline_available
-                    ? static_cast<double>(video_source_frame_count - 1U) /
-                          video_source_fps
-                    : 0.0;
+                currentVideoTimeline(video_timeline);
             float delta = wall_delta;
             if (video_timeline_available) {
                 if (!video_shader_clock_logged) {
