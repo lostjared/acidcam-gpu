@@ -8,6 +8,21 @@
 
 namespace acmxvk::dnn {
 
+    class GenericOnnxProcessor {
+      public:
+        explicit GenericOnnxProcessor(const std::string &configuration_path);
+        ~GenericOnnxProcessor();
+
+        GenericOnnxProcessor(const GenericOnnxProcessor &) = delete;
+        GenericOnnxProcessor &operator=(const GenericOnnxProcessor &) = delete;
+
+        void process(const cv::Mat &image, cv::Mat &result);
+
+      private:
+        struct Impl;
+        std::unique_ptr<Impl> impl;
+    };
+
     class EdgeDetector {
       public:
         explicit EdgeDetector(const std::string &model_path);

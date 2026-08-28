@@ -307,6 +307,7 @@ namespace acmxvk {
         std::string midi_map_file;
         std::string edge_model;
         std::string human_model;
+        std::string onnx_configuration;
         std::string snapshot_directory = ".";
         std::string resource_directory;
         std::string watermark_text;
@@ -414,6 +415,8 @@ namespace acmxvk {
                                "--edge", true);
         input::validate_string(options.human_model, input::StringKind::Path,
                                "--human", true);
+        input::validate_string(options.onnx_configuration,
+                               input::StringKind::Path, "--onnx", true);
 
         for (const std::string &path : options.shader_pass_files) {
             input::validate_string(path, input::StringKind::Path,
@@ -717,6 +720,9 @@ namespace acmxvk {
                 options.edge_model = optionValue(index, argc, argv, option);
             } else if (option == "--human") {
                 options.human_model = optionValue(index, argc, argv, option);
+            } else if (option == "--onnx") {
+                options.onnx_configuration =
+                    optionValue(index, argc, argv, option);
             } else if (option == "--background") {
                 options.human_background = true;
             } else if (option == "--black") {
@@ -1300,7 +1306,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8W)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8X)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1325,6 +1331,7 @@ namespace acmxvk {
                << "DNN effects (requires WITH_OPENCV_DNN=ON build):\n"
                << "      --edge <model.onnx>     Replace input with a DexiNed edge map\n"
                << "      --human <model.onnx>    Isolate a person with PP-HumanSeg\n"
+               << "      --onnx <config.yaml>    Run a YAML-configured image ONNX model\n"
                << "      --background           Apply shaders only behind the person (2D)\n"
                << "      --black <0.0-1.0>      Alpha black point (default 0.35)\n"
                << "      --white <0.0-1.0>      Alpha white point (default 0.75)\n"
@@ -2758,6 +2765,8 @@ namespace acmxvk {
         fs::path generate_output_directory;
         std::size_t shader_index = 0;
         std::size_t playlist_index = 0;
+        std::size_t crossfade_post_process_index =
+            std::numeric_limits<std::size_t>::max();
         bool effects_enabled = true;
         bool multipass_enabled = false;
         bool playlist_enabled = false;
@@ -2888,6 +2897,7 @@ namespace acmxvk {
 #ifdef ACMXVK_WITH_DNN
         std::unique_ptr<dnn::EdgeDetector> edge_detector;
         std::unique_ptr<dnn::HumanSegmenter> human_segmenter;
+        std::unique_ptr<dnn::GenericOnnxProcessor> generic_onnx_processor;
 #endif
 #ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::GpuMat cuda_input_rgba;
@@ -2983,6 +2993,14 @@ namespace acmxvk {
                     std::make_unique<dnn::EdgeDetector>(options.edge_model);
                 std::cout << "acmxvk: DexiNed edge detection enabled: "
                           << options.edge_model
+                          << " (automatic CPU/CUDA backend selection)\n";
+            }
+            if (!options.onnx_configuration.empty()) {
+                generic_onnx_processor =
+                    std::make_unique<dnn::GenericOnnxProcessor>(
+                        options.onnx_configuration);
+                std::cout << "acmxvk: generic ONNX processing enabled: "
+                          << options.onnx_configuration
                           << " (automatic CPU/CUDA backend selection)\n";
             }
 #endif
@@ -4574,6 +4592,16 @@ namespace acmxvk {
                 printPreviewText("DNN: DexiNed edge", 10, y, dnn_color);
                 y += line_height;
             }
+            if (generic_onnx_processor != nullptr) {
+                printPreviewText(
+                    clipOverlayText(
+                        "DNN: ONNX " +
+                        fs::path(options.onnx_configuration)
+                            .filename()
+                            .string()),
+                    10, y, dnn_color);
+                y += line_height;
+            }
 #endif
 
 #ifdef AUDIO_ENABLED
@@ -4729,7 +4757,8 @@ namespace acmxvk {
 
         [[nodiscard]] bool dnnHostProcessingEnabled() const {
 #ifdef ACMXVK_WITH_DNN
-            return edge_detector != nullptr || human_segmenter != nullptr;
+            return edge_detector != nullptr || human_segmenter != nullptr ||
+                   generic_onnx_processor != nullptr;
 #else
             return false;
 #endif
@@ -4770,28 +4799,53 @@ namespace acmxvk {
                     cv::cvtColor(foreground, rgba, cv::COLOR_BGR2RGBA);
                 }
             }
-            if (edge_detector == nullptr || rgba.empty()) {
-                return;
+            if (edge_detector != nullptr && !rgba.empty()) {
+                try {
+                    cv::Mat bgr;
+                    cv::Mat edge;
+                    cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
+                    edge_detector->process(bgr, edge);
+                    if (edge.empty()) {
+                        throw std::runtime_error(
+                            "DexiNed produced an empty edge frame");
+                    }
+                    if (edge.channels() == 1) {
+                        cv::cvtColor(edge, rgba, cv::COLOR_GRAY2RGBA);
+                    } else {
+                        cv::cvtColor(edge, rgba, cv::COLOR_BGR2RGBA);
+                    }
+                } catch (const std::exception &error) {
+                    std::cerr
+                        << "acmxvk: edge inference failed; disabling DNN "
+                           "effect: "
+                        << error.what() << '\n';
+                    edge_detector.reset();
+                }
             }
-            try {
-                cv::Mat bgr;
-                cv::Mat edge;
-                cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
-                edge_detector->process(bgr, edge);
-                if (edge.empty()) {
-                    throw std::runtime_error(
-                        "DexiNed produced an empty edge frame");
+            if (generic_onnx_processor != nullptr && !rgba.empty()) {
+                try {
+                    cv::Mat bgr;
+                    cv::Mat processed;
+                    cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
+                    generic_onnx_processor->process(bgr, processed);
+                    if (processed.empty()) {
+                        throw std::runtime_error(
+                            "generic ONNX model produced an empty frame");
+                    }
+                    if (processed.channels() == 1) {
+                        cv::cvtColor(processed, rgba,
+                                     cv::COLOR_GRAY2RGBA);
+                    } else {
+                        cv::cvtColor(processed, rgba,
+                                     cv::COLOR_BGR2RGBA);
+                    }
+                } catch (const std::exception &error) {
+                    std::cerr
+                        << "acmxvk: generic ONNX inference failed; disabling "
+                           "model: "
+                        << error.what() << '\n';
+                    generic_onnx_processor.reset();
                 }
-                if (edge.channels() == 1) {
-                    cv::cvtColor(edge, rgba, cv::COLOR_GRAY2RGBA);
-                } else {
-                    cv::cvtColor(edge, rgba, cv::COLOR_BGR2RGBA);
-                }
-            } catch (const std::exception &error) {
-                std::cerr << "acmxvk: edge inference failed; disabling DNN "
-                             "effect: "
-                          << error.what() << '\n';
-                edge_detector.reset();
             }
 #else
             static_cast<void>(rgba);
@@ -6156,10 +6210,14 @@ namespace acmxvk {
 
             std::vector<PostProcessingEffect> effects;
             effects.reserve(pipeline.size());
-            for (const fs::path &shader : pipeline) {
+            crossfade_post_process_index =
+                std::numeric_limits<std::size_t>::max();
+            for (std::size_t index = 0; index < pipeline.size(); ++index) {
+                const fs::path &shader = pipeline[index];
                 PostProcessingEffect effect{
                     shader.string(), {1.0F, 1.0F, 1.0F, 0.0F}, false};
                 if (crossfade_active && shader == crossfadeShader()) {
+                    crossfade_post_process_index = index;
                     effect.historySource = crossfade_previous_sprite;
                     effect.params[0] = crossfade_alpha;
                 } else if (options.human_background &&
@@ -6934,7 +6992,7 @@ namespace acmxvk {
             for (std::size_t index = 0; index < post_process_sprites.size(); ++index) {
                 mxvk::VK_Sprite *sprite = post_process_sprites[index];
                 if (crossfade_active &&
-                    index + 1U == post_process_sprites.size()) {
+                    index == crossfade_post_process_index) {
                     setPostProcessingShaderParams(index, crossfade_alpha, 0.0F,
                                                   0.0F, 0.0F);
                 } else {
@@ -7086,6 +7144,7 @@ int main(int argc, char **argv) {
 #endif
 #ifndef ACMXVK_WITH_DNN
         if (!options.edge_model.empty() || !options.human_model.empty() ||
+            !options.onnx_configuration.empty() ||
             options.human_background || options.human_black_specified ||
             options.human_white_specified) {
             throw std::runtime_error(

@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8W**. It is usable for video, camera, and
+The port is currently at **Increment 8X**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -34,7 +34,7 @@ ACMX2.
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, an M3U/M3U8 playlist, or `--use-source-audio` with real-time source-FPS video playback can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Source-video analysis follows the media clock even when late video frames are skipped. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
-| DNN effects | Partial | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection and PP-HumanSeg foreground isolation before the Vulkan shader chain. In 2D mode, `--background` applies the shader chain behind the unprocessed person. Generic YAML-configured ONNX processing remains to be ported. |
+| DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
 
@@ -79,7 +79,7 @@ cmake --build build/acmxvk --target uninstall
 Audio and MIDI support are optional and remain disabled when their CMake
 options are omitted.
 
-### DNN edge and human segmentation
+### DNN and generic ONNX processing
 
 Build with OpenCV's DNN module to enable the first ported ACMX2 DNN effect:
 
@@ -141,6 +141,51 @@ point to remain lower than the white point:
 
 Human segmentation and DexiNed can be combined. ACMXVK segments first and then
 applies edge detection, matching ACMX2's input-effect order.
+
+Use `--onnx <config.yaml>` for ACMX2-compatible generic image-to-image models.
+The ONNX file named by `model.path` is resolved relative to the configuration
+file. Generic processing runs after human segmentation and edge detection and
+before rotation, acidcam-gpu filters, history, 3D texture mapping, and Vulkan
+shaders:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input clip.mp4 \
+    --onnx models/bubble-512.yaml \
+    --fragment build/acmxvk/shaders/custom_uniform.frag.spv \
+    --use-source-fps
+```
+
+The accepted YAML schema is:
+
+```yaml
+model:
+  path: model.onnx
+  input: input_tensor       # optional
+preprocessing:
+  width: 512                # default 224
+  height: 512               # default 224
+  scale: 1.0                # default 1/255
+  swap_rb: true             # default true
+  mean: [0.0, 0.0, 0.0]    # optional
+  dynamic: false            # preserve dynamic input dimensions when true
+  alignment: 4              # dynamic-shape alignment
+postprocessing:
+  bilateral:
+    enabled: false
+    diameter: 5
+    sigma_color: 5.0
+    sigma_space: 5.0
+```
+
+One-channel outputs become grayscale BGR frames. Three-or-more-channel NCHW
+outputs use their first three RGB planes. Models with multiple output tensors
+retain ACMX2's fused-plane handling. Results are normalized to 8-bit color and
+resized back to the source frame. Dynamic configurations at 256 pixels or less
+enable edge-preserving bilateral smoothing by default unless the
+`postprocessing` block overrides it. Configuration size, supported keys,
+strings, tensor names, dimensions, numeric values, and the referenced ONNX file
+are validated before inference.
 
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
@@ -319,6 +364,12 @@ preserves the person above the completed 2D shader/crossfade chain, and
 `--black`/`--white` tune the hardened alpha mask. DNN remains independent of
 `libacidcam-gpu.so`; this increment changes only ACMXVK and requires no MXVK or
 acidcam-gpu reinstall.
+Increment 8X completes the core ACMX2 DNN input-effect port with `--onnx` and
+the existing generic model YAML schema. It supports fixed and dynamic input
+shapes, optional tensor names, scale/mean/channel preprocessing, output-shape
+conversion, and bilateral smoothing. Generic inference uses the same automatic
+OpenCV CPU/CUDA backend selection and remains independent of
+`libacidcam-gpu.so`. This increment changes only ACMXVK.
 
 ### Input validation
 
