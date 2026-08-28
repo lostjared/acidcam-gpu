@@ -19,6 +19,7 @@ option(MIDI "Enable RtMidi input support" OFF)
 option(WEBP "Enable lossless WebP snapshots" OFF)
 option(TIFF "Enable lossless TIFF snapshots" OFF)
 option(WITH_CUDA "Enable acidcam-gpu CUDA filters" OFF)
+option(WITH_OPENCV_DNN "Enable OpenCV DNN effects" OFF)
 option(ACMXVK_USE_MOLTENVK "Enable MoltenVK portability support on Apple platforms" ${APPLE})
 
 set(ACMXVK_MXWRITE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite" CACHE PATH
@@ -112,7 +113,18 @@ find_package(Vulkan 1.4 REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(glm CONFIG REQUIRED)
-find_package(OpenCV REQUIRED)
+if(WITH_OPENCV_DNN)
+    find_package(OpenCV REQUIRED COMPONENTS
+        core
+        imgproc
+        imgcodecs
+        highgui
+        videoio
+        dnn
+    )
+else()
+    find_package(OpenCV REQUIRED)
+endif()
 
 if(WEBP)
     pkg_check_modules(ACMXVK_WEBP REQUIRED IMPORTED_TARGET libwebp)
@@ -129,13 +141,19 @@ get_target_property(ACMXVK_MXVK_LIBRARIES mxvk::mxvk INTERFACE_LINK_LIBRARIES)
 set(ACMXVK_MXVK_CUDA_AVAILABLE OFF)
 if(NOT APPLE AND ACMXVK_MXVK_LIBRARIES MATCHES "CUDA::")
     set(ACMXVK_MXVK_CUDA_AVAILABLE ON)
-    find_package(OpenCV REQUIRED COMPONENTS
+    set(ACMXVK_OPENCV_COMPONENTS
         core
         imgproc
         imgcodecs
         highgui
         videoio
         cudaarithm
+    )
+    if(WITH_OPENCV_DNN)
+        list(APPEND ACMXVK_OPENCV_COMPONENTS dnn)
+    endif()
+    find_package(OpenCV REQUIRED COMPONENTS
+        ${ACMXVK_OPENCV_COMPONENTS}
     )
 endif()
 
@@ -196,6 +214,9 @@ set(ACMXVK_FLIP_SHADER
 )
 set(ACMXVK_PASSTHROUGH_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/passthrough.frag.spv"
+)
+set(ACMXVK_HUMAN_COMPOSITE_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/human_composite.frag.spv"
 )
 set(ACMXVK_MODEL_VERTEX_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/model.vert.spv"
@@ -327,6 +348,17 @@ add_custom_command(
 )
 
 add_custom_command(
+    OUTPUT "${ACMXVK_HUMAN_COMPOSITE_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/human_composite.frag"
+            -o "${ACMXVK_HUMAN_COMPOSITE_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/human_composite.frag"
+    COMMENT "Compiling ACMXVK human foreground composite shader"
+    VERBATIM
+)
+
+add_custom_command(
     OUTPUT "${ACMXVK_MODEL_VERTEX_SHADER}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
     COMMAND "${GLSLC_EXECUTABLE}"
@@ -415,6 +447,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_ECHO_CACHE_SHADER}"
     "${ACMXVK_FLIP_SHADER}"
     "${ACMXVK_PASSTHROUGH_SHADER}"
+    "${ACMXVK_HUMAN_COMPOSITE_SHADER}"
     "${ACMXVK_MODEL_VERTEX_SHADER}"
     "${ACMXVK_MODEL_FRAGMENT_SHADER}"
     "${ACMXVK_CUSTOM_UNIFORM_SHADER}"
@@ -484,6 +517,16 @@ if(TIFF)
 else()
     message(STATUS "TIFF snapshot support: DISABLED")
 endif()
+if(WITH_OPENCV_DNN)
+    target_sources(acmxvk PRIVATE edge_dnn.cpp edge_dnn.hpp)
+    target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_DNN)
+    message(STATUS "OpenCV DNN effects: ENABLED (independent of acidcam-gpu)")
+    if(NOT WITH_CUDA)
+        message(STATUS "acidcam-gpu filters: DISABLED; libacidcam-gpu will not be linked")
+    endif()
+else()
+    message(STATUS "OpenCV DNN effects: DISABLED")
+endif()
 if(ACMXVK_MXVK_CUDA_AVAILABLE)
     target_link_libraries(acmxvk PRIVATE opencv_cudaarithm)
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_MXVK_CUDA)
@@ -508,6 +551,8 @@ target_compile_definitions(acmxvk PRIVATE
     ACMXVK_INSTALL_FLIP_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/flip.frag.spv"
     ACMXVK_BUILD_PASSTHROUGH_SHADER="${ACMXVK_PASSTHROUGH_SHADER}"
     ACMXVK_INSTALL_PASSTHROUGH_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/passthrough.frag.spv"
+    ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER="${ACMXVK_HUMAN_COMPOSITE_SHADER}"
+    ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/human_composite.frag.spv"
     ACMXVK_BUILD_MODEL_VERTEX_SHADER="${ACMXVK_MODEL_VERTEX_SHADER}"
     ACMXVK_INSTALL_MODEL_VERTEX_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/model.vert.spv"
     ACMXVK_BUILD_MODEL_FRAGMENT_SHADER="${ACMXVK_MODEL_FRAGMENT_SHADER}"
@@ -542,6 +587,7 @@ install(FILES
         "${ACMXVK_ECHO_CACHE_SHADER}"
         "${ACMXVK_FLIP_SHADER}"
         "${ACMXVK_PASSTHROUGH_SHADER}"
+        "${ACMXVK_HUMAN_COMPOSITE_SHADER}"
         "${ACMXVK_MODEL_VERTEX_SHADER}"
         "${ACMXVK_MODEL_FRAGMENT_SHADER}"
         "${ACMXVK_CUSTOM_UNIFORM_SHADER}"

@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8U**. It is usable for video, camera, and
+The port is currently at **Increment 8W**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -34,7 +34,7 @@ ACMX2.
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, an M3U/M3U8 playlist, or `--use-source-audio` with real-time source-FPS video playback can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Source-video analysis follows the media clock even when late video frames are skipped. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, snapshots, watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
-| DNN effects | Not yet ported | OpenCV DNN segmentation, edge detection, and generic ONNX processing remain outside the current increment. |
+| DNN effects | Partial | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection and PP-HumanSeg foreground isolation before the Vulkan shader chain. In 2D mode, `--background` applies the shader chain behind the unprocessed person. Generic YAML-configured ONNX processing remains to be ported. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
 
@@ -50,6 +50,7 @@ ACMX2.
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
 - Optional RtAudio development files when building with `-DAUDIO=ON`
 - Optional RtMidi development files when building with `-DMIDI=ON`
+- Optional OpenCV DNN module when building with `-DWITH_OPENCV_DNN=ON`
 - Optional CUDA Toolkit, CUDA-enabled OpenCV and MXVK, and an installed
   `acidcam-gpu` CMake package when building with `-DWITH_CUDA=ON`
 
@@ -77,6 +78,70 @@ cmake --build build/acmxvk --target uninstall
 
 Audio and MIDI support are optional and remain disabled when their CMake
 options are omitted.
+
+### DNN edge and human segmentation
+
+Build with OpenCV's DNN module to enable the first ported ACMX2 DNN effect:
+
+```bash
+cmake -S ACMXVK -B build/acmxvk \
+    -DWITH_OPENCV_DNN=ON \
+    -DWITH_CUDA=OFF
+cmake --build build/acmxvk -j
+./build/acmxvk/acmxvk --check-dnn
+```
+
+`WITH_OPENCV_DNN` is independent of ACMXVK's `WITH_CUDA` acidcam-gpu filter
+option. The configuration above does not find or link `libacidcam-gpu.so`.
+OpenCV DNN can still select its own CUDA backend when the installed OpenCV was
+built with that backend; otherwise it uses OpenCV's CPU backend.
+
+Pass a DexiNed-compatible ONNX model with `--edge`. The generated grayscale
+edge image becomes the input to the selected fragment/compute pipeline:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input clip.mp4 \
+    --edge /path/to/dexined.onnx \
+    --fragment build/acmxvk/shaders/custom_uniform.frag.spv \
+    --use-source-fps \
+    --enable-vsync
+```
+
+The first frame can take longer because ACMXVK warms and benchmarks CPU and
+available CUDA DNN targets. Later frames retain the faster backend. If an
+inference error occurs, edge processing is disabled once and the original
+input continues through the Vulkan pipeline.
+
+Pass a PP-HumanSeg-compatible ONNX model with `--human` to isolate the detected
+person before the shader chain. The default mode applies shaders to the isolated
+foreground on black:
+
+```bash
+./build/acmxvk/acmxvk \
+    --device 0 \
+    --human /path/to/human-segmentation.onnx \
+    --fragment build/acmxvk/shaders/custom_uniform.frag.spv
+```
+
+Add `--background` to process only the background and composite the original
+person over the final Vulkan result. This composition is currently supported
+in 2D mode. `--black` and `--white` tune the mask's alpha thresholds; both
+accept values from 0.0 to 1.0, default to 0.35 and 0.75, and require the black
+point to remain lower than the white point:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input clip.mp4 \
+    --human /path/to/human-segmentation.onnx \
+    --background --black 0.30 --white 0.80 \
+    --fragment build/acmxvk/shaders/custom_uniform.frag.spv \
+    --use-source-fps
+```
+
+Human segmentation and DexiNed can be combined. ACMXVK segments first and then
+applies edge detection, matching ACMX2's input-effect order.
+
 Increment 5H added the MXVK spectrum-history descriptor and UBO suffix, so that
 matching MXVK version must be installed before compiling ACMXVK with
 `-DAUDIO=ON`. Increment 5I changes only ACMXVK and does not require another MXVK
@@ -239,6 +304,21 @@ headerless `.raw` file. Raw capture uses the same rendered-resolution naming,
 `--prefix` destination, bounded background queue, and shutdown draining as the
 encoded snapshot formats. It requires no optional build dependency and changes
 only ACMXVK. ACMX2 MIDI-map action code 54 triggers the same capture.
+Increment 8V begins the DNN port with ACMX2-compatible DexiNed edge detection.
+Configure with `-DWITH_OPENCV_DNN=ON`, then select an ONNX edge model with
+`--edge`. Each source frame is converted to the edge map before rotation,
+acidcam-gpu filtering, history insertion, 3D texture mapping, and the Vulkan
+shader chain. ACMXVK benchmarks the available OpenCV CPU and CUDA DNN backends
+on the first frame and retains the faster backend. This increment changes only
+ACMXVK; MXVK and acidcam-gpu do not need to be reinstalled. DNN-only builds use
+`-DWITH_OPENCV_DNN=ON -DWITH_CUDA=OFF` and have no `libacidcam-gpu.so`
+dependency.
+Increment 8W adds PP-HumanSeg foreground isolation and ACMX2-compatible
+background-only shader composition. `--human` selects the model, `--background`
+preserves the person above the completed 2D shader/crossfade chain, and
+`--black`/`--white` tune the hardened alpha mask. DNN remains independent of
+`libacidcam-gpu.so`; this increment changes only ACMXVK and requires no MXVK or
+acidcam-gpu reinstall.
 
 ### Input validation
 

@@ -35,6 +35,9 @@ extern "C" {
 #ifdef ACMXVK_WITH_CUDA
 #include "gpu_filters.hpp"
 #endif
+#ifdef ACMXVK_WITH_DNN
+#include "edge_dnn.hpp"
+#endif
 #include "input_validation.hpp"
 #ifdef ACMXVK_WITH_MXVK_CUDA
 #include <opencv2/core/cuda.hpp>
@@ -106,6 +109,14 @@ extern "C" {
 
 #ifndef ACMXVK_INSTALL_PASSTHROUGH_SHADER
 #define ACMXVK_INSTALL_PASSTHROUGH_SHADER "passthrough.frag.spv"
+#endif
+
+#ifndef ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER
+#define ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER "human_composite.frag.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER
+#define ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER "human_composite.frag.spv"
 #endif
 
 #ifndef ACMXVK_BUILD_MODEL_VERTEX_SHADER
@@ -221,6 +232,8 @@ namespace acmxvk {
         double audio_warm_rate = 0.5;
         double audio_pass_through_gain = 1.0;
         double audio_recording_gain = 1.0;
+        double human_black_point = 0.35;
+        double human_white_point = 0.75;
         bool resolution_specified = false;
         bool use_yuv = false;
         bool maximize_fps = false;
@@ -261,6 +274,10 @@ namespace acmxvk {
         bool list_gpu_filters = false;
         bool list_cuda_devices = false;
         bool check_cuda = false;
+        bool check_dnn = false;
+        bool human_background = false;
+        bool human_black_specified = false;
+        bool human_white_specified = false;
         bool list_encoders = false;
         bool display_filter = false;
         bool disable_counter = false;
@@ -288,6 +305,8 @@ namespace acmxvk {
         std::string audio_file;
         std::string record_audio_file;
         std::string midi_map_file;
+        std::string edge_model;
+        std::string human_model;
         std::string snapshot_directory = ".";
         std::string resource_directory;
         std::string watermark_text;
@@ -391,6 +410,10 @@ namespace acmxvk {
                                "--playlist", true);
         input::validate_string(options.midi_map_file, input::StringKind::Path,
                                "--midi-map", true);
+        input::validate_string(options.edge_model, input::StringKind::Path,
+                               "--edge", true);
+        input::validate_string(options.human_model, input::StringKind::Path,
+                               "--human", true);
 
         for (const std::string &path : options.shader_pass_files) {
             input::validate_string(path, input::StringKind::Path,
@@ -548,6 +571,7 @@ namespace acmxvk {
                options.check_audio || options.list_midi_devices ||
                options.check_midi || options.list_gpu_filters ||
                options.list_cuda_devices || options.check_cuda ||
+               options.check_dnn ||
                options.list_encoders || !options.list_encoder_options.empty();
     }
 
@@ -689,6 +713,32 @@ namespace acmxvk {
             } else if (option == "--use-source-audio") {
                 options.use_source_audio = true;
                 options.enable_audio = true;
+            } else if (option == "--edge") {
+                options.edge_model = optionValue(index, argc, argv, option);
+            } else if (option == "--human") {
+                options.human_model = optionValue(index, argc, argv, option);
+            } else if (option == "--background") {
+                options.human_background = true;
+            } else if (option == "--black") {
+                options.human_black_point =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.human_black_specified = true;
+                if (options.human_black_point < 0.0 ||
+                    options.human_black_point > 1.0) {
+                    throw std::runtime_error(
+                        "--black must be between 0.0 and 1.0");
+                }
+            } else if (option == "--white") {
+                options.human_white_point =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.human_white_specified = true;
+                if (options.human_white_point < 0.0 ||
+                    options.human_white_point > 1.0) {
+                    throw std::runtime_error(
+                        "--white must be between 0.0 and 1.0");
+                }
+            } else if (option == "--check-dnn") {
+                options.check_dnn = true;
             } else if (option == "-r" || option == "--resolution") {
                 parseDimensions(optionValue(index, argc, argv, option), options.width,
                                 options.height, option);
@@ -1231,11 +1281,26 @@ namespace acmxvk {
                     "--use-source-fps cannot be combined with --fps");
             }
         }
+        if ((options.human_background || options.human_black_specified ||
+             options.human_white_specified) &&
+            options.human_model.empty()) {
+            throw std::runtime_error(
+                "--background, --black, and --white require --human <model.onnx>");
+        }
+        if (!options.human_model.empty() &&
+            options.human_black_point >= options.human_white_point) {
+            throw std::runtime_error(
+                "--black must be less than --white for human segmentation");
+        }
+        if (options.human_background && options.enable_3d) {
+            throw std::runtime_error(
+                "--background is currently available only in 2D mode");
+        }
         return options;
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8U)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 8W)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1257,6 +1322,14 @@ namespace acmxvk {
                << "      --use-source-audio      Use the video's audio for shader reactivity\n"
                << "  -u, --fps <rate>            Camera/output FPS\n"
                << "                              Video files prefer FFmpeg/NVDEC capture\n\n"
+               << "DNN effects (requires WITH_OPENCV_DNN=ON build):\n"
+               << "      --edge <model.onnx>     Replace input with a DexiNed edge map\n"
+               << "      --human <model.onnx>    Isolate a person with PP-HumanSeg\n"
+               << "      --background           Apply shaders only behind the person (2D)\n"
+               << "      --black <0.0-1.0>      Alpha black point (default 0.35)\n"
+               << "      --white <0.0-1.0>      Alpha white point (default 0.75)\n"
+               << "      --check-dnn             Report compiled OpenCV DNN support\n"
+               << "                              Backend is benchmarked on the first frame\n\n"
                << "Shaders:\n"
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
@@ -1893,6 +1966,7 @@ namespace acmxvk {
             setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
             setEnableScreenshot(this->options.enable_screenshot);
             resolveConfiguredResourcePaths();
+            initializeDnn();
             initializeGpuFilters();
             openAudio();
             loadShaders();
@@ -2668,7 +2742,9 @@ namespace acmxvk {
         mxvk::VKAbstractModel input_model;
         mxvk::VK_Sprite *frame_sprite = nullptr;
         mxvk::VK_Sprite *crossfade_previous_sprite = nullptr;
+        mxvk::VK_Sprite *human_overlay_sprite = nullptr;
         cv::Mat graphic_rgba;
+        cv::Mat human_overlay_rgba;
         cv::Mat latest_camera_history_rgba;
         std::vector<fs::path> shaders;
         std::vector<fs::path> configured_passes;
@@ -2809,6 +2885,10 @@ namespace acmxvk {
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
 #endif
+#ifdef ACMXVK_WITH_DNN
+        std::unique_ptr<dnn::EdgeDetector> edge_detector;
+        std::unique_ptr<dnn::HumanSegmenter> human_segmenter;
+#endif
 #ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::GpuMat cuda_input_rgba;
         cv::cuda::GpuMat cuda_rotated_rgba;
@@ -2885,6 +2965,28 @@ namespace acmxvk {
             return audio_warmup_envelope;
         }
 #endif
+
+        void initializeDnn() {
+#ifdef ACMXVK_WITH_DNN
+            if (!options.human_model.empty()) {
+                human_segmenter =
+                    std::make_unique<dnn::HumanSegmenter>(options.human_model);
+                std::cout << "acmxvk: PP-HumanSeg enabled: "
+                          << options.human_model << " ("
+                          << (options.human_background
+                                  ? "background-only shader composition"
+                                  : "foreground isolation")
+                          << ", automatic CPU/CUDA backend selection)\n";
+            }
+            if (!options.edge_model.empty()) {
+                edge_detector =
+                    std::make_unique<dnn::EdgeDetector>(options.edge_model);
+                std::cout << "acmxvk: DexiNed edge detection enabled: "
+                          << options.edge_model
+                          << " (automatic CPU/CUDA backend selection)\n";
+            }
+#endif
+        }
 
         void initializeGpuFilters() {
 #ifdef ACMXVK_WITH_CUDA
@@ -4019,6 +4121,18 @@ namespace acmxvk {
             return ACMXVK_BUILD_PASSTHROUGH_SHADER;
         }
 
+        [[nodiscard]] fs::path humanCompositeShader() const {
+            const fs::path resource =
+                findResource(options, "shaders/human_composite.frag.spv");
+            if (!resource.empty()) {
+                return resource;
+            }
+            if (fs::is_regular_file(ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER)) {
+                return ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER;
+            }
+            return ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER;
+        }
+
         [[nodiscard]] fs::path crossfadeShader() const {
             const std::string filename =
                 std::string(CROSSFADE_NAMES[crossfade_shader_index]) +
@@ -4446,6 +4560,22 @@ namespace acmxvk {
                 y += line_height;
             }
 
+#ifdef ACMXVK_WITH_DNN
+            const SDL_Color dnn_color{64U, 220U, 128U, 255U};
+            if (human_segmenter != nullptr) {
+                printPreviewText(
+                    options.human_background
+                        ? "DNN: PP-HumanSeg [background]"
+                        : "DNN: PP-HumanSeg [foreground]",
+                    10, y, dnn_color);
+                y += line_height;
+            }
+            if (edge_detector != nullptr) {
+                printPreviewText("DNN: DexiNed edge", 10, y, dnn_color);
+                y += line_height;
+            }
+#endif
+
 #ifdef AUDIO_ENABLED
             if (file_audio_source != nullptr && file_audio_source->is_open()) {
                 const std::string track = fs::path(
@@ -4597,11 +4727,110 @@ namespace acmxvk {
             return name;
         }
 
+        [[nodiscard]] bool dnnHostProcessingEnabled() const {
+#ifdef ACMXVK_WITH_DNN
+            return edge_detector != nullptr || human_segmenter != nullptr;
+#else
+            return false;
+#endif
+        }
+
+        void applyDnnEffects(cv::Mat &rgba) {
+#ifdef ACMXVK_WITH_DNN
+            if (human_segmenter != nullptr && !rgba.empty()) {
+                cv::Mat bgr;
+                cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
+                const cv::Mat mask = human_segmenter->infer(bgr);
+                if (mask.empty()) {
+                    throw std::runtime_error(
+                        "PP-HumanSeg produced an empty person mask");
+                }
+                const float black_point =
+                    static_cast<float>(options.human_black_point);
+                const float white_point =
+                    static_cast<float>(options.human_white_point);
+                if (options.human_background) {
+                    const cv::Mat alpha = dnn::hardenedAlphaMask(
+                        bgr, mask, black_point, white_point);
+                    cv::cvtColor(bgr, human_overlay_rgba,
+                                 cv::COLOR_BGR2RGBA);
+                    std::vector<cv::Mat> overlay_channels;
+                    cv::split(human_overlay_rgba, overlay_channels);
+                    alpha.copyTo(overlay_channels[3]);
+                    cv::merge(overlay_channels, human_overlay_rgba);
+
+                    const cv::Mat foreground = dnn::isolateBody(
+                        bgr, mask, black_point, white_point);
+                    cv::Mat background;
+                    cv::subtract(bgr, foreground, background);
+                    cv::cvtColor(background, rgba, cv::COLOR_BGR2RGBA);
+                } else {
+                    const cv::Mat foreground = dnn::isolateBody(
+                        bgr, mask, black_point, white_point);
+                    cv::cvtColor(foreground, rgba, cv::COLOR_BGR2RGBA);
+                }
+            }
+            if (edge_detector == nullptr || rgba.empty()) {
+                return;
+            }
+            try {
+                cv::Mat bgr;
+                cv::Mat edge;
+                cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
+                edge_detector->process(bgr, edge);
+                if (edge.empty()) {
+                    throw std::runtime_error(
+                        "DexiNed produced an empty edge frame");
+                }
+                if (edge.channels() == 1) {
+                    cv::cvtColor(edge, rgba, cv::COLOR_GRAY2RGBA);
+                } else {
+                    cv::cvtColor(edge, rgba, cv::COLOR_BGR2RGBA);
+                }
+            } catch (const std::exception &error) {
+                std::cerr << "acmxvk: edge inference failed; disabling DNN "
+                             "effect: "
+                          << error.what() << '\n';
+                edge_detector.reset();
+            }
+#else
+            static_cast<void>(rgba);
+#endif
+        }
+
+        void updateHumanOverlayTexture() {
+#ifdef ACMXVK_WITH_DNN
+            if (!options.human_background || human_overlay_rgba.empty() ||
+                getDevice() == VK_NULL_HANDLE) {
+                return;
+            }
+            if (human_overlay_sprite == nullptr) {
+                human_overlay_sprite = createSprite(1, 1);
+                human_overlay_sprite->enableHistoryTexture(
+                    static_cast<std::uint32_t>(human_overlay_rgba.cols),
+                    static_cast<std::uint32_t>(human_overlay_rgba.rows), 1U);
+            }
+            cv::Mat upload = human_overlay_rgba;
+            cv::Mat flipped;
+            if (options.flip_output) {
+                cv::flip(human_overlay_rgba, flipped, 0);
+                upload = flipped;
+            }
+            human_overlay_sprite->updateHistoryTexture(
+                upload.ptr(), upload.cols, upload.rows,
+                static_cast<int>(upload.step));
+#endif
+        }
+
         void openInput() {
             if (!options.graphic_file.empty()) {
                 source_kind = SourceKind::Graphic;
                 graphic_rgba = loadRgbaImage(options.graphic_file);
+                applyDnnEffects(graphic_rgba);
                 rotateFrame(graphic_rgba, options.frame_rotation);
+                if (!human_overlay_rgba.empty()) {
+                    rotateFrame(human_overlay_rgba, options.frame_rotation);
+                }
                 return;
             }
 
@@ -5501,11 +5730,25 @@ namespace acmxvk {
                 source_width, source_height, spriteVertexShader(),
                 options.history_test ? echoCacheShader() : std::string{});
 
+            if (options.human_background &&
+                human_overlay_sprite == nullptr) {
+                human_overlay_sprite = createSprite(1, 1);
+                human_overlay_sprite->enableHistoryTexture(
+                    static_cast<std::uint32_t>(source_width),
+                    static_cast<std::uint32_t>(source_height), 1U);
+                const cv::Mat transparent(source_height, source_width,
+                                          CV_8UC4, cv::Scalar::all(0));
+                human_overlay_sprite->updateHistoryTexture(
+                    transparent.ptr(), transparent.cols, transparent.rows,
+                    static_cast<int>(transparent.step));
+            }
+
             initializeModel();
 
             if (source_kind == SourceKind::Graphic) {
                 initial_frame_pending = false;
                 uploadInputFrame(graphic_rgba);
+                updateHumanOverlayTexture();
                 initializeHistory(graphic_rgba);
             } else if (!readTrackedInputFrame()) {
                 std::cerr << "acmxvk: capture did not provide an initial frame\n";
@@ -5839,6 +6082,9 @@ namespace acmxvk {
             if (pipeline.empty()) {
                 pipeline.emplace_back(passthroughShader());
             }
+            if (options.human_background) {
+                pipeline.emplace_back(humanCompositeShader());
+            }
             return pipeline;
         }
 
@@ -5916,6 +6162,9 @@ namespace acmxvk {
                 if (crossfade_active && shader == crossfadeShader()) {
                     effect.historySource = crossfade_previous_sprite;
                     effect.params[0] = crossfade_alpha;
+                } else if (options.human_background &&
+                           shader == humanCompositeShader()) {
+                    effect.historySource = human_overlay_sprite;
                 } else if (historyCacheEnabled()) {
                     effect.historySource = frame_sprite;
                 }
@@ -6369,8 +6618,13 @@ namespace acmxvk {
 
             cv::Mat rgba;
             cv::cvtColor(bgr, rgba, cv::COLOR_BGR2RGBA);
+            applyDnnEffects(rgba);
             rotateFrame(rgba, options.frame_rotation);
+            if (!human_overlay_rgba.empty()) {
+                rotateFrame(human_overlay_rgba, options.frame_rotation);
+            }
             uploadInputFrame(rgba);
+            updateHumanOverlayTexture();
             latest_camera_history_rgba = rgba;
             async_camera_frame_uploaded = true;
 
@@ -6391,7 +6645,7 @@ namespace acmxvk {
                 return readLatestCameraFrame();
             }
 #ifdef ACMXVK_WITH_CUDA
-            if (gpu_filter_engine != nullptr) {
+            if (gpu_filter_engine != nullptr && !dnnHostProcessingEnabled()) {
                 cv::cuda::Stream *capture_stream = nullptr;
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
                 if (using_ffmpeg_capture) {
@@ -6446,7 +6700,8 @@ namespace acmxvk {
 #ifdef ACMXVK_WITH_MXVK_CUDA
 #if defined(MXVK_WITH_FFMPEG_CAPTURE)
             if (using_ffmpeg_capture &&
-                ffmpeg_capture.using_hardware_decode()) {
+                ffmpeg_capture.using_hardware_decode() &&
+                !dnnHostProcessingEnabled()) {
                 if (!ffmpeg_capture.readGpuRgba(cuda_input_rgba,
                                                 ffmpeg_cuda_stream, false)) {
                     return false;
@@ -6496,7 +6751,8 @@ namespace acmxvk {
 #endif
 #endif
 
-            bool requires_host_frame = historyCacheEnabled() ||
+            bool requires_host_frame = dnnHostProcessingEnabled() ||
+                                       historyCacheEnabled() ||
                                        options.frame_rotation != FrameRotation::None ||
                                        model_initialized;
             if (!requires_host_frame
@@ -6511,8 +6767,13 @@ namespace acmxvk {
             if (!readHostRgba(rgba)) {
                 return false;
             }
+            applyDnnEffects(rgba);
             rotateFrame(rgba, options.frame_rotation);
+            if (!human_overlay_rgba.empty()) {
+                rotateFrame(human_overlay_rgba, options.frame_rotation);
+            }
             uploadInputFrame(rgba);
+            updateHumanOverlayTexture();
             if (source_kind == SourceKind::Camera) {
                 latest_camera_history_rgba = rgba;
             }
@@ -6752,6 +7013,14 @@ int main(int argc, char **argv) {
 #endif
             return EXIT_SUCCESS;
         }
+        if (options.check_dnn) {
+#ifdef ACMXVK_WITH_DNN
+            std::cout << "OpenCV DNN effects: enabled\n";
+#else
+            std::cout << "OpenCV DNN effects: disabled\n";
+#endif
+            return EXIT_SUCCESS;
+        }
         if (options.list_audio_devices) {
 #ifdef AUDIO_ENABLED
             acmxvk::audio::AudioEngine::list_devices();
@@ -6813,6 +7082,15 @@ int main(int argc, char **argv) {
         if (options.cuda_device_specified) {
             throw std::runtime_error(
                 "--cuda-device requires a CUDA-enabled MXVK installation");
+        }
+#endif
+#ifndef ACMXVK_WITH_DNN
+        if (!options.edge_model.empty() || !options.human_model.empty() ||
+            options.human_background || options.human_black_specified ||
+            options.human_white_specified) {
+            throw std::runtime_error(
+                "DNN effects require an ACMXVK build configured with "
+                "-DWITH_OPENCV_DNN=ON");
         }
 #endif
         if (options.show_help) {
