@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9L**. It is usable for video, camera, and
+The port is currently at **Increment 9M**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -459,6 +459,12 @@ Increment 9L adds a deletion confirmation guard to archival pruning. A
 `--prune` request now stops before reading or writing the library and warns that
 source deletion is permanent unless `--force` is also present. This increment
 changes only ACMXVK and does not require MXVK or acidcam-gpu to be rebuilt.
+Increment 9M adds a complex kaleidoscopic mandala compute shader as a complete
+four-custom-uniform example. The bundled shader manifest now declares explicit
+slots for `slider1` through `slider4`, allowing command-line overrides, MIDI
+maps, and direct MIDI CC mappings to control symmetry, fractal detail, motion,
+and source/effect blending. This increment changes only ACMXVK and does not
+require MXVK or acidcam-gpu to be rebuilt.
 
 ### Input validation
 
@@ -1224,11 +1230,48 @@ forms such as `local_size_x_id` are not supported for dispatch sizing.
 `8x8` or `16x16` are sensible starting points; performance depends on the
 shader and GPU.
 
+### Slider-controlled mandala compute example
+
+`shaders/mandala_fractal.comp` is a more complete artistic compute example. It
+combines polar kaleidoscope folding, iterative inversion, orbit traps, radial
+lace, animated rings, source-image distortion, and palette synthesis. Its time
+comes from `ext.u2.y`, so a particular source timestamp produces the same
+animation whether video is played in real time or processed offline.
+
+The bundled `shaders/library.json` assigns the four controls to explicit slots:
+
+| Uniform | Shader location | Effect |
+| --- | --- | --- |
+| `slider1` | `ext.custom_uniforms[5].x` | Selects approximately 4–20 radial symmetry sectors. |
+| `slider2` | `ext.custom_uniforms[5].y` | Selects 3–10 fractal iterations and increases spatial detail. |
+| `slider3` | `ext.custom_uniforms[5].z` | Controls animation speed, iterative rotation, and source-image warp. |
+| `slider4` | `ext.custom_uniforms[5].w` | Blends from the unchanged source at `0.0` to the complete mandala at `1.0`. |
+
+Run it from the bundled shader library so ACMXVK loads the uniform definitions:
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic acmx-vk/jared-ai.png \
+    --shaders ./build/acmxvk/shaders \
+    --shader-file mandala_fractal.comp.spv \
+    --uniform slider1=0.65 \
+    --uniform slider2=0.75 \
+    --uniform slider3=0.4 \
+    --uniform slider4=0.9 \
+    --resolution 1280x720 \
+    --enable-vsync
+```
+
+The same names work with MIDI Slider 1–4 actions. Direct CC mappings can also
+be supplied, for example `--midi-cc 20=slider1` through
+`--midi-cc 23=slider4`.
+
 ### Custom variables from `library.json`
 
-Custom uniforms are packed in manifest declaration order. Uniform number `N`
-is stored in `ext.custom_uniforms[N / 4][N % 4]`. For example, the first five
-entries map as follows:
+Custom uniforms use their explicit manifest `slot` when one is present; older
+manifests without slots are packed in declaration order. Uniform slot `N` is
+stored in `ext.custom_uniforms[N / 4][N % 4]`. For example, the first five
+slots map as follows:
 
 | Declaration index | Shader location |
 | ---: | --- |
@@ -1247,10 +1290,12 @@ Given the earlier `square_size` manifest entry, the shader can use:
 The manifest's `minimum`, `maximum`, `step`, and `value` fields define the
 accepted range, adjustment step, and initial value. Repeat
 `--uniform name=value` to override initial values. ACMX2 MIDI Slider 1 through
-Slider 4 target custom uniforms named `slider1` through `slider4`; their packed
-positions depend on declaration order. Keep that order stable after compiling
-a shader which uses fixed array positions. See `shaders/custom_uniform.frag`
-and `shaders/midi_slider.frag`.
+Slider 4 target custom uniforms named `slider1` through `slider4`. ACMXVK's
+generated libraries reserve canonical slots 20 through 23 for these names, so
+their shader aliases are `ext.custom_uniforms[5].x` through
+`ext.custom_uniforms[5].w`. Keep explicit slots and shader aliases consistent
+after compiling a shader. See `shaders/custom_uniform.frag` and
+`shaders/midi_slider.frag`.
 
 ### FFT textures
 

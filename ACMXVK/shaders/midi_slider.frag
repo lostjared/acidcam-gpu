@@ -17,7 +17,7 @@ layout(set = 0, binding = 1) uniform SpriteExtended {
     vec4 custom_uniforms[16];
 } ext;
 
-#define slider1 ext.custom_uniforms[0].x
+#define slider1 ext.custom_uniforms[5].x
 
 void main() {
     vec4 source = texture(samp, tc);

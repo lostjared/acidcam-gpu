@@ -239,6 +239,9 @@ set(ACMXVK_AUDIO_SPECTRUM_SHADER
 set(ACMXVK_COMPUTE_TEST_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/compute_test.comp.spv"
 )
+set(ACMXVK_MANDALA_FRACTAL_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/mandala_fractal.comp.spv"
+)
 set(ACMXVK_AUDIO_HISTORY_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/audio_history.frag.spv"
 )
@@ -300,6 +303,17 @@ add_custom_command(
             -o "${ACMXVK_COMPUTE_TEST_SHADER}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/compute_test.comp"
     COMMENT "Compiling ACMXVK compute-pass test shader"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${ACMXVK_MANDALA_FRACTAL_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mandala_fractal.comp"
+            -o "${ACMXVK_MANDALA_FRACTAL_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mandala_fractal.comp"
+    COMMENT "Compiling ACMXVK slider-controlled mandala fractal shader"
     VERBATIM
 )
 
@@ -456,6 +470,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_AUDIO_REACTIVE_SHADER}"
     "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
     "${ACMXVK_COMPUTE_TEST_SHADER}"
+    "${ACMXVK_MANDALA_FRACTAL_SHADER}"
     "${ACMXVK_AUDIO_HISTORY_SHADER}"
     ${ACMXVK_CROSSFADE_SHADERS}
 )
@@ -609,6 +624,7 @@ install(FILES
         "${ACMXVK_AUDIO_REACTIVE_SHADER}"
         "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
         "${ACMXVK_COMPUTE_TEST_SHADER}"
+        "${ACMXVK_MANDALA_FRACTAL_SHADER}"
         "${ACMXVK_AUDIO_HISTORY_SHADER}"
         "${ACMXVK_TEST_SHADER_MANIFEST}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/shaders")

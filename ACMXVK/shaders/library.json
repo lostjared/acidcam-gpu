@@ -1,15 +1,178 @@
 {
     "version": 1,
     "custom_uniforms": {
+        "square_size": {
+            "slot": 0,
+            "minimum": 1.0,
+            "maximum": 128.0,
+            "step": 1.0,
+            "value": 55.0
+        },
+        "alpha_value": {
+            "slot": 1,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "alpha_r": {
+            "slot": 2,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "alpha_g": {
+            "slot": 3,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "alpha_b": {
+            "slot": 4,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "value_alpha_r": {
+            "slot": 5,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "value_alpha_g": {
+            "slot": 6,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "value_alpha_b": {
+            "slot": 7,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "index_value": {
+            "slot": 8,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "restore_black": {
+            "slot": 9,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "seed": {
+            "slot": 10,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "value1": {
+            "slot": 11,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "iChannelTime": {
+            "slot": 12,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "time_speed": {
+            "slot": 13,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "blendAmt": {
+            "slot": 14,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "uDistortion": {
+            "slot": 15,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "uRotateSpeed": {
+            "slot": 16,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "uWarpSpeed": {
+            "slot": 17,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "uRandRate": {
+            "slot": 18,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
+        "uPhaseRate": {
+            "slot": 19,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.0
+        },
         "slider1": {
+            "slot": 20,
             "minimum": 0.0,
             "maximum": 1.0,
             "step": 0.01,
             "value": 0.5
+        },
+        "slider2": {
+            "slot": 21,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.6
+        },
+        "slider3": {
+            "slot": 22,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.35
+        },
+        "slider4": {
+            "slot": 23,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.8
         }
     },
     "shaders": [
         "midi_slider.frag.spv",
-        "compute_test.comp.spv"
+        "compute_test.comp.spv",
+        "mandala_fractal.comp.spv"
     ]
 }

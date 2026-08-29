@@ -109,6 +109,10 @@ for my $slot (0 .. $maximum_slot) {
 
 my %metadata = (
     square_size => [1.0, 128.0, 1.0, 55.0],
+    slider1     => [0.0, 1.0, 0.01, 0.5],
+    slider2     => [0.0, 1.0, 0.01, 0.6],
+    slider3     => [0.0, 1.0, 0.01, 0.35],
+    slider4     => [0.0, 1.0, 0.01, 0.8],
 );
 
 my ($temporary, $temporary_path) = tempfile(
