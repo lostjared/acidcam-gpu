@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9J**. It is usable for video, camera, and
+The port is currently at **Increment 9K**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -449,6 +449,12 @@ entries to the generated `library.json`. Both strict and fix builds now print
 completion at every 5-percent boundary. Structural failures involving the input
 manifest, output directory, or final manifest remain fatal. This increment
 changes only ACMXVK and does not require MXVK or acidcam-gpu to be rebuilt.
+Increment 9K adds the explicit destructive `--prune` option for archival
+cleanup. When combined with `--fix`, ACMXVK deletes a `.frag` or `.comp` source
+only when an executed `glslc` process returns a compilation error. Missing
+tools, interrupted compiler processes, unsafe paths, and input/output filesystem
+errors never prune source files. This increment changes only ACMXVK and does
+not require MXVK or acidcam-gpu to be rebuilt.
 
 ### Input validation
 
@@ -810,6 +816,24 @@ To repair a large library while omitting shaders that do not compile, replace
     --fix ./shader-library
 ```
 
+For archival cleanup, `--prune` additionally deletes GLSL entry files that
+actually fail compilation:
+
+```bash
+./build/acmxvk/acmxvk \
+    --build ./shader-source/library.json \
+    --fix ./shader-library \
+    --prune
+```
+
+`--prune` is intentionally destructive and requires `--fix`. It deletes only
+the failing `.frag` or `.comp` source itself; it never deletes `.spv` source
+entries or files merely affected by a missing compiler, invalid path, output
+failure, or interrupted compiler. The source `library.json` is retained as an
+audit of what was attempted, while the generated output `library.json` contains
+only successful shaders. Regenerate the source manifest afterward if the
+archive also needs a manifest containing only files that remain.
+
 The result contains `effects/color.frag.spv`,
 `compute/feedback.comp.spv`, the copied prebuilt module, and a runtime-ready
 `shader-library/library.json`. Repeating the command skips valid outputs whose
@@ -840,8 +864,9 @@ incremental compilation.
 
 For a converted source tree, the repository also provides a manifest generator.
 It discovers fragment sources and `compute/` sources, reconstructs their
-explicit custom-uniform slots from the converter's aliases, and refuses slot or
-case-insensitive output conflicts:
+explicit custom-uniform slots from the converter's aliases, preserves the
+canonical 0–26 slot layout when pruning removes the final source that references
+a slot, and refuses slot or case-insensitive output conflicts:
 
 ```bash
 perl scripts/create_acmxvk_source_manifest.pl --root ~/vk_shaders

@@ -57,3 +57,49 @@ endif()
 if(NOT invalid_position EQUAL -1)
     message(FATAL_ERROR "failed shader remains in output library.json")
 endif()
+
+# Pruning is destructive, so exercise it only on a temporary copy of the
+# fixture and confirm that a real compiler failure removes just that source.
+set(prune_source "${OUTPUT_DIRECTORY}-prune-source")
+set(prune_output "${OUTPUT_DIRECTORY}-prune-output")
+file(REMOVE_RECURSE "${prune_source}" "${prune_output}")
+file(MAKE_DIRECTORY "${prune_source}")
+file(COPY
+    "${SOURCE_DIRECTORY}/library.json"
+    "${SOURCE_DIRECTORY}/valid.frag"
+    "${SOURCE_DIRECTORY}/invalid.frag"
+    DESTINATION "${prune_source}"
+)
+
+execute_process(
+    COMMAND "${ACMXVK_EXECUTABLE}"
+        --build "${prune_source}/library.json"
+        --fix "${prune_output}"
+        --prune
+        --glslc "${GLSLC_EXECUTABLE}"
+    RESULT_VARIABLE prune_result
+    OUTPUT_VARIABLE prune_output_text
+    ERROR_VARIABLE prune_errors
+)
+if(NOT prune_result EQUAL 0)
+    message(FATAL_ERROR
+        "--prune build returned ${prune_result}\n"
+        "${prune_output_text}${prune_errors}"
+    )
+endif()
+if(NOT EXISTS "${prune_source}/valid.frag")
+    message(FATAL_ERROR "--prune removed the valid shader source")
+endif()
+if(EXISTS "${prune_source}/invalid.frag")
+    message(FATAL_ERROR "--prune retained the failed shader source")
+endif()
+if(EXISTS "${prune_output}/invalid.frag.spv")
+    message(FATAL_ERROR "--prune retained the failed shader output")
+endif()
+string(FIND "${prune_errors}" "acmxvk: pruned failed source '"
+    prune_position)
+if(prune_position EQUAL -1)
+    message(FATAL_ERROR
+        "--prune did not report the deleted source:\n${prune_errors}"
+    )
+endif()

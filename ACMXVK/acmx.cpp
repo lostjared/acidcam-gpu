@@ -292,6 +292,7 @@ namespace acmxvk {
         bool display_filter = false;
         bool disable_counter = false;
         bool build_fix = false;
+        bool build_prune = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
@@ -688,7 +689,8 @@ namespace acmxvk {
             for (int index = 1; index < argc; ++index) {
                 const std::string_view argument(argv[index]);
                 if (argument == "--build" || argument == "--builddir" ||
-                    argument == "--fix" || argument == "--glslc") {
+                    argument == "--fix" || argument == "--prune" ||
+                    argument == "--glslc") {
                     return true;
                 }
             }
@@ -724,6 +726,12 @@ namespace acmxvk {
                     options.build_directory =
                         optionValue(index, argc, argv, option);
                     options.build_fix = true;
+                } else if (option == "--prune") {
+                    if (options.build_prune) {
+                        throw std::runtime_error(
+                            "--prune may only be supplied once");
+                    }
+                    options.build_prune = true;
                 } else if (option == "--glslc") {
                     options.glslc_executable =
                         optionValue(index, argc, argv, option);
@@ -743,11 +751,17 @@ namespace acmxvk {
                                    input::StringKind::Path, "--glslc");
             if (!options.show_help && options.build_manifest.empty()) {
                 throw std::runtime_error(
-                    "--builddir/--fix/--glslc requires --build <library.json>");
+                    "--builddir/--fix/--prune/--glslc requires --build "
+                    "<library.json>");
             }
             if (!options.show_help && options.build_directory.empty()) {
                 throw std::runtime_error(
                     "--build requires --builddir or --fix <output-directory>");
+            }
+            if (!options.show_help && options.build_prune &&
+                !options.build_fix) {
+                throw std::runtime_error(
+                    "--prune requires --fix <output-directory>");
             }
             return options;
         }
@@ -1388,7 +1402,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9J)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9K)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1423,6 +1437,7 @@ namespace acmxvk {
                << "      --build <library.json> Compile a source shader library and exit\n"
                << "      --builddir <directory> Output directory required by --build\n"
                << "      --fix <directory>      Continue and omit/remove failed shaders\n"
+               << "      --prune                Delete GLSL sources that fail compilation\n"
                << "      --glslc <executable>   GLSL compiler for --build (default: glslc)\n"
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
@@ -1963,6 +1978,11 @@ namespace acmxvk {
         }
     }
 
+    class ShaderCompilationError : public std::runtime_error {
+      public:
+        using std::runtime_error::runtime_error;
+    };
+
     void runGlslc(const std::string &executable, const fs::path &source_root,
                   const fs::path &source, const fs::path &output) {
         std::vector<std::string> arguments{
@@ -1991,13 +2011,14 @@ namespace acmxvk {
                                          std::string(std::strerror(errno)));
             }
         }
-        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-            const std::string result =
-                WIFEXITED(status)
-                    ? "exit status " + std::to_string(WEXITSTATUS(status))
-                    : "terminated by signal";
-            throw std::runtime_error("glslc failed for " + source.string() +
-                                     " (" + result + ")");
+        if (!WIFEXITED(status)) {
+            throw std::runtime_error("glslc terminated by a signal for " +
+                                     source.string());
+        }
+        if (WEXITSTATUS(status) != 0) {
+            throw ShaderCompilationError(
+                "glslc failed for " + source.string() + " (exit status " +
+                std::to_string(WEXITSTATUS(status)) + ")");
         }
     }
 
@@ -2048,6 +2069,7 @@ namespace acmxvk {
         std::size_t copied = 0;
         std::size_t current = 0;
         std::size_t failed = 0;
+        std::size_t pruned = 0;
         std::size_t processed = 0;
         int next_progress = 5;
 
@@ -2065,10 +2087,10 @@ namespace acmxvk {
         };
 
         for (const std::string &entry : manifest.entries) {
+            fs::path source;
             fs::path destination;
             try {
-                const fs::path source =
-                    resolveShaderBuildEntry(source_root, entry);
+                source = resolveShaderBuildEntry(source_root, entry);
                 if (source.empty()) {
                     throw std::runtime_error(
                         "source library contains an unavailable or unsafe shader: " +
@@ -2172,6 +2194,9 @@ namespace acmxvk {
                 if (!options.build_fix) {
                     throw;
                 }
+                const bool compilation_failed =
+                    dynamic_cast<const ShaderCompilationError *>(&failure) !=
+                    nullptr;
                 if (!destination.empty()) {
                     std::error_code remove_error;
                     fs::remove(destination, remove_error);
@@ -2181,6 +2206,23 @@ namespace acmxvk {
                             destination.string() + ": " +
                             remove_error.message());
                     }
+                }
+                if (options.build_prune && compilation_failed &&
+                    !source.empty() &&
+                    (source.extension() == ".frag" ||
+                     source.extension() == ".comp")) {
+                    std::error_code remove_error;
+                    const bool removed = fs::remove(source, remove_error);
+                    if (remove_error || !removed) {
+                        throw std::runtime_error(
+                            "unable to prune failed shader source " +
+                            source.string() +
+                            (remove_error ? ": " + remove_error.message()
+                                          : ": file was not removed"));
+                    }
+                    ++pruned;
+                    std::cerr << "acmxvk: pruned failed source '"
+                              << source.string() << "'\n";
                 }
                 ++failed;
                 std::cerr << "acmxvk: fix omitted '" << entry
@@ -2252,7 +2294,8 @@ namespace acmxvk {
         std::cout << "acmxvk: shader library built in " << output_root << '\n'
                   << "acmxvk: " << compiled << " compiled, " << copied
                   << " copied, " << current << " up to date, "
-                  << failed << " failed, " << output_entries.size()
+                  << failed << " failed, " << pruned << " pruned, "
+                  << output_entries.size()
                   << " included\n";
         return EXIT_SUCCESS;
     }
