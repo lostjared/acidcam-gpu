@@ -56,11 +56,13 @@ extern "C" {
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <deque>
 #include <filesystem>
@@ -77,8 +79,15 @@ extern "C" {
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 #include <vector>
+
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+extern char **environ;
 
 #ifndef ACMXVK_BUILD_SPRITE_VERTEX_SHADER
 #define ACMXVK_BUILD_SPRITE_VERTEX_SHADER "sprite.vert.spv"
@@ -282,6 +291,7 @@ namespace acmxvk {
         bool list_encoders = false;
         bool display_filter = false;
         bool disable_counter = false;
+        bool build_fix = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
@@ -295,6 +305,9 @@ namespace acmxvk {
         std::string fragment_shader;
         std::string compute_shader;
         std::string shader_file;
+        std::string build_manifest;
+        std::string build_directory;
+        std::string glslc_executable = "glslc";
         std::string model_file;
         std::string playlist_file;
         std::string output_file;
@@ -668,6 +681,74 @@ namespace acmxvk {
         }
         if (argc == 1) {
             options.show_help = true;
+            return options;
+        }
+
+        const bool library_build_requested = [&] {
+            for (int index = 1; index < argc; ++index) {
+                const std::string_view argument(argv[index]);
+                if (argument == "--build" || argument == "--builddir" ||
+                    argument == "--fix" || argument == "--glslc") {
+                    return true;
+                }
+            }
+            return false;
+        }();
+        if (library_build_requested) {
+            for (int index = 1; index < argc; ++index) {
+                const std::string_view option(argv[index]);
+                input::validate_string(option, input::StringKind::Token,
+                                       "command-line option");
+                if (option == "-h" || option == "-v" ||
+                    option == "--help" || option == "--version") {
+                    options.show_help = true;
+                } else if (option == "--build") {
+                    if (!options.build_manifest.empty()) {
+                        throw std::runtime_error(
+                            "--build may only be supplied once");
+                    }
+                    options.build_manifest =
+                        optionValue(index, argc, argv, option);
+                } else if (option == "--builddir") {
+                    if (!options.build_directory.empty()) {
+                        throw std::runtime_error(
+                            "--builddir and --fix are mutually exclusive");
+                    }
+                    options.build_directory =
+                        optionValue(index, argc, argv, option);
+                } else if (option == "--fix") {
+                    if (!options.build_directory.empty()) {
+                        throw std::runtime_error(
+                            "--builddir and --fix are mutually exclusive");
+                    }
+                    options.build_directory =
+                        optionValue(index, argc, argv, option);
+                    options.build_fix = true;
+                } else if (option == "--glslc") {
+                    options.glslc_executable =
+                        optionValue(index, argc, argv, option);
+                } else {
+                    throw std::runtime_error(
+                        "library build mode cannot be combined with option: " +
+                        std::string(option));
+                }
+            }
+            input::validate_string(options.build_manifest,
+                                   input::StringKind::Path, "--build", true);
+            input::validate_string(options.build_directory,
+                                   input::StringKind::Path,
+                                   options.build_fix ? "--fix" : "--builddir",
+                                   true);
+            input::validate_string(options.glslc_executable,
+                                   input::StringKind::Path, "--glslc");
+            if (!options.show_help && options.build_manifest.empty()) {
+                throw std::runtime_error(
+                    "--builddir/--fix/--glslc requires --build <library.json>");
+            }
+            if (!options.show_help && options.build_directory.empty()) {
+                throw std::runtime_error(
+                    "--build requires --builddir or --fix <output-directory>");
+            }
             return options;
         }
 
@@ -1307,7 +1388,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9H)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9J)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1339,6 +1420,10 @@ namespace acmxvk {
                << "      --check-dnn             Report compiled OpenCV DNN support\n"
                << "                              Backend is benchmarked on the first frame\n\n"
                << "Shaders:\n"
+               << "      --build <library.json> Compile a source shader library and exit\n"
+               << "      --builddir <directory> Output directory required by --build\n"
+               << "      --fix <directory>      Continue and omit/remove failed shaders\n"
+               << "      --glslc <executable>   GLSL compiler for --build (default: glslc)\n"
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
                << "      --compute <file.spv>    Use one SPIR-V compute shader\n"
@@ -1514,6 +1599,7 @@ namespace acmxvk {
     struct ShaderManifest {
         struct CustomUniform {
             std::string name;
+            std::size_t slot = 0;
             double minimum = 0.0;
             double maximum = 1.0;
             double step = 0.01;
@@ -1595,6 +1681,9 @@ namespace acmxvk {
                             json_path.string() +
                             " field 'custom_uniforms' must be an object");
                     }
+                    bool has_explicit_slots = false;
+                    bool has_implicit_slots = false;
+                    std::unordered_set<std::size_t> occupied_slots;
                     for (auto iterator = custom_uniforms.begin();
                          iterator != custom_uniforms.end(); ++iterator) {
                         if (manifest.custom_uniforms.size() >=
@@ -1615,6 +1704,29 @@ namespace acmxvk {
                                 json_path.string() +
                                 " contains an invalid custom uniform: " +
                                 uniform.name);
+                        }
+                        uniform.slot = manifest.custom_uniforms.size();
+                        if (!entry["slot"].empty()) {
+                            int slot = -1;
+                            entry["slot"] >> slot;
+                            if (slot < 0 ||
+                                slot >= static_cast<int>(
+                                            mxvk::VK_Sprite::MAX_CUSTOM_UNIFORMS)) {
+                                throw std::runtime_error(
+                                    json_path.string() +
+                                    " contains an invalid slot for custom uniform: " +
+                                    uniform.name);
+                            }
+                            uniform.slot = static_cast<std::size_t>(slot);
+                            if (!occupied_slots.insert(uniform.slot).second) {
+                                throw std::runtime_error(
+                                    json_path.string() +
+                                    " assigns more than one custom uniform to slot " +
+                                    std::to_string(slot));
+                            }
+                            has_explicit_slots = true;
+                        } else {
+                            has_implicit_slots = true;
                         }
                         if (!entry["minimum"].empty()) {
                             entry["minimum"] >> uniform.minimum;
@@ -1651,6 +1763,27 @@ namespace acmxvk {
                         uniform.value = std::clamp(
                             uniform.value, uniform.minimum, uniform.maximum);
                         manifest.custom_uniforms.push_back(std::move(uniform));
+                    }
+                    if (has_explicit_slots && has_implicit_slots) {
+                        throw std::runtime_error(
+                            json_path.string() +
+                            " must specify a slot for every custom uniform or none");
+                    }
+                    if (has_explicit_slots) {
+                        std::sort(manifest.custom_uniforms.begin(),
+                                  manifest.custom_uniforms.end(),
+                                  [](const ShaderManifest::CustomUniform &left,
+                                     const ShaderManifest::CustomUniform &right) {
+                                      return left.slot < right.slot;
+                                  });
+                        for (std::size_t slot = 0;
+                             slot < manifest.custom_uniforms.size(); ++slot) {
+                            if (manifest.custom_uniforms[slot].slot != slot) {
+                                throw std::runtime_error(
+                                    json_path.string() +
+                                    " custom uniform slots must be contiguous from zero");
+                            }
+                        }
                     }
                 }
             } catch (const cv::Exception &error) {
@@ -1724,6 +1857,404 @@ namespace acmxvk {
             return {};
         }
         return shader;
+    }
+
+    [[nodiscard]] fs::path resolveShaderBuildEntry(const fs::path &directory,
+                                                   std::string entry) {
+        std::replace(entry.begin(), entry.end(), '\\', '/');
+        const fs::path relative_path(entry);
+        if (relative_path.is_absolute()) {
+            return {};
+        }
+
+        const fs::path normalized = relative_path.lexically_normal();
+        const std::string normalized_text = normalized.generic_string();
+        const std::string extension = normalized.extension().string();
+        if (normalized_text.empty() || normalized_text == "." ||
+            normalized_text == ".." || normalized_text.starts_with("../") ||
+            normalized_text.find("/../") != std::string::npos ||
+            (extension != ".frag" && extension != ".comp" &&
+             extension != ".spv")) {
+            return {};
+        }
+
+        std::error_code error;
+        const fs::path root = fs::weakly_canonical(directory, error);
+        if (error) {
+            return {};
+        }
+        const fs::path source = fs::weakly_canonical(root / normalized, error);
+        if (error || !fs::is_regular_file(source)) {
+            return {};
+        }
+        const std::string resolved_relative =
+            source.lexically_relative(root).generic_string();
+        if (resolved_relative.empty() || resolved_relative == ".." ||
+            resolved_relative.starts_with("../")) {
+            return {};
+        }
+        return source;
+    }
+
+    [[nodiscard]] std::string escapeJson(std::string_view value) {
+        std::ostringstream escaped;
+        for (const unsigned char character : value) {
+            switch (character) {
+            case '"':
+                escaped << "\\\"";
+                break;
+            case '\\':
+                escaped << "\\\\";
+                break;
+            case '\b':
+                escaped << "\\b";
+                break;
+            case '\f':
+                escaped << "\\f";
+                break;
+            case '\n':
+                escaped << "\\n";
+                break;
+            case '\r':
+                escaped << "\\r";
+                break;
+            case '\t':
+                escaped << "\\t";
+                break;
+            default:
+                if (character < 0x20U) {
+                    escaped << "\\u" << std::hex << std::uppercase
+                            << std::setw(4) << std::setfill('0')
+                            << static_cast<unsigned int>(character)
+                            << std::dec << std::nouppercase;
+                } else {
+                    escaped << static_cast<char>(character);
+                }
+                break;
+            }
+        }
+        return escaped.str();
+    }
+
+    [[nodiscard]] fs::path temporaryBuildPath(const fs::path &destination) {
+        static std::uint64_t sequence = 0;
+        for (int attempt = 0; attempt < 100; ++attempt) {
+            fs::path temporary = destination;
+            temporary += ".acmxvk-tmp-" + std::to_string(::getpid()) + "-" +
+                         std::to_string(++sequence);
+            if (!fs::exists(temporary)) {
+                return temporary;
+            }
+        }
+        throw std::runtime_error(
+            "unable to allocate a temporary shader build path for: " +
+            destination.string());
+    }
+
+    void replaceBuiltFile(const fs::path &temporary,
+                          const fs::path &destination) {
+        std::error_code error;
+        fs::rename(temporary, destination, error);
+        if (error) {
+            fs::remove(temporary);
+            throw std::runtime_error("unable to install built file " +
+                                     destination.string() + ": " +
+                                     error.message());
+        }
+    }
+
+    void runGlslc(const std::string &executable, const fs::path &source_root,
+                  const fs::path &source, const fs::path &output) {
+        std::vector<std::string> arguments{
+            executable, "-I", source_root.string(), source.string(), "-o",
+            output.string()};
+        std::vector<char *> argument_pointers;
+        argument_pointers.reserve(arguments.size() + 1U);
+        for (std::string &argument : arguments) {
+            argument_pointers.push_back(argument.data());
+        }
+        argument_pointers.push_back(nullptr);
+
+        pid_t process = 0;
+        const int spawn_result =
+            posix_spawnp(&process, executable.c_str(), nullptr, nullptr,
+                         argument_pointers.data(), environ);
+        if (spawn_result != 0) {
+            throw std::runtime_error("unable to execute glslc '" + executable +
+                                     "': " + std::strerror(spawn_result));
+        }
+
+        int status = 0;
+        while (::waitpid(process, &status, 0) < 0) {
+            if (errno != EINTR) {
+                throw std::runtime_error("unable to wait for glslc: " +
+                                         std::string(std::strerror(errno)));
+            }
+        }
+        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            const std::string result =
+                WIFEXITED(status)
+                    ? "exit status " + std::to_string(WEXITSTATUS(status))
+                    : "terminated by signal";
+            throw std::runtime_error("glslc failed for " + source.string() +
+                                     " (" + result + ")");
+        }
+    }
+
+    [[nodiscard]] int buildShaderLibrary(const Options &options) {
+        const fs::path requested_manifest =
+            fs::absolute(options.build_manifest).lexically_normal();
+        if (requested_manifest.filename() != "library.json") {
+            throw std::runtime_error(
+                "--build must name a file called library.json");
+        }
+        input::validate_text_file(requested_manifest,
+                                  "source shader library.json");
+
+        std::error_code error;
+        const fs::path source_root =
+            fs::weakly_canonical(requested_manifest.parent_path(), error);
+        if (error || source_root.empty()) {
+            throw std::runtime_error("unable to resolve source shader library: " +
+                                     requested_manifest.string());
+        }
+        fs::create_directories(options.build_directory, error);
+        if (error) {
+            throw std::runtime_error("unable to create shader build directory: " +
+                                     error.message());
+        }
+        const fs::path output_root =
+            fs::weakly_canonical(options.build_directory, error);
+        if (error || output_root.empty()) {
+            throw std::runtime_error("unable to resolve shader build directory: " +
+                                     options.build_directory);
+        }
+        if (source_root == output_root) {
+            throw std::runtime_error(
+                "the shader output directory must differ from the source "
+                "library directory");
+        }
+
+        const ShaderManifest manifest = loadShaderManifest(source_root);
+        if (manifest.entries.empty()) {
+            throw std::runtime_error(
+                "source library.json contains no shader entries");
+        }
+
+        std::vector<std::string> output_entries;
+        output_entries.reserve(manifest.entries.size());
+        std::unordered_set<std::string> unique_outputs;
+        std::size_t compiled = 0;
+        std::size_t copied = 0;
+        std::size_t current = 0;
+        std::size_t failed = 0;
+        std::size_t processed = 0;
+        int next_progress = 5;
+
+        const auto report_progress = [&] {
+            ++processed;
+            const int percentage = static_cast<int>(
+                processed * 100U / manifest.entries.size());
+            while (next_progress <= 100 && percentage >= next_progress) {
+                std::cout << "acmxvk: build progress: " << next_progress
+                          << "% (" << processed << '/'
+                          << manifest.entries.size() << ")\n"
+                          << std::flush;
+                next_progress += 5;
+            }
+        };
+
+        for (const std::string &entry : manifest.entries) {
+            fs::path destination;
+            try {
+                const fs::path source =
+                    resolveShaderBuildEntry(source_root, entry);
+                if (source.empty()) {
+                    throw std::runtime_error(
+                        "source library contains an unavailable or unsafe shader: " +
+                        entry);
+                }
+
+                std::string normalized_entry = entry;
+                std::replace(normalized_entry.begin(), normalized_entry.end(),
+                             '\\', '/');
+                fs::path relative(normalized_entry);
+                relative = relative.lexically_normal();
+                if (relative.extension() != ".spv") {
+                    relative += ".spv";
+                }
+                const std::string output_entry = relative.generic_string();
+                std::string output_key = output_entry;
+                std::transform(
+                    output_key.begin(), output_key.end(), output_key.begin(),
+                    [](unsigned char character) {
+                        return static_cast<char>(std::tolower(character));
+                    });
+                if (!unique_outputs.insert(output_key).second) {
+                    throw std::runtime_error(
+                        "source library produces a duplicate output path: " +
+                        output_entry);
+                }
+
+                destination = output_root / relative;
+                error.clear();
+                fs::create_directories(destination.parent_path(), error);
+                if (error) {
+                    throw std::runtime_error(
+                        "unable to create shader output directory: " +
+                        error.message());
+                }
+                const fs::path destination_parent =
+                    fs::weakly_canonical(destination.parent_path(), error);
+                const std::string parent_relative =
+                    error ? std::string{}
+                          : destination_parent.lexically_relative(output_root)
+                                .generic_string();
+                if (error || parent_relative == ".." ||
+                    parent_relative.starts_with("../") ||
+                    fs::is_symlink(destination)) {
+                    throw std::runtime_error(
+                        "shader output resolves outside the output directory: " +
+                        output_entry);
+                }
+
+                bool needs_build = !fs::is_regular_file(destination);
+                if (!needs_build) {
+                    needs_build = fs::last_write_time(destination, error) <
+                                  fs::last_write_time(source);
+                    if (error) {
+                        needs_build = true;
+                        error.clear();
+                    }
+                }
+                if (!needs_build) {
+                    try {
+                        input::validate_spirv_file(
+                            destination, "built shader module");
+                    } catch (const std::runtime_error &) {
+                        needs_build = true;
+                    }
+                }
+
+                if (needs_build) {
+                    const fs::path temporary = temporaryBuildPath(destination);
+                    const bool copy_source = source.extension() == ".spv";
+                    try {
+                        if (copy_source) {
+                            input::validate_spirv_file(
+                                source, "source shader module");
+                            fs::copy_file(
+                                source, temporary,
+                                fs::copy_options::overwrite_existing);
+                        } else {
+                            input::validate_text_file(source,
+                                                      "GLSL shader source");
+                            runGlslc(options.glslc_executable, source_root,
+                                     source, temporary);
+                        }
+                        input::validate_spirv_file(temporary,
+                                                   "compiled shader module");
+                        replaceBuiltFile(temporary, destination);
+                    } catch (...) {
+                        fs::remove(temporary);
+                        throw;
+                    }
+                    if (copy_source) {
+                        ++copied;
+                    } else {
+                        ++compiled;
+                    }
+                } else {
+                    ++current;
+                }
+                output_entries.push_back(output_entry);
+            } catch (const std::exception &failure) {
+                if (!options.build_fix) {
+                    throw;
+                }
+                if (!destination.empty()) {
+                    std::error_code remove_error;
+                    fs::remove(destination, remove_error);
+                    if (remove_error) {
+                        throw std::runtime_error(
+                            "unable to remove failed shader output " +
+                            destination.string() + ": " +
+                            remove_error.message());
+                    }
+                }
+                ++failed;
+                std::cerr << "acmxvk: fix omitted '" << entry
+                          << "': " << failure.what() << '\n';
+            }
+            report_progress();
+        }
+
+        const fs::path output_manifest = output_root / "library.json";
+        if (fs::is_symlink(output_manifest)) {
+            throw std::runtime_error(
+                "refusing to replace a symbolic-link output library.json");
+        }
+        const fs::path temporary_manifest =
+            temporaryBuildPath(output_manifest);
+        {
+            std::ofstream output(temporary_manifest,
+                                 std::ios::out | std::ios::trunc);
+            if (!output) {
+                throw std::runtime_error(
+                    "unable to create output library.json");
+            }
+            output << "{\n    \"version\": 1";
+            if (!manifest.custom_uniforms.empty()) {
+                output << ",\n    \"custom_uniforms\": {\n";
+                for (std::size_t index = 0;
+                     index < manifest.custom_uniforms.size(); ++index) {
+                    const ShaderManifest::CustomUniform &uniform =
+                        manifest.custom_uniforms[index];
+                    output << "        \"" << escapeJson(uniform.name)
+                           << "\": {\n"
+                           << std::setprecision(15)
+                           << "            \"slot\": " << uniform.slot
+                           << ",\n            \"minimum\": " << uniform.minimum
+                           << ",\n            \"maximum\": " << uniform.maximum
+                           << ",\n            \"step\": " << uniform.step
+                           << ",\n            \"value\": " << uniform.value
+                           << "\n        }";
+                    output << (index + 1U < manifest.custom_uniforms.size()
+                                   ? ",\n"
+                                   : "\n");
+                }
+                output << "    }";
+            }
+            output << ",\n    \"shaders\": [\n";
+            for (std::size_t index = 0; index < output_entries.size();
+                 ++index) {
+                output << "        \"" << escapeJson(output_entries[index])
+                       << '"'
+                       << (index + 1U < output_entries.size() ? ",\n"
+                                                              : "\n");
+            }
+            output << "    ]\n}\n";
+            if (!output) {
+                fs::remove(temporary_manifest);
+                throw std::runtime_error(
+                    "unable to write output library.json");
+            }
+        }
+        try {
+            input::validate_text_file(temporary_manifest,
+                                      "built shader library.json");
+            replaceBuiltFile(temporary_manifest, output_manifest);
+        } catch (...) {
+            fs::remove(temporary_manifest);
+            throw;
+        }
+
+        std::cout << "acmxvk: shader library built in " << output_root << '\n'
+                  << "acmxvk: " << compiled << " compiled, " << copied
+                  << " copied, " << current << " up to date, "
+                  << failed << " failed, " << output_entries.size()
+                  << " included\n";
+        return EXIT_SUCCESS;
     }
 
     [[nodiscard]] cv::Mat loadRgbaImage(const std::string &filename) {
@@ -7444,6 +7975,13 @@ namespace acmxvk {
 int main(int argc, char **argv) {
     try {
         acmxvk::Options options = acmxvk::parseOptions(argc, argv);
+        if (options.show_help) {
+            acmxvk::printHelp(std::cout);
+            return EXIT_SUCCESS;
+        }
+        if (!options.build_manifest.empty()) {
+            return acmxvk::buildShaderLibrary(options);
+        }
         if (options.check_audio) {
 #ifdef AUDIO_ENABLED
             std::cout << "AUDIO: enabled\n";
@@ -7554,10 +8092,6 @@ int main(int argc, char **argv) {
                 "-DWITH_OPENCV_DNN=ON");
         }
 #endif
-        if (options.show_help) {
-            acmxvk::printHelp(std::cout);
-            return EXIT_SUCCESS;
-        }
         if (options.list_encoders) {
             acmxvk::printEncoders(std::cout);
             return EXIT_SUCCESS;

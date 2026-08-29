@@ -579,6 +579,20 @@ if(BUILD_TESTING)
     add_test(NAME acmxvk_input_validation
         COMMAND acmxvk_input_validation_tests
     )
+    add_test(NAME acmxvk_shader_library_build
+        COMMAND acmxvk
+            --build "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_library/library.json"
+            --builddir "${CMAKE_CURRENT_BINARY_DIR}/shader-library-build-test"
+            --glslc "${GLSLC_EXECUTABLE}"
+    )
+    add_test(NAME acmxvk_shader_library_fix
+        COMMAND "${CMAKE_COMMAND}"
+            -DACMXVK_EXECUTABLE=$<TARGET_FILE:acmxvk>
+            -DGLSLC_EXECUTABLE=${GLSLC_EXECUTABLE}
+            -DSOURCE_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_library_fix
+            -DOUTPUT_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/shader-library-fix-test
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_shader_library_fix.cmake"
+    )
 endif()
 
 install(TARGETS acmxvk RUNTIME DESTINATION bin)

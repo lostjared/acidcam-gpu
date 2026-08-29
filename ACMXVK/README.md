@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9H**. It is usable for video, camera, and
+The port is currently at **Increment 9J**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -18,7 +18,7 @@ ACMX2.
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
 | Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. When `--resolution` is omitted, encoded output follows the negotiated source dimensions, including a width/height swap for 90-degree input rotation; oversized previews are fitted to the usable display while preserving that aspect ratio. Still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
-| Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. |
+| Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. Offline `--build` mode incrementally compiles source manifests containing `.frag`, `.comp`, or `.spv` entries into a validated runtime library. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
 | Shader crossfades | Implemented | Shader, playlist, multipass, and bypass changes crossfade from a snapshot of the preceding rendered result. All 35 ACMX2 transition styles are bundled as Vulkan SPIR-V shaders, with selectable duration/style and optional random transition selection during autopilot. |
 | Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
@@ -434,6 +434,21 @@ manual rotation sensitivity. Rotation knobs retain ACMX2's delta-sensitive
 direction handling and velocity-sensitive repeat rate. The ACMXVK profile in
 the Qt MIDI-map editor exposes all of these mappings. This increment changes
 only ACMXVK and the MIDI-map editor; MXVK and acidcam-gpu are unchanged.
+Increment 9I adds a windowless shader-library build mode for command-line and
+interface use. `--build <library.json> --builddir <directory>` accepts source
+entries ending in `.frag`, `.comp`, or `.spv`, invokes `glslc` only for missing,
+outdated, or invalid compiled modules, and atomically writes a runtime-ready
+`library.json` containing the resulting `.spv` paths. Existing SPIR-V modules
+are validated and copied when needed. Custom-uniform ranges and defaults are
+preserved in declaration order. This increment changes only ACMXVK and does
+not require MXVK or acidcam-gpu to be rebuilt.
+Increment 9J adds the tolerant `--fix <directory>` variant of library building.
+It continues after individual shader compilation, validation, or path failures,
+removes any stale output module for each failed entry, and writes only successful
+entries to the generated `library.json`. Both strict and fix builds now print
+completion at every 5-percent boundary. Structural failures involving the input
+manifest, output directory, or final manifest remain fatal. This increment
+changes only ACMXVK and does not require MXVK or acidcam-gpu to be rebuilt.
 
 ### Input validation
 
@@ -751,6 +766,86 @@ multipass playlists, final-output flipping, bypass, and the 3D model texture
 pipeline.
 
 ## SPIR-V shader-library format
+
+### Building a source library
+
+For an editor or interface, keep a source `library.json` beside its GLSL files.
+It uses the normal manifest schema, but its `shaders` array may contain
+`.frag`, `.comp`, and already compiled `.spv` entries:
+
+```json
+{
+    "version": 1,
+    "custom_uniforms": {
+        "amount": {
+            "slot": 0,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.5
+        }
+    },
+    "shaders": [
+        "effects/color.frag",
+        { "file": "compute/feedback.comp" },
+        "prebuilt/special.comp.spv"
+    ]
+}
+```
+
+Build it without opening an ACMXVK window:
+
+```bash
+./build/acmxvk/acmxvk \
+    --build ./shader-source/library.json \
+    --builddir ./shader-library
+```
+
+To repair a large library while omitting shaders that do not compile, replace
+`--builddir` with `--fix`:
+
+```bash
+./build/acmxvk/acmxvk \
+    --build ./shader-source/library.json \
+    --fix ./shader-library
+```
+
+The result contains `effects/color.frag.spv`,
+`compute/feedback.comp.spv`, the copied prebuilt module, and a runtime-ready
+`shader-library/library.json`. Repeating the command skips valid outputs whose
+timestamps are at least as new as their sources. Both modes print progress at
+5-percent intervals. In strict `--builddir` mode, a failed compile leaves that
+shader's previous module and the runtime manifest intact and returns a nonzero
+exit status. In `--fix` mode, ACMXVK continues, removes the failed shader's stale
+module, omits it from the new runtime manifest, reports it in the summary, and
+returns success after all recoverable entries have been examined. This lets an
+interface choose between fail-fast compilation and producing the largest valid
+library from a mixed set of sources.
+
+`slot` is optional for older manifests. When supplied, every custom uniform
+must have a unique, contiguous slot starting at zero. Explicit slots are
+recommended for generated source libraries because JSON object ordering is not
+part of the JSON standard. The output manifest always records them.
+
+`glslc` is found through `PATH` by default. An interface may select a specific
+Vulkan SDK compiler with `--glslc /path/to/glslc`. Source and output entries
+must remain below their respective library roots; absolute paths, parent
+traversal, duplicate output names, and symbolic-link output escapes are
+rejected. The output directory must differ from the source directory.
+
+This mode compiles Vulkan-compatible GLSL; it does not rewrite legacy ACMX2
+OpenGL syntax or invent custom-uniform definitions. Use the conversion script
+described below for legacy shaders, then use `--build` for subsequent
+incremental compilation.
+
+For a converted source tree, the repository also provides a manifest generator.
+It discovers fragment sources and `compute/` sources, reconstructs their
+explicit custom-uniform slots from the converter's aliases, and refuses slot or
+case-insensitive output conflicts:
+
+```bash
+perl scripts/create_acmxvk_source_manifest.pl --root ~/vk_shaders
+```
 
 ACMXVK accepts `library.json` entries as strings or objects containing a
 `file` field:
