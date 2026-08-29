@@ -1,0 +1,49 @@
+[Prismatic Bloom]
+mirror-prism.frag.spv
+DispersionRotate.frag.spv
+color-bloom.frag.spv
+
+[Liquid Aurora]
+Liquid_Crystal_2.frag.spv
+color_swirl_beautiful.frag.spv
+rainbow-code-aurora-silk.frag.spv
+
+[Midnight VHS]
+codex_vhs_tape_warp.frag.spv
+codex_vhs_chroma_bleed.frag.spv
+composite_crt.frag.spv
+
+[Neon Pencil]
+edge_pencil.frag.spv
+neon.frag.spv
+rainbow-code-neon-topography.frag.spv
+
+[Kaleidoscope Glass]
+mirror-code-x-kaleido-eight.frag.spv
+codex_glass_mosaic_flow.frag.spv
+rainbow-code-holographic-facets.frag.spv
+
+[Ocean Ripples]
+fold-water.frag.spv
+code-frac-quartz-ripples.frag.spv
+rainbow-code-liquid-pearl.frag.spv
+
+[Pixel Glitch Bloom]
+block_pixels.frag.spv
+atan-glitch.frag.spv
+codex_glitch_bloom_wormhole.frag.spv
+
+[Cosmic Tunnel]
+mirror-spiral.frag.spv
+Liquid_Fractal_Tunnel.frag.spv
+rainbow-code-opal-vortex.frag.spv
+
+[Chrome Electricity]
+fold-mirror.frag.spv
+codex_chrome_spiderweb.frag.spv
+rainbow_metal_code_electric_iridescence.frag.spv
+
+[Soft Psychedelia]
+cosine_swirl_two.frag.spv
+rainbow_blur.frag.spv
+color_effect.frag.spv
