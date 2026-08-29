@@ -1,0 +1,16 @@
+{
+    "version": 1,
+    "custom_uniforms": {
+        "amount": {
+            "slot": 0,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "value": 0.5
+        }
+    },
+    "shaders": [
+        "build_test.frag",
+        { "file": "compute/build_test.comp" }
+    ]
+}
