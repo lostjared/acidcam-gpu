@@ -1,11 +1,12 @@
 #include "midi_window.hpp"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QGroupBox>
-#include <QHeaderView>
 #include <QFileDialog>
-#include <QMessageBox>
 #include <QFont>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QMessageBox>
+#include <QVBoxLayout>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
@@ -14,6 +15,7 @@ MidiMapWindow::MidiMapWindow(QWidget *parent)
     setupUi();
     applyStyleSheet();
     populateActions();
+    profile_mappings[0] = mappings;
     updateTable();
 
     pollTimer = new QTimer(this);
@@ -43,6 +45,21 @@ void MidiMapWindow::setupUi() {
     auto *mainLayout = new QVBoxLayout(central);
     mainLayout->setContentsMargins(12, 12, 12, 12);
     mainLayout->setSpacing(8);
+
+    // --- Target application ---
+    auto *target_group = new QGroupBox("Target Application", this);
+    auto *target_layout = new QHBoxLayout(target_group);
+    target_combo = new QComboBox(this);
+    target_combo->addItem("ACMX2");
+    target_combo->addItem("ACMXVK");
+    target_combo->setToolTip(
+        "Selects target-specific action names while preserving the shared "
+        ".midi_cfg file format.");
+    target_layout->addWidget(target_combo);
+    mainLayout->addWidget(target_group);
+
+    connect(target_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MidiMapWindow::change_target);
 
     // --- Device section ---
     auto *deviceGroup = new QGroupBox("MIDI Device", this);
@@ -135,11 +152,64 @@ void MidiMapWindow::applyStyleSheet() {
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
         "QMessageBox { background-color: #1a1a1a; color: white; }"
         "QMessageBox QLabel { color: white; }"
-        "QMessageBox QPushButton { min-width: 70px; }"
-    );
+        "QMessageBox QPushButton { min-width: 70px; }");
 }
 
 void MidiMapWindow::populateActions() {
+    mappings.clear();
+    if (target_profile == MidiTargetProfile::Acmxvk) {
+        // Knob mappings supported by ACMXVK.
+        mappings.push_back({"Left/Right Knob", "GPU filter index left/right", 262, 263, false, 0, 0, 0});
+        mappings.push_back({"Up/Down Knob", "Shader index or playlist node prev/next", 264, 265, false, 0, 0, 0});
+        mappings.push_back({"Time Fwd/Back Knob", "Shader time step forward/backward", 500, 501, false, 0, 0, 0});
+        mappings.push_back({"TimeSpeed Knob", "Shader time speed increase/decrease", 504, 505, false, 0, 0, 0});
+        mappings.push_back({"Slider 1 Knob", "Shader uniform slider1", 600, 601, false, 0, 0, 0});
+        mappings.push_back({"Slider 2 Knob", "Shader uniform slider2", 602, 603, false, 0, 0, 0});
+        mappings.push_back({"Slider 3 Knob", "Shader uniform slider3", 604, 605, false, 0, 0, 0});
+        mappings.push_back({"Slider 4 Knob", "Shader uniform slider4", 606, 607, false, 0, 0, 0});
+
+        // ACMXVK key/action mappings.
+        mappings.push_back({"Left", "Previous CUDA filter", 263, 0, false, 0, 0, 0});
+        mappings.push_back({"Right", "Next CUDA filter", 262, 0, false, 0, 0, 0});
+        mappings.push_back({"Up", "Previous shader or playlist node", 265, 0, false, 0, 0, 0});
+        mappings.push_back({"Down", "Next shader or playlist node", 264, 0, false, 0, 0, 0});
+        mappings.push_back({"Space", "Toggle shader bypass", 32, 0, false, 0, 0, 0});
+        mappings.push_back({"Time Forward", "Step shader time forward (U)", 500, 0, false, 0, 0, 0});
+        mappings.push_back({"Time Backward", "Step shader time backward (I)", 501, 0, false, 0, 0, 0});
+        mappings.push_back({"Page Up", "Increase shader time speed", 266, 0, false, 0, 0, 0});
+        mappings.push_back({"Page Down", "Decrease shader time speed", 267, 0, false, 0, 0, 0});
+        mappings.push_back({"P", "Toggle playlist mode or input pause", 80, 0, false, 0, 0, 0});
+        mappings.push_back({"L", "Toggle rendering freeze", 76, 0, false, 0, 0, 0});
+        mappings.push_back({"M", "Toggle configured multipass chain", 77, 0, false, 0, 0, 0});
+        mappings.push_back({"J", "Toggle random autopilot", 74, 0, false, 0, 0, 0});
+        mappings.push_back({"Y", "Toggle sequential autopilot", 89, 0, false, 0, 0, 0});
+        mappings.push_back({"N", "Toggle random autopilot XFade", 78, 0, false, 0, 0, 0});
+        mappings.push_back({"K", "Toggle shader lock", 75, 0, false, 0, 0, 0});
+        mappings.push_back({"T", "Toggle normal shader time", 84, 0, false, 0, 0, 0});
+        mappings.push_back({"Q", "Toggle audio-reactive shader time", 81, 0, false, 0, 0, 0});
+        mappings.push_back({"Home", "Toggle audio delta-time scaling", 268, 0, false, 0, 0, 0});
+        mappings.push_back({"End", "Toggle spectrum sensitivity scaling", 269, 0, false, 0, 0, 0});
+        mappings.push_back({"Insert", "Increase audio sensitivity", 260, 0, false, 0, 0, 0});
+        mappings.push_back({"Delete", "Decrease audio sensitivity", 261, 0, false, 0, 0, 0});
+        mappings.push_back({"E", "Toggle configured watermark", 69, 0, false, 0, 0, 0});
+        mappings.push_back({"F", "Toggle fullscreen", 70, 0, false, 0, 0, 0});
+        mappings.push_back({"F9", "Toggle preview-only runtime HUD", 298, 0, false, 0, 0, 0});
+        mappings.push_back({"Z", "Take PNG snapshot", 90, 0, false, 0, 0, 0});
+        mappings.push_back({"4", "Take optional TIFF snapshot", 52, 0, false, 0, 0, 0});
+        mappings.push_back({"5", "Take optional WebP snapshot", 53, 0, false, 0, 0, 0});
+        mappings.push_back({"6", "Take raw RGBA snapshot", 54, 0, false, 0, 0, 0});
+        mappings.push_back({"3", "Toggle 2D/3D rendering", 51, 0, false, 0, 0, 0});
+        mappings.push_back({"C", "Toggle 3D wave effect", 67, 0, false, 0, 0, 0});
+        mappings.push_back({"O", "Toggle 3D scale oscillation", 79, 0, false, 0, 0, 0});
+        mappings.push_back({"V", "Toggle automatic 3D view rotation", 86, 0, false, 0, 0, 0});
+        mappings.push_back({"X", "Reset 3D model view", 88, 0, false, 0, 0, 0});
+        mappings.push_back({"Comma", "Decrease 3D rotation speed", 44, 0, false, 0, 0, 0});
+        mappings.push_back({"Period", "Increase 3D rotation speed", 46, 0, false, 0, 0, 0});
+        mappings.push_back({"Scale Down", "Decrease 3D model scale", 91, 0, false, 0, 0, 0});
+        mappings.push_back({"Scale Up", "Increase 3D model scale", 93, 0, false, 0, 0, 0});
+        return;
+    }
+
     // Knob mappings (paired key codes)
     mappings.push_back({"Left/Right Knob", "GPU filter index left/right", 262, 263, false, 0, 0, 0});
     mappings.push_back({"Up/Down Knob", "Shader index prev/next (or playlist node)", 264, 265, false, 0, 0, 0});
@@ -204,6 +274,72 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"F9", "Toggle HUD overlay visibility", 298, 0, false, 0, 0, 0});
     mappings.push_back({"Left Bracket", "Crossfade shader previous", 91, 0, false, 0, 0, 0});
     mappings.push_back({"Right Bracket", "Crossfade shader next", 93, 0, false, 0, 0, 0});
+}
+
+void MidiMapWindow::change_target(int index) {
+    if (index < 0 || index > 1) {
+        return;
+    }
+
+    const MidiTargetProfile next_profile =
+        index == 0 ? MidiTargetProfile::Acmx2 : MidiTargetProfile::Acmxvk;
+    if (next_profile == target_profile) {
+        return;
+    }
+
+    if (capturing) {
+        capturing = false;
+        captureRow = -1;
+        captureButton->setText("Capture Selected");
+        captureButton->setEnabled(deviceOpen);
+    }
+
+    const std::size_t previous_profile_index =
+        target_profile == MidiTargetProfile::Acmx2 ? 0U : 1U;
+    const std::size_t next_profile_index =
+        next_profile == MidiTargetProfile::Acmx2 ? 0U : 1U;
+    profile_mappings[previous_profile_index] = mappings;
+    const std::vector<MidiMapping> previous_mappings = mappings;
+    target_profile = next_profile;
+
+    if (profile_mappings[next_profile_index].empty()) {
+        populateActions();
+        for (MidiMapping &mapping : mappings) {
+            const bool target_specific_meaning =
+                mapping.key2 == 0 &&
+                (mapping.key1 == 53 || mapping.key1 == 70 ||
+                 mapping.key1 == 91 || mapping.key1 == 93);
+            if (target_specific_meaning) {
+                continue;
+            }
+            const auto previous = std::find_if(
+                previous_mappings.begin(), previous_mappings.end(),
+                [&](const MidiMapping &candidate) {
+                    return candidate.captured &&
+                           candidate.key1 == mapping.key1 &&
+                           candidate.key2 == mapping.key2;
+                });
+            if (previous == previous_mappings.end()) {
+                continue;
+            }
+            mapping.captured = true;
+            mapping.byte0 = previous->byte0;
+            mapping.byte1 = previous->byte1;
+            mapping.byte2 = previous->byte2;
+        }
+        profile_mappings[next_profile_index] = mappings;
+    } else {
+        mappings = profile_mappings[next_profile_index];
+    }
+
+    const QString target_name =
+        target_profile == MidiTargetProfile::Acmx2 ? "ACMX2" : "ACMXVK";
+    setWindowTitle(target_name + " MIDI Map Configuration");
+    updateTable();
+    setStatus(QString("%1 profile selected — %2 actions available; shared "
+                      "captured mappings preserved")
+                  .arg(target_name)
+                  .arg(mappings.size()));
 }
 
 void MidiMapWindow::updateTable() {

@@ -1307,7 +1307,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9D)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9G)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1439,7 +1439,7 @@ namespace acmxvk {
                << "      --flip                  Flip final display/encoded output vertically\n"
                << "      --enable-vsync          Use FIFO presentation\n"
                << "      --enable-screenshot     Enable MXVK F10 screenshots\n\n"
-               << "Keys: Up/Down shader or playlist node, Shift+Up/Down final shader,\n"
+               << "Keys: Up/Down shader or playlist node, Shift+Up/Down post-shader,\n"
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
                << "      Insert/Delete audio sensitivity, End FFT sensitivity,\n"
@@ -3334,6 +3334,8 @@ namespace acmxvk {
                 return SDLK_U;
             case 501:
                 return SDLK_I;
+            case 298:
+                return SDLK_F9;
             case 32:
                 return SDLK_SPACE;
             case 44:
@@ -3342,6 +3344,10 @@ namespace acmxvk {
                 return options.enable_3d ? SDLK_PERIOD : SDLK_UNKNOWN;
             case 51:
                 return options.enable_3d ? SDLK_3 : SDLK_UNKNOWN;
+            case 52:
+                return SDLK_4;
+            case 53:
+                return SDLK_5;
             case 54:
                 return SDLK_6;
             case 67:
@@ -3355,8 +3361,9 @@ namespace acmxvk {
             case 69:
                 return options.watermark_text.empty() ? SDLK_UNKNOWN : SDLK_E;
             case 74:
-            case 78:
                 return SDLK_J;
+            case 78:
+                return SDLK_N;
             case 75:
                 return SDLK_K;
             case 76:
@@ -3371,8 +3378,14 @@ namespace acmxvk {
 #else
                 return SDLK_UNKNOWN;
 #endif
+            case 70:
+                return SDLK_F;
+            case 73:
+                return SDLK_I;
             case 84:
                 return SDLK_T;
+            case 85:
+                return SDLK_U;
             case 86:
                 return options.enable_3d ? SDLK_V : SDLK_UNKNOWN;
             case 88:
@@ -3435,6 +3448,8 @@ namespace acmxvk {
                 return "step shader time forward";
             case 501:
                 return "step shader time backward";
+            case 298:
+                return "toggle runtime HUD";
             case 32:
                 return "toggle shader bypass";
             case 44:
@@ -3443,6 +3458,10 @@ namespace acmxvk {
                 return "increase 3D view rotation speed";
             case 51:
                 return "toggle 2D/3D rendering";
+            case 52:
+                return "take TIFF snapshot";
+            case 53:
+                return "take WebP snapshot";
             case 54:
                 return "take raw RGBA snapshot";
             case 67:
@@ -3456,8 +3475,9 @@ namespace acmxvk {
             case 69:
                 return "toggle watermark";
             case 74:
-            case 78:
                 return "toggle random autopilot";
+            case 78:
+                return "toggle random autopilot crossfade";
             case 75:
                 return "toggle shader lock";
             case 76:
@@ -3468,8 +3488,14 @@ namespace acmxvk {
                 return "toggle playlist or input pause";
             case 81:
                 return "toggle audio-reactive shader time";
+            case 70:
+                return "toggle fullscreen";
+            case 73:
+                return "step shader time backward";
             case 84:
                 return "toggle shader time";
+            case 85:
+                return "step shader time forward";
             case 86:
                 return "toggle 3D view rotation";
             case 88:
@@ -4382,6 +4408,12 @@ namespace acmxvk {
             return nullptr;
         }
 
+        [[nodiscard]] std::string_view activeShaderRole() const {
+            const std::vector<fs::path> *passes = activePasses();
+            return passes != nullptr && !passes->empty() ? "Post-shader"
+                                                         : "Shader";
+        }
+
         [[nodiscard]] std::string activePassDescription() const {
             const std::vector<fs::path> *passes = activePasses();
             if (passes == nullptr || passes->empty()) {
@@ -4638,7 +4670,9 @@ namespace acmxvk {
             if (shader_locked) {
                 shader += " [locked]";
             }
-            printPreviewText(clipOverlayText("Shader: " + std::move(shader)),
+            printPreviewText(clipOverlayText(
+                                 std::string(activeShaderRole()) + ": " +
+                                 std::move(shader)),
                              10, y, shader_color);
             y += line_height;
 
@@ -4830,7 +4864,9 @@ namespace acmxvk {
                 std::string shader = effects_enabled
                                          ? fs::path(currentShader()).filename().string()
                                          : "bypassed";
-                printText(clipOverlayText("Shader: " + std::move(shader)),
+                printText(clipOverlayText(
+                              std::string(activeShaderRole()) + ": " +
+                              std::move(shader)),
                           LEFT_MARGIN, y, filter_color);
                 y += line_height;
 
@@ -5941,7 +5977,8 @@ namespace acmxvk {
 
             applyShaderPipeline();
             if (!currentShader().empty()) {
-                std::cout << "acmxvk: shader " << (shader_index + 1) << '/' << shaders.size()
+                std::cout << "acmxvk: " << activeShaderRole() << ' '
+                          << (shader_index + 1) << '/' << shaders.size()
                           << ": " << currentShader() << '\n';
             }
         }
@@ -6276,8 +6313,9 @@ namespace acmxvk {
             applyShaderPipeline();
             resetShaderTime();
             autopilot_counter = 0;
-            std::cout << "acmxvk: shader " << (shader_index + 1) << '/' << shaders.size()
-                      << ": " << currentShader() << '\n';
+            std::cout << "acmxvk: " << activeShaderRole() << ' '
+                      << (shader_index + 1) << '/' << shaders.size() << ": "
+                      << currentShader() << '\n';
         }
 
         void selectPlaylistNode(int direction) {

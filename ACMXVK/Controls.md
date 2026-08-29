@@ -10,7 +10,7 @@ controls respond while a key is held.
 | Input | Action | Notes |
 |---|---|---|
 | `Up` / `Down` | Select the previous or next shader | When playlist mode is active, these select playlist nodes instead. |
-| `Shift+Up` / `Shift+Down` | Select the previous or next final shader | Forces shader selection while a playlist is active. |
+| `Shift+Up` / `Shift+Down` | Select the previous or next post-shader | Changes the final shader appended after an active playlist or multipass chain. |
 | `Left` / `Right` | Select the previous or next CUDA filter | Requires a CUDA build with the acidcam-gpu filter engine active. |
 | `Space` | Bypass or enable shader effects | The change uses the selected crossfade. |
 | `P` | Toggle playlist mode | If no playlist was loaded, pauses or resumes video/graphic input instead. Camera input cannot be paused. |
@@ -108,7 +108,8 @@ ACMXVK recognizes the following ACMX2 MIDI-map action codes:
 | `88` | `X` | Reset the model view |
 | `91` / `93` | `Shift+-` / `Shift+=` | Decrease or increase model scale |
 | `69` | `E` | Toggle the watermark |
-| `74`, `78` | `J` | Toggle random autopilot |
+| `74` | `J` | Toggle random autopilot |
+| `78` | `N` | Toggle random XFade selection for autopilot |
 | `75` | `K` | Toggle shader lock |
 | `76` | `L` | Toggle rendering freeze |
 | `77` | `M` | Toggle multipass rendering |
@@ -117,7 +118,11 @@ ACMXVK recognizes the following ACMX2 MIDI-map action codes:
 | `84` | `T` | Toggle normal shader time |
 | `89` | `Y` | Toggle sequential autopilot |
 | `90` | `Z` | Save a processed PNG snapshot |
+| `298` | `F9` | Toggle the preview-only runtime HUD |
+| `52` / `53` | `4` / `5` | Save an optional TIFF or WebP snapshot |
 | `54` | `6` | Save a processed raw RGBA snapshot |
+| `70` | `F` | Toggle fullscreen |
+| `73` / `85` | `I` / `U` | Step shader time backward or forward |
 | `600:601` through `606:607` | Custom uniform sliders 1-4 | Map absolute MIDI values to `slider1` through `slider4`. |
 
 Paired action mappings use a centered controller value: `64` is neutral, and
@@ -125,6 +130,10 @@ distance from the center controls how often the action repeats. Slider pairs
 and direct `--midi-cc [channel:]CC=uniform` mappings instead normalize the
 controller's `0`-`127` range into the custom uniform range declared by
 `library.json`.
+
+The Qt MIDI-map editor under `ACMX2/interface/midi-map` provides separate
+ACMX2 and ACMXVK target profiles. Select ACMXVK before capturing or loading a
+map to see only supported actions and ACMXVK-specific meanings.
 
 ## Feature requirements at a glance
 

@@ -6,19 +6,19 @@
  * @brief MIDI mapping editor window for action-to-message binding.
  */
 
-#include <QMainWindow>
 #include <QComboBox>
-#include <QTableWidget>
-#include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMainWindow>
+#include <QPushButton>
 #include <QStatusBar>
+#include <QTableWidget>
 #include <QTimer>
-#include <rtmidi/RtMidi.h>
-#include <vector>
 #include <array>
+#include <rtmidi/RtMidi.h>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 /**
  * @brief Single MIDI action binding entry.
@@ -34,17 +34,24 @@ struct MidiMapping {
     unsigned char byte2{};
 };
 
+enum class MidiTargetProfile {
+    Acmx2,
+    Acmxvk,
+};
+
 /**
  * @brief Main window for creating and testing MIDI action mappings.
  */
 class MidiMapWindow : public QMainWindow {
     Q_OBJECT
 
-public:
+  public:
     explicit MidiMapWindow(QWidget *parent = nullptr);
     ~MidiMapWindow() override;
 
-private slots:
+  private slots:
+    /// @brief Switch between ACMX2 and ACMXVK action definitions.
+    void change_target(int index);
     /// @brief Refresh available MIDI input devices.
     void refreshDevices();
     /// @brief Open selected MIDI input device.
@@ -60,13 +67,14 @@ private slots:
     /// @brief Poll RtMidi input and apply capture logic.
     void pollMidi();
 
-private:
+  private:
     void setupUi();
     void applyStyleSheet();
     void populateActions();
     void updateTable();
     void setStatus(const QString &msg);
 
+    QComboBox *target_combo{};
     QComboBox *deviceCombo{};
     QPushButton *refreshButton{};
     QPushButton *captureButton{};
@@ -83,6 +91,8 @@ private:
     int captureRow{-1};
     QTimer *pollTimer{};
 
+    MidiTargetProfile target_profile{MidiTargetProfile::Acmx2};
+    std::array<std::vector<MidiMapping>, 2> profile_mappings;
     std::vector<MidiMapping> mappings;
 };
 
