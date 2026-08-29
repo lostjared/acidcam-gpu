@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 8Z**. It is usable for video, camera, and
+The port is currently at **Increment 9B**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -26,7 +26,7 @@ ACMX2.
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
 | Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, optional lossless WebP snapshots on `5`, and headerless RGBA8 snapshots on `6`. |
-| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter` or F9 hides the HUD. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
+| Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter`, a configured watermark, or F9 hides the HUD; F9 can show it again when a watermark selected the hidden default. When both are visible, the HUD starts below the watermark. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader locking, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
 | Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
@@ -385,6 +385,18 @@ these animations, skipped source frames advance them by the corresponding
 source duration, and a repeated video resets their autonomous animation state.
 Camera and still-image modes retain live render-clock behavior. This increment
 changes only ACMXVK.
+Increment 9A hides the preview-only runtime HUD by default whenever
+`--use-watermark` configures an initially enabled watermark. F9 can still show
+the HUD, and when both overlays are visible the HUD starts one line below the
+watermark so the text does not overlap. The watermark remains included in
+snapshots and encoded output, while the HUD remains preview-only. This
+increment changes only ACMXVK.
+Increment 9B moves the playlist-autopilot countdown onto decoded source-frame
+progress for video input. Repeated render loops and video pauses no longer
+consume the countdown, while frames skipped during real-time catch-up still
+advance it. Camera and still-image modes retain their rendered-frame countdown,
+and shader locking continues to pause autopilot without losing its remaining
+interval. This increment changes only ACMXVK.
 
 ### Input validation
 
@@ -588,8 +600,10 @@ ffplay -f rawvideo -pixel_format rgba -video_size 1920x1080 \
     snapshots/ACMXVK.Snapshot-2026.08.27-12.00.00-1920x1080-0.raw
 ```
 
-Show the active shader/filter information with a yellow watermark. Press `E`
-to toggle only the watermark while the filter information remains visible:
+Show the active shader/filter information with a yellow watermark. Configuring
+a watermark starts the preview-only runtime HUD hidden; press `F9` to show it.
+Press `E` to toggle only the watermark while the filter information remains
+visible:
 
 ```bash
 ./build/acmxvk/acmxvk \
@@ -683,6 +697,12 @@ Press `[` or `]` to select the previous or next transition. In 3D mode those
 keys retain ACMX2's model-scale action as well. Press `N` to toggle random
 transition selection for sequential or random autopilot changes. The HUD
 reports the current one as `XFade [index/35]: name`.
+
+Playlist autopilot intervals count decoded source frames for video input.
+Pausing the video or presenting the same frame more than once does not consume
+the countdown, while source frames discarded to catch up during
+`--use-source-fps` playback do count. Camera and still-image modes count
+rendered frames as before.
 
 The bundled set matches ACMX2: linear, block, wipe, radial, pixelate,
 dissolve, swirl, glitch, diamond, burn, fade-to-black, fade-to-white, four

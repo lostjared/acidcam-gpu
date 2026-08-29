@@ -1307,7 +1307,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 8Z)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9B)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1357,6 +1357,7 @@ namespace acmxvk {
                << "  --time-speed <mult>         Scale shader time (default 1.0)\n"
                << "  --normalized                Use fixed frame time outside video mode\n"
                << "  --autopilot-frames <N>      Playlist switch interval (minimum 4)\n"
+               << "                              Uses decoded frames for video input\n"
                << "  --autopilot-timeout <N>     Alias for --autopilot-frames\n"
                << "  --autopilot-random <N>      Random playlist interval from 4..N\n\n"
                << "History cache:\n"
@@ -1385,6 +1386,7 @@ namespace acmxvk {
                << "      --display-filter        Show active shader/filter details\n"
                << "      --disable-counter       Hide the shader/timer/FPS HUD at startup\n"
                << "      --use-watermark <text>  Show a text watermark in the upper-left\n"
+               << "                              and hide the preview HUD by default\n"
                << "      --use-watermark-color <r,g,b>\n"
                << "                              Watermark RGB color (default 255,0,150)\n"
                << "      --copy-audio            Copy input audio into encoded output\n"
@@ -2855,7 +2857,8 @@ namespace acmxvk {
         bool audio_delta_time = false;
         bool spectrum_scale_by_sensitivity = false;
         bool watermark_enabled = !options.watermark_text.empty();
-        bool counter_disabled = options.disable_counter;
+        bool counter_disabled =
+            options.disable_counter || !options.watermark_text.empty();
         int overlay_font_size = 18;
         int preview_overlay_font_size = 18;
         bool snapshot_pending = false;
@@ -2870,6 +2873,7 @@ namespace acmxvk {
         int camera_reported_height = 0;
         int autopilot_counter = 0;
         int autopilot_interval_frames = 0;
+        std::uint64_t previous_autopilot_video_frame = 0;
         int history_delay_counter = 0;
         std::size_t crossfade_shader_index = 0;
         bool camera_history_clock_started = false;
@@ -2948,6 +2952,7 @@ namespace acmxvk {
         bool video_shader_clock_logged = false;
         bool model_video_timeline_initialized = false;
         bool crossfade_uses_video_timeline = false;
+        bool autopilot_video_timeline_initialized = false;
         std::mt19937 autopilot_rng{std::random_device{}()};
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
@@ -4764,8 +4769,14 @@ namespace acmxvk {
             constexpr int LEFT_MARGIN = 10;
             constexpr int TOP_MARGIN = 10;
             const int line_height = overlay_font_size + 4;
-            int preview_y = TOP_MARGIN;
-            queueRuntimeHud(preview_y, preview_overlay_font_size + 4);
+            const int preview_line_height = preview_overlay_font_size + 4;
+            int preview_y =
+                TOP_MARGIN +
+                (!counter_disabled && watermark_enabled &&
+                         !options.watermark_text.empty()
+                     ? preview_line_height
+                     : 0);
+            queueRuntimeHud(preview_y, preview_line_height);
             int y = TOP_MARGIN;
             if (options.display_filter) {
                 const SDL_Color filter_color{255U, 0U, 255U, 255U};
@@ -6099,6 +6110,27 @@ namespace acmxvk {
             }
         }
 
+        [[nodiscard]] std::uint64_t autopilotFrameAdvance() {
+            double video_timeline = 0.0;
+            std::uint64_t video_frame_index = 0U;
+            if (!currentVideoTimeline(video_timeline, &video_frame_index)) {
+                autopilot_video_timeline_initialized = false;
+                return 1U;
+            }
+
+            if (!autopilot_video_timeline_initialized ||
+                video_frame_index < previous_autopilot_video_frame) {
+                previous_autopilot_video_frame = video_frame_index;
+                autopilot_video_timeline_initialized = true;
+                return 1U;
+            }
+
+            const std::uint64_t advance =
+                video_frame_index - previous_autopilot_video_frame;
+            previous_autopilot_video_frame = video_frame_index;
+            return advance;
+        }
+
         void toggleAutopilot(bool sequential) {
             if (!playlist_enabled) {
                 std::cout << "acmxvk: "
@@ -6121,6 +6153,7 @@ namespace acmxvk {
             autopilot_enabled = true;
             autopilot_sequential = sequential;
             autopilot_counter = 0;
+            autopilot_video_timeline_initialized = false;
             if (options.autopilot_random_timeout <= 0 && options.autopilot_frames <= 0) {
                 options.autopilot_frames = 300;
             }
@@ -6137,11 +6170,15 @@ namespace acmxvk {
         }
 
         void updateAutopilot() {
+            const std::uint64_t frame_advance = autopilotFrameAdvance();
             if (shader_locked || !autopilot_enabled || !playlist_enabled ||
                 playlist.empty() || autopilot_interval_frames <= 0) {
                 return;
             }
-            if (++autopilot_counter < autopilot_interval_frames) {
+            const std::uint64_t remaining = static_cast<std::uint64_t>(
+                std::max(0, autopilot_interval_frames - autopilot_counter));
+            if (frame_advance < remaining) {
+                autopilot_counter += static_cast<int>(frame_advance);
                 return;
             }
             autopilot_counter = 0;

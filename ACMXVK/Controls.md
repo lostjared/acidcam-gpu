@@ -39,7 +39,7 @@ controls respond while a key is held.
 | Input | Action | Notes |
 |---|---|---|
 | `F` | Toggle fullscreen | Switches the ACMXVK window between windowed and fullscreen modes. |
-| `F9` | Show or hide the ACMXVK runtime HUD | The HUD is preview-only and is **not encoded** into the output video. |
+| `F9` | Show or hide the ACMXVK runtime HUD | The HUD is preview-only and is **not encoded** into the output video. It starts hidden when `--use-watermark` is configured; if shown with the watermark, it begins one line lower. |
 | `F12` | Show or hide MXVK's FPS counter | This is the renderer-level counter supplied by MXVK. |
 | `E` | Show or hide the watermark | Available when watermark text was configured. The watermark is part of the encoded result. |
 | `Z` | Save a processed PNG snapshot | Saves beneath the directory selected by `--prefix`. Snapshot writing runs in the background. |
