@@ -1421,7 +1421,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9M)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9N)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1551,8 +1551,8 @@ namespace acmxvk {
                << "                              Filters require WITH_CUDA=ON\n"
                << "                              Video/camera RGBA and rotation stay on GPU\n\n"
                << "Window:\n"
-               << "  -r, --resolution <WxH>      Window/output resolution override\n"
-               << "                              Default output follows source; preview may fit display\n"
+               << "  -r, --resolution <WxH>      Render/output resolution override\n"
+               << "                              Preview fits display without changing output size\n"
                << "  -n, --fullscreen            Start fullscreen\n"
                << "  -a, --repeat                Repeat video input\n"
                << "      --rotate <mode>         clockwise, 180, or counterclockwise\n"
@@ -5942,48 +5942,52 @@ namespace acmxvk {
         }
 
         void configureRenderResolution() {
-            if (options.resolution_specified) {
-                setRenderExtent(static_cast<std::uint32_t>(options.width),
-                                static_cast<std::uint32_t>(options.height));
-                return;
-            }
+            int render_width = options.width;
+            int render_height = options.height;
+            if (!options.resolution_specified) {
+                const auto [source_width, source_height] = source_dimensions();
+                if (!dimensions_supported(source_width, source_height)) {
+                    throw std::runtime_error(
+                        "input source dimensions are outside the supported range");
+                }
 
-            const auto [source_width, source_height] = source_dimensions();
-            if (!dimensions_supported(source_width, source_height)) {
-                throw std::runtime_error(
-                    "input source dimensions are outside the supported range");
+                render_width = source_width;
+                render_height = source_height;
+                options.width = render_width;
+                options.height = render_height;
+                const char *source_name = source_kind == SourceKind::Video
+                                              ? "video"
+                                          : source_kind == SourceKind::Camera
+                                              ? "camera"
+                                              : "graphic";
+                std::cout << "acmxvk: automatic output resolution: "
+                          << render_width << 'x' << render_height << " from "
+                          << source_name;
+                if (rotationSwapsDimensions(options.frame_rotation)) {
+                    std::cout << " after input rotation";
+                }
+                std::cout << '\n';
+            } else {
+                std::cout << "acmxvk: requested output resolution: "
+                          << render_width << 'x' << render_height << '\n';
             }
-
-            options.width = source_width;
-            options.height = source_height;
-            setRenderExtent(static_cast<std::uint32_t>(source_width),
-                            static_cast<std::uint32_t>(source_height));
-            const char *source_name = source_kind == SourceKind::Video
-                                          ? "video"
-                                      : source_kind == SourceKind::Camera
-                                          ? "camera"
-                                          : "graphic";
-            std::cout << "acmxvk: automatic output resolution: " << source_width
-                      << 'x' << source_height << " from " << source_name;
-            if (rotationSwapsDimensions(options.frame_rotation)) {
-                std::cout << " after input rotation";
-            }
-            std::cout << '\n';
+            setRenderExtent(static_cast<std::uint32_t>(render_width),
+                            static_cast<std::uint32_t>(render_height));
 
             if (options.fullscreen) {
                 std::cout << "acmxvk: fullscreen presentation uses the display "
-                             "extent instead of the automatic window extent\n";
+                             "extent without changing the output resolution\n";
                 return;
             }
 
             SDL_Window *window = getSDLWindow();
             if (window == nullptr) {
                 throw std::runtime_error(
-                    "unable to apply automatic resolution without an SDL window");
+                    "unable to configure preview without an SDL window");
             }
 
-            int preview_width = source_width;
-            int preview_height = source_height;
+            int preview_width = render_width;
+            int preview_height = render_height;
             SDL_Rect usable_bounds{};
             SDL_DisplayID display = SDL_GetDisplayForWindow(window);
             if (display == 0) {
@@ -5996,35 +6000,35 @@ namespace acmxvk {
                 const double width_scale =
                     (static_cast<double>(usable_bounds.w) *
                      PREVIEW_DISPLAY_FRACTION) /
-                    source_width;
+                    render_width;
                 const double height_scale =
                     (static_cast<double>(usable_bounds.h) *
                      PREVIEW_DISPLAY_FRACTION) /
-                    source_height;
+                    render_height;
                 const double preview_scale =
                     std::min({1.0, width_scale, height_scale});
                 preview_width = std::max(
-                    1, static_cast<int>(std::lround(source_width * preview_scale)));
+                    1, static_cast<int>(std::lround(render_width * preview_scale)));
                 preview_height = std::max(
-                    1, static_cast<int>(std::lround(source_height * preview_scale)));
+                    1, static_cast<int>(std::lround(render_height * preview_scale)));
             }
 
-            const float source_aspect = static_cast<float>(source_width) /
-                                        static_cast<float>(source_height);
-            if (!SDL_SetWindowAspectRatio(window, source_aspect,
-                                          source_aspect)) {
+            const float render_aspect = static_cast<float>(render_width) /
+                                        static_cast<float>(render_height);
+            if (!SDL_SetWindowAspectRatio(window, render_aspect,
+                                          render_aspect)) {
                 std::cerr << "acmxvk: unable to lock preview aspect ratio: "
                           << SDL_GetError() << '\n';
             }
             if (!SDL_SetWindowSize(window, preview_width, preview_height)) {
                 throw std::runtime_error(
-                    std::string("unable to apply automatic preview resolution: ") +
+                    std::string("unable to apply preview resolution: ") +
                     SDL_GetError());
             }
             SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED,
                                   SDL_WINDOWPOS_CENTERED);
             if (!SDL_SyncWindow(window)) {
-                std::cerr << "acmxvk: automatic window resize sync warning: "
+                std::cerr << "acmxvk: window resize sync warning: "
                           << SDL_GetError() << '\n';
             }
 
@@ -6033,9 +6037,10 @@ namespace acmxvk {
             SDL_GetWindowSizeInPixels(window, &actual_width, &actual_height);
             std::cout << "acmxvk: preview resolution: " << actual_width << 'x'
                       << actual_height;
-            if (preview_width != source_width ||
-                preview_height != source_height) {
-                std::cout << " (source-sized output, preview fitted to display)";
+            if (preview_width != render_width ||
+                preview_height != render_height) {
+                std::cout << " (" << render_width << 'x' << render_height
+                          << " output, preview fitted to display)";
             }
             std::cout << '\n';
         }

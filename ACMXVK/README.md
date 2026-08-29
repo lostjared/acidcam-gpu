@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9M**. It is usable for video, camera, and
+The port is currently at **Increment 9N**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -16,7 +16,7 @@ ACMX2.
 | Standalone CMake project | Complete | Builds against installed MXVK and MXWrite and provides an `uninstall` target. |
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
-| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. When `--resolution` is omitted, encoded output follows the negotiated source dimensions, including a width/height swap for 90-degree input rotation; oversized previews are fitted to the usable display while preserving that aspect ratio. Still images remain OpenCV-backed. |
+| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Encoded output follows `--resolution` when supplied and otherwise uses the negotiated source dimensions, including a width/height swap for 90-degree input rotation. In either case, oversized previews are fitted to the usable display without changing the render or output dimensions. Still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. Offline `--build` mode incrementally compiles source manifests containing `.frag`, `.comp`, or `.spv` entries into a validated runtime library. |
 | Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
@@ -465,6 +465,11 @@ slots for `slider1` through `slider4`, allowing command-line overrides, MIDI
 maps, and direct MIDI CC mappings to control symmetry, fractal detail, motion,
 and source/effect blending. This increment changes only ACMXVK and does not
 require MXVK or acidcam-gpu to be rebuilt.
+Increment 9N decouples explicit output geometry from preview-window geometry.
+`--resolution` now fixes the native shader, snapshot, and encoded-output extent
+while an oversized preview is uniformly fitted within 90 percent of the usable
+display and centered with its aspect ratio locked. This matches automatic
+source-resolution behavior and changes only ACMXVK.
 
 ### Input validation
 
@@ -1957,16 +1962,17 @@ is opened, ACMXVK uses the decoder or camera driver's negotiated dimensions to
 size the window before MXVK creates its swapchain. Clockwise and
 counterclockwise 90-degree input rotation swap those dimensions. A still image
 uses its decoded dimensions in the same way. Passing `--resolution` keeps the
-requested fixed window/output size; fullscreen presentation continues to use
-the active display extent.
+requested fixed render/output size; fullscreen presentation continues to use
+the active display extent without changing that output size.
 
 Increment 7Z separates automatic output geometry from the physical preview
 window geometry. Sources that fit within 90 percent of the usable display keep
 their native preview dimensions. Larger 16:9, 9:16, square, and rotated inputs
 are uniformly scaled down and centered with a locked aspect ratio, preventing
 the window manager from stretching them when they exceed the desktop. Video
-and generated output still use the full source width and height. An explicit
-`--resolution` continues to control both the window and output directly.
+and generated output still use the full source width and height. Increment 9N
+extends the same preview fitting to an explicit `--resolution` while retaining
+that requested render/output extent.
 
 Increment 8A removes the remaining preview-resolution processing compromise.
 MXVK renders the scene and every ordered fragment/compute pass into
