@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9K**. It is usable for video, camera, and
+The port is currently at **Increment 9L**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -455,6 +455,10 @@ only when an executed `glslc` process returns a compilation error. Missing
 tools, interrupted compiler processes, unsafe paths, and input/output filesystem
 errors never prune source files. This increment changes only ACMXVK and does
 not require MXVK or acidcam-gpu to be rebuilt.
+Increment 9L adds a deletion confirmation guard to archival pruning. A
+`--prune` request now stops before reading or writing the library and warns that
+source deletion is permanent unless `--force` is also present. This increment
+changes only ACMXVK and does not require MXVK or acidcam-gpu to be rebuilt.
 
 ### Input validation
 
@@ -823,16 +827,20 @@ actually fail compilation:
 ./build/acmxvk/acmxvk \
     --build ./shader-source/library.json \
     --fix ./shader-library \
-    --prune
+    --prune \
+    --force
 ```
 
-`--prune` is intentionally destructive and requires `--fix`. It deletes only
-the failing `.frag` or `.comp` source itself; it never deletes `.spv` source
-entries or files merely affected by a missing compiler, invalid path, output
-failure, or interrupted compiler. The source `library.json` is retained as an
-audit of what was attempted, while the generated output `library.json` contains
-only successful shaders. Regenerate the source manifest afterward if the
-archive also needs a manifest containing only files that remain.
+`--prune` is intentionally destructive and requires both `--fix` and
+`--force`. Without `--force`, ACMXVK prints a permanent-deletion warning and
+stops before touching the manifest, source files, or output directory. Confirmed
+pruning deletes only the failing `.frag` or `.comp` source itself; it never
+deletes `.spv` source entries or files merely affected by a missing compiler,
+invalid path, output failure, or interrupted compiler. The source
+`library.json` is retained as an audit of what was attempted, while the
+generated output `library.json` contains only successful shaders. Regenerate
+the source manifest afterward if the archive also needs a manifest containing
+only files that remain.
 
 The result contains `effects/color.frag.spv`,
 `compute/feedback.comp.spv`, the copied prebuilt module, and a runtime-ready

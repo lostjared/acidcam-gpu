@@ -71,11 +71,43 @@ file(COPY
     DESTINATION "${prune_source}"
 )
 
+# A prune request without explicit confirmation must stop before touching the
+# copied source tree or creating the requested output directory.
 execute_process(
     COMMAND "${ACMXVK_EXECUTABLE}"
         --build "${prune_source}/library.json"
         --fix "${prune_output}"
         --prune
+        --glslc "${GLSLC_EXECUTABLE}"
+    RESULT_VARIABLE unconfirmed_result
+    OUTPUT_VARIABLE unconfirmed_output
+    ERROR_VARIABLE unconfirmed_errors
+)
+if(unconfirmed_result EQUAL 0)
+    message(FATAL_ERROR "unconfirmed --prune unexpectedly succeeded")
+endif()
+if(NOT EXISTS "${prune_source}/valid.frag" OR
+   NOT EXISTS "${prune_source}/invalid.frag")
+    message(FATAL_ERROR "unconfirmed --prune modified a source file")
+endif()
+if(EXISTS "${prune_output}")
+    message(FATAL_ERROR "unconfirmed --prune created its output directory")
+endif()
+string(FIND "${unconfirmed_errors}" "WARNING: --prune permanently deletes"
+    warning_position)
+string(FIND "${unconfirmed_errors}" "--force" force_position)
+if(warning_position EQUAL -1 OR force_position EQUAL -1)
+    message(FATAL_ERROR
+        "unconfirmed --prune omitted its warning:\n${unconfirmed_errors}"
+    )
+endif()
+
+execute_process(
+    COMMAND "${ACMXVK_EXECUTABLE}"
+        --build "${prune_source}/library.json"
+        --fix "${prune_output}"
+        --prune
+        --force
         --glslc "${GLSLC_EXECUTABLE}"
     RESULT_VARIABLE prune_result
     OUTPUT_VARIABLE prune_output_text

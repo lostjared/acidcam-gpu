@@ -293,6 +293,7 @@ namespace acmxvk {
         bool disable_counter = false;
         bool build_fix = false;
         bool build_prune = false;
+        bool build_force = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
@@ -690,7 +691,7 @@ namespace acmxvk {
                 const std::string_view argument(argv[index]);
                 if (argument == "--build" || argument == "--builddir" ||
                     argument == "--fix" || argument == "--prune" ||
-                    argument == "--glslc") {
+                    argument == "--force" || argument == "--glslc") {
                     return true;
                 }
             }
@@ -732,6 +733,12 @@ namespace acmxvk {
                             "--prune may only be supplied once");
                     }
                     options.build_prune = true;
+                } else if (option == "--force") {
+                    if (options.build_force) {
+                        throw std::runtime_error(
+                            "--force may only be supplied once");
+                    }
+                    options.build_force = true;
                 } else if (option == "--glslc") {
                     options.glslc_executable =
                         optionValue(index, argc, argv, option);
@@ -751,8 +758,8 @@ namespace acmxvk {
                                    input::StringKind::Path, "--glslc");
             if (!options.show_help && options.build_manifest.empty()) {
                 throw std::runtime_error(
-                    "--builddir/--fix/--prune/--glslc requires --build "
-                    "<library.json>");
+                    "--builddir/--fix/--prune/--force/--glslc requires "
+                    "--build <library.json>");
             }
             if (!options.show_help && options.build_directory.empty()) {
                 throw std::runtime_error(
@@ -762,6 +769,18 @@ namespace acmxvk {
                 !options.build_fix) {
                 throw std::runtime_error(
                     "--prune requires --fix <output-directory>");
+            }
+            if (!options.show_help && options.build_force &&
+                !options.build_prune) {
+                throw std::runtime_error(
+                    "--force is only valid with --prune");
+            }
+            if (!options.show_help && options.build_prune &&
+                !options.build_force) {
+                throw std::runtime_error(
+                    "WARNING: --prune permanently deletes .frag and .comp "
+                    "source files that fail compilation; use --force to "
+                    "confirm");
             }
             return options;
         }
@@ -1402,7 +1421,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9K)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9L)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1438,6 +1457,7 @@ namespace acmxvk {
                << "      --builddir <directory> Output directory required by --build\n"
                << "      --fix <directory>      Continue and omit/remove failed shaders\n"
                << "      --prune                Delete GLSL sources that fail compilation\n"
+               << "      --force                Confirm permanent deletion by --prune\n"
                << "      --glslc <executable>   GLSL compiler for --build (default: glslc)\n"
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
