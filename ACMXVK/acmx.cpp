@@ -1307,7 +1307,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9G)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9H)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -2298,6 +2298,9 @@ namespace acmxvk {
                     if (model_initialized) {
                         model_pitch_degrees = 0.0F;
                         model_yaw_degrees = 270.0F;
+                        model_rotation_x_degrees = 0.0F;
+                        model_rotation_y_degrees = 0.0F;
+                        model_rotation_z_degrees = 0.0F;
                         model_camera_distance = 0.0F;
                         model_scale = 1.0F;
                         model_view_rotation_degrees = 0.0F;
@@ -2593,6 +2596,15 @@ namespace acmxvk {
             uniforms.model = glm::scale(
                 glm::mat4(1.0F),
                 glm::vec3(input_model.modelRenderScale() * model_scale));
+            uniforms.model = glm::rotate(
+                uniforms.model, glm::radians(model_rotation_x_degrees),
+                glm::vec3(1.0F, 0.0F, 0.0F));
+            uniforms.model = glm::rotate(
+                uniforms.model, glm::radians(model_rotation_y_degrees),
+                glm::vec3(0.0F, 1.0F, 0.0F));
+            uniforms.model = glm::rotate(
+                uniforms.model, glm::radians(model_rotation_z_degrees),
+                glm::vec3(0.0F, 0.0F, 1.0F));
             uniforms.model = glm::translate(
                 uniforms.model, input_model.modelCenterOffset());
 
@@ -2891,6 +2903,9 @@ namespace acmxvk {
         float crossfade_alpha = 1.0F;
         float model_pitch_degrees = 0.0F;
         float model_yaw_degrees = 270.0F;
+        float model_rotation_x_degrees = 0.0F;
+        float model_rotation_y_degrees = 0.0F;
+        float model_rotation_z_degrees = 0.0F;
         float model_camera_distance = 0.0F;
         float model_camera_movement_speed = 0.1F;
         float model_camera_rotation_speed = 5.0F;
@@ -2987,6 +3002,8 @@ namespace acmxvk {
 
         struct MidiKnobState {
             int value = 64;
+            int previous_value = 64;
+            int direction_action = 0;
             int frame_counter = 0;
             bool active = false;
         };
@@ -3407,6 +3424,17 @@ namespace acmxvk {
                    mapping.secondary_action == mapping.primary_action + 1;
         }
 
+        [[nodiscard]] static bool usesMidiDeltaDirection(
+            const midi::MidiMapping &mapping) {
+            return mapping.primary_action == 506 ||
+                   mapping.primary_action == 508 ||
+                   mapping.primary_action == 512;
+        }
+
+        [[nodiscard]] bool isMidiModelAction(int action) const {
+            return options.enable_3d && action >= 506 && action <= 515;
+        }
+
         [[nodiscard]] bool isMidiMappingSupported(
             const midi::MidiMapping &mapping) const {
             if (isMidiSliderMapping(mapping)) {
@@ -3414,10 +3442,16 @@ namespace acmxvk {
                 return midi_slider_uniform_indices[slider] >= 0;
             }
             if (mapping.secondary_action == 0) {
-                return midiActionKey(mapping.primary_action) != SDLK_UNKNOWN;
+                return isMidiModelAction(mapping.primary_action) ||
+                       midiActionKey(mapping.primary_action) != SDLK_UNKNOWN;
             }
-            return midiActionKey(mapping.primary_action) != SDLK_UNKNOWN &&
-                   midiActionKey(mapping.secondary_action) != SDLK_UNKNOWN;
+            const bool primary_supported =
+                isMidiModelAction(mapping.primary_action) ||
+                midiActionKey(mapping.primary_action) != SDLK_UNKNOWN;
+            const bool secondary_supported =
+                isMidiModelAction(mapping.secondary_action) ||
+                midiActionKey(mapping.secondary_action) != SDLK_UNKNOWN;
+            return primary_supported && secondary_supported;
         }
 
         [[nodiscard]] std::string_view midiActionName(int action) const {
@@ -3448,6 +3482,26 @@ namespace acmxvk {
                 return "step shader time forward";
             case 501:
                 return "step shader time backward";
+            case 506:
+                return "rotate model X forward";
+            case 507:
+                return "rotate model X backward";
+            case 508:
+                return "rotate model Y forward";
+            case 509:
+                return "rotate model Y backward";
+            case 510:
+                return "increase 3D manual rotation speed";
+            case 511:
+                return "decrease 3D manual rotation speed";
+            case 512:
+                return "rotate model Z forward";
+            case 513:
+                return "rotate model Z backward";
+            case 514:
+                return "increase model scale";
+            case 515:
+                return "decrease model scale";
             case 298:
                 return "toggle runtime HUD";
             case 32:
@@ -3509,7 +3563,74 @@ namespace acmxvk {
             }
         }
 
+        void dispatchMidiModelAction(int action) {
+            if (!model_initialized || !isMidiModelAction(action)) {
+                return;
+            }
+
+            const auto rotate = [](float &degrees, float amount) {
+                degrees = std::fmod(degrees + amount, 360.0F);
+                if (degrees < 0.0F) {
+                    degrees += 360.0F;
+                }
+            };
+            switch (action) {
+            case 506:
+                rotate(model_rotation_x_degrees,
+                       model_camera_rotation_speed * 0.3F);
+                break;
+            case 507:
+                rotate(model_rotation_x_degrees,
+                       model_camera_rotation_speed * -0.33F);
+                break;
+            case 508:
+                rotate(model_rotation_y_degrees,
+                       model_camera_rotation_speed * 0.3F);
+                break;
+            case 509:
+                rotate(model_rotation_y_degrees,
+                       model_camera_rotation_speed * -0.3F);
+                break;
+            case 510:
+                model_camera_rotation_speed = std::clamp(
+                    model_camera_rotation_speed + 0.5F, 0.5F, 50.0F);
+                std::cout << "acmxvk: 3D manual rotation speed "
+                          << model_camera_rotation_speed << '\n';
+                break;
+            case 511:
+                model_camera_rotation_speed = std::clamp(
+                    model_camera_rotation_speed - 0.5F, 0.5F, 50.0F);
+                std::cout << "acmxvk: 3D manual rotation speed "
+                          << model_camera_rotation_speed << '\n';
+                break;
+            case 512:
+                rotate(model_rotation_z_degrees,
+                       model_camera_rotation_speed * 0.3F);
+                break;
+            case 513:
+                rotate(model_rotation_z_degrees,
+                       model_camera_rotation_speed * -0.3F);
+                break;
+            case 514:
+                adjustModelScale(0.05F);
+                break;
+            case 515:
+                adjustModelScale(-0.05F);
+                break;
+            default:
+                break;
+            }
+        }
+
         void dispatchMidiAction(int action) {
+            if (isMidiModelAction(action)) {
+                if (options.midi_monitor) {
+                    std::cout << "acmxvk: MIDI action: "
+                              << midiActionName(action) << '\n';
+                }
+                dispatchMidiModelAction(action);
+                return;
+            }
             const SDL_Keycode key = midiActionKey(action);
             if (key == SDLK_UNKNOWN) {
                 return;
@@ -3584,6 +3705,14 @@ namespace acmxvk {
                 }
 
                 MidiKnobState &state = midi_knob_states[index];
+                if (usesMidiDeltaDirection(mapping) &&
+                    value != state.previous_value) {
+                    state.direction_action =
+                        value > state.previous_value
+                            ? mapping.primary_action
+                            : mapping.secondary_action;
+                }
+                state.previous_value = value;
                 state.value = value;
                 state.active = value != 64;
                 if (!state.active) {
@@ -3611,9 +3740,16 @@ namespace acmxvk {
                     continue;
                 }
                 state.frame_counter = 0;
-                dispatchMidiAction(state.value > 64
-                                       ? mapping.primary_action
-                                       : mapping.secondary_action);
+                int action = state.value > 64
+                                 ? mapping.primary_action
+                                 : mapping.secondary_action;
+                if (usesMidiDeltaDirection(mapping)) {
+                    action = state.direction_action;
+                    if (action == 0) {
+                        continue;
+                    }
+                }
+                dispatchMidiAction(action);
             }
         }
 #endif

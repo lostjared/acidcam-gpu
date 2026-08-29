@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9G**. It is usable for video, camera, and
+The port is currently at **Increment 9H**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -32,7 +32,7 @@ ACMX2.
 | Input validation | Implemented | Centralized allowlists validate CLI and environment strings, paths, URLs, identifiers, encoder fields, manifests, playlists, MIDI maps, device names, and bounded live MIDI messages before use. Configuration files, lines, entry counts, numeric ranges, image dimensions, and SPIR-V binaries have explicit limits. |
 | ACMX2 GLSL compatibility | Partial | Existing GLSL effects must be translated to the MXVK Vulkan descriptor ABI and compiled to SPIR-V. |
 | Audio-reactive shader data | Implemented | RtAudio capture, an FFmpeg-decoded media file, an M3U/M3U8 playlist, or `--use-source-audio` with real-time source-FPS video playback can drive amplitude, frequency, peak, RMS, smoothed amplitude, low/mid/high bands, a current-frame FFT, configurable FFT history, audio-reactive shader time, and optional delta/sensitivity scaling. Source-video analysis follows the media clock even when late video frames are skipped. Live and file audio support configurable shader warmup, adjustable-gain output pass-through, and AAC muxing; live input can also be recorded independently as PCM16 WAV with adjustable gain, while file audio supports repeat and stop-at-EOF behavior. |
-| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, and the audio-time/delta/FFT sensitivity actions. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
+| MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
@@ -427,6 +427,13 @@ mappings are retained when switching profiles, while codes whose meanings
 differ between the applications are deliberately kept separate. This
 increment changes the MIDI-map editor and ACMXVK documentation; MXVK and
 acidcam-gpu are unchanged.
+Increment 9H ports ACMX2's remaining virtual 3D MIDI controls. Paired knob
+codes `506:507`, `508:509`, and `512:513` rotate the model on its X, Y, and Z
+axes; `514:515` changes model scale; and button codes `510`/`511` adjust the
+manual rotation sensitivity. Rotation knobs retain ACMX2's delta-sensitive
+direction handling and velocity-sensitive repeat rate. The ACMXVK profile in
+the Qt MIDI-map editor exposes all of these mappings. This increment changes
+only ACMXVK and the MIDI-map editor; MXVK and acidcam-gpu are unchanged.
 
 ### Input validation
 

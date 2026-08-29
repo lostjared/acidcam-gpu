@@ -100,6 +100,11 @@ ACMXVK recognizes the following ACMX2 MIDI-map action codes:
 | `268` | `Home` | Toggle audio delta-time scaling |
 | `269` | `End` | Toggle spectrum sensitivity scaling |
 | `500` / `501` | `U` / `I` | Step shader time forward or backward |
+| `506:507` | 3D model X rotation | Rotate the model forward or backward around X |
+| `508:509` | 3D model Y rotation | Rotate the model forward or backward around Y |
+| `512:513` | 3D model Z rotation | Rotate the model forward or backward around Z |
+| `514:515` | 3D model scale | Increase or decrease model scale |
+| `510` / `511` | 3D rotation sensitivity | Increase or decrease manual model-rotation speed |
 | `44` / `46` | `,` / `.` | Decrease or increase 3D rotation speed |
 | `51` | `3` | Toggle 2D/3D rendering |
 | `67` | `C` | Toggle the 3D wave effect |

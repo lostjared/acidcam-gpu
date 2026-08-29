@@ -163,6 +163,10 @@ void MidiMapWindow::populateActions() {
         mappings.push_back({"Up/Down Knob", "Shader index or playlist node prev/next", 264, 265, false, 0, 0, 0});
         mappings.push_back({"Time Fwd/Back Knob", "Shader time step forward/backward", 500, 501, false, 0, 0, 0});
         mappings.push_back({"TimeSpeed Knob", "Shader time speed increase/decrease", 504, 505, false, 0, 0, 0});
+        mappings.push_back({"Rotate X Axis Knob", "Rotate the 3D model forward/backward on X", 506, 507, false, 0, 0, 0});
+        mappings.push_back({"Rotate Y Axis Knob", "Rotate the 3D model forward/backward on Y", 508, 509, false, 0, 0, 0});
+        mappings.push_back({"Rotate Z Axis Knob", "Rotate the 3D model forward/backward on Z", 512, 513, false, 0, 0, 0});
+        mappings.push_back({"Model Scale Knob", "Increase/decrease 3D model scale", 514, 515, false, 0, 0, 0});
         mappings.push_back({"Slider 1 Knob", "Shader uniform slider1", 600, 601, false, 0, 0, 0});
         mappings.push_back({"Slider 2 Knob", "Shader uniform slider2", 602, 603, false, 0, 0, 0});
         mappings.push_back({"Slider 3 Knob", "Shader uniform slider3", 604, 605, false, 0, 0, 0});
@@ -207,6 +211,8 @@ void MidiMapWindow::populateActions() {
         mappings.push_back({"Period", "Increase 3D rotation speed", 46, 0, false, 0, 0, 0});
         mappings.push_back({"Scale Down", "Decrease 3D model scale", 91, 0, false, 0, 0, 0});
         mappings.push_back({"Scale Up", "Increase 3D model scale", 93, 0, false, 0, 0, 0});
+        mappings.push_back({"RotSpeed Up", "Increase manual 3D rotation speed", 510, 0, false, 0, 0, 0});
+        mappings.push_back({"RotSpeed Down", "Decrease manual 3D rotation speed", 511, 0, false, 0, 0, 0});
         return;
     }
 
@@ -218,6 +224,7 @@ void MidiMapWindow::populateActions() {
     mappings.push_back({"Rotate X Axis W/S Knob", "Camera pitch up/down (3D)", 506, 507, false, 0, 0, 0});
     mappings.push_back({"Rotate Y Axis A/D Knob", "Camera yaw right/left (3D)", 508, 509, false, 0, 0, 0});
     mappings.push_back({"Rotate Z Axis Knob", "Camera roll right/left (3D)", 512, 513, false, 0, 0, 0});
+    mappings.push_back({"Model Scale Knob", "Model scale increase/decrease (3D)", 514, 515, false, 0, 0, 0});
     mappings.push_back({"Slider 1 Knob", "Shader uniform slider1 (0.0-1.0)", 600, 601, false, 0, 0, 0});
     mappings.push_back({"Slider 2 Knob", "Shader uniform slider2 (0.0-1.0)", 602, 603, false, 0, 0, 0});
     mappings.push_back({"Slider 3 Knob", "Shader uniform slider3 (0.0-1.0)", 604, 605, false, 0, 0, 0});
