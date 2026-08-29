@@ -1307,7 +1307,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9C)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9D)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -4372,13 +4372,18 @@ namespace acmxvk {
             return input::truncate_utf8(text, MAX_OVERLAY_CHARACTERS);
         }
 
-        [[nodiscard]] std::string activePassDescription() const {
-            const std::vector<fs::path> *passes = nullptr;
+        [[nodiscard]] const std::vector<fs::path> *activePasses() const {
             if (playlist_enabled && !playlist.empty()) {
-                passes = &playlist[playlist_index].shaders;
-            } else if (multipass_enabled && !configured_passes.empty()) {
-                passes = &configured_passes;
+                return &playlist[playlist_index].shaders;
             }
+            if (multipass_enabled && !configured_passes.empty()) {
+                return &configured_passes;
+            }
+            return nullptr;
+        }
+
+        [[nodiscard]] std::string activePassDescription() const {
+            const std::vector<fs::path> *passes = activePasses();
             if (passes == nullptr || passes->empty()) {
                 return {};
             }
@@ -4655,10 +4660,28 @@ namespace acmxvk {
                 y += line_height;
             }
 
-            const std::string passes = activePassDescription();
-            if (!passes.empty()) {
-                printPreviewText(passes, 10, y, shader_color);
-                y += line_height;
+            const std::vector<fs::path> *passes = activePasses();
+            if (passes != nullptr && !passes->empty()) {
+                constexpr std::size_t MAX_HUD_PASS_LINES = 8U;
+                const std::size_t displayed_passes =
+                    std::min(passes->size(), MAX_HUD_PASS_LINES);
+                for (std::size_t index = 0; index < displayed_passes;
+                     ++index) {
+                    std::ostringstream pass;
+                    pass << "Pass [" << (index + 1) << '/' << passes->size()
+                         << "]: " << (*passes)[index].filename().string();
+                    printPreviewText(clipOverlayText(pass.str()), 10, y,
+                                     shader_color);
+                    y += line_height;
+                }
+                if (displayed_passes < passes->size()) {
+                    const std::string remaining =
+                        "Passes: +" +
+                        std::to_string(passes->size() - displayed_passes) +
+                        " more";
+                    printPreviewText(remaining, 10, y, shader_color);
+                    y += line_height;
+                }
             }
 
             if (model_initialized) {

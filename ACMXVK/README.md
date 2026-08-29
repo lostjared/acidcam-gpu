@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9C**. It is usable for video, camera, and
+The port is currently at **Increment 9D**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -402,6 +402,12 @@ immediately above its multipass shader chain. Playlist load, runtime enable,
 manual node selection, and autopilot changes now all print the selected node's
 index, name, and pass count to the terminal. This increment changes only
 ACMXVK.
+Increment 9D makes multipass chains readable in the runtime HUD. Playlist and
+standalone multipass shaders are shown as individually numbered pass lines
+instead of one clipped comma-separated line. The HUD displays up to eight
+passes and summarizes any additional entries, keeping malformed or unusually
+large playlists from filling the entire preview. Encoded filter text retains
+its compact single-line form. This increment changes only ACMXVK.
 
 ### Input validation
 
