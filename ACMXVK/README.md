@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9B**. It is usable for video, camera, and
+The port is currently at **Increment 9C**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -397,6 +397,11 @@ consume the countdown, while frames skipped during real-time catch-up still
 advance it. Camera and still-image modes retain their rendered-frame countdown,
 and shader locking continues to pause autopilot without losing its remaining
 interval. This increment changes only ACMXVK.
+Increment 9C adds the active playlist node to the preview-only runtime HUD,
+immediately above its multipass shader chain. Playlist load, runtime enable,
+manual node selection, and autopilot changes now all print the selected node's
+index, name, and pass count to the terminal. This increment changes only
+ACMXVK.
 
 ### Input validation
 

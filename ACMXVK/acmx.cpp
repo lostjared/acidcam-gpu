@@ -1307,7 +1307,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9B)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9C)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -2145,6 +2145,9 @@ namespace acmxvk {
                         applyShaderPipeline();
                         std::cout << "acmxvk: playlist "
                                   << (playlist_enabled ? "enabled" : "disabled") << '\n';
+                        if (playlist_enabled) {
+                            logSelectedPlaylistNode("selected");
+                        }
                     } else {
                         togglePause();
                     }
@@ -4152,6 +4155,7 @@ namespace acmxvk {
             }
             std::cout << "acmxvk: playlist loaded " << shader_count << " shaders in "
                       << playlist.size() << " nodes from " << options.playlist_file << '\n';
+            logSelectedPlaylistNode("selected");
         }
 
         [[nodiscard]] std::string spriteVertexShader() const {
@@ -4387,6 +4391,17 @@ namespace acmxvk {
                 description += (*passes)[index].filename().string();
             }
             return clipOverlayText(std::move(description));
+        }
+
+        [[nodiscard]] std::string activePlaylistDescription() const {
+            if (!playlist_enabled || playlist.empty()) {
+                return {};
+            }
+            std::ostringstream description;
+            description << "Playlist [" << (playlist_index + 1) << '/'
+                        << playlist.size() << "]: "
+                        << playlist[playlist_index].name;
+            return clipOverlayText(description.str());
         }
 
         [[nodiscard]] static std::string formatHudTime(double seconds_value) {
@@ -4630,6 +4645,15 @@ namespace acmxvk {
             printPreviewText(clipOverlayText(crossfade_status.str()), 10, y,
                              crossfade_color);
             y += line_height;
+
+            const std::string playlist_description =
+                activePlaylistDescription();
+            if (!playlist_description.empty()) {
+                const SDL_Color playlist_color{255U, 0U, 255U, 255U};
+                printPreviewText(playlist_description, 10, y,
+                                 playlist_color);
+                y += line_height;
+            }
 
             const std::string passes = activePassDescription();
             if (!passes.empty()) {
@@ -6110,6 +6134,17 @@ namespace acmxvk {
             }
         }
 
+        void logSelectedPlaylistNode(std::string_view action) const {
+            if (playlist.empty()) {
+                return;
+            }
+            std::cout << "acmxvk: " << action << " playlist node "
+                      << (playlist_index + 1) << '/' << playlist.size() << ": "
+                      << playlist[playlist_index].name << " ("
+                      << playlist[playlist_index].shaders.size()
+                      << " passes)\n";
+        }
+
         [[nodiscard]] std::uint64_t autopilotFrameAdvance() {
             double video_timeline = 0.0;
             std::uint64_t video_frame_index = 0U;
@@ -6202,8 +6237,7 @@ namespace acmxvk {
             if (options.autopilot_random_timeout > 0) {
                 resetAutopilotInterval();
             }
-            std::cout << "acmxvk: autopilot -> " << playlist[playlist_index].name << " ("
-                      << (playlist_index + 1) << '/' << playlist.size() << ")\n";
+            logSelectedPlaylistNode("autopilot selected");
         }
 
         void selectShader(int direction) {
@@ -6235,9 +6269,7 @@ namespace acmxvk {
             applyShaderPipeline();
             resetShaderTime();
             autopilot_counter = 0;
-            std::cout << "acmxvk: playlist node " << (playlist_index + 1) << '/'
-                      << playlist.size() << ": " << playlist[playlist_index].name << " ("
-                      << playlist[playlist_index].shaders.size() << " passes)\n";
+            logSelectedPlaylistNode("selected");
         }
 
         [[nodiscard]] std::vector<fs::path> activeShaderPipeline() const {
