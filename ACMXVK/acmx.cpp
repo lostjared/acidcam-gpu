@@ -2265,7 +2265,9 @@ namespace acmxvk {
                 throw std::runtime_error(
                     "unable to create output library.json");
             }
-            output << "{\n    \"version\": 1";
+            output << "{\n    \"version\": 1"
+                   << ",\n    \"backend\": \"acmxvk\""
+                   << ",\n    \"library_type\": \"runtime\"";
             if (!manifest.custom_uniforms.empty()) {
                 output << ",\n    \"custom_uniforms\": {\n";
                 for (std::size_t index = 0;

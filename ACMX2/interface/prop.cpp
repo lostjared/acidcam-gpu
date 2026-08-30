@@ -5,21 +5,18 @@
 #include <QSettings>
 #include <QStandardPaths>
 
-PropWindow::PropWindow(QWidget *parent) : QDialog(parent) {
+PropWindow::PropWindow(acmx2::Backend backend, QWidget *parent)
+    : QDialog(parent), active_backend(backend) {
     init();
 }
 
 void PropWindow::init() {
-    setWindowTitle("Properties");
+    setWindowTitle(tr("%1 Properties").arg(acmx2::backend_name(active_backend)));
     setFixedSize(400, 300);
 
     QLabel *exeLabel = new QLabel("Program Executable:");
     exePathLineEdit = new QLineEdit(this);
-#ifdef _WIN32
-    exePathLineEdit->setText("acmx2.exe");
-#else
-    exePathLineEdit->setText("acmx2");
-#endif
+    exePathLineEdit->setText(acmx2::default_backend_executable(active_backend));
     exePathLineEdit->setReadOnly(true);
     QPushButton *exeBrowseButton = new QPushButton("Browse");
 
@@ -75,12 +72,26 @@ void PropWindow::init() {
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     QString defaultPicturesDir = getDefaultPicturesDirectory();
     QSettings appSettings("LostSideDead");
-#ifndef _WIN32
-    QString filePath = appSettings.value("exePath", "acmx2").toString();
-#else
-    QString filePath = appSettings.value("exePath", "acmx2.exe").toString();
-#endif
-    QString shader = appSettings.value("shaders", "").toString();
+    const QString legacyExecutable =
+        active_backend == acmx2::Backend::Acmx2
+            ? appSettings.value("exePath", acmx2::default_backend_executable(
+                                               acmx2::Backend::Acmx2))
+                  .toString()
+            : acmx2::default_backend_executable(active_backend);
+    QString filePath =
+        appSettings
+            .value(acmx2::backend_settings_key(active_backend, "executable"),
+                   legacyExecutable)
+            .toString();
+    const QString legacyLibrary =
+        active_backend == acmx2::Backend::Acmx2
+            ? appSettings.value("shaders", "").toString()
+            : QString();
+    QString shader =
+        appSettings
+            .value(acmx2::backend_settings_key(active_backend, "library"),
+                   legacyLibrary)
+            .toString();
     QString screenshotDir = appSettings.value("prefix_path", defaultPicturesDir).toString();
     exePathLineEdit->setText(filePath);
     shaderDirLineEdit->setText(shader);
@@ -150,17 +161,22 @@ void PropWindow::restoreDefaults() {
     if (reply == QMessageBox::Yes) {
         QString defaultPicturesDir = getDefaultPicturesDirectory();
 
-#ifdef _WIN32
-        exePathLineEdit->setText("acmx2.exe");
-#else
-        exePathLineEdit->setText("acmx2");
-#endif
+        exePathLineEdit->setText(
+            acmx2::default_backend_executable(active_backend));
         shaderDirLineEdit->setText("");
         screenshotDirLineEdit->setText(defaultPicturesDir);
 
         QSettings appSettings("LostSideDead");
-        appSettings.setValue("exePath", exePathLineEdit->text());
-        appSettings.setValue("shaders", shaderDirLineEdit->text());
+        appSettings.setValue(
+            acmx2::backend_settings_key(active_backend, "executable"),
+            exePathLineEdit->text());
+        appSettings.setValue(
+            acmx2::backend_settings_key(active_backend, "library"),
+            shaderDirLineEdit->text());
+        if (active_backend == acmx2::Backend::Acmx2) {
+            appSettings.setValue("exePath", exePathLineEdit->text());
+            appSettings.setValue("shaders", shaderDirLineEdit->text());
+        }
         appSettings.setValue("prefix_path", screenshotDirLineEdit->text());
 
         QMessageBox::information(this, "Defaults Restored", "Default settings have been restored.");

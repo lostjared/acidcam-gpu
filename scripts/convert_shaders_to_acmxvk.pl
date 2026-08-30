@@ -185,6 +185,8 @@ if (!$dry_run) {
     }
 
     my $manifest = {
+        backend         => 'acmxvk',
+        library_type    => 'runtime',
         version         => 1,
         custom_uniforms => \%output_custom,
         shaders         => \@converted,

@@ -96,6 +96,36 @@ namespace acmx2 {
         return QFileInfo(shader_manifest_path(directory)).lastModified();
     }
 
+    std::optional<Backend> shader_manifest_backend(const QString &directory,
+                                                   QString &error) {
+        error.clear();
+        const QString path = shader_manifest_path(directory);
+        if (path.isEmpty()) {
+            error = QObject::tr("No library.json or index.txt found in %1.")
+                        .arg(directory);
+            return std::nullopt;
+        }
+        if (!path.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
+            return std::nullopt;
+
+        QJsonDocument document;
+        if (!load_json_document(path, document, error))
+            return std::nullopt;
+        const QJsonValue value = document.object().value(QStringLiteral("backend"));
+        if (value.isUndefined() || value.isNull())
+            return std::nullopt;
+        if (!value.isString()) {
+            error = QObject::tr("%1 has a non-string 'backend' value.").arg(path);
+            return std::nullopt;
+        }
+        const std::optional<Backend> backend = backend_from_id(value.toString());
+        if (!backend) {
+            error = QObject::tr("%1 has an unsupported backend '%2'.")
+                        .arg(path, value.toString());
+        }
+        return backend;
+    }
+
     bool load_shader_manifest(const QString &directory, QStringList &shaders,
                               QString &error) {
         shaders.clear();
@@ -241,6 +271,8 @@ namespace acmx2 {
                 entries.append(shader);
             QJsonObject root;
             root.insert("version", 1);
+            root.insert("backend", QStringLiteral("acmx2"));
+            root.insert("library_type", QStringLiteral("source"));
             root.insert("shaders", entries);
             return write_json_document(directory + "/" + JSON_MANIFEST_NAME,
                                        QJsonDocument(root), error);

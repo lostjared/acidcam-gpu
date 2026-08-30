@@ -797,6 +797,8 @@ It uses the normal manifest schema, but its `shaders` array may contain
 ```json
 {
     "version": 1,
+    "backend": "acmxvk",
+    "library_type": "source",
     "custom_uniforms": {
         "amount": {
             "slot": 0,
@@ -864,6 +866,13 @@ module, omits it from the new runtime manifest, reports it in the summary, and
 returns success after all recoverable entries have been examined. This lets an
 interface choose between fail-fast compilation and producing the largest valid
 library from a mixed set of sources.
+
+ACMXVK-generated manifests include `"backend": "acmxvk"` so a compatible
+launcher can validate its active engine. Source manifests use
+`"library_type": "source"`; `--build`, `--fix`, and the conversion script emit
+`"library_type": "runtime"` for libraries whose entries are executable SPIR-V.
+Both fields are backward-compatible metadata and do not change command-line
+loading behavior.
 
 `slot` is optional for older manifests. When supplied, every custom uniform
 must have a unique, contiguous slot starting at zero. Explicit slots are

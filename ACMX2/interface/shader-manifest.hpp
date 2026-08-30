@@ -6,10 +6,13 @@
  * @brief Optional JSON and legacy text shader-library manifests.
  */
 
+#include "backend.hpp"
+
 #include <QDateTime>
 #include <QList>
 #include <QString>
 #include <QStringList>
+#include <optional>
 
 namespace acmx2 {
     struct CustomUniformDefinition {
@@ -29,6 +32,15 @@ namespace acmx2 {
     bool shader_manifest_exists(const QString &directory);
     /// @brief Return the selected manifest's modification time.
     QDateTime shader_manifest_last_modified(const QString &directory);
+    /**
+     * Read an optional top-level `backend` hint from library.json.
+     *
+     * A missing hint and a legacy index.txt both return std::nullopt with an
+     * empty error. Invalid metadata returns std::nullopt with a non-empty
+     * error.
+     */
+    std::optional<Backend> shader_manifest_backend(const QString &directory,
+                                                   QString &error);
 
     /** Load shader filenames from the preferred manifest in a directory. */
     bool load_shader_manifest(const QString &directory, QStringList &shaders,

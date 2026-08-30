@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 project(acmx2_interface LANGUAGES CXX C)
 set(LAUNCHER_MAJOR_VERSION 2)
-set(LAUNCHER_MINOR_VERSION 101)
-set(LAUNCHER_PATCH_VERSION 1)
+set(LAUNCHER_MINOR_VERSION 102)
+set(LAUNCHER_PATCH_VERSION 0)
 set(LAUNCHER_VERSION ${LAUNCHER_MAJOR_VERSION}.${LAUNCHER_MINOR_VERSION}.${LAUNCHER_PATCH_VERSION})
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -73,6 +73,7 @@ message(STATUS "")
 set(LAUNCHER_GUI_HEADERS
     audio-playlist.hpp
     audio-window.hpp
+    backend.hpp
     custom-uniforms.hpp
     editor.hpp
     find-shader.hpp

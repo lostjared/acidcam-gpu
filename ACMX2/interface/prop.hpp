@@ -1,6 +1,8 @@
 #ifndef PROP_HPP
 #define PROP_HPP
 
+#include "backend.hpp"
+
 /**
  * @file prop.hpp
  * @brief Dialog for selecting executable and resource directories.
@@ -22,7 +24,8 @@
 class PropWindow : public QDialog {
     Q_OBJECT
   public:
-    explicit PropWindow(QWidget *parent = nullptr);
+    explicit PropWindow(acmx2::Backend backend,
+                        QWidget *parent = nullptr);
 
   private:
     void init();
@@ -31,6 +34,7 @@ class PropWindow : public QDialog {
     void selectScreenshotDirectory();
     void restoreDefaults();
     QString getDefaultPicturesDirectory();
+    acmx2::Backend active_backend;
 
   public:
     QLineEdit *exePathLineEdit;
@@ -39,3 +43,4 @@ class PropWindow : public QDialog {
 };
 
 #endif
+#include "backend.hpp"

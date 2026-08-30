@@ -122,6 +122,8 @@ my ($temporary, $temporary_path) = tempfile(
 );
 
 print {$temporary} "{\n    \"version\": 1,\n";
+print {$temporary} "    \"backend\": \"acmxvk\",\n";
+print {$temporary} "    \"library_type\": \"source\",\n";
 print {$temporary} "    \"custom_uniforms\": {\n";
 for my $slot (0 .. $maximum_slot) {
     my $name = $slot_names{$slot};

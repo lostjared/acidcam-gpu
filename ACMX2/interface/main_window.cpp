@@ -275,6 +275,8 @@ void MainWindow::initControls() {
     initShaderSelectionSharedMemory();
     auto updateShaderMenuState = [this](QProcess::ProcessState state) {
         const bool running = (state == QProcess::Running);
+        if (backendMenu)
+            backendMenu->setEnabled(!running);
         if (listMenu_new) {
             listMenu_new->setEnabled(!running);
         }
@@ -404,12 +406,26 @@ void MainWindow::initControls() {
 
     menuBar()->setNativeMenuBar(false);
     fileMenu = menuBarPtr->addMenu(tr("File"));
+    backendMenu = menuBarPtr->addMenu(tr("Backend"));
     cameraMenu = menuBarPtr->addMenu(tr("Session"));
     playbackMenu = menuBarPtr->addMenu(tr("Playback"));
     runMenu = menuBarPtr->addMenu(tr("Run"));
     listMenu = menuBarPtr->addMenu(tr("List"));
     viewMenu = menuBarPtr->addMenu(tr("View"));
     helpMenu = menuBarPtr->addMenu(tr("Help"));
+    backendActionGroup = new QActionGroup(this);
+    backendActionGroup->setExclusive(true);
+    backendAcmx2Action = backendMenu->addAction(tr("ACMX2"));
+    backendAcmx2Action->setCheckable(true);
+    backendAcmx2Action->setChecked(true);
+    backendActionGroup->addAction(backendAcmx2Action);
+    backendAcmxvkAction = backendMenu->addAction(tr("ACMXVK"));
+    backendAcmxvkAction->setCheckable(true);
+    backendActionGroup->addAction(backendAcmxvkAction);
+    connect(backendAcmx2Action, &QAction::triggered, this,
+            [this]() { set_backend(acmx2::Backend::Acmx2); });
+    connect(backendAcmxvkAction, &QAction::triggered, this,
+            [this]() { set_backend(acmx2::Backend::Acmxvk); });
     stayOnTopAction = new QAction(tr("Stay on Top"), this);
     stayOnTopAction->setShortcut(QKeySequence("Ctrl+Alt+T"));
     stayOnTopAction->setCheckable(true);
@@ -734,7 +750,8 @@ void MainWindow::initControls() {
 #endif
     list_view->setToolTip(tr("Right click while running to change the active shader."));
     bottomTextBox = new QTextEdit(this);
-    bottomTextBox->setHtml("<b style='color:red;'>ACMX2</b> - Interface: Loaded.");
+    bottomTextBox->setHtml(
+        "<b style='color:red;'>ACMX</b> - Interface: Loaded.");
     bottomTextBox->setReadOnly(true);
     connect(list_view, &QTreeWidget::doubleClicked,
             this, &MainWindow::listClicked);
@@ -760,20 +777,41 @@ void MainWindow::initControls() {
     centralWidget->setLayout(layout);
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
+    active_backend = acmx2::backend_from_id(
+                         appSettings.value("interface/backend", "acmx2")
+                             .toString())
+                         .value_or(acmx2::Backend::Acmx2);
+    backendAcmx2Action->setChecked(active_backend == acmx2::Backend::Acmx2);
+    backendAcmxvkAction->setChecked(active_backend == acmx2::Backend::Acmxvk);
     loadSessionSettings();
     baseAppStyleSheet = qApp->styleSheet();
-    QString path = appSettings.value("shaders", "").toString();
+    const QString legacyLibrary =
+        active_backend == acmx2::Backend::Acmx2
+            ? appSettings.value("shaders", "").toString()
+            : QString();
+    QString path = appSettings
+                       .value(acmx2::backend_settings_key(active_backend,
+                                                          "library"),
+                              legacyLibrary)
+                       .toString();
     path = path.trimmed();
     while (path.endsWith("/") || path.endsWith("\\")) {
         path.chop(1);
     }
-#ifdef _WIN32
-    executable_path = appSettings.value("exePath", "acmx2.exe").toString();
-#else
-    executable_path = appSettings.value("exePath", "acmx2").toString();
-#endif
+    const QString legacyExecutable =
+        active_backend == acmx2::Backend::Acmx2
+            ? appSettings.value("exePath", acmx2::default_backend_executable(
+                                               acmx2::Backend::Acmx2))
+                  .toString()
+            : acmx2::default_backend_executable(active_backend);
+    executable_path =
+        appSettings
+            .value(acmx2::backend_settings_key(active_backend, "executable"),
+                   legacyExecutable)
+            .toString();
     prefix_path = appSettings.value("prefix_path", ".").toString();
-    detectCudaSupport();
+    if (active_backend == acmx2::Backend::Acmx2)
+        detectCudaSupport();
     bool useCustomStyle = appSettings.value("useCustomStyle", false).toBool();
     styleSheetAction->setChecked(useCustomStyle);
     midi_enabled = appSettings.value("midiEnabled", false).toBool();
@@ -799,10 +837,23 @@ void MainWindow::initControls() {
         QFileInfo pathInfo(path);
         if (pathInfo.exists() && pathInfo.isDir() &&
             acmx2::shader_manifest_exists(path)) {
-            shader_path = path;
-            loadShaders(path);
-            addRecentLibrary(path);
-            Log("Successfully loaded saved shader path");
+            QString backendError;
+            const std::optional<acmx2::Backend> libraryBackend =
+                acmx2::shader_manifest_backend(path, backendError);
+            if (!backendError.isEmpty()) {
+                Log("Warning: Saved shader library backend metadata is invalid: " +
+                    backendError);
+            } else if (libraryBackend && *libraryBackend != active_backend) {
+                Log(tr("Warning: Saved shader library targets %1 while the "
+                       "active backend is %2: %3")
+                        .arg(acmx2::backend_name(*libraryBackend),
+                             acmx2::backend_name(active_backend), path));
+            } else {
+                shader_path = path;
+                loadShaders(path);
+                addRecentLibrary(path);
+                Log("Successfully loaded saved shader path");
+            }
         } else {
             QString errorMsg = "Warning: Saved shader path is invalid: " + path + " - ";
             if (!pathInfo.exists()) {
@@ -815,6 +866,7 @@ void MainWindow::initControls() {
             Log(errorMsg);
         }
     }
+    update_backend_ui();
     const QString defaultCustomStyleSheet = acmx2::defaultCustomStyleSheet();
     customStyleSheet = appSettings.value("customStyleSheet", defaultCustomStyleSheet).toString();
 
@@ -1352,7 +1404,10 @@ void MainWindow::newShader() {
     new_shader.setShaderPath(shader_path);
     if (new_shader.exec() == QDialog::Accepted) {
         QSettings appSettings("LostSideDead");
-        appSettings.setValue("shaders", shader_path);
+        appSettings.setValue(
+            acmx2::backend_settings_key(active_backend, "library"), shader_path);
+        if (active_backend == acmx2::Backend::Acmx2)
+            appSettings.setValue("shaders", shader_path);
         appSettings.sync();
         loadShaders(shader_path, true);
     }
@@ -1851,6 +1906,8 @@ void MainWindow::selectShaderRow(int row) {
 void MainWindow::refreshShaderCacheStatus() {
     shaderCacheStatus.clear();
     shaderCacheMTime = QDateTime();
+    if (active_backend != acmx2::Backend::Acmx2)
+        return;
 #ifdef Q_OS_MACOS
     // There is no persistent binary cache to inspect on macOS. Source saves
     // are handled by the live-reload IPC path instead.
@@ -1889,8 +1946,9 @@ void MainWindow::populateShaderTree() {
         const QString &name = items.at(i);
         QFileInfo fi(shader_path + "/" + name);
         const QString stem = QFileInfo(name).completeBaseName();
-        const bool isCompute = fi.suffix().compare(
-                                   QStringLiteral("comp"), Qt::CaseInsensitive) == 0;
+        const bool isCompute =
+            name.endsWith(QStringLiteral(".comp"), Qt::CaseInsensitive) ||
+            name.endsWith(QStringLiteral(".comp.spv"), Qt::CaseInsensitive);
         const QString shaderType = isCompute ? tr("Compute") : tr("Fragment");
 
         QString health;
@@ -1985,6 +2043,140 @@ void MainWindow::menuLoadLibrary() {
     loadLibraryPath(directory);
 }
 
+bool MainWindow::backend_launch_available() const {
+    return active_backend == acmx2::Backend::Acmx2;
+}
+
+void MainWindow::update_backend_ui() {
+    const QString name = acmx2::backend_name(active_backend);
+    setWindowTitle(tr("%1 - Interface").arg(name));
+    if (backendAcmx2Action)
+        backendAcmx2Action->setChecked(active_backend == acmx2::Backend::Acmx2);
+    if (backendAcmxvkAction)
+        backendAcmxvkAction->setChecked(active_backend == acmx2::Backend::Acmxvk);
+
+    const bool launchAvailable = backend_launch_available();
+    if (runMenu_select)
+        runMenu_select->setEnabled(launchAvailable);
+    if (runMenu_all)
+        runMenu_all->setEnabled(launchAvailable);
+    if (runMenu_copyCommand)
+        runMenu_copyCommand->setEnabled(launchAvailable);
+    if (buildCacheAction)
+        buildCacheAction->setEnabled(launchAvailable);
+    if (cleanShaderCacheAction)
+        cleanShaderCacheAction->setEnabled(launchAvailable);
+    if (removeBrokenAction)
+        removeBrokenAction->setEnabled(launchAvailable);
+    if (runFromCacheAction)
+        runFromCacheAction->setEnabled(launchAvailable);
+#ifdef Q_OS_MACOS
+    if (buildCacheAction)
+        buildCacheAction->setEnabled(false);
+    if (cleanShaderCacheAction)
+        cleanShaderCacheAction->setEnabled(false);
+    if (runFromCacheAction)
+        runFromCacheAction->setEnabled(false);
+#endif
+    if (libraryBuilderAction)
+        libraryBuilderAction->setEnabled(launchAvailable);
+    if (listMenu_new)
+        listMenu_new->setEnabled(launchAvailable);
+    if (listMenu_shader)
+        listMenu_shader->setEnabled(launchAvailable);
+    if (list_view) {
+#ifdef Q_OS_MACOS
+        list_view->setColumnHidden(3, true);
+#else
+        list_view->setColumnHidden(3, !launchAvailable);
+#endif
+    }
+
+    if (!launchAvailable && runMenu) {
+        runMenu->setToolTipsVisible(true);
+        const QString pending =
+            tr("ACMXVK launching will be enabled in interface Increment 2.");
+        runMenu_select->setToolTip(pending);
+        runMenu_all->setToolTip(pending);
+        runMenu_copyCommand->setToolTip(pending);
+    } else {
+        runMenu_select->setToolTip({});
+        runMenu_all->setToolTip({});
+        runMenu_copyCommand->setToolTip({});
+    }
+}
+
+void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
+    if (process && process->state() == QProcess::Running) {
+        QMessageBox::information(
+            this, tr("Process Running"),
+            tr("Stop the running process before changing backends."));
+        update_backend_ui();
+        return;
+    }
+
+    QSettings settings("LostSideDead");
+    settings.setValue(
+        acmx2::backend_settings_key(active_backend, "executable"),
+        executable_path);
+    settings.setValue(acmx2::backend_settings_key(active_backend, "library"),
+                      shader_path);
+
+    active_backend = backend;
+    if (persist)
+        settings.setValue("interface/backend", acmx2::backend_id(active_backend));
+    executable_path =
+        settings
+            .value(acmx2::backend_settings_key(active_backend, "executable"),
+                   acmx2::default_backend_executable(active_backend))
+            .toString();
+    const QString nextLibrary =
+        settings
+            .value(acmx2::backend_settings_key(active_backend, "library"), "")
+            .toString()
+            .trimmed();
+
+    shader_path.clear();
+    items.clear();
+    indexTimestamp = QDateTime();
+    activeShaderManifestPath.clear();
+    if (list_view)
+        list_view->clear();
+
+    if (!nextLibrary.isEmpty() && QFileInfo(nextLibrary).isDir() &&
+        acmx2::shader_manifest_exists(nextLibrary)) {
+        QString backendError;
+        const std::optional<acmx2::Backend> libraryBackend =
+            acmx2::shader_manifest_backend(nextLibrary, backendError);
+        if (!backendError.isEmpty()) {
+            Log(tr("Warning: Could not read backend metadata for %1: %2")
+                    .arg(nextLibrary, backendError));
+        } else if (libraryBackend && *libraryBackend != active_backend) {
+            Log(tr("Warning: Saved %1 library belongs to %2: %3")
+                    .arg(acmx2::backend_name(active_backend),
+                         acmx2::backend_name(*libraryBackend), nextLibrary));
+        } else {
+            shader_path = nextLibrary;
+            loadShaders(shader_path, true);
+        }
+    }
+
+    cuda_available = false;
+    audio_available = false;
+    midi_available = false;
+    dnn_available = false;
+    if (active_backend == acmx2::Backend::Acmx2)
+        detectFeatureSupport();
+    updateRecentLibrariesMenu();
+    update_backend_ui();
+    settings.sync();
+    Log(tr("Backend selected: %1").arg(acmx2::backend_name(active_backend)));
+    if (!backend_launch_available()) {
+        Log(tr("ACMXVK library selection is enabled; process launching arrives "
+               "in interface Increment 2."));
+    }
+}
+
 bool MainWindow::loadLibraryPath(const QString &path) {
     const QString trimmedPath = path.trimmed();
     if (trimmedPath.isEmpty())
@@ -2010,6 +2202,25 @@ bool MainWindow::loadLibraryPath(const QString &path) {
                 .arg(libraryPath));
         return false;
     }
+    QString backendError;
+    const std::optional<acmx2::Backend> libraryBackend =
+        acmx2::shader_manifest_backend(libraryPath, backendError);
+    if (!backendError.isEmpty()) {
+        QMessageBox::warning(this, tr("Invalid Backend Metadata"), backendError);
+        return false;
+    }
+    if (libraryBackend && *libraryBackend != active_backend) {
+        const QMessageBox::StandardButton reply = QMessageBox::question(
+            this, tr("Switch Backend"),
+            tr("This library targets %1, but the active backend is %2.\n\n"
+               "Switch to %1 and load it?")
+                .arg(acmx2::backend_name(*libraryBackend),
+                     acmx2::backend_name(active_backend)),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (reply != QMessageBox::Yes)
+            return false;
+        set_backend(*libraryBackend);
+    }
     if (!loadShaders(libraryPath, true)) {
         Log(tr("Warning: Could not load shaders from directory: %1")
                 .arg(libraryPath));
@@ -2017,7 +2228,10 @@ bool MainWindow::loadLibraryPath(const QString &path) {
     }
 
     QSettings settings("LostSideDead");
-    settings.setValue("shaders", libraryPath);
+    settings.setValue(acmx2::backend_settings_key(active_backend, "library"),
+                      libraryPath);
+    if (active_backend == acmx2::Backend::Acmx2)
+        settings.setValue("shaders", libraryPath);
     settings.sync();
     addRecentLibrary(libraryPath);
     Log(tr("Successfully loaded shader library: %1").arg(libraryPath));
@@ -2031,7 +2245,14 @@ void MainWindow::addRecentLibrary(const QString &path) {
     const QString libraryPath = QDir::cleanPath(trimmedPath);
 
     QSettings settings("LostSideDead");
-    QStringList recentLibraries = settings.value("recentLibraries").toStringList();
+    const QString recentKey =
+        acmx2::backend_settings_key(active_backend, "recentLibraries");
+    const QStringList legacyRecent = active_backend == acmx2::Backend::Acmx2
+                                         ? settings.value("recentLibraries")
+                                               .toStringList()
+                                         : QStringList();
+    QStringList recentLibraries =
+        settings.value(recentKey, legacyRecent).toStringList();
     for (auto it = recentLibraries.begin(); it != recentLibraries.end();) {
         if (QDir::cleanPath(*it).compare(libraryPath, Qt::CaseInsensitive) == 0)
             it = recentLibraries.erase(it);
@@ -2041,7 +2262,9 @@ void MainWindow::addRecentLibrary(const QString &path) {
     recentLibraries.prepend(libraryPath);
     while (recentLibraries.size() > RECENT_LIBRARY_LIMIT)
         recentLibraries.removeLast();
-    settings.setValue("recentLibraries", recentLibraries);
+    settings.setValue(recentKey, recentLibraries);
+    if (active_backend == acmx2::Backend::Acmx2)
+        settings.setValue("recentLibraries", recentLibraries);
     settings.sync();
     updateRecentLibrariesMenu();
 }
@@ -2052,8 +2275,14 @@ void MainWindow::updateRecentLibrariesMenu() {
 
     loadRecentMenu->clear();
     QSettings settings("LostSideDead");
+    const QString recentKey =
+        acmx2::backend_settings_key(active_backend, "recentLibraries");
+    const QStringList legacyRecent = active_backend == acmx2::Backend::Acmx2
+                                         ? settings.value("recentLibraries")
+                                               .toStringList()
+                                         : QStringList();
     const QStringList recentLibraries =
-        settings.value("recentLibraries").toStringList();
+        settings.value(recentKey, legacyRecent).toStringList();
     if (recentLibraries.isEmpty()) {
         QAction *emptyAction = loadRecentMenu->addAction(tr("No Recent Libraries"));
         emptyAction->setEnabled(false);
@@ -2068,7 +2297,8 @@ void MainWindow::updateRecentLibrariesMenu() {
 }
 
 void MainWindow::fileOpenProp() {
-    PropWindow propWindow(this);
+    const acmx2::Backend propertiesBackend = active_backend;
+    PropWindow propWindow(propertiesBackend, this);
     if (propWindow.exec() == QDialog::Accepted) {
         QString exePath = propWindow.exePathLineEdit->text();
         QString shaderDir = propWindow.shaderDirLineEdit->text();
@@ -2086,14 +2316,24 @@ void MainWindow::fileOpenProp() {
             return;
 
         QSettings appSettings("LostSideDead");
-        appSettings.setValue("exePath", exePath);
+        if (active_backend == propertiesBackend) {
+            appSettings.setValue(
+                acmx2::backend_settings_key(active_backend, "executable"),
+                exePath);
+            if (active_backend == acmx2::Backend::Acmx2)
+                appSettings.setValue("exePath", exePath);
+            executable_path = exePath;
+        } else {
+            Log(tr("Backend changed while loading the library; retained the "
+                   "%1 executable setting.")
+                    .arg(acmx2::backend_name(active_backend)));
+        }
         appSettings.setValue("prefix_path", prefix);
         appSettings.sync();
 
-        executable_path = exePath;
         prefix_path = prefix;
 
-        Log("Executable Path: " + exePath);
+        Log("Executable Path: " + executable_path);
         Log("Prefix Path: " + prefix);
         Log("Shader Directory: " + shaderDir);
 
@@ -2144,7 +2384,8 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
         return false;
     }
 
-    if (QFileInfo(manifestPath).fileName().compare("index.txt", Qt::CaseInsensitive) == 0) {
+    if (active_backend == acmx2::Backend::Acmx2 &&
+        QFileInfo(manifestPath).fileName().compare("index.txt", Qt::CaseInsensitive) == 0) {
         bool generated = false;
         QString migrationError;
         if (!acmx2::migrate_index_manifest_to_json(path, generated,
@@ -2654,6 +2895,13 @@ void MainWindow::cameraSettings() {
 }
 
 void MainWindow::runSelected() {
+    if (!backend_launch_available()) {
+        QMessageBox::information(
+            this, tr("ACMXVK Integration"),
+            tr("ACMXVK process launching will be enabled in interface "
+               "Increment 2."));
+        return;
+    }
     if (process->state() == QProcess::Running) {
         QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
         return;
@@ -3297,6 +3545,13 @@ void MainWindow::runHdr10Conversion() {
 }
 
 void MainWindow::runAll() {
+    if (!backend_launch_available()) {
+        QMessageBox::information(
+            this, tr("ACMXVK Integration"),
+            tr("ACMXVK process launching will be enabled in interface "
+               "Increment 2."));
+        return;
+    }
     if (process->state() == QProcess::Running) {
         QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
         return;
@@ -3333,6 +3588,13 @@ void MainWindow::runAll() {
 }
 
 void MainWindow::copyCommand() {
+    if (!backend_launch_available()) {
+        QMessageBox::information(
+            this, tr("ACMXVK Integration"),
+            tr("ACMXVK command generation will be enabled in interface "
+               "Increment 2."));
+        return;
+    }
     QStringList arguments;
     if (!buildRunArguments(arguments))
         return;

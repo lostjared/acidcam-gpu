@@ -6,9 +6,10 @@
 
 /**
  * @file main_window.hpp
- * @brief Main launcher window for ACMX2 shader selection and execution.
+ * @brief Main launcher window for ACMX2/ACMXVK shader selection and execution.
  */
 #include "../shader_selection_shm.hpp"
+#include "backend.hpp"
 #include "editor.hpp"
 #include "gpufilter.hpp"
 #include "midi-settings.hpp"
@@ -19,6 +20,7 @@
 #include "shaderpass.hpp"
 #include "version_info.hpp" //defines VERSION_INFO
 #include <QDateTime>
+#include <QActionGroup>
 #include <QHash>
 #include <QMainWindow>
 #include <QMenuBar>
@@ -34,7 +36,7 @@ class LibraryBuilderDialog;
 class UniformReferenceDialog;
 
 /**
- * @brief Primary ACMX2 desktop UI.
+ * @brief Primary ACMX desktop UI.
  *
  * Manages shader discovery, process launch arguments, and related option dialogs.
  */
@@ -155,8 +157,15 @@ class MainWindow : public QMainWindow {
     void addRecentLibrary(const QString &path);
     /// @brief Rebuild the File > Load Recent submenu from persisted settings.
     void updateRecentLibrariesMenu();
+    /// @brief Select the active rendering backend and restore its paths.
+    void set_backend(acmx2::Backend backend, bool persist = true);
+    /// @brief Update title, actions, and status text for the active backend.
+    void update_backend_ui();
+    /// @brief Return whether Increment 1 permits launching the active backend.
+    bool backend_launch_available() const;
     QMenu *fileMenu = nullptr;
     QMenu *loadRecentMenu = nullptr;
+    QMenu *backendMenu = nullptr;
     QMenu *cameraMenu = nullptr;
     QMenu *playbackMenu = nullptr;
     QMenu *runMenu = nullptr;
@@ -168,6 +177,9 @@ class MainWindow : public QMainWindow {
     QAction *cameraSet = nullptr, *audioSet = nullptr;
     QAction *runMenu_select = nullptr, *runMenu_all = nullptr;
     QAction *runMenu_copyCommand = nullptr;
+    QActionGroup *backendActionGroup = nullptr;
+    QAction *backendAcmx2Action = nullptr;
+    QAction *backendAcmxvkAction = nullptr;
     QAction *play_repeat = nullptr, *play_stop = nullptr;
     QAction *normalizedTimeAction = nullptr;
     QAction *listMenu_new = nullptr, *listMenu_shader = nullptr, *listMenu_remove = nullptr, *listMenu_set_current = nullptr, *listMenu_up = nullptr, *listMenu_down = nullptr, *listMenu_shuffle = nullptr, *listMenu_sort = nullptr;
@@ -178,6 +190,7 @@ class MainWindow : public QMainWindow {
     QAction *listMenu_findInFiles = nullptr;
     QString lastSearchText;
     int lastFoundIndex = -1;
+    acmx2::Backend active_backend = acmx2::Backend::Acmx2;
     QString executable_path;
     bool cuda_available = false;
     bool audio_available = false;

@@ -1,6 +1,25 @@
-# ACMX2 Interface
+# ACMX Interface
 
-Qt6-based GUI launcher for the ACMX2 engine.
+Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
+
+## Backend Integration
+
+Interface version 2.102.0 adds the first ACMXVK integration increment:
+
+- **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
+  selections.
+- Each backend retains its own executable, active shader library, and recent
+  library list.
+- `library.json` may include a top-level `"backend": "acmx2"` or
+  `"backend": "acmxvk"` hint. Loading a library tagged for the other backend
+  offers to switch before loading it.
+- Legacy manifests without a backend hint remain valid.
+- ACMXVK source manifests use `"library_type": "source"`; compiled SPIR-V
+  manifests use `"library_type": "runtime"`.
+
+This first increment enables ACMXVK library selection and configuration while
+keeping process launch disabled for that backend. The next increment adds the
+backend-specific ACMXVK command builder; ACMX2 launch behavior is unchanged.
 
 ## Building
 
