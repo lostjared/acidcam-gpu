@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.115.0 includes the current ACMXVK integration increments:
+Interface version 2.116.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -88,6 +88,9 @@ Interface version 2.115.0 includes the current ACMXVK integration increments:
 - **Display Filter** and **Watermark** changes are applied live by ACMXVK,
   including watermark text and RGB color. Runtime watermark text is validated
   before use, and enabling it preserves the hidden-HUD default.
+- **GPU Filter Settings** can replace, disable, or enable ACMXVK's ordered CUDA
+  filter chain and temporal-buffer size while it is running. Invalid chains are
+  rejected without discarding the active filter engine.
 
 Live source reload and the remaining shared runtime controls are still
 ACMX2-only. Source editing and binary-cache maintenance actions also remain

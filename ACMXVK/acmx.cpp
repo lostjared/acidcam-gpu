@@ -4836,12 +4836,19 @@ namespace acmxvk {
             std::array<std::uint8_t, 3> watermark_color{};
         };
 
+        struct InterfaceGpuFilterState {
+            bool enabled = false;
+            int frame_buffer_size = 8;
+            std::vector<int> filter_indices;
+        };
+
         [[nodiscard]] bool read_interface_selection(
             std::uint32_t &sequence, std::string &selected_name,
             InterfaceMultipassState &multipass,
             std::vector<InterfaceUniformValue> &uniform_values,
             InterfacePlaybackState &playback,
-            InterfaceOverlayState &overlay) const {
+            InterfaceOverlayState &overlay,
+            InterfaceGpuFilterState &gpu_filters) const {
             if (interface_selection == nullptr ||
                 interface_semaphore == SEM_FAILED) {
                 return false;
@@ -4909,6 +4916,22 @@ namespace acmxvk {
                 interface_selection->watermark_r,
                 interface_selection->watermark_g,
                 interface_selection->watermark_b};
+            gpu_filters.enabled =
+                interface_selection->gpu_filter_enabled != 0;
+            gpu_filters.frame_buffer_size =
+                static_cast<int>(interface_selection->gpu_buffer_size);
+            const std::uint32_t gpu_filter_count = std::min(
+                interface_selection->gpu_filter_count,
+                ipc::MAX_GPU_FILTER_COUNT);
+            gpu_filters.filter_indices.clear();
+            gpu_filters.filter_indices.reserve(gpu_filter_count);
+            for (std::uint32_t index = 0; index < gpu_filter_count; ++index) {
+                const int filter_index =
+                    interface_selection->gpu_filter_indices[index];
+                if (filter_index >= 0) {
+                    gpu_filters.filter_indices.push_back(filter_index);
+                }
+            }
             return true;
         }
 
@@ -4953,9 +4976,11 @@ namespace acmxvk {
             std::vector<InterfaceUniformValue> uniform_values;
             InterfacePlaybackState playback;
             InterfaceOverlayState overlay;
+            InterfaceGpuFilterState gpu_filters;
             if (!read_interface_selection(interface_last_sequence,
                                           selected_name, multipass,
-                                          uniform_values, playback, overlay)) {
+                                          uniform_values, playback, overlay,
+                                          gpu_filters)) {
                 std::cerr << "acmxvk: interface control protocol does not match "
                              "this build\n";
                 cleanup_interface_control();
@@ -4964,8 +4989,9 @@ namespace acmxvk {
             apply_interface_multipass_state(multipass);
             apply_interface_playback_state(playback, false);
             apply_interface_overlay_state(overlay, false);
+            apply_interface_gpu_filter_state(gpu_filters, false);
             std::cout << "acmxvk: interface live shader, multipass, playback, "
-                         "and overlay control enabled\n";
+                         "overlay, and GPU-filter control enabled\n";
         }
 
         void cleanup_interface_control() {
@@ -4991,9 +5017,10 @@ namespace acmxvk {
             std::vector<InterfaceUniformValue> uniform_values;
             InterfacePlaybackState playback;
             InterfaceOverlayState overlay;
+            InterfaceGpuFilterState gpu_filters;
             if (!read_interface_selection(sequence, requested_name,
                                           multipass, uniform_values,
-                                          playback, overlay) ||
+                                          playback, overlay, gpu_filters) ||
                 sequence == interface_last_sequence) {
                 return;
             }
@@ -5003,6 +5030,7 @@ namespace acmxvk {
             apply_interface_uniform_values(uniform_values);
             apply_interface_playback_state(playback, true);
             apply_interface_overlay_state(overlay, true);
+            apply_interface_gpu_filter_state(gpu_filters, true);
         }
 
         void apply_interface_playback_state(
@@ -5081,6 +5109,76 @@ namespace acmxvk {
                 }
                 std::cout << '\n';
             }
+        }
+
+        void apply_interface_gpu_filter_state(
+            const InterfaceGpuFilterState &requested, bool announce) {
+#ifdef ACMXVK_WITH_CUDA
+            const bool requested_enabled =
+                requested.enabled && !requested.filter_indices.empty();
+            const bool currently_enabled = gpu_filter_engine != nullptr;
+            const std::vector<int> effective_indices =
+                requested_enabled ? requested.filter_indices
+                                  : std::vector<int>{};
+            if (requested_enabled == currently_enabled &&
+                options.gpu_filter_indices == effective_indices &&
+                (!requested_enabled ||
+                 options.gpu_frame_buffer_size ==
+                     requested.frame_buffer_size)) {
+                return;
+            }
+
+            if (requested.enabled && requested.filter_indices.empty()) {
+                std::cerr << "acmxvk: rejected enabled interface GPU-filter "
+                             "state without any filter indices\n";
+                return;
+            }
+
+            std::unique_ptr<gpu::FilterEngine> replacement;
+            if (requested_enabled) {
+                try {
+                    replacement = std::make_unique<gpu::FilterEngine>(
+                        requested.filter_indices,
+                        requested.frame_buffer_size);
+                } catch (const std::exception &error) {
+                    std::cerr
+                        << "acmxvk: rejected interface GPU-filter state: "
+                        << error.what() << '\n';
+                    return;
+                }
+            }
+
+            gpu_filter_engine = std::move(replacement);
+            options.gpu_filter_indices = effective_indices;
+            if (requested_enabled) {
+                options.gpu_frame_buffer_size = requested.frame_buffer_size;
+            }
+
+            if (frame_sprite != nullptr &&
+                source_kind == SourceKind::Graphic && !graphic_rgba.empty()) {
+                uploadInputFrame(graphic_rgba);
+                if (history_initialized) {
+                    updateHistoryFrame(graphic_rgba);
+                    history_delay_counter = 0;
+                }
+            }
+
+            if (announce) {
+                std::cout << "acmxvk: interface CUDA filter chain "
+                          << (requested_enabled ? "enabled" : "disabled");
+                if (requested_enabled) {
+                    std::cout << " (" << requested.filter_indices.size()
+                              << " filters, " << requested.frame_buffer_size
+                              << " history frames)";
+                }
+                std::cout << '\n';
+            }
+#else
+            if (announce && requested.enabled) {
+                std::cerr << "acmxvk: ignored interface GPU-filter state: this "
+                             "build does not include acidcam-gpu\n";
+            }
+#endif
         }
 
         void apply_interface_multipass_state(

@@ -36,7 +36,7 @@ ACMX2.
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
-| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection, custom uniforms, multipass chains, Repeat, Normalized Time, Display Filter, and Watermark use synchronized shared-memory control. |
+| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, and CUDA filter chains use synchronized shared-memory control. |
 
 ## Requirements
 
@@ -2241,6 +2241,11 @@ Watermark enable state, validated UTF-8 text, and RGB color update together;
 enabling a watermark at runtime hides the HUD by default just as it does at
 startup. Interface-controlled runs initialize overlay font resources even when
 all overlays begin disabled, so enabling one later is safe.
+CUDA-enabled builds now accept live GPU filter-chain and temporal-buffer
+updates from the interface. A replacement engine is fully validated and
+constructed before the active engine is changed; invalid requests leave the
+current chain intact. Still-image mode immediately reprocesses its resident
+source after a successful update.
 
 ## Development note
 
