@@ -294,6 +294,7 @@ namespace acmxvk {
         bool build_fix = false;
         bool build_prune = false;
         bool build_force = false;
+        bool unbuffered_output = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
@@ -705,6 +706,8 @@ namespace acmxvk {
                 if (option == "-h" || option == "-v" ||
                     option == "--help" || option == "--version") {
                     options.show_help = true;
+                } else if (option == "--unbuffered") {
+                    options.unbuffered_output = true;
                 } else if (option == "--build") {
                     if (!options.build_manifest.empty()) {
                         throw std::runtime_error(
@@ -792,6 +795,8 @@ namespace acmxvk {
             if (option == "-h" || option == "-v" || option == "--help" ||
                 option == "--version") {
                 options.show_help = true;
+            } else if (option == "--unbuffered") {
+                options.unbuffered_output = true;
             } else if (option == "-p" || option == "--path") {
                 options.resource_directory =
                     optionValue(index, argc, argv, option);
@@ -1559,6 +1564,8 @@ namespace acmxvk {
                << "      --flip                  Flip final display/encoded output vertically\n"
                << "      --enable-vsync          Use FIFO presentation\n"
                << "      --enable-screenshot     Enable MXVK F10 screenshots\n\n"
+               << "Output:\n"
+               << "      --unbuffered           Flush stdout/stderr after each write for GUI capture\n\n"
                << "Keys: Up/Down shader or playlist node, Shift+Up/Down post-shader,\n"
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
@@ -8044,6 +8051,14 @@ namespace acmxvk {
 
 int main(int argc, char **argv) {
     try {
+        for (int index = 1; index < argc; ++index) {
+            if (argv[index] != nullptr &&
+                std::string_view(argv[index]) == "--unbuffered") {
+                std::cout << std::unitbuf;
+                std::cerr << std::unitbuf;
+                break;
+            }
+        }
         acmxvk::Options options = acmxvk::parseOptions(argc, argv);
         if (options.show_help) {
             acmxvk::printHelp(std::cout);

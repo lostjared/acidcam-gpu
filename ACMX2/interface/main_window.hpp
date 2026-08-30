@@ -19,8 +19,8 @@
 #include "shaderlibrary.hpp"
 #include "shaderpass.hpp"
 #include "version_info.hpp" //defines VERSION_INFO
-#include <QDateTime>
 #include <QActionGroup>
+#include <QDateTime>
 #include <QHash>
 #include <QMainWindow>
 #include <QMenuBar>
@@ -161,7 +161,7 @@ class MainWindow : public QMainWindow {
     void set_backend(acmx2::Backend backend, bool persist = true);
     /// @brief Update title, actions, and status text for the active backend.
     void update_backend_ui();
-    /// @brief Return whether Increment 1 permits launching the active backend.
+    /// @brief Return whether the active backend can be launched.
     bool backend_launch_available() const;
     QMenu *fileMenu = nullptr;
     QMenu *loadRecentMenu = nullptr;
@@ -193,6 +193,7 @@ class MainWindow : public QMainWindow {
     acmx2::Backend active_backend = acmx2::Backend::Acmx2;
     QString executable_path;
     bool cuda_available = false;
+    bool cuda_device_available = false;
     bool audio_available = false;
     bool midi_available = false;
     bool dnn_available = false;
@@ -328,8 +329,7 @@ class MainWindow : public QMainWindow {
     bool autopilot_random = false;
     QAction *playlistAction;
     QString stderrBuffer;
-    /// @brief True while a cache rebuild process started by menuBuildShaderCache
-    ///        is running.
+    /// @brief True while an ACMX2 cache rebuild or ACMXVK source build is running.
     bool cacheBuildInProgress = false;
 
     void initShaderSelectionSharedMemory();

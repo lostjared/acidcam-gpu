@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.102.0 adds the first ACMXVK integration increment:
+Interface version 2.105.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -16,10 +16,36 @@ Interface version 2.102.0 adds the first ACMXVK integration increment:
 - Legacy manifests without a backend hint remain valid.
 - ACMXVK source manifests use `"library_type": "source"`; compiled SPIR-V
   manifests use `"library_type": "runtime"`.
+- **Run Selected**, **Run All**, and **Copy Command** launch or generate a
+  command for the active backend. ACMXVK runs use `--shaders` and
+  `--shader-file`, preserving fragment/compute type and custom-uniform metadata
+  from `library.json`.
+- Feature checks, encoder queries, and CUDA-device discovery use the selected
+  backend executable. ACMXVK distinguishes MXVK CUDA interop from optional
+  acidcam-gpu filter support.
+- Installed ACMXVK data is discovered beside its executable or under the normal
+  `/usr/local`, `/opt/homebrew`, and `/usr` share directories.
+- Loading an ACMXVK source library changes **Playback > Rebuild Shader Cache**
+  to **Playback > Build**. It invokes the selected ACMXVK executable with
+  `--build library.json --builddir .acmxvk-build`; unchanged shaders remain
+  up to date while changed fragment and compute sources are compiled.
+- The generated `.acmxvk-build/library.json` is an ACMXVK runtime manifest.
+  **Run Selected**, **Run All**, multipass chains, playlists, and copied commands
+  transparently translate source names such as `effect.comp` to
+  `effect.comp.spv` in that build directory. The source library remains loaded
+  for browsing and editing.
+- A missing or stale build produces a Build prompt instead of launching old or
+  incomplete SPIR-V output. The hidden `.acmxvk-build/` directory is generated
+  data and should normally be excluded from commits.
+- Interface-launched ACMXVK runs and source builds include `--unbuffered`, so
+  ACMXVK stdout and stderr are streamed into the interface log while the process
+  is running instead of appearing only when an operating-system buffer fills.
 
-This first increment enables ACMXVK library selection and configuration while
-keeping process launch disabled for that backend. The next increment adds the
-backend-specific ACMXVK command builder; ACMX2 launch behavior is unchanged.
+ACMX2 shared-memory live shader selection and reload are intentionally not sent
+to ACMXVK yet. While ACMXVK is running, stop it and launch again to apply a new
+shader selection; live control is reserved for the next integration increment.
+ACMX2-only source editing and binary-cache maintenance actions remain disabled
+when ACMXVK is selected.
 
 ## Building
 

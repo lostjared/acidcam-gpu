@@ -29,7 +29,7 @@ class SettingsWindow : public QDialog {
     Q_OBJECT
   public:
     /// @brief Construct the settings dialog.
-    /// @param execPath Path to ACMX2 executable used for capability discovery.
+    /// @param execPath Path to the selected backend used for capability discovery.
     /// @param parent Parent widget.
     explicit SettingsWindow(const QString &execPath, QWidget *parent = nullptr);
     /// @brief Show or hide CUDA-specific controls based on availability.
@@ -153,7 +153,7 @@ class SettingsWindow : public QDialog {
     void saveUiState();
     void populateCameraDevices();
     void populateCudaDevices();
-    /// @brief Populate exact encoder names by querying the selected ACMX2 executable.
+    /// @brief Populate exact encoder names by querying the selected backend executable.
     void populateVideoEncoders(const QString &savedEncoder);
     /// @brief Refresh the selected encoder description and option-button state.
     void updateEncoderDetails();

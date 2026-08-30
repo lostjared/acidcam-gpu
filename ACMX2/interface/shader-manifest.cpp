@@ -126,6 +126,40 @@ namespace acmx2 {
         return backend;
     }
 
+    std::optional<ShaderLibraryType>
+    shader_manifest_library_type(const QString &directory, QString &error) {
+        error.clear();
+        const QString path = shader_manifest_path(directory);
+        if (path.isEmpty()) {
+            error = QObject::tr("No library.json or index.txt found in %1.")
+                        .arg(directory);
+            return std::nullopt;
+        }
+        if (!path.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
+            return std::nullopt;
+
+        QJsonDocument document;
+        if (!load_json_document(path, document, error))
+            return std::nullopt;
+        const QJsonValue value =
+            document.object().value(QStringLiteral("library_type"));
+        if (value.isUndefined() || value.isNull())
+            return std::nullopt;
+        if (!value.isString()) {
+            error = QObject::tr("%1 has a non-string 'library_type' value.")
+                        .arg(path);
+            return std::nullopt;
+        }
+        const QString type = value.toString().trimmed().toLower();
+        if (type == QStringLiteral("source"))
+            return ShaderLibraryType::Source;
+        if (type == QStringLiteral("runtime"))
+            return ShaderLibraryType::Runtime;
+        error = QObject::tr("%1 has an unsupported library_type '%2'.")
+                    .arg(path, value.toString());
+        return std::nullopt;
+    }
+
     bool load_shader_manifest(const QString &directory, QStringList &shaders,
                               QString &error) {
         shaders.clear();

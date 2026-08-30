@@ -25,6 +25,8 @@ namespace acmx2 {
 
     enum class ShaderManifestFormat { Json,
                                       Text };
+    enum class ShaderLibraryType { Source,
+                                   Runtime };
 
     /// @brief Resolve library.json first, then fall back to index.txt.
     QString shader_manifest_path(const QString &directory);
@@ -41,6 +43,9 @@ namespace acmx2 {
      */
     std::optional<Backend> shader_manifest_backend(const QString &directory,
                                                    QString &error);
+    /** Read and validate an optional top-level `library_type` value. */
+    std::optional<ShaderLibraryType>
+    shader_manifest_library_type(const QString &directory, QString &error);
 
     /** Load shader filenames from the preferred manifest in a directory. */
     bool load_shader_manifest(const QString &directory, QStringList &shaders,

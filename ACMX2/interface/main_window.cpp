@@ -39,6 +39,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSpinBox>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
@@ -122,6 +123,134 @@ namespace {
             return dirPath;
         return QStringLiteral("/usr/local/share/acmx2");
 #endif
+    }
+
+    QString resolve_backend_assets_path(acmx2::Backend backend,
+                                        const QString &executable,
+                                        const QString &libraryPath) {
+        if (backend == acmx2::Backend::Acmx2)
+            return resolveAssetsPath();
+
+        const QString applicationDir = QCoreApplication::applicationDirPath();
+#ifdef BUILD_BUNDLE
+        const QString bundleResources =
+            QDir::cleanPath(applicationDir + "/../Resources/acmxvk");
+        if (QFileInfo(bundleResources).isDir())
+            return bundleResources;
+#endif
+        QStringList candidates;
+        QString resolvedExecutable = executable;
+        if (QFileInfo(resolvedExecutable).isRelative()) {
+            const QString pathExecutable =
+                QStandardPaths::findExecutable(resolvedExecutable);
+            if (!pathExecutable.isEmpty())
+                resolvedExecutable = pathExecutable;
+        }
+        const QFileInfo executableInfo(resolvedExecutable);
+        if (!executableInfo.absolutePath().isEmpty()) {
+            candidates << QDir::cleanPath(executableInfo.absolutePath() +
+                                          "/../share/acmxvk");
+        }
+        if (!libraryPath.isEmpty())
+            candidates << QDir::cleanPath(QFileInfo(libraryPath).absolutePath());
+        candidates << QDir::cleanPath(applicationDir + "/../share/acmxvk")
+                   << QStringLiteral("/usr/local/share/acmxvk")
+                   << QStringLiteral("/opt/homebrew/share/acmxvk")
+                   << QStringLiteral("/usr/share/acmxvk");
+        for (const QString &candidate : candidates) {
+            if (QFileInfo(candidate + "/data").isDir())
+                return candidate;
+        }
+
+        // --path only requires a readable directory. ACMXVK can still use the
+        // explicitly selected shader library if no installed data tree exists.
+        return applicationDir;
+    }
+
+    bool is_acmxvk_source_library(const QString &libraryPath, QString &error) {
+        error.clear();
+        const std::optional<acmx2::ShaderLibraryType> type =
+            acmx2::shader_manifest_library_type(libraryPath, error);
+        if (!error.isEmpty())
+            return false;
+        if (type)
+            return *type == acmx2::ShaderLibraryType::Source;
+
+        // Legacy manifests may not carry library_type. Infer source libraries
+        // from GLSL entries while continuing to accept old SPIR-V manifests.
+        QStringList entries;
+        if (!acmx2::load_shader_manifest(libraryPath, entries, error))
+            return false;
+        return std::any_of(entries.cbegin(), entries.cend(), [](const QString &entry) {
+            return entry.endsWith(".frag", Qt::CaseInsensitive) ||
+                   entry.endsWith(".comp", Qt::CaseInsensitive);
+        });
+    }
+
+    QString acmxvk_build_directory(const QString &sourceLibrary) {
+        return QDir(sourceLibrary).filePath(QStringLiteral(".acmxvk-build"));
+    }
+
+    QString acmxvk_runtime_shader_name(const QString &sourceName) {
+        return sourceName.endsWith(".spv", Qt::CaseInsensitive)
+                   ? sourceName
+                   : sourceName + QStringLiteral(".spv");
+    }
+
+    bool resolve_acmxvk_runtime_library(const QString &selectedLibrary,
+                                        QString &runtimeLibrary,
+                                        QString &error) {
+        error.clear();
+        runtimeLibrary = selectedLibrary;
+        if (!is_acmxvk_source_library(selectedLibrary, error))
+            return error.isEmpty();
+
+        runtimeLibrary = acmxvk_build_directory(selectedLibrary);
+        if (!acmx2::shader_manifest_exists(runtimeLibrary)) {
+            error = QObject::tr(
+                        "The ACMXVK source library has not been built yet. "
+                        "Choose Playback > Build first.\n\nExpected output: %1")
+                        .arg(runtimeLibrary);
+            return false;
+        }
+        const std::optional<acmx2::ShaderLibraryType> type =
+            acmx2::shader_manifest_library_type(runtimeLibrary, error);
+        if (!error.isEmpty())
+            return false;
+        if (type && *type != acmx2::ShaderLibraryType::Runtime) {
+            error = QObject::tr("Compiled output is not an ACMXVK runtime library: %1")
+                        .arg(runtimeLibrary);
+            return false;
+        }
+        QStringList sourceEntries;
+        if (!acmx2::load_shader_manifest(selectedLibrary, sourceEntries, error))
+            return false;
+        const QFileInfo sourceManifest(
+            acmx2::shader_manifest_path(selectedLibrary));
+        const QFileInfo runtimeManifest(
+            acmx2::shader_manifest_path(runtimeLibrary));
+        if (runtimeManifest.lastModified() < sourceManifest.lastModified()) {
+            error = QObject::tr(
+                "The ACMXVK build is out of date. Choose Playback > "
+                "Build before running.");
+            return false;
+        }
+        for (const QString &sourceEntry : sourceEntries) {
+            const QFileInfo sourceFile(
+                QDir(selectedLibrary).filePath(sourceEntry));
+            const QFileInfo runtimeFile(QDir(runtimeLibrary)
+                                            .filePath(acmxvk_runtime_shader_name(
+                                                sourceEntry)));
+            if (!runtimeFile.isFile() ||
+                runtimeFile.lastModified() < sourceFile.lastModified()) {
+                error = QObject::tr(
+                            "The ACMXVK build is missing or older than %1. "
+                            "Choose Playback > Build before running.")
+                            .arg(sourceEntry);
+                return false;
+            }
+        }
+        return true;
     }
 
     bool textureCacheArraySettingEnabled() {
@@ -272,7 +401,6 @@ void MainWindow::initControls() {
     lastFoundIndex = -1;
     lastSearchText = QString();
     process = new QProcess(this);
-    initShaderSelectionSharedMemory();
     auto updateShaderMenuState = [this](QProcess::ProcessState state) {
         const bool running = (state == QProcess::Running);
         if (backendMenu)
@@ -299,7 +427,8 @@ void MainWindow::initControls() {
             listMenu_sort->setEnabled(!running);
         }
         if (listMenu_set_current) {
-            listMenu_set_current->setEnabled(running);
+            listMenu_set_current->setEnabled(
+                running && active_backend == acmx2::Backend::Acmx2);
         }
     };
     connect(process, &QProcess::stateChanged, this, updateShaderMenuState);
@@ -346,27 +475,45 @@ void MainWindow::initControls() {
                 }
                 QString text;
                 QTextStream stream(&text);
-                stream << "acmx2: Exited with Code: " << exitCode;
+                stream << acmx2::backend_name(active_backend)
+                       << ": Exited with Code: " << exitCode;
                 Log(text + "<br>");
                 play_stop->setEnabled(false);
 
                 if (exitStatus == QProcess::CrashExit) {
-                    qDebug() << "acmx2 engine crashed. Executing IPC cleanup.";
-                    Log("<b style='color:red;'>acmx2 engine crashed. Cleaning up IPC locks.</b><br>");
-                    cleanupShaderSelectionSemaphore();
+                    qDebug() << acmx2::backend_name(active_backend)
+                             << "engine crashed.";
+                    Log("<b style='color:red;'>" +
+                        acmx2::backend_name(active_backend) +
+                        " engine crashed.</b><br>");
+                    if (active_backend == acmx2::Backend::Acmx2)
+                        cleanupShaderSelectionSemaphore();
                 }
 
                 // Refresh the shader tree's compile-health column now that
                 // the child process has (re)written the binary shader cache.
                 populateShaderTree();
 
+                const bool finishedBuildProcess = cacheBuildInProgress;
                 if (cacheBuildInProgress) {
+                    if (active_backend == acmx2::Backend::Acmxvk) {
+                        if (exitCode == 0) {
+                            Log(tr("ACMXVK build ready: %1")
+                                    .arg(acmxvk_build_directory(shader_path)));
+                        } else {
+                            Log(tr("<b style='color:red;'>ACMXVK build failed "
+                                   "with exit code %1.</b>")
+                                    .arg(exitCode));
+                        }
+                    }
                     cacheBuildInProgress = false;
+                    update_backend_ui();
                 }
 
                 // Optional post-process: convert the produced HLG HDR file
                 // to HDR10 via ffmpeg and stream its output to the log.
-                if (convert_to_hdr10 && exitCode == 0 && !output_file.isEmpty() &&
+                if (!finishedBuildProcess && convert_to_hdr10 && exitCode == 0 &&
+                    !output_file.isEmpty() &&
                     QFileInfo::exists(output_file)) {
                     runHdr10Conversion();
                 }
@@ -811,7 +958,8 @@ void MainWindow::initControls() {
             .toString();
     prefix_path = appSettings.value("prefix_path", ".").toString();
     if (active_backend == acmx2::Backend::Acmx2)
-        detectCudaSupport();
+        initShaderSelectionSharedMemory();
+    detectCudaSupport();
     bool useCustomStyle = appSettings.value("useCustomStyle", false).toBool();
     styleSheetAction->setChecked(useCustomStyle);
     midi_enabled = appSettings.value("midiEnabled", false).toBool();
@@ -2044,7 +2192,7 @@ void MainWindow::menuLoadLibrary() {
 }
 
 bool MainWindow::backend_launch_available() const {
-    return active_backend == acmx2::Backend::Acmx2;
+    return true;
 }
 
 void MainWindow::update_backend_ui() {
@@ -2056,53 +2204,74 @@ void MainWindow::update_backend_ui() {
         backendAcmxvkAction->setChecked(active_backend == acmx2::Backend::Acmxvk);
 
     const bool launchAvailable = backend_launch_available();
+    const bool acmx2Tools = active_backend == acmx2::Backend::Acmx2;
+    QString sourceTypeError;
+    const bool acmxvkSource =
+        active_backend == acmx2::Backend::Acmxvk && !shader_path.isEmpty() &&
+        is_acmxvk_source_library(shader_path, sourceTypeError) &&
+        sourceTypeError.isEmpty();
     if (runMenu_select)
         runMenu_select->setEnabled(launchAvailable);
     if (runMenu_all)
         runMenu_all->setEnabled(launchAvailable);
     if (runMenu_copyCommand)
         runMenu_copyCommand->setEnabled(launchAvailable);
-    if (buildCacheAction)
-        buildCacheAction->setEnabled(launchAvailable);
-    if (cleanShaderCacheAction)
-        cleanShaderCacheAction->setEnabled(launchAvailable);
+    if (buildCacheAction) {
+        buildCacheAction->setText(acmxvkSource ? tr("Build")
+                                               : tr("Rebuild Shader Cache"));
+        buildCacheAction->setVisible(acmx2Tools || acmxvkSource);
+        buildCacheAction->setEnabled(acmx2Tools || acmxvkSource);
+        buildCacheAction->setToolTip(
+            acmxvkSource
+                ? tr("Compile changed GLSL sources into %1")
+                      .arg(acmxvk_build_directory(shader_path))
+                : QString());
+    }
+    if (cleanShaderCacheAction) {
+        cleanShaderCacheAction->setVisible(acmx2Tools);
+        cleanShaderCacheAction->setEnabled(acmx2Tools);
+    }
     if (removeBrokenAction)
-        removeBrokenAction->setEnabled(launchAvailable);
-    if (runFromCacheAction)
-        runFromCacheAction->setEnabled(launchAvailable);
+        removeBrokenAction->setEnabled(acmx2Tools);
+    if (runFromCacheAction) {
+        runFromCacheAction->setVisible(acmx2Tools);
+        runFromCacheAction->setEnabled(acmx2Tools);
+    }
 #ifdef Q_OS_MACOS
-    if (buildCacheAction)
+    if (buildCacheAction && acmx2Tools) {
+        buildCacheAction->setVisible(false);
         buildCacheAction->setEnabled(false);
+    }
     if (cleanShaderCacheAction)
         cleanShaderCacheAction->setEnabled(false);
     if (runFromCacheAction)
         runFromCacheAction->setEnabled(false);
 #endif
     if (libraryBuilderAction)
-        libraryBuilderAction->setEnabled(launchAvailable);
+        libraryBuilderAction->setEnabled(acmx2Tools);
     if (listMenu_new)
-        listMenu_new->setEnabled(launchAvailable);
+        listMenu_new->setEnabled(acmx2Tools);
     if (listMenu_shader)
-        listMenu_shader->setEnabled(launchAvailable);
+        listMenu_shader->setEnabled(acmx2Tools);
     if (list_view) {
 #ifdef Q_OS_MACOS
         list_view->setColumnHidden(3, true);
 #else
-        list_view->setColumnHidden(3, !launchAvailable);
+        list_view->setColumnHidden(3, !acmx2Tools);
 #endif
     }
 
-    if (!launchAvailable && runMenu) {
-        runMenu->setToolTipsVisible(true);
-        const QString pending =
-            tr("ACMXVK launching will be enabled in interface Increment 2.");
-        runMenu_select->setToolTip(pending);
-        runMenu_all->setToolTip(pending);
-        runMenu_copyCommand->setToolTip(pending);
-    } else {
+    if (runMenu) {
         runMenu_select->setToolTip({});
         runMenu_all->setToolTip({});
         runMenu_copyCommand->setToolTip({});
+    }
+    if (list_view) {
+        list_view->setToolTip(
+            acmx2Tools
+                ? tr("Right click while running to change the active shader.")
+                : tr("ACMXVK live shader switching is not available yet; stop "
+                     "and run again after changing the selection."));
     }
 }
 
@@ -2162,19 +2331,20 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
     }
 
     cuda_available = false;
+    cuda_device_available = false;
     audio_available = false;
     midi_available = false;
     dnn_available = false;
     if (active_backend == acmx2::Backend::Acmx2)
-        detectFeatureSupport();
+        initShaderSelectionSharedMemory();
+    detectFeatureSupport();
     updateRecentLibrariesMenu();
     update_backend_ui();
     settings.sync();
     Log(tr("Backend selected: %1").arg(acmx2::backend_name(active_backend)));
-    if (!backend_launch_available()) {
-        Log(tr("ACMXVK library selection is enabled; process launching arrives "
-               "in interface Increment 2."));
-    }
+    if (active_backend == acmx2::Backend::Acmxvk)
+        Log(tr("ACMXVK launching is enabled; live shader switching remains "
+               "disabled for this increment."));
 }
 
 bool MainWindow::loadLibraryPath(const QString &path) {
@@ -2221,6 +2391,15 @@ bool MainWindow::loadLibraryPath(const QString &path) {
             return false;
         set_backend(*libraryBackend);
     }
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        QString libraryTypeError;
+        acmx2::shader_manifest_library_type(libraryPath, libraryTypeError);
+        if (!libraryTypeError.isEmpty()) {
+            QMessageBox::warning(this, tr("Invalid Library Type"),
+                                 libraryTypeError);
+            return false;
+        }
+    }
     if (!loadShaders(libraryPath, true)) {
         Log(tr("Warning: Could not load shaders from directory: %1")
                 .arg(libraryPath));
@@ -2235,6 +2414,7 @@ bool MainWindow::loadLibraryPath(const QString &path) {
     settings.sync();
     addRecentLibrary(libraryPath);
     Log(tr("Successfully loaded shader library: %1").arg(libraryPath));
+    update_backend_ui();
     return true;
 }
 
@@ -2816,7 +2996,7 @@ void MainWindow::menuPlaylistSettings() {
 
 void MainWindow::cameraSettings() {
     SettingsWindow settingsWindow(executable_path, this);
-    settingsWindow.setCudaAvailable(cuda_available);
+    settingsWindow.setCudaAvailable(cuda_device_available);
     settingsWindow.setDnnAvailable(dnn_available);
     if (settingsWindow.exec() == QDialog::Accepted) {
         full_screen_value = settingsWindow.isFullscreen();
@@ -2895,13 +3075,6 @@ void MainWindow::cameraSettings() {
 }
 
 void MainWindow::runSelected() {
-    if (!backend_launch_available()) {
-        QMessageBox::information(
-            this, tr("ACMXVK Integration"),
-            tr("ACMXVK process launching will be enabled in interface "
-               "Increment 2."));
-        return;
-    }
     if (process->state() == QProcess::Running) {
         QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
         return;
@@ -2933,33 +3106,63 @@ void MainWindow::runSelected() {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
     }
-    initShaderSelectionSharedMemory();
-    publishSelectedShaderIndexToRunningProcess();
-    publishRuntimeSettingsToRunningProcess();
+    if (active_backend == acmx2::Backend::Acmx2) {
+        initShaderSelectionSharedMemory();
+        publishSelectedShaderIndexToRunningProcess();
+        publishRuntimeSettingsToRunningProcess();
+    }
     const QString data = currentShaderName();
     if (data.isEmpty()) {
         Log("<b>No item selected.</b>");
         return;
     }
+    QString launchShaderPath = shader_path;
+    QString launchShaderName = data;
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        QString runtimeError;
+        if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
+                                            runtimeError)) {
+            QMessageBox::warning(this, tr("Build ACMXVK Library"), runtimeError);
+            return;
+        }
+        if (launchShaderPath != shader_path)
+            launchShaderName = acmxvk_runtime_shader_name(data);
+        if (!QFileInfo(QDir(launchShaderPath).filePath(launchShaderName)).isFile()) {
+            QMessageBox::warning(
+                this, tr("Build ACMXVK Library"),
+                tr("The compiled shader is missing. Choose Playback > Build "
+                   "and try again.\n\n%1")
+                    .arg(QDir(launchShaderPath).filePath(launchShaderName)));
+            return;
+        }
+    }
     QStringList arguments;
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
-    executable_path = dirPath + "/../Helpers/acmx2";
+    executable_path = dirPath + "/../Helpers/" +
+                      acmx2::default_backend_executable(active_backend);
 #endif
-    if (!QFileInfo::exists(dirPath + "/data/win-icon.png"))
-        dirPath = "/usr/local/share/acmx2";
+    dirPath = resolve_backend_assets_path(active_backend, executable_path,
+                                          shader_path);
     const int selectedIndex = currentShaderRow();
     if (selectedIndex < 0 || selectedIndex >= items.size()) {
         Log("<b>No valid shader selection.</b>");
         return;
     }
-    // Single-shader run: use --fragment to bypass library load/compile entirely.
-    // Only the selected shader gets compiled; no binary cache lookup, no 1700+
-    // shader compile pass.
-    const QString fragmentPath = shader_path + "/" + data;
-    arguments << "--path" << dirPath
-              << "--fragment" << fragmentPath;
-    arguments << "--interface-shm";
+    if (active_backend == acmx2::Backend::Acmxvk)
+        arguments << "--unbuffered";
+    arguments << "--path" << dirPath;
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        // ACMXVK needs its manifest to resolve fragment/compute types and
+        // custom-uniform metadata for the selected SPIR-V shader.
+        arguments << "--shaders" << launchShaderPath << "--shader-file"
+                  << launchShaderName;
+    } else {
+        // ACMX2 can compile a selected source directly without loading the
+        // complete shader library and its binary cache.
+        arguments << "--fragment" << (shader_path + "/" + data)
+                  << "--interface-shm";
+    }
     // Pass texture cache size so the SIZE macro injected into the fragment
     // matches whatever the user has configured for cache shaders.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
@@ -3093,7 +3296,7 @@ void MainWindow::runSelected() {
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
 
-    if (cuda_available) {
+    if (cuda_device_available) {
         arguments << "--cuda-device" << QString::number(cuda_device);
     }
 
@@ -3103,7 +3306,7 @@ void MainWindow::runSelected() {
         arguments << "--normalized";
     }
 
-    if (!use_shader_cache) {
+    if (!use_shader_cache && active_backend == acmx2::Backend::Acmx2) {
         arguments << "--no-cache";
     }
 
@@ -3151,9 +3354,9 @@ void MainWindow::runSelected() {
         arguments << "--display-filter";
     }
 
-    // Single-shader (--fragment) mode does not use the library binary cache,
-    // so skip the auto-rebuild gate that's needed for full library runs.
-    Log("shell: acmx2 " + concatList(arguments) + "<br>");
+    // ACMX2 single-source mode bypasses its binary cache. ACMXVK uses the
+    // selected runtime library and does not accept ACMX2 cache controls.
+    Log("shell: " + executable_path + " " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
         Log("<b style='color:red;'>Failed to start the program.</b>");
@@ -3178,16 +3381,50 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         const QString selectedData = currentShaderName();
         Log("Selected shader: " + selectedData + " at index: " + QString::number(index));
     }
+    if (items.isEmpty()) {
+        QMessageBox::warning(this, tr("Empty Shader Library"),
+                             tr("The selected shader library contains no shaders."));
+        return false;
+    }
+    if (index < 0 || index >= items.size()) {
+        QMessageBox::warning(this, tr("Invalid Shader Selection"),
+                             tr("Select a shader from the active library."));
+        return false;
+    }
+    QString launchShaderPath = shader_path;
+    QString launchShaderName = items.at(index);
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        QString runtimeError;
+        if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
+                                            runtimeError)) {
+            QMessageBox::warning(this, tr("Build ACMXVK Library"), runtimeError);
+            return false;
+        }
+        if (launchShaderPath != shader_path)
+            launchShaderName = acmxvk_runtime_shader_name(launchShaderName);
+        if (!QFileInfo(QDir(launchShaderPath).filePath(launchShaderName)).isFile()) {
+            QMessageBox::warning(
+                this, tr("Build ACMXVK Library"),
+                tr("The compiled shader is missing. Choose Playback > Build "
+                   "and try again.\n\n%1")
+                    .arg(QDir(launchShaderPath).filePath(launchShaderName)));
+            return false;
+        }
+    }
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
-    executable_path = dirPath + "/../Helpers/acmx2";
+    executable_path = dirPath + "/../Helpers/" +
+                      acmx2::default_backend_executable(active_backend);
 #endif
-    if (!QFileInfo::exists(dirPath + "/data/win-icon.png"))
-        dirPath = "/usr/local/share/acmx2";
+    dirPath = resolve_backend_assets_path(active_backend, executable_path,
+                                          shader_path);
 
-    QString shader_file = shader_path;
+    QString shader_file = launchShaderPath;
+    if (active_backend == acmx2::Backend::Acmxvk)
+        arguments << "--unbuffered";
     arguments << "--path" << dirPath << "--shaders" << shader_file;
-    arguments << "--interface-shm";
+    if (active_backend == acmx2::Backend::Acmx2)
+        arguments << "--interface-shm";
     // Always pass texture cache size so runtime SIZE matches the cache file.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     if (cache_enabled && textureCacheArraySettingEnabled())
@@ -3253,7 +3490,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
             (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
     }
-    arguments << "--shader-file" << items.at(index);
+    arguments << "--shader-file" << launchShaderName;
 
     if (audio_available && audio_enabled) {
         arguments << "--enable-audio";
@@ -3328,8 +3565,12 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
             for (const QString &indexValue : indexValues) {
                 bool ok = false;
                 const int passIndex = indexValue.toInt(&ok);
-                if (ok && passIndex >= 0 && passIndex < items.size())
-                    passFiles.append(items.at(passIndex));
+                if (ok && passIndex >= 0 && passIndex < items.size()) {
+                    const QString passFile = items.at(passIndex);
+                    passFiles.append(launchShaderPath == shader_path
+                                         ? passFile
+                                         : acmxvk_runtime_shader_name(passFile));
+                }
             }
             QByteArray passFilePayload;
             for (const QString &passFile : passFiles) {
@@ -3343,7 +3584,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         }
     }
 
-    if (cuda_available) {
+    if (cuda_device_available) {
         arguments << "--cuda-device" << QString::number(cuda_device);
     }
 
@@ -3353,7 +3594,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         arguments << "--normalized";
     }
 
-    if (!use_shader_cache) {
+    if (!use_shader_cache && active_backend == acmx2::Backend::Acmx2) {
         arguments << "--no-cache";
     }
 
@@ -3374,12 +3615,20 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
             if (!playlist_tree_data.isEmpty()) {
                 for (const auto &[nodeName, shaders] : playlist_tree_data) {
                     out << "[" << nodeName << "]\n";
-                    for (const QString &name : shaders)
-                        out << name << "\n";
+                    for (const QString &name : shaders) {
+                        out << (launchShaderPath == shader_path
+                                    ? name
+                                    : acmxvk_runtime_shader_name(name))
+                            << "\n";
+                    }
                 }
             } else {
-                for (const QString &name : playlist_names)
-                    out << name << "\n";
+                for (const QString &name : playlist_names) {
+                    out << (launchShaderPath == shader_path
+                                ? name
+                                : acmxvk_runtime_shader_name(name))
+                        << "\n";
+                }
             }
             f.close();
             playlist_file_path = plFile;
@@ -3545,13 +3794,6 @@ void MainWindow::runHdr10Conversion() {
 }
 
 void MainWindow::runAll() {
-    if (!backend_launch_available()) {
-        QMessageBox::information(
-            this, tr("ACMXVK Integration"),
-            tr("ACMXVK process launching will be enabled in interface "
-               "Increment 2."));
-        return;
-    }
     if (process->state() == QProcess::Running) {
         QMessageBox::information(this, "Process Running", "A process is already running. Please stop it first.");
         return;
@@ -3572,12 +3814,14 @@ void MainWindow::runAll() {
     QStringList arguments;
     if (!buildRunArguments(arguments))
         return;
-    initShaderSelectionSharedMemory();
-    publishMultipassShadersToRunningProcess();
-    publishSelectedShaderIndexToRunningProcess();
-    publishRuntimeSettingsToRunningProcess();
+    if (active_backend == acmx2::Backend::Acmx2) {
+        initShaderSelectionSharedMemory();
+        publishMultipassShadersToRunningProcess();
+        publishSelectedShaderIndexToRunningProcess();
+        publishRuntimeSettingsToRunningProcess();
+    }
 
-    Log("shell: acmx2 " + concatList(arguments) + "<br>");
+    Log("shell: " + executable_path + " " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
         Log("<b style='color:red;'>Failed to start the program.</b>");
@@ -3588,20 +3832,13 @@ void MainWindow::runAll() {
 }
 
 void MainWindow::copyCommand() {
-    if (!backend_launch_available()) {
-        QMessageBox::information(
-            this, tr("ACMXVK Integration"),
-            tr("ACMXVK command generation will be enabled in interface "
-               "Increment 2."));
-        return;
-    }
     QStringList arguments;
     if (!buildRunArguments(arguments))
         return;
 
     QString exe = executable_path;
     if (exe.isEmpty())
-        exe = "acmx2";
+        exe = acmx2::default_backend_executable(active_backend);
     QStringList envAssignments;
 #ifdef __linux__
     envAssignments = defaultLinuxRunEnvAssignments();
@@ -3767,16 +4004,16 @@ void MainWindow::menuSort() {
 }
 
 void MainWindow::menuBuildShaderCache() {
-#ifdef Q_OS_MACOS
-    // macOS does not support the persistent binary shader cache.
-    Log("Rebuild Shader Cache is not available on macOS.");
-    cacheBuildInProgress = false;
-    return;
-#else
     QString build_path = shader_path;
     if (build_path.isEmpty()) {
         QSettings appSettings("LostSideDead");
-        build_path = appSettings.value("shaders", "").toString();
+        build_path =
+            appSettings
+                .value(acmx2::backend_settings_key(active_backend, "library"),
+                       active_backend == acmx2::Backend::Acmx2
+                           ? appSettings.value("shaders", "").toString()
+                           : QString())
+                .toString();
     }
 
     if (build_path.isEmpty()) {
@@ -3790,6 +4027,49 @@ void MainWindow::menuBuildShaderCache() {
         QMessageBox::warning(this, "Error", "A process is already running. Please wait for it to finish.");
         return;
     }
+
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        QString typeError;
+        if (!is_acmxvk_source_library(build_path, typeError)) {
+            QMessageBox::warning(
+                this, tr("Build ACMXVK Library"),
+                typeError.isEmpty()
+                    ? tr("The selected ACMXVK library is already a compiled "
+                         "runtime library.")
+                    : typeError);
+            return;
+        }
+        const QString manifestPath =
+            QDir(build_path).filePath(QStringLiteral("library.json"));
+        if (!QFileInfo(manifestPath).isFile()) {
+            QMessageBox::warning(
+                this, tr("Build ACMXVK Library"),
+                tr("ACMXVK source builds require library.json:\n%1")
+                    .arg(manifestPath));
+            return;
+        }
+        const QString outputPath = acmxvk_build_directory(build_path);
+        const QStringList args{"--unbuffered", "--build", manifestPath,
+                               "--builddir", outputPath};
+        Log(tr("Building ACMXVK SPIR-V library: %1").arg(build_path));
+        Log("Command: " + executable_path + " " + concatList(args));
+        play_stop->setEnabled(true);
+        cacheBuildInProgress = true;
+        process->start(executable_path, args);
+        if (!process->waitForStarted()) {
+            Log("<b style='color:red;'>Error:</b> Failed to start ACMXVK build process");
+            cacheBuildInProgress = false;
+            play_stop->setEnabled(false);
+        }
+        return;
+    }
+
+#ifdef Q_OS_MACOS
+    // ACMX2 does not support its persistent OpenGL binary cache on macOS.
+    Log("Rebuild Shader Cache is not available on macOS.");
+    cacheBuildInProgress = false;
+    return;
+#else
 
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
@@ -4030,31 +4310,53 @@ void MainWindow::detectCudaSupport() {
     detectFeatureSupport();
 }
 
-static bool probeFeature(const QString &exe, const QString &flag, const QString &token) {
+static QString probe_feature_output(const QString &exe, const QString &flag) {
     QProcess probe;
     probe.start(exe, QStringList() << flag);
     if (!probe.waitForFinished(5000)) {
         probe.kill();
-        return false;
+        return {};
     }
-    const QString out = QString::fromLocal8Bit(probe.readAllStandardOutput()).trimmed();
-    return out.contains(token, Qt::CaseInsensitive);
+    return QString::fromLocal8Bit(probe.readAllStandardOutput()).trimmed();
+}
+
+static bool probeFeature(const QString &exe, const QString &flag,
+                         const QString &token) {
+    return probe_feature_output(exe, flag).contains(token, Qt::CaseInsensitive);
 }
 
 void MainWindow::detectFeatureSupport() {
-    cuda_available = probeFeature(executable_path, "--check-cuda", "CUDA: enabled");
+    const bool isAcmxvk = active_backend == acmx2::Backend::Acmxvk;
+    const QString backendName = acmx2::backend_name(active_backend);
+    const QString cudaOutput =
+        probe_feature_output(executable_path, "--check-cuda");
+    cuda_available = cudaOutput.contains(
+        isAcmxvk ? "acidcam-gpu filters: enabled" : "CUDA: enabled",
+        Qt::CaseInsensitive);
+    cuda_device_available =
+        isAcmxvk
+            ? cudaOutput.contains("MXVK CUDA interop: enabled",
+                                  Qt::CaseInsensitive)
+            : cuda_available;
     audio_available = probeFeature(executable_path, "--check-audio", "AUDIO: enabled");
     midi_available = probeFeature(executable_path, "--check-midi", "MIDI: enabled");
-    dnn_available = probeFeature(executable_path, "--check-dnn", "OpenCV DNN: enabled");
+    dnn_available = probeFeature(
+        executable_path, "--check-dnn",
+        isAcmxvk ? "OpenCV DNN effects: enabled" : "OpenCV DNN: enabled");
 
-    Log(cuda_available ? "CUDA: enabled (acmx2 built with CUDA support)"
-                       : "CUDA: disabled (acmx2 built without CUDA support)");
-    Log(audio_available ? "AUDIO: enabled (acmx2 built with audio support)"
-                        : "AUDIO: disabled (acmx2 built without audio support)");
-    Log(midi_available ? "MIDI: enabled (acmx2 built with MIDI support)"
-                       : "MIDI: disabled (acmx2 built without MIDI support)");
-    Log(dnn_available ? "OpenCV DNN: enabled (acmx2 built with OpenCV DNN support)"
-                      : "OpenCV DNN: disabled (acmx2 built without OpenCV DNN support)");
+    Log(QString("CUDA filters: %1 (%2)")
+            .arg(cuda_available ? "enabled" : "disabled", backendName));
+    if (isAcmxvk) {
+        Log(QString("CUDA device interop: %1 (%2)")
+                .arg(cuda_device_available ? "enabled" : "disabled",
+                     backendName));
+    }
+    Log(QString("AUDIO: %1 (%2)")
+            .arg(audio_available ? "enabled" : "disabled", backendName));
+    Log(QString("MIDI: %1 (%2)")
+            .arg(midi_available ? "enabled" : "disabled", backendName));
+    Log(QString("OpenCV DNN: %1 (%2)")
+            .arg(dnn_available ? "enabled" : "disabled", backendName));
 
     if (!dnn_available) {
         onnx_model_enabled = false;
@@ -4063,21 +4365,26 @@ void MainWindow::detectFeatureSupport() {
 
     if (gpuFilterAction) {
         gpuFilterAction->setEnabled(cuda_available);
-        if (!cuda_available) {
-            gpuFilterAction->setToolTip(tr("Disabled: acmx2 was built without CUDA support."));
-        }
+        gpuFilterAction->setToolTip(
+            cuda_available
+                ? QString()
+                : tr("Disabled: %1 was built without acidcam-gpu filter support.")
+                      .arg(backendName));
     }
     if (!cuda_available) {
         gpu_filter_enabled = false;
         gpu_filter_indices.clear();
-        cuda_device = 0;
+        if (!cuda_device_available)
+            cuda_device = 0;
     }
 
     if (audioSet) {
         audioSet->setEnabled(audio_available);
-        if (!audio_available) {
-            audioSet->setToolTip(tr("Disabled: acmx2 was built without audio support."));
-        }
+        audioSet->setToolTip(
+            audio_available
+                ? QString()
+                : tr("Disabled: %1 was built without audio support.")
+                      .arg(backendName));
     }
     if (!audio_available) {
         audio_enabled = false;
@@ -4090,9 +4397,11 @@ void MainWindow::detectFeatureSupport() {
 
     if (midiSettingsAction) {
         midiSettingsAction->setEnabled(midi_available);
-        if (!midi_available) {
-            midiSettingsAction->setToolTip(tr("Disabled: acmx2 was built without MIDI support."));
-        }
+        midiSettingsAction->setToolTip(
+            midi_available
+                ? QString()
+                : tr("Disabled: %1 was built without MIDI support.")
+                      .arg(backendName));
     }
     if (!midi_available) {
         midi_enabled = false;

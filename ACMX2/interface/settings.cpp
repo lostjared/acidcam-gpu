@@ -534,7 +534,7 @@ void SettingsWindow::populateCameraDevices() {
 
 void SettingsWindow::populateCudaDevices() {
     QProcess process;
-    process.start("acmx2", QStringList() << "--list-cuda-devices");
+    process.start(executablePath, QStringList() << "--list-cuda-devices");
     process.waitForFinished(5000);
 
     QString output = process.readAllStandardOutput();
@@ -545,7 +545,9 @@ void SettingsWindow::populateCudaDevices() {
     }
 
     QStringList lines = output.split('\n');
-    QRegularExpression deviceRegex("Device\\s+(\\d+):\\s*\"?([^\"\\n]+)\"?");
+    QRegularExpression deviceRegex(
+        "(?:device\\s+)?(\\d+):\\s*\"?([^\"\\n]+)\"?",
+        QRegularExpression::CaseInsensitiveOption);
 
     bool foundDevice = false;
     for (const QString &line : lines) {
@@ -1687,8 +1689,9 @@ void SettingsWindow::setCudaAvailable(bool available) {
         cudaDeviceComboBox->setEnabled(available);
         if (!available) {
             cudaDeviceComboBox->clear();
-            cudaDeviceComboBox->addItem("CUDA disabled (acmx2 built without CUDA)", 0);
-            cudaDeviceComboBox->setToolTip("CUDA support is not compiled into this acmx2 build.");
+            cudaDeviceComboBox->addItem("CUDA device support disabled", 0);
+            cudaDeviceComboBox->setToolTip(
+                "CUDA device support is not compiled into the selected backend.");
         }
     }
     if (cudaDeviceLabel) {

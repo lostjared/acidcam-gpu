@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9N**. It is usable for video, camera, and
+The port is currently at **Increment 9O**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -36,7 +36,7 @@ ACMX2.
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
-| Qt interface integration | Not yet ported | ACMXVK currently provides the command-line renderer only. |
+| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader-control IPC remains ACMX2-only. |
 
 ## Requirements
 
@@ -470,6 +470,11 @@ Increment 9N decouples explicit output geometry from preview-window geometry.
 while an oversized preview is uniformly fitted within 90 percent of the usable
 display and centered with its aspect ratio locked. This matches automatic
 source-resolution behavior and changes only ACMXVK.
+Increment 9O adds `--unbuffered` for launchers and other supervising processes.
+When enabled, ACMXVK flushes standard output and standard error after every
+write so startup, build-progress, validation, capture, and teardown messages can
+be displayed immediately by the ACMX interface. Normal terminal behavior is
+unchanged when the option is omitted.
 
 ### Input validation
 
