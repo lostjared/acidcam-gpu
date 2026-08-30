@@ -224,7 +224,16 @@ void CustomUniformDialog::addUniform() {
         return;
     }
 
-    uniformDefinitions.append({name, minimum, maximum, step, minimum});
+    acmx2::CustomUniformDefinition uniform{name, minimum, maximum, step,
+                                           minimum};
+    const bool usesExplicitSlots = std::any_of(
+        uniformDefinitions.cbegin(), uniformDefinitions.cend(),
+        [](const acmx2::CustomUniformDefinition &definition) {
+            return definition.slot >= 0;
+        });
+    if (usesExplicitSlots)
+        uniform.slot = uniformDefinitions.size();
+    uniformDefinitions.append(uniform);
     if (!saveUniforms(true)) {
         uniformDefinitions.removeLast();
         return;
@@ -326,9 +335,18 @@ void CustomUniformDialog::removeUniform(const QString &name) {
     const int index = uniformIndex(name);
     if (index < 0)
         return;
-    const acmx2::CustomUniformDefinition removed = uniformDefinitions.takeAt(index);
+    const QList<acmx2::CustomUniformDefinition> previousDefinitions =
+        uniformDefinitions;
+    const acmx2::CustomUniformDefinition removed =
+        uniformDefinitions.takeAt(index);
+    if (removed.slot >= 0) {
+        for (acmx2::CustomUniformDefinition &uniform : uniformDefinitions) {
+            if (uniform.slot > removed.slot)
+                --uniform.slot;
+        }
+    }
     if (!saveUniforms(true)) {
-        uniformDefinitions.insert(index, removed);
+        uniformDefinitions = previousDefinitions;
         return;
     }
     rebuildUniformRows();

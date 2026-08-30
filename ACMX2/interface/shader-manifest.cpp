@@ -12,6 +12,7 @@
 #include <QTextStream>
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace {
     constexpr auto JSON_MANIFEST_NAME = "library.json";
@@ -355,6 +356,9 @@ namespace acmx2 {
         }
 
         const QJsonObject entries = value.toObject();
+        bool hasExplicitSlots = false;
+        bool hasImplicitSlots = false;
+        std::vector<int> occupiedSlots;
         for (auto it = entries.constBegin(); it != entries.constEnd(); ++it) {
             if (!it.value().isObject()) {
                 error = QObject::tr("Custom uniform '%1' must be an object.")
@@ -373,6 +377,26 @@ namespace acmx2 {
             uniform.maximum = entry.value("maximum").toDouble(1.0);
             uniform.step = entry.value("step").toDouble(0.01);
             uniform.value = entry.value("value").toDouble(uniform.minimum);
+            const QJsonValue slotValue = entry.value("slot");
+            if (!slotValue.isUndefined() && !slotValue.isNull()) {
+                const double numericSlot = slotValue.toDouble(-1.0);
+                uniform.slot = static_cast<int>(numericSlot);
+                if (!slotValue.isDouble() || numericSlot != uniform.slot ||
+                    uniform.slot < 0 ||
+                    uniform.slot >= static_cast<int>(
+                                        ipc::kShaderSelectionMaxCustomUniforms) ||
+                    std::find(occupiedSlots.begin(), occupiedSlots.end(),
+                              uniform.slot) != occupiedSlots.end()) {
+                    error = QObject::tr(
+                                "Custom uniform '%1' has an invalid or duplicate slot.")
+                                .arg(uniform.name);
+                    return false;
+                }
+                occupiedSlots.push_back(uniform.slot);
+                hasExplicitSlots = true;
+            } else {
+                hasImplicitSlots = true;
+            }
             if (!std::isfinite(uniform.minimum) ||
                 !std::isfinite(uniform.maximum) ||
                 !std::isfinite(uniform.step) ||
@@ -385,6 +409,25 @@ namespace acmx2 {
             uniform.value = std::clamp(uniform.value, uniform.minimum,
                                        uniform.maximum);
             uniforms.append(uniform);
+        }
+        if (hasExplicitSlots && hasImplicitSlots) {
+            error = QObject::tr(
+                "Custom uniforms must either all specify slots or all omit them.");
+            return false;
+        }
+        if (hasExplicitSlots) {
+            std::sort(uniforms.begin(), uniforms.end(),
+                      [](const CustomUniformDefinition &left,
+                         const CustomUniformDefinition &right) {
+                          return left.slot < right.slot;
+                      });
+            for (int index = 0; index < uniforms.size(); ++index) {
+                if (uniforms.at(index).slot != index) {
+                    error = QObject::tr(
+                        "Custom-uniform slots must be contiguous from zero.");
+                    return false;
+                }
+            }
         }
         return true;
     }
@@ -399,14 +442,50 @@ namespace acmx2 {
             return false;
 
         QJsonObject entries;
+        const bool hasExplicitSlots = std::any_of(
+            uniforms.cbegin(), uniforms.cend(),
+            [](const CustomUniformDefinition &uniform) {
+                return uniform.slot >= 0;
+            });
+        std::vector<int> writtenSlots;
         for (const CustomUniformDefinition &uniform : uniforms) {
+            if ((hasExplicitSlots && uniform.slot < 0) ||
+                (!hasExplicitSlots && uniform.slot >= 0)) {
+                error = QObject::tr(
+                    "Custom uniforms must either all specify slots or all omit them.");
+                return false;
+            }
+            if (hasExplicitSlots &&
+                (uniform.slot >= static_cast<int>(
+                                     ipc::kShaderSelectionMaxCustomUniforms) ||
+                 std::find(writtenSlots.begin(), writtenSlots.end(),
+                           uniform.slot) != writtenSlots.end())) {
+                error = QObject::tr(
+                            "Custom uniform '%1' has an invalid or duplicate slot.")
+                            .arg(uniform.name);
+                return false;
+            }
+            if (hasExplicitSlots)
+                writtenSlots.push_back(uniform.slot);
             QJsonObject entry;
+            if (hasExplicitSlots)
+                entry.insert("slot", uniform.slot);
             entry.insert("minimum", uniform.minimum);
             entry.insert("maximum", uniform.maximum);
             entry.insert("step", uniform.step);
             entry.insert("value", std::clamp(uniform.value, uniform.minimum,
                                              uniform.maximum));
             entries.insert(uniform.name, entry);
+        }
+        if (hasExplicitSlots) {
+            std::sort(writtenSlots.begin(), writtenSlots.end());
+            for (std::size_t index = 0; index < writtenSlots.size(); ++index) {
+                if (writtenSlots[index] != static_cast<int>(index)) {
+                    error = QObject::tr(
+                        "Custom-uniform slots must be contiguous from zero.");
+                    return false;
+                }
+            }
         }
 
         QJsonObject root = document.object();

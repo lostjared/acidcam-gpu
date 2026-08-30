@@ -21,6 +21,7 @@ namespace acmx2 {
         double maximum = 1.0;
         double step = 0.01;
         double value = 0.0;
+        int slot = -1;
     };
 
     enum class ShaderManifestFormat { Json,

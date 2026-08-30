@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.111.0 includes the current ACMXVK integration increments:
+Interface version 2.111.1 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -65,6 +65,11 @@ Interface version 2.111.0 includes the current ACMXVK integration increments:
 - The **Custom Uniforms** dialog now controls a running ACMXVK process through
   the same synchronized interface channel. Values are matched by manifest name
   and applied live to fragment, compute, multipass, and 3D shader paths.
+- Custom-uniform `slot` fields are preserved when the dialog saves values.
+  Explicit slots are validated as unique and contiguous, preventing interface
+  edits from silently remapping the uniform ABI used by compiled shaders. The
+  source-manifest generator can repair slots while retaining edited ranges and
+  values from an existing `library.json`.
 
 Live source reload and the remaining shared runtime controls are still
 ACMX2-only. Source editing and binary-cache maintenance actions also remain

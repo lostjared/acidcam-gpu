@@ -8,6 +8,7 @@ use File::Find qw(find);
 use File::Spec;
 use File::Temp qw(tempfile);
 use Getopt::Long qw(GetOptions);
+use JSON::PP qw(decode_json);
 
 my $root = '';
 my $output = '';
@@ -114,6 +115,32 @@ my %metadata = (
     slider3     => [0.0, 1.0, 0.01, 0.35],
     slider4     => [0.0, 1.0, 0.01, 0.8],
 );
+
+# Preserve edited ranges and values when repairing or refreshing an existing
+# source manifest. Slots are always regenerated from the shader ABI discovered
+# above, because stale/missing slots are exactly what this tool must repair.
+if (-f $output) {
+    open my $existing_file, '<', $output
+      or die "Cannot read existing manifest $output: $!\n";
+    local $/;
+    my $existing_text = <$existing_file>;
+    close $existing_file;
+    my $existing = eval { decode_json($existing_text) };
+    die "Cannot parse existing manifest $output: $@\n" if $@;
+    if (ref($existing->{custom_uniforms}) eq 'HASH') {
+        for my $name (keys %{ $existing->{custom_uniforms} }) {
+            my $uniform = $existing->{custom_uniforms}{$name};
+            next if ref($uniform) ne 'HASH';
+            my $fallback = $metadata{$name} // [0.0, 1.0, 0.01, 0.0];
+            $metadata{$name} = [
+                $uniform->{minimum} // $fallback->[0],
+                $uniform->{maximum} // $fallback->[1],
+                $uniform->{step}    // $fallback->[2],
+                $uniform->{value}   // $fallback->[3],
+            ];
+        }
+    }
+}
 
 my ($temporary, $temporary_path) = tempfile(
     'library.json.tmp.XXXXXX',
