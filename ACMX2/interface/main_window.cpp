@@ -3604,7 +3604,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
             arguments << "--midi-device" << QString::number(midi_device);
     }
 
-    if (playlist_enabled && !playlist_names.isEmpty()) {
+    const bool playlistActive = playlist_enabled && !playlist_names.isEmpty();
+    if (playlistActive) {
         QString plFile = playlist_file_path;
         if (plFile.isEmpty()) {
             plFile = prefix_path + "/playlist.txt";
@@ -3636,7 +3637,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         arguments << "--playlist" << plFile;
     }
 
-    if (autopilot_frames > 0) {
+    if (playlistActive && autopilot_frames > 0) {
         arguments << (autopilot_random ? "--autopilot-random" : "--autopilot-frames")
                   << QString::number(autopilot_frames);
     }
@@ -4052,7 +4053,7 @@ void MainWindow::menuBuildShaderCache() {
         const QStringList args{"--unbuffered", "--build", manifestPath,
                                "--builddir", outputPath};
         Log(tr("Building ACMXVK SPIR-V library: %1").arg(build_path));
-        Log("Command: " + executable_path + " " + concatList(args));
+        Log("Command: " + executable_path + " " + concatList(args) + "<br>");
         play_stop->setEnabled(true);
         cacheBuildInProgress = true;
         process->start(executable_path, args);
@@ -4090,7 +4091,7 @@ void MainWindow::menuBuildShaderCache() {
     }
 
     Log("Building shader cache for: " + build_path);
-    Log("Command: " + executable_path + " " + args.join(" "));
+    Log("Command: " + executable_path + " " + args.join(" ") + "<br>");
 
     play_stop->setEnabled(true);
     cacheBuildInProgress = true;
@@ -4168,7 +4169,7 @@ void MainWindow::menuRemoveBroken() {
         args << "--enable-3d";
 
     Log("Scanning for broken shaders in: " + scan_path);
-    Log("Command: " + executable_path + " " + args.join(" "));
+    Log("Command: " + executable_path + " " + args.join(" ") + "<br>");
 
     // Use a dedicated QProcess so we can reload the list when it finishes
     // without interfering with the main playback process.
