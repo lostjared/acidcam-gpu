@@ -44,6 +44,7 @@
 #include <QSpinBox>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QTimer>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -580,6 +581,9 @@ void MainWindow::initControls() {
 
                 const bool finishedBuildProcess = cacheBuildInProgress;
                 if (cacheBuildInProgress) {
+                    const PendingAcmxvkAction resume_action =
+                        pending_acmxvk_action;
+                    pending_acmxvk_action = PendingAcmxvkAction::None;
                     if (active_backend == acmx2::Backend::Acmxvk) {
                         if (exitCode == 0) {
                             Log(tr("ACMXVK build ready: %1")
@@ -592,6 +596,25 @@ void MainWindow::initControls() {
                     }
                     cacheBuildInProgress = false;
                     update_backend_ui();
+                    if (active_backend == acmx2::Backend::Acmxvk &&
+                        exitCode == 0 &&
+                        exitStatus == QProcess::NormalExit &&
+                        resume_action != PendingAcmxvkAction::None) {
+                        Log(tr("ACMXVK build succeeded; resuming the requested "
+                               "action."));
+                        QTimer::singleShot(0, this, [this, resume_action]() {
+                            if (resume_action ==
+                                PendingAcmxvkAction::RunSelected) {
+                                runSelected();
+                            } else if (resume_action ==
+                                       PendingAcmxvkAction::RunAll) {
+                                runAll();
+                            } else if (resume_action ==
+                                       PendingAcmxvkAction::CopyCommand) {
+                                copyCommand();
+                            }
+                        });
+                    }
                 }
 
                 // Optional post-process: convert the produced HLG HDR file
@@ -2317,7 +2340,8 @@ bool MainWindow::backend_launch_available() const {
     return true;
 }
 
-void MainWindow::prompt_acmxvk_rebuild(const QString &reason) {
+void MainWindow::prompt_acmxvk_rebuild(
+    const QString &reason, PendingAcmxvkAction resume_action) {
     QString type_error;
     if (!is_acmxvk_source_library(shader_path, type_error) ||
         !type_error.isEmpty()) {
@@ -2334,6 +2358,7 @@ void MainWindow::prompt_acmxvk_rebuild(const QString &reason) {
     if (answer != QMessageBox::Yes)
         return;
 
+    pending_acmxvk_action = resume_action;
     Log(tr("ACMXVK rebuild requested before launch."));
     menuBuildShaderCache();
 }
@@ -3271,7 +3296,8 @@ void MainWindow::runSelected() {
         QString runtimeError;
         if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
                                             runtimeError)) {
-            prompt_acmxvk_rebuild(runtimeError);
+            prompt_acmxvk_rebuild(runtimeError,
+                                  PendingAcmxvkAction::RunSelected);
             return;
         }
         if (launchShaderPath != shader_path)
@@ -3515,7 +3541,8 @@ void MainWindow::runSelected() {
     }
 }
 
-bool MainWindow::buildRunArguments(QStringList &arguments) {
+bool MainWindow::buildRunArguments(QStringList &arguments,
+                                   PendingAcmxvkAction resume_action) {
     if (shader_path.length() == 0) {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return false;
@@ -3546,7 +3573,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         QString runtimeError;
         if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
                                             runtimeError)) {
-            prompt_acmxvk_rebuild(runtimeError);
+            prompt_acmxvk_rebuild(runtimeError, resume_action);
             return false;
         }
         if (launchShaderPath != shader_path)
@@ -3961,7 +3988,7 @@ void MainWindow::runAll() {
 #endif
 
     QStringList arguments;
-    if (!buildRunArguments(arguments))
+    if (!buildRunArguments(arguments, PendingAcmxvkAction::RunAll))
         return;
     initShaderSelectionSharedMemory();
     publishSelectedShaderIndexToRunningProcess();
@@ -3982,7 +4009,7 @@ void MainWindow::runAll() {
 
 void MainWindow::copyCommand() {
     QStringList arguments;
-    if (!buildRunArguments(arguments))
+    if (!buildRunArguments(arguments, PendingAcmxvkAction::CopyCommand))
         return;
 
     QString exe = executable_path;
@@ -4244,6 +4271,7 @@ void MainWindow::menuFixBuild() {
 void MainWindow::start_acmxvk_build(const QString &build_path, bool fix) {
     QString type_error;
     if (!is_acmxvk_source_library(build_path, type_error)) {
+        pending_acmxvk_action = PendingAcmxvkAction::None;
         QMessageBox::warning(
             this, fix ? tr("Fix Build") : tr("Build ACMXVK Library"),
             type_error.isEmpty()
@@ -4256,6 +4284,7 @@ void MainWindow::start_acmxvk_build(const QString &build_path, bool fix) {
     const QString manifest_path =
         QDir(build_path).filePath(QStringLiteral("library.json"));
     if (!QFileInfo(manifest_path).isFile()) {
+        pending_acmxvk_action = PendingAcmxvkAction::None;
         QMessageBox::warning(
             this, fix ? tr("Fix Build") : tr("Build ACMXVK Library"),
             tr("ACMXVK source builds require library.json:\n%1")
@@ -4277,6 +4306,7 @@ void MainWindow::start_acmxvk_build(const QString &build_path, bool fix) {
     if (!process->waitForStarted()) {
         Log("<b style='color:red;'>Error:</b> Failed to start ACMXVK build process");
         cacheBuildInProgress = false;
+        pending_acmxvk_action = PendingAcmxvkAction::None;
         play_stop->setEnabled(false);
     }
 }

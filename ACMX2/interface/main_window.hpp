@@ -164,8 +164,13 @@ class MainWindow : public QMainWindow {
     void update_backend_ui();
     /// @brief Return whether the active backend can be launched.
     bool backend_launch_available() const;
+    enum class PendingAcmxvkAction { None,
+                                     RunSelected,
+                                     RunAll,
+                                     CopyCommand };
     /// @brief Offer to rebuild a stale or incomplete ACMXVK source library.
-    void prompt_acmxvk_rebuild(const QString &reason);
+    void prompt_acmxvk_rebuild(const QString &reason,
+                               PendingAcmxvkAction resume_action);
     /// @brief Start a normal or failure-tolerant ACMXVK source-library build.
     void start_acmxvk_build(const QString &build_path, bool fix);
     QMenu *fileMenu = nullptr;
@@ -230,7 +235,9 @@ class MainWindow : public QMainWindow {
     /// @brief Build acmx2 command-line arguments from current UI state.
     /// @param arguments Output list to populate with command-line tokens.
     /// @return true if arguments were built, false on user-facing error.
-    bool buildRunArguments(QStringList &arguments);
+    bool buildRunArguments(
+        QStringList &arguments,
+        PendingAcmxvkAction resume_action = PendingAcmxvkAction::None);
     /// @brief Run ffmpeg to convert the just-produced acmx2 output (assumed
     ///        HLG HDR) into HDR10 (HEVC NVENC, BT.2020 / SMPTE2084) and pipe
     ///        ffmpeg's stdout/stderr to the main log window.
@@ -337,6 +344,7 @@ class MainWindow : public QMainWindow {
     QString stderrBuffer;
     /// @brief True while an ACMX2 cache rebuild or ACMXVK source build is running.
     bool cacheBuildInProgress = false;
+    PendingAcmxvkAction pending_acmxvk_action = PendingAcmxvkAction::None;
 
     void initShaderSelectionSharedMemory();
     void publishSelectedShaderIndexToRunningProcess();

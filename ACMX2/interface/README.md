@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.109.0 includes the current ACMXVK integration increments:
+Interface version 2.110.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -51,6 +51,10 @@ Interface version 2.109.0 includes the current ACMXVK integration increments:
   .acmxvk-build`. It uses the normal build output directory and progress log,
   but removes failed outputs from the generated runtime manifest so the
   remaining successfully compiled shaders can still be used.
+- When an automatic rebuild was accepted from Run Selected, Run All, or Copy
+  Command, a successful build now resumes that original action automatically.
+  Failed or cancelled builds remain stopped and retain their diagnostics in the
+  interface log.
 - Interface-launched ACMXVK runs and source builds include `--unbuffered`, so
   ACMXVK stdout and stderr are streamed into the interface log while the process
   is running instead of appearing only when an operating-system buffer fills.
