@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.106.0 includes the current ACMXVK integration increments:
+Interface version 2.107.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -37,6 +37,12 @@ Interface version 2.106.0 includes the current ACMXVK integration increments:
 - A missing or stale build produces a Build prompt instead of launching old or
   incomplete SPIR-V output. The hidden `.acmxvk-build/` directory is generated
   data and should normally be excluded from commits.
+- ACMXVK source libraries show `Up to Date`, `Stale`, or `Not Built` for each
+  shader in the **Build Status** column. Loading or sorting an unchanged list no
+  longer rewrites `library.json`, so an up-to-date build is launched without a
+  redundant Build prompt. Launch validation compares shader timestamps plus the
+  actual runtime shader list and custom-uniform metadata; manifest timestamps
+  alone do not make a library stale.
 - Interface-launched ACMXVK runs and source builds include `--unbuffered`, so
   ACMXVK stdout and stderr are streamed into the interface log while the process
   is running instead of appearing only when an operating-system buffer fills.

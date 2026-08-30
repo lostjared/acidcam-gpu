@@ -29,6 +29,9 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QLabel>
 #include <QLayout>
 #include <QLineEdit>
@@ -197,6 +200,95 @@ namespace {
                    : sourceName + QStringLiteral(".spv");
     }
 
+    enum class AcmxvkBuildState { UpToDate,
+                                  Stale,
+                                  NotBuilt };
+
+    AcmxvkBuildState acmxvk_shader_build_state(
+        const QString &source_library, const QString &source_name) {
+        const QString runtime_library =
+            acmxvk_build_directory(source_library);
+        if (!acmx2::shader_manifest_exists(runtime_library))
+            return AcmxvkBuildState::NotBuilt;
+
+        const QFileInfo source_file(
+            QDir(source_library).filePath(source_name));
+        const QFileInfo runtime_file(
+            QDir(runtime_library)
+                .filePath(acmxvk_runtime_shader_name(source_name)));
+        if (!runtime_file.isFile())
+            return AcmxvkBuildState::NotBuilt;
+        if (source_file.isFile() &&
+            runtime_file.lastModified() < source_file.lastModified()) {
+            return AcmxvkBuildState::Stale;
+        }
+        return AcmxvkBuildState::UpToDate;
+    }
+
+    bool load_json_object(const QString &path, QJsonObject &object,
+                          QString &error) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            error = QObject::tr("Could not open %1: %2")
+                        .arg(path, file.errorString());
+            return false;
+        }
+        QJsonParseError parse_error;
+        const QJsonDocument document =
+            QJsonDocument::fromJson(file.readAll(), &parse_error);
+        if (parse_error.error != QJsonParseError::NoError ||
+            !document.isObject()) {
+            error = QObject::tr("Could not parse %1: %2")
+                        .arg(path, parse_error.errorString());
+            return false;
+        }
+        object = document.object();
+        return true;
+    }
+
+    bool acmxvk_runtime_manifest_matches(const QString &source_library,
+                                         const QString &runtime_library,
+                                         QString &error) {
+        QStringList source_entries;
+        QStringList runtime_entries;
+        if (!acmx2::load_shader_manifest(source_library, source_entries,
+                                         error) ||
+            !acmx2::load_shader_manifest(runtime_library, runtime_entries,
+                                         error)) {
+            return false;
+        }
+
+        QStringList expected_entries;
+        expected_entries.reserve(source_entries.size());
+        for (const QString &entry : source_entries)
+            expected_entries.append(acmxvk_runtime_shader_name(entry));
+        if (runtime_entries != expected_entries) {
+            error = QObject::tr(
+                "The ACMXVK runtime manifest does not match the source "
+                "shader list. Choose Playback > Build before running.");
+            return false;
+        }
+
+        QJsonObject source_object;
+        QJsonObject runtime_object;
+        if (!load_json_object(
+                QDir(source_library).filePath(QStringLiteral("library.json")),
+                source_object, error) ||
+            !load_json_object(
+                QDir(runtime_library).filePath(QStringLiteral("library.json")),
+                runtime_object, error)) {
+            return false;
+        }
+        if (source_object.value(QStringLiteral("custom_uniforms")) !=
+            runtime_object.value(QStringLiteral("custom_uniforms"))) {
+            error = QObject::tr(
+                "The ACMXVK runtime custom-uniform metadata is out of date. "
+                "Choose Playback > Build before running.");
+            return false;
+        }
+        return true;
+    }
+
     bool resolve_acmxvk_runtime_library(const QString &selectedLibrary,
                                         QString &runtimeLibrary,
                                         QString &error) {
@@ -225,14 +317,8 @@ namespace {
         QStringList sourceEntries;
         if (!acmx2::load_shader_manifest(selectedLibrary, sourceEntries, error))
             return false;
-        const QFileInfo sourceManifest(
-            acmx2::shader_manifest_path(selectedLibrary));
-        const QFileInfo runtimeManifest(
-            acmx2::shader_manifest_path(runtimeLibrary));
-        if (runtimeManifest.lastModified() < sourceManifest.lastModified()) {
-            error = QObject::tr(
-                "The ACMXVK build is out of date. Choose Playback > "
-                "Build before running.");
+        if (!acmxvk_runtime_manifest_matches(selectedLibrary, runtimeLibrary,
+                                             error)) {
             return false;
         }
         for (const QString &sourceEntry : sourceEntries) {
@@ -1598,6 +1684,16 @@ void MainWindow::updateIndex() {
         }
     }
     QString manifestError;
+    QStringList existingItems;
+    if (acmx2::load_shader_manifest(shader_path, existingItems,
+                                    manifestError) &&
+        existingItems == writtenItems) {
+        indexTimestamp = acmx2::shader_manifest_last_modified(shader_path);
+        activeShaderManifestPath =
+            acmx2::shader_manifest_path(shader_path);
+        return;
+    }
+    manifestError.clear();
     if (!acmx2::write_shader_manifest(shader_path, writtenItems, manifestError)) {
         Log("Failed to update shader manifest: " + manifestError);
         return;
@@ -2086,6 +2182,11 @@ void MainWindow::populateShaderTree() {
     const QSignalBlocker blocker(list_view);
     list_view->clear();
 
+    QString acmxvk_type_error;
+    const bool acmxvk_source =
+        active_backend == acmx2::Backend::Acmxvk &&
+        is_acmxvk_source_library(shader_path, acmxvk_type_error) &&
+        acmxvk_type_error.isEmpty();
     const int width = QString::number(items.size()).size();
     for (int i = 0; i < items.size(); ++i) {
         const QString &name = items.at(i);
@@ -2098,7 +2199,22 @@ void MainWindow::populateShaderTree() {
 
         QString health;
         QColor healthColor;
-        if (shaderCacheStatus.isEmpty()) {
+        if (active_backend == acmx2::Backend::Acmxvk) {
+            const AcmxvkBuildState state =
+                acmxvk_source
+                    ? acmxvk_shader_build_state(shader_path, name)
+                    : AcmxvkBuildState::UpToDate;
+            if (state == AcmxvkBuildState::NotBuilt) {
+                health = tr("Not Built");
+                healthColor = QColor("#888888");
+            } else if (state == AcmxvkBuildState::Stale) {
+                health = tr("Stale");
+                healthColor = QColor("#ffaa00");
+            } else {
+                health = tr("Up to Date");
+                healthColor = QColor("#55ff55");
+            }
+        } else if (shaderCacheStatus.isEmpty()) {
             health = tr("No cache");
             healthColor = QColor("#888888");
         } else if (!shaderCacheStatus.contains(stem)) {
@@ -2252,10 +2368,12 @@ void MainWindow::update_backend_ui() {
         listMenu_shader->setEnabled(acmx2Tools);
     if (list_view) {
 #ifdef Q_OS_MACOS
-        list_view->setColumnHidden(3, true);
+        list_view->setColumnHidden(3, acmx2Tools);
 #else
-        list_view->setColumnHidden(3, !acmx2Tools);
+        list_view->setColumnHidden(3, false);
 #endif
+        list_view->headerItem()->setText(
+            3, acmx2Tools ? tr("Compile Health") : tr("Build Status"));
     }
 
     if (runMenu) {
