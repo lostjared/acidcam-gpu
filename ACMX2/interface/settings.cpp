@@ -478,8 +478,11 @@ namespace {
 #endif
 } // namespace
 
-SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
+SettingsWindow::SettingsWindow(const QString &execPath, acmx2::Backend backend,
+                               QWidget *parent)
     : QDialog(parent),
+      executablePath(execPath),
+      activeBackend(backend),
       selectedCameraIndex(0),
       selectedCameraResolution(1280, 720),
       selectedScreenResolution(0, 0),
@@ -494,8 +497,7 @@ SettingsWindow::SettingsWindow(const QString &execPath, QWidget *parent)
       modelFile("data/cube.mxmod.z"),
       selectedCudaDevice(0),
       maxDuration(0.0),
-      maxSizeLimit(0.0),
-      executablePath(execPath) {
+      maxSizeLimit(0.0) {
     init();
 }
 
@@ -906,6 +908,21 @@ void SettingsWindow::init() {
 
     fullscreenCheckBox = new QCheckBox("Fullscreen", this);
 
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        maximizeFpsCheckBox = new QCheckBox("Maximize FPS", this);
+        maximizeFpsCheckBox->setToolTip(
+            "Camera mode: render at the selected FPS while updating the image "
+            "at the camera's capture rate (--maximize-fps).");
+        useSourceFpsCheckBox = new QCheckBox("Use Source FPS", this);
+        useSourceFpsCheckBox->setToolTip(
+            "Video mode: pace playback using the video's reported frame rate "
+            "(--use-source-fps).");
+        useSourceAudioCheckBox = new QCheckBox("Use Source Audio", this);
+        useSourceAudioCheckBox->setToolTip(
+            "Video mode: use the video's audio track for shader reactivity "
+            "(--use-source-audio). Requires Use Source FPS.");
+    }
+
     enable3dCheckBox = new QCheckBox("Enable 3D", this);
     enable3dCheckBox->setChecked(false);
 
@@ -1086,6 +1103,11 @@ void SettingsWindow::init() {
     playbackGrid->addWidget(rotate_check_box, ++r, 0);
     playbackGrid->addWidget(rotate_combo_box, r, 1);
     playbackGrid->addWidget(fullscreenCheckBox, ++r, 0, 1, 2);
+    if (maximizeFpsCheckBox) {
+        playbackGrid->addWidget(maximizeFpsCheckBox, ++r, 0, 1, 2);
+        playbackGrid->addWidget(useSourceFpsCheckBox, ++r, 0, 1, 2);
+        playbackGrid->addWidget(useSourceAudioCheckBox, ++r, 0, 1, 2);
+    }
     auto *durationRow = new QHBoxLayout;
     durationRow->addWidget(durationLimitCheckBox);
     durationRow->addWidget(durationLimitSpinBox);
@@ -1201,6 +1223,37 @@ void SettingsWindow::init() {
     connect(rotate_check_box, &QCheckBox::toggled, rotate_combo_box,
             &QComboBox::setEnabled);
 
+    const auto updateAcmxvkTimingControls = [this]() {
+        if (!maximizeFpsCheckBox)
+            return;
+        const bool cameraMode = cameraOptionRadioButton->isChecked();
+        const bool videoMode = inputVideoOptionRadioButton->isChecked();
+        maximizeFpsCheckBox->setEnabled(cameraMode);
+        useSourceFpsCheckBox->setEnabled(videoMode);
+        useSourceAudioCheckBox->setEnabled(
+            videoMode && useSourceFpsCheckBox->isChecked());
+    };
+    if (useSourceFpsCheckBox) {
+        connect(useSourceFpsCheckBox, &QCheckBox::toggled, this,
+                [this, updateAcmxvkTimingControls](bool checked) {
+                    if (!checked)
+                        useSourceAudioCheckBox->setChecked(false);
+                    updateAcmxvkTimingControls();
+                });
+        connect(cameraOptionRadioButton, &QRadioButton::toggled, this,
+                [updateAcmxvkTimingControls]() {
+                    updateAcmxvkTimingControls();
+                });
+        connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this,
+                [updateAcmxvkTimingControls]() {
+                    updateAcmxvkTimingControls();
+                });
+        connect(graphicsFileOptionRadioButton, &QRadioButton::toggled, this,
+                [updateAcmxvkTimingControls]() {
+                    updateAcmxvkTimingControls();
+                });
+    }
+
     connect(enable3dCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         modelFileLineEdit->setEnabled(checked);
         browseModelButton->setEnabled(checked);
@@ -1312,6 +1365,7 @@ void SettingsWindow::init() {
     browseOutputVideoButton->setEnabled(false);
 
     loadUiState();
+    updateAcmxvkTimingControls();
     if (cameraOptionRadioButton->isChecked()) {
         encodeNoDropCheckBox->setChecked(false);
         encodeNoDropCheckBox->setEnabled(false);
@@ -1464,6 +1518,16 @@ void SettingsWindow::loadUiState() {
     }
 
     fullscreenCheckBox->setChecked(appSettings.value("interface/fullscreen", false).toBool());
+    if (maximizeFpsCheckBox) {
+        maximizeFpsCheckBox->setChecked(
+            appSettings.value("interface/acmxvk_maximize_fps", false).toBool());
+        useSourceFpsCheckBox->setChecked(
+            appSettings.value("interface/acmxvk_use_source_fps", false).toBool());
+        useSourceAudioCheckBox->setChecked(
+            appSettings.value("interface/acmxvk_use_source_audio", false)
+                .toBool() &&
+            useSourceFpsCheckBox->isChecked());
+    }
     enable3dCheckBox->setChecked(appSettings.value("interface/enable_3d", false).toBool());
     modelFileLineEdit->setText(appSettings.value("interface/model_file", "cube.mxmod.z").toString());
     useOnnxModelCheckBox->setChecked(appSettings.value("interface/use_onnx_model", false).toBool());
@@ -1551,6 +1615,15 @@ void SettingsWindow::saveUiState() {
     }
 
     appSettings.setValue("interface/fullscreen", fullscreenCheckBox->isChecked());
+    if (maximizeFpsCheckBox) {
+        appSettings.setValue("interface/acmxvk_maximize_fps",
+                             maximizeFpsCheckBox->isChecked());
+        appSettings.setValue("interface/acmxvk_use_source_fps",
+                             useSourceFpsCheckBox->isChecked());
+        appSettings.setValue("interface/acmxvk_use_source_audio",
+                             useSourceAudioCheckBox->isChecked() &&
+                                 useSourceFpsCheckBox->isChecked());
+    }
     appSettings.setValue("interface/enable_3d", enable3dCheckBox->isChecked());
     appSettings.setValue("interface/model_file", modelFileLineEdit->text());
     appSettings.setValue("interface/use_onnx_model", useOnnxModelCheckBox->isChecked());
@@ -1646,6 +1719,20 @@ int SettingsWindow::getCacheSize() const {
 
 bool SettingsWindow::isFullscreen() const {
     return fullscreenCheckBox->isChecked();
+}
+
+bool SettingsWindow::isMaximizeFpsEnabled() const {
+    return maximizeFpsCheckBox && maximizeFpsCheckBox->isChecked();
+}
+
+bool SettingsWindow::isUseSourceFpsEnabled() const {
+    return useSourceFpsCheckBox && useSourceFpsCheckBox->isChecked();
+}
+
+bool SettingsWindow::isUseSourceAudioEnabled() const {
+    return useSourceAudioCheckBox && useSourceFpsCheckBox &&
+           useSourceFpsCheckBox->isChecked() &&
+           useSourceAudioCheckBox->isChecked();
 }
 
 bool SettingsWindow::isCopyAudioEnabled() const {

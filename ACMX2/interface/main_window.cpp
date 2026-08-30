@@ -1217,6 +1217,13 @@ void MainWindow::loadSessionSettings() {
     encode_realtime = settings.value("recording/realtime", false).toBool();
     encode_no_drop = !cameraMode &&
                      settings.value("recording/no_drop", false).toBool();
+    maximize_fps =
+        settings.value("interface/acmxvk_maximize_fps", false).toBool();
+    use_source_fps =
+        settings.value("interface/acmxvk_use_source_fps", false).toBool();
+    use_source_audio = use_source_fps &&
+                       settings.value("interface/acmxvk_use_source_audio", false)
+                           .toBool();
 }
 
 void MainWindow::applyMainViewStyles(bool customStyleEnabled) {
@@ -3169,7 +3176,7 @@ void MainWindow::menuPlaylistSettings() {
 }
 
 void MainWindow::cameraSettings() {
-    SettingsWindow settingsWindow(executable_path, this);
+    SettingsWindow settingsWindow(executable_path, active_backend, this);
     settingsWindow.setCudaAvailable(cuda_device_available);
     settingsWindow.setDnnAvailable(dnn_available);
     if (settingsWindow.exec() == QDialog::Accepted) {
@@ -3221,6 +3228,9 @@ void MainWindow::cameraSettings() {
         convert_to_hdr10 = settingsWindow.isConvertToHdr10Enabled() &&
                            settingsWindow.isUsingInputVideoFile() &&
                            settingsWindow.isSavingToOutputVideoFile();
+        maximize_fps = settingsWindow.isMaximizeFpsEnabled();
+        use_source_fps = settingsWindow.isUseSourceFpsEnabled();
+        use_source_audio = settingsWindow.isUseSourceAudioEnabled();
     }
     enable_3d = settingsWindow.is3dEnabled();
     model_file = settingsWindow.getModelFile();
@@ -3368,6 +3378,8 @@ void MainWindow::runSelected() {
             arguments << "--resolution" << scr_res;
         arguments << "--device" << QString::number(camera_index);
         arguments << "--fps" << QString::number(output_fps);
+        if (active_backend == acmx2::Backend::Acmxvk && maximize_fps)
+            arguments << "--maximize-fps";
         if (use_yuv)
             arguments << "--use-yuv";
         if (cache_enabled) {
@@ -3376,6 +3388,11 @@ void MainWindow::runSelected() {
         }
     } else {
         arguments << "--input" << video_file;
+        if (active_backend == acmx2::Backend::Acmxvk && use_source_fps) {
+            arguments << "--use-source-fps";
+            if (use_source_audio)
+                arguments << "--use-source-audio";
+        }
         if (hasPositiveResolution(screen_res))
             arguments << "--resolution" << scr_res;
         if (play_repeat->isChecked())
@@ -3406,7 +3423,10 @@ void MainWindow::runSelected() {
             (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
     }
-    if (audio_available && audio_enabled) {
+    const bool sourceAudioActive =
+        active_backend == acmx2::Backend::Acmxvk && !video_file.isEmpty() &&
+        use_source_fps && use_source_audio;
+    if (audio_available && audio_enabled && !sourceAudioActive) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
 
@@ -3428,7 +3448,8 @@ void MainWindow::runSelected() {
         }
     }
 
-    if (audio_available && (audio_enabled || !audio_file.isEmpty())) {
+    if (audio_available &&
+        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--sense" << QString::number(audio_sense);
         if (audio_passthrough) {
             arguments << "--pass-through";
@@ -3439,7 +3460,7 @@ void MainWindow::runSelected() {
         }
     }
 
-    if (audio_available && !audio_file.isEmpty()) {
+    if (audio_available && !audio_file.isEmpty() && !sourceAudioActive) {
         arguments << "--audio-file" << audio_file;
         if (audio_trunc) {
             arguments << "--audio-trunc";
@@ -3453,7 +3474,8 @@ void MainWindow::runSelected() {
         arguments << "--enable-audio-buffers" << QString::number(audio_buffer_frames);
     }
 
-    if (audio_available && (audio_enabled || !audio_file.isEmpty())) {
+    if (audio_available &&
+        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--audio-warm-rate" << QString::number(audio_warm_rate, 'f', 2);
     }
 
@@ -3491,11 +3513,11 @@ void MainWindow::runSelected() {
             arguments << "--midi-device" << QString::number(midi_device);
     }
 
-    if (duration_limit_enabled && max_duration > 0.0) {
+    if (!output_file.isEmpty() && duration_limit_enabled && max_duration > 0.0) {
         arguments << "--duration" << QString::number(max_duration, 'f', 1);
     }
 
-    if (max_size_limit_enabled && max_size_mb > 0.0 && !output_file.isEmpty()) {
+    if (!output_file.isEmpty() && max_size_limit_enabled && max_size_mb > 0.0) {
         arguments << "--max-size" << QString::number(max_size_mb, 'f', 2);
     }
 
@@ -3628,6 +3650,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
             arguments << "--resolution" << scr_res;
         arguments << "--device" << QString::number(camera_index);
         arguments << "--fps" << QString::number(output_fps);
+        if (active_backend == acmx2::Backend::Acmxvk && maximize_fps)
+            arguments << "--maximize-fps";
         if (use_yuv)
             arguments << "--use-yuv";
         if (cache_enabled) {
@@ -3636,6 +3660,11 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         }
     } else {
         arguments << "--input" << video_file;
+        if (active_backend == acmx2::Backend::Acmxvk && use_source_fps) {
+            arguments << "--use-source-fps";
+            if (use_source_audio)
+                arguments << "--use-source-audio";
+        }
         if (hasPositiveResolution(screen_res))
             arguments << "--resolution" << scr_res;
         if (play_repeat->isChecked())
@@ -3667,7 +3696,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
     }
     arguments << "--shader-file" << launchShaderName;
 
-    if (audio_available && audio_enabled) {
+    const bool sourceAudioActive =
+        active_backend == acmx2::Backend::Acmxvk && !video_file.isEmpty() &&
+        use_source_fps && use_source_audio;
+    if (audio_available && audio_enabled && !sourceAudioActive) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
 
@@ -3689,7 +3721,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         }
     }
 
-    if (audio_available && (audio_enabled || !audio_file.isEmpty())) {
+    if (audio_available &&
+        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--sense" << QString::number(audio_sense);
         if (audio_passthrough) {
             arguments << "--pass-through";
@@ -3700,7 +3733,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         }
     }
 
-    if (audio_available && !audio_file.isEmpty()) {
+    if (audio_available && !audio_file.isEmpty() && !sourceAudioActive) {
         arguments << "--audio-file" << audio_file;
         if (audio_trunc) {
             arguments << "--audio-trunc";
@@ -3714,7 +3747,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         arguments << "--enable-audio-buffers" << QString::number(audio_buffer_frames);
     }
 
-    if (audio_available && (audio_enabled || !audio_file.isEmpty())) {
+    if (audio_available &&
+        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--audio-warm-rate" << QString::number(audio_warm_rate, 'f', 2);
     }
 
@@ -3817,11 +3851,11 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
                   << QString::number(autopilot_frames);
     }
 
-    if (duration_limit_enabled && max_duration > 0.0) {
+    if (!output_file.isEmpty() && duration_limit_enabled && max_duration > 0.0) {
         arguments << "--duration" << QString::number(max_duration, 'f', 1);
     }
 
-    if (max_size_limit_enabled && max_size_mb > 0.0 && !output_file.isEmpty()) {
+    if (!output_file.isEmpty() && max_size_limit_enabled && max_size_mb > 0.0) {
         arguments << "--max-size" << QString::number(max_size_mb, 'f', 2);
     }
 

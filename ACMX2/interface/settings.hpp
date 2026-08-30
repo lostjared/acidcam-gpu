@@ -1,6 +1,8 @@
 #ifndef SETTINGS_HPP
 #define SETTINGS_HPP
 
+#include "backend.hpp"
+
 /**
  * @file settings.hpp
  * @brief Main capture/playback settings dialog for ACMX2 execution.
@@ -30,8 +32,10 @@ class SettingsWindow : public QDialog {
   public:
     /// @brief Construct the settings dialog.
     /// @param execPath Path to the selected backend used for capability discovery.
+    /// @param backend Active rendering backend, used to expose compatible options.
     /// @param parent Parent widget.
-    explicit SettingsWindow(const QString &execPath, QWidget *parent = nullptr);
+    explicit SettingsWindow(const QString &execPath, acmx2::Backend backend,
+                            QWidget *parent = nullptr);
     /// @brief Show or hide CUDA-specific controls based on availability.
     /// @param available True when CUDA runtime/device support is available.
     void setCudaAvailable(bool available);
@@ -70,6 +74,12 @@ class SettingsWindow : public QDialog {
     int getCacheSize() const;
     /// @return True if fullscreen mode is enabled.
     bool isFullscreen() const;
+    /// @return True if ACMXVK should render camera input at the selected FPS.
+    bool isMaximizeFpsEnabled() const;
+    /// @return True if ACMXVK should pace video using its reported frame rate.
+    bool isUseSourceFpsEnabled() const;
+    /// @return True if ACMXVK should use video audio for shader reactivity.
+    bool isUseSourceAudioEnabled() const;
     /// @return True if input audio should be copied to output.
     bool isCopyAudioEnabled() const;
     /// @brief Return whether Write PNG mode is enabled.
@@ -164,6 +174,7 @@ class SettingsWindow : public QDialog {
     void populateFPS();
 
     QString executablePath;
+    acmx2::Backend activeBackend = acmx2::Backend::Acmx2;
     QComboBox *cameraFPSComboBox;
     // resolution -> list of FPS values
     QMap<QString, QList<double>> deviceCapabilities;
@@ -190,6 +201,9 @@ class SettingsWindow : public QDialog {
     QSpinBox *cacheDelaySpinBox;
     QSpinBox *cacheSizeSpinBox;
     QCheckBox *fullscreenCheckBox;
+    QCheckBox *maximizeFpsCheckBox = nullptr;
+    QCheckBox *useSourceFpsCheckBox = nullptr;
+    QCheckBox *useSourceAudioCheckBox = nullptr;
     QCheckBox *copyAudioCheckBox;
     QCheckBox *enable3dCheckBox;
     QCheckBox *useYuvCheckBox;

@@ -228,6 +228,9 @@ class MainWindow : public QMainWindow {
     QString encode_parameters;
     bool encode_realtime = false;
     bool encode_no_drop = false;
+    bool maximize_fps = false;
+    bool use_source_fps = false;
+    bool use_source_audio = false;
     /// @brief Join list items into a comma-separated argument string.
     /// @param lst Input list of values.
     /// @return Concatenated string for command-line usage.
