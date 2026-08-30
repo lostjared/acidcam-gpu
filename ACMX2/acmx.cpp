@@ -8385,8 +8385,12 @@ class ACView : public gl::GLObject {
             return;
         shaderSelectionSemaphore =
             ::sem_open(acmx2::ipc::kShaderSelectionSemaphoreName, 0);
-        if (shaderSelectionSemaphore == SEM_FAILED)
+        if (shaderSelectionSemaphore == SEM_FAILED) {
+            std::cerr << "acmx2: interface control unavailable: sem_open("
+                      << acmx2::ipc::kShaderSelectionSemaphoreName
+                      << ") failed: " << std::strerror(errno) << '\n';
             return;
+        }
         shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName, O_RDWR, 0666);
         if (shaderSelectionShmFd < 0) {
             ::sem_close(shaderSelectionSemaphore);

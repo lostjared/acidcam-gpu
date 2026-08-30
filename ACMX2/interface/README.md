@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.112.1 includes the current ACMXVK integration increments:
+Interface version 2.112.2 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -76,6 +76,9 @@ Interface version 2.112.1 includes the current ACMXVK integration increments:
   `--use-source-audio` respectively.
 - Maximum duration and output-size limits are added to launch commands only
   while output video recording is enabled.
+- Shared interface control verifies that its named semaphore remains published
+  before every engine launch and recreates it after an external unlink. Engine
+  and launcher errors now include the failing semaphore name and OS error.
 
 Live source reload and the remaining shared runtime controls are still
 ACMX2-only. Source editing and binary-cache maintenance actions also remain

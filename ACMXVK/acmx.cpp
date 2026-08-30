@@ -4868,8 +4868,10 @@ namespace acmxvk {
             interface_semaphore =
                 ::sem_open(ipc::SHADER_SELECTION_SEMAPHORE_NAME, 0);
             if (interface_semaphore == SEM_FAILED) {
-                std::cerr << "acmxvk: interface control unavailable: could not "
-                             "open its semaphore\n";
+                std::cerr
+                    << "acmxvk: interface control unavailable: sem_open("
+                    << ipc::SHADER_SELECTION_SEMAPHORE_NAME
+                    << ") failed: " << std::strerror(errno) << '\n';
                 return;
             }
 

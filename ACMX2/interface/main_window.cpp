@@ -49,6 +49,7 @@
 #include <QVBoxLayout>
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <filesystem>
 #include <functional>
 #include <random>
@@ -572,7 +573,6 @@ void MainWindow::initControls() {
                     Log("<b style='color:red;'>" +
                         acmx2::backend_name(active_backend) +
                         " engine crashed.</b><br>");
-                    cleanupShaderSelectionSemaphore();
                 }
 
                 // Refresh the shader tree's compile-health column now that
@@ -1853,12 +1853,29 @@ int MainWindow::currentShaderRow() const {
 
 void MainWindow::initShaderSelectionSharedMemory() {
 #if defined(__linux__) || defined(__APPLE__)
+    // A named semaphore can be unlinked while an existing process still owns
+    // a usable handle. Verify that new child processes can still discover the
+    // name before every launch and recreate it when necessary.
+    if (shaderSelectionSemaphore != SEM_FAILED) {
+        sem_t *publishedSemaphore = ::sem_open(
+            acmx2::ipc::kShaderSelectionSemaphoreName, 0);
+        if (publishedSemaphore != SEM_FAILED) {
+            ::sem_close(publishedSemaphore);
+        } else {
+            ::sem_close(shaderSelectionSemaphore);
+            shaderSelectionSemaphore = SEM_FAILED;
+        }
+    }
     if (shaderSelectionSemaphore == SEM_FAILED) {
         shaderSelectionSemaphore = ::sem_open(
             acmx2::ipc::kShaderSelectionSemaphoreName, O_CREAT, 0666, 1);
     }
-    if (shaderSelectionSemaphore == SEM_FAILED)
+    if (shaderSelectionSemaphore == SEM_FAILED) {
+        Log(tr("Shared interface control unavailable: sem_open(%1) failed: %2")
+                .arg(acmx2::ipc::kShaderSelectionSemaphoreName,
+                     QString::fromLocal8Bit(std::strerror(errno))));
         return;
+    }
 
     if (shaderSelectionShm)
         return;
