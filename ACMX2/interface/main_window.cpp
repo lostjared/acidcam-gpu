@@ -786,6 +786,13 @@ void MainWindow::initControls() {
     buildCacheAction->setShortcut(QKeySequence("Ctrl+Alt+B"));
     connect(buildCacheAction, &QAction::triggered, this, &MainWindow::menuBuildShaderCache);
     playbackMenu->addAction(buildCacheAction);
+    fixBuildAction = new QAction(tr("Fix Build"), this);
+    fixBuildAction->setShortcut(QKeySequence("Ctrl+Alt+F"));
+    fixBuildAction->setToolTip(
+        tr("Build ACMXVK while omitting shaders that fail to compile."));
+    connect(fixBuildAction, &QAction::triggered, this,
+            &MainWindow::menuFixBuild);
+    playbackMenu->addAction(fixBuildAction);
     cleanShaderCacheAction = new QAction(tr("Clean Shader Cache"), this);
     cleanShaderCacheAction->setShortcut(QKeySequence("Ctrl+Alt+C"));
     connect(cleanShaderCacheAction, &QAction::triggered,
@@ -795,6 +802,8 @@ void MainWindow::initControls() {
     // macOS does not support the persistent binary shader cache.
     buildCacheAction->setVisible(false);
     buildCacheAction->setEnabled(false);
+    fixBuildAction->setVisible(false);
+    fixBuildAction->setEnabled(false);
     cleanShaderCacheAction->setVisible(false);
     cleanShaderCacheAction->setEnabled(false);
 #endif
@@ -2308,6 +2317,27 @@ bool MainWindow::backend_launch_available() const {
     return true;
 }
 
+void MainWindow::prompt_acmxvk_rebuild(const QString &reason) {
+    QString type_error;
+    if (!is_acmxvk_source_library(shader_path, type_error) ||
+        !type_error.isEmpty()) {
+        QMessageBox::warning(this, tr("Build ACMXVK Library"), reason);
+        return;
+    }
+
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this, tr("Build ACMXVK Library"),
+        tr("The ACMXVK build is out of date or incomplete.\n\n%1\n\n"
+           "Do you wish to rebuild it now?")
+            .arg(reason),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (answer != QMessageBox::Yes)
+        return;
+
+    Log(tr("ACMXVK rebuild requested before launch."));
+    menuBuildShaderCache();
+}
+
 void MainWindow::update_backend_ui() {
     const QString name = acmx2::backend_name(active_backend);
     setWindowTitle(tr("%1 - Interface").arg(name));
@@ -2337,6 +2367,15 @@ void MainWindow::update_backend_ui() {
         buildCacheAction->setToolTip(
             acmxvkSource
                 ? tr("Compile changed GLSL sources into %1")
+                      .arg(acmxvk_build_directory(shader_path))
+                : QString());
+    }
+    if (fixBuildAction) {
+        fixBuildAction->setVisible(acmxvkSource);
+        fixBuildAction->setEnabled(acmxvkSource);
+        fixBuildAction->setToolTip(
+            acmxvkSource
+                ? tr("Build into %1 and omit shaders that fail to compile")
                       .arg(acmxvk_build_directory(shader_path))
                 : QString());
     }
@@ -3232,7 +3271,7 @@ void MainWindow::runSelected() {
         QString runtimeError;
         if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
                                             runtimeError)) {
-            QMessageBox::warning(this, tr("Build ACMXVK Library"), runtimeError);
+            prompt_acmxvk_rebuild(runtimeError);
             return;
         }
         if (launchShaderPath != shader_path)
@@ -3507,7 +3546,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
         QString runtimeError;
         if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
                                             runtimeError)) {
-            QMessageBox::warning(this, tr("Build ACMXVK Library"), runtimeError);
+            prompt_acmxvk_rebuild(runtimeError);
             return false;
         }
         if (launchShaderPath != shader_path)
@@ -4139,38 +4178,7 @@ void MainWindow::menuBuildShaderCache() {
     }
 
     if (active_backend == acmx2::Backend::Acmxvk) {
-        QString typeError;
-        if (!is_acmxvk_source_library(build_path, typeError)) {
-            QMessageBox::warning(
-                this, tr("Build ACMXVK Library"),
-                typeError.isEmpty()
-                    ? tr("The selected ACMXVK library is already a compiled "
-                         "runtime library.")
-                    : typeError);
-            return;
-        }
-        const QString manifestPath =
-            QDir(build_path).filePath(QStringLiteral("library.json"));
-        if (!QFileInfo(manifestPath).isFile()) {
-            QMessageBox::warning(
-                this, tr("Build ACMXVK Library"),
-                tr("ACMXVK source builds require library.json:\n%1")
-                    .arg(manifestPath));
-            return;
-        }
-        const QString outputPath = acmxvk_build_directory(build_path);
-        const QStringList args{"--unbuffered", "--build", manifestPath,
-                               "--builddir", outputPath};
-        Log(tr("Building ACMXVK SPIR-V library: %1").arg(build_path));
-        Log("Command: " + executable_path + " " + concatList(args) + "<br>");
-        play_stop->setEnabled(true);
-        cacheBuildInProgress = true;
-        process->start(executable_path, args);
-        if (!process->waitForStarted()) {
-            Log("<b style='color:red;'>Error:</b> Failed to start ACMXVK build process");
-            cacheBuildInProgress = false;
-            play_stop->setEnabled(false);
-        }
+        start_acmxvk_build(build_path, false);
         return;
     }
 
@@ -4213,6 +4221,64 @@ void MainWindow::menuBuildShaderCache() {
         play_stop->setEnabled(false);
     }
 #endif
+}
+
+void MainWindow::menuFixBuild() {
+    if (active_backend != acmx2::Backend::Acmxvk)
+        return;
+    if (process->state() == QProcess::Running) {
+        QMessageBox::warning(
+            this, tr("Fix Build"),
+            tr("A process is already running. Please wait for it to finish."));
+        return;
+    }
+    if (shader_path.isEmpty()) {
+        QMessageBox::warning(
+            this, tr("Fix Build"),
+            tr("No shader library is loaded."));
+        return;
+    }
+    start_acmxvk_build(shader_path, true);
+}
+
+void MainWindow::start_acmxvk_build(const QString &build_path, bool fix) {
+    QString type_error;
+    if (!is_acmxvk_source_library(build_path, type_error)) {
+        QMessageBox::warning(
+            this, fix ? tr("Fix Build") : tr("Build ACMXVK Library"),
+            type_error.isEmpty()
+                ? tr("The selected ACMXVK library is already a compiled "
+                     "runtime library.")
+                : type_error);
+        return;
+    }
+
+    const QString manifest_path =
+        QDir(build_path).filePath(QStringLiteral("library.json"));
+    if (!QFileInfo(manifest_path).isFile()) {
+        QMessageBox::warning(
+            this, fix ? tr("Fix Build") : tr("Build ACMXVK Library"),
+            tr("ACMXVK source builds require library.json:\n%1")
+                .arg(manifest_path));
+        return;
+    }
+
+    const QString output_path = acmxvk_build_directory(build_path);
+    QStringList arguments{"--unbuffered", "--build", manifest_path};
+    arguments << (fix ? QStringLiteral("--fix")
+                      : QStringLiteral("--builddir"))
+              << output_path;
+    Log(fix ? tr("Fix building ACMXVK SPIR-V library: %1").arg(build_path)
+            : tr("Building ACMXVK SPIR-V library: %1").arg(build_path));
+    Log("Command: " + executable_path + " " + concatList(arguments) + "<br>");
+    play_stop->setEnabled(true);
+    cacheBuildInProgress = true;
+    process->start(executable_path, arguments);
+    if (!process->waitForStarted()) {
+        Log("<b style='color:red;'>Error:</b> Failed to start ACMXVK build process");
+        cacheBuildInProgress = false;
+        play_stop->setEnabled(false);
+    }
 }
 
 void MainWindow::menuRunFromCache() {

@@ -90,6 +90,7 @@ class MainWindow : public QMainWindow {
     void menuPlaylistSettings();
     void menuLibraryBuilder();
     void menuBuildShaderCache();
+    void menuFixBuild();
     void menuRunFromCache();
     void menuCleanShaderCache();
     void menuRemoveBroken();
@@ -163,6 +164,10 @@ class MainWindow : public QMainWindow {
     void update_backend_ui();
     /// @brief Return whether the active backend can be launched.
     bool backend_launch_available() const;
+    /// @brief Offer to rebuild a stale or incomplete ACMXVK source library.
+    void prompt_acmxvk_rebuild(const QString &reason);
+    /// @brief Start a normal or failure-tolerant ACMXVK source-library build.
+    void start_acmxvk_build(const QString &build_path, bool fix);
     QMenu *fileMenu = nullptr;
     QMenu *loadRecentMenu = nullptr;
     QMenu *backendMenu = nullptr;
@@ -275,6 +280,7 @@ class MainWindow : public QMainWindow {
     QPointer<LibraryBuilderDialog> libraryBuilderDialog;
     QAction *styleSheetAction;
     QAction *buildCacheAction;
+    QAction *fixBuildAction;
     QAction *runFromCacheAction;
     QAction *cleanShaderCacheAction;
     QAction *removeBrokenAction;
