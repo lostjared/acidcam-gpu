@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9P**. It is usable for video, camera, and
+The port is currently at **Increment 9Q**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -23,7 +23,7 @@ ACMX2.
 | Shader crossfades | Implemented | Shader, playlist, multipass, and bypass changes crossfade from a snapshot of the preceding rendered result. All 35 ACMX2 transition styles are bundled as Vulkan SPIR-V shaders, with selectable duration/style and optional random transition selection during autopilot. |
 | Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
-| Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides. |
+| Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides and live updates from the ACMX Qt interface. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
 | Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, optional lossless WebP snapshots on `5`, and headerless RGBA8 snapshots on `6`. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter`, a configured watermark, or F9 hides the HUD; F9 can show it again when a watermark selected the hidden default. When both are visible, the HUD starts below the watermark. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
@@ -482,6 +482,12 @@ Source-library names such as `effect.comp` map to `effect.comp.spv` in the
 generated runtime library. A live selection uses ACMXVK's normal crossfade and
 pipeline rebuild path; unsupported shared runtime settings and source reload
 messages remain ACMX2-only for now.
+Increment 9Q extends ACMX interface control to named custom uniforms. Slider
+and value changes from the interface are read atomically with the selection
+sequence, matched against the active runtime manifest, clamped to each
+uniform's declared range, and uploaded to fragment, compute, multipass, and 3D
+rendering paths without restarting ACMXVK. Unknown names and non-finite values
+are ignored safely.
 
 ### Input validation
 

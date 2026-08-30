@@ -890,7 +890,7 @@ void MainWindow::initControls() {
     listMenu_shader->setShortcut(QKeySequence::New);
     connect(listMenu_shader, &QAction::triggered, this, &MainWindow::newShader);
     listMenu->addAction(listMenu_shader);
-    customUniformsAction = new QAction(tr("Add Custom Uniforms..."), this);
+    customUniformsAction = new QAction(tr("Custom Uniforms..."), this);
     customUniformsAction->setShortcut(QKeySequence("Ctrl+U"));
     connect(customUniformsAction, &QAction::triggered, this,
             &MainWindow::menuCustomUniforms);

@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.110.0 includes the current ACMXVK integration increments:
+Interface version 2.111.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -62,6 +62,9 @@ Interface version 2.110.0 includes the current ACMXVK integration increments:
   running, right-click a shader (or use **Set Current Shader**) to switch the
   active fragment or compute shader through its normal crossfade path. Source
   names are resolved to their corresponding `.spv` files in `.acmxvk-build`.
+- The **Custom Uniforms** dialog now controls a running ACMXVK process through
+  the same synchronized interface channel. Values are matched by manifest name
+  and applied live to fragment, compute, multipass, and 3D shader paths.
 
 Live source reload and the remaining shared runtime controls are still
 ACMX2-only. Source editing and binary-cache maintenance actions also remain

@@ -1432,7 +1432,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9P)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9Q)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -4814,8 +4814,14 @@ namespace acmxvk {
             return options.audio_buffers > 0;
         }
 
+        struct InterfaceUniformValue {
+            std::string name;
+            float value = 0.0F;
+        };
+
         [[nodiscard]] bool read_interface_selection(
-            std::uint32_t &sequence, std::string &selected_name) const {
+            std::uint32_t &sequence, std::string &selected_name,
+            std::vector<InterfaceUniformValue> &uniform_values) const {
             if (interface_selection == nullptr ||
                 interface_semaphore == SEM_FAILED) {
                 return false;
@@ -4836,6 +4842,21 @@ namespace acmxvk {
             selected_name.assign(
                 std::begin(interface_selection->selected_shader_name),
                 name_end);
+            const std::uint32_t uniform_count = std::min(
+                interface_selection->custom_uniform_count,
+                ipc::MAX_CUSTOM_UNIFORMS);
+            uniform_values.clear();
+            uniform_values.reserve(uniform_count);
+            for (std::uint32_t index = 0; index < uniform_count; ++index) {
+                const char *name_begin =
+                    interface_selection->custom_uniform_names[index];
+                const char *name_limit = name_begin + ipc::MAX_UNIFORM_NAME;
+                const char *uniform_name_end =
+                    std::find(name_begin, name_limit, '\0');
+                uniform_values.push_back(
+                    {std::string(name_begin, uniform_name_end),
+                     interface_selection->custom_uniform_values[index]});
+            }
             return true;
         }
 
@@ -4874,8 +4895,9 @@ namespace acmxvk {
                 static_cast<ipc::ShaderSelectionData *>(mapped);
 
             std::string selected_name;
+            std::vector<InterfaceUniformValue> uniform_values;
             if (!read_interface_selection(interface_last_sequence,
-                                          selected_name)) {
+                                          selected_name, uniform_values)) {
                 std::cerr << "acmxvk: interface control protocol does not match "
                              "this build\n";
                 cleanup_interface_control();
@@ -4903,11 +4925,19 @@ namespace acmxvk {
         void sync_interface_control() {
             std::uint32_t sequence = 0;
             std::string requested_name;
-            if (!read_interface_selection(sequence, requested_name) ||
+            std::vector<InterfaceUniformValue> uniform_values;
+            if (!read_interface_selection(sequence, requested_name,
+                                          uniform_values) ||
                 sequence == interface_last_sequence) {
                 return;
             }
             interface_last_sequence = sequence;
+            apply_interface_shader_selection(requested_name);
+            apply_interface_uniform_values(uniform_values);
+        }
+
+        void apply_interface_shader_selection(
+            const std::string &requested_name) {
             if (requested_name.empty()) {
                 return;
             }
@@ -4950,6 +4980,56 @@ namespace acmxvk {
             std::cout << "acmxvk: interface selected " << activeShaderRole()
                       << ' ' << (shader_index + 1) << '/' << shaders.size()
                       << ": " << currentShader() << '\n';
+        }
+
+        void apply_interface_uniform_values(
+            const std::vector<InterfaceUniformValue> &uniform_values) {
+            if (uniform_values.empty()) {
+                return;
+            }
+
+            std::size_t changed_count = 0;
+            std::size_t ignored_count = 0;
+            for (const InterfaceUniformValue &incoming : uniform_values) {
+                if (!isValidCustomUniformName(incoming.name) ||
+                    !std::isfinite(incoming.value)) {
+                    ++ignored_count;
+                    continue;
+                }
+                const auto match = std::find_if(
+                    custom_uniforms.begin(), custom_uniforms.end(),
+                    [&](const ShaderManifest::CustomUniform &uniform) {
+                        return uniform.name == incoming.name;
+                    });
+                if (match == custom_uniforms.end()) {
+                    ++ignored_count;
+                    continue;
+                }
+                const std::size_t index = static_cast<std::size_t>(
+                    std::distance(custom_uniforms.begin(), match));
+                if (index >= custom_uniform_values.size()) {
+                    ++ignored_count;
+                    continue;
+                }
+                const float value = static_cast<float>(std::clamp(
+                    static_cast<double>(incoming.value), match->minimum,
+                    match->maximum));
+                if (custom_uniform_values[index] == value) {
+                    continue;
+                }
+                custom_uniform_values[index] = value;
+                ++changed_count;
+            }
+
+            if (changed_count > 0) {
+                uploadCustomUniforms();
+                std::cout << "acmxvk: interface updated " << changed_count
+                          << " custom uniform(s)\n";
+            }
+            if (ignored_count > 0) {
+                std::cerr << "acmxvk: interface ignored " << ignored_count
+                          << " unknown or invalid custom uniform(s)\n";
+            }
         }
 
         [[nodiscard]] fs::path findShader(std::string name) const {
