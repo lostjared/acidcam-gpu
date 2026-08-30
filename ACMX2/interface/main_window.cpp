@@ -660,8 +660,8 @@ void MainWindow::initControls() {
 
     menuBar()->setNativeMenuBar(false);
     fileMenu = menuBarPtr->addMenu(tr("File"));
-    backendMenu = menuBarPtr->addMenu(tr("Backend"));
     cameraMenu = menuBarPtr->addMenu(tr("Session"));
+    backendMenu = menuBarPtr->addMenu(tr("Backend"));
     playbackMenu = menuBarPtr->addMenu(tr("Playback"));
     runMenu = menuBarPtr->addMenu(tr("Run"));
     listMenu = menuBarPtr->addMenu(tr("List"));
@@ -3309,6 +3309,7 @@ void MainWindow::runSelected() {
     }
     initShaderSelectionSharedMemory();
     publishSelectedShaderIndexToRunningProcess();
+    publishMultipassShadersToRunningProcess();
     if (active_backend == acmx2::Backend::Acmx2) {
         publishRuntimeSettingsToRunningProcess();
     }
@@ -4043,8 +4044,8 @@ void MainWindow::runAll() {
         return;
     initShaderSelectionSharedMemory();
     publishSelectedShaderIndexToRunningProcess();
+    publishMultipassShadersToRunningProcess();
     if (active_backend == acmx2::Backend::Acmx2) {
-        publishMultipassShadersToRunningProcess();
         publishRuntimeSettingsToRunningProcess();
     }
 

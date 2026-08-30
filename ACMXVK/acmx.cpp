@@ -2590,10 +2590,10 @@ namespace acmxvk {
             initializeGpuFilters();
             openAudio();
             loadShaders();
+            loadShaderPasses();
             initialize_interface_control();
             configureMidiMappings();
             openMidi();
-            loadShaderPasses();
             loadPlaylist();
             resetAutopilotInterval();
             openInput();
@@ -4819,8 +4819,14 @@ namespace acmxvk {
             float value = 0.0F;
         };
 
+        struct InterfaceMultipassState {
+            bool enabled = false;
+            std::vector<std::string> shader_names;
+        };
+
         [[nodiscard]] bool read_interface_selection(
             std::uint32_t &sequence, std::string &selected_name,
+            InterfaceMultipassState &multipass,
             std::vector<InterfaceUniformValue> &uniform_values) const {
             if (interface_selection == nullptr ||
                 interface_semaphore == SEM_FAILED) {
@@ -4842,6 +4848,22 @@ namespace acmxvk {
             selected_name.assign(
                 std::begin(interface_selection->selected_shader_name),
                 name_end);
+            multipass.enabled = interface_selection->shader_pass_enabled != 0;
+            const std::uint32_t pass_count = std::min(
+                interface_selection->shader_pass_count, ipc::MAX_PASS_COUNT);
+            multipass.shader_names.clear();
+            multipass.shader_names.reserve(pass_count);
+            for (std::uint32_t index = 0; index < pass_count; ++index) {
+                const char *name_begin =
+                    interface_selection->shader_pass_names[index];
+                const char *name_limit = name_begin + ipc::MAX_SHADER_NAME;
+                const char *shader_name_end =
+                    std::find(name_begin, name_limit, '\0');
+                if (shader_name_end != name_begin) {
+                    multipass.shader_names.emplace_back(name_begin,
+                                                        shader_name_end);
+                }
+            }
             const std::uint32_t uniform_count = std::min(
                 interface_selection->custom_uniform_count,
                 ipc::MAX_CUSTOM_UNIFORMS);
@@ -4897,15 +4919,19 @@ namespace acmxvk {
                 static_cast<ipc::ShaderSelectionData *>(mapped);
 
             std::string selected_name;
+            InterfaceMultipassState multipass;
             std::vector<InterfaceUniformValue> uniform_values;
             if (!read_interface_selection(interface_last_sequence,
-                                          selected_name, uniform_values)) {
+                                          selected_name, multipass,
+                                          uniform_values)) {
                 std::cerr << "acmxvk: interface control protocol does not match "
                              "this build\n";
                 cleanup_interface_control();
                 return;
             }
-            std::cout << "acmxvk: interface live shader selection enabled\n";
+            apply_interface_multipass_state(multipass);
+            std::cout << "acmxvk: interface live shader and multipass control "
+                         "enabled\n";
         }
 
         void cleanup_interface_control() {
@@ -4927,15 +4953,84 @@ namespace acmxvk {
         void sync_interface_control() {
             std::uint32_t sequence = 0;
             std::string requested_name;
+            InterfaceMultipassState multipass;
             std::vector<InterfaceUniformValue> uniform_values;
             if (!read_interface_selection(sequence, requested_name,
-                                          uniform_values) ||
+                                          multipass, uniform_values) ||
                 sequence == interface_last_sequence) {
                 return;
             }
             interface_last_sequence = sequence;
             apply_interface_shader_selection(requested_name);
+            apply_interface_multipass_state(multipass);
             apply_interface_uniform_values(uniform_values);
+        }
+
+        void apply_interface_multipass_state(
+            const InterfaceMultipassState &requested) {
+            std::vector<fs::path> requested_passes;
+            if (requested.enabled) {
+                if (requested.shader_names.empty()) {
+                    std::cerr << "acmxvk: rejected enabled interface multipass "
+                                 "state without any shader passes\n";
+                    return;
+                }
+                requested_passes.reserve(requested.shader_names.size());
+                for (const std::string &name : requested.shader_names) {
+                    const fs::path requested_path(name);
+                    const bool has_parent_reference = std::any_of(
+                        requested_path.begin(), requested_path.end(),
+                        [](const fs::path &part) { return part == ".."; });
+                    if (requested_path.is_absolute() || has_parent_reference) {
+                        std::cerr << "acmxvk: rejected unsafe interface "
+                                     "multipass shader name: "
+                                  << name << '\n';
+                        return;
+                    }
+                    const fs::path shader = findShader(name);
+                    if (shader.empty()) {
+                        std::cerr << "acmxvk: interface multipass shader is not "
+                                     "in the active library: "
+                                  << name << '\n';
+                        return;
+                    }
+                    requested_passes.push_back(shader);
+                }
+            }
+
+            const bool requested_enabled =
+                requested.enabled && !requested_passes.empty();
+            if (multipass_enabled == requested_enabled &&
+                configured_passes == requested_passes) {
+                return;
+            }
+            if (frame_sprite != nullptr && shader_locked) {
+                std::cerr << "acmxvk: interface multipass update ignored while "
+                             "shader switching is locked\n";
+                return;
+            }
+
+            if (frame_sprite != nullptr) {
+                beginCrossfade();
+            }
+            configured_passes = std::move(requested_passes);
+            multipass_enabled = requested_enabled;
+            if (frame_sprite != nullptr) {
+                applyShaderPipeline();
+                resetShaderTime();
+                autopilot_counter = 0;
+            }
+
+            if (multipass_enabled) {
+                std::cout << "acmxvk: interface multipass enabled ("
+                          << configured_passes.size() << " passes)";
+                for (const fs::path &shader : configured_passes) {
+                    std::cout << "\n  " << shader.filename().string();
+                }
+                std::cout << '\n';
+            } else {
+                std::cout << "acmxvk: interface multipass disabled\n";
+            }
         }
 
         void apply_interface_shader_selection(

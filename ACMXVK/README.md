@@ -2227,6 +2227,10 @@ media duration.
 Increment 8U built in full-featured and portable configurations. The raw RGBA8
 writer uses the shared snapshot worker without an optional image library, and
 the input-validation test passes in both configurations.
+The ACMX interface integration now accepts live multipass enable/disable and
+ordered pass-name updates over its synchronized shared-memory channel. Each
+requested fragment or compute pass is resolved against the active compiled
+library before the Vulkan pipeline is rebuilt.
 
 ## Development note
 

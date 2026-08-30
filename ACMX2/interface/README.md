@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.112.2 includes the current ACMXVK integration increments:
+Interface version 2.113.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -79,6 +79,9 @@ Interface version 2.112.2 includes the current ACMXVK integration increments:
 - Shared interface control verifies that its named semaphore remains published
   before every engine launch and recreates it after an external unlink. Engine
   and launcher errors now include the failing semaphore name and OS error.
+- Multipass settings are published to ACMXVK at startup and while it is
+  running. Applying, reordering, or disabling passes in the interface rebuilds
+  the Vulkan fragment/compute chain without restarting the engine.
 
 Live source reload and the remaining shared runtime controls are still
 ACMX2-only. Source editing and binary-cache maintenance actions also remain
