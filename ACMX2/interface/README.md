@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.114.0 includes the current ACMXVK integration increments:
+Interface version 2.115.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -85,6 +85,9 @@ Interface version 2.114.0 includes the current ACMXVK integration increments:
 - Playback **Repeat** and **Normalized Time** changes are published to a running
   ACMXVK process. Video looping and fixed-per-output-frame shader timing can be
   enabled or disabled without restarting the engine.
+- **Display Filter** and **Watermark** changes are applied live by ACMXVK,
+  including watermark text and RGB color. Runtime watermark text is validated
+  before use, and enabling it preserves the hidden-HUD default.
 
 Live source reload and the remaining shared runtime controls are still
 ACMX2-only. Source editing and binary-cache maintenance actions also remain

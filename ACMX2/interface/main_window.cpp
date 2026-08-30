@@ -3310,9 +3310,7 @@ void MainWindow::runSelected() {
     initShaderSelectionSharedMemory();
     publishSelectedShaderIndexToRunningProcess();
     publishMultipassShadersToRunningProcess();
-    if (active_backend == acmx2::Backend::Acmx2) {
-        publishRuntimeSettingsToRunningProcess();
-    }
+    publishRuntimeSettingsToRunningProcess();
     const QString data = currentShaderName();
     if (data.isEmpty()) {
         Log("<b>No item selected.</b>");
@@ -4045,9 +4043,7 @@ void MainWindow::runAll() {
     initShaderSelectionSharedMemory();
     publishSelectedShaderIndexToRunningProcess();
     publishMultipassShadersToRunningProcess();
-    if (active_backend == acmx2::Backend::Acmx2) {
-        publishRuntimeSettingsToRunningProcess();
-    }
+    publishRuntimeSettingsToRunningProcess();
 
     Log("shell: " + executable_path + " " + concatList(arguments) + "<br>");
     process->start(executable_path, arguments);

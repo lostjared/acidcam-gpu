@@ -4829,11 +4829,19 @@ namespace acmxvk {
             bool normalized_time = false;
         };
 
+        struct InterfaceOverlayState {
+            bool display_filter = false;
+            bool watermark_enabled = false;
+            std::string watermark_text;
+            std::array<std::uint8_t, 3> watermark_color{};
+        };
+
         [[nodiscard]] bool read_interface_selection(
             std::uint32_t &sequence, std::string &selected_name,
             InterfaceMultipassState &multipass,
             std::vector<InterfaceUniformValue> &uniform_values,
-            InterfacePlaybackState &playback) const {
+            InterfacePlaybackState &playback,
+            InterfaceOverlayState &overlay) const {
             if (interface_selection == nullptr ||
                 interface_semaphore == SEM_FAILED) {
                 return false;
@@ -4888,6 +4896,19 @@ namespace acmxvk {
             playback.repeat = interface_selection->repeat_enabled != 0;
             playback.normalized_time =
                 interface_selection->normalized_time_enabled != 0;
+            overlay.display_filter =
+                interface_selection->display_filter_enabled != 0;
+            overlay.watermark_enabled =
+                interface_selection->watermark_enabled != 0;
+            const auto watermark_end = std::find(
+                std::begin(interface_selection->watermark_text),
+                std::end(interface_selection->watermark_text), '\0');
+            overlay.watermark_text.assign(
+                std::begin(interface_selection->watermark_text), watermark_end);
+            overlay.watermark_color = {
+                interface_selection->watermark_r,
+                interface_selection->watermark_g,
+                interface_selection->watermark_b};
             return true;
         }
 
@@ -4931,9 +4952,10 @@ namespace acmxvk {
             InterfaceMultipassState multipass;
             std::vector<InterfaceUniformValue> uniform_values;
             InterfacePlaybackState playback;
+            InterfaceOverlayState overlay;
             if (!read_interface_selection(interface_last_sequence,
                                           selected_name, multipass,
-                                          uniform_values, playback)) {
+                                          uniform_values, playback, overlay)) {
                 std::cerr << "acmxvk: interface control protocol does not match "
                              "this build\n";
                 cleanup_interface_control();
@@ -4941,8 +4963,9 @@ namespace acmxvk {
             }
             apply_interface_multipass_state(multipass);
             apply_interface_playback_state(playback, false);
-            std::cout << "acmxvk: interface live shader, multipass, and "
-                         "playback control enabled\n";
+            apply_interface_overlay_state(overlay, false);
+            std::cout << "acmxvk: interface live shader, multipass, playback, "
+                         "and overlay control enabled\n";
         }
 
         void cleanup_interface_control() {
@@ -4967,9 +4990,10 @@ namespace acmxvk {
             InterfaceMultipassState multipass;
             std::vector<InterfaceUniformValue> uniform_values;
             InterfacePlaybackState playback;
+            InterfaceOverlayState overlay;
             if (!read_interface_selection(sequence, requested_name,
                                           multipass, uniform_values,
-                                          playback) ||
+                                          playback, overlay) ||
                 sequence == interface_last_sequence) {
                 return;
             }
@@ -4978,6 +5002,7 @@ namespace acmxvk {
             apply_interface_multipass_state(multipass);
             apply_interface_uniform_values(uniform_values);
             apply_interface_playback_state(playback, true);
+            apply_interface_overlay_state(overlay, true);
         }
 
         void apply_interface_playback_state(
@@ -4998,6 +5023,63 @@ namespace acmxvk {
                                                           : "disabled")
                               << '\n';
                 }
+            }
+        }
+
+        void apply_interface_overlay_state(const InterfaceOverlayState &requested,
+                                           bool announce) {
+            if (options.display_filter != requested.display_filter) {
+                options.display_filter = requested.display_filter;
+                if (announce) {
+                    std::cout << "acmxvk: interface display-filter overlay "
+                              << (options.display_filter ? "enabled"
+                                                         : "disabled")
+                              << '\n';
+                }
+            }
+
+            try {
+                input::validate_string(requested.watermark_text,
+                                       input::StringKind::DisplayText,
+                                       "interface watermark", true);
+            } catch (const std::exception &error) {
+                std::cerr << "acmxvk: rejected interface watermark: "
+                          << error.what() << '\n';
+                return;
+            }
+
+            const bool was_enabled =
+                watermark_enabled && !options.watermark_text.empty();
+            const bool requested_enabled =
+                requested.watermark_enabled &&
+                !requested.watermark_text.empty();
+            const bool changed =
+                watermark_enabled != requested_enabled ||
+                options.watermark_text != requested.watermark_text ||
+                options.watermark_color != requested.watermark_color;
+            if (!changed) {
+                return;
+            }
+
+            options.watermark_text = requested.watermark_text;
+            options.watermark_color = requested.watermark_color;
+            watermark_enabled = requested_enabled;
+            if (!was_enabled && watermark_enabled) {
+                counter_disabled = true;
+            }
+            if (announce) {
+                std::cout << "acmxvk: interface watermark "
+                          << (watermark_enabled ? "enabled" : "disabled");
+                if (watermark_enabled) {
+                    std::cout << " (color="
+                              << static_cast<int>(options.watermark_color[0])
+                              << ','
+                              << static_cast<int>(options.watermark_color[1])
+                              << ','
+                              << static_cast<int>(options.watermark_color[2])
+                              << ')';
+                }
+                std::cout << '\n';
             }
         }
 
@@ -5472,7 +5554,7 @@ namespace acmxvk {
 
         void initializeOverlayFont() {
             if (counter_disabled && !options.display_filter &&
-                options.watermark_text.empty()) {
+                options.watermark_text.empty() && !options.interface_shm) {
                 return;
             }
 
