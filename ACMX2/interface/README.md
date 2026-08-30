@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.113.0 includes the current ACMXVK integration increments:
+Interface version 2.114.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -82,6 +82,9 @@ Interface version 2.113.0 includes the current ACMXVK integration increments:
 - Multipass settings are published to ACMXVK at startup and while it is
   running. Applying, reordering, or disabling passes in the interface rebuilds
   the Vulkan fragment/compute chain without restarting the engine.
+- Playback **Repeat** and **Normalized Time** changes are published to a running
+  ACMXVK process. Video looping and fixed-per-output-frame shader timing can be
+  enabled or disabled without restarting the engine.
 
 Live source reload and the remaining shared runtime controls are still
 ACMX2-only. Source editing and binary-cache maintenance actions also remain

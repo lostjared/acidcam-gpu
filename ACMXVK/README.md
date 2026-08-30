@@ -36,7 +36,7 @@ ACMX2.
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
-| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader-control IPC remains ACMX2-only. |
+| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection, custom uniforms, multipass chains, Repeat, and Normalized Time use synchronized shared-memory control. |
 
 ## Requirements
 
@@ -480,8 +480,8 @@ launched with `--interface-shm` consume versioned, semaphore-protected shader
 selection messages and resolve them strictly through the active manifest.
 Source-library names such as `effect.comp` map to `effect.comp.spv` in the
 generated runtime library. A live selection uses ACMXVK's normal crossfade and
-pipeline rebuild path; unsupported shared runtime settings and source reload
-messages remain ACMX2-only for now.
+pipeline rebuild path; source reload and the remaining shared runtime settings
+remain ACMX2-only for now.
 Increment 9Q extends ACMX interface control to named custom uniforms. Slider
 and value changes from the interface are read atomically with the selection
 sequence, matched against the active runtime manifest, clamped to each
@@ -2231,6 +2231,11 @@ The ACMX interface integration now accepts live multipass enable/disable and
 ordered pass-name updates over its synchronized shared-memory channel. Each
 requested fragment or compute pass is resolved against the active compiled
 library before the Vulkan pipeline is rebuilt.
+The same channel now accepts live playback Repeat and Normalized Time state.
+Changing either action in the interface updates a running ACMXVK process
+without restarting it; Repeat is consulted at video end-of-stream, while
+Normalized Time switches non-video shader timing between wall-clock and one
+fixed step per output frame.
 
 ## Development note
 

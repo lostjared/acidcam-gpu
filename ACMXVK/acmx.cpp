@@ -4824,10 +4824,16 @@ namespace acmxvk {
             std::vector<std::string> shader_names;
         };
 
+        struct InterfacePlaybackState {
+            bool repeat = false;
+            bool normalized_time = false;
+        };
+
         [[nodiscard]] bool read_interface_selection(
             std::uint32_t &sequence, std::string &selected_name,
             InterfaceMultipassState &multipass,
-            std::vector<InterfaceUniformValue> &uniform_values) const {
+            std::vector<InterfaceUniformValue> &uniform_values,
+            InterfacePlaybackState &playback) const {
             if (interface_selection == nullptr ||
                 interface_semaphore == SEM_FAILED) {
                 return false;
@@ -4879,6 +4885,9 @@ namespace acmxvk {
                     {std::string(name_begin, uniform_name_end),
                      interface_selection->custom_uniform_values[index]});
             }
+            playback.repeat = interface_selection->repeat_enabled != 0;
+            playback.normalized_time =
+                interface_selection->normalized_time_enabled != 0;
             return true;
         }
 
@@ -4921,17 +4930,19 @@ namespace acmxvk {
             std::string selected_name;
             InterfaceMultipassState multipass;
             std::vector<InterfaceUniformValue> uniform_values;
+            InterfacePlaybackState playback;
             if (!read_interface_selection(interface_last_sequence,
                                           selected_name, multipass,
-                                          uniform_values)) {
+                                          uniform_values, playback)) {
                 std::cerr << "acmxvk: interface control protocol does not match "
                              "this build\n";
                 cleanup_interface_control();
                 return;
             }
             apply_interface_multipass_state(multipass);
-            std::cout << "acmxvk: interface live shader and multipass control "
-                         "enabled\n";
+            apply_interface_playback_state(playback, false);
+            std::cout << "acmxvk: interface live shader, multipass, and "
+                         "playback control enabled\n";
         }
 
         void cleanup_interface_control() {
@@ -4955,8 +4966,10 @@ namespace acmxvk {
             std::string requested_name;
             InterfaceMultipassState multipass;
             std::vector<InterfaceUniformValue> uniform_values;
+            InterfacePlaybackState playback;
             if (!read_interface_selection(sequence, requested_name,
-                                          multipass, uniform_values) ||
+                                          multipass, uniform_values,
+                                          playback) ||
                 sequence == interface_last_sequence) {
                 return;
             }
@@ -4964,6 +4977,28 @@ namespace acmxvk {
             apply_interface_shader_selection(requested_name);
             apply_interface_multipass_state(multipass);
             apply_interface_uniform_values(uniform_values);
+            apply_interface_playback_state(playback, true);
+        }
+
+        void apply_interface_playback_state(
+            const InterfacePlaybackState &requested, bool announce) {
+            if (options.repeat != requested.repeat) {
+                options.repeat = requested.repeat;
+                if (announce) {
+                    std::cout << "acmxvk: interface video repeat "
+                              << (options.repeat ? "enabled" : "disabled")
+                              << '\n';
+                }
+            }
+            if (options.normalized_time != requested.normalized_time) {
+                options.normalized_time = requested.normalized_time;
+                if (announce) {
+                    std::cout << "acmxvk: interface normalized time "
+                              << (options.normalized_time ? "enabled"
+                                                          : "disabled")
+                              << '\n';
+                }
+            }
         }
 
         void apply_interface_multipass_state(
