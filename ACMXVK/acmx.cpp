@@ -39,6 +39,7 @@ extern "C" {
 #include "edge_dnn.hpp"
 #endif
 #include "input_validation.hpp"
+#include "interface_control.hpp"
 #ifdef ACMXVK_WITH_MXVK_CUDA
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaarithm.hpp>
@@ -83,7 +84,9 @@ extern "C" {
 #include <utility>
 #include <vector>
 
+#include <fcntl.h>
 #include <spawn.h>
+#include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -295,6 +298,7 @@ namespace acmxvk {
         bool build_prune = false;
         bool build_force = false;
         bool unbuffered_output = false;
+        bool interface_shm = false;
         bool show_help = false;
         FrameRotation frame_rotation = FrameRotation::None;
         std::vector<int> shader_pass_indices;
@@ -797,6 +801,8 @@ namespace acmxvk {
                 options.show_help = true;
             } else if (option == "--unbuffered") {
                 options.unbuffered_output = true;
+            } else if (option == "--interface-shm") {
+                options.interface_shm = true;
             } else if (option == "-p" || option == "--path") {
                 options.resource_directory =
                     optionValue(index, argc, argv, option);
@@ -1426,7 +1432,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9N)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9P)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1565,7 +1571,8 @@ namespace acmxvk {
                << "      --enable-vsync          Use FIFO presentation\n"
                << "      --enable-screenshot     Enable MXVK F10 screenshots\n\n"
                << "Output:\n"
-               << "      --unbuffered           Flush stdout/stderr after each write for GUI capture\n\n"
+               << "      --unbuffered           Flush stdout/stderr after each write for GUI capture\n"
+               << "      --interface-shm        Accept live shader selection from the ACMX interface\n\n"
                << "Keys: Up/Down shader or playlist node, Shift+Up/Down post-shader,\n"
                << "      P playlist/pause, L freeze, T time, U/I step time,\n"
                << "      Page Up/Down time speed, Q audio time, Home audio delta,\n"
@@ -2583,6 +2590,7 @@ namespace acmxvk {
             initializeGpuFilters();
             openAudio();
             loadShaders();
+            initialize_interface_control();
             configureMidiMappings();
             openMidi();
             loadShaderPasses();
@@ -2598,6 +2606,7 @@ namespace acmxvk {
         }
 
         ~MainWindow() override {
+            cleanup_interface_control();
             latest_camera_frame.stop();
             try {
                 flushFrameReadbacks();
@@ -3282,6 +3291,7 @@ namespace acmxvk {
             paceMaximizedRendering();
 
             pollMidi();
+            sync_interface_control();
 
             source_frame_received = false;
             recording_frame_due = false;
@@ -3434,6 +3444,10 @@ namespace acmxvk {
         fs::path shader_manifest_path;
         fs::path png_output_directory;
         fs::path generate_output_directory;
+        int interface_shm_fd = -1;
+        ipc::ShaderSelectionData *interface_selection = nullptr;
+        sem_t *interface_semaphore = SEM_FAILED;
+        std::uint32_t interface_last_sequence = 0;
         std::size_t shader_index = 0;
         std::size_t playlist_index = 0;
         std::size_t crossfade_post_process_index =
@@ -4800,6 +4814,144 @@ namespace acmxvk {
             return options.audio_buffers > 0;
         }
 
+        [[nodiscard]] bool read_interface_selection(
+            std::uint32_t &sequence, std::string &selected_name) const {
+            if (interface_selection == nullptr ||
+                interface_semaphore == SEM_FAILED) {
+                return false;
+            }
+            ipc::SemaphoreLock lock(interface_semaphore);
+            if (!lock) {
+                return false;
+            }
+            if (interface_selection->magic != ipc::SHADER_SELECTION_MAGIC ||
+                interface_selection->version !=
+                    ipc::SHADER_SELECTION_VERSION) {
+                return false;
+            }
+            sequence = interface_selection->sequence;
+            const auto name_end = std::find(
+                std::begin(interface_selection->selected_shader_name),
+                std::end(interface_selection->selected_shader_name), '\0');
+            selected_name.assign(
+                std::begin(interface_selection->selected_shader_name),
+                name_end);
+            return true;
+        }
+
+        void initialize_interface_control() {
+            if (!options.interface_shm) {
+                return;
+            }
+
+            interface_semaphore =
+                ::sem_open(ipc::SHADER_SELECTION_SEMAPHORE_NAME, 0);
+            if (interface_semaphore == SEM_FAILED) {
+                std::cerr << "acmxvk: interface control unavailable: could not "
+                             "open its semaphore\n";
+                return;
+            }
+
+            interface_shm_fd =
+                ::shm_open(ipc::SHADER_SELECTION_SHM_NAME, O_RDWR, 0666);
+            if (interface_shm_fd < 0) {
+                std::cerr << "acmxvk: interface control unavailable: could not "
+                             "open shared memory\n";
+                cleanup_interface_control();
+                return;
+            }
+
+            void *mapped = ::mmap(nullptr, sizeof(ipc::ShaderSelectionData),
+                                  PROT_READ | PROT_WRITE, MAP_SHARED,
+                                  interface_shm_fd, 0);
+            if (mapped == MAP_FAILED) {
+                std::cerr << "acmxvk: interface control unavailable: could not "
+                             "map shared memory\n";
+                cleanup_interface_control();
+                return;
+            }
+            interface_selection =
+                static_cast<ipc::ShaderSelectionData *>(mapped);
+
+            std::string selected_name;
+            if (!read_interface_selection(interface_last_sequence,
+                                          selected_name)) {
+                std::cerr << "acmxvk: interface control protocol does not match "
+                             "this build\n";
+                cleanup_interface_control();
+                return;
+            }
+            std::cout << "acmxvk: interface live shader selection enabled\n";
+        }
+
+        void cleanup_interface_control() {
+            if (interface_selection != nullptr) {
+                ::munmap(interface_selection,
+                         sizeof(ipc::ShaderSelectionData));
+                interface_selection = nullptr;
+            }
+            if (interface_shm_fd >= 0) {
+                ::close(interface_shm_fd);
+                interface_shm_fd = -1;
+            }
+            if (interface_semaphore != SEM_FAILED) {
+                ::sem_close(interface_semaphore);
+                interface_semaphore = SEM_FAILED;
+            }
+        }
+
+        void sync_interface_control() {
+            std::uint32_t sequence = 0;
+            std::string requested_name;
+            if (!read_interface_selection(sequence, requested_name) ||
+                sequence == interface_last_sequence) {
+                return;
+            }
+            interface_last_sequence = sequence;
+            if (requested_name.empty()) {
+                return;
+            }
+
+            const fs::path requested(requested_name);
+            const bool has_parent_reference =
+                std::any_of(requested.begin(), requested.end(),
+                            [](const fs::path &part) { return part == ".."; });
+            if (requested.is_absolute() || has_parent_reference) {
+                std::cerr << "acmxvk: rejected unsafe interface shader name: "
+                          << requested_name << '\n';
+                return;
+            }
+
+            const fs::path shader = findShader(requested_name);
+            const auto match = std::find(shaders.begin(), shaders.end(), shader);
+            if (shader.empty() || match == shaders.end()) {
+                std::cerr << "acmxvk: interface shader is not in the active "
+                             "library: "
+                          << requested_name << '\n';
+                return;
+            }
+
+            const std::size_t next_index =
+                static_cast<std::size_t>(std::distance(shaders.begin(), match));
+            if (next_index == shader_index) {
+                return;
+            }
+            if (shader_locked || frame_sprite == nullptr) {
+                std::cerr << "acmxvk: interface shader selection ignored while "
+                             "shader switching is locked\n";
+                return;
+            }
+
+            beginCrossfade();
+            shader_index = next_index;
+            applyShaderPipeline();
+            resetShaderTime();
+            autopilot_counter = 0;
+            std::cout << "acmxvk: interface selected " << activeShaderRole()
+                      << ' ' << (shader_index + 1) << '/' << shaders.size()
+                      << ": " << currentShader() << '\n';
+        }
+
         [[nodiscard]] fs::path findShader(std::string name) const {
             name = trim(std::move(name));
             if (name.empty()) {
@@ -4808,7 +4960,7 @@ namespace acmxvk {
 
             fs::path requested(name);
             if (requested.extension() != ".spv") {
-                requested.replace_extension(".spv");
+                requested += ".spv";
             }
             const auto match = std::find_if(shaders.begin(), shaders.end(),
                                             [&](const fs::path &shader) {

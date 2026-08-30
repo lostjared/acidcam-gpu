@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9O**. It is usable for video, camera, and
+The port is currently at **Increment 9P**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -19,7 +19,7 @@ ACMX2.
 | Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Encoded output follows `--resolution` when supplied and otherwise uses the negotiated source dimensions, including a width/height swap for 90-degree input rotation. In either case, oversized previews are fitted to the usable display without changing the render or output dimensions. Still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. Offline `--build` mode incrementally compiles source manifests containing `.frag`, `.comp`, or `.spv` entries into a validated runtime library. |
-| Shader selection | Complete | Supports selection by index or filename and keyboard switching. |
+| Shader selection | Complete | Supports selection by index or filename, keyboard switching, and live selection from the ACMX Qt interface through `--interface-shm`. |
 | Shader crossfades | Implemented | Shader, playlist, multipass, and bypass changes crossfade from a snapshot of the preceding rendered result. All 35 ACMX2 transition styles are bundled as Vulkan SPIR-V shaders, with selectable duration/style and optional random transition selection during autopilot. |
 | Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
@@ -475,6 +475,13 @@ When enabled, ACMXVK flushes standard output and standard error after every
 write so startup, build-progress, validation, capture, and teardown messages can
 be displayed immediately by the ACMX interface. Normal terminal behavior is
 unchanged when the option is omitted.
+Increment 9P adds live shader selection from the ACMX Qt interface. Runs
+launched with `--interface-shm` consume versioned, semaphore-protected shader
+selection messages and resolve them strictly through the active manifest.
+Source-library names such as `effect.comp` map to `effect.comp.spv` in the
+generated runtime library. A live selection uses ACMXVK's normal crossfade and
+pipeline rebuild path; unsupported shared runtime settings and source reload
+messages remain ACMX2-only for now.
 
 ### Input validation
 
