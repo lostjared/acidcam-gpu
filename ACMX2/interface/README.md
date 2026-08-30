@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.105.0 includes the current ACMXVK integration increments:
+Interface version 2.106.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -40,12 +40,14 @@ Interface version 2.105.0 includes the current ACMXVK integration increments:
 - Interface-launched ACMXVK runs and source builds include `--unbuffered`, so
   ACMXVK stdout and stderr are streamed into the interface log while the process
   is running instead of appearing only when an operating-system buffer fills.
+- Interface-launched ACMXVK runs include `--interface-shm`. While ACMXVK is
+  running, right-click a shader (or use **Set Current Shader**) to switch the
+  active fragment or compute shader through its normal crossfade path. Source
+  names are resolved to their corresponding `.spv` files in `.acmxvk-build`.
 
-ACMX2 shared-memory live shader selection and reload are intentionally not sent
-to ACMXVK yet. While ACMXVK is running, stop it and launch again to apply a new
-shader selection; live control is reserved for the next integration increment.
-ACMX2-only source editing and binary-cache maintenance actions remain disabled
-when ACMXVK is selected.
+Live source reload and the remaining shared runtime controls are still
+ACMX2-only. Source editing and binary-cache maintenance actions also remain
+disabled when ACMXVK is selected.
 
 ## Building
 

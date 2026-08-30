@@ -427,8 +427,7 @@ void MainWindow::initControls() {
             listMenu_sort->setEnabled(!running);
         }
         if (listMenu_set_current) {
-            listMenu_set_current->setEnabled(
-                running && active_backend == acmx2::Backend::Acmx2);
+            listMenu_set_current->setEnabled(running);
         }
     };
     connect(process, &QProcess::stateChanged, this, updateShaderMenuState);
@@ -486,8 +485,7 @@ void MainWindow::initControls() {
                     Log("<b style='color:red;'>" +
                         acmx2::backend_name(active_backend) +
                         " engine crashed.</b><br>");
-                    if (active_backend == acmx2::Backend::Acmx2)
-                        cleanupShaderSelectionSemaphore();
+                    cleanupShaderSelectionSemaphore();
                 }
 
                 // Refresh the shader tree's compile-health column now that
@@ -957,8 +955,7 @@ void MainWindow::initControls() {
                    legacyExecutable)
             .toString();
     prefix_path = appSettings.value("prefix_path", ".").toString();
-    if (active_backend == acmx2::Backend::Acmx2)
-        initShaderSelectionSharedMemory();
+    initShaderSelectionSharedMemory();
     detectCudaSupport();
     bool useCustomStyle = appSettings.value("useCustomStyle", false).toBool();
     styleSheetAction->setChecked(useCustomStyle);
@@ -1840,7 +1837,7 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
 
 void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
 #if defined(__linux__) || defined(__APPLE__)
-    if (!shaderSelectionShm || !process ||
+    if (active_backend != acmx2::Backend::Acmx2 || !shaderSelectionShm || !process ||
         process->state() != QProcess::Running || cacheBuildInProgress) {
         return;
     }
@@ -2268,10 +2265,7 @@ void MainWindow::update_backend_ui() {
     }
     if (list_view) {
         list_view->setToolTip(
-            acmx2Tools
-                ? tr("Right click while running to change the active shader.")
-                : tr("ACMXVK live shader switching is not available yet; stop "
-                     "and run again after changing the selection."));
+            tr("Right click while running to change the active shader."));
     }
 }
 
@@ -2335,16 +2329,14 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
     audio_available = false;
     midi_available = false;
     dnn_available = false;
-    if (active_backend == acmx2::Backend::Acmx2)
-        initShaderSelectionSharedMemory();
+    initShaderSelectionSharedMemory();
     detectFeatureSupport();
     updateRecentLibrariesMenu();
     update_backend_ui();
     settings.sync();
     Log(tr("Backend selected: %1").arg(acmx2::backend_name(active_backend)));
     if (active_backend == acmx2::Backend::Acmxvk)
-        Log(tr("ACMXVK launching is enabled; live shader switching remains "
-               "disabled for this increment."));
+        Log(tr("ACMXVK launching and live shader selection are enabled."));
 }
 
 bool MainWindow::loadLibraryPath(const QString &path) {
@@ -3106,9 +3098,9 @@ void MainWindow::runSelected() {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return;
     }
+    initShaderSelectionSharedMemory();
+    publishSelectedShaderIndexToRunningProcess();
     if (active_backend == acmx2::Backend::Acmx2) {
-        initShaderSelectionSharedMemory();
-        publishSelectedShaderIndexToRunningProcess();
         publishRuntimeSettingsToRunningProcess();
     }
     const QString data = currentShaderName();
@@ -3156,7 +3148,7 @@ void MainWindow::runSelected() {
         // ACMXVK needs its manifest to resolve fragment/compute types and
         // custom-uniform metadata for the selected SPIR-V shader.
         arguments << "--shaders" << launchShaderPath << "--shader-file"
-                  << launchShaderName;
+                  << launchShaderName << "--interface-shm";
     } else {
         // ACMX2 can compile a selected source directly without loading the
         // complete shader library and its binary cache.
@@ -3423,8 +3415,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments) {
     if (active_backend == acmx2::Backend::Acmxvk)
         arguments << "--unbuffered";
     arguments << "--path" << dirPath << "--shaders" << shader_file;
-    if (active_backend == acmx2::Backend::Acmx2)
-        arguments << "--interface-shm";
+    arguments << "--interface-shm";
     // Always pass texture cache size so runtime SIZE matches the cache file.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     if (cache_enabled && textureCacheArraySettingEnabled())
@@ -3815,10 +3806,10 @@ void MainWindow::runAll() {
     QStringList arguments;
     if (!buildRunArguments(arguments))
         return;
+    initShaderSelectionSharedMemory();
+    publishSelectedShaderIndexToRunningProcess();
     if (active_backend == acmx2::Backend::Acmx2) {
-        initShaderSelectionSharedMemory();
         publishMultipassShadersToRunningProcess();
-        publishSelectedShaderIndexToRunningProcess();
         publishRuntimeSettingsToRunningProcess();
     }
 
