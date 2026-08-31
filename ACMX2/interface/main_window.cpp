@@ -1976,7 +1976,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
             cleanupShaderSelectionSharedMemory();
             return;
         }
-    } else if (shmStat.st_size != static_cast<off_t>(SHARED_MEMORY_SIZE)) {
+    } else if (shmStat.st_size < static_cast<off_t>(SHARED_MEMORY_SIZE)) {
         Log(tr("Shared interface control unavailable: %1 has size %2 bytes; "
                "expected %3. Refusing to resize an active or stale shared "
                "memory object.")
