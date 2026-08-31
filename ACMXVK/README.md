@@ -36,7 +36,7 @@ ACMX2.
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
-| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
+| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
 
 ## Requirements
 
@@ -480,8 +480,8 @@ launched with `--interface-shm` consume versioned, semaphore-protected shader
 selection messages and resolve them strictly through the active manifest.
 Source-library names such as `effect.comp` map to `effect.comp.spv` in the
 generated runtime library. A live selection uses ACMXVK's normal crossfade and
-pipeline rebuild path; source reload and the remaining shared runtime settings
-remain ACMX2-only for now.
+pipeline rebuild path. Later interface increments extend the same channel to
+source reload and additional runtime settings.
 Increment 9Q extends ACMX interface control to named custom uniforms. Slider
 and value changes from the interface are read atomically with the selection
 sequence, matched against the active runtime manifest, clamped to each
@@ -2251,6 +2251,17 @@ interface. ACMXVK decodes and configures the requested replacement before
 stopping the current source, so invalid paths or undecodable media leave the
 active audio intact. Repeat, stop-at-audio-EOF, output device, and pass-through
 state are applied with the replacement.
+Saving an active-library `.frag` or `.comp` source in the ACMX editor now
+compiles only that file with `glslc`. Compilation targets a unique temporary
+file; the interface validates its SPIR-V magic and atomically replaces the
+matching `.acmxvk-build` module only after success. ACMXVK validates that the
+reload path belongs to its active runtime manifest, refreshes active fragment,
+compute, multipass, playlist, or direct 3D pipelines, and leaves inactive
+modules ready for their next selection. Failed compilation keeps the running
+pipeline and previous cached module unchanged. The interface log retains and
+prints the compiler's complete failure diagnostic. Its ACMXVK Properties dialog
+can resolve `glslc` automatically or select a custom glslc-compatible
+executable; that selection is also passed to full Build and Fix Build runs.
 
 ## Development note
 

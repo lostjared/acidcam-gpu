@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.117.0 includes the current ACMXVK integration increments:
+Interface version 2.118.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -95,10 +95,18 @@ Interface version 2.117.0 includes the current ACMXVK integration increments:
   file-audio session without restarting it. The new source is decoded before
   replacing the current source, together with repeat, truncation, output-device,
   and pass-through settings.
+- Saving a `.frag` or `.comp` source in the built-in editor while ACMXVK is
+  running invokes `glslc` for only that source. The interface validates and
+  atomically installs the resulting `.spv` in `.acmxvk-build`, then requests a
+  live Vulkan pipeline reload. Compile failures preserve the previous module
+  and print the complete compiler diagnostic in the ACMX log.
+- **Properties** (`Ctrl+,`) includes an ACMXVK shader-compiler section. Use
+  **Automatic glslc** to resolve `glslc` from `PATH` or `VULKAN_SDK`, or select
+  a custom glslc-compatible executable. The selected compiler is used for
+  **Build**, **Fix Build**, and live single-shader compilation.
 
-Live source reload and the remaining shared runtime controls are still
-ACMX2-only. Source editing and binary-cache maintenance actions also remain
-disabled when ACMXVK is selected.
+The remaining shared runtime controls are still ACMX2-only. ACMX2-specific
+binary-cache maintenance actions remain disabled when ACMXVK is selected.
 
 ## Building
 

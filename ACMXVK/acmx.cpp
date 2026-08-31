@@ -3449,6 +3449,7 @@ namespace acmxvk {
         sem_t *interface_semaphore = SEM_FAILED;
         std::uint32_t interface_last_sequence = 0;
         std::uint32_t interface_last_audio_file_sequence = 0;
+        std::uint32_t interface_last_reload_sequence = 0;
         std::size_t shader_index = 0;
         std::size_t playlist_index = 0;
         std::size_t crossfade_post_process_index =
@@ -4852,6 +4853,11 @@ namespace acmxvk {
             bool repeat = false;
         };
 
+        struct InterfaceReloadState {
+            std::uint32_t request_sequence = 0;
+            std::string path;
+        };
+
         [[nodiscard]] bool read_interface_selection(
             std::uint32_t &sequence, std::string &selected_name,
             InterfaceMultipassState &multipass,
@@ -4859,7 +4865,8 @@ namespace acmxvk {
             InterfacePlaybackState &playback,
             InterfaceOverlayState &overlay,
             InterfaceGpuFilterState &gpu_filters,
-            InterfaceAudioFileState &audio_file) const {
+            InterfaceAudioFileState &audio_file,
+            InterfaceReloadState &reload) const {
             if (interface_selection == nullptr ||
                 interface_semaphore == SEM_FAILED) {
                 return false;
@@ -4957,6 +4964,13 @@ namespace acmxvk {
                 interface_selection->audio_pass_through != 0;
             audio_file.trunc = interface_selection->audio_trunc != 0;
             audio_file.repeat = interface_selection->audio_repeat != 0;
+            reload.request_sequence = interface_selection->reload_sequence;
+            const auto reload_path_end = std::find(
+                std::begin(interface_selection->reload_shader_path),
+                std::end(interface_selection->reload_shader_path), '\0');
+            reload.path.assign(
+                std::begin(interface_selection->reload_shader_path),
+                reload_path_end);
             return true;
         }
 
@@ -5003,10 +5017,11 @@ namespace acmxvk {
             InterfaceOverlayState overlay;
             InterfaceGpuFilterState gpu_filters;
             InterfaceAudioFileState audio_file;
+            InterfaceReloadState reload;
             if (!read_interface_selection(interface_last_sequence,
                                           selected_name, multipass,
                                           uniform_values, playback, overlay,
-                                          gpu_filters, audio_file)) {
+                                          gpu_filters, audio_file, reload)) {
                 std::cerr << "acmxvk: interface control protocol does not match "
                              "this build\n";
                 cleanup_interface_control();
@@ -5018,6 +5033,7 @@ namespace acmxvk {
             apply_interface_gpu_filter_state(gpu_filters, false);
             interface_last_audio_file_sequence =
                 audio_file.request_sequence;
+            interface_last_reload_sequence = reload.request_sequence;
             std::cout << "acmxvk: interface live shader, multipass, playback, "
                          "overlay, GPU-filter, and audio-file control enabled\n";
         }
@@ -5047,10 +5063,11 @@ namespace acmxvk {
             InterfaceOverlayState overlay;
             InterfaceGpuFilterState gpu_filters;
             InterfaceAudioFileState audio_file;
+            InterfaceReloadState reload;
             if (!read_interface_selection(sequence, requested_name,
                                           multipass, uniform_values,
                                           playback, overlay, gpu_filters,
-                                          audio_file) ||
+                                          audio_file, reload) ||
                 sequence == interface_last_sequence) {
                 return;
             }
@@ -5066,6 +5083,10 @@ namespace acmxvk {
                 interface_last_audio_file_sequence =
                     audio_file.request_sequence;
                 apply_interface_audio_file_state(audio_file);
+            }
+            if (reload.request_sequence != interface_last_reload_sequence) {
+                interface_last_reload_sequence = reload.request_sequence;
+                apply_interface_shader_reload(reload);
             }
         }
 
@@ -5276,6 +5297,101 @@ namespace acmxvk {
             std::cerr << "acmxvk: ignored interface audio-file request: this "
                          "build does not include audio support\n";
 #endif
+        }
+
+        void apply_interface_shader_reload(
+            const InterfaceReloadState &requested) {
+            if (requested.path.empty()) {
+                std::cerr
+                    << "acmxvk: rejected empty interface shader reload\n";
+                return;
+            }
+
+            try {
+                input::validate_string(requested.path,
+                                       input::StringKind::Path,
+                                       "interface shader reload path");
+            } catch (const std::exception &error) {
+                std::cerr << "acmxvk: rejected interface shader reload: "
+                          << error.what() << '\n';
+                return;
+            }
+
+            std::error_code error;
+            const fs::path requested_path =
+                fs::weakly_canonical(requested.path, error);
+            if (error || requested_path.empty() ||
+                !fs::is_regular_file(requested_path)) {
+                std::cerr << "acmxvk: interface shader reload file is not "
+                             "readable: "
+                          << requested.path << '\n';
+                return;
+            }
+
+            const auto shader_match = std::find_if(
+                shaders.begin(), shaders.end(),
+                [&](const fs::path &shader) {
+                    std::error_code shader_error;
+                    const fs::path canonical_shader =
+                        fs::weakly_canonical(shader, shader_error);
+                    return !shader_error &&
+                           canonical_shader == requested_path;
+                });
+            if (shader_match == shaders.end()) {
+                std::cerr << "acmxvk: interface shader reload is outside the "
+                             "active runtime library: "
+                          << requested_path.string() << '\n';
+                return;
+            }
+
+            mxvk::ShaderModuleInfo module_info;
+            try {
+                input::validate_spirv_file(requested_path,
+                                           "interface shader reload");
+                module_info = mxvk::inspect_spirv(
+                    mxvk::load_spv(requested_path.string()));
+            } catch (const std::exception &reload_error) {
+                std::cerr << "acmxvk: rejected compiled shader reload: "
+                          << reload_error.what() << '\n';
+                return;
+            }
+
+            const bool history_before = shader_history_required;
+            const bool spectrum_before = shader_spectrum_required;
+            const bool spectrum_history_before =
+                shader_spectrum_history_required;
+            recordShaderResources(module_info, "live shader reload");
+            const bool resources_grew =
+                history_before != shader_history_required ||
+                spectrum_before != shader_spectrum_required ||
+                spectrum_history_before !=
+                    shader_spectrum_history_required;
+
+            const std::vector<fs::path> active_pipeline =
+                activeShaderPipeline();
+            const bool active =
+                std::find(active_pipeline.begin(), active_pipeline.end(),
+                          *shader_match) != active_pipeline.end();
+            if (active && frame_sprite != nullptr) {
+                if (model_effect_shader == *shader_match) {
+                    model_effect_shader.clear();
+                }
+                if (resources_grew) {
+                    initializeSprite();
+                } else {
+                    beginCrossfade();
+                    applyShaderPipeline();
+                }
+                std::cout << "acmxvk: live reloaded active "
+                          << (module_info.stage == mxvk::ShaderStage::Compute
+                                  ? "compute"
+                                  : "fragment")
+                          << " shader: " << requested_path.string() << '\n';
+            } else {
+                std::cout << "acmxvk: live compiled shader ready for its next "
+                             "use: "
+                          << requested_path.string() << '\n';
+            }
         }
 
         void apply_interface_multipass_state(

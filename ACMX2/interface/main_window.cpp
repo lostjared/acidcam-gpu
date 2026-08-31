@@ -130,6 +130,65 @@ namespace {
 #endif
     }
 
+    QString resolve_acmxvk_shader_compiler(QString &error) {
+        error.clear();
+        QSettings settings("LostSideDead");
+        const QString mode =
+            settings
+                .value(acmx2::backend_settings_key(
+                           acmx2::Backend::Acmxvk,
+                           "shader_compiler_mode"),
+                       "auto")
+                .toString();
+        if (mode == QStringLiteral("custom")) {
+            QString compiler =
+                settings
+                    .value(acmx2::backend_settings_key(
+                        acmx2::Backend::Acmxvk,
+                        "shader_compiler_path"))
+                    .toString()
+                    .trimmed();
+            if (compiler.isEmpty()) {
+                error = QStringLiteral(
+                    "The custom ACMXVK shader compiler path is empty. Select "
+                    "one in Properties (Ctrl+,).");
+                return {};
+            }
+            if (QFileInfo(compiler).isRelative()) {
+                const QString resolved =
+                    QStandardPaths::findExecutable(compiler);
+                if (!resolved.isEmpty())
+                    compiler = resolved;
+            }
+            const QFileInfo compilerInfo(compiler);
+            if (!compilerInfo.isFile() || !compilerInfo.isExecutable()) {
+                error = QStringLiteral(
+                            "The configured ACMXVK shader compiler is not an "
+                            "executable file: %1")
+                            .arg(compiler);
+                return {};
+            }
+            return compilerInfo.absoluteFilePath();
+        }
+
+        QString compiler =
+            QStandardPaths::findExecutable(QStringLiteral("glslc"));
+        if (compiler.isEmpty()) {
+            const QString sdk =
+                QString::fromLocal8Bit(qgetenv("VULKAN_SDK"));
+            const QString sdkCompiler =
+                QDir(sdk).filePath(QStringLiteral("bin/glslc"));
+            if (!sdk.isEmpty() && QFileInfo(sdkCompiler).isExecutable())
+                compiler = sdkCompiler;
+        }
+        if (compiler.isEmpty()) {
+            error = QStringLiteral(
+                "glslc was not found in PATH or VULKAN_SDK. Select a custom "
+                "compiler in Properties (Ctrl+,).");
+        }
+        return compiler;
+    }
+
     QString resolve_backend_assets_path(acmx2::Backend backend,
                                         const QString &executable,
                                         const QString &libraryPath) {
@@ -1824,8 +1883,7 @@ void MainWindow::openShaderEditor(const QString &filePath, int lineNumber,
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
     connect(editor, &TextEditor::fileSaved, this, [this](const QString &filePath) {
-        populateShaderTree();
-        publishShaderReloadToRunningProcess(filePath);
+        handleSavedShader(filePath);
     });
     open_files.append(editor);
     editor->show();
@@ -2020,6 +2078,272 @@ void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
     Log("Requested live shader reload: " + shaderName + "<br>");
 #else
     Q_UNUSED(filePath);
+#endif
+}
+
+void MainWindow::handleSavedShader(const QString &filePath) {
+    populateShaderTree();
+    if (active_backend == acmx2::Backend::Acmxvk && process &&
+        process->state() == QProcess::Running) {
+        queueAcmxvkLiveCompile(filePath);
+        return;
+    }
+    publishShaderReloadToRunningProcess(filePath);
+}
+
+void MainWindow::queueAcmxvkLiveCompile(const QString &filePath) {
+#if defined(__linux__) || defined(__APPLE__)
+    QString typeError;
+    if (!is_acmxvk_source_library(shader_path, typeError)) {
+        Log(typeError.isEmpty()
+                ? tr("ACMXVK live compile requires a source library.")
+                : typeError);
+        return;
+    }
+
+    const QFileInfo sourceInfo(filePath);
+    const QString sourcePath = sourceInfo.canonicalFilePath();
+    const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
+    if (sourcePath.isEmpty() || sourceRoot.isEmpty()) {
+        Log(tr("Could not resolve saved ACMXVK shader: %1").arg(filePath));
+        return;
+    }
+    const QString sourceName =
+        sanitizeShaderName(QDir(sourceRoot).relativeFilePath(sourcePath));
+    if (sourceName.isEmpty() ||
+        (!sourceName.endsWith(QStringLiteral(".frag"), Qt::CaseInsensitive) &&
+         !sourceName.endsWith(QStringLiteral(".comp"), Qt::CaseInsensitive)) ||
+        !items.contains(sourceName, Qt::CaseInsensitive)) {
+        Log(tr("Saved file is not a fragment or compute source in the active "
+               "ACMXVK library: %1")
+                .arg(filePath));
+        return;
+    }
+
+    liveShaderCompileQueue.removeAll(sourcePath);
+    liveShaderCompileQueue.append(sourcePath);
+    startNextAcmxvkLiveCompile();
+#else
+    Q_UNUSED(filePath);
+#endif
+}
+
+void MainWindow::startNextAcmxvkLiveCompile() {
+#if defined(__linux__) || defined(__APPLE__)
+    if (liveShaderCompileProcess &&
+        liveShaderCompileProcess->state() != QProcess::NotRunning) {
+        return;
+    }
+    if (liveShaderCompileQueue.isEmpty()) {
+        return;
+    }
+
+    if (!liveShaderCompileProcess) {
+        liveShaderCompileProcess = new QProcess(this);
+        liveShaderCompileProcess->setProcessChannelMode(
+            QProcess::SeparateChannels);
+        connect(liveShaderCompileProcess, &QProcess::readyReadStandardOutput,
+                this, [this]() {
+                    QString output = QString::fromUtf8(
+                        liveShaderCompileProcess->readAllStandardOutput());
+                    liveShaderCompileStdout += output;
+                    if (liveShaderCompileStdout.size() > 262144)
+                        liveShaderCompileStdout =
+                            liveShaderCompileStdout.right(262144);
+                    Write(output.toHtmlEscaped().replace(
+                        '\n', QStringLiteral("<br>")));
+                });
+        connect(liveShaderCompileProcess, &QProcess::readyReadStandardError,
+                this, [this]() {
+                    QString output = QString::fromUtf8(
+                        liveShaderCompileProcess->readAllStandardError());
+                    liveShaderCompileStderr += output;
+                    if (liveShaderCompileStderr.size() > 262144)
+                        liveShaderCompileStderr =
+                            liveShaderCompileStderr.right(262144);
+                    Write(QStringLiteral("<b style='color:red;'>") +
+                          output.toHtmlEscaped().replace(
+                              '\n', QStringLiteral("<br>")) +
+                          QStringLiteral("</b>"));
+                });
+        connect(
+            liveShaderCompileProcess,
+            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(
+                &QProcess::finished),
+            this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
+                liveShaderCompileStdout += QString::fromUtf8(
+                    liveShaderCompileProcess->readAllStandardOutput());
+                liveShaderCompileStderr += QString::fromUtf8(
+                    liveShaderCompileProcess->readAllStandardError());
+                bool installed = false;
+                if (exitStatus == QProcess::NormalExit && exitCode == 0) {
+                    QFile compiled(liveShaderCompileTemporary);
+                    quint32 magic = 0;
+                    if (compiled.open(QIODevice::ReadOnly)) {
+                        QDataStream stream(&compiled);
+                        stream.setByteOrder(QDataStream::LittleEndian);
+                        stream >> magic;
+                    }
+                    constexpr quint32 SPIRV_MAGIC = 0x07230203U;
+                    if (magic != SPIRV_MAGIC) {
+                        Log(tr("<b style='color:red;'>Live ACMXVK compile did "
+                               "not produce valid SPIR-V for %1.</b>")
+                                .arg(liveShaderCompileSource));
+                    } else if (QFileInfo(liveShaderCompileOutput).isSymLink()) {
+                        Log(tr("<b style='color:red;'>Refusing to replace "
+                               "symbolic-link shader output: %1</b>")
+                                .arg(liveShaderCompileOutput));
+                    } else {
+                        std::error_code error;
+                        std::filesystem::rename(
+                            std::filesystem::u8path(
+                                liveShaderCompileTemporary.toUtf8().constData()),
+                            std::filesystem::u8path(
+                                liveShaderCompileOutput.toUtf8().constData()),
+                            error);
+                        if (error) {
+                            Log(tr("<b style='color:red;'>Could not install "
+                                   "live ACMXVK shader: %1</b>")
+                                    .arg(QString::fromStdString(
+                                        error.message())));
+                        } else {
+                            installed = true;
+                        }
+                    }
+                } else {
+                    Log(tr("<b style='color:red;'>Live ACMXVK compile failed "
+                           "for %1 (%2, exit code %3).</b>")
+                            .arg(liveShaderCompileSource)
+                            .arg(exitStatus == QProcess::CrashExit
+                                     ? tr("compiler crashed")
+                                     : tr("compiler error"))
+                            .arg(exitCode));
+                    QString diagnostics =
+                        liveShaderCompileStderr.trimmed();
+                    if (diagnostics.isEmpty())
+                        diagnostics = liveShaderCompileStdout.trimmed();
+                    if (diagnostics.isEmpty())
+                        diagnostics = liveShaderCompileProcess->errorString();
+                    Log(tr("<b style='color:red;'>Compiler message:</b>"
+                           "<pre style='white-space:pre-wrap;'>%1</pre>")
+                            .arg(diagnostics.toHtmlEscaped()));
+                }
+
+                if (!installed) {
+                    QFile::remove(liveShaderCompileTemporary);
+                } else {
+                    Log(tr("Compiled and installed ACMXVK shader: %1")
+                            .arg(liveShaderCompileOutput));
+                    populateShaderTree();
+                    publishAcmxvkCompiledShaderReload(
+                        liveShaderCompileSource, liveShaderCompileOutput);
+                }
+
+                liveShaderCompileSource.clear();
+                liveShaderCompileOutput.clear();
+                liveShaderCompileTemporary.clear();
+                liveShaderCompileStdout.clear();
+                liveShaderCompileStderr.clear();
+                QTimer::singleShot(
+                    0, this, &MainWindow::startNextAcmxvkLiveCompile);
+            });
+    }
+
+    QString compilerError;
+    const QString glslc = resolve_acmxvk_shader_compiler(compilerError);
+    if (glslc.isEmpty()) {
+        Log(tr("<b style='color:red;'>Cannot live compile ACMXVK shader: "
+               "%1</b>")
+                .arg(compilerError.toHtmlEscaped()));
+        liveShaderCompileQueue.clear();
+        return;
+    }
+
+    liveShaderCompileSource = liveShaderCompileQueue.takeFirst();
+    const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
+    const QString sourceName =
+        QDir(sourceRoot).relativeFilePath(liveShaderCompileSource);
+    liveShaderCompileOutput =
+        QDir(acmxvk_build_directory(sourceRoot))
+            .filePath(acmxvk_runtime_shader_name(sourceName));
+    if (!QDir().mkpath(QFileInfo(liveShaderCompileOutput).absolutePath())) {
+        Log(tr("<b style='color:red;'>Could not create live shader output "
+               "directory for %1.</b>")
+                .arg(liveShaderCompileOutput));
+        liveShaderCompileSource.clear();
+        liveShaderCompileOutput.clear();
+        QTimer::singleShot(0, this,
+                           &MainWindow::startNextAcmxvkLiveCompile);
+        return;
+    }
+
+    liveShaderCompileTemporary =
+        liveShaderCompileOutput + QStringLiteral(".live-tmp-%1-%2")
+                                      .arg(QCoreApplication::applicationPid())
+                                      .arg(++liveShaderCompileSequence);
+    const QStringList arguments{
+        QStringLiteral("-I"), sourceRoot, liveShaderCompileSource,
+        QStringLiteral("-o"), liveShaderCompileTemporary};
+    Log(tr("Live compiling ACMXVK shader: %1").arg(sourceName));
+    Log(tr("Command: %1 %2<br>")
+            .arg(glslc, concatList(arguments)));
+    liveShaderCompileStdout.clear();
+    liveShaderCompileStderr.clear();
+    liveShaderCompileProcess->start(glslc, arguments);
+    if (!liveShaderCompileProcess->waitForStarted()) {
+        Log(tr("<b style='color:red;'>Failed to start the ACMXVK shader "
+               "compiler: %1</b>")
+                .arg(liveShaderCompileProcess->errorString().toHtmlEscaped()));
+        QFile::remove(liveShaderCompileTemporary);
+        liveShaderCompileSource.clear();
+        liveShaderCompileOutput.clear();
+        liveShaderCompileTemporary.clear();
+        liveShaderCompileStdout.clear();
+        liveShaderCompileStderr.clear();
+        QTimer::singleShot(0, this,
+                           &MainWindow::startNextAcmxvkLiveCompile);
+    }
+#endif
+}
+
+void MainWindow::publishAcmxvkCompiledShaderReload(
+    const QString &sourcePath, const QString &runtimePath) {
+#if defined(__linux__) || defined(__APPLE__)
+    if (active_backend != acmx2::Backend::Acmxvk || !shaderSelectionShm ||
+        !process || process->state() != QProcess::Running) {
+        return;
+    }
+
+    const QString sourceName = QDir(shader_path).relativeFilePath(sourcePath);
+    const int shaderIndex =
+        items.indexOf(sourceName, 0, Qt::CaseInsensitive);
+    const QByteArray reloadPath =
+        QFileInfo(runtimePath).canonicalFilePath().toUtf8();
+    if (shaderIndex < 0 || reloadPath.isEmpty() ||
+        reloadPath.size() >=
+            static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
+        Log(tr("Compiled shader cannot be published for live reload: %1")
+                .arg(runtimePath));
+        return;
+    }
+
+    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    if (!lock) {
+        Log(tr("Could not lock the live shader reload channel."));
+        return;
+    }
+    shaderSelectionShm->reload_shader_index = shaderIndex;
+    std::fill(std::begin(shaderSelectionShm->reload_shader_path),
+              std::end(shaderSelectionShm->reload_shader_path), '\0');
+    std::copy(reloadPath.cbegin(), reloadPath.cend(),
+              shaderSelectionShm->reload_shader_path);
+    ++shaderSelectionShm->reload_sequence;
+    ++shaderSelectionShm->sequence;
+    Log(tr("Requested live ACMXVK pipeline reload: %1<br>")
+            .arg(sourceName));
+#else
+    Q_UNUSED(sourcePath);
+    Q_UNUSED(runtimePath);
 #endif
 }
 
@@ -2681,6 +3005,22 @@ void MainWindow::fileOpenProp() {
         QString exePath = propWindow.exePathLineEdit->text();
         QString shaderDir = propWindow.shaderDirLineEdit->text();
         QString prefix = propWindow.screenshotDirLineEdit->text();
+        QString compilerMode;
+        QString compilerPath;
+        if (propertiesBackend == acmx2::Backend::Acmxvk &&
+            propWindow.shaderCompilerComboBox) {
+            compilerMode =
+                propWindow.shaderCompilerComboBox->currentData().toString();
+            compilerPath =
+                propWindow.shaderCompilerPathLineEdit->text().trimmed();
+            if (compilerMode == QStringLiteral("custom") &&
+                compilerPath.isEmpty()) {
+                QMessageBox::information(
+                    this, tr("Shader Compiler"),
+                    tr("Select a custom glslc-compatible compiler path."));
+                return;
+            }
+        }
         if (exePath.length() == 0) {
             QMessageBox::information(this, "No Path", "Requires Executable path");
             return;
@@ -2701,6 +3041,19 @@ void MainWindow::fileOpenProp() {
             if (active_backend == acmx2::Backend::Acmx2)
                 appSettings.setValue("exePath", exePath);
             executable_path = exePath;
+            if (propertiesBackend == acmx2::Backend::Acmxvk) {
+                appSettings.setValue(
+                    acmx2::backend_settings_key(
+                        acmx2::Backend::Acmxvk,
+                        "shader_compiler_mode"),
+                    compilerMode.isEmpty() ? QStringLiteral("auto")
+                                           : compilerMode);
+                appSettings.setValue(
+                    acmx2::backend_settings_key(
+                        acmx2::Backend::Acmxvk,
+                        "shader_compiler_path"),
+                    compilerPath);
+            }
         } else {
             Log(tr("Backend changed while loading the library; retained the "
                    "%1 executable setting.")
@@ -4351,10 +4704,22 @@ void MainWindow::start_acmxvk_build(const QString &build_path, bool fix) {
     }
 
     const QString output_path = acmxvk_build_directory(build_path);
+    QString compilerError;
+    const QString compiler =
+        resolve_acmxvk_shader_compiler(compilerError);
+    if (compiler.isEmpty()) {
+        pending_acmxvk_action = PendingAcmxvkAction::None;
+        Log(tr("<b style='color:red;'>Cannot build ACMXVK library: %1</b>")
+                .arg(compilerError.toHtmlEscaped()));
+        QMessageBox::warning(this, tr("ACMXVK Shader Compiler"),
+                             compilerError);
+        return;
+    }
     QStringList arguments{"--unbuffered", "--build", manifest_path};
     arguments << (fix ? QStringLiteral("--fix")
                       : QStringLiteral("--builddir"))
               << output_path;
+    arguments << QStringLiteral("--glslc") << compiler;
     Log(fix ? tr("Fix building ACMXVK SPIR-V library: %1").arg(build_path)
             : tr("Building ACMXVK SPIR-V library: %1").arg(build_path));
     Log("Command: " + executable_path + " " + concatList(arguments) + "<br>");

@@ -121,6 +121,13 @@ class MainWindow : public QMainWindow {
                 hdr10Process->kill();
             }
         }
+        if (liveShaderCompileProcess &&
+            liveShaderCompileProcess->state() == QProcess::Running) {
+            liveShaderCompileProcess->terminate();
+            if (!liveShaderCompileProcess->waitForFinished(5000)) {
+                liveShaderCompileProcess->kill();
+            }
+        }
         cleanupShaderSelectionSharedMemory();
         QMainWindow::closeEvent(event);
     }
@@ -348,8 +355,21 @@ class MainWindow : public QMainWindow {
     /// @brief True while an ACMX2 cache rebuild or ACMXVK source build is running.
     bool cacheBuildInProgress = false;
     PendingAcmxvkAction pending_acmxvk_action = PendingAcmxvkAction::None;
+    QProcess *liveShaderCompileProcess = nullptr;
+    QStringList liveShaderCompileQueue;
+    QString liveShaderCompileSource;
+    QString liveShaderCompileOutput;
+    QString liveShaderCompileTemporary;
+    QString liveShaderCompileStdout;
+    QString liveShaderCompileStderr;
+    quint64 liveShaderCompileSequence = 0;
 
     void initShaderSelectionSharedMemory();
+    void handleSavedShader(const QString &filePath);
+    void queueAcmxvkLiveCompile(const QString &filePath);
+    void startNextAcmxvkLiveCompile();
+    void publishAcmxvkCompiledShaderReload(const QString &sourcePath,
+                                           const QString &runtimePath);
     void publishSelectedShaderIndexToRunningProcess();
     void publishShaderReloadToRunningProcess(const QString &filePath);
     void publishMultipassShadersToRunningProcess();
