@@ -62,7 +62,7 @@ namespace acmxvk {
             close();
             return false;
         }
-        if (shm_stat.st_size != static_cast<off_t>(SHARED_MEMORY_SIZE)) {
+        if (shm_stat.st_size < static_cast<off_t>(SHARED_MEMORY_SIZE)) {
             std::cerr << "acmxvk: interface control unavailable: "
                       << ipc::SHADER_SELECTION_SHM_NAME << " has size "
                       << shm_stat.st_size << " bytes; expected "
