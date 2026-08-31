@@ -476,7 +476,6 @@ add_custom_target(acmxvk_shaders DEPENDS
 )
 
 set(ACMXVK_APP_IMPLEMENTATION_SECTIONS
-    app/media_helpers.ipp
     app/window_lifecycle.ipp
     app/window_state.ipp
     app/window_audio_midi.ipp
@@ -490,6 +489,8 @@ set_source_files_properties(${ACMXVK_APP_IMPLEMENTATION_SECTIONS}
 )
 add_executable(acmxvk
     acmx.cpp
+    app/media_helpers.cpp
+    app/media_helpers.hpp
     app/media_utils.cpp
     app/media_utils.hpp
     app/options.cpp

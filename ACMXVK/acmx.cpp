@@ -38,6 +38,7 @@ extern "C" {
 #ifdef ACMXVK_WITH_DNN
 #include "edge_dnn.hpp"
 #endif
+#include "app/media_helpers.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
 #include "app/shader_library.hpp"
@@ -184,7 +185,6 @@ namespace acmxvk {
 // These sections form one ordered implementation unit. Their order preserves
 // the open MainWindow class definition across section files.
 // clang-format off
-#include "app/media_helpers.ipp"
 #include "app/window_lifecycle.ipp"
 #include "app/window_state.ipp"
 #include "app/window_audio_midi.ipp"

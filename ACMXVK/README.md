@@ -45,8 +45,9 @@ unit. Its application implementation is grouped under `app/` by responsibility:
 command-line options, shader-library building, media helpers, lifecycle/state,
 audio and MIDI, shaders and interface control, overlays, input/output, and
 rendering. See `app/README.md` for the file map. Options, shader-library
-building, and media utilities use normal `.hpp`/`.cpp` pairs; the tightly
-coupled render-window implementation remains in ordered `.ipp` sections.
+building, media utilities, and asynchronous camera capture use normal
+`.hpp`/`.cpp` pairs; only the tightly coupled render-window implementation
+remains in ordered `.ipp` sections.
 
 ## Requirements
 
