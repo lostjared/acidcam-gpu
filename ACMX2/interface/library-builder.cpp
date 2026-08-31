@@ -1,5 +1,6 @@
 #include "library-builder.hpp"
 
+#include "acmxvk-source-manifest.hpp"
 #include "custom_style.hpp"
 #include "shader-manifest.hpp"
 
@@ -18,6 +19,7 @@
 #include <QPushButton>
 #include <QSaveFile>
 #include <QSettings>
+#include <QTemporaryDir>
 #include <QVBoxLayout>
 #include <QtConcurrent>
 
@@ -30,11 +32,15 @@ namespace {
         QString error;
     };
 
-    bool is_shader_file(const QFileInfo &fileInfo) {
+    bool is_shader_file(const QFileInfo &fileInfo, acmx2::Backend backend) {
         const QString suffix = fileInfo.suffix();
-        return fileInfo.isFile() && fileInfo.isReadable() &&
-               (suffix.compare("glsl", Qt::CaseInsensitive) == 0 ||
-                suffix.compare("comp", Qt::CaseInsensitive) == 0);
+        if (!fileInfo.isFile() || !fileInfo.isReadable())
+            return false;
+        if (suffix.compare("comp", Qt::CaseInsensitive) == 0)
+            return true;
+        return suffix.compare(backend == acmx2::Backend::Acmxvk ? "frag"
+                                                                : "glsl",
+                              Qt::CaseInsensitive) == 0;
     }
 
     QString normalized_path(const QString &path) {
@@ -104,50 +110,120 @@ namespace {
 
     ExportResult export_shader_library(const QString &directory,
                                        bool replacingLibrary,
-                                       const QStringList &sourcePaths) {
+                                       const QStringList &sourcePaths,
+                                       acmx2::Backend backend) {
         ExportResult result;
-        QStringList usedNames;
+        QStringList usedFragmentNames;
+        QStringList usedComputeNames;
         if (!replacingLibrary) {
-            const QDir exportDir(directory);
-            const QStringList existingFiles = exportDir.entryList(QDir::Files);
-            for (const QString &existingFile : existingFiles) {
-                const QString existingPath = exportDir.filePath(existingFile);
-                bool isSelectedSource = false;
-                for (const QString &sourcePath : sourcePaths) {
-                    if (normalized_path(existingPath) ==
-                        normalized_path(sourcePath)) {
-                        isSelectedSource = true;
-                        break;
+            auto reserveExisting = [&](const QDir &outputDirectory,
+                                       QStringList &usedNames,
+                                       bool computeDirectory) {
+                const QStringList existingFiles =
+                    outputDirectory.entryList(QDir::Files);
+                for (const QString &existingFile : existingFiles) {
+                    const QFileInfo existingInfo(
+                        outputDirectory.filePath(existingFile));
+                    if (!is_shader_file(existingInfo, backend))
+                        continue;
+                    if (backend == acmx2::Backend::Acmxvk) {
+                        const bool compute = existingInfo.suffix().compare(
+                                                 "comp", Qt::CaseInsensitive) == 0;
+                        if (compute != computeDirectory)
+                            continue;
                     }
+                    bool isSelectedSource = false;
+                    for (const QString &sourcePath : sourcePaths) {
+                        if (normalized_path(existingInfo.absoluteFilePath()) ==
+                            normalized_path(sourcePath)) {
+                            isSelectedSource = true;
+                            break;
+                        }
+                    }
+                    if (!isSelectedSource)
+                        usedNames.append(existingFile);
                 }
-                if (!isSelectedSource)
-                    usedNames.append(existingFile);
-            }
+            };
+            reserveExisting(QDir(directory), usedFragmentNames, false);
+            if (backend == acmx2::Backend::Acmxvk)
+                reserveExisting(QDir(QDir(directory).filePath("compute")),
+                                usedComputeNames, true);
+        }
+
+        QTemporaryDir stagingDirectory;
+        if (backend == acmx2::Backend::Acmxvk &&
+            !stagingDirectory.isValid()) {
+            result.error = QObject::tr(
+                "Could not create a temporary ACMXVK manifest directory.");
+            return result;
         }
 
         for (const QString &sourcePath : sourcePaths) {
             const QFileInfo sourceInfo(sourcePath);
-            if (!is_shader_file(sourceInfo)) {
+            if (!is_shader_file(sourceInfo, backend)) {
                 result.error =
                     QObject::tr("A source shader is now missing or unreadable:\n%1")
                         .arg(QDir::toNativeSeparators(sourcePath));
                 return result;
             }
 
+            const bool compute =
+                sourceInfo.suffix().compare("comp", Qt::CaseInsensitive) == 0;
+            QStringList &usedNames =
+                backend == acmx2::Backend::Acmxvk && compute
+                    ? usedComputeNames
+                    : usedFragmentNames;
+            const QString preferredName =
+                backend == acmx2::Backend::Acmxvk
+                    ? sourceInfo.completeBaseName() +
+                          (compute ? QStringLiteral(".comp")
+                                   : QStringLiteral(".frag"))
+                    : sourceInfo.fileName();
             const QString exportName =
-                unique_export_name(sourceInfo.fileName(), usedNames);
-            const QString destinationPath =
-                QDir(directory).filePath(exportName);
+                unique_export_name(preferredName, usedNames);
+            const QString relativeName =
+                backend == acmx2::Backend::Acmxvk && compute
+                    ? QStringLiteral("compute/") + exportName
+                    : exportName;
+            const QString destinationPath = QDir(directory).filePath(relativeName);
+            if (!QDir().mkpath(QFileInfo(destinationPath).absolutePath())) {
+                result.error = QObject::tr("Could not create shader directory: %1")
+                                   .arg(QFileInfo(destinationPath).absolutePath());
+                return result;
+            }
             if (!copy_shader(sourcePath, destinationPath, result.error))
                 return result;
-            result.exportedNames.append(exportName);
+            result.exportedNames.append(relativeName);
             usedNames.append(exportName);
+
+            if (backend == acmx2::Backend::Acmxvk) {
+                const QString stagingPath =
+                    QDir(stagingDirectory.path()).filePath(relativeName);
+                if (!QDir().mkpath(QFileInfo(stagingPath).absolutePath())) {
+                    result.error = QObject::tr(
+                                       "Could not create temporary shader directory: %1")
+                                       .arg(QFileInfo(stagingPath).absolutePath());
+                    return result;
+                }
+                if (!copy_shader(sourcePath, stagingPath, result.error))
+                    return result;
+            }
         }
 
-        if (!acmx2::create_shader_manifest(directory,
-                                           acmx2::ShaderManifestFormat::Json,
-                                           result.exportedNames, result.error)) {
-            return result;
+        if (backend == acmx2::Backend::Acmxvk) {
+            acmx2::AcmxvkSourceManifestResult manifestResult;
+            if (!acmx2::create_acmxvk_source_manifest(
+                    stagingDirectory.path(),
+                    QDir(directory).filePath(QStringLiteral("library.json")),
+                    manifestResult, result.error)) {
+                return result;
+            }
+        } else {
+            if (!acmx2::create_shader_manifest(
+                    directory, acmx2::ShaderManifestFormat::Json,
+                    result.exportedNames, result.error)) {
+                return result;
+            }
         }
 
         result.success = true;
@@ -155,15 +231,24 @@ namespace {
     }
 } // namespace
 
-LibraryBuilderDialog::LibraryBuilderDialog(QWidget *parent) : QDialog(parent) {
-    setWindowTitle(tr("Shader Library Builder"));
+LibraryBuilderDialog::LibraryBuilderDialog(acmx2::Backend selectedBackend,
+                                           QWidget *parent)
+    : QDialog(parent), backend(selectedBackend) {
+    setWindowTitle(tr("%1 Shader Library Builder")
+                       .arg(acmx2::backend_name(backend)));
     setMinimumSize(720, 520);
 
     auto *layout = new QVBoxLayout(this);
-    auto *intro = new QLabel(
-        tr("Add fragment (.glsl) and compute (.comp) shaders. The list stays "
-           "sorted automatically and exports as a portable library.json."),
-        this);
+    auto *intro = new QLabel(this);
+    intro->setText(
+        backend == acmx2::Backend::Acmxvk
+            ? tr("Add Vulkan fragment (.frag) and compute (.comp) sources. "
+                 "Compute files export beneath compute/, and the native ACMXVK "
+                 "generator creates a source library.json with custom-uniform "
+                 "metadata.")
+            : tr("Add fragment (.glsl) and compute (.comp) shaders. The list "
+                 "stays sorted automatically and exports as a portable "
+                 "library.json."));
     intro->setWordWrap(true);
     layout->addWidget(intro);
 
@@ -224,35 +309,50 @@ LibraryBuilderDialog::LibraryBuilderDialog(QWidget *parent) : QDialog(parent) {
     acmx2::applyCustomStyleIfEnabled(this);
 }
 
+acmx2::Backend LibraryBuilderDialog::selectedBackend() const {
+    return backend;
+}
+
 QString LibraryBuilderDialog::shaderFilter() const {
-    return tr("Shader files (*.glsl *.comp);;Fragment shaders (*.glsl);;Compute "
-              "shaders (*.comp)");
+    return backend == acmx2::Backend::Acmxvk
+               ? tr("Shader files (*.frag *.comp);;Fragment shaders "
+                    "(*.frag);;Compute shaders (*.comp)")
+               : tr("Shader files (*.glsl *.comp);;Fragment shaders "
+                    "(*.glsl);;Compute shaders (*.comp)");
 }
 
 void LibraryBuilderDialog::addFiles() {
     QSettings settings("LostSideDead");
-    const QString startDir = settings.value("libraryBuilder/sourceDir").toString();
+    const QString sourceKey =
+        acmx2::backend_settings_key(backend, "library_builder_source_dir");
+    const QString startDir = settings.value(sourceKey).toString();
     const QStringList files = QFileDialog::getOpenFileNames(
         this, tr("Add Shader Files"), startDir, shaderFilter());
     if (files.isEmpty())
         return;
 
-    settings.setValue("libraryBuilder/sourceDir", QFileInfo(files.first()).absolutePath());
+    settings.setValue(sourceKey, QFileInfo(files.first()).absolutePath());
     addShaderFiles(files);
 }
 
 void LibraryBuilderDialog::addFolder() {
     QSettings settings("LostSideDead");
-    const QString startDir = settings.value("libraryBuilder/sourceDir").toString();
+    const QString sourceKey =
+        acmx2::backend_settings_key(backend, "library_builder_source_dir");
+    const QString startDir = settings.value(sourceKey).toString();
     const QString directory = QFileDialog::getExistingDirectory(
         this, tr("Add Shader Folder"), startDir);
     if (directory.isEmpty())
         return;
 
-    settings.setValue("libraryBuilder/sourceDir", directory);
+    settings.setValue(sourceKey, directory);
     const auto flags = recursiveCheck->isChecked() ? QDirIterator::Subdirectories
                                                    : QDirIterator::NoIteratorFlags;
-    QDirIterator iterator(directory, {"*.glsl", "*.comp"}, QDir::Files, flags);
+    const QStringList nameFilters =
+        backend == acmx2::Backend::Acmxvk
+            ? QStringList{QStringLiteral("*.frag"), QStringLiteral("*.comp")}
+            : QStringList{QStringLiteral("*.glsl"), QStringLiteral("*.comp")};
+    QDirIterator iterator(directory, nameFilters, QDir::Files, flags);
     QStringList files;
     while (iterator.hasNext())
         files.append(iterator.next());
@@ -261,7 +361,9 @@ void LibraryBuilderDialog::addFolder() {
     const int added = addShaderFiles(files);
     if (files.isEmpty()) {
         QMessageBox::information(this, tr("No Shaders Found"),
-                                 tr("No .glsl or .comp files were found in %1.")
+                                 (backend == acmx2::Backend::Acmxvk
+                                      ? tr("No .frag or .comp files were found in %1.")
+                                      : tr("No .glsl or .comp files were found in %1."))
                                      .arg(QDir::toNativeSeparators(directory)));
     } else if (added == 0) {
         QMessageBox::information(this, tr("No Shaders Added"),
@@ -271,11 +373,47 @@ void LibraryBuilderDialog::addFolder() {
 
 void LibraryBuilderDialog::openLibrary() {
     QSettings settings("LostSideDead");
-    const QString startDir = settings.value("libraryBuilder/sourceDir").toString();
+    const QString sourceKey =
+        acmx2::backend_settings_key(backend, "library_builder_source_dir");
+    const QString startDir = settings.value(sourceKey).toString();
     const QString directory = QFileDialog::getExistingDirectory(
         this, tr("Open Shader Library"), startDir);
     if (directory.isEmpty())
         return;
+
+    QString metadataError;
+    const std::optional<acmx2::Backend> manifestBackend =
+        acmx2::shader_manifest_backend(directory, metadataError);
+    if (!metadataError.isEmpty()) {
+        QMessageBox::critical(this, tr("Could Not Open Library"), metadataError);
+        return;
+    }
+    if (manifestBackend && *manifestBackend != backend) {
+        QMessageBox::warning(
+            this, tr("Wrong Library Backend"),
+            tr("This library targets %1, but the builder is in %2 mode.")
+                .arg(acmx2::backend_name(*manifestBackend),
+                     acmx2::backend_name(backend)));
+        return;
+    }
+    if (backend == acmx2::Backend::Acmxvk) {
+        const std::optional<acmx2::ShaderLibraryType> libraryType =
+            acmx2::shader_manifest_library_type(directory, metadataError);
+        if (!metadataError.isEmpty()) {
+            QMessageBox::critical(this, tr("Could Not Open Library"),
+                                  metadataError);
+            return;
+        }
+        if (libraryType &&
+            *libraryType == acmx2::ShaderLibraryType::Runtime) {
+            QMessageBox::warning(
+                this, tr("Runtime Library Not Supported"),
+                tr("The ACMXVK library builder accepts source libraries with "
+                   ".frag and .comp files, not compiled SPIR-V runtime "
+                   "libraries."));
+            return;
+        }
+    }
 
     QStringList shaderNames;
     QString error;
@@ -298,23 +436,29 @@ void LibraryBuilderDialog::openLibrary() {
         if (!addShader(path, false))
             missing.append(shaderName);
     }
-    settings.setValue("libraryBuilder/sourceDir", directory);
+    settings.setValue(sourceKey, directory);
     updateControls();
 
     if (!missing.isEmpty()) {
         QMessageBox::warning(
             this, tr("Some Shaders Were Skipped"),
-            tr("%1 entries were missing, unreadable, duplicated, or not .glsl/.comp files.")
+            (backend == acmx2::Backend::Acmxvk
+                 ? tr("%1 entries were missing, unreadable, duplicated, or not "
+                      ".frag/.comp files.")
+                 : tr("%1 entries were missing, unreadable, duplicated, or not "
+                      ".glsl/.comp files."))
                 .arg(missing.size()));
     }
 }
 
 bool LibraryBuilderDialog::addShader(const QString &filePath, bool showErrors) {
     const QFileInfo fileInfo(filePath);
-    if (!is_shader_file(fileInfo)) {
+    if (!is_shader_file(fileInfo, backend)) {
         if (showErrors) {
             QMessageBox::warning(this, tr("Invalid Shader"),
-                                 tr("%1 is not a readable .glsl or .comp file.")
+                                 (backend == acmx2::Backend::Acmxvk
+                                      ? tr("%1 is not a readable .frag or .comp file.")
+                                      : tr("%1 is not a readable .glsl or .comp file."))
                                      .arg(QDir::toNativeSeparators(filePath)));
         }
         return false;
@@ -378,7 +522,9 @@ void LibraryBuilderDialog::exportLibrary() {
         return;
 
     QSettings settings("LostSideDead");
-    const QString startDir = settings.value("libraryBuilder/exportDir").toString();
+    const QString exportKey =
+        acmx2::backend_settings_key(backend, "library_builder_export_dir");
+    const QString startDir = settings.value(exportKey).toString();
     const QString directory = QFileDialog::getExistingDirectory(
         this, tr("Choose Library Export Folder"), startDir,
         QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
@@ -387,6 +533,25 @@ void LibraryBuilderDialog::exportLibrary() {
 
     const QString manifestPath = QDir(directory).filePath("library.json");
     const bool replacingLibrary = QFileInfo::exists(manifestPath);
+    if (replacingLibrary) {
+        QString backendError;
+        const std::optional<acmx2::Backend> existingBackend =
+            acmx2::shader_manifest_backend(directory, backendError);
+        if (!backendError.isEmpty()) {
+            QMessageBox::critical(this, tr("Invalid Existing Library"),
+                                  backendError);
+            return;
+        }
+        if (existingBackend && *existingBackend != backend) {
+            QMessageBox::warning(
+                this, tr("Wrong Export Backend"),
+                tr("The selected folder contains a %1 library. Choose a "
+                   "different folder for the %2 export.")
+                    .arg(acmx2::backend_name(*existingBackend),
+                         acmx2::backend_name(backend)));
+            return;
+        }
+    }
     if (replacingLibrary &&
         QMessageBox::question(this, tr("Replace Existing Library"),
                               tr("This folder already contains library.json. Replace "
@@ -407,7 +572,7 @@ void LibraryBuilderDialog::exportLibrary() {
 
     auto *watcher = new QFutureWatcher<ExportResult>(this);
     connect(watcher, &QFutureWatcher<ExportResult>::finished, this,
-            [this, watcher, directory]() {
+            [this, watcher, directory, exportKey]() {
                 const ExportResult result = watcher->result();
                 watcher->deleteLater();
                 exportInProgress = false;
@@ -420,7 +585,7 @@ void LibraryBuilderDialog::exportLibrary() {
                 }
 
                 QSettings settings("LostSideDead");
-                settings.setValue("libraryBuilder/exportDir", directory);
+                settings.setValue(exportKey, directory);
                 emit libraryExported(directory);
                 QMessageBox::information(
                     this, tr("Library Exported"),
@@ -428,9 +593,11 @@ void LibraryBuilderDialog::exportLibrary() {
                         .arg(result.exportedNames.size())
                         .arg(QDir::toNativeSeparators(directory)));
             });
+    const acmx2::Backend exportBackend = backend;
     watcher->setFuture(QtConcurrent::run([directory, replacingLibrary,
-                                          sourcePaths]() {
-        return export_shader_library(directory, replacingLibrary, sourcePaths);
+                                          sourcePaths, exportBackend]() {
+        return export_shader_library(directory, replacingLibrary, sourcePaths,
+                                     exportBackend);
     }));
 }
 

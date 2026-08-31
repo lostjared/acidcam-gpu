@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.121.0 includes the current ACMXVK integration increments:
+Interface version 2.122.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -23,6 +23,13 @@ Interface version 2.121.0 includes the current ACMXVK integration increments:
   recursively refreshes the shader list and custom-uniform slots while
   preserving edited ranges and values. ACMX2 keeps its legacy `.glsl` and
   `index.txt`/JSON creation behavior.
+- **List > Shader Library Builder** now follows the active backend. In ACMXVK
+  mode it accepts `.frag` and `.comp` sources, rejects compiled runtime
+  libraries, exports compute sources beneath `compute/`, and invokes the same
+  native manifest generator used by New Shader Library. Existing uniform
+  ranges and values are retained when replacing an ACMXVK source library.
+  ACMX2 mode continues to assemble `.glsl`/`.comp` libraries with its original
+  layout.
 - **Run Selected**, **Run All**, and **Copy Command** launch or generate a
   command for the active backend. ACMXVK runs use `--shaders` and
   `--shader-file`, preserving fragment/compute type and custom-uniform metadata

@@ -558,6 +558,9 @@ void MainWindow::initControls() {
         if (listMenu_shader) {
             listMenu_shader->setEnabled(!running);
         }
+        if (libraryBuilderAction) {
+            libraryBuilderAction->setEnabled(!running);
+        }
         if (listMenu_remove) {
             listMenu_remove->setEnabled(!running);
         }
@@ -1616,6 +1619,11 @@ void MainWindow::newList() {
 }
 
 void MainWindow::menuLibraryBuilder() {
+    if (libraryBuilderDialog &&
+        libraryBuilderDialog->selectedBackend() != active_backend) {
+        libraryBuilderDialog->close();
+        libraryBuilderDialog = nullptr;
+    }
     if (libraryBuilderDialog) {
         libraryBuilderDialog->show();
         libraryBuilderDialog->raise();
@@ -1623,7 +1631,7 @@ void MainWindow::menuLibraryBuilder() {
         return;
     }
 
-    libraryBuilderDialog = new LibraryBuilderDialog(this);
+    libraryBuilderDialog = new LibraryBuilderDialog(active_backend, this);
     libraryBuilderDialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(libraryBuilderDialog, &LibraryBuilderDialog::libraryExported, this,
             [this](const QString &directory) {
@@ -2852,10 +2860,10 @@ void MainWindow::update_backend_ui() {
     if (runFromCacheAction)
         runFromCacheAction->setEnabled(false);
 #endif
-    if (libraryBuilderAction)
-        libraryBuilderAction->setEnabled(acmx2Tools);
     const bool processIdle =
         !process || process->state() == QProcess::NotRunning;
+    if (libraryBuilderAction)
+        libraryBuilderAction->setEnabled(processIdle);
     if (listMenu_new)
         listMenu_new->setEnabled(processIdle);
     if (listMenu_shader)
@@ -2888,6 +2896,11 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
             tr("Stop the running process before changing backends."));
         update_backend_ui();
         return;
+    }
+
+    if (libraryBuilderDialog) {
+        libraryBuilderDialog->close();
+        libraryBuilderDialog = nullptr;
     }
 
     QSettings settings("LostSideDead");
