@@ -8,20 +8,13 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
-#include <string>
 #include <thread>
-#include <vector>
 
 namespace mxvk {
     class VK_Capture;
 }
 
 namespace acmxvk {
-    struct PlaylistNode {
-        std::string name;
-        std::vector<fs::path> shaders;
-    };
-
     class LatestCameraFrame {
       public:
         LatestCameraFrame() = default;

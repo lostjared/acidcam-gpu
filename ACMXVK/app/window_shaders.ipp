@@ -573,7 +573,8 @@
                                   << name << '\n';
                         return;
                     }
-                    const fs::path shader = findShader(name);
+                    const fs::path shader = find_shader_path(
+                        shaders, shader_library_directory, name);
                     if (shader.empty()) {
                         std::cerr << "acmxvk: interface multipass shader is not "
                                      "in the active library: "
@@ -635,7 +636,8 @@
                 return;
             }
 
-            const fs::path shader = findShader(requested_name);
+            const fs::path shader = find_shader_path(
+                shaders, shader_library_directory, requested_name);
             const auto match = std::find(shaders.begin(), shaders.end(), shader);
             if (shader.empty() || match == shaders.end()) {
                 std::cerr << "acmxvk: interface shader is not in the active "
@@ -715,27 +717,6 @@
             }
         }
 
-        [[nodiscard]] fs::path findShader(std::string name) const {
-            name = trim(std::move(name));
-            if (name.empty()) {
-                return {};
-            }
-
-            fs::path requested(name);
-            if (requested.extension() != ".spv") {
-                requested += ".spv";
-            }
-            const auto match = std::find_if(shaders.begin(), shaders.end(),
-                                            [&](const fs::path &shader) {
-                                                return shader.filename() == requested.filename() ||
-                                                       (!shader_library_directory.empty() &&
-                                                        shader.lexically_relative(
-                                                            shader_library_directory) ==
-                                                            requested);
-                                            });
-            return match == shaders.end() ? fs::path{} : *match;
-        }
-
         void loadShaderPasses() {
             for (const int index : options.shader_pass_indices) {
                 if (index < 0 || index >= static_cast<int>(shaders.size())) {
@@ -745,7 +726,8 @@
                 configured_passes.push_back(shaders[static_cast<std::size_t>(index)]);
             }
             for (const std::string &name : options.shader_pass_files) {
-                const fs::path shader = findShader(name);
+                const fs::path shader = find_shader_path(
+                    shaders, shader_library_directory, name);
                 if (shader.empty()) {
                     throw std::runtime_error("shader pass file is not listed in the manifest: " +
                                              name);
@@ -759,81 +741,12 @@
             if (options.playlist_file.empty()) {
                 return;
             }
-
-            input::validate_file_size(options.playlist_file,
-                                      "shader playlist");
-            std::ifstream playlist_input(options.playlist_file);
-            if (!playlist_input) {
-                throw std::runtime_error("unable to open playlist: " + options.playlist_file);
-            }
-
-            PlaylistNode *current_node = nullptr;
-            std::vector<fs::path> default_entries;
-            std::string line;
-            std::size_t line_number = 1;
-            std::size_t entry_count = 0;
-            while (input::read_bounded_line(
-                playlist_input, line, "shader playlist", line_number++)) {
-                line = trim(std::move(line));
-                if (line.empty() || line.front() == '#') {
-                    continue;
-                }
-                if (line.size() >= 2 && line.front() == '[' && line.back() == ']') {
-                    if (playlist.size() >= input::MAX_PLAYLIST_NODES) {
-                        throw std::runtime_error(
-                            "shader playlist contains too many nodes");
-                    }
-                    std::string node_name =
-                        trim(line.substr(1, line.size() - 2));
-                    input::validate_string(node_name,
-                                           input::StringKind::DisplayText,
-                                           "shader playlist node");
-                    playlist.push_back({std::move(node_name), {}});
-                    current_node = &playlist.back();
-                    continue;
-                }
-                if (line.front() == '[' || line.back() == ']') {
-                    throw std::runtime_error(
-                        "malformed shader playlist node at line " +
-                        std::to_string(line_number - 1));
-                }
-                if (++entry_count > input::MAX_PLAYLIST_ENTRIES) {
-                    throw std::runtime_error(
-                        "shader playlist contains too many entries");
-                }
-                input::validate_string(line, input::StringKind::Path,
-                                       "shader playlist entry");
-
-                const fs::path shader = findShader(line);
-                if (shader.empty()) {
-                    std::cerr << "acmxvk: playlist shader not found: " << line << '\n';
-                    continue;
-                }
-                if (current_node != nullptr) {
-                    current_node->shaders.push_back(shader);
-                } else {
-                    default_entries.push_back(shader);
-                }
-            }
-
-            playlist.erase(std::remove_if(playlist.begin(), playlist.end(),
-                                          [](const PlaylistNode &node) {
-                                              return node.shaders.empty();
-                                          }),
-                           playlist.end());
-            if (!default_entries.empty()) {
-                playlist.insert(playlist.begin(), {"Default", std::move(default_entries)});
-            }
-            if (playlist.empty()) {
-                throw std::runtime_error("playlist contains no shaders available in the SPIR-V library");
-            }
+            playlist = load_playlist(options.playlist_file, shaders,
+                                     shader_library_directory, std::cerr);
             playlist_enabled = options.enable_playlist;
-
-            std::size_t shader_count = 0;
-            for (const PlaylistNode &node : playlist) {
-                shader_count += node.shaders.size();
-            }
-            std::cout << "acmxvk: playlist loaded " << shader_count << " shaders in "
-                      << playlist.size() << " nodes from " << options.playlist_file << '\n';
+            std::cout << "acmxvk: playlist loaded "
+                      << playlist_shader_count(playlist) << " shaders in "
+                      << playlist.size() << " nodes from "
+                      << options.playlist_file << '\n';
             logSelectedPlaylistNode("selected");
         }

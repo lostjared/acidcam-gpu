@@ -497,6 +497,8 @@ add_executable(acmxvk
     app/media_utils.hpp
     app/options.cpp
     app/options.hpp
+    app/playlist.cpp
+    app/playlist.hpp
     app/resource_paths.cpp
     app/resource_paths.hpp
     app/shader_library.cpp
@@ -636,6 +638,20 @@ if(BUILD_TESTING)
     )
     add_test(NAME acmxvk_resource_paths
         COMMAND acmxvk_resource_paths_tests
+    )
+    add_executable(acmxvk_playlist_tests
+        playlist_tests.cpp
+        app/playlist.cpp
+        app/playlist.hpp
+        app/options.hpp
+        input_validation.cpp
+        input_validation.hpp
+    )
+    target_compile_options(acmxvk_playlist_tests PRIVATE
+        -Wall -Wextra -Wpedantic
+    )
+    add_test(NAME acmxvk_playlist
+        COMMAND acmxvk_playlist_tests
     )
     add_test(NAME acmxvk_shader_library_build
         COMMAND acmxvk

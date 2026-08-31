@@ -10,10 +10,11 @@ responsibility:
   user-selected shader, model, font, and crossfade asset resolution.
 - `shader_library.hpp` / `shader_library.cpp`: manifests and source-library
   compilation.
+- `playlist.hpp` / `playlist.cpp`: shader-name resolution and bounded,
+  validated playlist parsing.
 - `media_utils.hpp` / `media_utils.cpp`: image loading, video metadata, frame
   rotation, and CUDA device selection.
-- `media_helpers.hpp` / `media_helpers.cpp`: playlist data and asynchronous
-  camera capture state.
+- `media_helpers.hpp` / `media_helpers.cpp`: asynchronous camera capture state.
 - `interface_client.hpp` / `interface_client.cpp`: validated shared-memory
   connection and synchronized snapshots of live interface controls.
 - `snapshot_writer.hpp` / `snapshot_writer.cpp`: background snapshot queue and
@@ -26,8 +27,8 @@ responsibility:
 - `window_io.ipp`: inputs, encoding, snapshots, and frame readback.
 - `window_rendering.ipp`: 3D, crossfades, pipelines, history, and uploads.
 
-The low-coupling options, resource-path, shader-library, media-utility,
-camera-helper, interface-client, and snapshot-writer modules are independently
-compiled translation units. Only the stateful window implementation remains in
-ordered `.ipp` sections because those sections share one class definition and
-many compile-time feature switches.
+The low-coupling options, resource-path, shader-library, playlist,
+media-utility, camera-helper, interface-client, and snapshot-writer modules are
+independently compiled translation units. Only the stateful window
+implementation remains in ordered `.ipp` sections because those sections share
+one class definition and many compile-time feature switches.

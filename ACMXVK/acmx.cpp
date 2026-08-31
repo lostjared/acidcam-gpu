@@ -34,6 +34,7 @@ extern "C" {
 #include "app/media_helpers.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
+#include "app/playlist.hpp"
 #include "app/resource_paths.hpp"
 #include "app/shader_library.hpp"
 #include "app/snapshot_writer.hpp"
@@ -63,7 +64,6 @@ extern "C" {
 #include <ctime>
 #include <deque>
 #include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
