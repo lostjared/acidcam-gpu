@@ -38,6 +38,16 @@ ACMX2.
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
 
+## Source layout
+
+`acmx.cpp` is the compact process entry point and compile-time integration
+unit. Its application implementation is grouped under `app/` by responsibility:
+command-line options, shader-library building, media helpers, lifecycle/state,
+audio and MIDI, shaders and interface control, overlays, input/output, and
+rendering. See `app/README.md` for the file map. Options, shader-library
+building, and media utilities use normal `.hpp`/`.cpp` pairs; the tightly
+coupled render-window implementation remains in ordered `.ipp` sections.
+
 ## Requirements
 
 - A C++20 compiler and CMake 3.20 or newer

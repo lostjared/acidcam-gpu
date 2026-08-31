@@ -475,7 +475,31 @@ add_custom_target(acmxvk_shaders DEPENDS
     ${ACMXVK_CROSSFADE_SHADERS}
 )
 
-add_executable(acmxvk acmx.cpp input_validation.cpp input_validation.hpp)
+set(ACMXVK_APP_IMPLEMENTATION_SECTIONS
+    app/media_helpers.ipp
+    app/window_lifecycle.ipp
+    app/window_state.ipp
+    app/window_audio_midi.ipp
+    app/window_shaders.ipp
+    app/window_overlay.ipp
+    app/window_io.ipp
+    app/window_rendering.ipp
+)
+set_source_files_properties(${ACMXVK_APP_IMPLEMENTATION_SECTIONS}
+    PROPERTIES HEADER_FILE_ONLY TRUE
+)
+add_executable(acmxvk
+    acmx.cpp
+    app/media_utils.cpp
+    app/media_utils.hpp
+    app/options.cpp
+    app/options.hpp
+    app/shader_library.cpp
+    app/shader_library.hpp
+    input_validation.cpp
+    input_validation.hpp
+    ${ACMXVK_APP_IMPLEMENTATION_SECTIONS}
+)
 add_dependencies(acmxvk acmxvk_shaders)
 target_include_directories(acmxvk PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(acmxvk PRIVATE
