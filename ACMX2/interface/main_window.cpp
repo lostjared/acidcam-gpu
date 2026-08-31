@@ -1000,16 +1000,25 @@ void MainWindow::initControls() {
         QMessageBox box(this);
         box.setWindowTitle("About ACMX2");
         box.setWindowIcon(QIcon(":/win-icon.png"));
-        QString info;
-        QTextStream stream(&info);
-        stream << "ACMX2 " << VERSION_INFO << "\n(C) 2026 " << VERSION_AUTHOR << " Software\nhttps://lostsidedead.biz\nThis software is dedicated to all that have experienced mental health issues.\n";
+        const QString info =
+            QStringLiteral("<p><b>ACMX %1</b><br>"
+                           "(C) 2026 %2 Software<br>"
+                           "<a href=\"https://lostsidedead.biz\">"
+                           "http://lostsidedead.biz</a><br>"
+                           "This software is dedicated to all that have "
+                           "experienced mental health issues.</p>")
+                .arg(QStringLiteral(VERSION_INFO),
+                     QStringLiteral(VERSION_AUTHOR));
+        box.setTextFormat(Qt::RichText);
+        box.setTextInteractionFlags(Qt::TextBrowserInteraction);
         box.setText(info);
+        for (QLabel *label : box.findChildren<QLabel *>())
+            label->setOpenExternalLinks(true);
         QPixmap bigIcon(":/win-icon.png");
         if (!bigIcon.isNull()) {
             QPixmap resizedIcon = bigIcon.scaled(64, 64, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
             box.setIconPixmap(resizedIcon);
         }
-        Log(info);
         box.exec();
     });
     helpMenu->addAction(helpMenu_about);
