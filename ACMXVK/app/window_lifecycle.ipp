@@ -130,7 +130,7 @@
                 }
             }
 #endif
-            stopSnapshotWorker();
+            snapshot_writer.stop();
         }
 
         void event(SDL_Event &event) override {

@@ -4,19 +4,6 @@
                                 Video,
                                 Graphic };
 
-        enum class SnapshotFormat { Png,
-                                    WebP,
-                                    Tiff,
-                                    Raw };
-
-        struct SnapshotJob {
-            fs::path path;
-            std::vector<std::uint8_t> rgba;
-            std::uint32_t width = 0;
-            std::uint32_t height = 0;
-            SnapshotFormat format = SnapshotFormat::Png;
-        };
-
         struct ReadbackRequest {
             bool snapshot = false;
             SnapshotFormat snapshot_format = SnapshotFormat::Png;
@@ -26,13 +13,13 @@
             std::uint64_t pts = 0;
         };
 
-        static constexpr std::size_t SNAPSHOT_QUEUE_CAPACITY = 4;
         static constexpr std::uint32_t COMPATIBILITY_SPECTRUM_BIN_COUNT = 256;
 
         Options options;
         SourceKind source_kind = SourceKind::Camera;
         mxvk::VK_Capture capture;
         LatestCameraFrame latest_camera_frame;
+        SnapshotWriter snapshot_writer;
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
         mxvk::VK_FF_Capture ffmpeg_capture;
         std::vector<std::uint8_t> ffmpeg_rgba;
@@ -181,12 +168,6 @@
         std::uint64_t hud_fps_frame_count = 0;
         std::uint64_t camera_fps_frame_count = 0;
         double hud_display_fps = 0.0;
-        std::deque<SnapshotJob> snapshot_jobs;
-        std::mutex snapshot_mutex;
-        std::condition_variable snapshot_condition;
-        std::thread snapshot_worker;
-        std::size_t snapshot_jobs_in_flight = 0;
-        bool snapshot_worker_stopping = false;
         std::deque<ReadbackRequest> readback_requests;
         std::chrono::steady_clock::time_point hud_session_start{
             std::chrono::steady_clock::now()};

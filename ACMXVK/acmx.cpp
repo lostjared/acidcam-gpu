@@ -10,15 +10,7 @@
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
 #include <mxvk/mxvk_ff_capture.hpp>
 #endif
-#include <mxvk/mxvk_png.hpp>
 #include <mxwrite.hpp>
-
-#ifdef ACMXVK_WITH_WEBP
-#include <webp/encode.h>
-#endif
-#ifdef ACMXVK_WITH_TIFF
-#include <tiffio.h>
-#endif
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -42,6 +34,7 @@ extern "C" {
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
 #include "app/shader_library.hpp"
+#include "app/snapshot_writer.hpp"
 #include "input_validation.hpp"
 #include "interface_control.hpp"
 #ifdef ACMXVK_WITH_MXVK_CUDA

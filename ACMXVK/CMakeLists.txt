@@ -497,6 +497,8 @@ add_executable(acmxvk
     app/options.hpp
     app/shader_library.cpp
     app/shader_library.hpp
+    app/snapshot_writer.cpp
+    app/snapshot_writer.hpp
     input_validation.cpp
     input_validation.hpp
     ${ACMXVK_APP_IMPLEMENTATION_SECTIONS}

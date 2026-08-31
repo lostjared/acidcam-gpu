@@ -322,275 +322,6 @@
             return directory / filename.str();
         }
 
-        static void savePng(const fs::path &path, std::uint8_t *rgba, int width,
-                            int height) {
-            if (!mxvk::SavePNG_RGBA(path.string().c_str(), rgba, width, height)) {
-                throw std::runtime_error("unable to write PNG frame: " + path.string());
-            }
-        }
-
-        static void saveRaw(const fs::path &path,
-                            const std::vector<std::uint8_t> &rgba,
-                            std::uint32_t width, std::uint32_t height) {
-            if (width == 0U || height == 0U) {
-                throw std::runtime_error(
-                    "invalid image dimensions for raw RGBA snapshot: " +
-                    path.string());
-            }
-
-            const std::uint64_t byte_count =
-                static_cast<std::uint64_t>(width) *
-                static_cast<std::uint64_t>(height) * 4U;
-            if (byte_count > rgba.size() ||
-                byte_count > static_cast<std::uint64_t>(
-                                 std::numeric_limits<std::streamsize>::max())) {
-                throw std::runtime_error(
-                    "invalid pixel buffer for raw RGBA snapshot: " +
-                    path.string());
-            }
-
-            std::ofstream output(path, std::ios::binary);
-            if (!output) {
-                throw std::runtime_error("unable to open raw RGBA snapshot: " +
-                                         path.string());
-            }
-            output.write(reinterpret_cast<const char *>(rgba.data()),
-                         static_cast<std::streamsize>(byte_count));
-            if (!output) {
-                throw std::runtime_error("unable to write raw RGBA snapshot: " +
-                                         path.string());
-            }
-        }
-
-#ifdef ACMXVK_WITH_WEBP
-        static void saveWebP(const fs::path &path, const std::uint8_t *rgba,
-                             int width, int height) {
-            if (rgba == nullptr || width <= 0 || height <= 0 ||
-                width > std::numeric_limits<int>::max() / 4) {
-                throw std::runtime_error(
-                    "invalid image dimensions for WebP snapshot: " +
-                    path.string());
-            }
-
-            std::uint8_t *encoded_pixels = nullptr;
-            const std::size_t encoded_size = WebPEncodeLosslessRGBA(
-                rgba, width, height, width * 4, &encoded_pixels);
-            const std::unique_ptr<std::uint8_t, decltype(&WebPFree)>
-                encoded_data(encoded_pixels, &WebPFree);
-            if (encoded_size == 0 || encoded_data == nullptr) {
-                throw std::runtime_error("unable to encode WebP snapshot: " +
-                                         path.string());
-            }
-
-            std::ofstream output(path, std::ios::binary);
-            if (!output) {
-                throw std::runtime_error("unable to open WebP snapshot: " +
-                                         path.string());
-            }
-            output.write(reinterpret_cast<const char *>(encoded_data.get()),
-                         static_cast<std::streamsize>(encoded_size));
-            if (!output) {
-                throw std::runtime_error("unable to write WebP snapshot: " +
-                                         path.string());
-            }
-        }
-#endif
-
-#ifdef ACMXVK_WITH_TIFF
-        static void saveTiff(const fs::path &path, const std::uint8_t *rgba,
-                             int width, int height) {
-            if (rgba == nullptr || width <= 0 || height <= 0 ||
-                width > std::numeric_limits<int>::max() / 4) {
-                throw std::runtime_error(
-                    "invalid image dimensions for TIFF snapshot: " +
-                    path.string());
-            }
-
-            const std::unique_ptr<TIFF, decltype(&TIFFClose)> output(
-                TIFFOpen(path.string().c_str(), "w"), &TIFFClose);
-            if (output == nullptr) {
-                throw std::runtime_error("unable to open TIFF snapshot: " +
-                                         path.string());
-            }
-
-            const std::uint16_t extra_sample = EXTRASAMPLE_UNASSALPHA;
-            const bool configured =
-                TIFFSetField(output.get(), TIFFTAG_IMAGEWIDTH,
-                             static_cast<std::uint32_t>(width)) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_IMAGELENGTH,
-                             static_cast<std::uint32_t>(height)) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_SAMPLESPERPIXEL, 4) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_BITSPERSAMPLE, 8) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_ORIENTATION,
-                             ORIENTATION_TOPLEFT) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_PLANARCONFIG,
-                             PLANARCONFIG_CONTIG) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_PHOTOMETRIC,
-                             PHOTOMETRIC_RGB) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_SAMPLEFORMAT,
-                             SAMPLEFORMAT_UINT) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_COMPRESSION,
-                             COMPRESSION_LZW) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_ROWSPERSTRIP,
-                             TIFFDefaultStripSize(output.get(), 0)) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_EXTRASAMPLES, 1,
-                             &extra_sample) != 0 &&
-                TIFFSetField(output.get(), TIFFTAG_IMAGEDESCRIPTION,
-                             "ACMXVK processed snapshot: 8-bit RGBA TIFF") != 0;
-            if (!configured) {
-                throw std::runtime_error(
-                    "unable to configure TIFF snapshot: " + path.string());
-            }
-
-            const std::size_t row_bytes = static_cast<std::size_t>(width) * 4U;
-            for (int row = 0; row < height; ++row) {
-                auto *row_pixels = const_cast<std::uint8_t *>(
-                    rgba + static_cast<std::size_t>(row) * row_bytes);
-                if (TIFFWriteScanline(output.get(), row_pixels,
-                                      static_cast<std::uint32_t>(row), 0) < 0) {
-                    throw std::runtime_error(
-                        "unable to write TIFF snapshot: " + path.string());
-                }
-            }
-        }
-#endif
-
-        [[nodiscard]] static std::string_view
-        snapshotFormatName(SnapshotFormat format) {
-            switch (format) {
-            case SnapshotFormat::WebP:
-                return "WebP";
-            case SnapshotFormat::Tiff:
-                return "TIFF";
-            case SnapshotFormat::Raw:
-                return "raw RGBA";
-            case SnapshotFormat::Png:
-                return "PNG";
-            }
-            return "snapshot";
-        }
-
-        [[nodiscard]] static std::string_view
-        snapshotExtension(SnapshotFormat format) {
-            switch (format) {
-            case SnapshotFormat::WebP:
-                return ".webp";
-            case SnapshotFormat::Tiff:
-                return ".tiff";
-            case SnapshotFormat::Raw:
-                return ".raw";
-            case SnapshotFormat::Png:
-                return ".png";
-            }
-            return ".snapshot";
-        }
-
-        void snapshotWorkerLoop() noexcept {
-            while (true) {
-                SnapshotJob job;
-                {
-                    std::unique_lock<std::mutex> lock(snapshot_mutex);
-                    snapshot_condition.wait(lock, [&] {
-                        return snapshot_worker_stopping ||
-                               !snapshot_jobs.empty();
-                    });
-                    if (snapshot_worker_stopping && snapshot_jobs.empty()) {
-                        return;
-                    }
-                    job = std::move(snapshot_jobs.front());
-                    snapshot_jobs.pop_front();
-                }
-
-                try {
-                    if (job.format == SnapshotFormat::Raw) {
-                        saveRaw(job.path, job.rgba, job.width, job.height);
-                    } else if (job.format == SnapshotFormat::Tiff) {
-#ifdef ACMXVK_WITH_TIFF
-                        saveTiff(job.path, job.rgba.data(),
-                                 static_cast<int>(job.width),
-                                 static_cast<int>(job.height));
-#else
-                        throw std::runtime_error(
-                            "TIFF snapshot support is not compiled in");
-#endif
-                    } else if (job.format == SnapshotFormat::WebP) {
-#ifdef ACMXVK_WITH_WEBP
-                        saveWebP(job.path, job.rgba.data(),
-                                 static_cast<int>(job.width),
-                                 static_cast<int>(job.height));
-#else
-                        throw std::runtime_error(
-                            "WebP snapshot support is not compiled in");
-#endif
-                    } else {
-                        savePng(job.path, job.rgba.data(),
-                                static_cast<int>(job.width),
-                                static_cast<int>(job.height));
-                    }
-                    std::ostringstream message;
-                    message << "acmxvk: took "
-                            << snapshotFormatName(job.format) << " snapshot: "
-                            << job.path.string() << '\n';
-                    std::cout << message.str();
-                } catch (const std::exception &error) {
-                    std::ostringstream message;
-                    message << "acmxvk: snapshot failed: " << error.what()
-                            << '\n';
-                    std::cerr << message.str();
-                } catch (...) {
-                    std::cerr << "acmxvk: snapshot failed with an unknown error\n";
-                }
-
-                std::lock_guard<std::mutex> lock(snapshot_mutex);
-                if (snapshot_jobs_in_flight > 0) {
-                    --snapshot_jobs_in_flight;
-                }
-            }
-        }
-
-        [[nodiscard]] bool startSnapshotWorker() {
-            std::lock_guard<std::mutex> lock(snapshot_mutex);
-            if (snapshot_worker.joinable()) {
-                return true;
-            }
-            snapshot_worker_stopping = false;
-            try {
-                snapshot_worker =
-                    std::thread(&MainWindow::snapshotWorkerLoop, this);
-            } catch (const std::exception &error) {
-                std::cerr << "acmxvk: could not start snapshot worker: "
-                          << error.what() << '\n';
-                return false;
-            }
-            return true;
-        }
-
-        void stopSnapshotWorker() noexcept {
-            {
-                std::lock_guard<std::mutex> lock(snapshot_mutex);
-                if (!snapshot_worker.joinable()) {
-                    return;
-                }
-                snapshot_worker_stopping = true;
-            }
-            snapshot_condition.notify_one();
-            snapshot_worker.join();
-        }
-
-        [[nodiscard]] bool snapshotQueueFull() {
-            std::lock_guard<std::mutex> lock(snapshot_mutex);
-            return snapshot_jobs_in_flight >= SNAPSHOT_QUEUE_CAPACITY;
-        }
-
-        void enqueueSnapshot(SnapshotJob job) {
-            {
-                std::lock_guard<std::mutex> lock(snapshot_mutex);
-                snapshot_jobs.push_back(std::move(job));
-                ++snapshot_jobs_in_flight;
-            }
-            snapshot_condition.notify_one();
-        }
-
         [[nodiscard]] fs::path snapshotPath(std::uint32_t width,
                                             std::uint32_t height,
                                             SnapshotFormat format) {
@@ -609,7 +340,7 @@
                 filename << "ACMXVK.Snapshot-"
                          << std::put_time(&local_time, "%Y.%m.%d-%H.%M.%S")
                          << '-' << width << 'x' << height << '-'
-                         << snapshot_count << snapshotExtension(format);
+                         << snapshot_count << SnapshotWriter::extension(format);
                 const fs::path candidate = directory / filename.str();
                 if (!fs::exists(candidate)) {
                     return candidate;
@@ -636,7 +367,7 @@
             if (snapshot_pending) {
                 return;
             }
-            if (snapshotQueueFull()) {
+            if (snapshot_writer.queueFull()) {
                 std::cerr << "acmxvk: snapshot queue is full; request ignored\n";
                 return;
             }
@@ -648,13 +379,13 @@
                           << directory.string() << '\n';
                 return;
             }
-            if (!startSnapshotWorker()) {
+            if (!snapshot_writer.start()) {
                 return;
             }
             snapshot_pending = true;
             pending_snapshot_format = format;
             setFrameReadbackEnabled(true);
-            std::cout << "acmxvk: " << snapshotFormatName(format)
+            std::cout << "acmxvk: " << SnapshotWriter::formatName(format)
                       << " snapshot requested\n";
         }
 
@@ -774,10 +505,10 @@
                 } else {
                     job.rgba = std::move(rgba);
                 }
-                enqueueSnapshot(std::move(job));
+                snapshot_writer.enqueue(std::move(job));
                 ++snapshot_count;
                 std::cout << "acmxvk: queued "
-                          << snapshotFormatName(request.snapshot_format)
+                          << SnapshotWriter::formatName(request.snapshot_format)
                           << " snapshot: " << path.string() << '\n';
             }
 
@@ -807,16 +538,18 @@
                 }
             }
             if (options.png_output) {
-                savePng(framePath(png_output_directory, png_frame_count), output_pixels,
-                        recording_width, recording_height);
+                SnapshotWriter::savePng(
+                    framePath(png_output_directory, png_frame_count),
+                    output_pixels, recording_width, recording_height);
                 ++png_frame_count;
             }
             if (options.generate_interval > 0 &&
                 (request.has_pts ? request.pts : output_frame_count) %
                         static_cast<std::uint64_t>(options.generate_interval) ==
                     0) {
-                savePng(framePath(generate_output_directory, generated_frame_count),
-                        output_pixels, recording_width, recording_height);
+                SnapshotWriter::savePng(
+                    framePath(generate_output_directory, generated_frame_count),
+                    output_pixels, recording_width, recording_height);
                 ++generated_frame_count;
             }
             ++output_frame_count;

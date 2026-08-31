@@ -12,6 +12,8 @@ the application organized by responsibility:
   rotation, and CUDA device selection.
 - `media_helpers.hpp` / `media_helpers.cpp`: playlist data and asynchronous
   camera capture state.
+- `snapshot_writer.hpp` / `snapshot_writer.cpp`: background snapshot queue and
+  PNG, raw RGBA, WebP, and TIFF encoding.
 - `window_lifecycle.ipp`: construction, events, and frame processing.
 - `window_state.ipp`: `MainWindow` state shared by the other sections.
 - `window_audio_midi.ipp`: audio, MIDI, controls, and media clocks.
@@ -20,7 +22,8 @@ the application organized by responsibility:
 - `window_io.ipp`: inputs, encoding, snapshots, and frame readback.
 - `window_rendering.ipp`: 3D, crossfades, pipelines, history, and uploads.
 
-The low-coupling options, shader-library, media-utility, and camera-helper
-modules are independently compiled translation units. Only the stateful window
-implementation remains in ordered `.ipp` sections because those sections share
-one class definition and many compile-time feature switches.
+The low-coupling options, shader-library, media-utility, camera-helper, and
+snapshot-writer modules are independently compiled translation units. Only the
+stateful window implementation remains in ordered `.ipp` sections because
+those sections share one class definition and many compile-time feature
+switches.
