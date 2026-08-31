@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.116.0 includes the current ACMXVK integration increments:
+Interface version 2.117.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -91,6 +91,10 @@ Interface version 2.116.0 includes the current ACMXVK integration increments:
 - **GPU Filter Settings** can replace, disable, or enable ACMXVK's ordered CUDA
   filter chain and temporal-buffer size while it is running. Invalid chains are
   rejected without discarding the active filter engine.
+- Changing an audio file in **Audio Settings** switches a running ACMXVK
+  file-audio session without restarting it. The new source is decoded before
+  replacing the current source, together with repeat, truncation, output-device,
+  and pass-through settings.
 
 Live source reload and the remaining shared runtime controls are still
 ACMX2-only. Source editing and binary-cache maintenance actions also remain

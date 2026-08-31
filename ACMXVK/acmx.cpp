@@ -3448,6 +3448,7 @@ namespace acmxvk {
         ipc::ShaderSelectionData *interface_selection = nullptr;
         sem_t *interface_semaphore = SEM_FAILED;
         std::uint32_t interface_last_sequence = 0;
+        std::uint32_t interface_last_audio_file_sequence = 0;
         std::size_t shader_index = 0;
         std::size_t playlist_index = 0;
         std::size_t crossfade_post_process_index =
@@ -4842,13 +4843,23 @@ namespace acmxvk {
             std::vector<int> filter_indices;
         };
 
+        struct InterfaceAudioFileState {
+            std::uint32_t request_sequence = 0;
+            std::string path;
+            int output_device = -1;
+            bool pass_through = false;
+            bool trunc = false;
+            bool repeat = false;
+        };
+
         [[nodiscard]] bool read_interface_selection(
             std::uint32_t &sequence, std::string &selected_name,
             InterfaceMultipassState &multipass,
             std::vector<InterfaceUniformValue> &uniform_values,
             InterfacePlaybackState &playback,
             InterfaceOverlayState &overlay,
-            InterfaceGpuFilterState &gpu_filters) const {
+            InterfaceGpuFilterState &gpu_filters,
+            InterfaceAudioFileState &audio_file) const {
             if (interface_selection == nullptr ||
                 interface_semaphore == SEM_FAILED) {
                 return false;
@@ -4932,6 +4943,20 @@ namespace acmxvk {
                     gpu_filters.filter_indices.push_back(filter_index);
                 }
             }
+            audio_file.request_sequence =
+                interface_selection->audio_file_sequence;
+            const auto audio_path_end = std::find(
+                std::begin(interface_selection->audio_file_path),
+                std::end(interface_selection->audio_file_path), '\0');
+            audio_file.path.assign(
+                std::begin(interface_selection->audio_file_path),
+                audio_path_end);
+            audio_file.output_device =
+                interface_selection->audio_output_device;
+            audio_file.pass_through =
+                interface_selection->audio_pass_through != 0;
+            audio_file.trunc = interface_selection->audio_trunc != 0;
+            audio_file.repeat = interface_selection->audio_repeat != 0;
             return true;
         }
 
@@ -4977,10 +5002,11 @@ namespace acmxvk {
             InterfacePlaybackState playback;
             InterfaceOverlayState overlay;
             InterfaceGpuFilterState gpu_filters;
+            InterfaceAudioFileState audio_file;
             if (!read_interface_selection(interface_last_sequence,
                                           selected_name, multipass,
                                           uniform_values, playback, overlay,
-                                          gpu_filters)) {
+                                          gpu_filters, audio_file)) {
                 std::cerr << "acmxvk: interface control protocol does not match "
                              "this build\n";
                 cleanup_interface_control();
@@ -4990,8 +5016,10 @@ namespace acmxvk {
             apply_interface_playback_state(playback, false);
             apply_interface_overlay_state(overlay, false);
             apply_interface_gpu_filter_state(gpu_filters, false);
+            interface_last_audio_file_sequence =
+                audio_file.request_sequence;
             std::cout << "acmxvk: interface live shader, multipass, playback, "
-                         "overlay, and GPU-filter control enabled\n";
+                         "overlay, GPU-filter, and audio-file control enabled\n";
         }
 
         void cleanup_interface_control() {
@@ -5018,9 +5046,11 @@ namespace acmxvk {
             InterfacePlaybackState playback;
             InterfaceOverlayState overlay;
             InterfaceGpuFilterState gpu_filters;
+            InterfaceAudioFileState audio_file;
             if (!read_interface_selection(sequence, requested_name,
                                           multipass, uniform_values,
-                                          playback, overlay, gpu_filters) ||
+                                          playback, overlay, gpu_filters,
+                                          audio_file) ||
                 sequence == interface_last_sequence) {
                 return;
             }
@@ -5031,6 +5061,12 @@ namespace acmxvk {
             apply_interface_playback_state(playback, true);
             apply_interface_overlay_state(overlay, true);
             apply_interface_gpu_filter_state(gpu_filters, true);
+            if (audio_file.request_sequence !=
+                interface_last_audio_file_sequence) {
+                interface_last_audio_file_sequence =
+                    audio_file.request_sequence;
+                apply_interface_audio_file_state(audio_file);
+            }
         }
 
         void apply_interface_playback_state(
@@ -5178,6 +5214,67 @@ namespace acmxvk {
                 std::cerr << "acmxvk: ignored interface GPU-filter state: this "
                              "build does not include acidcam-gpu\n";
             }
+#endif
+        }
+
+        void apply_interface_audio_file_state(
+            const InterfaceAudioFileState &requested) {
+#ifdef AUDIO_ENABLED
+            if (file_audio_source == nullptr || audio_engine == nullptr) {
+                std::cerr
+                    << "acmxvk: ignored live audio-file change because this "
+                       "process was not started in audio-file mode\n";
+                return;
+            }
+            if (requested.path.empty()) {
+                std::cerr
+                    << "acmxvk: rejected empty interface audio-file request\n";
+                return;
+            }
+
+            auto replacement = std::make_unique<audio::FileAudioSource>();
+            try {
+                if (!replacement->open(requested.path)) {
+                    std::cerr << "acmxvk: could not switch file audio to: "
+                              << requested.path << '\n';
+                    return;
+                }
+            } catch (const std::exception &error) {
+                std::cerr << "acmxvk: rejected interface audio-file request: "
+                          << error.what() << '\n';
+                return;
+            }
+
+            replacement->set_repeat(requested.repeat);
+            if (requested.pass_through &&
+                !replacement->enable_output(
+                    requested.output_device,
+                    static_cast<float>(options.audio_pass_through_gain))) {
+                std::cerr
+                    << "acmxvk: live audio-file output could not be opened; "
+                       "continuing with visual reactivity only\n";
+            }
+
+            file_audio_source->stop_output();
+            file_audio_source = std::move(replacement);
+            options.audio_file = requested.path;
+            options.audio_output_device = requested.output_device;
+            options.audio_pass_through = requested.pass_through;
+            options.audio_trunc = requested.trunc;
+            options.audio_repeat = requested.repeat;
+            audio_engine->reset();
+            resetAudioWarmup();
+            std::cout << "acmxvk: switched file audio to: "
+                      << file_audio_source->path() << " (repeat="
+                      << (options.audio_repeat ? "on" : "off")
+                      << ", trunc=" << (options.audio_trunc ? "on" : "off")
+                      << ", pass-through="
+                      << (options.audio_pass_through ? "on" : "off")
+                      << ")\n";
+#else
+            static_cast<void>(requested);
+            std::cerr << "acmxvk: ignored interface audio-file request: this "
+                         "build does not include audio support\n";
 #endif
         }
 

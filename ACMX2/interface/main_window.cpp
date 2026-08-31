@@ -2855,6 +2855,10 @@ void MainWindow::menuAudioSettings() {
         return;
     }
     const QString previousAudioFile = audio_file;
+    const int previousAudioOutput = audio_output;
+    const bool previousAudioPassThrough = audio_passthrough;
+    const bool previousAudioTrunc = audio_trunc;
+    const bool previousAudioRepeat = audio_repeat;
     AudioSettings audio_set(this);
     if (audio_set.exec() == QDialog::Accepted) {
         audio_enabled = audio_set.isAudioReactivityEnabled();
@@ -2877,10 +2881,16 @@ void MainWindow::menuAudioSettings() {
         audio_warm_rate = audio_set.getAudioWarmRate();
         Log("Audio Settings Saved");
 #if defined(__linux__) || defined(__APPLE__)
+        const bool liveAudioSettingsChanged =
+            QFileInfo(audio_file).absoluteFilePath() !=
+                QFileInfo(previousAudioFile).absoluteFilePath() ||
+            audio_output != previousAudioOutput ||
+            audio_passthrough != previousAudioPassThrough ||
+            audio_trunc != previousAudioTrunc ||
+            audio_repeat != previousAudioRepeat;
         if (shaderSelectionShm && process &&
             process->state() == QProcess::Running && !audio_file.isEmpty() &&
-            QFileInfo(audio_file).absoluteFilePath() !=
-                QFileInfo(previousAudioFile).absoluteFilePath()) {
+            liveAudioSettingsChanged) {
             const QByteArray path =
                 QFileInfo(audio_file).absoluteFilePath().toUtf8();
             if (path.size() >=
