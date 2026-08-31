@@ -2854,10 +2854,12 @@ void MainWindow::update_backend_ui() {
 #endif
     if (libraryBuilderAction)
         libraryBuilderAction->setEnabled(acmx2Tools);
+    const bool processIdle =
+        !process || process->state() == QProcess::NotRunning;
     if (listMenu_new)
-        listMenu_new->setEnabled(acmx2Tools);
+        listMenu_new->setEnabled(processIdle);
     if (listMenu_shader)
-        listMenu_shader->setEnabled(acmx2Tools);
+        listMenu_shader->setEnabled(processIdle);
     if (list_view) {
 #ifdef Q_OS_MACOS
         list_view->setColumnHidden(3, acmx2Tools);
