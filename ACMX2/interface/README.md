@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.127.0 includes the current ACMXVK integration increments:
+Interface version 2.128.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -27,6 +27,10 @@ Interface version 2.127.0 includes the current ACMXVK integration increments:
   passthrough shader. It declares only the fragment input/output, binding-zero
   source sampler, and texture-copy `main`, so a newly created library can be
   built and run immediately instead of containing an empty shader source.
+- **Help > Built-in Uniform Reference** follows the selected backend. ACMXVK
+  value entries include their ready-to-paste `#define` mapping into the
+  `SpriteExtended` block, while descriptor-backed resources retain their GLSL
+  declarations. ACMX2 continues to show its native uniform declarations.
 - **List > Shader Library Builder** now follows the active backend. In ACMXVK
   mode it accepts `.frag` and `.comp` sources, rejects compiled runtime
   libraries, exports compute sources beneath `compute/`, and invokes the same

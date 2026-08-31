@@ -3,6 +3,7 @@
 
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -204,19 +205,101 @@ namespace {
          "float amount = slider4;"},
     };
 
-    QString detailsFor(const UniformInfo &uniform) {
-        return QStringLiteral("%1\n\nType: %2\nCategory: %3\nAvailability: %4\n\nDeclaration:\nuniform %2 %1;\n\n%5\n\nExample:\n%6")
+    QString acmxvkDefine(const UniformInfo &uniform) {
+        static const QHash<QString, QString> DEFINES = {
+            {QStringLiteral("alpha"), QStringLiteral("ext.u0.x")},
+            {QStringLiteral("iTime"), QStringLiteral("ext.u0.y")},
+            {QStringLiteral("iResolution"), QStringLiteral("ext.u0.zw")},
+            {QStringLiteral("iMouse"), QStringLiteral("ext.mouse")},
+            {QStringLiteral("iTimeDelta"), QStringLiteral("ext.u1.x")},
+            {QStringLiteral("amp"), QStringLiteral("ext.u1.y")},
+            {QStringLiteral("iamp"), QStringLiteral("ext.u1.z")},
+            {QStringLiteral("iFrameRate"), QStringLiteral("ext.u1.w")},
+            {QStringLiteral("iFrame"), QStringLiteral("int(ext.u2.x)")},
+            {QStringLiteral("time_f"), QStringLiteral("ext.u2.y")},
+            {QStringLiteral("iSampleRate"), QStringLiteral("ext.u2.z")},
+            {QStringLiteral("amp_peak"), QStringLiteral("ext.u2.w")},
+            {QStringLiteral("history_head"), QStringLiteral("int(ext.u3.x)")},
+            {QStringLiteral("amp_rms"), QStringLiteral("ext.u3.z")},
+            {QStringLiteral("amp_smooth"), QStringLiteral("ext.u3.w")},
+            {QStringLiteral("amp_low"), QStringLiteral("ext.audio_bands.x")},
+            {QStringLiteral("amp_mid"), QStringLiteral("ext.audio_bands.y")},
+            {QStringLiteral("amp_high"), QStringLiteral("ext.audio_bands.z")},
+            {QStringLiteral("spectrum_history_head"),
+             QStringLiteral("int(ext.audio_history.x)")},
+            {QStringLiteral("spectrum_history_size"),
+             QStringLiteral("int(ext.audio_history.y)")},
+            {QStringLiteral("alpha_value"),
+             QStringLiteral("ext.custom_uniforms[0].y")},
+            {QStringLiteral("alpha_r"),
+             QStringLiteral("ext.custom_uniforms[0].z")},
+            {QStringLiteral("alpha_g"),
+             QStringLiteral("ext.custom_uniforms[0].w")},
+            {QStringLiteral("alpha_b"),
+             QStringLiteral("ext.custom_uniforms[1].x")},
+            {QStringLiteral("value_alpha_r"),
+             QStringLiteral("ext.custom_uniforms[1].y")},
+            {QStringLiteral("value_alpha_g"),
+             QStringLiteral("ext.custom_uniforms[1].z")},
+            {QStringLiteral("value_alpha_b"),
+             QStringLiteral("ext.custom_uniforms[1].w")},
+            {QStringLiteral("index_value"),
+             QStringLiteral("ext.custom_uniforms[2].x")},
+            {QStringLiteral("restore_black"),
+             QStringLiteral("ext.custom_uniforms[2].y")},
+            {QStringLiteral("time_speed"),
+             QStringLiteral("ext.custom_uniforms[3].y")},
+            {QStringLiteral("slider1"),
+             QStringLiteral("ext.custom_uniforms[5].x")},
+            {QStringLiteral("slider2"),
+             QStringLiteral("ext.custom_uniforms[5].y")},
+            {QStringLiteral("slider3"),
+             QStringLiteral("ext.custom_uniforms[5].z")},
+            {QStringLiteral("slider4"),
+             QStringLiteral("ext.custom_uniforms[5].w")},
+        };
+        const QString name = QString::fromLatin1(uniform.name);
+        const auto define = DEFINES.constFind(name);
+        if (define == DEFINES.constEnd())
+            return QString();
+        return QStringLiteral("#define %1 %2").arg(name, define.value());
+    }
+
+    QString detailsFor(const UniformInfo &uniform, acmx2::Backend backend) {
+        QString declaration =
+            QStringLiteral("Declaration:\nuniform %1 %2;")
+                .arg(QString::fromLatin1(uniform.type),
+                     QString::fromLatin1(uniform.name));
+        if (backend == acmx2::Backend::Acmxvk) {
+            const QString define = acmxvkDefine(uniform);
+            if (!define.isEmpty()) {
+                declaration =
+                    QStringLiteral("ACMXVK alias (copy after the required "
+                                   "SpriteExtended block):\n%1")
+                        .arg(define);
+            } else {
+                declaration = QStringLiteral(
+                                  "ACMXVK resource declaration:\nuniform %1 %2;\n\n"
+                                  "This value is not an alias within SpriteExtended, "
+                                  "so it does not use a #define.")
+                                  .arg(QString::fromLatin1(uniform.type),
+                                       QString::fromLatin1(uniform.name));
+            }
+        }
+        return QStringLiteral("%1\n\nType: %2\nCategory: %3\nAvailability: %4\n\n%5\n\n%6\n\nExample:\n%7")
             .arg(QString::fromLatin1(uniform.name),
                  QString::fromLatin1(uniform.type),
                  QString::fromLatin1(uniform.category),
                  QString::fromLatin1(uniform.availability),
+                 declaration,
                  QString::fromLatin1(uniform.description),
                  QString::fromLatin1(uniform.example));
     }
 } // namespace
 
-UniformReferenceDialog::UniformReferenceDialog(QWidget *parent)
-    : QDialog(parent) {
+UniformReferenceDialog::UniformReferenceDialog(acmx2::Backend backend,
+                                               QWidget *parent)
+    : QDialog(parent), activeBackend(backend) {
     setWindowTitle(tr("Built-in Uniform Reference"));
     resize(900, 580);
     setModal(false);
@@ -260,9 +343,10 @@ UniformReferenceDialog::UniformReferenceDialog(QWidget *parent)
 }
 
 void UniformReferenceDialog::populateUniforms() {
+    uniformList->clear();
     for (const UniformInfo &uniform : UNIFORMS) {
         auto *item = new QListWidgetItem(QString::fromLatin1(uniform.name), uniformList);
-        item->setData(Qt::UserRole, detailsFor(uniform));
+        item->setData(Qt::UserRole, detailsFor(uniform, activeBackend));
         item->setData(Qt::UserRole + 1,
                       QStringLiteral("%1 %2 %3")
                           .arg(QString::fromLatin1(uniform.name),
@@ -272,6 +356,14 @@ void UniformReferenceDialog::populateUniforms() {
     }
     if (uniformList->count() > 0)
         uniformList->setCurrentRow(0);
+}
+
+void UniformReferenceDialog::setBackend(acmx2::Backend backend) {
+    if (activeBackend == backend)
+        return;
+    activeBackend = backend;
+    populateUniforms();
+    filterUniforms(searchEdit->text());
 }
 
 void UniformReferenceDialog::filterUniforms(const QString &text) {

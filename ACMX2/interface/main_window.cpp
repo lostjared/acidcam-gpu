@@ -3177,9 +3177,11 @@ void MainWindow::menuCustomUniforms() {
 
 void MainWindow::menuUniformReference() {
     if (!uniformReferenceDialog) {
-        uniformReferenceDialog = new UniformReferenceDialog(this);
+        uniformReferenceDialog =
+            new UniformReferenceDialog(active_backend, this);
         uniformReferenceDialog->setAttribute(Qt::WA_DeleteOnClose);
-    }
+    } else
+        uniformReferenceDialog->setBackend(active_backend);
     uniformReferenceDialog->show();
     uniformReferenceDialog->raise();
     uniformReferenceDialog->activateWindow();
