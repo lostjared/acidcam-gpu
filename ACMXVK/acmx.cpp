@@ -89,6 +89,7 @@ extern "C" {
 
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #ifndef ACMXVK_BUILD_SPRITE_VERTEX_SHADER

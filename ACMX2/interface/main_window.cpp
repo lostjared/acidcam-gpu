@@ -1942,22 +1942,64 @@ void MainWindow::initShaderSelectionSharedMemory() {
                                       O_CREAT | O_RDWR,
                                       0666);
     if (shaderSelectionShmFd < 0) {
+        const int openError = errno;
+        Log(tr("Shared interface control unavailable: shm_open(%1) failed: "
+               "%2")
+                .arg(acmx2::ipc::kShaderSelectionShmName,
+                     QString::fromLocal8Bit(std::strerror(openError))));
         cleanupShaderSelectionSharedMemory();
         return;
     }
 
-    if (::ftruncate(shaderSelectionShmFd, sizeof(acmx2::ipc::ShaderSelectionShmData)) != 0) {
+    constexpr std::size_t SHARED_MEMORY_SIZE =
+        sizeof(acmx2::ipc::ShaderSelectionShmData);
+    struct stat shmStat{};
+    if (::fstat(shaderSelectionShmFd, &shmStat) != 0) {
+        const int statError = errno;
+        Log(tr("Shared interface control unavailable: fstat(%1) failed: %2")
+                .arg(acmx2::ipc::kShaderSelectionShmName,
+                     QString::fromLocal8Bit(std::strerror(statError))));
+        cleanupShaderSelectionSharedMemory();
+        return;
+    }
+
+    if (shmStat.st_size == 0) {
+        if (::ftruncate(shaderSelectionShmFd,
+                        static_cast<off_t>(SHARED_MEMORY_SIZE)) != 0) {
+            const int truncateError = errno;
+            Log(tr("Shared interface control unavailable: ftruncate(%1, %2) "
+                   "failed: %3")
+                    .arg(acmx2::ipc::kShaderSelectionShmName)
+                    .arg(static_cast<qulonglong>(SHARED_MEMORY_SIZE))
+                    .arg(QString::fromLocal8Bit(
+                        std::strerror(truncateError))));
+            cleanupShaderSelectionSharedMemory();
+            return;
+        }
+    } else if (shmStat.st_size != static_cast<off_t>(SHARED_MEMORY_SIZE)) {
+        Log(tr("Shared interface control unavailable: %1 has size %2 bytes; "
+               "expected %3. Refusing to resize an active or stale shared "
+               "memory object.")
+                .arg(acmx2::ipc::kShaderSelectionShmName)
+                .arg(static_cast<qlonglong>(shmStat.st_size))
+                .arg(static_cast<qulonglong>(SHARED_MEMORY_SIZE)));
         cleanupShaderSelectionSharedMemory();
         return;
     }
 
     void *mapped = ::mmap(nullptr,
-                          sizeof(acmx2::ipc::ShaderSelectionShmData),
+                          SHARED_MEMORY_SIZE,
                           PROT_READ | PROT_WRITE,
                           MAP_SHARED,
                           shaderSelectionShmFd,
                           0);
     if (mapped == MAP_FAILED) {
+        const int mapError = errno;
+        Log(tr("Shared interface control unavailable: mmap(%1, %2) failed: "
+               "%3")
+                .arg(acmx2::ipc::kShaderSelectionShmName)
+                .arg(static_cast<qulonglong>(SHARED_MEMORY_SIZE))
+                .arg(QString::fromLocal8Bit(std::strerror(mapError))));
         cleanupShaderSelectionSharedMemory();
         return;
     }
@@ -1965,6 +2007,9 @@ void MainWindow::initShaderSelectionSharedMemory() {
     shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
     if (!lock) {
+        Log(tr("Shared interface control unavailable: could not lock %1: %2")
+                .arg(acmx2::ipc::kShaderSelectionSemaphoreName,
+                     QString::fromLocal8Bit(std::strerror(errno))));
         cleanupShaderSelectionSharedMemory();
         return;
     }
@@ -2508,7 +2553,7 @@ void MainWindow::cleanupShaderSelectionSemaphore() {
     if (shaderSelectionSemaphore == SEM_FAILED)
         return;
 
-    ::sem_unlink(acmx2::ipc::kShaderSelectionSemaphoreName);
+    //::sem_unlink(acmx2::ipc::kShaderSelectionSemaphoreName);
     ::sem_close(shaderSelectionSemaphore);
     shaderSelectionSemaphore = SEM_FAILED;
 #endif

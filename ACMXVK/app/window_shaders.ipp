@@ -370,18 +370,45 @@
             interface_shm_fd =
                 ::shm_open(ipc::SHADER_SELECTION_SHM_NAME, O_RDWR, 0666);
             if (interface_shm_fd < 0) {
-                std::cerr << "acmxvk: interface control unavailable: could not "
-                             "open shared memory\n";
+                const int open_error = errno;
+                std::cerr << "acmxvk: interface control unavailable: shm_open("
+                          << ipc::SHADER_SELECTION_SHM_NAME
+                          << ") failed: " << std::strerror(open_error) << '\n';
                 cleanup_interface_control();
                 return;
             }
 
-            void *mapped = ::mmap(nullptr, sizeof(ipc::ShaderSelectionData),
+            constexpr std::size_t SHARED_MEMORY_SIZE =
+                sizeof(ipc::ShaderSelectionData);
+            struct stat shm_stat {};
+            if (::fstat(interface_shm_fd, &shm_stat) != 0) {
+                const int stat_error = errno;
+                std::cerr << "acmxvk: interface control unavailable: fstat("
+                          << ipc::SHADER_SELECTION_SHM_NAME
+                          << ") failed: " << std::strerror(stat_error) << '\n';
+                cleanup_interface_control();
+                return;
+            }
+            if (shm_stat.st_size !=
+                static_cast<off_t>(SHARED_MEMORY_SIZE)) {
+                std::cerr
+                    << "acmxvk: interface control unavailable: "
+                    << ipc::SHADER_SELECTION_SHM_NAME << " has size "
+                    << shm_stat.st_size << " bytes; expected "
+                    << SHARED_MEMORY_SIZE << '\n';
+                cleanup_interface_control();
+                return;
+            }
+
+            void *mapped = ::mmap(nullptr, SHARED_MEMORY_SIZE,
                                   PROT_READ | PROT_WRITE, MAP_SHARED,
                                   interface_shm_fd, 0);
             if (mapped == MAP_FAILED) {
-                std::cerr << "acmxvk: interface control unavailable: could not "
-                             "map shared memory\n";
+                const int map_error = errno;
+                std::cerr << "acmxvk: interface control unavailable: mmap("
+                          << ipc::SHADER_SELECTION_SHM_NAME << ", "
+                          << SHARED_MEMORY_SIZE
+                          << ") failed: " << std::strerror(map_error) << '\n';
                 cleanup_interface_control();
                 return;
             }

@@ -79,6 +79,10 @@ Interface version 2.118.0 includes the current ACMXVK integration increments:
 - Shared interface control verifies that its named semaphore remains published
   before every engine launch and recreates it after an external unlink. Engine
   and launcher errors now include the failing semaphore name and OS error.
+- Shared-memory startup checks the existing object with `fstat` and calls
+  `ftruncate` only for a newly created zero-length object. Reopening the
+  interface therefore preserves a correctly sized macOS shared-memory object;
+  syscall failures and unsafe size mismatches are reported in the ACMX log.
 - Multipass settings are published to ACMXVK at startup and while it is
   running. Applying, reordering, or disabling passes in the interface rebuilds
   the Vulkan fragment/compute chain without restarting the engine.

@@ -2261,6 +2261,9 @@ interface. ACMXVK decodes and configures the requested replacement before
 stopping the current source, so invalid paths or undecodable media leave the
 active audio intact. Repeat, stop-at-audio-EOF, output device, and pass-through
 state are applied with the replacement.
+ACMXVK validates the interface shared-memory object size with `fstat` before
+mapping it. Errors now identify the failing `shm_open`, `fstat`, or `mmap`
+operation and include the operating-system message.
 Saving an active-library `.frag` or `.comp` source in the ACMX editor now
 compiles only that file with `glslc`. Compilation targets a unique temporary
 file; the interface validates its SPIR-V magic and atomically replaces the
