@@ -28,6 +28,13 @@ void LibraryWindow::init() {
     layout->addWidget(browseButton);
 
     createDefaultShaderCheckBox = new QCheckBox("Create default shader", this);
+    if (backend == acmx2::Backend::Acmxvk) {
+        createDefaultShaderCheckBox->setText("Create default.frag passthrough shader");
+        createDefaultShaderCheckBox->setChecked(true);
+        createDefaultShaderCheckBox->setEnabled(false);
+        createDefaultShaderCheckBox->setToolTip(
+            "A new ACMXVK source library starts with a valid fragment shader.");
+    }
     layout->addWidget(createDefaultShaderCheckBox);
 
     createJsonManifestCheckBox = new QCheckBox("Use library.json manifest", this);
@@ -84,17 +91,6 @@ const char *defaultAcmxvkFile = R"(#version 450
 layout(location = 0) in vec2 tc;
 layout(location = 0) out vec4 color;
 layout(set = 0, binding = 0) uniform sampler2D samp;
-
-layout(set = 0, binding = 1, std140) uniform SpriteExtended {
-    vec4 mouse;
-    vec4 u0;
-    vec4 u1;
-    vec4 u2;
-    vec4 u3;
-    vec4 custom_uniforms[16];
-    vec4 audio_bands;
-    vec4 audio_history;
-} ext;
 
 void main() {
     color = texture(samp, tc);
