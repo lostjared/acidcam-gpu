@@ -489,6 +489,8 @@ set_source_files_properties(${ACMXVK_APP_IMPLEMENTATION_SECTIONS}
 )
 add_executable(acmxvk
     acmx.cpp
+    app/interface_client.cpp
+    app/interface_client.hpp
     app/media_helpers.cpp
     app/media_helpers.hpp
     app/media_utils.cpp

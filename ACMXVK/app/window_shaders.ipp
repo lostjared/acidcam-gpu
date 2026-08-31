@@ -194,304 +194,57 @@
             return options.audio_buffers > 0;
         }
 
-        struct InterfaceUniformValue {
-            std::string name;
-            float value = 0.0F;
-        };
-
-        struct InterfaceMultipassState {
-            bool enabled = false;
-            std::vector<std::string> shader_names;
-        };
-
-        struct InterfacePlaybackState {
-            bool repeat = false;
-            bool normalized_time = false;
-        };
-
-        struct InterfaceOverlayState {
-            bool display_filter = false;
-            bool watermark_enabled = false;
-            std::string watermark_text;
-            std::array<std::uint8_t, 3> watermark_color{};
-        };
-
-        struct InterfaceGpuFilterState {
-            bool enabled = false;
-            int frame_buffer_size = 8;
-            std::vector<int> filter_indices;
-        };
-
-        struct InterfaceAudioFileState {
-            std::uint32_t request_sequence = 0;
-            std::string path;
-            int output_device = -1;
-            bool pass_through = false;
-            bool trunc = false;
-            bool repeat = false;
-        };
-
-        struct InterfaceReloadState {
-            std::uint32_t request_sequence = 0;
-            std::string path;
-        };
-
-        [[nodiscard]] bool read_interface_selection(
-            std::uint32_t &sequence, std::string &selected_name,
-            InterfaceMultipassState &multipass,
-            std::vector<InterfaceUniformValue> &uniform_values,
-            InterfacePlaybackState &playback,
-            InterfaceOverlayState &overlay,
-            InterfaceGpuFilterState &gpu_filters,
-            InterfaceAudioFileState &audio_file,
-            InterfaceReloadState &reload) const {
-            if (interface_selection == nullptr ||
-                interface_semaphore == SEM_FAILED) {
-                return false;
-            }
-            ipc::SemaphoreLock lock(interface_semaphore);
-            if (!lock) {
-                return false;
-            }
-            if (interface_selection->magic != ipc::SHADER_SELECTION_MAGIC ||
-                interface_selection->version !=
-                    ipc::SHADER_SELECTION_VERSION) {
-                return false;
-            }
-            sequence = interface_selection->sequence;
-            const auto name_end = std::find(
-                std::begin(interface_selection->selected_shader_name),
-                std::end(interface_selection->selected_shader_name), '\0');
-            selected_name.assign(
-                std::begin(interface_selection->selected_shader_name),
-                name_end);
-            multipass.enabled = interface_selection->shader_pass_enabled != 0;
-            const std::uint32_t pass_count = std::min(
-                interface_selection->shader_pass_count, ipc::MAX_PASS_COUNT);
-            multipass.shader_names.clear();
-            multipass.shader_names.reserve(pass_count);
-            for (std::uint32_t index = 0; index < pass_count; ++index) {
-                const char *name_begin =
-                    interface_selection->shader_pass_names[index];
-                const char *name_limit = name_begin + ipc::MAX_SHADER_NAME;
-                const char *shader_name_end =
-                    std::find(name_begin, name_limit, '\0');
-                if (shader_name_end != name_begin) {
-                    multipass.shader_names.emplace_back(name_begin,
-                                                        shader_name_end);
-                }
-            }
-            const std::uint32_t uniform_count = std::min(
-                interface_selection->custom_uniform_count,
-                ipc::MAX_CUSTOM_UNIFORMS);
-            uniform_values.clear();
-            uniform_values.reserve(uniform_count);
-            for (std::uint32_t index = 0; index < uniform_count; ++index) {
-                const char *name_begin =
-                    interface_selection->custom_uniform_names[index];
-                const char *name_limit = name_begin + ipc::MAX_UNIFORM_NAME;
-                const char *uniform_name_end =
-                    std::find(name_begin, name_limit, '\0');
-                uniform_values.push_back(
-                    {std::string(name_begin, uniform_name_end),
-                     interface_selection->custom_uniform_values[index]});
-            }
-            playback.repeat = interface_selection->repeat_enabled != 0;
-            playback.normalized_time =
-                interface_selection->normalized_time_enabled != 0;
-            overlay.display_filter =
-                interface_selection->display_filter_enabled != 0;
-            overlay.watermark_enabled =
-                interface_selection->watermark_enabled != 0;
-            const auto watermark_end = std::find(
-                std::begin(interface_selection->watermark_text),
-                std::end(interface_selection->watermark_text), '\0');
-            overlay.watermark_text.assign(
-                std::begin(interface_selection->watermark_text), watermark_end);
-            overlay.watermark_color = {
-                interface_selection->watermark_r,
-                interface_selection->watermark_g,
-                interface_selection->watermark_b};
-            gpu_filters.enabled =
-                interface_selection->gpu_filter_enabled != 0;
-            gpu_filters.frame_buffer_size =
-                static_cast<int>(interface_selection->gpu_buffer_size);
-            const std::uint32_t gpu_filter_count = std::min(
-                interface_selection->gpu_filter_count,
-                ipc::MAX_GPU_FILTER_COUNT);
-            gpu_filters.filter_indices.clear();
-            gpu_filters.filter_indices.reserve(gpu_filter_count);
-            for (std::uint32_t index = 0; index < gpu_filter_count; ++index) {
-                const int filter_index =
-                    interface_selection->gpu_filter_indices[index];
-                if (filter_index >= 0) {
-                    gpu_filters.filter_indices.push_back(filter_index);
-                }
-            }
-            audio_file.request_sequence =
-                interface_selection->audio_file_sequence;
-            const auto audio_path_end = std::find(
-                std::begin(interface_selection->audio_file_path),
-                std::end(interface_selection->audio_file_path), '\0');
-            audio_file.path.assign(
-                std::begin(interface_selection->audio_file_path),
-                audio_path_end);
-            audio_file.output_device =
-                interface_selection->audio_output_device;
-            audio_file.pass_through =
-                interface_selection->audio_pass_through != 0;
-            audio_file.trunc = interface_selection->audio_trunc != 0;
-            audio_file.repeat = interface_selection->audio_repeat != 0;
-            reload.request_sequence = interface_selection->reload_sequence;
-            const auto reload_path_end = std::find(
-                std::begin(interface_selection->reload_shader_path),
-                std::end(interface_selection->reload_shader_path), '\0');
-            reload.path.assign(
-                std::begin(interface_selection->reload_shader_path),
-                reload_path_end);
-            return true;
-        }
-
         void initialize_interface_control() {
             if (!options.interface_shm) {
                 return;
             }
 
-            interface_semaphore =
-                ::sem_open(ipc::SHADER_SELECTION_SEMAPHORE_NAME, 0);
-            if (interface_semaphore == SEM_FAILED) {
-                std::cerr
-                    << "acmxvk: interface control unavailable: sem_open("
-                    << ipc::SHADER_SELECTION_SEMAPHORE_NAME
-                    << ") failed: " << std::strerror(errno) << '\n';
+            if (!interface_client.open()) {
                 return;
             }
 
-            interface_shm_fd =
-                ::shm_open(ipc::SHADER_SELECTION_SHM_NAME, O_RDWR, 0666);
-            if (interface_shm_fd < 0) {
-                const int open_error = errno;
-                std::cerr << "acmxvk: interface control unavailable: shm_open("
-                          << ipc::SHADER_SELECTION_SHM_NAME
-                          << ") failed: " << std::strerror(open_error) << '\n';
-                cleanup_interface_control();
-                return;
-            }
-
-            constexpr std::size_t SHARED_MEMORY_SIZE =
-                sizeof(ipc::ShaderSelectionData);
-            struct stat shm_stat {};
-            if (::fstat(interface_shm_fd, &shm_stat) != 0) {
-                const int stat_error = errno;
-                std::cerr << "acmxvk: interface control unavailable: fstat("
-                          << ipc::SHADER_SELECTION_SHM_NAME
-                          << ") failed: " << std::strerror(stat_error) << '\n';
-                cleanup_interface_control();
-                return;
-            }
-            if (shm_stat.st_size !=
-                static_cast<off_t>(SHARED_MEMORY_SIZE)) {
-                std::cerr
-                    << "acmxvk: interface control unavailable: "
-                    << ipc::SHADER_SELECTION_SHM_NAME << " has size "
-                    << shm_stat.st_size << " bytes; expected "
-                    << SHARED_MEMORY_SIZE << '\n';
-                cleanup_interface_control();
-                return;
-            }
-
-            void *mapped = ::mmap(nullptr, SHARED_MEMORY_SIZE,
-                                  PROT_READ | PROT_WRITE, MAP_SHARED,
-                                  interface_shm_fd, 0);
-            if (mapped == MAP_FAILED) {
-                const int map_error = errno;
-                std::cerr << "acmxvk: interface control unavailable: mmap("
-                          << ipc::SHADER_SELECTION_SHM_NAME << ", "
-                          << SHARED_MEMORY_SIZE
-                          << ") failed: " << std::strerror(map_error) << '\n';
-                cleanup_interface_control();
-                return;
-            }
-            interface_selection =
-                static_cast<ipc::ShaderSelectionData *>(mapped);
-
-            std::string selected_name;
-            InterfaceMultipassState multipass;
-            std::vector<InterfaceUniformValue> uniform_values;
-            InterfacePlaybackState playback;
-            InterfaceOverlayState overlay;
-            InterfaceGpuFilterState gpu_filters;
-            InterfaceAudioFileState audio_file;
-            InterfaceReloadState reload;
-            if (!read_interface_selection(interface_last_sequence,
-                                          selected_name, multipass,
-                                          uniform_values, playback, overlay,
-                                          gpu_filters, audio_file, reload)) {
+            InterfaceState state;
+            if (!interface_client.read(state)) {
                 std::cerr << "acmxvk: interface control protocol does not match "
                              "this build\n";
-                cleanup_interface_control();
+                interface_client.close();
                 return;
             }
-            apply_interface_multipass_state(multipass);
-            apply_interface_playback_state(playback, false);
-            apply_interface_overlay_state(overlay, false);
-            apply_interface_gpu_filter_state(gpu_filters, false);
+            interface_last_sequence = state.sequence;
+            apply_interface_multipass_state(state.multipass);
+            apply_interface_playback_state(state.playback, false);
+            apply_interface_overlay_state(state.overlay, false);
+            apply_interface_gpu_filter_state(state.gpu_filters, false);
             interface_last_audio_file_sequence =
-                audio_file.request_sequence;
-            interface_last_reload_sequence = reload.request_sequence;
+                state.audio_file.request_sequence;
+            interface_last_reload_sequence = state.reload.request_sequence;
             std::cout << "acmxvk: interface live shader, multipass, playback, "
                          "overlay, GPU-filter, and audio-file control enabled\n";
         }
 
-        void cleanup_interface_control() {
-            if (interface_selection != nullptr) {
-                ::munmap(interface_selection,
-                         sizeof(ipc::ShaderSelectionData));
-                interface_selection = nullptr;
-            }
-            if (interface_shm_fd >= 0) {
-                ::close(interface_shm_fd);
-                interface_shm_fd = -1;
-            }
-            if (interface_semaphore != SEM_FAILED) {
-                ::sem_close(interface_semaphore);
-                interface_semaphore = SEM_FAILED;
-            }
-        }
-
         void sync_interface_control() {
-            std::uint32_t sequence = 0;
-            std::string requested_name;
-            InterfaceMultipassState multipass;
-            std::vector<InterfaceUniformValue> uniform_values;
-            InterfacePlaybackState playback;
-            InterfaceOverlayState overlay;
-            InterfaceGpuFilterState gpu_filters;
-            InterfaceAudioFileState audio_file;
-            InterfaceReloadState reload;
-            if (!read_interface_selection(sequence, requested_name,
-                                          multipass, uniform_values,
-                                          playback, overlay, gpu_filters,
-                                          audio_file, reload) ||
-                sequence == interface_last_sequence) {
+            InterfaceState state;
+            if (!interface_client.read(state) ||
+                state.sequence == interface_last_sequence) {
                 return;
             }
-            interface_last_sequence = sequence;
-            apply_interface_shader_selection(requested_name);
-            apply_interface_multipass_state(multipass);
-            apply_interface_uniform_values(uniform_values);
-            apply_interface_playback_state(playback, true);
-            apply_interface_overlay_state(overlay, true);
-            apply_interface_gpu_filter_state(gpu_filters, true);
-            if (audio_file.request_sequence !=
+            interface_last_sequence = state.sequence;
+            apply_interface_shader_selection(state.selected_shader_name);
+            apply_interface_multipass_state(state.multipass);
+            apply_interface_uniform_values(state.uniform_values);
+            apply_interface_playback_state(state.playback, true);
+            apply_interface_overlay_state(state.overlay, true);
+            apply_interface_gpu_filter_state(state.gpu_filters, true);
+            if (state.audio_file.request_sequence !=
                 interface_last_audio_file_sequence) {
                 interface_last_audio_file_sequence =
-                    audio_file.request_sequence;
-                apply_interface_audio_file_state(audio_file);
+                    state.audio_file.request_sequence;
+                apply_interface_audio_file_state(state.audio_file);
             }
-            if (reload.request_sequence != interface_last_reload_sequence) {
-                interface_last_reload_sequence = reload.request_sequence;
-                apply_interface_shader_reload(reload);
+            if (state.reload.request_sequence !=
+                interface_last_reload_sequence) {
+                interface_last_reload_sequence = state.reload.request_sequence;
+                apply_interface_shader_reload(state.reload);
             }
         }
 

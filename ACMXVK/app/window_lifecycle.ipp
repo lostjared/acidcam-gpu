@@ -28,7 +28,7 @@
         }
 
         ~MainWindow() override {
-            cleanup_interface_control();
+            interface_client.close();
             latest_camera_frame.stop();
             try {
                 flushFrameReadbacks();

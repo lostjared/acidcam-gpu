@@ -47,9 +47,7 @@
         fs::path shader_manifest_path;
         fs::path png_output_directory;
         fs::path generate_output_directory;
-        int interface_shm_fd = -1;
-        ipc::ShaderSelectionData *interface_selection = nullptr;
-        sem_t *interface_semaphore = SEM_FAILED;
+        InterfaceClient interface_client;
         std::uint32_t interface_last_sequence = 0;
         std::uint32_t interface_last_audio_file_sequence = 0;
         std::uint32_t interface_last_reload_sequence = 0;

@@ -30,13 +30,13 @@ extern "C" {
 #ifdef ACMXVK_WITH_DNN
 #include "edge_dnn.hpp"
 #endif
+#include "app/interface_client.hpp"
 #include "app/media_helpers.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
 #include "app/shader_library.hpp"
 #include "app/snapshot_writer.hpp"
 #include "input_validation.hpp"
-#include "interface_control.hpp"
 #ifdef ACMXVK_WITH_MXVK_CUDA
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaarithm.hpp>
@@ -54,13 +54,11 @@ extern "C" {
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <ctime>
 #include <deque>
 #include <filesystem>
@@ -80,11 +78,6 @@ extern "C" {
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #ifndef ACMXVK_BUILD_SPRITE_VERTEX_SHADER
 #define ACMXVK_BUILD_SPRITE_VERTEX_SHADER "sprite.vert.spv"
