@@ -7,9 +7,9 @@
                     fs::path(path).is_absolute()) {
                     return;
                 }
-                fs::path resolved = findResource(options, fs::path(path));
+                fs::path resolved = find_resource(options, fs::path(path));
                 if (resolved.empty()) {
-                    resolved = findResource(
+                    resolved = find_resource(
                         options, resource_subdirectory / fs::path(path));
                 }
                 if (!resolved.empty()) {
@@ -22,7 +22,7 @@
             resolve(options.midi_map_file, "midi-examples", "MIDI map");
             if (options.enable_3d) {
                 if (options.model_file.empty()) {
-                    options.model_file = defaultModel().string();
+                    options.model_file = default_model_path(options).string();
                     std::cout << "acmxvk: 3D model (default): "
                               << options.model_file << '\n';
                 } else {
@@ -59,7 +59,7 @@
                 return;
             }
 
-            const fs::path font = overlayFont();
+            const fs::path font = overlay_font_path(options);
             if (!fs::is_regular_file(font)) {
                 throw std::runtime_error("overlay font was not found: " +
                                          font.string());

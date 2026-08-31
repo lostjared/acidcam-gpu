@@ -8,9 +8,9 @@
                 input_model.enableExtendedFragmentUniforms();
                 input_model.load(this, options.model_file, "", "", 1.0F);
                 input_model.setShaders(
-                    this, modelVertexShader().string(),
-                    modelFragmentShader().string());
-                model_effect_shader = modelFragmentShader();
+                    this, model_vertex_shader_path(options).string(),
+                    model_fragment_shader_path(options).string());
+                model_effect_shader = model_fragment_shader_path(options);
                 input_model.setBackfaceCulling(false);
                 model_initialized = true;
                 model_3d_active = true;
@@ -58,8 +58,11 @@
                                                        options.texture_cache_size));
             }
             frame_sprite->createEmptySprite(
-                source_width, source_height, spriteVertexShader(),
-                options.history_test ? echoCacheShader() : std::string{});
+                source_width, source_height,
+                sprite_vertex_shader_path(options).string(),
+                options.history_test
+                    ? echo_cache_shader_path(options).string()
+                    : std::string{});
 
             if (options.human_background &&
                 human_overlay_sprite == nullptr) {
@@ -458,16 +461,17 @@
                 }
             }
             if (options.flip_output) {
-                pipeline.emplace_back(flipShader());
+                pipeline.emplace_back(flip_shader_path(options));
             }
             if (crossfade_active) {
-                pipeline.emplace_back(crossfadeShader());
+                pipeline.emplace_back(
+                    crossfade_shader_path(options, crossfade_shader_index));
             }
             if (pipeline.empty()) {
-                pipeline.emplace_back(passthroughShader());
+                pipeline.emplace_back(passthrough_shader_path(options));
             }
             if (options.human_background) {
-                pipeline.emplace_back(humanCompositeShader());
+                pipeline.emplace_back(human_composite_shader_path(options));
             }
             return pipeline;
         }
@@ -507,10 +511,12 @@
                 model_texture_prepass_active);
             if (model_initialized) {
                 const fs::path desired_model_shader =
-                    direct_model_shader.empty() ? modelFragmentShader()
-                                                : direct_model_shader;
+                    direct_model_shader.empty()
+                        ? model_fragment_shader_path(options)
+                        : direct_model_shader;
                 if (desired_model_shader != model_effect_shader) {
-                    input_model.setShaders(this, modelVertexShader().string(),
+                    input_model.setShaders(
+                        this, model_vertex_shader_path(options).string(),
                                            desired_model_shader.string());
                     model_effect_shader = desired_model_shader;
                 }
@@ -524,7 +530,7 @@
                     pipeline.erase(selected);
                 }
                 if (pipeline.empty()) {
-                    pipeline.emplace_back(passthroughShader());
+                    pipeline.emplace_back(passthrough_shader_path(options));
                 }
                 std::cout << "acmxvk: 3D texture effect: "
                           << direct_model_shader.filename().string()
@@ -546,12 +552,14 @@
                 const fs::path &shader = pipeline[index];
                 PostProcessingEffect effect{
                     shader.string(), {1.0F, 1.0F, 1.0F, 0.0F}, false};
-                if (crossfade_active && shader == crossfadeShader()) {
+                if (crossfade_active &&
+                    shader == crossfade_shader_path(options,
+                                                    crossfade_shader_index)) {
                     crossfade_post_process_index = index;
                     effect.historySource = crossfade_previous_sprite;
                     effect.params[0] = crossfade_alpha;
                 } else if (options.human_background &&
-                           shader == humanCompositeShader()) {
+                           shader == human_composite_shader_path(options)) {
                     effect.historySource = human_overlay_sprite;
                 } else if (historyCacheEnabled()) {
                     effect.historySource = frame_sprite;

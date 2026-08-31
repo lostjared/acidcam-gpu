@@ -34,6 +34,7 @@ extern "C" {
 #include "app/media_helpers.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
+#include "app/resource_paths.hpp"
 #include "app/shader_library.hpp"
 #include "app/snapshot_writer.hpp"
 #include "input_validation.hpp"
@@ -78,94 +79,6 @@ extern "C" {
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#ifndef ACMXVK_BUILD_SPRITE_VERTEX_SHADER
-#define ACMXVK_BUILD_SPRITE_VERTEX_SHADER "sprite.vert.spv"
-#endif
-
-#ifndef ACMXVK_INSTALL_SPRITE_VERTEX_SHADER
-#define ACMXVK_INSTALL_SPRITE_VERTEX_SHADER "sprite.vert.spv"
-#endif
-
-#ifndef ACMXVK_BUILD_ECHO_CACHE_SHADER
-#define ACMXVK_BUILD_ECHO_CACHE_SHADER "echo_cache.frag.spv"
-#endif
-
-#ifndef ACMXVK_INSTALL_ECHO_CACHE_SHADER
-#define ACMXVK_INSTALL_ECHO_CACHE_SHADER "echo_cache.frag.spv"
-#endif
-
-#ifndef ACMXVK_BUILD_FLIP_SHADER
-#define ACMXVK_BUILD_FLIP_SHADER "flip.frag.spv"
-#endif
-
-#ifndef ACMXVK_INSTALL_FLIP_SHADER
-#define ACMXVK_INSTALL_FLIP_SHADER "flip.frag.spv"
-#endif
-
-#ifndef ACMXVK_BUILD_PASSTHROUGH_SHADER
-#define ACMXVK_BUILD_PASSTHROUGH_SHADER "passthrough.frag.spv"
-#endif
-
-#ifndef ACMXVK_INSTALL_PASSTHROUGH_SHADER
-#define ACMXVK_INSTALL_PASSTHROUGH_SHADER "passthrough.frag.spv"
-#endif
-
-#ifndef ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER
-#define ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER "human_composite.frag.spv"
-#endif
-
-#ifndef ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER
-#define ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER "human_composite.frag.spv"
-#endif
-
-#ifndef ACMXVK_BUILD_MODEL_VERTEX_SHADER
-#define ACMXVK_BUILD_MODEL_VERTEX_SHADER "model.vert.spv"
-#endif
-
-#ifndef ACMXVK_INSTALL_MODEL_VERTEX_SHADER
-#define ACMXVK_INSTALL_MODEL_VERTEX_SHADER "model.vert.spv"
-#endif
-
-#ifndef ACMXVK_BUILD_MODEL_FRAGMENT_SHADER
-#define ACMXVK_BUILD_MODEL_FRAGMENT_SHADER "model.frag.spv"
-#endif
-
-#ifndef ACMXVK_INSTALL_MODEL_FRAGMENT_SHADER
-#define ACMXVK_INSTALL_MODEL_FRAGMENT_SHADER "model.frag.spv"
-#endif
-
-#ifndef ACMXVK_BUILD_DEFAULT_MODEL
-#define ACMXVK_BUILD_DEFAULT_MODEL "cube.obj"
-#endif
-
-#ifndef ACMXVK_INSTALL_DEFAULT_MODEL
-#define ACMXVK_INSTALL_DEFAULT_MODEL "cube.obj"
-#endif
-
-#ifndef ACMXVK_BUILD_OVERLAY_FONT
-#define ACMXVK_BUILD_OVERLAY_FONT "font.ttf"
-#endif
-
-#ifndef ACMXVK_INSTALL_OVERLAY_FONT
-#define ACMXVK_INSTALL_OVERLAY_FONT "font.ttf"
-#endif
-
-#ifndef ACMXVK_BUILD_RESOURCE_DIRECTORY
-#define ACMXVK_BUILD_RESOURCE_DIRECTORY "."
-#endif
-
-#ifndef ACMXVK_INSTALL_RESOURCE_DIRECTORY
-#define ACMXVK_INSTALL_RESOURCE_DIRECTORY "."
-#endif
-
-#ifndef ACMXVK_BUILD_CROSSFADE_DIRECTORY
-#define ACMXVK_BUILD_CROSSFADE_DIRECTORY "shaders/xfade"
-#endif
-
-#ifndef ACMXVK_INSTALL_CROSSFADE_DIRECTORY
-#define ACMXVK_INSTALL_CROSSFADE_DIRECTORY "shaders/xfade"
-#endif
 
 namespace acmxvk {
 // These sections form one ordered implementation unit. Their order preserves

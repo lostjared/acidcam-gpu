@@ -157,7 +157,6 @@ namespace acmxvk {
     };
 
     [[nodiscard]] bool dimensions_supported(int width, int height);
-    [[nodiscard]] fs::path findResource(const Options &options, const fs::path &relative_path);
     [[nodiscard]] int parseInteger(std::string_view text, std::string_view option);
     [[nodiscard]] double parseNumber(std::string_view text, std::string_view option);
     [[nodiscard]] Options parseOptions(int argc, char **argv);

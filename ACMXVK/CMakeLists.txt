@@ -497,6 +497,8 @@ add_executable(acmxvk
     app/media_utils.hpp
     app/options.cpp
     app/options.hpp
+    app/resource_paths.cpp
+    app/resource_paths.hpp
     app/shader_library.cpp
     app/shader_library.hpp
     app/snapshot_writer.cpp
@@ -622,6 +624,18 @@ if(BUILD_TESTING)
     )
     add_test(NAME acmxvk_input_validation
         COMMAND acmxvk_input_validation_tests
+    )
+    add_executable(acmxvk_resource_paths_tests
+        resource_paths_tests.cpp
+        app/resource_paths.cpp
+        app/resource_paths.hpp
+        app/options.hpp
+    )
+    target_compile_options(acmxvk_resource_paths_tests PRIVATE
+        -Wall -Wextra -Wpedantic
+    )
+    add_test(NAME acmxvk_resource_paths
+        COMMAND acmxvk_resource_paths_tests
     )
     add_test(NAME acmxvk_shader_library_build
         COMMAND acmxvk

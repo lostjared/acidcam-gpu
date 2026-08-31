@@ -1,11 +1,13 @@
 # ACMXVK application implementation
 
-`acmx.cpp` owns platform/library includes, compile-time resource defaults, and
-the process entry point. The implementation sections in this directory keep
-the application organized by responsibility:
+`acmx.cpp` owns platform/library integration and the process entry point. The
+implementation sections in this directory keep the application organized by
+responsibility:
 
 - `options.hpp` / `options.cpp`: command-line parsing, validation, resources,
   and help.
+- `resource_paths.hpp` / `resource_paths.cpp`: built, installed, and
+  user-selected shader, model, font, and crossfade asset resolution.
 - `shader_library.hpp` / `shader_library.cpp`: manifests and source-library
   compilation.
 - `media_utils.hpp` / `media_utils.cpp`: image loading, video metadata, frame
@@ -24,8 +26,8 @@ the application organized by responsibility:
 - `window_io.ipp`: inputs, encoding, snapshots, and frame readback.
 - `window_rendering.ipp`: 3D, crossfades, pipelines, history, and uploads.
 
-The low-coupling options, shader-library, media-utility, camera-helper,
-interface-client, and snapshot-writer modules are independently compiled
-translation units. Only the stateful window implementation remains in ordered
-`.ipp` sections because those sections share one class definition and many
-compile-time feature switches.
+The low-coupling options, resource-path, shader-library, media-utility,
+camera-helper, interface-client, and snapshot-writer modules are independently
+compiled translation units. Only the stateful window implementation remains in
+ordered `.ipp` sections because those sections share one class definition and
+many compile-time feature switches.

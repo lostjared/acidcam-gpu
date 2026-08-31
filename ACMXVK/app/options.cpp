@@ -1,6 +1,7 @@
 #include "options.hpp"
 
 #include "../input_validation.hpp"
+#include "resource_paths.hpp"
 #include <mxvk/mxvk.hpp>
 #include <mxwrite.hpp>
 
@@ -12,13 +13,6 @@
 #include <stdexcept>
 #include <utility>
 
-#ifndef ACMXVK_BUILD_RESOURCE_DIRECTORY
-#define ACMXVK_BUILD_RESOURCE_DIRECTORY "."
-#endif
-#ifndef ACMXVK_INSTALL_RESOURCE_DIRECTORY
-#define ACMXVK_INSTALL_RESOURCE_DIRECTORY "."
-#endif
-
 namespace acmxvk {
     namespace {
         constexpr int MAX_FRAME_DIMENSION = 16384;
@@ -29,47 +23,6 @@ namespace acmxvk {
         return width > 0 && height > 0 && width <= MAX_FRAME_DIMENSION &&
                height <= MAX_FRAME_DIMENSION &&
                static_cast<std::int64_t>(width) * height <= MAX_FRAME_PIXELS;
-    }
-
-    [[nodiscard]] std::vector<fs::path>
-    resourceDirectories(const Options &options) {
-        std::vector<fs::path> directories;
-        const auto append = [&](const fs::path &directory) {
-            if (directory.empty()) {
-                return;
-            }
-            const fs::path normalized = fs::absolute(directory).lexically_normal();
-            if (std::find(directories.begin(), directories.end(), normalized) ==
-                directories.end()) {
-                directories.push_back(normalized);
-            }
-        };
-        append(options.resource_directory);
-        append(ACMXVK_INSTALL_RESOURCE_DIRECTORY);
-        append(ACMXVK_BUILD_RESOURCE_DIRECTORY);
-        append(fs::current_path());
-        return directories;
-    }
-
-    [[nodiscard]] fs::path findResource(const Options &options,
-                                        const fs::path &relative_path) {
-        if (relative_path.empty() || relative_path.is_absolute()) {
-            return {};
-        }
-        const fs::path normalized_relative = relative_path.lexically_normal();
-        const std::string relative_text = normalized_relative.generic_string();
-        if (relative_text == ".." || relative_text.starts_with("../") ||
-            relative_text.find("/../") != std::string::npos) {
-            return {};
-        }
-        for (const fs::path &directory : resourceDirectories(options)) {
-            const fs::path candidate =
-                (directory / normalized_relative).lexically_normal();
-            if (fs::is_regular_file(candidate)) {
-                return candidate;
-            }
-        }
-        return {};
     }
 
     [[nodiscard]] bool hasShaderManifest(const fs::path &directory) {
@@ -365,7 +318,7 @@ namespace acmxvk {
         }
 
         for (const fs::path &resource_directory :
-             resourceDirectories(options)) {
+             resource_directories(options)) {
             const fs::path shader_directory = resource_directory / "shaders";
             if (hasShaderManifest(shader_directory)) {
                 options.shader_directory = shader_directory.string();
