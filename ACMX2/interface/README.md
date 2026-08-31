@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.122.0 includes the current ACMXVK integration increments:
+Interface version 2.126.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -84,6 +84,26 @@ Interface version 2.122.0 includes the current ACMXVK integration increments:
   edits from silently remapping the uniform ABI used by compiled shaders. The
   source-manifest generator can repair slots while retaining edited ranges and
   values from an existing `library.json`.
+- The Custom Uniforms dialog now assigns and writes a contiguous explicit slot
+  for every newly added uniform, removes its JSON entry when deleted, and
+  renumbers later entries to preserve the runtime ABI. Both the dialog and the
+  manifest writer enforce the 64-scalar (`custom_uniforms[16]`) maximum. Each
+  row shows its current slot/location and provides **Copy** for the exact GLSL
+  declaration (`#define name ext.custom_uniforms[N].component` in ACMXVK
+  mode).
+- **List > Remove Shader** now removes the selected entry from the active
+  `library.json` or legacy `index.txt` atomically before updating the shader
+  list. The source shader file remains on disk, and a manifest write failure
+  leaves the interface row intact.
+- Creating another ACMXVK shader refreshes the manifest from its current
+  entries plus the new source instead of rescanning every file in the folder.
+  Sources intentionally removed from the manifest therefore remain excluded;
+  the standalone manifest-generator command remains the explicit full-rescan
+  operation.
+- ACMXVK source-build freshness compares custom-uniform metadata semantically
+  by explicit slot, name, range, step, and value. Equivalent floating-point
+  values rewritten by ACMXVK's runtime-manifest serializer no longer trigger a
+  repeated "build is out of date or incomplete" prompt.
 - The Settings dialog exposes ACMXVK-only **Maximize FPS**, **Use Source FPS**,
   and **Use Source Audio** controls. They are enabled only for compatible input
   modes and emit `--maximize-fps`, `--use-source-fps`, and

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 project(acmx2_interface LANGUAGES CXX C)
 include(CTest)
 set(LAUNCHER_MAJOR_VERSION 2)
-set(LAUNCHER_MINOR_VERSION 122)
+set(LAUNCHER_MINOR_VERSION 126)
 set(LAUNCHER_PATCH_VERSION 0)
 set(LAUNCHER_VERSION ${LAUNCHER_MAJOR_VERSION}.${LAUNCHER_MINOR_VERSION}.${LAUNCHER_PATCH_VERSION})
 
@@ -148,6 +148,8 @@ if(BUILD_TESTING)
         tests/acmxvk-source-manifest-test.cpp
         acmxvk-source-manifest.cpp
         acmxvk-source-manifest.hpp
+        shader-manifest.cpp
+        shader-manifest.hpp
     )
     target_include_directories(acmxvk_source_manifest_test
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

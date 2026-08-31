@@ -29,9 +29,6 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonParseError>
 #include <QLabel>
 #include <QLayout>
 #include <QLineEdit>
@@ -286,27 +283,6 @@ namespace {
         return AcmxvkBuildState::UpToDate;
     }
 
-    bool load_json_object(const QString &path, QJsonObject &object,
-                          QString &error) {
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly)) {
-            error = QObject::tr("Could not open %1: %2")
-                        .arg(path, file.errorString());
-            return false;
-        }
-        QJsonParseError parse_error;
-        const QJsonDocument document =
-            QJsonDocument::fromJson(file.readAll(), &parse_error);
-        if (parse_error.error != QJsonParseError::NoError ||
-            !document.isObject()) {
-            error = QObject::tr("Could not parse %1: %2")
-                        .arg(path, parse_error.errorString());
-            return false;
-        }
-        object = document.object();
-        return true;
-    }
-
     bool acmxvk_runtime_manifest_matches(const QString &source_library,
                                          const QString &runtime_library,
                                          QString &error) {
@@ -330,18 +306,13 @@ namespace {
             return false;
         }
 
-        QJsonObject source_object;
-        QJsonObject runtime_object;
-        if (!load_json_object(
-                QDir(source_library).filePath(QStringLiteral("library.json")),
-                source_object, error) ||
-            !load_json_object(
-                QDir(runtime_library).filePath(QStringLiteral("library.json")),
-                runtime_object, error)) {
+        bool uniformMetadataMatches = false;
+        if (!acmx2::custom_uniform_metadata_matches(
+                source_library, runtime_library, uniformMetadataMatches,
+                error)) {
             return false;
         }
-        if (source_object.value(QStringLiteral("custom_uniforms")) !=
-            runtime_object.value(QStringLiteral("custom_uniforms"))) {
+        if (!uniformMetadataMatches) {
             error = QObject::tr(
                 "The ACMXVK runtime custom-uniform metadata is out of date. "
                 "Choose Playback > Build before running.");
@@ -1776,9 +1747,21 @@ void MainWindow::menuRemove() {
     int row = currentShaderRow();
     if (row < 0 || row >= items.size())
         return;
+    const QString shaderName = items.at(row);
+    QString manifestError;
+    if (!acmx2::remove_shader_manifest_entry(shader_path, shaderName,
+                                             manifestError)) {
+        QMessageBox::warning(this, tr("Could Not Remove Shader"),
+                             manifestError);
+        Log(tr("Could not remove %1 from the library manifest: %2")
+                .arg(shaderName, manifestError));
+        return;
+    }
     items.removeAt(row);
     populateShaderTree();
-    updateIndex();
+    indexTimestamp = acmx2::shader_manifest_last_modified(shader_path);
+    activeShaderManifestPath = acmx2::shader_manifest_path(shader_path);
+    Log(tr("Removed shader from library manifest: %1").arg(shaderName));
     loadShaders(shader_path, true);
 }
 
@@ -3183,7 +3166,7 @@ void MainWindow::menuCustomUniforms() {
     }
 
     QString error;
-    if (!customUniformDialog->loadLibrary(shader_path, &error)) {
+    if (!customUniformDialog->loadLibrary(shader_path, active_backend, &error)) {
         QMessageBox::warning(this, tr("Could Not Load Custom Uniforms"), error);
         return;
     }
@@ -3241,7 +3224,7 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     if (customUniformDialog &&
         QFileInfo(manifestPath).fileName().compare("library.json", Qt::CaseInsensitive) == 0) {
         QString uniformError;
-        if (!customUniformDialog->loadLibrary(path, &uniformError))
+        if (!customUniformDialog->loadLibrary(path, active_backend, &uniformError))
             Log("Could not load custom uniforms: " + uniformError);
     }
     const int previousRow = currentShaderRow();

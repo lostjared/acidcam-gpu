@@ -11,6 +11,7 @@
 #include <QJsonParseError>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QStringList>
 #include <algorithm>
 
@@ -153,8 +154,9 @@ namespace {
 } // namespace
 
 namespace acmx2 {
-    bool create_acmxvk_source_manifest(
+    static bool create_acmxvk_source_manifest_impl(
         const QString &rootDirectory, const QString &requestedOutputPath,
+        const QStringList *includedShaders,
         AcmxvkSourceManifestResult &result, QString &error) {
         result = {};
         error.clear();
@@ -175,6 +177,29 @@ namespace acmx2 {
             return false;
         }
 
+        QSet<QString> includedFiles;
+        if (includedShaders) {
+            for (QString entry : *includedShaders) {
+                entry = entry.trimmed();
+                entry.replace(QLatin1Char('\\'), QLatin1Char('/'));
+                entry = QDir::cleanPath(entry);
+                if (entry.isEmpty() || entry == QStringLiteral(".") ||
+                    entry == QStringLiteral("..") ||
+                    entry.startsWith(QStringLiteral("../")) ||
+                    QDir::isAbsolutePath(entry)) {
+                    error = QObject::tr("Invalid shader path in source manifest: %1")
+                                .arg(entry);
+                    return false;
+                }
+                if (includedFiles.contains(entry)) {
+                    error = QObject::tr("Duplicate shader path in source manifest: %1")
+                                .arg(entry);
+                    return false;
+                }
+                includedFiles.insert(entry);
+            }
+        }
+
         QHash<int, QString> slotNames = default_slot_names();
         QHash<QString, int> nameSlots;
         for (auto it = slotNames.constBegin(); it != slotNames.constEnd(); ++it)
@@ -182,6 +207,7 @@ namespace acmx2 {
 
         QStringList fragmentFiles;
         QStringList computeFiles;
+        QSet<QString> discoveredFiles;
         QDirIterator iterator(root, QDir::Files | QDir::Hidden,
                               QDirIterator::Subdirectories);
         while (iterator.hasNext()) {
@@ -194,16 +220,34 @@ namespace acmx2 {
             const bool underCompute =
                 parts.mid(0, directoryPartCount)
                     .contains(QStringLiteral("compute"));
-            if (underCompute && relative.endsWith(QStringLiteral(".comp"))) {
-                computeFiles.append(relative);
-            } else if (!underCompute &&
-                       relative.endsWith(QStringLiteral(".frag"))) {
-                fragmentFiles.append(relative);
-            } else {
+            const bool computeShader =
+                underCompute && relative.endsWith(QStringLiteral(".comp"));
+            const bool fragmentShader =
+                !underCompute && relative.endsWith(QStringLiteral(".frag"));
+            if (!computeShader && !fragmentShader)
                 continue;
+            if (includedShaders && !includedFiles.contains(relative))
+                continue;
+            if (computeShader) {
+                computeFiles.append(relative);
+            } else {
+                fragmentFiles.append(relative);
             }
+            discoveredFiles.insert(relative);
             if (!scan_slots(absolutePath, slotNames, nameSlots, error))
                 return false;
+        }
+
+        if (includedShaders) {
+            for (const QString &entry : includedFiles) {
+                if (!discoveredFiles.contains(entry)) {
+                    error = QObject::tr(
+                                "Manifest shader is missing or is not a supported "
+                                ".frag/compute/*.comp source: %1")
+                                .arg(entry);
+                    return false;
+                }
+            }
         }
 
         std::sort(fragmentFiles.begin(), fragmentFiles.end(), shader_name_less);
@@ -287,5 +331,20 @@ namespace acmx2 {
         result.customUniformCount = maximumSlot + 1;
         result.outputPath = outputPath;
         return true;
+    }
+
+    bool create_acmxvk_source_manifest(
+        const QString &rootDirectory, const QString &outputPath,
+        AcmxvkSourceManifestResult &result, QString &error) {
+        return create_acmxvk_source_manifest_impl(
+            rootDirectory, outputPath, nullptr, result, error);
+    }
+
+    bool create_acmxvk_source_manifest_for_shaders(
+        const QString &rootDirectory, const QStringList &shaderFiles,
+        const QString &outputPath, AcmxvkSourceManifestResult &result,
+        QString &error) {
+        return create_acmxvk_source_manifest_impl(
+            rootDirectory, outputPath, &shaderFiles, result, error);
     }
 } // namespace acmx2

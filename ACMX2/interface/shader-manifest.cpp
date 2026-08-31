@@ -26,6 +26,12 @@ namespace {
                    static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName);
     }
 
+    bool nearly_equal(double left, double right) {
+        const double scale =
+            std::max({1.0, std::abs(left), std::abs(right)});
+        return std::abs(left - right) <= 1.0e-12 * scale;
+    }
+
     QString json_entry_file(const QJsonValue &value) {
         if (value.isString())
             return value.toString().trimmed();
@@ -265,6 +271,29 @@ namespace acmx2 {
         return write_shader_manifest(directory, shaders, error);
     }
 
+    bool remove_shader_manifest_entry(const QString &directory,
+                                      const QString &shader, QString &error) {
+        QStringList shaders;
+        if (!load_shader_manifest(directory, shaders, error))
+            return false;
+
+        bool removed = false;
+        for (auto it = shaders.begin(); it != shaders.end();) {
+            if (it->compare(shader, Qt::CaseInsensitive) == 0) {
+                it = shaders.erase(it);
+                removed = true;
+            } else {
+                ++it;
+            }
+        }
+        if (!removed) {
+            error = QObject::tr("Shader '%1' is not present in the library manifest.")
+                        .arg(shader);
+            return false;
+        }
+        return write_shader_manifest(directory, shaders, error);
+    }
+
     bool migrate_index_manifest_to_json(const QString &directory, bool &created,
                                         QString &error) {
         created = false;
@@ -436,6 +465,12 @@ namespace acmx2 {
                                const QList<CustomUniformDefinition> &uniforms,
                                QString &error) {
         error.clear();
+        if (uniforms.size() >
+            static_cast<int>(ipc::kShaderSelectionMaxCustomUniforms)) {
+            error = QObject::tr("A library can contain at most %1 custom uniforms.")
+                        .arg(ipc::kShaderSelectionMaxCustomUniforms);
+            return false;
+        }
         const QString path = directory + "/" + JSON_MANIFEST_NAME;
         QJsonDocument document;
         if (!load_json_document(path, document, error))
@@ -448,7 +483,30 @@ namespace acmx2 {
                 return uniform.slot >= 0;
             });
         std::vector<int> writtenSlots;
+        QStringList writtenNames;
         for (const CustomUniformDefinition &uniform : uniforms) {
+            if (!valid_custom_uniform_name(uniform.name)) {
+                error = QObject::tr(
+                            "Custom uniform '%1' is not a valid GLSL identifier.")
+                            .arg(uniform.name);
+                return false;
+            }
+            if (writtenNames.contains(uniform.name, Qt::CaseSensitive)) {
+                error = QObject::tr("Duplicate custom uniform '%1'.")
+                            .arg(uniform.name);
+                return false;
+            }
+            writtenNames.append(uniform.name);
+            if (!std::isfinite(uniform.minimum) ||
+                !std::isfinite(uniform.maximum) ||
+                !std::isfinite(uniform.step) ||
+                !std::isfinite(uniform.value) ||
+                uniform.maximum <= uniform.minimum || uniform.step <= 0.0) {
+                error = QObject::tr(
+                            "Custom uniform '%1' has an invalid range or value.")
+                            .arg(uniform.name);
+                return false;
+            }
             if ((hasExplicitSlots && uniform.slot < 0) ||
                 (!hasExplicitSlots && uniform.slot >= 0)) {
                 error = QObject::tr(
@@ -494,5 +552,35 @@ namespace acmx2 {
         else
             root.insert("custom_uniforms", entries);
         return write_json_document(path, QJsonDocument(root), error);
+    }
+
+    bool custom_uniform_metadata_matches(const QString &leftDirectory,
+                                         const QString &rightDirectory,
+                                         bool &matches, QString &error) {
+        matches = false;
+        QList<CustomUniformDefinition> leftUniforms;
+        QList<CustomUniformDefinition> rightUniforms;
+        if (!load_custom_uniforms(leftDirectory, leftUniforms, error) ||
+            !load_custom_uniforms(rightDirectory, rightUniforms, error)) {
+            return false;
+        }
+        if (leftUniforms.size() != rightUniforms.size()) {
+            matches = false;
+            return true;
+        }
+        for (int index = 0; index < leftUniforms.size(); ++index) {
+            const CustomUniformDefinition &left = leftUniforms.at(index);
+            const CustomUniformDefinition &right = rightUniforms.at(index);
+            if (left.name != right.name || left.slot != right.slot ||
+                !nearly_equal(left.minimum, right.minimum) ||
+                !nearly_equal(left.maximum, right.maximum) ||
+                !nearly_equal(left.step, right.step) ||
+                !nearly_equal(left.value, right.value)) {
+                matches = false;
+                return true;
+            }
+        }
+        matches = true;
+        return true;
     }
 } // namespace acmx2

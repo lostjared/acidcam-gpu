@@ -145,9 +145,20 @@ void ShaderDialog::onOkButtonClicked() {
     QString manifestError;
     bool manifestCreated = false;
     if (backend == acmx2::Backend::Acmxvk) {
+        QStringList manifestShaders;
+        if (!acmx2::load_shader_manifest(shaderPath, manifestShaders,
+                                         manifestError)) {
+            QFile::remove(absoluteShaderName);
+            QMessageBox::critical(this, "Error", manifestError);
+            return;
+        }
+        if (!manifestShaders.contains(relativeShaderName,
+                                      Qt::CaseInsensitive)) {
+            manifestShaders.append(relativeShaderName);
+        }
         acmx2::AcmxvkSourceManifestResult result;
-        manifestCreated = acmx2::create_acmxvk_source_manifest(
-            shaderPath, QString(), result, manifestError);
+        manifestCreated = acmx2::create_acmxvk_source_manifest_for_shaders(
+            shaderPath, manifestShaders, QString(), result, manifestError);
     } else {
         manifestCreated = acmx2::append_shader_manifest(
             shaderPath, relativeShaderName, manifestError);

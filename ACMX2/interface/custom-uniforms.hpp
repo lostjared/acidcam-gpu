@@ -1,6 +1,7 @@
 #ifndef CUSTOM_UNIFORMS_HPP
 #define CUSTOM_UNIFORMS_HPP
 
+#include "backend.hpp"
 #include "shader-manifest.hpp"
 #include <QDialog>
 
@@ -16,7 +17,8 @@ class CustomUniformDialog : public QDialog {
   public:
     explicit CustomUniformDialog(QWidget *parent = nullptr);
 
-    bool loadLibrary(const QString &directory, QString *error = nullptr);
+    bool loadLibrary(const QString &directory, acmx2::Backend backend,
+                     QString *error = nullptr);
     const QList<acmx2::CustomUniformDefinition> &uniforms() const;
 
   signals:
@@ -43,6 +45,7 @@ class CustomUniformDialog : public QDialog {
     QWidget *rowsWidget = nullptr;
     QVBoxLayout *rowsLayout = nullptr;
     QTimer *saveTimer = nullptr;
+    acmx2::Backend activeBackend = acmx2::Backend::Acmx2;
 };
 
 #endif

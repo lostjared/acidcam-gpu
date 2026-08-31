@@ -1,9 +1,11 @@
 #include "custom-uniforms.hpp"
 #include "../shader_selection_shm.hpp"
 
+#include <QClipboard>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -52,6 +54,25 @@ namespace {
         return std::clamp(static_cast<int>(std::ceil(-std::log10(step))) + 2,
                           2, 10);
     }
+
+    QString uniformLocation(const acmx2::CustomUniformDefinition &uniform) {
+        if (uniform.slot < 0)
+            return {};
+        static const QString components = QStringLiteral("xyzw");
+        return QStringLiteral("ext.custom_uniforms[%1].%2")
+            .arg(uniform.slot / 4)
+            .arg(components.at(uniform.slot % 4));
+    }
+
+    QString uniformSourceDefinition(
+        const acmx2::CustomUniformDefinition &uniform,
+        acmx2::Backend backend) {
+        if (backend == acmx2::Backend::Acmxvk) {
+            return QStringLiteral("#define %1 %2")
+                .arg(uniform.name, uniformLocation(uniform));
+        }
+        return QStringLiteral("uniform float %1;").arg(uniform.name);
+    }
 } // namespace
 
 CustomUniformDialog::CustomUniformDialog(QWidget *parent)
@@ -89,7 +110,8 @@ CustomUniformDialog::CustomUniformDialog(QWidget *parent)
     mainLayout->addLayout(addLayout);
 
     auto *hint = new QLabel(
-        tr("Names become GLSL float uniforms. Values are saved in library.json and sent live to acmx2."),
+        tr("Names become GLSL float uniforms. Values and slots are saved in "
+           "library.json and sent live to the active engine."),
         this);
     hint->setWordWrap(true);
     mainLayout->addWidget(hint);
@@ -120,12 +142,15 @@ CustomUniformDialog::CustomUniformDialog(QWidget *parent)
     rebuildUniformRows();
 }
 
-bool CustomUniformDialog::loadLibrary(const QString &directory, QString *error) {
+bool CustomUniformDialog::loadLibrary(const QString &directory,
+                                      acmx2::Backend backend,
+                                      QString *error) {
     if (saveTimer->isActive()) {
         saveTimer->stop();
         saveUniforms(false);
     }
 
+    activeBackend = backend;
     QList<acmx2::CustomUniformDefinition> loadedUniforms;
     QString loadError;
     const auto clearFailedLoad = [this, &directory]() {
@@ -161,6 +186,21 @@ bool CustomUniformDialog::loadLibrary(const QString &directory, QString *error) 
             }
             return false;
         }
+    }
+
+    bool addedExplicitSlots = false;
+    for (int index = 0; index < loadedUniforms.size(); ++index) {
+        if (loadedUniforms[index].slot < 0) {
+            loadedUniforms[index].slot = index;
+            addedExplicitSlots = true;
+        }
+    }
+    if (addedExplicitSlots &&
+        !acmx2::write_custom_uniforms(directory, loadedUniforms, loadError)) {
+        clearFailedLoad();
+        if (error)
+            *error = loadError;
+        return false;
     }
 
     libraryDirectory = directory;
@@ -225,14 +265,9 @@ void CustomUniformDialog::addUniform() {
     }
 
     acmx2::CustomUniformDefinition uniform{name, minimum, maximum, step,
-                                           minimum};
-    const bool usesExplicitSlots = std::any_of(
-        uniformDefinitions.cbegin(), uniformDefinitions.cend(),
-        [](const acmx2::CustomUniformDefinition &definition) {
-            return definition.slot >= 0;
-        });
-    if (usesExplicitSlots)
-        uniform.slot = uniformDefinitions.size();
+                                           minimum,
+                                           static_cast<int>(
+                                               uniformDefinitions.size())};
     uniformDefinitions.append(uniform);
     if (!saveUniforms(true)) {
         uniformDefinitions.removeLast();
@@ -286,13 +321,26 @@ void CustomUniformDialog::rebuildUniformRows() {
                 .arg(uniform.maximum, 0, 'g', 8)
                 .arg(uniform.step, 0, 'g', 8),
             row);
+        const QString location = uniformLocation(uniform);
+        auto *locationLabel = new QLabel(
+            activeBackend == acmx2::Backend::Acmxvk
+                ? tr("Slot %1: %2").arg(uniform.slot).arg(location)
+                : tr("Slot %1").arg(uniform.slot),
+            row);
+        locationLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        auto *copyButton = new QPushButton(tr("Copy"), row);
+        copyButton->setToolTip(
+            tr("Copy the source declaration:\n%1")
+                .arg(uniformSourceDefinition(uniform, activeBackend)));
         auto *deleteButton = new QPushButton(tr("Delete"), row);
 
         layout->addWidget(nameLabel, 0, 0);
         layout->addWidget(slider, 0, 1);
         layout->addWidget(valueSpin, 0, 2);
-        layout->addWidget(deleteButton, 0, 3);
+        layout->addWidget(copyButton, 0, 3);
+        layout->addWidget(deleteButton, 0, 4);
         layout->addWidget(rangeLabel, 1, 1, 1, 2);
+        layout->addWidget(locationLabel, 1, 3, 1, 2);
         layout->setColumnStretch(1, 1);
         rowsLayout->addWidget(row);
 
@@ -327,6 +375,11 @@ void CustomUniformDialog::rebuildUniformRows() {
                 });
         connect(deleteButton, &QPushButton::clicked, this,
                 [this, name = uniform.name]() { removeUniform(name); });
+        connect(copyButton, &QPushButton::clicked, this,
+                [uniform, backend = activeBackend]() {
+                    QGuiApplication::clipboard()->setText(
+                        uniformSourceDefinition(uniform, backend));
+                });
     }
     rowsLayout->addStretch();
 }

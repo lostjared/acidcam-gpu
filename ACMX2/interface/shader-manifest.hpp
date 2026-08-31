@@ -57,6 +57,9 @@ namespace acmx2 {
     /** Add one shader to the preferred manifest if it is not already present. */
     bool append_shader_manifest(const QString &directory, const QString &shader,
                                 QString &error);
+    /** Remove one shader from the preferred manifest, without deleting its file. */
+    bool remove_shader_manifest_entry(const QString &directory,
+                                      const QString &shader, QString &error);
     /** Create library.json from index.txt when a JSON manifest is absent. */
     bool migrate_index_manifest_to_json(const QString &directory, bool &created,
                                         QString &error);
@@ -71,6 +74,10 @@ namespace acmx2 {
     bool write_custom_uniforms(const QString &directory,
                                const QList<CustomUniformDefinition> &uniforms,
                                QString &error);
+    /** Compare two manifests' custom-uniform ABI and numeric metadata. */
+    bool custom_uniform_metadata_matches(const QString &leftDirectory,
+                                         const QString &rightDirectory,
+                                         bool &matches, QString &error);
 } // namespace acmx2
 
 #endif

@@ -1345,6 +1345,14 @@ Given the earlier `square_size` manifest entry, the shader can use:
 #define square_size ext.custom_uniforms[0].x
 ```
 
+The Qt interface's Custom Uniforms dialog displays this location for every
+entry and provides a **Copy** button for the complete `#define`. Adding a
+uniform appends the next contiguous explicit slot to `library.json`; deleting
+one removes its entry and renumbers later slots. Because deletion can therefore
+change later locations, recopy any affected aliases into their shader sources.
+The dialog refuses additions beyond 64 scalar slots, matching the
+`custom_uniforms[16]` block.
+
 The manifest's `minimum`, `maximum`, `step`, and `value` fields define the
 accepted range, adjustment step, and initial value. Repeat
 `--uniform name=value` to override initial values. ACMX2 MIDI Slider 1 through

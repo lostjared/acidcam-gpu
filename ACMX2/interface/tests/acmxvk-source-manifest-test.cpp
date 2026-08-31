@@ -1,4 +1,5 @@
 #include "acmxvk-source-manifest.hpp"
+#include "shader-manifest.hpp"
 
 #include <QDir>
 #include <QFile>
@@ -88,6 +89,115 @@ int main() {
         slider.value(QStringLiteral("value")).toDouble() != 0.75 ||
         slider.value(QStringLiteral("maximum")).toDouble() != 2.0) {
         return 8;
+    }
+
+    if (!acmx2::remove_shader_manifest_entry(root, QStringLiteral("z.frag"),
+                                             error)) {
+        std::cerr << error.toStdString() << '\n';
+        return 9;
+    }
+    QStringList remainingShaders;
+    if (!acmx2::load_shader_manifest(root, remainingShaders, error) ||
+        remainingShaders.contains(QStringLiteral("z.frag"),
+                                  Qt::CaseInsensitive) ||
+        !QFileInfo::exists(QDir(root).filePath(QStringLiteral("z.frag")))) {
+        return 10;
+    }
+    if (!write_file(QDir(root).filePath(QStringLiteral("new.frag")),
+                    QByteArrayLiteral("#version 450\n"))) {
+        return 11;
+    }
+    remainingShaders.append(QStringLiteral("new.frag"));
+    if (!acmx2::create_acmxvk_source_manifest_for_shaders(
+            root, remainingShaders, QString(), result, error)) {
+        std::cerr << error.toStdString() << '\n';
+        return 12;
+    }
+    remainingShaders.clear();
+    if (!acmx2::load_shader_manifest(root, remainingShaders, error) ||
+        remainingShaders.contains(QStringLiteral("z.frag"),
+                                  Qt::CaseInsensitive) ||
+        !remainingShaders.contains(QStringLiteral("new.frag"),
+                                   Qt::CaseInsensitive)) {
+        return 13;
+    }
+
+    QList<acmx2::CustomUniformDefinition> customUniforms;
+    if (!acmx2::load_custom_uniforms(root, customUniforms, error) ||
+        customUniforms.size() != 27) {
+        return 14;
+    }
+    customUniforms.append({QStringLiteral("custom_knob"), 0.0, 2.0, 0.1,
+                           1.0, 27});
+    if (!acmx2::write_custom_uniforms(root, customUniforms, error)) {
+        std::cerr << error.toStdString() << '\n';
+        return 15;
+    }
+    QJsonObject writtenUniforms =
+        read_manifest(manifestPath)
+            .value(QStringLiteral("custom_uniforms"))
+            .toObject();
+    if (writtenUniforms.value(QStringLiteral("custom_knob"))
+            .toObject()
+            .value(QStringLiteral("slot"))
+            .toInt(-1) != 27) {
+        return 16;
+    }
+
+    customUniforms.removeLast();
+    if (!acmx2::write_custom_uniforms(root, customUniforms, error) ||
+        read_manifest(manifestPath)
+            .value(QStringLiteral("custom_uniforms"))
+            .toObject()
+            .contains(QStringLiteral("custom_knob"))) {
+        return 17;
+    }
+
+    while (customUniforms.size() < 65) {
+        const int slot = customUniforms.size();
+        customUniforms.append(
+            {QStringLiteral("extra_%1").arg(slot), 0.0, 1.0, 0.01, 0.0,
+             slot});
+    }
+    if (acmx2::write_custom_uniforms(root, customUniforms, error) ||
+        !error.contains(QStringLiteral("at most 64"))) {
+        return 18;
+    }
+
+    QTemporaryDir runtimeDirectory;
+    if (!runtimeDirectory.isValid())
+        return 19;
+    QJsonObject runtimeManifest = read_manifest(manifestPath);
+    QJsonObject runtimeUniforms =
+        runtimeManifest.value(QStringLiteral("custom_uniforms")).toObject();
+    QJsonObject runtimeSlider =
+        runtimeUniforms.value(QStringLiteral("slider1")).toObject();
+    runtimeSlider.insert(QStringLiteral("value"), 0.75000000000001);
+    runtimeUniforms.insert(QStringLiteral("slider1"), runtimeSlider);
+    runtimeManifest.insert(QStringLiteral("custom_uniforms"), runtimeUniforms);
+    if (!write_file(QDir(runtimeDirectory.path())
+                        .filePath(QStringLiteral("library.json")),
+                    QJsonDocument(runtimeManifest)
+                        .toJson(QJsonDocument::Indented))) {
+        return 20;
+    }
+    bool metadataMatches = false;
+    if (!acmx2::custom_uniform_metadata_matches(
+            root, runtimeDirectory.path(), metadataMatches, error) ||
+        !metadataMatches) {
+        return 21;
+    }
+    runtimeSlider.insert(QStringLiteral("value"), 0.8);
+    runtimeUniforms.insert(QStringLiteral("slider1"), runtimeSlider);
+    runtimeManifest.insert(QStringLiteral("custom_uniforms"), runtimeUniforms);
+    if (!write_file(QDir(runtimeDirectory.path())
+                        .filePath(QStringLiteral("library.json")),
+                    QJsonDocument(runtimeManifest)
+                        .toJson(QJsonDocument::Indented)) ||
+        !acmx2::custom_uniform_metadata_matches(
+            root, runtimeDirectory.path(), metadataMatches, error) ||
+        metadataMatches) {
+        return 22;
     }
     return 0;
 }
