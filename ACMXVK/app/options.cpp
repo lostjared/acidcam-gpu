@@ -241,10 +241,12 @@ namespace acmxvk {
 
     [[nodiscard]] bool isUtilityRequest(const Options &options) {
         return options.show_help || options.list_audio_devices ||
+               options.list_camera_devices ||
                options.check_audio || options.list_midi_devices ||
                options.check_midi || options.list_gpu_filters ||
                options.list_cuda_devices || options.check_cuda ||
                options.check_dnn ||
+               options.enumerate_camera_device >= 0 ||
                options.list_encoders || !options.list_encoder_options.empty();
     }
 
@@ -482,6 +484,17 @@ namespace acmxvk {
             } else if (option == "-c" || option == "--camera-res") {
                 parseDimensions(optionValue(index, argc, argv, option),
                                 options.camera_width, options.camera_height, option);
+            } else if (option == "--enumerate-device" ||
+                       option == "--probe-camera") {
+                options.enumerate_camera_device =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.enumerate_camera_device < 0 ||
+                    options.enumerate_camera_device > 65535) {
+                    throw std::runtime_error(
+                        "camera probe device index must be between 0 and 65535");
+                }
+            } else if (option == "--list-camera-devices") {
+                options.list_camera_devices = true;
             } else if (option == "--use-yuv") {
                 options.use_yuv = true;
             } else if (option == "--maximize-fps") {
@@ -1081,7 +1094,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9Q)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9R)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1097,6 +1110,9 @@ namespace acmxvk {
                << "  -g, --graphic <file>        Read a still image\n"
                << "  -d, --device <index>        Camera device (default 0)\n"
                << "  -c, --camera-res <WxH>      Requested camera dimensions\n"
+               << "      --enumerate-device N   List native camera modes and exit\n"
+               << "      --probe-camera N       Alias for --enumerate-device\n"
+               << "      --list-camera-devices  List native camera indices and names\n"
                << "      --use-yuv               Prefer YUYV camera capture over MJPG\n"
                << "      --maximize-fps          Render at --fps using the latest camera frame\n"
                << "      --use-source-fps        Play video on its reported source clock\n"

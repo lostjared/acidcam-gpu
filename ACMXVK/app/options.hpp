@@ -43,6 +43,7 @@ namespace acmxvk {
         int camera_width = 1280;
         int camera_height = 720;
         int camera_device = 0;
+        int enumerate_camera_device = -1;
         int shader_index = 0;
         int encode_crf = 18;
         int autopilot_frames = 0;
@@ -98,6 +99,7 @@ namespace acmxvk {
         bool audio_repeat = false;
         bool audio_trunc = false;
         bool list_audio_devices = false;
+        bool list_camera_devices = false;
         bool check_audio = false;
         bool midi_device_specified = false;
         bool midi_monitor = false;

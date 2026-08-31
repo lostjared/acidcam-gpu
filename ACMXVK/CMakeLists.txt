@@ -10,6 +10,13 @@ endif()
 
 project(ACMXVK VERSION 0.1.0 LANGUAGES CXX)
 
+if(APPLE)
+    enable_language(OBJCXX)
+    set(CMAKE_OBJCXX_STANDARD 20)
+    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+    set(CMAKE_OBJCXX_EXTENSIONS OFF)
+endif()
+
 include(GNUInstallDirs)
 include(CTest)
 
@@ -475,22 +482,13 @@ add_custom_target(acmxvk_shaders DEPENDS
     ${ACMXVK_CROSSFADE_SHADERS}
 )
 
-set(ACMXVK_APP_IMPLEMENTATION_SECTIONS
-    app/window_lifecycle.ipp
-    app/window_state.ipp
-    app/window_audio_midi.ipp
-    app/window_shaders.ipp
-    app/window_overlay.ipp
-    app/window_io.ipp
-    app/window_rendering.ipp
-)
-set_source_files_properties(${ACMXVK_APP_IMPLEMENTATION_SECTIONS}
-    PROPERTIES HEADER_FILE_ONLY TRUE
-)
 add_executable(acmxvk
     acmx.cpp
+    main_window.cpp
+    main_window.hpp
     app/interface_client.cpp
     app/interface_client.hpp
+    app/camera_probe.hpp
     app/media_helpers.cpp
     app/media_helpers.hpp
     app/media_utils.cpp
@@ -509,8 +507,20 @@ add_executable(acmxvk
     app/snapshot_writer.hpp
     input_validation.cpp
     input_validation.hpp
-    ${ACMXVK_APP_IMPLEMENTATION_SECTIONS}
 )
+if(APPLE)
+    target_sources(acmxvk PRIVATE app/camera_probe_macos.mm)
+    find_library(ACMXVK_AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
+    find_library(ACMXVK_COREMEDIA_FRAMEWORK CoreMedia REQUIRED)
+    find_library(ACMXVK_FOUNDATION_FRAMEWORK Foundation REQUIRED)
+    target_link_libraries(acmxvk PRIVATE
+        "${ACMXVK_AVFOUNDATION_FRAMEWORK}"
+        "${ACMXVK_COREMEDIA_FRAMEWORK}"
+        "${ACMXVK_FOUNDATION_FRAMEWORK}"
+    )
+else()
+    target_sources(acmxvk PRIVATE app/camera_probe.cpp)
+endif()
 add_dependencies(acmxvk acmxvk_shaders)
 target_include_directories(acmxvk PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(acmxvk PRIVATE

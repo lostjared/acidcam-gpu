@@ -156,6 +156,46 @@ namespace {
         fpsList.append(fps);
     }
 
+    void parseAcmxvkCameraCapabilities(
+        const QString &output,
+        QMap<QString, QList<double>> &deviceCapabilities,
+        QSet<QString> &yuvResolutions) {
+        const QRegularExpression resolutionExpression(
+            R"(^\s+(\d+x\d+)\s*@\s*(.+)$)");
+        const QRegularExpression frameRateExpression(
+            R"((\d+(?:\.\d+)?)\s*fps)");
+        const QRegularExpression formatExpression(
+            R"(^\s*Format:\s*(\S+))");
+
+        QString currentFormat;
+        const QStringList lines = output.split('\n');
+        for (const QString &line : lines) {
+            const QRegularExpressionMatch formatMatch =
+                formatExpression.match(line);
+            if (formatMatch.hasMatch()) {
+                currentFormat = formatMatch.captured(1).toUpper();
+                continue;
+            }
+
+            const QRegularExpressionMatch resolutionMatch =
+                resolutionExpression.match(line);
+            if (!resolutionMatch.hasMatch()) {
+                continue;
+            }
+            const QString resolution = resolutionMatch.captured(1);
+            QRegularExpressionMatchIterator frameRates =
+                frameRateExpression.globalMatch(resolutionMatch.captured(2));
+            while (frameRates.hasNext()) {
+                appendUniqueFps(deviceCapabilities[resolution],
+                                frameRates.next().captured(1).toDouble());
+            }
+            if (currentFormat == "YUYV" || currentFormat == "YUVS" ||
+                currentFormat == "2VUY") {
+                yuvResolutions.insert(resolution);
+            }
+        }
+    }
+
 #ifdef __APPLE__
     QStringList appleCameraNamesFromSystemProfiler() {
         QProcess process;
@@ -502,6 +542,36 @@ SettingsWindow::SettingsWindow(const QString &execPath, acmx2::Backend backend,
 }
 
 void SettingsWindow::populateCameraDevices() {
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        QProcess process;
+        process.start(executablePath, {"--list-camera-devices"});
+        const bool finished = process.waitForFinished(8000);
+        if (finished && process.exitStatus() == QProcess::NormalExit &&
+            process.exitCode() == 0) {
+            const QStringList lines =
+                QString::fromUtf8(process.readAllStandardOutput())
+                    .split('\n', Qt::SkipEmptyParts);
+            for (const QString &line : lines) {
+                const qsizetype separator = line.indexOf('\t');
+                if (separator <= 0) {
+                    continue;
+                }
+                bool validIndex = false;
+                const int deviceIndex =
+                    line.left(separator).trimmed().toInt(&validIndex);
+                const QString cameraName = line.mid(separator + 1).trimmed();
+                if (validIndex && deviceIndex >= 0 && !cameraName.isEmpty()) {
+                    cameraIndexComboBox->addItem(
+                        QString("%1 [%2]").arg(cameraName).arg(deviceIndex),
+                        deviceIndex);
+                }
+            }
+        }
+        if (cameraIndexComboBox->count() == 0) {
+            cameraIndexComboBox->addItem("No cameras found", -1);
+        }
+        return;
+    }
 #ifdef __APPLE__
     const QStringList cameraNames = appleCameraNamesFromSystemProfiler();
     for (int i = 0; i < cameraNames.size(); ++i) {
@@ -1887,6 +1957,18 @@ bool SettingsWindow::isEncodeNoDrop() const {
 }
 
 QString SettingsWindow::getCameraName(int device_index) {
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        for (int index = 0; index < cameraIndexComboBox->count(); ++index) {
+            if (cameraIndexComboBox->itemData(index).toInt() == device_index) {
+                const QString label = cameraIndexComboBox->itemText(index);
+                const int suffixPosition = label.lastIndexOf(" [");
+                return suffixPosition > 0
+                           ? label.left(suffixPosition).trimmed()
+                           : label;
+            }
+        }
+        return QString("Camera %1").arg(device_index);
+    }
 #ifdef __APPLE__
     for (int i = 0; i < cameraIndexComboBox->count(); ++i) {
         if (cameraIndexComboBox->itemData(i).toInt() == device_index) {
@@ -2202,6 +2284,25 @@ void SettingsWindow::browseOnnxModelFile() {
 void SettingsWindow::enumerateDevice(int deviceIndex) {
     deviceCapabilities.clear();
     yuvResolutions.clear();
+
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        if (deviceIndex < 0) {
+            populateResolutions();
+            return;
+        }
+        QProcess process;
+        process.start(executablePath,
+                      {"--enumerate-device", QString::number(deviceIndex)});
+        const bool finished = process.waitForFinished(8000);
+        if (finished && process.exitStatus() == QProcess::NormalExit &&
+            process.exitCode() == 0) {
+            parseAcmxvkCameraCapabilities(
+                QString::fromUtf8(process.readAllStandardOutput()),
+                deviceCapabilities, yuvResolutions);
+        }
+        populateResolutions();
+        return;
+    }
 
 #ifdef __APPLE__
     QProcess process;

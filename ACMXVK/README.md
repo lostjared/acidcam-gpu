@@ -16,7 +16,7 @@ ACMX2.
 | Standalone CMake project | Complete | Builds against installed MXVK and MXWrite and provides an `uninstall` target. |
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
-| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Encoded output follows `--resolution` when supplied and otherwise uses the negotiated source dimensions, including a width/height swap for 90-degree input rotation. In either case, oversized previews are fitted to the usable display without changing the render or output dimensions. Still images remain OpenCV-backed. |
+| Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--enumerate-device` probes native V4L2 modes on Linux and AVFoundation modes on macOS. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Encoded output follows `--resolution` when supplied and otherwise uses the negotiated source dimensions, including a width/height swap for 90-degree input rotation. In either case, oversized previews are fitted to the usable display without changing the render or output dimensions. Still images remain OpenCV-backed. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. Offline `--build` mode incrementally compiles source manifests containing `.frag`, `.comp`, or `.spv` entries into a validated runtime library. |
 | Shader selection | Complete | Supports selection by index or filename, keyboard switching, and live selection from the ACMX Qt interface through `--interface-shm`. |
@@ -40,15 +40,21 @@ ACMX2.
 
 ## Source layout
 
-`acmx.cpp` is the compact process entry point and compile-time integration
-unit. Its application implementation is grouped under `app/` by responsibility:
-command-line options, shader-library building, media helpers, lifecycle/state,
-audio and MIDI, shaders and interface control, overlays, input/output, and
-rendering. See `app/README.md` for the file map. Options, shader-library
+`acmx.cpp` is the compact process entry point. `main_window.hpp` and
+`main_window.cpp` now own the render-window class boundary. Its application
+implementation is grouped under `app/` by responsibility: command-line options,
+shader-library building, media helpers, lifecycle/state, audio and MIDI,
+shaders and interface control, overlays, input/output, and rendering. See
+`app/README.md` for the file map. Options, shader-library
 building, playlist parsing, resource discovery, output-path generation, media
 utilities, asynchronous camera capture, interface shared-memory access, and
-background snapshot encoding use normal `.hpp`/`.cpp` pairs; only the tightly
-coupled render-window implementation remains in ordered `.ipp` sections.
+background snapshot encoding use normal `.hpp`/`.cpp` pairs. The class
+declaration and complete runtime state live in `main_window.hpp`. Lifecycle, event,
+frame-processing, audio, MIDI, custom-control, media-clock, shader, interface
+IPC, playlist, resource, HUD, watermark, DNN-overlay, input, output, snapshot,
+frame-readback, 3D, crossfade, history, capture, and frame-upload methods are
+standard out-of-class definitions in `main_window.cpp`. The former ordered
+`.ipp` implementation sections have been fully retired.
 
 ## Requirements
 
@@ -1964,6 +1970,22 @@ rate measured from successfully delivered frames. Significant delivery-rate
 changes are also logged, making low-light automatic-exposure reductions such
 as 60-to-30 FPS visible without mistaking the driver's nominal rate for actual
 throughput.
+
+Increment 9R adds native camera capability discovery without opening a Vulkan
+window. Linux uses V4L2 enumeration and macOS uses AVFoundation, including
+each device's formats, discrete resolutions, and supported frame-rate values
+or range endpoints. The output retains ACMX2's interface-compatible format.
+
+```bash
+./build/acmxvk/acmxvk --list-camera-devices
+./build/acmxvk/acmxvk --enumerate-device 0
+```
+
+`--probe-camera 0` is an alias for `--enumerate-device 0`. A missing device,
+permission failure, or device with no capture formats produces a diagnostic
+and a nonzero exit status. When the Qt interface is using the ACMXVK backend,
+its camera names and resolution/FPS choices come from these native probes.
+Selecting ACMX2 retains that backend's existing platform-specific discovery.
 
 Increment 7U adds `--maximize-fps` for camera input. It requires `--fps` and
 runs camera acquisition on a bounded latest-frame worker while pacing the

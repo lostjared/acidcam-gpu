@@ -74,6 +74,10 @@ Interface version 2.118.0 includes the current ACMXVK integration increments:
   and **Use Source Audio** controls. They are enabled only for compatible input
   modes and emit `--maximize-fps`, `--use-source-fps`, and
   `--use-source-audio` respectively.
+- With the ACMXVK backend selected, the Settings dialog obtains camera names,
+  native formats, resolutions, and FPS choices from ACMXVK's
+  `--list-camera-devices` and `--enumerate-device` probes. ACMX2 selection
+  retains its existing Linux, macOS, and Windows discovery paths.
 - Maximum duration and output-size limits are added to launch commands only
   while output video recording is enabled.
 - Shared interface control verifies that its named semaphore remains published

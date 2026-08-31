@@ -2013,6 +2013,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
         cleanupShaderSelectionSharedMemory();
         return;
     }
+
     if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
         shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
         shaderSelectionShm->magic = acmx2::ipc::kShaderSelectionMagic;
@@ -2075,8 +2076,10 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
     if (row < 0 || row >= items.size())
         return;
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
-    if (!lock)
+    if (!lock) {
+	Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
+    }
     shaderSelectionShm->selected_index = row;
     const QByteArray shaderName = items.at(row).toUtf8();
     const qsizetype copyLength = std::min<qsizetype>(
@@ -2113,8 +2116,10 @@ void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
     }
 
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
-    if (!lock)
+    if (!lock) {
+	Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
+    }
     shaderSelectionShm->reload_shader_index = shaderIndex;
     std::fill(std::begin(shaderSelectionShm->reload_shader_path), std::end(shaderSelectionShm->reload_shader_path), '\0');
     std::copy(reloadPath.cbegin(), reloadPath.cend(), shaderSelectionShm->reload_shader_path);
@@ -2424,8 +2429,10 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
     }
 
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
-    if (!lock)
+    if (!lock) {
+	Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
+    }
     shaderSelectionShm->shader_pass_enabled = (shader_pass_enabled && passCount > 0) ? 1 : 0;
     shaderSelectionShm->shader_pass_count = passCount;
     std::copy(passIndices.begin(), passIndices.end(), std::begin(shaderSelectionShm->shader_pass_indices));
@@ -2442,8 +2449,10 @@ void MainWindow::publishRepeatStateToRunningProcess() {
     if (!shaderSelectionShm)
         return;
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
-    if (!lock)
+    if (!lock) {
+	Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
+    }
     shaderSelectionShm->repeat_enabled = (play_repeat && play_repeat->isChecked()) ? 1 : 0;
     ++shaderSelectionShm->sequence;
 #endif
@@ -2455,8 +2464,10 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
         return;
 
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
-    if (!lock)
+    if (!lock) {
+	Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
+    }
     shaderSelectionShm->display_filter_enabled = display_filter_enabled ? 1 : 0;
     shaderSelectionShm->normalized_time_enabled = normalized_time ? 1 : 0;
 
@@ -2502,8 +2513,10 @@ void MainWindow::publishCustomUniformsToRunningProcess() {
         return;
 
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
-    if (!lock)
+    if (!lock) {
+        Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
+    }
     std::fill(&shaderSelectionShm->custom_uniform_names[0][0],
               &shaderSelectionShm->custom_uniform_names[0][0] +
                   acmx2::ipc::kShaderSelectionMaxCustomUniforms *

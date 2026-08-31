@@ -3,23 +3,10 @@
  * @brief ACMXVK real-time Vulkan video shader application.
  */
 
-#include <mxvk/mxvk.hpp>
-#include <mxvk/mxvk_abstract_model.hpp>
-#include <mxvk/mxvk_cv.hpp>
 #include <mxvk/mxvk_exception.hpp>
-#ifdef MXVK_WITH_FFMPEG_CAPTURE
-#include <mxvk/mxvk_ff_capture.hpp>
-#endif
-#include <mxwrite.hpp>
-
-extern "C" {
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-}
 
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
-#include "file_audio.hpp"
 #endif
 #ifdef MIDI_ENABLED
 #include "midi.hpp"
@@ -27,72 +14,19 @@ extern "C" {
 #ifdef ACMXVK_WITH_CUDA
 #include "gpu_filters.hpp"
 #endif
-#ifdef ACMXVK_WITH_DNN
-#include "edge_dnn.hpp"
-#endif
-#include "app/interface_client.hpp"
-#include "app/media_helpers.hpp"
+#include "app/camera_probe.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
-#include "app/output_paths.hpp"
-#include "app/playlist.hpp"
-#include "app/resource_paths.hpp"
 #include "app/shader_library.hpp"
-#include "app/snapshot_writer.hpp"
-#include "input_validation.hpp"
-#ifdef ACMXVK_WITH_MXVK_CUDA
-#include <opencv2/core/cuda.hpp>
-#include <opencv2/cudaarithm.hpp>
-#endif
+#include "main_window.hpp"
 
+#include <cstdlib>
+#include <iostream>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/videoio.hpp>
-
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/glm.hpp>
-
-#include <algorithm>
-#include <array>
-#include <cctype>
-#include <chrono>
-#include <cmath>
-#include <condition_variable>
-#include <cstdint>
-#include <cstdlib>
-#include <deque>
-#include <filesystem>
-#include <iomanip>
-#include <iostream>
-#include <limits>
-#include <memory>
-#include <mutex>
-#include <numbers>
-#include <random>
-#include <sstream>
 #include <stdexcept>
-#include <string>
 #include <string_view>
-#include <thread>
-#include <unordered_set>
 #include <utility>
-#include <vector>
-
-namespace acmxvk {
-// These sections form one ordered implementation unit. Their order preserves
-// the open MainWindow class definition across section files.
-// clang-format off
-#include "app/window_lifecycle.ipp"
-#include "app/window_state.ipp"
-#include "app/window_audio_midi.ipp"
-#include "app/window_shaders.ipp"
-#include "app/window_overlay.ipp"
-#include "app/window_io.ipp"
-#include "app/window_rendering.ipp"
-    // clang-format on
-} // namespace acmxvk
 
 int main(int argc, char **argv) {
     try {
@@ -111,6 +45,17 @@ int main(int argc, char **argv) {
         }
         if (!options.build_manifest.empty()) {
             return acmxvk::buildShaderLibrary(options);
+        }
+        if (options.enumerate_camera_device >= 0) {
+            return acmxvk::probeCameraDevice(options.enumerate_camera_device,
+                                             std::cout, std::cerr)
+                       ? EXIT_SUCCESS
+                       : EXIT_FAILURE;
+        }
+        if (options.list_camera_devices) {
+            return acmxvk::listCameraDevices(std::cout, std::cerr)
+                       ? EXIT_SUCCESS
+                       : EXIT_FAILURE;
         }
         if (options.check_audio) {
 #ifdef AUDIO_ENABLED
