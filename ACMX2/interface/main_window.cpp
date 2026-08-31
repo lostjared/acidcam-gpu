@@ -1608,7 +1608,7 @@ void MainWindow::openCustomStyleEditor() {
 }
 
 void MainWindow::newList() {
-    LibraryWindow library(this);
+    LibraryWindow library(active_backend, this);
 
     if (library.exec() == QDialog::Accepted) {
         loadLibraryPath(library.getShaderPath());
@@ -1729,7 +1729,29 @@ void MainWindow::menuFindNext() {
 }
 
 void MainWindow::newShader() {
-    ShaderDialog new_shader(this);
+    if (shader_path.isEmpty() || !acmx2::shader_manifest_exists(shader_path)) {
+        QMessageBox::information(this, tr("New Shader File"),
+                                 tr("Create or load a shader library first."));
+        return;
+    }
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        QString typeError;
+        const auto libraryType =
+            acmx2::shader_manifest_library_type(shader_path, typeError);
+        if (!typeError.isEmpty()) {
+            QMessageBox::warning(this, tr("New Shader File"), typeError);
+            return;
+        }
+        if (libraryType &&
+            *libraryType == acmx2::ShaderLibraryType::Runtime) {
+            QMessageBox::information(
+                this, tr("New Shader File"),
+                tr("New ACMXVK shaders must be added to a source library, not "
+                   "a compiled SPIR-V runtime library."));
+            return;
+        }
+    }
+    ShaderDialog new_shader(active_backend, this);
     new_shader.setShaderPath(shader_path);
     if (new_shader.exec() == QDialog::Accepted) {
         QSettings appSettings("LostSideDead");
@@ -2077,7 +2099,7 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
         return;
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
     if (!lock) {
-	Log("<br><style color=\"red\">Error lock failed</style><br>");
+        Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
     }
     shaderSelectionShm->selected_index = row;
@@ -2117,7 +2139,7 @@ void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
 
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
     if (!lock) {
-	Log("<br><style color=\"red\">Error lock failed</style><br>");
+        Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
     }
     shaderSelectionShm->reload_shader_index = shaderIndex;
@@ -2430,7 +2452,7 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
 
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
     if (!lock) {
-	Log("<br><style color=\"red\">Error lock failed</style><br>");
+        Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
     }
     shaderSelectionShm->shader_pass_enabled = (shader_pass_enabled && passCount > 0) ? 1 : 0;
@@ -2450,7 +2472,7 @@ void MainWindow::publishRepeatStateToRunningProcess() {
         return;
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
     if (!lock) {
-	Log("<br><style color=\"red\">Error lock failed</style><br>");
+        Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
     }
     shaderSelectionShm->repeat_enabled = (play_repeat && play_repeat->isChecked()) ? 1 : 0;
@@ -2465,7 +2487,7 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
 
     acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
     if (!lock) {
-	Log("<br><style color=\"red\">Error lock failed</style><br>");
+        Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
     }
     shaderSelectionShm->display_filter_enabled = display_filter_enabled ? 1 : 0;

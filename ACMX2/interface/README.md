@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.118.0 includes the current ACMXVK integration increments:
+Interface version 2.121.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -16,6 +16,13 @@ Interface version 2.118.0 includes the current ACMXVK integration increments:
 - Legacy manifests without a backend hint remain valid.
 - ACMXVK source manifests use `"library_type": "source"`; compiled SPIR-V
   manifests use `"library_type": "runtime"`.
+- With ACMXVK selected, **List > New Shader Library** creates a Vulkan source
+  library with `library.json`, and **New Shader File** creates either a `.frag`
+  source or a `compute/*.comp` source using ACMXVK-compatible descriptor
+  bindings. Both actions run the native C++ source-manifest generator, which
+  recursively refreshes the shader list and custom-uniform slots while
+  preserving edited ranges and values. ACMX2 keeps its legacy `.glsl` and
+  `index.txt`/JSON creation behavior.
 - **Run Selected**, **Run All**, and **Copy Command** launch or generate a
   command for the active backend. ACMXVK runs use `--shaders` and
   `--shader-file`, preserving fragment/compute type and custom-uniform metadata
@@ -129,6 +136,7 @@ cmake .. && make -j$(nproc) && sudo make install
 `make install` places:
 
 - `acmx2_interface` → `<prefix>/bin/`
+- `create_acmxvk_source_manifest` → `<prefix>/bin/`
 - `acmx2-interface.desktop` → `<prefix>/share/applications/`
 - `acmx2.png` → `<prefix>/share/acmx2/`
 

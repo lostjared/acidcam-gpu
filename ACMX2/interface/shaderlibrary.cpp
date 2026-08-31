@@ -1,5 +1,6 @@
 
 #include "shaderlibrary.hpp"
+#include "acmxvk-source-manifest.hpp"
 #include "custom_style.hpp"
 #include "shader-manifest.hpp"
 #include <QDir>
@@ -7,7 +8,8 @@
 #include <QSettings>
 #include <QTextStream>
 
-LibraryWindow::LibraryWindow(QWidget *parent) : QDialog(parent) {
+LibraryWindow::LibraryWindow(acmx2::Backend selectedBackend, QWidget *parent)
+    : QDialog(parent), backend(selectedBackend) {
     init();
 }
 
@@ -32,6 +34,12 @@ void LibraryWindow::init() {
     createJsonManifestCheckBox->setToolTip(
         "Store the shader list as JSON. Existing libraries continue to support index.txt.");
     layout->addWidget(createJsonManifestCheckBox);
+    if (backend == acmx2::Backend::Acmxvk) {
+        createJsonManifestCheckBox->setChecked(true);
+        createJsonManifestCheckBox->setEnabled(false);
+        createJsonManifestCheckBox->setToolTip(
+            "ACMXVK source libraries always use library.json.");
+    }
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
@@ -71,6 +79,28 @@ void main() {
 }
 )";
 
+const char *defaultAcmxvkFile = R"(#version 450
+
+layout(location = 0) in vec2 tc;
+layout(location = 0) out vec4 color;
+layout(set = 0, binding = 0) uniform sampler2D samp;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+void main() {
+    color = texture(samp, tc);
+}
+)";
+
 void LibraryWindow::onOkButtonClicked() {
     QString folderPath = folderPathEdit->text().trimmed();
 
@@ -86,26 +116,33 @@ void LibraryWindow::onOkButtonClicked() {
 
     if (reply == QMessageBox::Yes) {
         QDir dir;
-        if (!dir.mkpath(folderPath) || !createShaderManifest(folderPath))
+        if (!dir.mkpath(folderPath)) {
+            QMessageBox::critical(this, "Error",
+                                  "Failed to create the shader library directory.");
             return;
+        }
         path = folderPath;
 
-        if (createDefaultShaderCheckBox->isChecked()) {
-            QFile file(folderPath + "/default.glsl");
-            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                QTextStream out(&file);
-                out << defaultFile << "\n";
-                file.close();
-            }
-        } else {
-
-            QFile file(folderPath + "/default.glsl");
-            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                QTextStream out(&file);
-                out << "\n";
-                file.close();
-            }
+        const QString defaultName =
+            backend == acmx2::Backend::Acmxvk ? QStringLiteral("default.frag")
+                                              : QStringLiteral("default.glsl");
+        QFile file(QDir(folderPath).filePath(defaultName));
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMessageBox::critical(
+                this, "Error",
+                QString("Failed to create %1: %2")
+                    .arg(defaultName, file.errorString()));
+            return;
         }
+        QTextStream out(&file);
+        if (createDefaultShaderCheckBox->isChecked())
+            out << (backend == acmx2::Backend::Acmxvk ? defaultAcmxvkFile
+                                                      : defaultFile);
+        out << "\n";
+        file.close();
+
+        if (!createShaderManifest(folderPath))
+            return;
 
         QMessageBox::information(this, "Success", "Shader library created successfully.");
         accept();
@@ -122,6 +159,15 @@ void LibraryWindow::onCancelButtonClicked() {
 
 bool LibraryWindow::createShaderManifest(const QString &folderPath) {
     QString error;
+    if (backend == acmx2::Backend::Acmxvk) {
+        acmx2::AcmxvkSourceManifestResult result;
+        if (!acmx2::create_acmxvk_source_manifest(folderPath, QString(), result,
+                                                  error)) {
+            QMessageBox::critical(this, "Error", error);
+            return false;
+        }
+        return true;
+    }
     const auto format = createJsonManifestCheckBox->isChecked()
                             ? acmx2::ShaderManifestFormat::Json
                             : acmx2::ShaderManifestFormat::Text;

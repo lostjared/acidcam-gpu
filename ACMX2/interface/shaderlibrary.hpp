@@ -6,6 +6,7 @@
  * @brief Dialog for generating a shader index from a selected folder.
  */
 
+#include "backend.hpp"
 #include <QCheckBox>
 #include <QDialog>
 #include <QDir>
@@ -25,7 +26,8 @@ class LibraryWindow : public QDialog {
     Q_OBJECT
 
   public:
-    LibraryWindow(QWidget *parent = nullptr);
+    explicit LibraryWindow(acmx2::Backend backend,
+                           QWidget *parent = nullptr);
 
   private:
     QLineEdit *folderPathEdit;
@@ -48,6 +50,7 @@ class LibraryWindow : public QDialog {
 
   private:
     QString path;
+    acmx2::Backend backend;
 };
 
 #endif

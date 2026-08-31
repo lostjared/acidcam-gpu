@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 project(acmx2_interface LANGUAGES CXX C)
+include(CTest)
 set(LAUNCHER_MAJOR_VERSION 2)
-set(LAUNCHER_MINOR_VERSION 120)
+set(LAUNCHER_MINOR_VERSION 121)
 set(LAUNCHER_PATCH_VERSION 0)
 set(LAUNCHER_VERSION ${LAUNCHER_MAJOR_VERSION}.${LAUNCHER_MINOR_VERSION}.${LAUNCHER_PATCH_VERSION})
 
@@ -71,6 +72,7 @@ message(STATUS "")
 
 # Launcher GUI sources
 set(LAUNCHER_GUI_HEADERS
+    acmxvk-source-manifest.hpp
     audio-playlist.hpp
     audio-window.hpp
     backend.hpp
@@ -95,6 +97,7 @@ set(LAUNCHER_GUI_HEADERS
 )
 
 set(LAUNCHER_GUI_SOURCES
+    acmxvk-source-manifest.cpp
     audio-playlist.cpp
     audio-window.cpp
     custom-uniforms.cpp
@@ -117,6 +120,19 @@ set(LAUNCHER_GUI_SOURCES
     uniform-reference.cpp
 )
 
+add_executable(create_acmxvk_source_manifest
+    acmxvk-source-manifest-cli.cpp
+    acmxvk-source-manifest.cpp
+    acmxvk-source-manifest.hpp
+)
+target_include_directories(create_acmxvk_source_manifest
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+if(QT_VERSION_MAJOR EQUAL 6)
+    target_link_libraries(create_acmxvk_source_manifest PRIVATE Qt6::Core)
+else()
+    target_link_libraries(create_acmxvk_source_manifest PRIVATE Qt5::Core)
+endif()
+
 set(LAUNCHER_GUI_RESOURCES
     qresource.qrc
 )
@@ -126,6 +142,22 @@ add_executable(acmx2_interface
     ${LAUNCHER_GUI_SOURCES}
     ${LAUNCHER_GUI_RESOURCES}
 )
+
+if(BUILD_TESTING)
+    add_executable(acmxvk_source_manifest_test
+        tests/acmxvk-source-manifest-test.cpp
+        acmxvk-source-manifest.cpp
+        acmxvk-source-manifest.hpp
+    )
+    target_include_directories(acmxvk_source_manifest_test
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    if(QT_VERSION_MAJOR EQUAL 6)
+        target_link_libraries(acmxvk_source_manifest_test PRIVATE Qt6::Core)
+    else()
+        target_link_libraries(acmxvk_source_manifest_test PRIVATE Qt5::Core)
+    endif()
+    add_test(NAME acmxvk_source_manifest COMMAND acmxvk_source_manifest_test)
+endif()
 
 target_include_directories(acmx2_interface
     PRIVATE
@@ -172,7 +204,7 @@ if(MINGW)
     target_link_options(acmx2_interface PRIVATE -mwindows)
     set_target_properties(acmx2_interface PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
-install(TARGETS acmx2_interface DESTINATION bin)
+install(TARGETS acmx2_interface create_acmxvk_source_manifest DESTINATION bin)
 install(FILES acmx2-interface.desktop DESTINATION share/applications)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../data/win-icon.png DESTINATION share/acmx2 RENAME acmx2.png)
 

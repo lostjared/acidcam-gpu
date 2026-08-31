@@ -1,9 +1,14 @@
 #include "shader.hpp"
+#include "acmxvk-source-manifest.hpp"
 #include "custom_style.hpp"
 #include "shader-manifest.hpp"
+#include <QDir>
+#include <QFileInfo>
+#include <QRegularExpression>
 #include <QSettings>
 
-ShaderDialog::ShaderDialog(QWidget *parent) : QDialog(parent) {
+ShaderDialog::ShaderDialog(acmx2::Backend selectedBackend, QWidget *parent)
+    : QDialog(parent), backend(selectedBackend) {
     init();
 }
 
@@ -14,14 +19,19 @@ void ShaderDialog::init() {
     layout->addWidget(instructionLabel);
 
     shaderNameEdit = new QLineEdit(this);
-    shaderNameEdit->setPlaceholderText("Shader name (e.g., myshader.glsl)");
+    shaderNameEdit->setPlaceholderText(
+        backend == acmx2::Backend::Acmxvk
+            ? "Shader name (e.g., myshader.frag)"
+            : "Shader name (e.g., myshader.glsl)");
     layout->addWidget(shaderNameEdit);
 
     QLabel *shaderTypeLabel = new QLabel("Shader type:", this);
     layout->addWidget(shaderTypeLabel);
 
     shaderTypeComboBox = new QComboBox(this);
-    shaderTypeComboBox->addItem("Fragment shader (.glsl)");
+    shaderTypeComboBox->addItem(
+        backend == acmx2::Backend::Acmxvk ? "Fragment shader (.frag)"
+                                          : "Fragment shader (.glsl)");
     shaderTypeComboBox->addItem("Compute shader (.comp)");
     layout->addWidget(shaderTypeComboBox);
 
@@ -41,11 +51,15 @@ void ShaderDialog::init() {
                 cacheShaderCheckBox->setText(
                     createComputeShader
                         ? "Create as cache shader (_cache.comp)"
-                        : "Create as cache shader (_cache.glsl)");
+                        : (backend == acmx2::Backend::Acmxvk
+                               ? "Create as cache shader (_cache.frag)"
+                               : "Create as cache shader (_cache.glsl)"));
                 shaderNameEdit->setPlaceholderText(
                     createComputeShader
                         ? "Shader name (e.g., myshader.comp)"
-                        : "Shader name (e.g., myshader.glsl)");
+                        : (backend == acmx2::Backend::Acmxvk
+                               ? "Shader name (e.g., myshader.frag)"
+                               : "Shader name (e.g., myshader.glsl)"));
             });
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
@@ -72,7 +86,8 @@ void ShaderDialog::onOkButtonClicked() {
         return;
     }
 
-    if (shaderName.endsWith(".glsl", Qt::CaseInsensitive)) {
+    if (shaderName.endsWith(".glsl", Qt::CaseInsensitive) ||
+        shaderName.endsWith(".frag", Qt::CaseInsensitive)) {
         shaderName.chop(5);
     } else if (shaderName.endsWith(".comp", Qt::CaseInsensitive)) {
         shaderName.chop(5);
@@ -83,23 +98,62 @@ void ShaderDialog::onOkButtonClicked() {
         return;
     }
 
+    static const QRegularExpression safeName(
+        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_.-]*$"));
+    if (!safeName.match(shaderName).hasMatch() || shaderName == "." ||
+        shaderName == "..") {
+        QMessageBox::warning(
+            this, "Warning",
+            "Shader names may contain only letters, numbers, '.', '_', and '-'.");
+        return;
+    }
+
     const bool createComputeShader = shaderTypeComboBox->currentIndex() == 1;
     const bool createCacheShader = cacheShaderCheckBox->isChecked();
     if (createCacheShader &&
         !shaderName.endsWith("_cache", Qt::CaseInsensitive)) {
         shaderName += "_cache";
     }
-    shaderName += createComputeShader ? ".comp" : ".glsl";
+    shaderName += createComputeShader
+                      ? ".comp"
+                      : (backend == acmx2::Backend::Acmxvk ? ".frag" : ".glsl");
+
+    QString relativeShaderName = shaderName;
+    if (backend == acmx2::Backend::Acmxvk && createComputeShader)
+        relativeShaderName = QStringLiteral("compute/") + shaderName;
+    const QString absoluteShaderName =
+        QDir(shaderPath).filePath(relativeShaderName);
+    if (QFileInfo::exists(absoluteShaderName)) {
+        QMessageBox::warning(
+            this, "Shader Already Exists",
+            QString("The shader already exists and was not changed:\n%1")
+                .arg(absoluteShaderName));
+        return;
+    }
+    if (!QDir().mkpath(QFileInfo(absoluteShaderName).absolutePath())) {
+        QMessageBox::critical(this, "Error",
+                              "Failed to create the shader directory.");
+        return;
+    }
 
     const bool includeDefaultCode = defaultCodeCheckBox->isChecked();
-    if (!createShaderFile(shaderPath + "/" + shaderName, includeDefaultCode,
+    if (!createShaderFile(absoluteShaderName, includeDefaultCode,
                           createCacheShader, createComputeShader)) {
         return;
     }
 
     QString manifestError;
-    if (!acmx2::append_shader_manifest(shaderPath, shaderName, manifestError)) {
-        QFile::remove(shaderPath + "/" + shaderName);
+    bool manifestCreated = false;
+    if (backend == acmx2::Backend::Acmxvk) {
+        acmx2::AcmxvkSourceManifestResult result;
+        manifestCreated = acmx2::create_acmxvk_source_manifest(
+            shaderPath, QString(), result, manifestError);
+    } else {
+        manifestCreated = acmx2::append_shader_manifest(
+            shaderPath, relativeShaderName, manifestError);
+    }
+    if (!manifestCreated) {
+        QFile::remove(absoluteShaderName);
         QMessageBox::critical(this, "Error", manifestError);
         return;
     }
@@ -233,6 +287,122 @@ void main() {
     imageStore(outputImage, pixel, mix(live_frame, cached_frame, 0.5));
 }
 )";
+
+    constexpr const char *ACMXVK_FRAGMENT_SHADER_CODE = R"(#version 450
+
+layout(location = 0) in vec2 tc;
+layout(location = 0) out vec4 color;
+layout(set = 0, binding = 0) uniform sampler2D samp;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+#define iResolution ext.u0.zw
+#define time_f ext.u2.y
+
+void main() {
+    color = texture(samp, tc);
+}
+)";
+
+    constexpr const char *ACMXVK_FRAGMENT_CACHE_SHADER_CODE = R"(#version 450
+
+layout(location = 0) in vec2 tc;
+layout(location = 0) out vec4 color;
+layout(set = 0, binding = 0) uniform sampler2D samp;
+layout(set = 0, binding = 2) uniform sampler2DArray history;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+#define history_head int(ext.u3.x + 0.5)
+#define history_size max(int(ext.u3.y), 1)
+
+void main() {
+    vec4 live_frame = texture(samp, tc);
+    int cache_layer = history_head % history_size;
+    vec4 cached_frame = texture(history, vec3(tc, float(cache_layer)));
+    color = mix(live_frame, cached_frame, 0.5);
+}
+)";
+
+    constexpr const char *ACMXVK_COMPUTE_SHADER_CODE = R"(#version 450
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(set = 0, binding = 5, rgba8) writeonly uniform image2D outputImage;
+layout(set = 0, binding = 0) uniform sampler2D samp;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(outputImage);
+    if (any(greaterThanEqual(pixel, size)))
+        return;
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+    imageStore(outputImage, pixel, textureLod(samp, uv, 0.0));
+}
+)";
+
+    constexpr const char *ACMXVK_COMPUTE_CACHE_SHADER_CODE = R"(#version 450
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(set = 0, binding = 5, rgba8) writeonly uniform image2D outputImage;
+layout(set = 0, binding = 0) uniform sampler2D samp;
+layout(set = 0, binding = 2) uniform sampler2DArray history;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+#define history_head int(ext.u3.x + 0.5)
+#define history_size max(int(ext.u3.y), 1)
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(outputImage);
+    if (any(greaterThanEqual(pixel, size)))
+        return;
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+    vec4 live_frame = textureLod(samp, uv, 0.0);
+    int cache_layer = history_head % history_size;
+    vec4 cached_frame =
+        textureLod(history, vec3(uv, float(cache_layer)), 0.0);
+    imageStore(outputImage, pixel, mix(live_frame, cached_frame, 0.5));
+}
+)";
 } // namespace
 
 bool ShaderDialog::createShaderFile(const QString &shaderName,
@@ -243,7 +413,17 @@ bool ShaderDialog::createShaderFile(const QString &shaderName,
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&file);
         if (includeDefaultCode) {
-            if (createComputeShader) {
+            if (backend == acmx2::Backend::Acmxvk) {
+                if (createComputeShader) {
+                    out << (createCacheShader
+                                ? ACMXVK_COMPUTE_CACHE_SHADER_CODE
+                                : ACMXVK_COMPUTE_SHADER_CODE);
+                } else {
+                    out << (createCacheShader
+                                ? ACMXVK_FRAGMENT_CACHE_SHADER_CODE
+                                : ACMXVK_FRAGMENT_SHADER_CODE);
+                }
+            } else if (createComputeShader) {
                 out << (createCacheShader ? COMPUTE_CACHE_SHADER_CODE
                                           : COMPUTE_SHADER_CODE);
             } else {

@@ -926,15 +926,23 @@ OpenGL syntax or invent custom-uniform definitions. Use the conversion script
 described below for legacy shaders, then use `--build` for subsequent
 incremental compilation.
 
-For a converted source tree, the repository also provides a manifest generator.
-It discovers fragment sources and `compute/` sources, reconstructs their
-explicit custom-uniform slots from the converter's aliases, preserves the
-canonical 0–26 slot layout when pruning removes the final source that references
-a slot, and refuses slot or case-insensitive output conflicts:
+The Qt interface's **List > New Shader Library** and **New Shader File** actions
+generate and refresh ACMXVK source manifests directly in C++. The generator
+discovers `.frag` sources and `compute/*.comp` sources recursively,
+reconstructs explicit custom-uniform slots from converter aliases, preserves
+edited uniform ranges and the canonical 0–26 slot layout, and refuses slot or
+case-insensitive output conflicts. This replaces the former standalone Perl
+manifest script.
+
+The interface build also produces a headless frontend using that same C++
+implementation:
 
 ```bash
-perl scripts/create_acmxvk_source_manifest.pl --root ~/vk_shaders
+create_acmxvk_source_manifest --root ~/vk_shaders
 ```
+
+Use `--output FILE` to place the source manifest somewhere other than
+`ROOT/library.json`.
 
 ACMXVK accepts `library.json` entries as strings or objects containing a
 `file` field:

@@ -6,6 +6,7 @@
  * @brief Dialog for creating a new shader file.
  */
 
+#include "backend.hpp"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -24,7 +25,8 @@ class ShaderDialog : public QDialog {
     Q_OBJECT
 
   public:
-    ShaderDialog(QWidget *parent = nullptr);
+    explicit ShaderDialog(acmx2::Backend backend,
+                          QWidget *parent = nullptr);
     /// @brief Set output directory used for generated shader files.
     void setShaderPath(const QString &path);
 
@@ -36,6 +38,7 @@ class ShaderDialog : public QDialog {
     QCheckBox *cacheShaderCheckBox;
     QComboBox *shaderTypeComboBox;
     QString shaderPath;
+    acmx2::Backend backend;
 
     void init();
     bool createShaderFile(const QString &shaderName, bool includeDefaultCode,
