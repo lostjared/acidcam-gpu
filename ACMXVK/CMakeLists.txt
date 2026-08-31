@@ -497,6 +497,8 @@ add_executable(acmxvk
     app/media_utils.hpp
     app/options.cpp
     app/options.hpp
+    app/output_paths.cpp
+    app/output_paths.hpp
     app/playlist.cpp
     app/playlist.hpp
     app/resource_paths.cpp
@@ -652,6 +654,19 @@ if(BUILD_TESTING)
     )
     add_test(NAME acmxvk_playlist
         COMMAND acmxvk_playlist_tests
+    )
+    add_executable(acmxvk_output_paths_tests
+        output_paths_tests.cpp
+        app/output_paths.cpp
+        app/output_paths.hpp
+        app/snapshot_writer.hpp
+        app/options.hpp
+    )
+    target_compile_options(acmxvk_output_paths_tests PRIVATE
+        -Wall -Wextra -Wpedantic
+    )
+    add_test(NAME acmxvk_output_paths
+        COMMAND acmxvk_output_paths_tests
     )
     add_test(NAME acmxvk_shader_library_build
         COMMAND acmxvk

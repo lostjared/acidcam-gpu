@@ -43,8 +43,6 @@ namespace acmxvk {
                             int width, int height);
         [[nodiscard]] static std::string_view
         formatName(SnapshotFormat format) noexcept;
-        [[nodiscard]] static std::string_view
-        extension(SnapshotFormat format) noexcept;
 
       private:
         static constexpr std::size_t QUEUE_CAPACITY = 4;

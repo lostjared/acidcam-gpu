@@ -211,20 +211,6 @@ namespace acmxvk {
         return "snapshot";
     }
 
-    std::string_view SnapshotWriter::extension(SnapshotFormat format) noexcept {
-        switch (format) {
-        case SnapshotFormat::WebP:
-            return ".webp";
-        case SnapshotFormat::Tiff:
-            return ".tiff";
-        case SnapshotFormat::Raw:
-            return ".raw";
-        case SnapshotFormat::Png:
-            return ".png";
-        }
-        return ".snapshot";
-    }
-
     void SnapshotWriter::workerLoop() noexcept {
         while (true) {
             SnapshotJob job;

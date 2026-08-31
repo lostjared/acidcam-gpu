@@ -34,6 +34,7 @@ extern "C" {
 #include "app/media_helpers.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
+#include "app/output_paths.hpp"
 #include "app/playlist.hpp"
 #include "app/resource_paths.hpp"
 #include "app/shader_library.hpp"
@@ -61,7 +62,6 @@ extern "C" {
 #include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
-#include <ctime>
 #include <deque>
 #include <filesystem>
 #include <iomanip>

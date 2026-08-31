@@ -12,6 +12,8 @@ responsibility:
   compilation.
 - `playlist.hpp` / `playlist.cpp`: shader-name resolution and bounded,
   validated playlist parsing.
+- `output_paths.hpp` / `output_paths.cpp`: PNG sequence directories, numbered
+  frame paths, and collision-safe timestamped snapshot names.
 - `media_utils.hpp` / `media_utils.cpp`: image loading, video metadata, frame
   rotation, and CUDA device selection.
 - `media_helpers.hpp` / `media_helpers.cpp`: asynchronous camera capture state.
@@ -27,7 +29,7 @@ responsibility:
 - `window_io.ipp`: inputs, encoding, snapshots, and frame readback.
 - `window_rendering.ipp`: 3D, crossfades, pipelines, history, and uploads.
 
-The low-coupling options, resource-path, shader-library, playlist,
+The low-coupling options, resource-path, shader-library, playlist, output-path,
 media-utility, camera-helper, interface-client, and snapshot-writer modules are
 independently compiled translation units. Only the stateful window
 implementation remains in ordered `.ipp` sections because those sections share

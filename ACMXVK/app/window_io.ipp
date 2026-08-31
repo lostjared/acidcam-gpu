@@ -294,61 +294,6 @@
             return 30.0;
         }
 
-        [[nodiscard]] static fs::path outputFrameDirectory(const std::string &filename,
-                                                           std::string_view suffix) {
-            const fs::path output_path(filename);
-            const fs::path parent = output_path.has_parent_path()
-                                        ? output_path.parent_path()
-                                        : fs::path(".");
-            const std::string name = output_path.filename().empty()
-                                         ? std::string("output")
-                                         : output_path.filename().string();
-            return parent / ("video_file-" + name + "-" + std::string(suffix));
-        }
-
-        static void createOutputDirectory(const fs::path &directory) {
-            std::error_code error;
-            fs::create_directories(directory, error);
-            if (error || !fs::is_directory(directory)) {
-                throw std::runtime_error("unable to create PNG output directory: " +
-                                         directory.string());
-            }
-        }
-
-        [[nodiscard]] static fs::path framePath(const fs::path &directory,
-                                                std::uint64_t index) {
-            std::ostringstream filename;
-            filename << "frame-" << std::setfill('0') << std::setw(8) << index << ".png";
-            return directory / filename.str();
-        }
-
-        [[nodiscard]] fs::path snapshotPath(std::uint32_t width,
-                                            std::uint32_t height,
-                                            SnapshotFormat format) {
-            const auto now = std::chrono::system_clock::now();
-            const std::time_t now_time =
-                std::chrono::system_clock::to_time_t(now);
-            std::tm local_time{};
-#ifdef _WIN32
-            localtime_s(&local_time, &now_time);
-#else
-            localtime_r(&now_time, &local_time);
-#endif
-            const fs::path directory(options.snapshot_directory);
-            while (true) {
-                std::ostringstream filename;
-                filename << "ACMXVK.Snapshot-"
-                         << std::put_time(&local_time, "%Y.%m.%d-%H.%M.%S")
-                         << '-' << width << 'x' << height << '-'
-                         << snapshot_count << SnapshotWriter::extension(format);
-                const fs::path candidate = directory / filename.str();
-                if (!fs::exists(candidate)) {
-                    return candidate;
-                }
-                ++snapshot_count;
-            }
-        }
-
         void requestSnapshot(SnapshotFormat format) {
 #ifndef ACMXVK_WITH_TIFF
             if (format == SnapshotFormat::Tiff) {
@@ -414,8 +359,9 @@
             recording_fps = outputFrameRate();
 
             if (options.png_output) {
-                png_output_directory = outputFrameDirectory(options.output_file, "png");
-                createOutputDirectory(png_output_directory);
+                png_output_directory =
+                    output_frame_directory(options.output_file, "png");
+                create_output_directory(png_output_directory);
                 std::cout << "acmxvk: writing PNG sequence to "
                           << png_output_directory.string() << '\n';
             }
@@ -423,14 +369,16 @@
             if (options.generate_interval > 0) {
                 if (!options.output_file.empty()) {
                     generate_output_directory =
-                        outputFrameDirectory(options.output_file, "generate");
+                        output_frame_directory(options.output_file,
+                                               "generate");
                 } else if (!options.input_file.empty()) {
                     generate_output_directory =
-                        outputFrameDirectory(options.input_file, "generate");
+                        output_frame_directory(options.input_file,
+                                               "generate");
                 } else {
                     generate_output_directory = "camera-generate";
                 }
-                createOutputDirectory(generate_output_directory);
+                create_output_directory(generate_output_directory);
                 std::cout << "acmxvk: saving every " << options.generate_interval
                           << "th frame to " << generate_output_directory.string() << '\n';
             }
@@ -493,8 +441,9 @@
             readback_requests.pop_front();
 
             if (request.snapshot) {
-                const fs::path path =
-                    snapshotPath(width, height, request.snapshot_format);
+                const fs::path path = snapshot_path(
+                    options.snapshot_directory, width, height, snapshot_count,
+                    request.snapshot_format);
                 SnapshotJob job;
                 job.path = path;
                 job.width = width;
@@ -539,7 +488,7 @@
             }
             if (options.png_output) {
                 SnapshotWriter::savePng(
-                    framePath(png_output_directory, png_frame_count),
+                    frame_path(png_output_directory, png_frame_count),
                     output_pixels, recording_width, recording_height);
                 ++png_frame_count;
             }
@@ -548,7 +497,8 @@
                         static_cast<std::uint64_t>(options.generate_interval) ==
                     0) {
                 SnapshotWriter::savePng(
-                    framePath(generate_output_directory, generated_frame_count),
+                    frame_path(generate_output_directory,
+                               generated_frame_count),
                     output_pixels, recording_width, recording_height);
                 ++generated_frame_count;
             }
