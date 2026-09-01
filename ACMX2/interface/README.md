@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.131.0 includes the current ACMXVK integration increments:
+Interface version 2.132.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -76,6 +76,12 @@ Interface version 2.131.0 includes the current ACMXVK integration increments:
   .acmxvk-build`. It uses the normal build output directory and progress log,
   but removes failed outputs from the generated runtime manifest so the
   remaining successfully compiled shaders can still be used.
+- **Playback > Remove Broken** is the explicitly destructive ACMXVK cleanup.
+  It presents a warning that deletion cannot be undone and defaults to No.
+  After confirmation it runs `--build library.json --fix .acmxvk-build
+  --prune --force`, permanently deletes only `.frag`/`.comp` sources rejected
+  by `glslc`, and removes their missing paths from the source `library.json`.
+  **Fix Build remains non-destructive.**
 - When an automatic rebuild was accepted from Run Selected, Run All, or Copy
   Command, a successful build now resumes that original action automatically.
   Failed or cancelled builds remain stopped and retain their diagnostics in the

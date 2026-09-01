@@ -616,7 +616,10 @@ void MainWindow::initControls() {
                 if (cacheBuildInProgress) {
                     const PendingAcmxvkAction resume_action =
                         pending_acmxvk_action;
+                    const QString pruneLibraryPath =
+                        acmxvkPruneLibraryPath;
                     pending_acmxvk_action = PendingAcmxvkAction::None;
+                    acmxvkPruneLibraryPath.clear();
                     if (active_backend == acmx2::Backend::Acmxvk) {
                         if (exitCode == 0) {
                             Log(tr("ACMXVK build ready: %1")
@@ -629,6 +632,74 @@ void MainWindow::initControls() {
                     }
                     cacheBuildInProgress = false;
                     update_backend_ui();
+                    if (!pruneLibraryPath.isEmpty() && exitCode == 0 &&
+                        exitStatus == QProcess::NormalExit) {
+                        QStringList sourceShaders;
+                        QString manifestError;
+                        if (!acmx2::load_shader_manifest(
+                                pruneLibraryPath, sourceShaders,
+                                manifestError)) {
+                            Log(tr("<b style='color:red;'>Broken sources were "
+                                   "pruned, but the source manifest could not "
+                                   "be read: %1</b>")
+                                    .arg(manifestError.toHtmlEscaped()));
+                            QMessageBox::warning(
+                                this, tr("Remove Broken Shaders"),
+                                tr("Broken source files were deleted, but the "
+                                   "source manifest could not be updated.\n\n%1")
+                                    .arg(manifestError));
+                        } else {
+                            QStringList retainedShaders;
+                            int removedCount = 0;
+                            const QDir sourceDirectory(pruneLibraryPath);
+                            for (const QString &shader : sourceShaders) {
+                                const QString suffix =
+                                    QFileInfo(shader).suffix().toLower();
+                                const bool sourceEntry =
+                                    suffix == QStringLiteral("frag") ||
+                                    suffix == QStringLiteral("comp");
+                                if (sourceEntry &&
+                                    !QFileInfo(sourceDirectory.filePath(shader))
+                                         .isFile()) {
+                                    ++removedCount;
+                                } else {
+                                    retainedShaders.append(shader);
+                                }
+                            }
+
+                            if (removedCount > 0 &&
+                                !acmx2::write_shader_manifest(
+                                    pruneLibraryPath, retainedShaders,
+                                    manifestError)) {
+                                Log(tr("<b style='color:red;'>Broken sources "
+                                       "were pruned, but the source manifest "
+                                       "could not be updated: %1</b>")
+                                        .arg(manifestError.toHtmlEscaped()));
+                                QMessageBox::warning(
+                                    this, tr("Remove Broken Shaders"),
+                                    tr("%1 source file(s) were permanently "
+                                       "deleted, but library.json could not be "
+                                       "updated.\n\n%2")
+                                        .arg(removedCount)
+                                        .arg(manifestError));
+                            } else {
+                                if (shader_path == pruneLibraryPath)
+                                    loadShaders(pruneLibraryPath, true);
+                                Log(tr("Remove Broken completed: %1 source "
+                                       "shader(s) permanently deleted.")
+                                        .arg(removedCount));
+                                QMessageBox::information(
+                                    this, tr("Remove Broken Shaders"),
+                                    removedCount > 0
+                                        ? tr("Removed %1 broken source shader(s) "
+                                             "and updated library.json.\n\n"
+                                             "This deletion cannot be undone.")
+                                              .arg(removedCount)
+                                        : tr("The build completed and no broken "
+                                             "source shaders were found."));
+                            }
+                        }
+                    }
                     if (active_backend == acmx2::Backend::Acmxvk &&
                         exitCode == 0 &&
                         exitStatus == QProcess::NormalExit &&
@@ -2836,8 +2907,15 @@ void MainWindow::update_backend_ui() {
         cleanShaderCacheAction->setVisible(acmx2Tools);
         cleanShaderCacheAction->setEnabled(acmx2Tools);
     }
-    if (removeBrokenAction)
-        removeBrokenAction->setEnabled(acmx2Tools);
+    if (removeBrokenAction) {
+        removeBrokenAction->setVisible(acmx2Tools || acmxvkSource);
+        removeBrokenAction->setEnabled(acmx2Tools || acmxvkSource);
+        removeBrokenAction->setToolTip(
+            acmxvkSource
+                ? tr("Permanently delete .frag and .comp sources that fail "
+                     "the ACMXVK Fix Build")
+                : QString());
+    }
     if (runFromCacheAction) {
         runFromCacheAction->setVisible(acmx2Tools);
         runFromCacheAction->setEnabled(acmx2Tools);
@@ -4705,7 +4783,7 @@ void MainWindow::menuBuildShaderCache() {
     }
 
     if (active_backend == acmx2::Backend::Acmxvk) {
-        start_acmxvk_build(build_path, false);
+        start_acmxvk_build(build_path, AcmxvkBuildMode::Strict);
         return;
     }
 
@@ -4765,15 +4843,21 @@ void MainWindow::menuFixBuild() {
             tr("No shader library is loaded."));
         return;
     }
-    start_acmxvk_build(shader_path, true);
+    start_acmxvk_build(shader_path, AcmxvkBuildMode::Fix);
 }
 
-void MainWindow::start_acmxvk_build(const QString &build_path, bool fix) {
+void MainWindow::start_acmxvk_build(const QString &build_path,
+                                    AcmxvkBuildMode mode) {
+    const bool fix = mode != AcmxvkBuildMode::Strict;
+    const bool prune = mode == AcmxvkBuildMode::Prune;
+    const QString dialogTitle =
+        prune ? tr("Remove Broken Shaders")
+              : (fix ? tr("Fix Build") : tr("Build ACMXVK Library"));
     QString type_error;
     if (!is_acmxvk_source_library(build_path, type_error)) {
         pending_acmxvk_action = PendingAcmxvkAction::None;
         QMessageBox::warning(
-            this, fix ? tr("Fix Build") : tr("Build ACMXVK Library"),
+            this, dialogTitle,
             type_error.isEmpty()
                 ? tr("The selected ACMXVK library is already a compiled "
                      "runtime library.")
@@ -4786,7 +4870,7 @@ void MainWindow::start_acmxvk_build(const QString &build_path, bool fix) {
     if (!QFileInfo(manifest_path).isFile()) {
         pending_acmxvk_action = PendingAcmxvkAction::None;
         QMessageBox::warning(
-            this, fix ? tr("Fix Build") : tr("Build ACMXVK Library"),
+            this, dialogTitle,
             tr("ACMXVK source builds require library.json:\n%1")
                 .arg(manifest_path));
         return;
@@ -4809,15 +4893,23 @@ void MainWindow::start_acmxvk_build(const QString &build_path, bool fix) {
                       : QStringLiteral("--builddir"))
               << output_path;
     arguments << QStringLiteral("--glslc") << compiler;
-    Log(fix ? tr("Fix building ACMXVK SPIR-V library: %1").arg(build_path)
-            : tr("Building ACMXVK SPIR-V library: %1").arg(build_path));
+    if (prune)
+        arguments << QStringLiteral("--prune") << QStringLiteral("--force");
+    Log(prune ? tr("Removing broken ACMXVK shader sources from: %1")
+                    .arg(build_path)
+              : (fix ? tr("Fix building ACMXVK SPIR-V library: %1")
+                           .arg(build_path)
+                     : tr("Building ACMXVK SPIR-V library: %1")
+                           .arg(build_path)));
     Log("Command: " + executable_path + " " + concatList(arguments) + "<br>");
     play_stop->setEnabled(true);
     cacheBuildInProgress = true;
+    acmxvkPruneLibraryPath = prune ? build_path : QString();
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
         Log("<b style='color:red;'>Error:</b> Failed to start ACMXVK build process");
         cacheBuildInProgress = false;
+        acmxvkPruneLibraryPath.clear();
         pending_acmxvk_action = PendingAcmxvkAction::None;
         play_stop->setEnabled(false);
     }
@@ -4835,7 +4927,13 @@ void MainWindow::menuRemoveBroken() {
     QString scan_path = shader_path;
     if (scan_path.isEmpty()) {
         QSettings appSettings("LostSideDead");
-        scan_path = appSettings.value("shaders", "").toString();
+        scan_path =
+            appSettings
+                .value(acmx2::backend_settings_key(active_backend, "library"),
+                       active_backend == acmx2::Backend::Acmx2
+                           ? appSettings.value("shaders", "").toString()
+                           : QString())
+                .toString();
     }
     if (scan_path.isEmpty()) {
         QMessageBox::warning(this, "Error",
@@ -4855,6 +4953,42 @@ void MainWindow::menuRemoveBroken() {
         return;
     }
     const QString manifestName = QFileInfo(manifestPath).fileName();
+
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        QString typeError;
+        if (!is_acmxvk_source_library(scan_path, typeError)) {
+            QMessageBox::warning(
+                this, tr("Remove Broken Shaders"),
+                typeError.isEmpty()
+                    ? tr("Remove Broken requires an ACMXVK source library, "
+                         "not a compiled runtime library.")
+                    : typeError);
+            return;
+        }
+
+        QMessageBox confirmation(this);
+        confirmation.setIcon(QMessageBox::Warning);
+        confirmation.setWindowTitle(tr("Permanently Remove Broken Shaders"));
+        confirmation.setText(
+            tr("This operation permanently deletes source shader files."));
+        confirmation.setInformativeText(
+            tr("ACMXVK will compile every shader listed in:\n\n%1\n\n"
+               "Any .frag or .comp source for which glslc reports a compilation "
+               "failure will be deleted. The generated runtime library and the "
+               "source library manifest will then omit those shaders.\n\n"
+               "No backup is created and this operation cannot be undone. "
+               "Commit or archive the library before continuing.\n\n"
+               "Do you want to permanently remove the broken sources?")
+                .arg(scan_path));
+        confirmation.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+        confirmation.setDefaultButton(QMessageBox::No);
+        confirmation.setEscapeButton(QMessageBox::No);
+        if (confirmation.exec() != QMessageBox::Yes)
+            return;
+
+        start_acmxvk_build(scan_path, AcmxvkBuildMode::Prune);
+        return;
+    }
 
     QMessageBox::StandardButton reply = QMessageBox::question(this,
                                                               tr("Remove Broken Shaders"),

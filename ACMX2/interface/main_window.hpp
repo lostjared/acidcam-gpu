@@ -175,11 +175,14 @@ class MainWindow : public QMainWindow {
                                      RunSelected,
                                      RunAll,
                                      CopyCommand };
+    enum class AcmxvkBuildMode { Strict,
+                                 Fix,
+                                 Prune };
     /// @brief Offer to rebuild a stale or incomplete ACMXVK source library.
     void prompt_acmxvk_rebuild(const QString &reason,
                                PendingAcmxvkAction resume_action);
-    /// @brief Start a normal or failure-tolerant ACMXVK source-library build.
-    void start_acmxvk_build(const QString &build_path, bool fix);
+    /// @brief Start a strict, failure-tolerant, or destructive ACMXVK build.
+    void start_acmxvk_build(const QString &build_path, AcmxvkBuildMode mode);
     QMenu *fileMenu = nullptr;
     QMenu *loadRecentMenu = nullptr;
     QMenu *backendMenu = nullptr;
@@ -355,6 +358,7 @@ class MainWindow : public QMainWindow {
     /// @brief True while an ACMX2 cache rebuild or ACMXVK source build is running.
     bool cacheBuildInProgress = false;
     PendingAcmxvkAction pending_acmxvk_action = PendingAcmxvkAction::None;
+    QString acmxvkPruneLibraryPath;
     QProcess *liveShaderCompileProcess = nullptr;
     QStringList liveShaderCompileQueue;
     QString liveShaderCompileSource;
