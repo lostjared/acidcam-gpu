@@ -460,6 +460,13 @@ namespace acmxvk {
     }
 
     void MainWindow::onSwapchainRecreated() {
+        // Initial headless extent configuration creates MXVK's surface-free
+        // targets before MainWindow performs its normal sprite setup. Do not
+        // initialize here: doing so consumes video frame zero, after which the
+        // constructor consumes frame one and leaves an empty encoded PTS zero.
+        if (frame_sprite == nullptr) {
+            return;
+        }
         initializeSprite();
         if (model_initialized) {
             input_model.resize(this);

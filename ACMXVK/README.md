@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9T**. It is usable for video, camera, and
+The port is currently at **Increment 9U**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -552,6 +552,12 @@ or duration boundary. Headless `--repeat` now requires a positive `--duration`
 so a looping batch job always has a defined completion point. Ctrl+C remains
 an early graceful stop and therefore does not misreport the interrupted job as
 100% complete.
+
+Increment 9U prevents initial headless target creation from running ACMXVK's
+sprite/input initialization twice. Video frame zero now remains the first
+submitted encoder frame at PTS zero instead of being consumed during setup and
+leaving a synthetic black frame at the beginning of headless output. Windowed
+initialization and later swapchain recreation behavior are unchanged.
 
 ### Input validation
 
