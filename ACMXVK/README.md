@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9Q**. It is usable for video, camera, and
+The port is currently at **Increment 9T**. It is usable for video, camera, and
 still-image shader processing, but it is not yet a complete replacement for
 ACMX2.
 
@@ -506,6 +506,52 @@ sequence, matched against the active runtime manifest, clamped to each
 uniform's declared range, and uploaded to fragment, compute, multipass, and 3D
 rendering paths without restarting ACMXVK. Unknown names and non-finite values
 are ignored safely.
+Increment 9S adds true surface-free Vulkan batch rendering. `--headless` and
+its ACMX2-compatible alias `--silent` skip SDL video initialization, window
+creation, the Vulkan presentation surface, swapchain acquisition, and
+presentation. MXVK-owned RGBA8 targets feed ACMXVK's existing asynchronous
+recording readback path. Headless mode accepts video or still-image input and
+requires `--output`; still images also require a positive `--duration`.
+Ctrl+C is handled as a graceful stop request at a frame boundary: pending GPU
+readbacks are drained before MXWrite closes the output.
+This increment requires an MXVK installation containing
+`VK_Window::RuntimeMode::Headless`.
+
+### Headless terminal processing
+
+Process a video without a graphical desktop or preview window:
+
+```bash
+./acmxvk \
+    --input input.mp4 \
+    --shaders ./shaders \
+    --shader-file effect.frag.spv \
+    --output processed.mp4 \
+    --headless
+```
+
+`--silent` is an exact alias, so existing ACMX2-style command lines can use:
+
+```bash
+./acmxvk \
+    --graphic image.png \
+    --fragment effect.frag.spv \
+    --duration 10 \
+    --output processed.mp4 \
+    --silent
+```
+
+The host still needs a working Vulkan loader, ICD, and GPU/device access, but
+it does not need X11, Wayland, Quartz, or another graphical session.
+
+Increment 9T adds ACMX2-style headless completion progress. Progress lines
+report the percentage, processed and expected frame counts, written frame
+count, media time, and current encoded size. They are emitted whenever the
+percentage advances or after 500 ms and finish at 100% after a normal source
+or duration boundary. Headless `--repeat` now requires a positive `--duration`
+so a looping batch job always has a defined completion point. Ctrl+C remains
+an early graceful stop and therefore does not misreport the interrupted job as
+100% complete.
 
 ### Input validation
 

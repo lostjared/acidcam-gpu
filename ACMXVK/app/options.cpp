@@ -452,6 +452,8 @@ namespace acmxvk {
                 options.show_help = true;
             } else if (option == "--unbuffered") {
                 options.unbuffered_output = true;
+            } else if (option == "--silent" || option == "--headless") {
+                options.headless = true;
             } else if (option == "--interface-shm") {
                 options.interface_shm = true;
             } else if (option == "-p" || option == "--path") {
@@ -1018,6 +1020,33 @@ namespace acmxvk {
                 "graphic recording requires --duration <seconds> or "
                 "--audio-file <media> --audio-trunc");
         }
+        if (options.headless && !isUtilityRequest(options)) {
+            if (options.input_file.empty() && options.graphic_file.empty()) {
+                throw std::runtime_error(
+                    "--headless/--silent requires --input <video> or "
+                    "--graphic <image>; camera input is not supported");
+            }
+            if (options.output_file.empty()) {
+                throw std::runtime_error(
+                    "--headless/--silent requires --output <file>");
+            }
+            if (!options.graphic_file.empty() && options.duration <= 0.0) {
+                throw std::runtime_error(
+                    "headless graphic processing requires --duration "
+                    "<seconds>");
+            }
+            if (options.repeat && options.duration <= 0.0) {
+                throw std::runtime_error(
+                    "--headless/--silent with --repeat requires --duration "
+                    "<seconds>");
+            }
+            if (options.fullscreen || options.enable_vsync ||
+                options.enable_screenshot) {
+                throw std::runtime_error(
+                    "--headless/--silent cannot be combined with "
+                    "--fullscreen, --enable-vsync, or --enable-screenshot");
+            }
+        }
         if (options.audio_buffers > 0 && !options.enable_audio) {
             throw std::runtime_error(
                 "--enable-audio-buffers requires --enable-audio");
@@ -1094,7 +1123,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9R)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9T)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1235,6 +1264,11 @@ namespace acmxvk {
                << "      --flip                  Flip final display/encoded output vertically\n"
                << "      --enable-vsync          Use FIFO presentation\n"
                << "      --enable-screenshot     Enable MXVK F10 screenshots\n\n"
+               << "Headless processing:\n"
+               << "      --headless              Surface-free terminal/batch rendering\n"
+               << "      --silent                Alias for --headless\n"
+               << "                              Requires video/image input and --output\n"
+               << "                              Image input and --repeat require --duration\n\n"
                << "Output:\n"
                << "      --unbuffered           Flush stdout/stderr after each write for GUI capture\n"
                << "      --interface-shm        Accept live shader selection from the ACMX interface\n\n"

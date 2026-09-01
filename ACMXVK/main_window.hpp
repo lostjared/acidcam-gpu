@@ -70,6 +70,8 @@
 #include <vector>
 
 namespace acmxvk {
+    void request_headless_shutdown([[maybe_unused]] int signal_number) noexcept;
+
     // MainWindow's declaration and runtime state live here; method definitions
     // are implemented in main_window.cpp.
     class MainWindow final : public mxvk::VK_Window {
@@ -175,6 +177,8 @@ namespace acmxvk {
         bool media_clock_sync_logged = false;
         bool camera_recording_clock_logged = false;
         bool recording_complete = false;
+        bool headless_shutdown_logged = false;
+        bool headless_progress_complete = false;
         bool input_paused = false;
         bool rendering_frozen = false;
         bool source_playback_clock_paused = false;
@@ -184,7 +188,8 @@ namespace acmxvk {
         bool spectrum_scale_by_sensitivity = false;
         bool watermark_enabled = !options.watermark_text.empty();
         bool counter_disabled =
-            options.disable_counter || !options.watermark_text.empty();
+            options.headless || options.disable_counter ||
+            !options.watermark_text.empty();
         int overlay_font_size = 18;
         int preview_overlay_font_size = 18;
         bool snapshot_pending = false;
@@ -265,6 +270,8 @@ namespace acmxvk {
         std::chrono::steady_clock::time_point camera_fps_last_tick{};
         std::chrono::steady_clock::time_point camera_history_next_update{};
         std::chrono::steady_clock::time_point window_title_last_update{};
+        std::chrono::steady_clock::time_point headless_progress_last_emit{};
+        int headless_progress_last_percent = -1;
         std::chrono::steady_clock::time_point next_render_tick{};
         std::chrono::steady_clock::time_point source_playback_clock_start{};
         std::chrono::steady_clock::time_point source_playback_pause_start{};
@@ -407,6 +414,7 @@ namespace acmxvk {
         [[nodiscard]] std::string activePlaylistDescription() const;
         [[nodiscard]] static std::string formatHudTime(double seconds_value);
         void updateWindowTitle(bool force = false);
+        void emitHeadlessProgress(bool complete);
         [[nodiscard]] double hudWallElapsedSeconds() const;
         [[nodiscard]] bool currentVideoTimeline(
             double &timeline,

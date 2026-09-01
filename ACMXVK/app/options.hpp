@@ -75,6 +75,7 @@ namespace acmxvk {
         bool use_source_fps = false;
         bool use_source_audio = false;
         bool fullscreen = false;
+        bool headless = false;
         bool repeat = false;
         bool enable_vsync = false;
         bool enable_screenshot = false;

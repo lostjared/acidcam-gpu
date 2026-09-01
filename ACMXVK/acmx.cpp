@@ -20,6 +20,7 @@
 #include "app/shader_library.hpp"
 #include "main_window.hpp"
 
+#include <csignal>
 #include <cstdlib>
 #include <iostream>
 #include <opencv2/core.hpp>
@@ -32,7 +33,9 @@ int main(int argc, char **argv) {
     try {
         for (int index = 1; index < argc; ++index) {
             if (argv[index] != nullptr &&
-                std::string_view(argv[index]) == "--unbuffered") {
+                (std::string_view(argv[index]) == "--unbuffered" ||
+                 std::string_view(argv[index]) == "--silent" ||
+                 std::string_view(argv[index]) == "--headless")) {
                 std::cout << std::unitbuf;
                 std::cerr << std::unitbuf;
                 break;
@@ -176,6 +179,13 @@ int main(int argc, char **argv) {
                                                std::cerr)
                        ? EXIT_SUCCESS
                        : EXIT_FAILURE;
+        }
+
+        if (options.headless &&
+            std::signal(SIGINT, acmxvk::request_headless_shutdown) ==
+                SIG_ERR) {
+            throw std::runtime_error(
+                "unable to install Ctrl+C handler for headless mode");
         }
 
 #ifdef ACMXVK_WITH_CUDA

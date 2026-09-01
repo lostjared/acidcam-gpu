@@ -1,12 +1,30 @@
 #include "main_window.hpp"
 
+#include <csignal>
+
 namespace acmxvk {
+    namespace {
+        volatile std::sig_atomic_t HEADLESS_SHUTDOWN_REQUESTED = 0;
+    }
+
+    void request_headless_shutdown([[maybe_unused]] int signal_number) noexcept {
+        HEADLESS_SHUTDOWN_REQUESTED = 1;
+    }
 
     // Window construction, event handling, rendering callbacks, and main loop.
     MainWindow::MainWindow(Options options)
         : mxvk::VK_Window("ACMXVK", options.width, options.height,
-                          options.fullscreen, MXVK_VALIDATION, options.enable_vsync),
+                          options.fullscreen, MXVK_VALIDATION,
+                          options.enable_vsync
+                              ? PresentModePreference::Vsync
+                              : PresentModePreference::LowLatency,
+                          options.headless ? RuntimeMode::Headless
+                                           : RuntimeMode::Windowed),
           options(std::move(options)) {
+        if (this->options.headless) {
+            std::cout << "acmxvk: headless mode enabled: surface-free Vulkan "
+                         "rendering without an SDL window\n";
+        }
         setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
         setEnableScreenshot(this->options.enable_screenshot);
         resolveConfiguredResourcePaths();
@@ -37,6 +55,9 @@ namespace acmxvk {
         } catch (const std::exception &error) {
             std::cerr << "acmxvk: unable to flush pending frame readbacks: "
                       << error.what() << '\n';
+        }
+        if (headless_progress_complete) {
+            emitHeadlessProgress(true);
         }
         if (model_initialized && getDevice() != VK_NULL_HANDLE) {
             vkDeviceWaitIdle(getDevice());
@@ -708,6 +729,16 @@ namespace acmxvk {
     }
 
     void MainWindow::proc() {
+        if (options.headless && HEADLESS_SHUTDOWN_REQUESTED != 0) {
+            if (!headless_shutdown_logged) {
+                std::cout << "acmxvk: Ctrl+C received; draining rendered "
+                             "frames and closing output\n";
+                headless_shutdown_logged = true;
+            }
+            setFrameReadbackEnabled(false);
+            exit();
+            return;
+        }
         if (recording_complete) {
             return;
         }
@@ -2754,6 +2785,99 @@ namespace acmxvk {
         SDL_SetWindowTitle(window, text.c_str());
     }
 
+    void MainWindow::emitHeadlessProgress(bool complete) {
+        if (!options.headless || recording_fps <= 0.0 ||
+            output_frame_count == 0U) {
+            return;
+        }
+
+        std::uint64_t expected_frames = 0U;
+        if (options.duration > 0.0) {
+            const auto duration_frames = static_cast<std::uint64_t>(
+                std::ceil(options.duration * recording_fps));
+            expected_frames = std::max<std::uint64_t>(1U, duration_frames);
+        }
+        if (source_kind == SourceKind::Video &&
+            video_duration_seconds > 0.0) {
+            const auto source_frames = static_cast<std::uint64_t>(
+                std::ceil(video_duration_seconds * recording_fps));
+            if (expected_frames == 0U) {
+                expected_frames = source_frames;
+            } else if (!options.repeat) {
+                expected_frames = std::min(expected_frames, source_frames);
+            }
+        }
+        if (complete && expected_frames == 0U) {
+            expected_frames = output_frame_count;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        int percent = -1;
+        if (expected_frames > 0U) {
+            const std::uint64_t processed_frames = complete
+                                                       ? expected_frames
+                                                       : std::min(
+                                                             output_frame_count,
+                                                             expected_frames);
+            percent = static_cast<int>(
+                (static_cast<double>(processed_frames) /
+                 static_cast<double>(expected_frames)) *
+                100.0);
+            if (!complete) {
+                percent = std::min(percent, 99);
+            }
+        }
+
+        const bool percent_changed =
+            percent >= 0 && percent > headless_progress_last_percent;
+        const bool time_elapsed =
+            headless_progress_last_emit.time_since_epoch().count() == 0 ||
+            now - headless_progress_last_emit >=
+                std::chrono::milliseconds(500);
+        if (!complete && !percent_changed && !time_elapsed) {
+            return;
+        }
+
+        headless_progress_last_percent = percent;
+        headless_progress_last_emit = now;
+        const std::uint64_t processed_frames =
+            complete && expected_frames > 0U ? expected_frames
+                                             : output_frame_count;
+        const std::uint64_t written_frames =
+            writer.is_open()
+                ? static_cast<std::uint64_t>(
+                      std::max<std::int64_t>(0, writer.get_frame_count()))
+                : png_frame_count;
+        const double elapsed_seconds =
+            static_cast<double>(processed_frames) / recording_fps;
+
+        std::cout << "acmxvk: [";
+        if (percent >= 0) {
+            std::cout << std::setw(3) << percent << '%';
+        } else {
+            std::cout << "  ?%";
+        }
+        std::cout << "] Frame " << processed_frames << '/';
+        if (expected_frames > 0U) {
+            std::cout << expected_frames;
+        } else {
+            std::cout << '?';
+        }
+        std::cout << " | Written: " << written_frames
+                  << " | Time: " << formatHudTime(elapsed_seconds);
+        if (writer.is_open()) {
+            constexpr double BYTES_PER_MEGABYTE = 1024.0 * 1024.0;
+            const double file_size_mb =
+                static_cast<double>(writer.get_bytes_written()) /
+                BYTES_PER_MEGABYTE;
+            std::ostringstream size_text;
+            size_text << std::fixed << std::setprecision(2) << file_size_mb;
+            std::cout << " | Size: " << size_text.str() << " MB";
+        }
+        std::cout << '\n'
+                  << std::flush;
+    }
+
     [[nodiscard]] double MainWindow::hudWallElapsedSeconds() const {
         return std::max(
             0.0,
@@ -3472,6 +3596,12 @@ namespace acmxvk {
         setRenderExtent(static_cast<std::uint32_t>(render_width),
                         static_cast<std::uint32_t>(render_height));
 
+        if (options.headless) {
+            std::cout << "acmxvk: headless output resolution: "
+                      << render_width << 'x' << render_height << '\n';
+            return;
+        }
+
         if (options.fullscreen) {
             std::cout << "acmxvk: fullscreen presentation uses the display "
                          "extent without changing the output resolution\n";
@@ -3773,6 +3903,7 @@ namespace acmxvk {
             ++generated_frame_count;
         }
         ++output_frame_count;
+        emitHeadlessProgress(false);
 
         if (options.duration > 0.0) {
             double output_duration = 0.0;
@@ -3787,6 +3918,7 @@ namespace acmxvk {
             }
             if (output_duration >= options.duration) {
                 recording_complete = true;
+                headless_progress_complete = options.headless;
                 exit();
             }
         }
@@ -4442,6 +4574,7 @@ namespace acmxvk {
         }
         if (!options.repeat) {
             setFrameReadbackEnabled(false);
+            headless_progress_complete = options.headless;
             exit();
             return false;
         }
