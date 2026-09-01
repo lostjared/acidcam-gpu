@@ -175,6 +175,7 @@
     "shaders": [
         "midi_slider.frag.spv",
         "compute_test.comp.spv",
+        "compute_test_hdr.comp.spv",
         "mandala_fractal.comp.spv"
     ]
 }

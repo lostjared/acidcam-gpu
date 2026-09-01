@@ -15,7 +15,11 @@ layout(set = 0, binding = 1, std140) uniform SpriteExtended {
     vec4 audio_history;
 };
 
+#ifdef ACMXVK_HDR_COMPUTE
+layout(set = 0, binding = 5, rgba16f) writeonly uniform image2D output_image;
+#else
 layout(set = 0, binding = 5, rgba8) writeonly uniform image2D output_image;
+#endif
 
 void main() {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);

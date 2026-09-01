@@ -113,6 +113,8 @@ namespace acmxvk {
         input::validate_string(options.list_encoder_options,
                                input::StringKind::Token,
                                "--list-encoder-options", true);
+        input::validate_string(options.probe_hdr_file,
+                               input::StringKind::Path, "--probe-hdr", true);
         input::validate_string(options.watermark_text,
                                input::StringKind::DisplayText,
                                "--use-watermark", true);
@@ -246,6 +248,7 @@ namespace acmxvk {
                options.check_midi || options.list_gpu_filters ||
                options.list_cuda_devices || options.check_cuda ||
                options.check_dnn ||
+               !options.probe_hdr_file.empty() ||
                options.enumerate_camera_device >= 0 ||
                options.list_encoders || !options.list_encoder_options.empty();
     }
@@ -535,6 +538,9 @@ namespace acmxvk {
                 }
             } else if (option == "--check-dnn") {
                 options.check_dnn = true;
+            } else if (option == "--probe-hdr") {
+                options.probe_hdr_file =
+                    optionValue(index, argc, argv, option);
             } else if (option == "-r" || option == "--resolution") {
                 parseDimensions(optionValue(index, argc, argv, option), options.width,
                                 options.height, option);
@@ -1123,7 +1129,7 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9U)\n\n"
+        output << "ACMXVK - Vulkan video shader engine (Increment 9X / HDR 3)\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
@@ -1146,6 +1152,7 @@ namespace acmxvk {
                << "      --maximize-fps          Render at --fps using the latest camera frame\n"
                << "      --use-source-fps        Play video on its reported source clock\n"
                << "      --use-source-audio      Use the video's audio for shader reactivity\n"
+               << "      --probe-hdr <video>     Print HDR/color metadata and exit\n"
                << "  -u, --fps <rate>            Camera/output FPS\n"
                << "                              Video files prefer FFmpeg/NVDEC capture\n\n"
                << "DNN effects (requires WITH_OPENCV_DNN=ON build):\n"

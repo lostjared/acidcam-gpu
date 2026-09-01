@@ -97,6 +97,19 @@ int main(int argc, char **argv) {
 #endif
             return EXIT_SUCCESS;
         }
+        if (!options.probe_hdr_file.empty()) {
+            const acmxvk::VideoHdrInfo info =
+                acmxvk::probeVideoHdrInfo(options.probe_hdr_file);
+            if (!info.valid) {
+                std::cerr << "acmxvk: unable to probe HDR metadata: "
+                          << options.probe_hdr_file << '\n';
+                return EXIT_FAILURE;
+            }
+            std::cout << "acmxvk: HDR probe: " << options.probe_hdr_file
+                      << '\n';
+            acmxvk::printVideoHdrInfo(info, std::cout);
+            return EXIT_SUCCESS;
+        }
         if (options.list_audio_devices) {
 #ifdef AUDIO_ENABLED
             acmxvk::audio::AudioEngine::list_devices();

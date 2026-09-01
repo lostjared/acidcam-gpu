@@ -143,6 +143,52 @@ endif()
 find_package(mxvk 0.33.1 CONFIG REQUIRED)
 find_program(GLSLC_EXECUTABLE glslc REQUIRED)
 
+get_target_property(ACMXVK_MXVK_INCLUDE_DIRECTORIES
+    mxvk::mxvk INTERFACE_INCLUDE_DIRECTORIES)
+set(ACMXVK_MXVK_HDR_INPUT_API OFF)
+foreach(ACMXVK_MXVK_INCLUDE_DIRECTORY IN LISTS
+        ACMXVK_MXVK_INCLUDE_DIRECTORIES)
+    set(ACMXVK_MXVK_SPRITE_HEADER
+        "${ACMXVK_MXVK_INCLUDE_DIRECTORY}/mxvk/mxvk_sprite.hpp")
+    set(ACMXVK_MXVK_CAPTURE_HEADER
+        "${ACMXVK_MXVK_INCLUDE_DIRECTORY}/mxvk/mxvk_ff_capture.hpp")
+    set(ACMXVK_MXVK_WINDOW_HEADER
+        "${ACMXVK_MXVK_INCLUDE_DIRECTORY}/mxvk/mxvk.hpp")
+    set(ACMXVK_MXVK_MODEL_HEADER
+        "${ACMXVK_MXVK_INCLUDE_DIRECTORY}/mxvk/mxvk_abstract_model.hpp")
+    if(EXISTS "${ACMXVK_MXVK_SPRITE_HEADER}"
+       AND EXISTS "${ACMXVK_MXVK_CAPTURE_HEADER}"
+       AND EXISTS "${ACMXVK_MXVK_WINDOW_HEADER}"
+       AND EXISTS "${ACMXVK_MXVK_MODEL_HEADER}")
+        file(READ "${ACMXVK_MXVK_SPRITE_HEADER}"
+            ACMXVK_MXVK_SPRITE_HEADER_CONTENT)
+        file(READ "${ACMXVK_MXVK_CAPTURE_HEADER}"
+            ACMXVK_MXVK_CAPTURE_HEADER_CONTENT)
+        file(READ "${ACMXVK_MXVK_WINDOW_HEADER}"
+            ACMXVK_MXVK_WINDOW_HEADER_CONTENT)
+        file(READ "${ACMXVK_MXVK_MODEL_HEADER}"
+            ACMXVK_MXVK_MODEL_HEADER_CONTENT)
+        if(ACMXVK_MXVK_SPRITE_HEADER_CONTENT MATCHES
+               "createEmptySpriteRgba16"
+           AND ACMXVK_MXVK_SPRITE_HEADER_CONTENT MATCHES
+               "enableHistoryTextureRgba16Float"
+           AND ACMXVK_MXVK_CAPTURE_HEADER_CONTENT MATCHES "readRgba16"
+           AND ACMXVK_MXVK_WINDOW_HEADER_CONTENT MATCHES
+               "setHdrRenderIntermediatesEnabled"
+           AND ACMXVK_MXVK_MODEL_HEADER_CONTENT MATCHES
+               "setColorAttachmentFormat")
+            set(ACMXVK_MXVK_HDR_INPUT_API ON)
+            break()
+        endif()
+    endif()
+endforeach()
+if(NOT ACMXVK_MXVK_HDR_INPUT_API)
+    message(FATAL_ERROR
+        "The selected MXVK package predates ACMXVK HDR increment 3. Rebuild "
+        "and reinstall the current MXVK source tree, then configure ACMXVK "
+        "again.")
+endif()
+
 get_target_property(ACMXVK_MXVK_LIBRARIES mxvk::mxvk INTERFACE_LINK_LIBRARIES)
 
 set(ACMXVK_MXVK_CUDA_AVAILABLE OFF)
@@ -246,6 +292,9 @@ set(ACMXVK_AUDIO_SPECTRUM_SHADER
 set(ACMXVK_COMPUTE_TEST_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/compute_test.comp.spv"
 )
+set(ACMXVK_HDR_COMPUTE_TEST_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/compute_test_hdr.comp.spv"
+)
 set(ACMXVK_MANDALA_FRACTAL_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/mandala_fractal.comp.spv"
 )
@@ -310,6 +359,17 @@ add_custom_command(
             -o "${ACMXVK_COMPUTE_TEST_SHADER}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/compute_test.comp"
     COMMENT "Compiling ACMXVK compute-pass test shader"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${ACMXVK_HDR_COMPUTE_TEST_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}" -DACMXVK_HDR_COMPUTE=1
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/compute_test.comp"
+            -o "${ACMXVK_HDR_COMPUTE_TEST_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/compute_test.comp"
+    COMMENT "Compiling ACMXVK RGBA16F compute-pass test shader"
     VERBATIM
 )
 
@@ -477,6 +537,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_AUDIO_REACTIVE_SHADER}"
     "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
     "${ACMXVK_COMPUTE_TEST_SHADER}"
+    "${ACMXVK_HDR_COMPUTE_TEST_SHADER}"
     "${ACMXVK_MANDALA_FRACTAL_SHADER}"
     "${ACMXVK_AUDIO_HISTORY_SHADER}"
     ${ACMXVK_CROSSFADE_SHADERS}
@@ -708,6 +769,7 @@ install(FILES
         "${ACMXVK_AUDIO_REACTIVE_SHADER}"
         "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
         "${ACMXVK_COMPUTE_TEST_SHADER}"
+        "${ACMXVK_HDR_COMPUTE_TEST_SHADER}"
         "${ACMXVK_MANDALA_FRACTAL_SHADER}"
         "${ACMXVK_AUDIO_HISTORY_SHADER}"
         "${ACMXVK_TEST_SHADER_MANIFEST}"

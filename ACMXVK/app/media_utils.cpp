@@ -3,8 +3,10 @@
 #include "../input_validation.hpp"
 
 extern "C" {
+#include <libavcodec/version.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
+#include <libavutil/pixdesc.h>
 }
 
 #include <opencv2/imgcodecs.hpp>
@@ -17,6 +19,7 @@ extern "C" {
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 
 namespace acmxvk {
     [[nodiscard]] cv::Mat loadRgbaImage(const std::string &filename) {
@@ -93,6 +96,120 @@ namespace acmxvk {
         }
         close_format();
         return std::isfinite(duration) && duration > 0.0 ? duration : 0.0;
+    }
+
+    [[nodiscard]] VideoHdrInfo probeVideoHdrInfo(
+        const std::string &filename) {
+        VideoHdrInfo info;
+        if (filename.empty() || filename.find("://") != std::string::npos) {
+            return info;
+        }
+
+        AVFormatContext *format = nullptr;
+        if (avformat_open_input(&format, filename.c_str(), nullptr, nullptr) < 0) {
+            return info;
+        }
+        const auto close_format = [&format] {
+            if (format != nullptr) {
+                avformat_close_input(&format);
+            }
+        };
+        if (avformat_find_stream_info(format, nullptr) < 0) {
+            close_format();
+            return info;
+        }
+
+        const int stream_index = av_find_best_stream(
+            format, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        if (stream_index < 0) {
+            close_format();
+            return info;
+        }
+
+        const AVStream *stream = format->streams[stream_index];
+        const AVCodecParameters *parameters = stream->codecpar;
+        info.valid = true;
+        info.color_primaries = parameters->color_primaries;
+        info.color_transfer = parameters->color_trc;
+        info.color_space = parameters->color_space;
+        info.color_range = parameters->color_range;
+        info.bit_depth = parameters->bits_per_raw_sample;
+        if (info.bit_depth <= 0 && parameters->format != AV_PIX_FMT_NONE) {
+            const auto pixel_format =
+                static_cast<AVPixelFormat>(parameters->format);
+            const AVPixFmtDescriptor *descriptor =
+                av_pix_fmt_desc_get(pixel_format);
+            if (descriptor != nullptr && descriptor->nb_components > 0) {
+                info.bit_depth = descriptor->comp[0].depth;
+            }
+        }
+
+        const bool bt2020_primaries =
+            parameters->color_primaries == AVCOL_PRI_BT2020;
+        const bool hdr_transfer =
+            parameters->color_trc == AVCOL_TRC_SMPTE2084 ||
+            parameters->color_trc == AVCOL_TRC_ARIB_STD_B67 ||
+            parameters->color_trc == AVCOL_TRC_BT2020_10 ||
+            parameters->color_trc == AVCOL_TRC_BT2020_12;
+        const bool bt2020_space =
+            parameters->color_space == AVCOL_SPC_BT2020_NCL ||
+            parameters->color_space == AVCOL_SPC_BT2020_CL;
+        info.hdr = info.bit_depth >= 10 &&
+                   (bt2020_primaries || hdr_transfer || bt2020_space);
+
+        const auto copy_side_data = [&info](const AVPacketSideData *side_data,
+                                            int side_data_count) {
+            for (int index = 0; index < side_data_count; ++index) {
+                const AVPacketSideData &entry = side_data[index];
+                if (entry.type == AV_PKT_DATA_MASTERING_DISPLAY_METADATA) {
+                    info.mastering_display.assign(entry.data,
+                                                  entry.data + entry.size);
+                } else if (entry.type ==
+                           AV_PKT_DATA_CONTENT_LIGHT_LEVEL) {
+                    info.content_light.assign(entry.data,
+                                              entry.data + entry.size);
+                }
+            }
+        };
+#if LIBAVCODEC_VERSION_MAJOR >= 60
+        copy_side_data(parameters->coded_side_data,
+                       parameters->nb_coded_side_data);
+#else
+        copy_side_data(stream->side_data, stream->nb_side_data);
+#endif
+
+        close_format();
+        return info;
+    }
+
+    void printVideoHdrInfo(const VideoHdrInfo &info, std::ostream &output) {
+        const auto label = [](const char *name) -> std::string_view {
+            return name != nullptr ? std::string_view(name)
+                                   : std::string_view("unknown");
+        };
+        output << "HDR: " << (info.hdr ? "yes" : "no") << '\n'
+               << "Bit depth: " << info.bit_depth << '\n'
+               << "Color primaries: "
+               << label(av_color_primaries_name(
+                      static_cast<AVColorPrimaries>(info.color_primaries)))
+               << " (" << info.color_primaries << ")\n"
+               << "Transfer: "
+               << label(av_color_transfer_name(
+                      static_cast<AVColorTransferCharacteristic>(
+                          info.color_transfer)))
+               << " (" << info.color_transfer << ")\n"
+               << "Matrix: "
+               << label(av_color_space_name(
+                      static_cast<AVColorSpace>(info.color_space)))
+               << " (" << info.color_space << ")\n"
+               << "Range: "
+               << label(av_color_range_name(
+                      static_cast<AVColorRange>(info.color_range)))
+               << " (" << info.color_range << ")\n"
+               << "Mastering-display metadata: "
+               << info.mastering_display.size() << " bytes\n"
+               << "Content-light metadata: " << info.content_light.size()
+               << " bytes\n";
     }
     // Frame transforms, CUDA device helpers, and asynchronous camera capture.
     void rotateFrame(cv::Mat &frame, FrameRotation rotation) {

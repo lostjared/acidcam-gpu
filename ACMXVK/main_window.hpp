@@ -116,6 +116,7 @@ namespace acmxvk {
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
         mxvk::VK_FF_Capture ffmpeg_capture;
         std::vector<std::uint8_t> ffmpeg_rgba;
+        std::vector<std::uint16_t> ffmpeg_rgba16;
         bool using_ffmpeg_capture = false;
         bool ffmpeg_seek_repeat_logged = false;
 #ifdef ACMXVK_WITH_MXVK_CUDA
@@ -211,6 +212,11 @@ namespace acmxvk {
         double recording_fps = 0.0;
         double video_source_fps = 0.0;
         double video_duration_seconds = 0.0;
+        VideoHdrInfo video_hdr_info;
+        bool hdr_input_precision_enabled = false;
+        bool hdr_dnn_compatibility_logged = false;
+        bool hdr_cuda_filter_bypass_logged = false;
+        bool hdr_input_upload_logged = false;
         double camera_reported_fps = 0.0;
         double camera_delivered_fps = 0.0;
         double camera_last_logged_fps = 0.0;

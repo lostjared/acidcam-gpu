@@ -5,7 +5,16 @@
 namespace acmxvk {
     namespace {
         volatile std::sig_atomic_t HEADLESS_SHUTDOWN_REQUESTED = 0;
-    }
+
+        [[nodiscard]] cv::Mat rgba16ToRgba8(const cv::Mat &rgba) {
+            if (rgba.empty() || rgba.type() != CV_16UC4) {
+                return rgba;
+            }
+            cv::Mat converted;
+            rgba.convertTo(converted, CV_8UC4, 1.0 / 257.0);
+            return converted;
+        }
+    } // namespace
 
     void request_headless_shutdown([[maybe_unused]] int signal_number) noexcept {
         HEADLESS_SHUTDOWN_REQUESTED = 1;
@@ -3290,6 +3299,20 @@ namespace acmxvk {
 
     void MainWindow::applyDnnEffects(cv::Mat &rgba) {
 #ifdef ACMXVK_WITH_DNN
+        if (rgba.type() == CV_16UC4 &&
+            (human_segmenter != nullptr || edge_detector != nullptr ||
+             generic_onnx_processor != nullptr)) {
+            cv::Mat compatible = rgba16ToRgba8(rgba);
+            if (!hdr_dnn_compatibility_logged) {
+                std::cout
+                    << "acmxvk: HDR increment 2: DNN preprocessing uses an "
+                       "RGBA8 compatibility copy before RGBA16 upload\n";
+                hdr_dnn_compatibility_logged = true;
+            }
+            applyDnnEffects(compatible);
+            compatible.convertTo(rgba, CV_16UC4, 257.0);
+            return;
+        }
         if (human_segmenter != nullptr && !rgba.empty()) {
             cv::Mat bgr;
             cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
@@ -3429,6 +3452,15 @@ namespace acmxvk {
         if (source_kind == SourceKind::Video) {
             video_duration_seconds =
                 probeVideoDuration(options.input_file);
+            video_hdr_info = probeVideoHdrInfo(options.input_file);
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+            hdr_input_precision_enabled =
+                video_hdr_info.valid && video_hdr_info.hdr &&
+                using_ffmpeg_capture;
+#else
+            hdr_input_precision_enabled = false;
+#endif
+            setHdrRenderIntermediatesEnabled(hdr_input_precision_enabled);
             std::ostringstream timeline;
             timeline << "acmxvk: video timeline: " << std::fixed
                      << std::setprecision(3) << video_source_fps
@@ -3440,6 +3472,25 @@ namespace acmxvk {
                 timeline << ", duration unavailable";
             }
             std::cout << timeline.str() << '\n';
+            if (video_hdr_info.valid && video_hdr_info.hdr) {
+                std::cout << "acmxvk: HDR input metadata detected\n";
+                printVideoHdrInfo(video_hdr_info, std::cout);
+                if (hdr_input_precision_enabled) {
+                    std::cout
+                        << "acmxvk: HDR increment 3 active: decoding to "
+                           "native RGBA16 and uploading an "
+                           "R16G16B16A16_UNORM source texture\n"
+                        << "acmxvk: HDR source values remain transfer-encoded; "
+                           "fragment/compute intermediates and texture history "
+                           "use RGBA16F; final presentation/readback remains "
+                           "RGBA8 until later HDR increments\n";
+                } else {
+                    std::cout
+                        << "acmxvk: HDR precision path unavailable because this "
+                           "build is not using MXVK FFmpeg capture; falling "
+                           "back to RGBA8\n";
+                }
+            }
             if (options.use_source_fps) {
                 std::cout
                     << "acmxvk: source-FPS playback enabled at "
@@ -3996,16 +4047,31 @@ namespace acmxvk {
                 static_cast<std::uint32_t>(options.audio_buffers));
         }
         if (historyCacheEnabled()) {
-            frame_sprite->enableHistoryTexture(source_width, source_height,
-                                               static_cast<uint32_t>(
-                                                   options.texture_cache_size));
+            if (hdr_input_precision_enabled) {
+                frame_sprite->enableHistoryTextureRgba16Float(
+                    source_width, source_height,
+                    static_cast<uint32_t>(options.texture_cache_size));
+            } else {
+                frame_sprite->enableHistoryTexture(
+                    source_width, source_height,
+                    static_cast<uint32_t>(options.texture_cache_size));
+            }
         }
-        frame_sprite->createEmptySprite(
-            source_width, source_height,
-            sprite_vertex_shader_path(options).string(),
+        const std::string initial_fragment =
             options.history_test
                 ? echo_cache_shader_path(options).string()
-                : std::string{});
+            : hdr_input_precision_enabled
+                ? passthrough_shader_path(options).string()
+                : std::string{};
+        if (hdr_input_precision_enabled) {
+            frame_sprite->createEmptySpriteRgba16(
+                source_width, source_height,
+                sprite_vertex_shader_path(options).string(), initial_fragment);
+        } else {
+            frame_sprite->createEmptySprite(
+                source_width, source_height,
+                sprite_vertex_shader_path(options).string(), initial_fragment);
+        }
 
         if (options.human_background &&
             human_overlay_sprite == nullptr) {
@@ -4109,8 +4175,13 @@ namespace acmxvk {
             if (crossfade_previous_sprite == nullptr) {
                 crossfade_previous_sprite = createSprite(1, 1);
             }
-            crossfade_previous_sprite->enableHistoryTexture(
-                extent.width, extent.height, 1U);
+            if (hdr_input_precision_enabled) {
+                crossfade_previous_sprite->enableHistoryTextureRgba16Float(
+                    extent.width, extent.height, 1U);
+            } else {
+                crossfade_previous_sprite->enableHistoryTexture(
+                    extent.width, extent.height, 1U);
+            }
             crossfade_previous_sprite->updateHistoryTexture(
                 previous_rgba.ptr(), static_cast<int>(extent.width),
                 static_cast<int>(extent.height),
@@ -4453,6 +4524,9 @@ namespace acmxvk {
         setPostProcessingTextureConsumerEnabled(
             model_texture_prepass_active);
         if (model_initialized) {
+            input_model.setColorAttachmentFormat(
+                model_texture_prepass_active ? getSwapchainFormat()
+                                             : getSceneColorFormat());
             const fs::path desired_model_shader =
                 direct_model_shader.empty()
                     ? model_fragment_shader_path(options)
@@ -4717,6 +4791,18 @@ namespace acmxvk {
             int width = 0;
             int height = 0;
             int pitch = 0;
+            if (hdr_input_precision_enabled) {
+                if (!ffmpeg_capture.readRgba16(ffmpeg_rgba16, width, height,
+                                               pitch, false) ||
+                    ffmpeg_rgba16.empty() || width <= 0 || height <= 0 ||
+                    pitch < width * 8) {
+                    return false;
+                }
+                rgba = cv::Mat(height, width, CV_16UC4,
+                               ffmpeg_rgba16.data(),
+                               static_cast<std::size_t>(pitch));
+                return true;
+            }
             if (!ffmpeg_capture.readRgba(ffmpeg_rgba, width, height, pitch,
                                          false) ||
                 ffmpeg_rgba.empty() || width <= 0 || height <= 0 ||
@@ -4748,14 +4834,19 @@ namespace acmxvk {
 
     void MainWindow::updateHistoryFrame(const cv::Mat &rgba) {
 #ifdef ACMXVK_WITH_CUDA
-        if (gpu_filter_engine != nullptr) {
+        if (gpu_filter_engine != nullptr && rgba.type() == CV_8UC4) {
             updateFilteredCudaHistoryFrame();
             return;
         }
 #endif
-        frame_sprite->updateHistoryTexture(
-            rgba.ptr(), rgba.cols, rgba.rows,
-            static_cast<int>(rgba.step));
+        if (rgba.type() == CV_16UC4) {
+            frame_sprite->updateHistoryTextureRgba16(
+                rgba.ptr<uint16_t>(), rgba.cols, rgba.rows,
+                static_cast<int>(rgba.step));
+            return;
+        }
+        frame_sprite->updateHistoryTexture(rgba.ptr(), rgba.cols, rgba.rows,
+                                           static_cast<int>(rgba.step));
     }
 
     void MainWindow::updateCameraHistory() {
@@ -4920,7 +5011,7 @@ namespace acmxvk {
 
     void MainWindow::uploadInputFrame(const cv::Mat &rgba) {
 #ifdef ACMXVK_WITH_CUDA
-        if (gpu_filter_engine != nullptr) {
+        if (gpu_filter_engine != nullptr && rgba.type() == CV_8UC4) {
             if (!gpu_filter_engine->process(rgba)) {
                 throw std::runtime_error(
                     "acidcam-gpu rejected the RGBA input frame");
@@ -4935,13 +5026,38 @@ namespace acmxvk {
                                    gpu_filter_engine->stream());
             return;
         }
+        if (gpu_filter_engine != nullptr && rgba.type() == CV_16UC4 &&
+            !hdr_cuda_filter_bypass_logged) {
+            std::cout
+                << "acmxvk: HDR increment 2: bypassing RGBA8 CUDA filters to "
+                   "preserve the 16-bit source texture\n";
+            hdr_cuda_filter_bypass_logged = true;
+        }
 #endif
-        frame_sprite->updateTexture(rgba.ptr(), rgba.cols, rgba.rows,
-                                    static_cast<int>(rgba.step));
+        if (rgba.type() == CV_16UC4) {
+            frame_sprite->updateTextureRgba16(
+                rgba.ptr<std::uint16_t>(), rgba.cols, rgba.rows,
+                static_cast<int>(rgba.step));
+            if (!hdr_input_upload_logged) {
+                std::cout << "acmxvk: uploaded first RGBA16 HDR source frame "
+                             "to Vulkan\n";
+                hdr_input_upload_logged = true;
+            }
+        } else {
+            frame_sprite->updateTexture(rgba.ptr(), rgba.cols, rgba.rows,
+                                        static_cast<int>(rgba.step));
+        }
+
+        cv::Mat model_compatible;
+        const cv::Mat *model_input = &rgba;
+        if (model_initialized && rgba.type() == CV_16UC4) {
+            model_compatible = rgba16ToRgba8(rgba);
+            model_input = &model_compatible;
+        }
         if (model_initialized &&
             !input_model.updatePrimaryTexture(
-                rgba.ptr(), rgba.cols, rgba.rows,
-                static_cast<int>(rgba.step))) {
+                model_input->ptr(), model_input->cols, model_input->rows,
+                static_cast<int>(model_input->step))) {
             throw std::runtime_error(
                 "MXVK could not update the 3D model texture");
         }
@@ -4985,7 +5101,8 @@ namespace acmxvk {
             return readLatestCameraFrame();
         }
 #ifdef ACMXVK_WITH_CUDA
-        if (gpu_filter_engine != nullptr && !dnnHostProcessingEnabled()) {
+        if (gpu_filter_engine != nullptr && !dnnHostProcessingEnabled() &&
+            !hdr_input_precision_enabled) {
             cv::cuda::Stream *capture_stream = nullptr;
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
             if (using_ffmpeg_capture) {
@@ -5041,7 +5158,7 @@ namespace acmxvk {
 #if defined(MXVK_WITH_FFMPEG_CAPTURE)
         if (using_ffmpeg_capture &&
             ffmpeg_capture.using_hardware_decode() &&
-            !dnnHostProcessingEnabled()) {
+            !dnnHostProcessingEnabled() && !hdr_input_precision_enabled) {
             if (!ffmpeg_capture.readGpuRgba(cuda_input_rgba,
                                             ffmpeg_cuda_stream, false)) {
                 return false;
@@ -5091,7 +5208,8 @@ namespace acmxvk {
 #endif
 #endif
 
-        bool requires_host_frame = dnnHostProcessingEnabled() ||
+        bool requires_host_frame = hdr_input_precision_enabled ||
+                                   dnnHostProcessingEnabled() ||
                                    historyCacheEnabled() ||
                                    options.frame_rotation != FrameRotation::None ||
                                    model_initialized;

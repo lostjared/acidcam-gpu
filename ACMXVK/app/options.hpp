@@ -147,6 +147,7 @@ namespace acmxvk {
         std::string encode_codec = "auto";
         std::string encode_params;
         std::string list_encoder_options;
+        std::string probe_hdr_file;
         std::string audio_file;
         std::string record_audio_file;
         std::string midi_map_file;

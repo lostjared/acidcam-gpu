@@ -5,9 +5,9 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9U**. It is usable for video, camera, and
-still-image shader processing, but it is not yet a complete replacement for
-ACMX2.
+The port is currently at **Increment 9X (HDR Increment 3 of 6)**. It is usable
+for video, camera, and still-image shader processing, but it is not yet a
+complete replacement for ACMX2.
 
 ## Translation progress
 
@@ -17,6 +17,7 @@ ACMX2.
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
 | Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--enumerate-device` probes native V4L2 modes on Linux and AVFoundation modes on macOS. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Encoded output follows `--resolution` when supplied and otherwise uses the negotiated source dimensions, including a width/height swap for 90-degree input rotation. In either case, oversized previews are fitted to the usable display without changing the render or output dimensions. Still images remain OpenCV-backed. |
+| HDR video | In progress (3/6) | Detects 10-bit BT.2020/PQ/HLG input, captures mastering-display/content-light metadata, decodes HDR files to native RGBA16, uploads an `R16G16B16A16_UNORM` source texture, and preserves HDR precision through RGBA16F scene, multipass, compute, history, crossfade, and 3D prepass targets. Transfer-function conversion and output remain scheduled for later increments. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. Offline `--build` mode incrementally compiles source manifests containing `.frag`, `.comp`, or `.spv` entries into a validated runtime library. |
 | Shader selection | Complete | Supports selection by index or filename, keyboard switching, and live selection from the ACMX Qt interface through `--interface-shm`. |
@@ -60,7 +61,8 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.33.1 or newer, built with `-DVALIDATION=ON -DCV=ON`
+- MXVK 0.33.1 or newer with the HDR increment 3 RGBA16F render API, built with
+  `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional libtiff development files for `-DTIFF=ON` lossless snapshots
@@ -558,6 +560,40 @@ sprite/input initialization twice. Video frame zero now remains the first
 submitted encoder frame at PTS zero instead of being consumed during setup and
 leaving a synthetic black frame at the beginning of headless output. Windowed
 initialization and later swapchain recreation behavior are unchanged.
+
+### HDR port roadmap
+
+HDR support is planned as six independently testable increments:
+
+1. Detect input bit depth, BT.2020/PQ/HLG metadata, mastering-display data,
+   and content-light data. Provide a GPU-free `--probe-hdr` diagnostic.
+2. Decode 10-bit HDR input without reducing it to RGBA8 and upload RGBA16
+   source textures.
+3. Add BT.2020 RGBA16F render, multipass, compute, history, crossfade, and 3D
+   intermediate targets without quantizing between passes.
+4. Add PQ/HLG transfer-function decode/encode passes for linear-light effects,
+   plus 16-bit Vulkan frame readback.
+5. Connect the 16-bit readback and captured metadata to MXWrite's existing
+   HEVC Main10 path while preserving timestamps and audio muxing.
+6. Add SDR preview tone mapping, HDR-aware snapshots and feature fallbacks,
+   then validate Linux/Vulkan and macOS/MoltenVK output.
+
+Increments 1 through 3 are complete. ACMXVK automatically reports detected HDR video
+metadata when opening a file, or it can inspect a file without initializing
+Vulkan:
+
+```bash
+acmxvk --probe-hdr input.mkv
+```
+
+Increment 3 preserves that precision through RGBA16F scene and effect targets,
+mixed fragment/compute chains, texture history, crossfades, and 3D texture
+prepasses. Fragment shaders require no format declaration changes. HDR compute
+shaders must declare their binding-5 output as `layout(rgba16f)`; MXVK rejects
+an incompatible `rgba8` compute shader with a clear error instead of binding an
+invalid storage image. PQ/HLG values remain transfer-encoded until increment 4,
+which adds linear-light transfer conversion and 16-bit readback. Main10 output
+then arrives in increment 5.
 
 ### Input validation
 
@@ -1098,7 +1134,7 @@ when their feature is unavailable.
 | 2 | `uniform sampler2DArray history;` | Fragment and compute | Optional shared RGBA input-frame history ring. `--texture-cache` enables it explicitly without adding an effect; ACMXVK also enables it automatically when a directly loaded shader or any entry in `library.json` declares set 0, binding 2. Every pass in the active fragment/compute chain shares the same ring. Use `--history-test` only when you also want ACMXVK's built-in echo demonstration applied before the selected pipeline. |
 | 3 | `uniform sampler1D spectrum;` | Fragment and compute | Current 256-bin R32 floating-point FFT. ACMXVK detects this binding from SPIR-V and supplies a zero-initialized descriptor when audio support or an active audio source is unavailable. |
 | 4 | `uniform sampler1DArray spectrum_history;` | Fragment and compute | Circular FFT history. ACMXVK detects this binding from SPIR-V and automatically allocates eight zero-initialized layers when `--enable-audio-buffers N` was not supplied. |
-| 5 | `layout(rgba8) writeonly uniform image2D output_image;` | Compute only | Compute destination. Always required by an ACMXVK compute shader and unavailable to fragment shaders. |
+| 5 | `layout(rgba8)` or `layout(rgba16f) writeonly uniform image2D output_image;` | Compute only | Compute destination. Always required by an ACMXVK compute shader and unavailable to fragment shaders. Use `rgba8` for SDR input and `rgba16f` for HDR input. |
 
 Binding numbers, descriptor types, array lengths, and block-member order are
 part of the ABI and must match exactly. Resource and member names are not part
@@ -1306,6 +1342,9 @@ void main() {
 }
 ```
 
+The complete example above is the SDR form. Change only the binding-5 storage
+qualifier from `rgba8` to `rgba16f` when the shader will run on HDR input.
+
 The standard compute built-ins are useful for effects which operate on tiles
 or share data within a workgroup:
 
@@ -1336,7 +1375,9 @@ Use literal `local_size_x`, `local_size_y`, and `local_size_z` values as in the
 example. MXVK currently reads SPIR-V `LocalSize` metadata; specialization-ID
 forms such as `local_size_x_id` are not supported for dispatch sizing.
 
-`shaders/compute_test.comp` is the complete working reference. Workgroups of
+`shaders/compute_test.comp` is the complete working reference. CMake compiles
+it as `compute_test.comp.spv` with an `rgba8` output for SDR and as
+`compute_test_hdr.comp.spv` with an `rgba16f` output for HDR. Workgroups of
 `8x8` or `16x16` are sensible starting points; performance depends on the
 shader and GPU.
 
@@ -1481,7 +1522,8 @@ Common shader problems are:
 - declaring fragment push constants in a compute shader;
 - using a non-`main` entry point or specialization-ID compute local sizes;
 - forgetting the compute edge bounds check or failing to write every valid output pixel;
-- using a compute storage-image format other than `rgba8`;
+- using a compute storage-image format other than `rgba8` for SDR or
+  `rgba16f` for HDR;
 - relying on fragment alpha below `1.0` even though the pass destination is not preserved for partial-alpha composition;
 - adding a vertex module or unsupported SPIR-V stage to `library.json`.
 
