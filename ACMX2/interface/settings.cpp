@@ -1064,12 +1064,12 @@ void SettingsWindow::init() {
 
         encodeBitrateLineEdit = new QLineEdit(this);
         encodeBitrateLineEdit->setText(
-            encSettings.value("recording/bitrate", "10M").toString());
-        encodeBitrateLineEdit->setPlaceholderText("10M");
+            encSettings.value("recording/bitrate", "15M").toString());
+        encodeBitrateLineEdit->setPlaceholderText("15M");
         encodeBitrateLineEdit->setMaxLength(13);
         encodeBitrateLineEdit->setToolTip(
             "Target video bitrate in bits per second. K, M, and G suffixes "
-            "are accepted, for example 10M.");
+            "are accepted, for example 15M.");
         const auto updateRateControlWidgets = [this] {
             const bool bitrateMode =
                 encodeRateControlComboBox->currentData().toString() ==
@@ -1986,7 +1986,7 @@ QString SettingsWindow::getEncodeRateControl() const {
 QString SettingsWindow::getEncodeBitrate() const {
     return encodeBitrateLineEdit
                ? encodeBitrateLineEdit->text().trimmed()
-               : QString("10M");
+               : QString("15M");
 }
 
 QString SettingsWindow::getEncodeCodec() const {
@@ -2092,7 +2092,7 @@ void SettingsWindow::acceptSettings() {
             QMessageBox::warning(
                 this, "Invalid video bitrate",
                 "Enter a positive integer with an optional K, M, or G suffix "
-                "(for example, 10M).");
+                "(for example, 15M).");
             encodeBitrateLineEdit->setFocus();
             encodeBitrateLineEdit->selectAll();
             return;
