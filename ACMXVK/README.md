@@ -767,6 +767,23 @@ Render a still image for five seconds and encode it with a software encoder:
     --output output.mp4
 ```
 
+Select target-bitrate VBR instead of CRF/CQ with `--bitrate` (also available
+as `--video-bitrate` or `--encode-bitrate`). Values are bits per second and
+accept `K`, `M`, or `G` suffixes. This is equivalent to FFmpeg's `-b:v 10M`
+setting. The short `-b` remains an alias for `--encode-crf` for ACMX2 command
+compatibility:
+
+```bash
+./build/acmxvk/acmxvk \
+    --input input.mp4 \
+    --output output.mp4 \
+    --bitrate 10M
+```
+
+Target bitrate controls the encoder's average rate rather than imposing a hard
+per-second cap, so short clips and keyframe-heavy sections can exceed the
+requested rate. Omitting this option retains `--encode-crf` quality mode.
+
 Take a processed PNG snapshot by pressing `Z`. The directory is created on the
 first request:
 

@@ -208,8 +208,11 @@ the complete OpenGL compiler message is written to the interface log.
 	- preset: `ultrafast` through `veryslow`, plus NVENC `p1` through `p7`
 	- tune: software tunes plus NVENC `hq`, `uhq`, `ll`, `ull`, and `lossless`
 	- CRF quality override
+	- ACMXVK rate-control selector for CRF/CQ quality or target-bitrate VBR
+	- target bitrate values such as `10M` (equivalent to FFmpeg `-b:v 10M`)
 	- codec mode: `auto`, `software`, `nvenc`, `h264_nvenc`, `hevc_nvenc`
 	- NVENC presets `p1` through `p7` and tunes including `lossless`
 	- extra FFmpeg-style encoder parameters, such as `-profile:v rext -pix_fmt yuv444p`
 	- realtime low-latency encoding toggle
-- These settings are persisted with `QSettings` and are forwarded to `acmx2` using the matching CLI flags.
+- These settings are persisted with `QSettings`. ACMXVK bitrate mode is
+  forwarded as `--video-bitrate`; ACMX2 retains its existing CRF behavior.

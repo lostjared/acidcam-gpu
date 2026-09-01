@@ -75,6 +75,8 @@ std::vector<EncoderOptionInfo> video_encoder_options(std::string_view encoder_na
  * crf:    Constant Rate Factor, 0 (lossless) .. 51 (worst). 18 is visually
  *         near-lossless; 23 is default for x264; 28 is typical "small file".
  *         For NVENC this is forwarded as `cq`.
+ * bit_rate: Target video bitrate in bits per second. A positive value selects
+ *         bitrate-based VBR and disables the built-in CRF/CQ setting.
  * codec:  "auto" (NVENC if available, else software), "software" (force software),
  *         "nvenc" (force resolution-selected NVENC), or any exact video encoder
  *         name registered by FFmpeg, such as "libx264", "libx265", "libsvtav1",
@@ -93,6 +95,7 @@ struct EncodeOptions {
     std::string preset = "medium"; ///< Encoder preset name.
     std::string tune = "";         ///< Optional tuning mode.
     int crf = 18;                  ///< Constant Rate Factor.
+    std::int64_t bit_rate = 0;     ///< Target bits/second; 0 selects CRF/CQ.
     std::string codec = "auto";    ///< Encoder selection policy or exact FFmpeg encoder name.
     std::string ffmpeg_options;    ///< Additional FFmpeg-style video encoder options.
     bool realtime = false;         ///< Enable low-latency settings.

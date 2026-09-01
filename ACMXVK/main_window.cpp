@@ -3994,6 +3994,7 @@ namespace acmxvk {
             encode_options.preset = options.encode_preset;
             encode_options.tune = options.encode_tune;
             encode_options.crf = options.encode_crf;
+            encode_options.bit_rate = options.encode_bitrate;
             encode_options.codec = options.encode_codec;
             encode_options.ffmpeg_options = options.encode_params;
             encode_options.realtime = options.encode_realtime;
@@ -4022,6 +4023,14 @@ namespace acmxvk {
                     << "acmxvk: HDR output: HEVC Main10 with captured "
                     << (hdr_transfer_hlg ? "BT.2020/HLG" : "BT.2020/PQ")
                     << " color metadata (software libx265)\n";
+            }
+
+            if (options.encode_bitrate > 0) {
+                std::cout << "acmxvk: encoder rate control: target VBR "
+                          << options.encode_bitrate << " bits/s\n";
+            } else {
+                std::cout << "acmxvk: encoder rate control: CRF/CQ "
+                          << options.encode_crf << '\n';
             }
 
             if (!writer.open(options.output_file, recording_width, recording_height,

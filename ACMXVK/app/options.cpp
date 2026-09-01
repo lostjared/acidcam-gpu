@@ -17,6 +17,46 @@ namespace acmxvk {
     namespace {
         constexpr int MAX_FRAME_DIMENSION = 16384;
         constexpr std::int64_t MAX_FRAME_PIXELS = 67108864;
+
+        [[nodiscard]] std::int64_t parse_video_bitrate(
+            std::string value, std::string_view option) {
+            if (value.empty()) {
+                throw std::runtime_error(std::string(option) +
+                                         " requires a bitrate");
+            }
+            std::int64_t multiplier = 1;
+            const char suffix = static_cast<char>(
+                std::toupper(static_cast<unsigned char>(value.back())));
+            if (suffix == 'K' || suffix == 'M' || suffix == 'G') {
+                value.pop_back();
+                multiplier = suffix == 'K'   ? 1000LL
+                             : suffix == 'M' ? 1000000LL
+                                             : 1000000000LL;
+            }
+            if (value.empty() ||
+                !std::ranges::all_of(value, [](unsigned char character) {
+                    return std::isdigit(character) != 0;
+                })) {
+                throw std::runtime_error(
+                    "video bitrate must be an integer with an optional K, M, "
+                    "or G suffix (for example 10M)");
+            }
+            std::uint64_t amount = 0;
+            try {
+                amount = std::stoull(value);
+            } catch (const std::exception &) {
+                throw std::runtime_error("video bitrate is out of range");
+            }
+            constexpr std::uint64_t MAX_VIDEO_BITRATE = 100000000000ULL;
+            if (amount == 0U ||
+                amount > MAX_VIDEO_BITRATE /
+                             static_cast<std::uint64_t>(multiplier)) {
+                throw std::runtime_error(
+                    "video bitrate must be between 1 bit/s and 100G");
+            }
+            return static_cast<std::int64_t>(
+                amount * static_cast<std::uint64_t>(multiplier));
+        }
     } // namespace
 
     [[nodiscard]] bool dimensions_supported(int width, int height) {
@@ -841,13 +881,17 @@ namespace acmxvk {
                 if (options.generate_interval <= 0) {
                     throw std::runtime_error("--generate requires a positive frame interval");
                 }
-            } else if (option == "-b" || option == "--bitrate" ||
-                       option == "--encode-crf") {
+            } else if (option == "-b" || option == "--encode-crf") {
                 options.encode_crf =
                     parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.encode_crf < 0 || options.encode_crf > 51) {
                     throw std::runtime_error("encoder CRF must be between 0 and 51");
                 }
+            } else if (option == "--bitrate" ||
+                       option == "--video-bitrate" ||
+                       option == "--encode-bitrate") {
+                options.encode_bitrate = parse_video_bitrate(
+                    optionValue(index, argc, argv, option), option);
             } else if (option == "--encode-preset") {
                 options.encode_preset = optionValue(index, argc, argv, option);
             } else if (option == "--encode-tune") {
@@ -1206,6 +1250,8 @@ namespace acmxvk {
                << "      --generate <N>          Save a PNG every N processed frames\n"
                << "  -e, --prefix <directory>   Directory for Z snapshots (default .)\n"
                << "  -b, --encode-crf <0-51>     Encoder quality (default 18)\n"
+               << "      --bitrate <rate>        Target VBR, e.g. 10M (disables CRF/CQ)\n"
+               << "      --video-bitrate <rate>  Alias for --bitrate\n"
                << "      --encode-preset <name>  Encoder speed/quality preset\n"
                << "      --encode-tune <name>    Encoder content/latency tuning\n"
                << "      --encode-codec <name>   auto, software, nvenc, or exact encoder\n"

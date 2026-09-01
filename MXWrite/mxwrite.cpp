@@ -1313,6 +1313,7 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         codec_ctx->thread_count = std::max(1u, std::thread::hardware_concurrency());
         codec_ctx->thread_type = FF_THREAD_SLICE;
         codec_ctx->delay = 0;
+        codec_ctx->bit_rate = std::max<std::int64_t>(0, opts.bit_rate);
 
         // Tag the stream with BT.2020 + PQ (or whatever the input used).
         codec_ctx->color_primaries = static_cast<AVColorPrimaries>(
@@ -1328,13 +1329,15 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         // Encoder options: Main10, matching x265-params for color volume.
         std::string preset_hdr = opts.preset.empty() ? std::string("medium") : opts.preset;
         av_opt_set(codec_ctx->priv_data, "preset", preset_hdr.c_str(), 0);
-        int crf_val_hdr = opts.crf;
-        if (crf_val_hdr < 0)
-            crf_val_hdr = 0;
-        if (crf_val_hdr > 51)
-            crf_val_hdr = 51;
-        const std::string crf_hdr = std::to_string(crf_val_hdr);
-        av_opt_set(codec_ctx->priv_data, "crf", crf_hdr.c_str(), 0);
+        if (opts.bit_rate <= 0) {
+            int crf_val_hdr = opts.crf;
+            if (crf_val_hdr < 0)
+                crf_val_hdr = 0;
+            if (crf_val_hdr > 51)
+                crf_val_hdr = 51;
+            const std::string crf_hdr = std::to_string(crf_val_hdr);
+            av_opt_set(codec_ctx->priv_data, "crf", crf_hdr.c_str(), 0);
+        }
 
         // x265 params: colorprim, transfer, colormatrix, range, hdr flag.
         // These drive the stream VUI + SEI so players recognise the file as HDR.
@@ -1582,6 +1585,7 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         codec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
     }
     codec_ctx->delay = 0;
+    codec_ctx->bit_rate = std::max<std::int64_t>(0, opts.bit_rate);
 
     if (ts_mode || opts.realtime) {
         codec_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
@@ -1594,7 +1598,9 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         if (!opts.tune.empty() && opts.tune != "none") {
             set_named_encoder_option(codec_ctx->priv_data, "tune", opts.tune);
         }
-        set_named_encoder_option(codec_ctx->priv_data, "crf", crf_str);
+        if (opts.bit_rate <= 0) {
+            set_named_encoder_option(codec_ctx->priv_data, "crf", crf_str);
+        }
         if (!apply_ffmpeg_options(extra_options, codec_ctx, format_ctx)) {
             avcodec_free_context(&codec_ctx);
             avformat_free_context(format_ctx);
@@ -1633,7 +1639,9 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
                                    (custom_tune && lowercase_ascii(*custom_tune) == "lossless");
         if (!lossless_tune) {
             av_opt_set(codec_ctx->priv_data, "rc", "vbr", 0);
-            av_opt_set(codec_ctx->priv_data, "cq", crf_str.c_str(), 0);
+            if (opts.bit_rate <= 0) {
+                av_opt_set(codec_ctx->priv_data, "cq", crf_str.c_str(), 0);
+            }
         }
         if (opts.realtime) {
             av_opt_set(codec_ctx->priv_data, "zerolatency", "1", 0);
@@ -1719,6 +1727,8 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
                 codec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
             }
             codec_ctx->delay = 0;
+            codec_ctx->bit_rate =
+                std::max<std::int64_t>(0, opts.bit_rate);
 
             if (ts_mode || opts.realtime) {
                 codec_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
@@ -1751,7 +1761,9 @@ bool Writer::openInternal(const std::string &filename, int w, int h, float fps, 
         if (!tune.empty() && tune != "none") {
             set_named_encoder_option(codec_ctx->priv_data, "tune", tune);
         }
-        set_named_encoder_option(codec_ctx->priv_data, "crf", crf_str);
+        if (opts.bit_rate <= 0) {
+            set_named_encoder_option(codec_ctx->priv_data, "crf", crf_str);
+        }
         if (opts.realtime && codec->id == AV_CODEC_ID_H264) {
             // Legacy low-latency parameters kept for realtime path to avoid
             // pipeline stalls during live capture.

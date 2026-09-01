@@ -234,6 +234,8 @@ class MainWindow : public QMainWindow {
     QString encode_preset = "medium";
     QString encode_tune; // empty => "none"
     int encode_crf = 18;
+    QString encode_rate_control = "quality";
+    QString encode_bitrate = "10M";
     QString encode_codec = "auto";
     QString encode_parameters;
     bool encode_realtime = false;

@@ -46,6 +46,7 @@ namespace acmxvk {
         int enumerate_camera_device = -1;
         int shader_index = 0;
         int encode_crf = 18;
+        std::int64_t encode_bitrate = 0;
         int autopilot_frames = 0;
         int autopilot_random_timeout = 0;
         int generate_interval = 0;

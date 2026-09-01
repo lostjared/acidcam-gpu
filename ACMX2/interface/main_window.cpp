@@ -1325,6 +1325,10 @@ void MainWindow::loadSessionSettings() {
     encode_preset = settings.value("recording/preset", "medium").toString();
     encode_tune = settings.value("recording/tune", "").toString();
     encode_crf = settings.value("recording/crf", 18).toInt();
+    encode_rate_control =
+        settings.value("recording/rate_control", "quality").toString();
+    encode_bitrate =
+        settings.value("recording/bitrate", "10M").toString();
     encode_codec = settings.value("recording/codec", "auto").toString();
     encode_parameters = settings.value("recording/parameters", "").toString();
     encode_realtime = settings.value("recording/realtime", false).toBool();
@@ -3799,6 +3803,8 @@ void MainWindow::cameraSettings() {
     encode_preset = settingsWindow.getEncodePreset();
     encode_tune = settingsWindow.getEncodeTune();
     encode_crf = settingsWindow.getEncodeCrf();
+    encode_rate_control = settingsWindow.getEncodeRateControl();
+    encode_bitrate = settingsWindow.getEncodeBitrate();
     encode_codec = settingsWindow.getEncodeCodec();
     encode_parameters = settingsWindow.getEncodeParameters();
     encode_realtime = settingsWindow.isEncodeRealtime();
@@ -3954,7 +3960,11 @@ void MainWindow::runSelected() {
 
     if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
-        arguments << "--encode-crf" << QString::number(encode_crf);
+        if (active_backend == acmx2::Backend::Acmxvk &&
+            encode_rate_control == "bitrate")
+            arguments << "--video-bitrate" << encode_bitrate;
+        else
+            arguments << "--encode-crf" << QString::number(encode_crf);
         if (!encode_preset.isEmpty())
             arguments << "--encode-preset" << encode_preset;
         if (!encode_tune.isEmpty())
@@ -4225,7 +4235,11 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
     arguments << "--prefix" << prefix_path;
     if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
-        arguments << "--encode-crf" << QString::number(encode_crf);
+        if (active_backend == acmx2::Backend::Acmxvk &&
+            encode_rate_control == "bitrate")
+            arguments << "--video-bitrate" << encode_bitrate;
+        else
+            arguments << "--encode-crf" << QString::number(encode_crf);
         if (!encode_preset.isEmpty())
             arguments << "--encode-preset" << encode_preset;
         if (!encode_tune.isEmpty())

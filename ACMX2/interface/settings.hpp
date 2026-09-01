@@ -129,6 +129,10 @@ class SettingsWindow : public QDialog {
     QString getEncodeTune() const;
     /// @return Selected encoder CRF value (0..51).
     int getEncodeCrf() const;
+    /// @return Encoding rate-control mode: quality or bitrate.
+    QString getEncodeRateControl() const;
+    /// @return Target video bitrate text, such as 10M.
+    QString getEncodeBitrate() const;
     /// @return Selected encoder codec preference (auto/software/nvenc).
     QString getEncodeCodec() const;
     /// @return Additional FFmpeg-style video encoder parameters.
@@ -228,6 +232,8 @@ class SettingsWindow : public QDialog {
     QComboBox *encodePresetComboBox = nullptr;
     QComboBox *encodeTuneComboBox = nullptr;
     QSpinBox *encodeCrfSpinBox = nullptr;
+    QComboBox *encodeRateControlComboBox = nullptr;
+    QLineEdit *encodeBitrateLineEdit = nullptr;
     QComboBox *encodeCodecComboBox = nullptr;
     QLabel *encodeCodecDetailsLabel = nullptr;
     QPushButton *encodeOptionsButton = nullptr;

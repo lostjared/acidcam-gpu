@@ -110,6 +110,10 @@ if (!writer.open("output_hardware_lossless.mkv", 1920, 1080, 60.0f, options)) {
 }
 ```
 
+Set `options.bit_rate` to a positive number of bits per second to use
+bitrate-based VBR instead of the built-in CRF/CQ value. For example,
+`options.bit_rate = 10'000'000` is equivalent to FFmpeg `-b:v 10M`.
+
 MXWrite uses the FFmpeg libraries directly, so the parameter string contains
 video encoder/muxer options only; input and output filenames are supplied to
 `Writer::open()`.

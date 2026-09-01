@@ -1051,6 +1051,40 @@ void SettingsWindow::init() {
     encodeCrfSpinBox->setValue(encSettings.value("recording/crf", 18).toInt());
     encodeCrfSpinBox->setToolTip("Constant Rate Factor: 0 = lossless, 18 = visually lossless, 23 = default, 28 = small file");
 
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        encodeRateControlComboBox = new QComboBox(this);
+        encodeRateControlComboBox->addItem("Quality (CRF/CQ)", "quality");
+        encodeRateControlComboBox->addItem("Target bitrate (VBR)", "bitrate");
+        const QString savedRateControl =
+            encSettings.value("recording/rate_control", "quality").toString();
+        const int rateControlIndex =
+            encodeRateControlComboBox->findData(savedRateControl);
+        encodeRateControlComboBox->setCurrentIndex(
+            rateControlIndex >= 0 ? rateControlIndex : 0);
+
+        encodeBitrateLineEdit = new QLineEdit(this);
+        encodeBitrateLineEdit->setText(
+            encSettings.value("recording/bitrate", "10M").toString());
+        encodeBitrateLineEdit->setPlaceholderText("10M");
+        encodeBitrateLineEdit->setMaxLength(13);
+        encodeBitrateLineEdit->setToolTip(
+            "Target video bitrate in bits per second. K, M, and G suffixes "
+            "are accepted, for example 10M.");
+        const auto updateRateControlWidgets = [this] {
+            const bool bitrateMode =
+                encodeRateControlComboBox->currentData().toString() ==
+                "bitrate";
+            encodeCrfSpinBox->setEnabled(!bitrateMode);
+            encodeBitrateLineEdit->setEnabled(bitrateMode);
+        };
+        connect(encodeRateControlComboBox,
+                QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                [updateRateControlWidgets](int) {
+                    updateRateControlWidgets();
+                });
+        updateRateControlWidgets();
+    }
+
     encodeCodecComboBox = new QComboBox(this);
     encodeCodecComboBox->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     encodeCodecComboBox->setMinimumContentsLength(28);
@@ -1146,8 +1180,16 @@ void SettingsWindow::init() {
     encodingGrid->addWidget(encodePresetComboBox, r, 1);
     encodingGrid->addWidget(new QLabel("Tune:", this), ++r, 0);
     encodingGrid->addWidget(encodeTuneComboBox, r, 1);
+    if (encodeRateControlComboBox) {
+        encodingGrid->addWidget(new QLabel("Rate control:", this), ++r, 0);
+        encodingGrid->addWidget(encodeRateControlComboBox, r, 1);
+    }
     encodingGrid->addWidget(new QLabel("CRF (quality):", this), ++r, 0);
     encodingGrid->addWidget(encodeCrfSpinBox, r, 1);
+    if (encodeBitrateLineEdit) {
+        encodingGrid->addWidget(new QLabel("Target bitrate:", this), ++r, 0);
+        encodingGrid->addWidget(encodeBitrateLineEdit, r, 1);
+    }
     encodingGrid->addWidget(new QLabel("Codec:", this), ++r, 0);
     encodingGrid->addWidget(encodeCodecComboBox, r, 1);
     encodingGrid->addWidget(encodeOptionsButton, ++r, 1);
@@ -1935,6 +1977,18 @@ int SettingsWindow::getEncodeCrf() const {
     return encodeCrfSpinBox ? encodeCrfSpinBox->value() : 18;
 }
 
+QString SettingsWindow::getEncodeRateControl() const {
+    return encodeRateControlComboBox
+               ? encodeRateControlComboBox->currentData().toString()
+               : QString("quality");
+}
+
+QString SettingsWindow::getEncodeBitrate() const {
+    return encodeBitrateLineEdit
+               ? encodeBitrateLineEdit->text().trimmed()
+               : QString("10M");
+}
+
 QString SettingsWindow::getEncodeCodec() const {
     if (!encodeCodecComboBox) {
         return QString("auto");
@@ -2029,6 +2083,41 @@ void SettingsWindow::acceptSettings() {
         return;
     }
 
+    if (encodeRateControlComboBox &&
+        encodeRateControlComboBox->currentData().toString() == "bitrate") {
+        const QString bitrate = encodeBitrateLineEdit->text().trimmed();
+        static const QRegularExpression bitratePattern(
+            QStringLiteral("^[1-9][0-9]{0,11}[KkMmGg]?$"));
+        if (!bitratePattern.match(bitrate).hasMatch()) {
+            QMessageBox::warning(
+                this, "Invalid video bitrate",
+                "Enter a positive integer with an optional K, M, or G suffix "
+                "(for example, 10M).");
+            encodeBitrateLineEdit->setFocus();
+            encodeBitrateLineEdit->selectAll();
+            return;
+        }
+        QString numericBitrate = bitrate;
+        quint64 multiplier = 1;
+        const QChar suffix = numericBitrate.back().toUpper();
+        if (suffix == 'K' || suffix == 'M' || suffix == 'G') {
+            numericBitrate.chop(1);
+            multiplier = suffix == 'K'   ? 1000ULL
+                         : suffix == 'M' ? 1000000ULL
+                                         : 1000000000ULL;
+        }
+        bool numericOk = false;
+        const quint64 amount = numericBitrate.toULongLong(&numericOk);
+        constexpr quint64 MAX_VIDEO_BITRATE = 100000000000ULL;
+        if (!numericOk || amount > MAX_VIDEO_BITRATE / multiplier) {
+            QMessageBox::warning(this, "Invalid video bitrate",
+                                 "The target video bitrate cannot exceed 100G.");
+            encodeBitrateLineEdit->setFocus();
+            encodeBitrateLineEdit->selectAll();
+            return;
+        }
+    }
+
     useInputVideoFile = inputVideoOptionRadioButton->isChecked();
     useGraphicsFile = graphicsFileOptionRadioButton->isChecked();
     saveOutputVideoFile = saveOutputVideoCheckBox->isChecked();
@@ -2104,6 +2193,10 @@ void SettingsWindow::acceptSettings() {
         encSettings.setValue("recording/tune", encodeTuneComboBox->currentText());
     if (encodeCrfSpinBox)
         encSettings.setValue("recording/crf", encodeCrfSpinBox->value());
+    if (encodeRateControlComboBox)
+        encSettings.setValue("recording/rate_control", getEncodeRateControl());
+    if (encodeBitrateLineEdit)
+        encSettings.setValue("recording/bitrate", getEncodeBitrate());
     if (encodeCodecComboBox)
         encSettings.setValue("recording/codec", getEncodeCodec());
     if (encodeParametersLineEdit)
