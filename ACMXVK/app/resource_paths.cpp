@@ -194,6 +194,16 @@ namespace acmxvk {
             fs::path(ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY) / filename);
     }
 
+    fs::path hdr_preview_shader_path(const Options &options, bool hlg) {
+        const std::string filename =
+            std::string("hdr_preview_") + (hlg ? "hlg" : "pq") +
+            ".frag.spv";
+        return resolve_resource(
+            options, fs::path("shaders") / filename,
+            fs::path(ACMXVK_INSTALL_HDR_TRANSFER_DIRECTORY) / filename,
+            fs::path(ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY) / filename);
+    }
+
     fs::path human_composite_shader_path(const Options &options) {
         return resolve_resource(options, "shaders/human_composite.frag.spv",
                                 ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER,

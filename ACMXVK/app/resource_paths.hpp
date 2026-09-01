@@ -17,6 +17,8 @@ namespace acmxvk {
     [[nodiscard]] fs::path passthrough_shader_path(const Options &options);
     [[nodiscard]] fs::path hdr_transfer_shader_path(const Options &options,
                                                     bool hlg, bool encode);
+    [[nodiscard]] fs::path hdr_preview_shader_path(const Options &options,
+                                                   bool hlg);
     [[nodiscard]] fs::path
     human_composite_shader_path(const Options &options);
     [[nodiscard]] fs::path crossfade_shader_path(const Options &options,

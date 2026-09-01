@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9Z (HDR Increment 5 of 6)**. It is usable
+The port is currently at **Increment 10A (HDR Increment 6 of 6)**. It is usable
 for video, camera, and still-image shader processing, but it is not yet a
 complete replacement for ACMX2.
 
@@ -17,7 +17,7 @@ complete replacement for ACMX2.
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
 | Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--enumerate-device` probes native V4L2 modes on Linux and AVFoundation modes on macOS. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Encoded output follows `--resolution` when supplied and otherwise uses the negotiated source dimensions, including a width/height swap for 90-degree input rotation. In either case, oversized previews are fitted to the usable display without changing the render or output dimensions. Still images remain OpenCV-backed. |
-| HDR video | In progress (5/6) | Detects 10-bit BT.2020/PQ/HLG input, captures mastering-display/content-light metadata, decodes HDR files to native RGBA16, uploads an `R16G16B16A16_UNORM` source texture, and preserves HDR precision through RGBA16F scene, multipass, compute, history, crossfade, and 3D prepass targets. PQ and HLG are decoded to linear BT.2020 before effects and encoded afterward. Video recording sends normalized RGBA16 directly to MXWrite for HEVC Main10/YUV420P10LE encoding with source color and luminance metadata, timestamps, and the existing audio muxing behavior. SDR preview tone mapping and HDR-aware snapshots remain scheduled for increment 6. |
+| HDR video | Implemented (6/6) | Detects 10-bit BT.2020/PQ/HLG input, captures mastering-display/content-light metadata, decodes HDR files to native RGBA16, uploads an `R16G16B16A16_UNORM` source texture, and preserves HDR precision through RGBA16F scene, multipass, compute, history, crossfade, and 3D final targets. PQ and HLG are decoded to linear BT.2020 before effects and encoded afterward. Video recording sends normalized RGBA16 directly to MXWrite for HEVC Main10/YUV420P10LE encoding with source color and luminance metadata, timestamps, and the existing audio muxing behavior. Windowed preview and ordinary image output use an isolated BT.2020-to-BT.709 SDR tone map; TIFF and raw snapshots retain RGBA16 samples. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. Offline `--build` mode incrementally compiles source manifests containing `.frag`, `.comp`, or `.spv` entries into a validated runtime library. |
 | Shader selection | Complete | Supports selection by index or filename, keyboard switching, and live selection from the ACMX Qt interface through `--interface-shm`. |
@@ -26,7 +26,7 @@ complete replacement for ACMX2.
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides and live updates from the ACMX Qt interface. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
-| Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, optional lossless WebP snapshots on `5`, and headerless RGBA8 snapshots on `6`. |
+| Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, optional lossless WebP snapshots on `5`, and headerless raw snapshots on `6`. HDR PNG/WebP output is SDR tone-mapped; HDR TIFF/raw output retains normalized RGBA16 samples. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter`, a configured watermark, or F9 hides the HUD; F9 can show it again when a watermark selected the hidden default. When both are visible, the HUD starts below the watermark. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader locking, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
@@ -579,7 +579,7 @@ HDR support is planned as six independently testable increments:
 6. Add SDR preview tone mapping, HDR-aware snapshots and feature fallbacks,
    then validate Linux/Vulkan and macOS/MoltenVK output.
 
-Increments 1 through 5 are complete. ACMXVK automatically reports detected HDR video
+All six increments are complete. ACMXVK automatically reports detected HDR video
 metadata when opening a file, or it can inspect a file without initializing
 Vulkan:
 
@@ -602,8 +602,14 @@ primaries, matrix, range, mastering-display, and content-light metadata.
 Explicit and source-timeline timestamps use the same writer queue as SDR, and
 the existing post-encode audio copy/mux paths are unchanged. HDR recording
 selects software `libx265` automatically and requires even output dimensions.
-The current 3D final target remains RGBA8, so 3D mode logs a clear fallback and
-uses the configured SDR writer until its HDR-aware final target is added.
+Increment 6 renders the 3D texture consumer into an RGBA16F final target, so
+3D output uses that same Main10 path. A presentation-only PQ/HLG tone mapper
+converts BT.2020 to BT.709/sRGB for an SDR window without changing the encoded
+frame. PNG sequences, generated PNGs, and PNG/WebP snapshots use the equivalent
+CPU tone map. TIFF and raw snapshots retain normalized 16-bit RGBA data. MXVK
+checks the required sampled/color-attachment/storage format features before
+creating HDR targets and ACMXVK reports unsupported transfer functions,
+encoders, or odd Main10 dimensions explicitly.
 
 ### Input validation
 
@@ -789,18 +795,19 @@ cmake --build build/acmxvk -j
 ```
 
 To enable lossless TIFF snapshots, install the libtiff development package and
-configure with `-DTIFF=ON`. Press `4` to capture an LZW-compressed 8-bit RGBA
-TIFF using the same processed frame, naming scheme, `--prefix` directory, and
-background queue:
+configure with `-DTIFF=ON`. Press `4` to capture an LZW-compressed RGBA TIFF
+using the same processed frame, naming scheme, `--prefix` directory, and
+background queue. SDR captures are 8-bit; HDR captures retain 16-bit samples:
 
 ```bash
 cmake -S ACMXVK -B build/acmxvk -DTIFF=ON
 cmake --build build/acmxvk -j
 ```
 
-Press `6` to save the same final processed frame as a headerless RGBA8 `.raw`
-file. Its dimensions are embedded in the filename. Supply those dimensions
-when opening it with a raw-video tool, for example:
+Press `6` to save the same final processed frame as a headerless `.raw` file.
+SDR captures are RGBA8; HDR captures are native-endian normalized RGBA16. Its
+dimensions are embedded in the filename. Supply those dimensions when opening
+an SDR capture with a raw-video tool, for example:
 
 ```bash
 ffplay -f rawvideo -pixel_format rgba -video_size 1920x1080 \
@@ -2267,7 +2274,7 @@ control reference.
 - Z: save a processed PNG snapshot under the `--prefix` directory
 - 4: save a processed lossless TIFF snapshot when built with `-DTIFF=ON`
 - 5: save a processed lossless WebP snapshot when built with `-DWEBP=ON`
-- 6: save a processed, headerless RGBA8 snapshot
+- 6: save a processed headerless RGBA8 snapshot, or RGBA16 for HDR
 - F10: capture a screenshot when `--enable-screenshot` is active
 - Escape: quit
 

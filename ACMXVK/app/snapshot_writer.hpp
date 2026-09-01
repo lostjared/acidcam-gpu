@@ -20,6 +20,7 @@ namespace acmxvk {
     struct SnapshotJob {
         fs::path path;
         std::vector<std::uint8_t> rgba;
+        std::vector<std::uint16_t> rgba16;
         std::uint32_t width = 0;
         std::uint32_t height = 0;
         SnapshotFormat format = SnapshotFormat::Png;
@@ -50,6 +51,9 @@ namespace acmxvk {
         static void saveRaw(const fs::path &path,
                             const std::vector<std::uint8_t> &rgba,
                             std::uint32_t width, std::uint32_t height);
+        static void saveRaw16(const fs::path &path,
+                              const std::vector<std::uint16_t> &rgba,
+                              std::uint32_t width, std::uint32_t height);
 #ifdef ACMXVK_WITH_WEBP
         static void saveWebP(const fs::path &path, const std::uint8_t *rgba,
                              int width, int height);
@@ -57,6 +61,9 @@ namespace acmxvk {
 #ifdef ACMXVK_WITH_TIFF
         static void saveTiff(const fs::path &path, const std::uint8_t *rgba,
                              int width, int height);
+        static void saveTiff16(const fs::path &path,
+                               const std::uint16_t *rgba, int width,
+                               int height);
 #endif
         void workerLoop() noexcept;
 

@@ -85,6 +85,59 @@ namespace acmxvk {
             rgba.convertTo(converted, CV_8UC4, 1.0 / 257.0);
             return converted;
         }
+
+        [[nodiscard]] float tone_map_channel(float value) {
+            value = std::max(value, 0.0F);
+            return std::clamp(
+                (value * (2.51F * value + 0.03F)) /
+                    (value * (2.43F * value + 0.59F) + 0.14F),
+                0.0F, 1.0F);
+        }
+
+        [[nodiscard]] float encode_srgb(float value) {
+            value = std::clamp(value, 0.0F, 1.0F);
+            return value <= 0.0031308F
+                       ? 12.92F * value
+                       : 1.055F * std::pow(value, 1.0F / 2.4F) - 0.055F;
+        }
+
+        [[nodiscard]] std::vector<std::uint8_t> tone_map_hdr_rgba16(
+            const std::vector<std::uint16_t> &rgba, bool hlg) {
+            std::vector<std::uint8_t> converted(rgba.size());
+            const float reference_scale =
+                hlg ? 1000.0F / 203.0F : 10000.0F / 203.0F;
+            for (std::size_t offset = 0; offset + 3U < rgba.size();
+                 offset += 4U) {
+                const auto decode = [hlg](std::uint16_t sample) {
+                    const float encoded =
+                        static_cast<float>(sample) / 65535.0F;
+                    return hlg ? decode_hlg(encoded) : decode_pq(encoded);
+                };
+                const float red = decode(rgba[offset]) * reference_scale;
+                const float green =
+                    decode(rgba[offset + 1U]) * reference_scale;
+                const float blue =
+                    decode(rgba[offset + 2U]) * reference_scale;
+                const float bt709_red =
+                    1.660491F * red - 0.587641F * green - 0.072850F * blue;
+                const float bt709_green =
+                    -0.124550F * red + 1.132900F * green - 0.008349F * blue;
+                const float bt709_blue =
+                    -0.018151F * red - 0.100579F * green + 1.118730F * blue;
+                converted[offset] = static_cast<std::uint8_t>(std::lround(
+                    encode_srgb(tone_map_channel(bt709_red)) * 255.0F));
+                converted[offset + 1U] = static_cast<std::uint8_t>(
+                    std::lround(encode_srgb(tone_map_channel(bt709_green)) *
+                                255.0F));
+                converted[offset + 2U] = static_cast<std::uint8_t>(
+                    std::lround(encode_srgb(tone_map_channel(bt709_blue)) *
+                                255.0F));
+                converted[offset + 3U] = static_cast<std::uint8_t>(
+                    (static_cast<std::uint32_t>(rgba[offset + 3U]) + 128U) /
+                    257U);
+            }
+            return converted;
+        }
     } // namespace
 
     void request_headless_shutdown([[maybe_unused]] int signal_number) noexcept {
@@ -3566,6 +3619,12 @@ namespace acmxvk {
                             << (hdr_transfer_hlg ? "HLG" : "PQ")
                             << " decoded to linear BT.2020 before effects and "
                                "encoded after effects\n";
+                        if (!options.headless) {
+                            std::cout
+                                << "acmxvk: HDR preview: presentation-only "
+                                   "BT.2020-to-BT.709 SDR tone mapping active; "
+                                   "Main10 recording remains unchanged\n";
+                        }
                     } else {
                         std::cerr
                             << "acmxvk: HDR transfer "
@@ -3939,8 +3998,7 @@ namespace acmxvk {
             encode_options.ffmpeg_options = options.encode_params;
             encode_options.realtime = options.encode_realtime;
             encode_options.block_when_full = options.no_drop;
-            hdr_output_enabled = hdr_transfer_processing_enabled &&
-                                 !options.enable_3d;
+            hdr_output_enabled = hdr_transfer_processing_enabled;
             if (hdr_output_enabled) {
                 if ((recording_width & 1) != 0 ||
                     (recording_height & 1) != 0) {
@@ -3964,12 +4022,6 @@ namespace acmxvk {
                     << "acmxvk: HDR output: HEVC Main10 with captured "
                     << (hdr_transfer_hlg ? "BT.2020/HLG" : "BT.2020/PQ")
                     << " color metadata (software libx265)\n";
-            } else if (hdr_transfer_processing_enabled &&
-                       options.enable_3d) {
-                std::cerr
-                    << "acmxvk: HDR Main10 output is not yet available in "
-                       "3D mode; recording the RGBA8 model target with the "
-                       "configured SDR writer\n";
             }
 
             if (!writer.open(options.output_file, recording_width, recording_height,
@@ -4035,6 +4087,11 @@ namespace acmxvk {
             job.width = width;
             job.height = height;
             job.format = request.snapshot_format;
+            if (rgba16 != nullptr &&
+                (request.snapshot_format == SnapshotFormat::Tiff ||
+                 request.snapshot_format == SnapshotFormat::Raw)) {
+                job.rgba16 = *rgba16;
+            }
             if (request.continuous) {
                 job.rgba = rgba;
             } else {
@@ -4158,13 +4215,8 @@ namespace acmxvk {
                         : "; converting to RGBA8 for snapshots/output\n");
             hdr_readback_logged = true;
         }
-        std::vector<std::uint8_t> rgba8(rgba.size());
-        std::transform(rgba.begin(), rgba.end(), rgba8.begin(),
-                       [](std::uint16_t value) {
-                           return static_cast<std::uint8_t>(
-                               (static_cast<std::uint32_t>(value) + 128U) /
-                               257U);
-                       });
+        std::vector<std::uint8_t> rgba8 =
+            tone_map_hdr_rgba16(rgba, hdr_transfer_hlg);
         handleFrameReadback(rgba8, &rgba, width, height);
     }
     // 3D rendering, crossfades, pipelines, history, and frame uploads.
@@ -4702,6 +4754,10 @@ namespace acmxvk {
         vkDeviceWaitIdle(getDevice());
         detachPostProcessingShader();
         post_process_sprites.clear();
+        setPostProcessingPresentFragmentShader(
+            hdr_transfer_processing_enabled
+                ? hdr_preview_shader_path(options, hdr_transfer_hlg).string()
+                : std::string{});
         frame_sprite->setEffectsEnabled(effects_enabled);
 
         const fs::path direct_model_shader = directModelFragmentShader();
@@ -4711,8 +4767,10 @@ namespace acmxvk {
             model_texture_prepass_active);
         if (model_initialized) {
             input_model.setColorAttachmentFormat(
-                model_texture_prepass_active ? getSwapchainFormat()
-                                             : getSceneColorFormat());
+                model_texture_prepass_active &&
+                        !hdr_transfer_processing_enabled
+                    ? getSwapchainFormat()
+                    : getSceneColorFormat());
             const fs::path desired_model_shader =
                 direct_model_shader.empty()
                     ? model_fragment_shader_path(options)

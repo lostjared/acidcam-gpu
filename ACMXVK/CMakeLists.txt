@@ -180,6 +180,8 @@ foreach(ACMXVK_MXVK_INCLUDE_DIRECTORY IN LISTS
                "setHdrRenderIntermediatesEnabled"
            AND ACMXVK_MXVK_WINDOW_HEADER_CONTENT MATCHES
                "setFrameReadbackRgba16Enabled"
+           AND ACMXVK_MXVK_WINDOW_HEADER_CONTENT MATCHES
+               "setPostProcessingPresentFragmentShader"
            AND ACMXVK_MXVK_MODEL_HEADER_CONTENT MATCHES
                "setColorAttachmentFormat")
             set(ACMXVK_MXVK_HDR_INPUT_API ON)
@@ -189,7 +191,7 @@ foreach(ACMXVK_MXVK_INCLUDE_DIRECTORY IN LISTS
 endforeach()
 if(NOT ACMXVK_MXVK_HDR_INPUT_API)
     message(FATAL_ERROR
-        "The selected MXVK package predates ACMXVK HDR increment 4. Rebuild "
+        "The selected MXVK package predates ACMXVK HDR increment 6. Rebuild "
         "and reinstall the current MXVK source tree, then configure ACMXVK "
         "again.")
 endif()
@@ -326,6 +328,27 @@ foreach(ACMXVK_HDR_TRANSFER_INDEX RANGE 0 3)
     )
     list(APPEND ACMXVK_HDR_TRANSFER_SHADERS
         "${ACMXVK_HDR_TRANSFER_OUTPUT}")
+endforeach()
+set(ACMXVK_HDR_PREVIEW_SHADERS)
+foreach(ACMXVK_HDR_PREVIEW_NAME pq hlg)
+    string(TOUPPER "${ACMXVK_HDR_PREVIEW_NAME}"
+        ACMXVK_HDR_PREVIEW_DEFINE_SUFFIX)
+    set(ACMXVK_HDR_PREVIEW_OUTPUT
+        "${ACMXVK_SHADER_OUTPUT_DIR}/hdr_preview_${ACMXVK_HDR_PREVIEW_NAME}.frag.spv")
+    add_custom_command(
+        OUTPUT "${ACMXVK_HDR_PREVIEW_OUTPUT}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "${ACMXVK_SHADER_OUTPUT_DIR}"
+        COMMAND "${GLSLC_EXECUTABLE}"
+                -DACMXVK_HDR_PREVIEW_${ACMXVK_HDR_PREVIEW_DEFINE_SUFFIX}=1
+                "${CMAKE_CURRENT_SOURCE_DIR}/shaders/hdr_preview.frag"
+                -o "${ACMXVK_HDR_PREVIEW_OUTPUT}"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/hdr_preview.frag"
+        COMMENT "Compiling ACMXVK ${ACMXVK_HDR_PREVIEW_NAME} HDR preview shader"
+        VERBATIM
+    )
+    list(APPEND ACMXVK_HDR_PREVIEW_SHADERS
+        "${ACMXVK_HDR_PREVIEW_OUTPUT}")
 endforeach()
 set(ACMXVK_MANDALA_FRACTAL_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/mandala_fractal.comp.spv"
@@ -571,6 +594,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_COMPUTE_TEST_SHADER}"
     "${ACMXVK_HDR_COMPUTE_TEST_SHADER}"
     ${ACMXVK_HDR_TRANSFER_SHADERS}
+    ${ACMXVK_HDR_PREVIEW_SHADERS}
     "${ACMXVK_MANDALA_FRACTAL_SHADER}"
     "${ACMXVK_AUDIO_HISTORY_SHADER}"
     ${ACMXVK_CROSSFADE_SHADERS}
@@ -806,6 +830,7 @@ install(FILES
         "${ACMXVK_COMPUTE_TEST_SHADER}"
         "${ACMXVK_HDR_COMPUTE_TEST_SHADER}"
         ${ACMXVK_HDR_TRANSFER_SHADERS}
+        ${ACMXVK_HDR_PREVIEW_SHADERS}
         "${ACMXVK_MANDALA_FRACTAL_SHADER}"
         "${ACMXVK_AUDIO_HISTORY_SHADER}"
         "${ACMXVK_TEST_SHADER_MANIFEST}"
