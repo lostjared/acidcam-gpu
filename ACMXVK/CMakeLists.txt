@@ -93,10 +93,13 @@ if(ACMXVK_USE_BUNDLED_MXWRITE)
         ACMXVK_MXWRITE_HEADER_CONTENT
     )
     if(NOT ACMXVK_MXWRITE_HEADER_CONTENT MATCHES "get_bytes_written"
-       OR NOT ACMXVK_MXWRITE_HEADER_CONTENT MATCHES "video_encoder_options")
+       OR NOT ACMXVK_MXWRITE_HEADER_CONTENT MATCHES "video_encoder_options"
+       OR NOT ACMXVK_MXWRITE_HEADER_CONTENT MATCHES
+           "write_hdr_rgba16_at_pts")
         message(FATAL_ERROR
             "${ACMXVK_MXWRITE_SOURCE_DIR}/mxwrite.hpp is older than the API "
-            "required by ACMXVK. Use the MXWrite source from the current MXVK."
+            "required by ACMXVK HDR increment 5. Use the MXWrite source from "
+            "the current MXVK."
         )
     endif()
     message(STATUS "Using MXWrite source: ${ACMXVK_MXWRITE_SOURCE_DIR}")
@@ -175,6 +178,8 @@ foreach(ACMXVK_MXVK_INCLUDE_DIRECTORY IN LISTS
            AND ACMXVK_MXVK_CAPTURE_HEADER_CONTENT MATCHES "readRgba16"
            AND ACMXVK_MXVK_WINDOW_HEADER_CONTENT MATCHES
                "setHdrRenderIntermediatesEnabled"
+           AND ACMXVK_MXVK_WINDOW_HEADER_CONTENT MATCHES
+               "setFrameReadbackRgba16Enabled"
            AND ACMXVK_MXVK_MODEL_HEADER_CONTENT MATCHES
                "setColorAttachmentFormat")
             set(ACMXVK_MXVK_HDR_INPUT_API ON)
@@ -184,7 +189,7 @@ foreach(ACMXVK_MXVK_INCLUDE_DIRECTORY IN LISTS
 endforeach()
 if(NOT ACMXVK_MXVK_HDR_INPUT_API)
     message(FATAL_ERROR
-        "The selected MXVK package predates ACMXVK HDR increment 3. Rebuild "
+        "The selected MXVK package predates ACMXVK HDR increment 4. Rebuild "
         "and reinstall the current MXVK source tree, then configure ACMXVK "
         "again.")
 endif()
@@ -295,6 +300,33 @@ set(ACMXVK_COMPUTE_TEST_SHADER
 set(ACMXVK_HDR_COMPUTE_TEST_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/compute_test_hdr.comp.spv"
 )
+set(ACMXVK_HDR_TRANSFER_SHADERS)
+set(ACMXVK_HDR_TRANSFER_NAMES pq_decode pq_encode hlg_decode hlg_encode)
+set(ACMXVK_HDR_TRANSFER_DEFINES
+    ACMXVK_HDR_PQ_DECODE ACMXVK_HDR_PQ_ENCODE
+    ACMXVK_HDR_HLG_DECODE ACMXVK_HDR_HLG_ENCODE)
+foreach(ACMXVK_HDR_TRANSFER_INDEX RANGE 0 3)
+    list(GET ACMXVK_HDR_TRANSFER_NAMES ${ACMXVK_HDR_TRANSFER_INDEX}
+        ACMXVK_HDR_TRANSFER_NAME)
+    list(GET ACMXVK_HDR_TRANSFER_DEFINES ${ACMXVK_HDR_TRANSFER_INDEX}
+        ACMXVK_HDR_TRANSFER_DEFINE)
+    set(ACMXVK_HDR_TRANSFER_OUTPUT
+        "${ACMXVK_SHADER_OUTPUT_DIR}/hdr_${ACMXVK_HDR_TRANSFER_NAME}.frag.spv")
+    add_custom_command(
+        OUTPUT "${ACMXVK_HDR_TRANSFER_OUTPUT}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "${ACMXVK_SHADER_OUTPUT_DIR}"
+        COMMAND "${GLSLC_EXECUTABLE}"
+                -D${ACMXVK_HDR_TRANSFER_DEFINE}=1
+                "${CMAKE_CURRENT_SOURCE_DIR}/shaders/hdr_transfer.frag"
+                -o "${ACMXVK_HDR_TRANSFER_OUTPUT}"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/hdr_transfer.frag"
+        COMMENT "Compiling ACMXVK HDR ${ACMXVK_HDR_TRANSFER_NAME} shader"
+        VERBATIM
+    )
+    list(APPEND ACMXVK_HDR_TRANSFER_SHADERS
+        "${ACMXVK_HDR_TRANSFER_OUTPUT}")
+endforeach()
 set(ACMXVK_MANDALA_FRACTAL_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/mandala_fractal.comp.spv"
 )
@@ -538,6 +570,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
     "${ACMXVK_COMPUTE_TEST_SHADER}"
     "${ACMXVK_HDR_COMPUTE_TEST_SHADER}"
+    ${ACMXVK_HDR_TRANSFER_SHADERS}
     "${ACMXVK_MANDALA_FRACTAL_SHADER}"
     "${ACMXVK_AUDIO_HISTORY_SHADER}"
     ${ACMXVK_CROSSFADE_SHADERS}
@@ -672,6 +705,8 @@ target_compile_definitions(acmxvk PRIVATE
     ACMXVK_INSTALL_FLIP_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/flip.frag.spv"
     ACMXVK_BUILD_PASSTHROUGH_SHADER="${ACMXVK_PASSTHROUGH_SHADER}"
     ACMXVK_INSTALL_PASSTHROUGH_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/passthrough.frag.spv"
+    ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY="${ACMXVK_SHADER_OUTPUT_DIR}"
+    ACMXVK_INSTALL_HDR_TRANSFER_DIRECTORY="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders"
     ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER="${ACMXVK_HUMAN_COMPOSITE_SHADER}"
     ACMXVK_INSTALL_HUMAN_COMPOSITE_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/human_composite.frag.spv"
     ACMXVK_BUILD_MODEL_VERTEX_SHADER="${ACMXVK_MODEL_VERTEX_SHADER}"
@@ -770,6 +805,7 @@ install(FILES
         "${ACMXVK_AUDIO_SPECTRUM_SHADER}"
         "${ACMXVK_COMPUTE_TEST_SHADER}"
         "${ACMXVK_HDR_COMPUTE_TEST_SHADER}"
+        ${ACMXVK_HDR_TRANSFER_SHADERS}
         "${ACMXVK_MANDALA_FRACTAL_SHADER}"
         "${ACMXVK_AUDIO_HISTORY_SHADER}"
         "${ACMXVK_TEST_SHADER_MANIFEST}"

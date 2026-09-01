@@ -3,9 +3,11 @@
 #include "../input_validation.hpp"
 
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavcodec/version.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
+#include <libavutil/mastering_display_metadata.h>
 #include <libavutil/pixdesc.h>
 }
 
@@ -161,11 +163,13 @@ namespace acmxvk {
                                             int side_data_count) {
             for (int index = 0; index < side_data_count; ++index) {
                 const AVPacketSideData &entry = side_data[index];
-                if (entry.type == AV_PKT_DATA_MASTERING_DISPLAY_METADATA) {
+                if (entry.type == AV_PKT_DATA_MASTERING_DISPLAY_METADATA &&
+                    entry.size == sizeof(AVMasteringDisplayMetadata)) {
                     info.mastering_display.assign(entry.data,
                                                   entry.data + entry.size);
                 } else if (entry.type ==
-                           AV_PKT_DATA_CONTENT_LIGHT_LEVEL) {
+                               AV_PKT_DATA_CONTENT_LIGHT_LEVEL &&
+                           entry.size == sizeof(AVContentLightMetadata)) {
                     info.content_light.assign(entry.data,
                                               entry.data + entry.size);
                 }
@@ -177,6 +181,74 @@ namespace acmxvk {
 #else
         copy_side_data(stream->side_data, stream->nb_side_data);
 #endif
+
+        if (info.mastering_display.empty() || info.content_light.empty()) {
+            const AVCodec *decoder =
+                avcodec_find_decoder(parameters->codec_id);
+            AVCodecContext *decoder_context =
+                decoder != nullptr ? avcodec_alloc_context3(decoder)
+                                   : nullptr;
+            AVPacket *packet = av_packet_alloc();
+            AVFrame *frame = av_frame_alloc();
+            const auto copy_frame_side_data = [&info](const AVFrame *source) {
+                if (info.mastering_display.empty()) {
+                    const AVFrameSideData *side_data = av_frame_get_side_data(
+                        source, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+                    if (side_data != nullptr &&
+                        side_data->size ==
+                            sizeof(AVMasteringDisplayMetadata)) {
+                        info.mastering_display.assign(
+                            side_data->data,
+                            side_data->data + side_data->size);
+                    }
+                }
+                if (info.content_light.empty()) {
+                    const AVFrameSideData *side_data = av_frame_get_side_data(
+                        source, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+                    if (side_data != nullptr &&
+                        side_data->size == sizeof(AVContentLightMetadata)) {
+                        info.content_light.assign(
+                            side_data->data,
+                            side_data->data + side_data->size);
+                    }
+                }
+            };
+            if (decoder_context != nullptr && packet != nullptr &&
+                frame != nullptr &&
+                avcodec_parameters_to_context(decoder_context, parameters) >=
+                    0 &&
+                avcodec_open2(decoder_context, decoder, nullptr) >= 0) {
+                constexpr int MAX_METADATA_PACKETS = 256;
+                bool decoded_frame = false;
+                for (int packet_count = 0;
+                     packet_count < MAX_METADATA_PACKETS && !decoded_frame &&
+                     av_read_frame(format, packet) >= 0;
+                     ++packet_count) {
+                    if (packet->stream_index == stream_index &&
+                        avcodec_send_packet(decoder_context, packet) >= 0) {
+                        while (avcodec_receive_frame(decoder_context, frame) >=
+                               0) {
+                            copy_frame_side_data(frame);
+                            decoded_frame = true;
+                            av_frame_unref(frame);
+                        }
+                    }
+                    av_packet_unref(packet);
+                }
+                if (!decoded_frame) {
+                    avcodec_send_packet(decoder_context, nullptr);
+                    while (avcodec_receive_frame(decoder_context, frame) >=
+                           0) {
+                        copy_frame_side_data(frame);
+                        decoded_frame = true;
+                        av_frame_unref(frame);
+                    }
+                }
+            }
+            av_frame_free(&frame);
+            av_packet_free(&packet);
+            avcodec_free_context(&decoder_context);
+        }
 
         close_format();
         return info;

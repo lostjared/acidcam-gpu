@@ -5,7 +5,7 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 9X (HDR Increment 3 of 6)**. It is usable
+The port is currently at **Increment 9Z (HDR Increment 5 of 6)**. It is usable
 for video, camera, and still-image shader processing, but it is not yet a
 complete replacement for ACMX2.
 
@@ -17,7 +17,7 @@ complete replacement for ACMX2.
 | Runtime resource paths | Implemented | ACMX2-compatible `-p/--path`, `ACMXVK_PATH`, and build/install fallbacks resolve data, internal shaders, shader libraries, playlists, and MIDI examples. `ACMXVK_SHADER_PATH` supplies a default SPIR-V library. |
 | Window and Vulkan lifecycle | Complete | MXVK owns the window, device, swapchain, rendering, screenshots, and validation integration. |
 | Video, camera, and image input | Complete | Video files prefer MXVK's FFmpeg capture with CUDA/NVDEC when available and fall back to OpenCV; an MXVK CUDA installation sends NVDEC frames directly to Vulkan independently of the acidcam-gpu build option. `--use-source-fps` provides real-time effects playback on the source-reported video clock, waiting when early and skipping decode work when late. Camera devices use ACMX2-compatible resolution, pixel-format, buffer, and FPS negotiation and report both the negotiated mode and measured delivery rate. `--enumerate-device` probes native V4L2 modes on Linux and AVFoundation modes on macOS. Camera recordings use real-time PTS so expensive 4K processing preserves wall-clock duration even below the nominal FPS. `--maximize-fps` decouples camera acquisition from Vulkan presentation. Encoded output follows `--resolution` when supplied and otherwise uses the negotiated source dimensions, including a width/height swap for 90-degree input rotation. In either case, oversized previews are fitted to the usable display without changing the render or output dimensions. Still images remain OpenCV-backed. |
-| HDR video | In progress (3/6) | Detects 10-bit BT.2020/PQ/HLG input, captures mastering-display/content-light metadata, decodes HDR files to native RGBA16, uploads an `R16G16B16A16_UNORM` source texture, and preserves HDR precision through RGBA16F scene, multipass, compute, history, crossfade, and 3D prepass targets. Transfer-function conversion and output remain scheduled for later increments. |
+| HDR video | In progress (5/6) | Detects 10-bit BT.2020/PQ/HLG input, captures mastering-display/content-light metadata, decodes HDR files to native RGBA16, uploads an `R16G16B16A16_UNORM` source texture, and preserves HDR precision through RGBA16F scene, multipass, compute, history, crossfade, and 3D prepass targets. PQ and HLG are decoded to linear BT.2020 before effects and encoded afterward. Video recording sends normalized RGBA16 directly to MXWrite for HEVC Main10/YUV420P10LE encoding with source color and luminance metadata, timestamps, and the existing audio muxing behavior. SDR preview tone mapping and HDR-aware snapshots remain scheduled for increment 6. |
 | Basic shader playback | Complete | Loads Vulkan fragment or compute shaders compiled to `.spv`; `--fragment` and `--compute` validate the SPIR-V stage. |
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. Offline `--build` mode incrementally compiles source manifests containing `.frag`, `.comp`, or `.spv` entries into a validated runtime library. |
 | Shader selection | Complete | Supports selection by index or filename, keyboard switching, and live selection from the ACMX Qt interface through `--interface-shm`. |
@@ -61,9 +61,10 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.33.1 or newer with the HDR increment 3 RGBA16F render API, built with
+- MXVK 0.33.1 or newer with the HDR increment 4 RGBA16 readback API, built with
   `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
+- An FFmpeg build containing the `libx265` encoder for HDR Main10 recording
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional libtiff development files for `-DTIFF=ON` lossless snapshots
 - Optional libwebp development files for `-DWEBP=ON` lossless snapshots
@@ -578,7 +579,7 @@ HDR support is planned as six independently testable increments:
 6. Add SDR preview tone mapping, HDR-aware snapshots and feature fallbacks,
    then validate Linux/Vulkan and macOS/MoltenVK output.
 
-Increments 1 through 3 are complete. ACMXVK automatically reports detected HDR video
+Increments 1 through 5 are complete. ACMXVK automatically reports detected HDR video
 metadata when opening a file, or it can inspect a file without initializing
 Vulkan:
 
@@ -591,9 +592,18 @@ mixed fragment/compute chains, texture history, crossfades, and 3D texture
 prepasses. Fragment shaders require no format declaration changes. HDR compute
 shaders must declare their binding-5 output as `layout(rgba16f)`; MXVK rejects
 an incompatible `rgba8` compute shader with a clear error instead of binding an
-invalid storage image. PQ/HLG values remain transfer-encoded until increment 4,
-which adds linear-light transfer conversion and 16-bit readback. Main10 output
-then arrives in increment 5.
+invalid storage image. Increment 4 wraps the user effect chain in the matching
+PQ or HLG transfer passes, so shader inputs, intermediate values, texture
+history, and crossfade history are linear BT.2020. It transfer-encodes the
+result and reads the final RGBA16F target back as normalized RGBA16. Increment
+5 sends that buffer directly to MXWrite, which converts encoded BT.2020 RGB to
+limited-range YUV420P10LE and writes HEVC Main10 with the source PQ/HLG,
+primaries, matrix, range, mastering-display, and content-light metadata.
+Explicit and source-timeline timestamps use the same writer queue as SDR, and
+the existing post-encode audio copy/mux paths are unchanged. HDR recording
+selects software `libx265` automatically and requires even output dimensions.
+The current 3D final target remains RGBA8, so 3D mode logs a clear fallback and
+uses the configured SDR writer until its HDR-aware final target is added.
 
 ### Input validation
 
@@ -1129,7 +1139,7 @@ when their feature is unavailable.
 
 | Binding | GLSL declaration | Stages | Contents and availability |
 | --- | --- | --- | --- |
-| 0 | `uniform sampler2D input_image;` | Fragment and compute | Always present. The image produced by the preceding stage. The name may be `samp`, `input_image`, or any other valid identifier. |
+| 0 | `uniform sampler2D input_image;` | Fragment and compute | Always present. The image produced by the preceding stage. For PQ/HLG HDR video, ACMXVK decodes this value to linear BT.2020 before the user chain and transfer-encodes it again after the chain. The name may be `samp`, `input_image`, or any other valid identifier. |
 | 1 | `uniform SpriteExtended { ... } ext;` | Fragment and compute | Always present. Per-frame state, mouse, timing, audio values, and custom library uniforms. |
 | 2 | `uniform sampler2DArray history;` | Fragment and compute | Optional shared RGBA input-frame history ring. `--texture-cache` enables it explicitly without adding an effect; ACMXVK also enables it automatically when a directly loaded shader or any entry in `library.json` declares set 0, binding 2. Every pass in the active fragment/compute chain shares the same ring. Use `--history-test` only when you also want ACMXVK's built-in echo demonstration applied before the selected pipeline. |
 | 3 | `uniform sampler1D spectrum;` | Fragment and compute | Current 256-bin R32 floating-point FFT. ACMXVK detects this binding from SPIR-V and supplies a zero-initialized descriptor when audio support or an active audio source is unavailable. |

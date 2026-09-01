@@ -106,15 +106,15 @@ struct EncodeOptions {
      *  - Encodes with libx265 at 10-bit (AV_PIX_FMT_YUV420P10LE).
      *  - Tags the stream with BT.2020 primaries, BT.2020 non-constant luminance
      *    matrix, and SMPTE ST.2084 (PQ) transfer.
-     *  - Converts incoming 8-bit sRGB RGBA shader output into PQ-encoded
-     *    10-bit YUV, placing SDR-range content at the 100-nit reference level
-     *    inside the PQ signal (SDR-in-HDR-container).
+     *  - Accepts already-PQ/HLG-encoded BT.2020 RGBA16 through the dedicated
+     *    HDR write methods and converts it directly to 10-bit YUV.
+     *  - Retains an RGBA8 compatibility path that places SDR-range content at
+     *    the 100-nit reference level inside a PQ signal.
      *  - Copies @ref mastering_display and @ref content_light side data from
      *    the input stream when provided, so player HDR metadata is preserved.
      *
-     * This mode is intended for use when the *input* video is HDR; the 8-bit
-     * GL pipeline cannot reconstruct the original highlight precision, but the
-     * resulting file is a correctly-tagged HDR container.
+     * This mode is intended for HDR render pipelines and preserves their
+     * 16-bit encoded signal through the RGB-to-YUV conversion.
      */
     struct HdrInfo {
         bool enabled = false;    ///< Enables the HDR output path.
@@ -314,10 +314,10 @@ class Writer {
     std::condition_variable queue_cv; ///< Signals queue availability.
     std::jthread encode_thread;       ///< Background encoder thread.
 
-    std::mutex queue_mutex{};                 ///< Guards the frame queue.
-    std::mutex writer_mutex{};                ///< Guards writer state transitions.
-    bool stop_requested = false;              ///< Signals encoder shutdown.
-    std::atomic<bool> block_when_full{false}; ///< Queue backpressure mode.
+    std::mutex queue_mutex{};                    ///< Guards the frame queue.
+    std::mutex writer_mutex{};                   ///< Guards writer state transitions.
+    bool stop_requested = false;                 ///< Signals encoder shutdown.
+    std::atomic<bool> block_when_full{false};    ///< Queue backpressure mode.
     std::atomic<std::uint64_t> bytes_written{0}; ///< Logical output bytes accepted by FFmpeg.
 
     /** @brief Shared implementation for open() and open_ts(). */

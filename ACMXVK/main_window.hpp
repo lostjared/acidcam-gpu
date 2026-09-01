@@ -214,6 +214,10 @@ namespace acmxvk {
         double video_duration_seconds = 0.0;
         VideoHdrInfo video_hdr_info;
         bool hdr_input_precision_enabled = false;
+        bool hdr_transfer_processing_enabled = false;
+        bool hdr_transfer_hlg = false;
+        bool hdr_output_enabled = false;
+        bool hdr_readback_logged = false;
         bool hdr_dnn_compatibility_logged = false;
         bool hdr_cuda_filter_bypass_logged = false;
         bool hdr_input_upload_logged = false;
@@ -448,6 +452,13 @@ namespace acmxvk {
         void onFrameReadbackScheduled() override;
         void onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width,
                              uint32_t height) override;
+        void onFrameReadbackRgba16(std::vector<std::uint16_t> &rgba,
+                                   uint32_t width,
+                                   uint32_t height) override;
+        void handleFrameReadback(
+            std::vector<std::uint8_t> &rgba,
+            const std::vector<std::uint16_t> *rgba16, uint32_t width,
+            uint32_t height);
 
         void initializeModel();
         void initializeSprite();

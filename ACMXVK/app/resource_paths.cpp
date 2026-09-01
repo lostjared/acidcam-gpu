@@ -45,6 +45,14 @@
 #define ACMXVK_INSTALL_PASSTHROUGH_SHADER "passthrough.frag.spv"
 #endif
 
+#ifndef ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY
+#define ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY "."
+#endif
+
+#ifndef ACMXVK_INSTALL_HDR_TRANSFER_DIRECTORY
+#define ACMXVK_INSTALL_HDR_TRANSFER_DIRECTORY "."
+#endif
+
 #ifndef ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER
 #define ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER "human_composite.frag.spv"
 #endif
@@ -173,6 +181,17 @@ namespace acmxvk {
         return resolve_resource(options, "shaders/passthrough.frag.spv",
                                 ACMXVK_INSTALL_PASSTHROUGH_SHADER,
                                 ACMXVK_BUILD_PASSTHROUGH_SHADER);
+    }
+
+    fs::path hdr_transfer_shader_path(const Options &options, bool hlg,
+                                      bool encode) {
+        const std::string filename =
+            std::string("hdr_") + (hlg ? "hlg_" : "pq_") +
+            (encode ? "encode.frag.spv" : "decode.frag.spv");
+        return resolve_resource(
+            options, fs::path("shaders") / filename,
+            fs::path(ACMXVK_INSTALL_HDR_TRANSFER_DIRECTORY) / filename,
+            fs::path(ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY) / filename);
     }
 
     fs::path human_composite_shader_path(const Options &options) {

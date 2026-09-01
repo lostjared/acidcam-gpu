@@ -5,6 +5,77 @@
 namespace acmxvk {
     namespace {
         volatile std::sig_atomic_t HEADLESS_SHUTDOWN_REQUESTED = 0;
+        constexpr int COLOR_TRANSFER_SMPTE2084 = 16;
+        constexpr int COLOR_TRANSFER_ARIB_STD_B67 = 18;
+
+        [[nodiscard]] float decode_pq(float encoded) {
+            constexpr float M1 = 2610.0F / 16384.0F;
+            constexpr float M2 = 2523.0F / 32.0F;
+            constexpr float C1 = 3424.0F / 4096.0F;
+            constexpr float C2 = 2413.0F / 128.0F;
+            constexpr float C3 = 2392.0F / 128.0F;
+            const float power_value =
+                std::pow(std::clamp(encoded, 0.0F, 1.0F), 1.0F / M2);
+            const float numerator = std::max(power_value - C1, 0.0F);
+            const float denominator =
+                std::max(C2 - C3 * power_value, 1.0e-6F);
+            return std::pow(numerator / denominator, 1.0F / M1);
+        }
+
+        [[nodiscard]] float decode_hlg(float encoded) {
+            constexpr float A = 0.17883277F;
+            constexpr float B = 0.28466892F;
+            constexpr float C = 0.55991073F;
+            encoded = std::max(encoded, 0.0F);
+            if (encoded <= 0.5F) {
+                return encoded * encoded / 3.0F;
+            }
+            return (std::exp((encoded - C) / A) + B) / 12.0F;
+        }
+
+        [[nodiscard]] cv::Mat decode_hdr_transfer(const cv::Mat &rgba,
+                                                  bool hlg) {
+            if (rgba.empty() ||
+                (rgba.type() != CV_8UC4 && rgba.type() != CV_16UC4)) {
+                return rgba;
+            }
+            cv::Mat linear(rgba.rows, rgba.cols, CV_16UC4);
+            const float scale = rgba.type() == CV_16UC4
+                                    ? 1.0F / 65535.0F
+                                    : 1.0F / 255.0F;
+            for (int row = 0; row < rgba.rows; ++row) {
+                auto *destination = linear.ptr<std::uint16_t>(row);
+                for (int column = 0; column < rgba.cols; ++column) {
+                    for (int channel = 0; channel < 3; ++channel) {
+                        const std::size_t offset =
+                            static_cast<std::size_t>(column) * 4U +
+                            static_cast<std::size_t>(channel);
+                        const float encoded =
+                            rgba.type() == CV_16UC4
+                                ? static_cast<float>(
+                                      rgba.ptr<std::uint16_t>(row)[offset]) *
+                                      scale
+                                : static_cast<float>(
+                                      rgba.ptr<std::uint8_t>(row)[offset]) *
+                                      scale;
+                        const float decoded =
+                            hlg ? decode_hlg(encoded) : decode_pq(encoded);
+                        destination[offset] = static_cast<std::uint16_t>(
+                            std::lround(std::clamp(decoded, 0.0F, 1.0F) *
+                                        65535.0F));
+                    }
+                    const std::size_t alpha_offset =
+                        static_cast<std::size_t>(column) * 4U + 3U;
+                    destination[alpha_offset] =
+                        rgba.type() == CV_16UC4
+                            ? rgba.ptr<std::uint16_t>(row)[alpha_offset]
+                            : static_cast<std::uint16_t>(
+                                  rgba.ptr<std::uint8_t>(row)[alpha_offset] *
+                                  257U);
+                }
+            }
+            return linear;
+        }
 
         [[nodiscard]] cv::Mat rgba16ToRgba8(const cv::Mat &rgba) {
             if (rgba.empty() || rgba.type() != CV_16UC4) {
@@ -3460,7 +3531,17 @@ namespace acmxvk {
 #else
             hdr_input_precision_enabled = false;
 #endif
+            hdr_transfer_processing_enabled =
+                hdr_input_precision_enabled &&
+                (video_hdr_info.color_transfer ==
+                     COLOR_TRANSFER_SMPTE2084 ||
+                 video_hdr_info.color_transfer ==
+                     COLOR_TRANSFER_ARIB_STD_B67);
+            hdr_transfer_hlg =
+                video_hdr_info.color_transfer ==
+                COLOR_TRANSFER_ARIB_STD_B67;
             setHdrRenderIntermediatesEnabled(hdr_input_precision_enabled);
+            setFrameReadbackRgba16Enabled(hdr_input_precision_enabled);
             std::ostringstream timeline;
             timeline << "acmxvk: video timeline: " << std::fixed
                      << std::setprecision(3) << video_source_fps
@@ -3476,14 +3557,22 @@ namespace acmxvk {
                 std::cout << "acmxvk: HDR input metadata detected\n";
                 printVideoHdrInfo(video_hdr_info, std::cout);
                 if (hdr_input_precision_enabled) {
-                    std::cout
-                        << "acmxvk: HDR increment 3 active: decoding to "
-                           "native RGBA16 and uploading an "
-                           "R16G16B16A16_UNORM source texture\n"
-                        << "acmxvk: HDR source values remain transfer-encoded; "
-                           "fragment/compute intermediates and texture history "
-                           "use RGBA16F; final presentation/readback remains "
-                           "RGBA8 until later HDR increments\n";
+                    std::cout << "acmxvk: HDR processing active: native "
+                                 "RGBA16 input, RGBA16F effects/history, and "
+                                 "normalized RGBA16 Vulkan readback\n";
+                    if (hdr_transfer_processing_enabled) {
+                        std::cout
+                            << "acmxvk: HDR transfer: "
+                            << (hdr_transfer_hlg ? "HLG" : "PQ")
+                            << " decoded to linear BT.2020 before effects and "
+                               "encoded after effects\n";
+                    } else {
+                        std::cerr
+                            << "acmxvk: HDR transfer "
+                            << video_hdr_info.color_transfer
+                            << " is not PQ or HLG; preserving transfer-encoded "
+                               "values through the precision path\n";
+                    }
                 } else {
                     std::cout
                         << "acmxvk: HDR precision path unavailable because this "
@@ -3850,6 +3939,38 @@ namespace acmxvk {
             encode_options.ffmpeg_options = options.encode_params;
             encode_options.realtime = options.encode_realtime;
             encode_options.block_when_full = options.no_drop;
+            hdr_output_enabled = hdr_transfer_processing_enabled &&
+                                 !options.enable_3d;
+            if (hdr_output_enabled) {
+                if ((recording_width & 1) != 0 ||
+                    (recording_height & 1) != 0) {
+                    throw std::runtime_error(
+                        "HDR Main10 output requires even width and height");
+                }
+                encode_options.hdr.enabled = true;
+                encode_options.hdr.color_primaries =
+                    video_hdr_info.color_primaries;
+                encode_options.hdr.color_trc =
+                    video_hdr_info.color_transfer;
+                encode_options.hdr.color_space =
+                    video_hdr_info.color_space;
+                encode_options.hdr.color_range =
+                    video_hdr_info.color_range;
+                encode_options.hdr.mastering_display =
+                    video_hdr_info.mastering_display;
+                encode_options.hdr.content_light =
+                    video_hdr_info.content_light;
+                std::cout
+                    << "acmxvk: HDR output: HEVC Main10 with captured "
+                    << (hdr_transfer_hlg ? "BT.2020/HLG" : "BT.2020/PQ")
+                    << " color metadata (software libx265)\n";
+            } else if (hdr_transfer_processing_enabled &&
+                       options.enable_3d) {
+                std::cerr
+                    << "acmxvk: HDR Main10 output is not yet available in "
+                       "3D mode; recording the RGBA8 model target with the "
+                       "configured SDR writer\n";
+            }
 
             if (!writer.open(options.output_file, recording_width, recording_height,
                              static_cast<float>(recording_fps), encode_options)) {
@@ -3891,6 +4012,13 @@ namespace acmxvk {
 
     void MainWindow::onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width,
                                      uint32_t height) {
+        handleFrameReadback(rgba, nullptr, width, height);
+    }
+
+    void MainWindow::handleFrameReadback(
+        std::vector<std::uint8_t> &rgba,
+        const std::vector<std::uint16_t> *rgba16, uint32_t width,
+        uint32_t height) {
         if (readback_requests.empty()) {
             std::cerr << "acmxvk: received frame readback without queued metadata\n";
             return;
@@ -3926,6 +4054,9 @@ namespace acmxvk {
 
         std::uint8_t *output_pixels = rgba.data();
         cv::Mat resized;
+        const std::uint16_t *hdr_output_pixels =
+            rgba16 != nullptr ? rgba16->data() : nullptr;
+        cv::Mat hdr_resized;
         if (static_cast<int>(width) != recording_width ||
             static_cast<int>(height) != recording_height) {
             const cv::Mat source(static_cast<int>(height), static_cast<int>(width),
@@ -3933,13 +4064,36 @@ namespace acmxvk {
             cv::resize(source, resized, cv::Size(recording_width, recording_height),
                        0.0, 0.0, cv::INTER_LINEAR);
             output_pixels = resized.ptr();
+            if (rgba16 != nullptr) {
+                const cv::Mat hdr_source(
+                    static_cast<int>(height), static_cast<int>(width),
+                    CV_16UC4,
+                    const_cast<std::uint16_t *>(rgba16->data()));
+                cv::resize(hdr_source, hdr_resized,
+                           cv::Size(recording_width, recording_height), 0.0,
+                           0.0, cv::INTER_LINEAR);
+                hdr_output_pixels = hdr_resized.ptr<std::uint16_t>();
+            }
         }
 
         if (writer.is_open()) {
-            if (request.has_pts) {
-                writer.write_at_pts(
-                    output_pixels,
-                    static_cast<std::int64_t>(request.pts));
+            if (hdr_output_enabled) {
+                if (hdr_output_pixels == nullptr) {
+                    throw std::runtime_error(
+                        "HDR Main10 recording did not receive an RGBA16 "
+                        "Vulkan readback");
+                }
+                if (request.has_pts) {
+                    writer.write_hdr_rgba16_at_pts(
+                        const_cast<std::uint16_t *>(hdr_output_pixels),
+                        static_cast<std::int64_t>(request.pts));
+                } else {
+                    writer.write_hdr_rgba16(
+                        const_cast<std::uint16_t *>(hdr_output_pixels));
+                }
+            } else if (request.has_pts) {
+                writer.write_at_pts(output_pixels,
+                                    static_cast<std::int64_t>(request.pts));
             } else {
                 writer.write(output_pixels);
             }
@@ -3991,6 +4145,27 @@ namespace acmxvk {
                 exit();
             }
         }
+    }
+
+    void MainWindow::onFrameReadbackRgba16(
+        std::vector<std::uint16_t> &rgba, uint32_t width, uint32_t height) {
+        if (!hdr_readback_logged) {
+            std::cout
+                << "acmxvk: HDR readback: normalized RGBA16 received from "
+                   "the final Vulkan HDR intermediate"
+                << (hdr_output_enabled
+                        ? "; feeding MXWrite's HEVC Main10 encoder\n"
+                        : "; converting to RGBA8 for snapshots/output\n");
+            hdr_readback_logged = true;
+        }
+        std::vector<std::uint8_t> rgba8(rgba.size());
+        std::transform(rgba.begin(), rgba.end(), rgba8.begin(),
+                       [](std::uint16_t value) {
+                           return static_cast<std::uint8_t>(
+                               (static_cast<std::uint32_t>(value) + 128U) /
+                               257U);
+                       });
+        handleFrameReadback(rgba8, &rgba, width, height);
     }
     // 3D rendering, crossfades, pipelines, history, and frame uploads.
     void MainWindow::initializeModel() {
@@ -4182,10 +4357,20 @@ namespace acmxvk {
                 crossfade_previous_sprite->enableHistoryTexture(
                     extent.width, extent.height, 1U);
             }
-            crossfade_previous_sprite->updateHistoryTexture(
-                previous_rgba.ptr(), static_cast<int>(extent.width),
-                static_cast<int>(extent.height),
-                static_cast<int>(previous_rgba.step));
+            if (hdr_transfer_processing_enabled) {
+                const cv::Mat linear_previous =
+                    decode_hdr_transfer(previous_rgba, hdr_transfer_hlg);
+                crossfade_previous_sprite->updateHistoryTextureRgba16(
+                    linear_previous.ptr<std::uint16_t>(),
+                    static_cast<int>(extent.width),
+                    static_cast<int>(extent.height),
+                    static_cast<int>(linear_previous.step));
+            } else {
+                crossfade_previous_sprite->updateHistoryTexture(
+                    previous_rgba.ptr(), static_cast<int>(extent.width),
+                    static_cast<int>(extent.height),
+                    static_cast<int>(previous_rgba.step));
+            }
             crossfade_alpha = 0.0F;
             crossfade_active = true;
             crossfade_start_time = std::chrono::steady_clock::now();
@@ -4492,7 +4677,8 @@ namespace acmxvk {
 
     [[nodiscard]] fs::path MainWindow::directModelFragmentShader() const {
         if (!model_3d_active || !model_initialized || !effects_enabled ||
-            playlist_enabled || multipass_enabled ||
+            hdr_input_precision_enabled || playlist_enabled ||
+            multipass_enabled ||
             currentShader().empty()) {
             return {};
         }
@@ -4556,6 +4742,13 @@ namespace acmxvk {
                    !currentShader().empty()) {
             std::cout << "acmxvk: 3D texture prepass: fragment/compute "
                          "chain output mapped onto model UVs\n";
+        }
+        if (hdr_transfer_processing_enabled) {
+            pipeline.insert(
+                pipeline.begin(),
+                hdr_transfer_shader_path(options, hdr_transfer_hlg, false));
+            pipeline.emplace_back(
+                hdr_transfer_shader_path(options, hdr_transfer_hlg, true));
         }
         if (pipeline.empty()) {
             return;
@@ -4840,6 +5033,15 @@ namespace acmxvk {
         }
 #endif
         if (rgba.type() == CV_16UC4) {
+            if (hdr_transfer_processing_enabled) {
+                const cv::Mat linear_history =
+                    decode_hdr_transfer(rgba, hdr_transfer_hlg);
+                frame_sprite->updateHistoryTextureRgba16(
+                    linear_history.ptr<std::uint16_t>(), linear_history.cols,
+                    linear_history.rows,
+                    static_cast<int>(linear_history.step));
+                return;
+            }
             frame_sprite->updateHistoryTextureRgba16(
                 rgba.ptr<uint16_t>(), rgba.cols, rgba.rows,
                 static_cast<int>(rgba.step));
