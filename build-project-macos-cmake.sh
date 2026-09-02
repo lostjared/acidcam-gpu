@@ -172,5 +172,8 @@ macOS build complete.
 Add the local prefix to PATH before launching installed executables:
   export PATH="$INSTALL_PREFIX/bin:\$PATH"
 
+Persist that PATH setting for future zsh sessions:
+  echo 'export PATH="$INSTALL_PREFIX/bin:\$PATH"' >> ~/.zshenv
+
 The script builds libmx2 into the local install prefix before configuring ACMX2.
 EOF
