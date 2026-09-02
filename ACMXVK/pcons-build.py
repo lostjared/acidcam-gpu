@@ -258,25 +258,29 @@ for shader in sorted((project_dir / "shaders" / "xfade").glob("xfade_*.glsl")):
 
 default_model_output = runtime_dir / "models" / "cube.obj"
 overlay_font_output = runtime_dir / "data" / "font.ttf"
+default_model_marker = runtime_dir / "models" / ".cube.pcons-asset"
+overlay_font_marker = runtime_dir / "data" / ".font.pcons-asset"
 resource_targets = [
     project.Command(
         "acmxvk-default-model",
         env,
-        target=default_model_output,
+        target=default_model_marker,
         source=project_dir / "models" / "cube.obj",
         command=(
             f"mkdir -p {quoted(default_model_output.parent)} && "
-            f"cp {quoted(project_dir / 'models' / 'cube.obj')} {quoted(default_model_output)}"
+            f"cp {quoted(project_dir / 'models' / 'cube.obj')} {quoted(default_model_output)} && "
+            f"touch {quoted(default_model_marker)}"
         ),
     ),
     project.Command(
         "acmxvk-overlay-font",
         env,
-        target=overlay_font_output,
+        target=overlay_font_marker,
         source=project_dir.parent / "ACMX2" / "data" / "font.ttf",
         command=(
             f"mkdir -p {quoted(overlay_font_output.parent)} && "
-            f"cp {quoted(project_dir.parent / 'ACMX2' / 'data' / 'font.ttf')} {quoted(overlay_font_output)}"
+            f"cp {quoted(project_dir.parent / 'ACMX2' / 'data' / 'font.ttf')} {quoted(overlay_font_output)} && "
+            f"touch {quoted(overlay_font_marker)}"
         ),
     ),
 ]
