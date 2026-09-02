@@ -174,6 +174,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def require_outside_checkout(path: Path, label: str) -> None:
+    """Avoid Pcons non-relocatable-build warnings from embedded local paths."""
+    try:
+        path.relative_to(ROOT_DIR)
+    except ValueError:
+        return
+    raise RuntimeError(
+        f"{label} must be outside the checkout to keep build.ninja relocatable: {path}"
+    )
+
+
 def main() -> int:
     args = parse_args()
     if platform.system() != "Darwin":
@@ -192,10 +203,14 @@ def main() -> int:
     opencv_package = find_opencv_package(environment, args.dry_run)
 
     build_dir = args.build_dir or Path(
-        os.environ.get("ACMX_MACOS_BUILD_DIRECTORY", ROOT_DIR / "build" / "macos-pcons")
+        os.environ.get(
+            "ACMX_MACOS_BUILD_DIRECTORY", ROOT_DIR.parent / f"{ROOT_DIR.name}-macos-pcons-build"
+        )
     )
     install_prefix = args.prefix or Path(
-        os.environ.get("ACMX_MACOS_INSTALL_PREFIX", ROOT_DIR / "build" / "macos-pcons-prefix")
+        os.environ.get(
+            "ACMX_MACOS_INSTALL_PREFIX", ROOT_DIR.parent / f"{ROOT_DIR.name}-macos-pcons-prefix"
+        )
     )
     libmx2_dir = args.libmx2_source or Path(
         os.environ.get("LIBMX2_SOURCE_DIR", ROOT_DIR.parent / "libmx2")
@@ -207,6 +222,8 @@ def main() -> int:
     install_prefix = install_prefix.expanduser().resolve()
     libmx2_dir = libmx2_dir.expanduser().resolve()
     mxvk_dir = mxvk_dir.expanduser().resolve()
+    require_outside_checkout(build_dir, "--build-dir")
+    require_outside_checkout(install_prefix, "--prefix")
 
     checkout(libmx2_dir, LIBMX2_REPOSITORY, libmx2_dir / "libmx" / "CMakeLists.txt", args.dry_run)
     checkout(mxvk_dir, MXVK_REPOSITORY, mxvk_dir / "CMakeLists.txt", args.dry_run)

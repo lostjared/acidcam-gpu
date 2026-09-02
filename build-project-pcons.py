@@ -123,6 +123,17 @@ def enabled(value: bool) -> str:
     return "1" if value else "0"
 
 
+def require_outside_checkout(path: Path, label: str) -> None:
+    """Avoid Pcons non-relocatable-build warnings from embedded local paths."""
+    try:
+        path.relative_to(ROOT_DIR)
+    except ValueError:
+        return
+    raise RuntimeError(
+        f"{label} must be outside the checkout to keep build.ninja relocatable: {path}"
+    )
+
+
 def main() -> int:
     args = parse_args()
     if platform.system() not in {"Linux", "Darwin"}:
@@ -136,10 +147,14 @@ def main() -> int:
     opencv_package = find_opencv_package(args.dry_run)
 
     build_dir = args.build_dir or Path(
-        os.environ.get("ACMX_PCONS_BUILD_DIRECTORY", ROOT_DIR / "build" / "pcons")
+        os.environ.get(
+            "ACMX_PCONS_BUILD_DIRECTORY", ROOT_DIR.parent / f"{ROOT_DIR.name}-pcons-build"
+        )
     )
     install_prefix = args.prefix or Path(
-        os.environ.get("ACMX_PCONS_INSTALL_PREFIX", ROOT_DIR / "build" / "pcons-prefix")
+        os.environ.get(
+            "ACMX_PCONS_INSTALL_PREFIX", ROOT_DIR.parent / f"{ROOT_DIR.name}-pcons-prefix"
+        )
     )
     libmx2_dir = args.libmx2_source or Path(
         os.environ.get("LIBMX2_SOURCE_DIR", ROOT_DIR.parent / "libmx2")
@@ -151,6 +166,8 @@ def main() -> int:
     install_prefix = install_prefix.expanduser().resolve()
     libmx2_dir = libmx2_dir.expanduser().resolve()
     mxvk_dir = mxvk_dir.expanduser().resolve()
+    require_outside_checkout(build_dir, "--build-dir")
+    require_outside_checkout(install_prefix, "--prefix")
 
     if args.skip_clone and not (libmx2_dir / ".git").is_dir():
         raise RuntimeError(f"libmx2 checkout is required: {libmx2_dir}")
