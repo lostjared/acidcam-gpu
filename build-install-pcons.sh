@@ -85,14 +85,14 @@ echo "Building and staging ACMX2 targets..."
     cd "$REPO_DIR"
     CC="$compiler_c" CXX="$compiler_cxx" \
         "$pcons_command" "${pcons_options[@]}" "${pcons_defaults[@]}" \
-        "VARIANT=$variant" "$@" all
+        "VARIANT=$variant" "$@" all install
 )
 
 echo "Building and staging the Qt interface..."
 (
     cd "$INTERFACE_DIR"
-    CC="$compiler_c" CXX="$compiler_cxx" VARIANT="$variant" \
-        "$pcons_command" "${pcons_options[@]}" all
+        CC="$compiler_c" CXX="$compiler_cxx" VARIANT="$variant" \
+        "$pcons_command" "${pcons_options[@]}" all install
 )
 
 required_files=(
@@ -100,6 +100,7 @@ required_files=(
     "$ROOT_STAGE_DIR/bin/audio_transfer"
     "$ROOT_STAGE_DIR/bin/shader_generator"
     "$INTERFACE_STAGE_DIR/bin/acmx2_interface"
+    "$INTERFACE_STAGE_DIR/bin/create_acmxvk_source_manifest"
     "$INTERFACE_STAGE_DIR/bin/midi-map"
     "$INTERFACE_STAGE_DIR/share/applications/acmx2-interface.desktop"
 )
@@ -154,6 +155,9 @@ run_install install -Dm755 \
     "$INTERFACE_STAGE_DIR/bin/acmx2_interface" \
     "$INSTALL_ROOT/bin/acmx2_interface"
 run_install install -Dm755 \
+    "$INTERFACE_STAGE_DIR/bin/create_acmxvk_source_manifest" \
+    "$INSTALL_ROOT/bin/create_acmxvk_source_manifest"
+run_install install -Dm755 \
     "$INTERFACE_STAGE_DIR/bin/midi-map" \
     "$INSTALL_ROOT/bin/midi-map"
 
@@ -161,6 +165,16 @@ library_source="$ROOT_STAGE_DIR/lib/libacidcam-gpu.so"
 if [[ -f "$library_source" ]]; then
     run_install install -Dm755 \
         "$library_source" "$INSTALL_ROOT/lib/libacidcam-gpu.so"
+    for header_source in "$ROOT_STAGE_DIR"/include/ac-gpu/*.{hpp,h}; do
+        [[ -f "$header_source" ]] || continue
+        run_install install -Dm644 \
+            "$header_source" "$INSTALL_ROOT/include/ac-gpu/$(basename -- "$header_source")"
+    done
+    if [[ -f "$ROOT_STAGE_DIR/lib/pkgconfig/acidcam-gpu.pc" ]]; then
+        run_install install -Dm644 \
+            "$ROOT_STAGE_DIR/lib/pkgconfig/acidcam-gpu.pc" \
+            "$INSTALL_ROOT/lib/pkgconfig/acidcam-gpu.pc"
+    fi
 fi
 
 run_install install -d "$INSTALL_ROOT/share/acmx2"
@@ -185,5 +199,6 @@ echo "  Programs: $INSTALL_ROOT/bin"
 if [[ -f "$library_source" ]]; then
     echo "  Library:  $INSTALL_ROOT/lib/libacidcam-gpu.so"
 fi
+echo "  ACMXVK manifest tool: $INSTALL_ROOT/bin/create_acmxvk_source_manifest"
 echo "  Data:     $INSTALL_ROOT/share/acmx2"
 echo "  Desktop:  $INSTALL_ROOT/share/applications/acmx2-interface.desktop"
