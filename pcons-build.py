@@ -215,9 +215,13 @@ def find_by_prefix(
                     include_dirs=[str(prefix / "include" / include_subdir)],
                     library_dirs=[str(libdir)] if libraries else [],
                     libraries=list(libraries),
-                    # CMake's INSTALL_RPATH, so the binaries run in place.
+                    # Use a relative install rpath. An absolute prefix inside
+                    # the project would make Pcons' build.ninja non-relocatable.
                     link_flags=(
-                        [f"-Wl,-rpath,{libdir}"]
+                        [
+                            "-Wl,-rpath,"
+                            + ("@loader_path/../lib" if platform.is_macos else "$ORIGIN/../lib")
+                        ]
                         if libraries and not platform.is_windows
                         else []
                     ),

@@ -256,10 +256,35 @@ for shader in sorted((project_dir / "shaders" / "xfade").glob("xfade_*.glsl")):
         "-fshader-stage=fragment",
     )
 
+default_model_output = runtime_dir / "models" / "cube.obj"
+overlay_font_output = runtime_dir / "data" / "font.ttf"
+resource_targets = [
+    project.Command(
+        "acmxvk-default-model",
+        env,
+        target=default_model_output,
+        source=project_dir / "models" / "cube.obj",
+        command=(
+            f"mkdir -p {quoted(default_model_output.parent)} && "
+            f"cp {quoted(project_dir / 'models' / 'cube.obj')} {quoted(default_model_output)}"
+        ),
+    ),
+    project.Command(
+        "acmxvk-overlay-font",
+        env,
+        target=overlay_font_output,
+        source=project_dir.parent / "ACMX2" / "data" / "font.ttf",
+        command=(
+            f"mkdir -p {quoted(overlay_font_output.parent)} && "
+            f"cp {quoted(project_dir.parent / 'ACMX2' / 'data' / 'font.ttf')} {quoted(overlay_font_output)}"
+        ),
+    ),
+]
+
 acmxvk = project.Program("acmxvk", env, sources=sources)
 acmxvk.private.include_dirs.extend([project_dir, project_dir / "app"])
 acmxvk.link(*libraries)
-acmxvk.add_dependency(*shader_targets)
+acmxvk.add_dependency(*resource_targets, *shader_targets)
 
 build_defines = {
     "ACMXVK_BUILD_RESOURCE_DIRECTORY": runtime_dir,
@@ -280,9 +305,9 @@ build_defines = {
     "ACMXVK_INSTALL_MODEL_VERTEX_SHADER": install_resource_dir / "shaders" / "model.vert.spv",
     "ACMXVK_BUILD_MODEL_FRAGMENT_SHADER": shader_output_dir / "model.frag.spv",
     "ACMXVK_INSTALL_MODEL_FRAGMENT_SHADER": install_resource_dir / "shaders" / "model.frag.spv",
-    "ACMXVK_BUILD_DEFAULT_MODEL": project_dir / "models" / "cube.obj",
+    "ACMXVK_BUILD_DEFAULT_MODEL": default_model_output,
     "ACMXVK_INSTALL_DEFAULT_MODEL": install_resource_dir / "models" / "cube.obj",
-    "ACMXVK_BUILD_OVERLAY_FONT": project_dir.parent / "ACMX2" / "data" / "font.ttf",
+    "ACMXVK_BUILD_OVERLAY_FONT": overlay_font_output,
     "ACMXVK_INSTALL_OVERLAY_FONT": install_resource_dir / "data" / "font.ttf",
     "ACMXVK_BUILD_CROSSFADE_DIRECTORY": shader_output_dir / "xfade",
     "ACMXVK_INSTALL_CROSSFADE_DIRECTORY": install_resource_dir / "shaders" / "xfade",
