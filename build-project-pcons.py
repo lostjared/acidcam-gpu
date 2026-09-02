@@ -219,7 +219,11 @@ def main() -> int:
         ROOT_DIR,
         build_dir / "acmx2",
         install_prefix,
-        [*common_options, "WITH_CUDA=" + enabled(args.cuda)],
+        [
+            *common_options,
+            "WITH_CUDA=" + enabled(args.cuda),
+            "MXWRITE_SOURCE_DIR=" + str(mxvk_dir / "MXWrite"),
+        ],
         jobs=args.jobs,
         dry_run=args.dry_run,
     )

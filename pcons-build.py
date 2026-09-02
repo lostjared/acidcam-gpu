@@ -26,6 +26,7 @@ parentheses:
     TIFF=1            (-DTIFF)               16-bit TIFF HDR snapshots
     VARIANT=debug     (-DCMAKE_BUILD_TYPE)   default: release
     PREFIX=<dir>      (-DCMAKE_PREFIX_PATH)  extra dependency search prefix
+    MXWRITE_SOURCE_DIR=<dir>                  MXWrite source directory
     PCONS_INSTALL_PREFIX=<dir>                staged install prefix
     PCONS_FINAL_PREFIX=<dir>                  final runtime install prefix
 
@@ -275,11 +276,42 @@ if not platform.is_windows:
     env.link.flags.append("-pthread")
 
 # =============================================================================
-# MXWrite: FFmpeg encoder library, built in-tree as a private dependency
+# MXWrite: FFmpeg encoder library, built from a compatible source checkout.
 # =============================================================================
 
-mxwrite = project.StaticLibrary("mxwrite", env, sources=["MXWrite/mxwrite.cpp"])
-mxwrite.public.include_dirs.append("MXWrite")
+# ACMX2 and MXWrite evolve together.  The repository historically shipped a
+# copy in MXWrite/, but a checkout can retain an older copy after cherry-picks
+# or partial updates.  The top-level build wrappers therefore explicitly point
+# this at MXVK's current bundled MXWrite source.  Keep the local copy as the
+# direct-Pcons default, but fail early with an actionable message if it lacks
+# the encoder API required by the checked-out ACMX2 source.
+mxwrite_source_dir = Path(
+    get_var("MXWRITE_SOURCE_DIR", str(project_dir / "MXWrite"))
+).expanduser().resolve()
+mxwrite_header = mxwrite_source_dir / "mxwrite.hpp"
+mxwrite_source = mxwrite_source_dir / "mxwrite.cpp"
+if not mxwrite_header.is_file() or not mxwrite_source.is_file():
+    raise SystemExit(
+        "MXWrite source is incomplete: expected mxwrite.hpp and mxwrite.cpp under "
+        f"MXWRITE_SOURCE_DIR={mxwrite_source_dir}."
+    )
+mxwrite_api = mxwrite_header.read_text(encoding="utf-8", errors="replace")
+required_mxwrite_api = (
+    "struct EncodeOptions",
+    "set_block_when_full",
+    "write_at_pts",
+    "available_video_encoders",
+)
+missing_mxwrite_api = [name for name in required_mxwrite_api if name not in mxwrite_api]
+if missing_mxwrite_api:
+    raise SystemExit(
+        "MXWrite source is incompatible with this ACMX2 checkout (missing "
+        + ", ".join(missing_mxwrite_api)
+        + "). Update MXWrite, or pass MXWRITE_SOURCE_DIR=/path/to/a/current/MXVK/MXWrite."
+    )
+
+mxwrite = project.StaticLibrary("mxwrite", env, sources=[mxwrite_source])
+mxwrite.public.include_dirs.append(mxwrite_source_dir)
 mxwrite.link(ffmpeg)
 if with_cuda:
     # PUBLIC in CMake, and it has to stay public: the define changes the
@@ -345,12 +377,17 @@ if option("TIFF"):
     libs.append(package("libtiff-4"))
 
 acmx2 = project.Program("acmx2", env, sources=sources)
+# Homebrew's global include directory can contain an older installed MXWrite
+# header.  This must precede package-provided include paths so ACMX2 sees the
+# same header as the libmxwrite.a it links below.
+acmx2.private.include_dirs.insert(0, mxwrite_source_dir)
 acmx2.private.defines.extend(defines)
 acmx2.link(*libs)
 
 audio_transfer = project.Program(
     "audio_transfer", env, sources=["ACMX2/audio_transfer.cpp"]
 )
+audio_transfer.private.include_dirs.insert(0, mxwrite_source_dir)
 audio_transfer.link(mxwrite, ffmpeg)
 
 # =============================================================================

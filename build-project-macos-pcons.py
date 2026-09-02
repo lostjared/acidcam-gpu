@@ -270,6 +270,7 @@ def main() -> int:
             "TIFF=1",
             "DNN=1",
             "WITH_CUDA=0",
+            "MXWRITE_SOURCE_DIR=" + str(mxvk_dir / "MXWrite"),
         ],
         environment=environment,
         dry_run=args.dry_run,
