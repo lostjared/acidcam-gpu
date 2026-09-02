@@ -118,6 +118,7 @@ namespace ac_gpu {
 #endif
 #if defined(__APPLE__)
 #include <fcntl.h>
+#include <mach-o/dyld.h>
 #include <semaphore.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -134,6 +135,73 @@ namespace ac_gpu {
 #endif
 #include <opencv2/opencv.hpp>
 #include <string_view>
+
+/**
+ * @brief Return the directory containing the running ACMX2 executable.
+ *
+ * Installed ACMX2 layouts place the program in @c <prefix>/bin and its runtime
+ * data in @c <prefix>/share/acmx2. Resolving this from the executable keeps a
+ * relocated installation self-contained instead of assuming @c /usr/local.
+ */
+static std::filesystem::path executable_directory() {
+#if defined(__linux__)
+    std::vector<char> executable_path(1024, '\0');
+    while (true) {
+        const ssize_t length = readlink("/proc/self/exe", executable_path.data(),
+                                        executable_path.size() - 1);
+        if (length < 0) {
+            return {};
+        }
+        if (static_cast<size_t>(length) < executable_path.size() - 1) {
+            executable_path[static_cast<size_t>(length)] = '\0';
+            return std::filesystem::path(executable_path.data()).parent_path();
+        }
+        executable_path.resize(executable_path.size() * 2, '\0');
+    }
+#elif defined(__APPLE__)
+    uint32_t required_size = 0;
+    if (_NSGetExecutablePath(nullptr, &required_size) != -1 || required_size == 0) {
+        return {};
+    }
+
+    std::vector<char> executable_path(required_size, '\0');
+    if (_NSGetExecutablePath(executable_path.data(), &required_size) != 0) {
+        return {};
+    }
+
+    std::error_code error;
+    const std::filesystem::path resolved_path =
+        std::filesystem::weakly_canonical(executable_path.data(), error);
+    return error ? std::filesystem::path(executable_path.data()).parent_path()
+                 : resolved_path.parent_path();
+#else
+    return {};
+#endif
+}
+
+/** @brief Locate the installed ACMX2 asset root relative to the executable. */
+static std::filesystem::path installed_assets_directory() {
+    const std::filesystem::path executable_dir = executable_directory();
+    if (executable_dir.empty()) {
+        return {};
+    }
+
+    const std::vector<std::filesystem::path> candidates = {
+        executable_dir.parent_path() / "share" / "acmx2",
+#if defined(__APPLE__)
+        executable_dir.parent_path() / "Resources" / "acmx2",
+#endif
+        executable_dir,
+    };
+    for (const std::filesystem::path &candidate : candidates) {
+        std::error_code error;
+        if (std::filesystem::is_regular_file(candidate / "data" / "win-icon.png",
+                                             error)) {
+            return candidate;
+        }
+    }
+    return {};
+}
 
 /// @brief Copy the audio track from one media file to another via FFmpeg.
 void transfer_audio(std::string_view, std::string_view);
@@ -13639,10 +13707,6 @@ class MainWindow : public gl::GLWindow {
     void initCommon(const MXArguments &args) {
         update_compute_shader_support();
         util.path = args.path;
-        if (!std::filesystem::exists(util.path + "/data/win-icon.png")) {
-            if (std::filesystem::exists("/usr/local/share/acmx2/data"))
-                util.path = "/usr/local/share/acmx2";
-        }
 
         if (!silent_mode) {
             SDL_Surface *ico = png::LoadPNG(util.getFilePath("data/win-icon.png").c_str());
@@ -13886,7 +13950,7 @@ namespace {
         printSection(out, c, "Snapshots", {{"Z", "Save PNG snapshot (SDR 8-bit; HDR mode still outputs SDR PNG).", ""}, {"4", "Save TIFF snapshot (SDR: 8-bit RGBA; HDR: 16-bit RGBA; requires ACMX2_WITH_TIFF).", ""}, {"5", "Save lossless WebP snapshot (HDR is tone-mapped; requires ACMX2_WITH_WEBP).", ""}, {"6", "Save raw RGBA snapshot (HDR: 16-bit RGBA, otherwise 8-bit RGBA).", "ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw"}});
 
         printSection(out, c, "3D Mode", {{"W / A / S / D", "Look around.", ""}, {"V", "Toggle view rotation.", ""}, {"O", "Toggle oscillation.", ""}, {"X", "Reset camera distance.", ""}, {"+ / -", "Increase/decrease camera distance.", ""}, {"B", "Increase movement speed.", ""}, {"N (held in 3D)", "Decrease movement speed.", ""}, {"C", "Toggle object wave.", ""}, {"E", "Enable/disable watermark.", ""}, {"]", "Increase model scale.", ""}, {"[", "Decrease model scale.", ""}, {". (period)", "Increase camera rotation speed.", ""}, {", (comma)", "Decrease camera rotation speed.", ""}});
-        printSection(out, c, "Environment Variables", {{"ACMX2_PATH", "Default assets root directory (equivalent to --path). Used when --path is not specified.", "export ACMX2_PATH=/usr/local/share/acmx2"}, {"ACMX2_SHADER_PATH", "Default shader library index file or directory (equivalent to --shaders). Used when neither --shaders nor --fragment is specified.", "export ACMX2_SHADER_PATH=/usr/local/share/acmx2/filters"}});
+        printSection(out, c, "Environment Variables", {{"ACMX2_PATH", "Default assets root directory (equivalent to --path). Used when --path is not specified.", "export ACMX2_PATH=/path/to/share/acmx2"}, {"ACMX2_SHADER_PATH", "Default shader library index file or directory (equivalent to --shaders). Used when neither --shaders nor --fragment is specified.", "export ACMX2_SHADER_PATH=/path/to/shaders"}});
     }
 } // namespace
 
@@ -14830,8 +14894,15 @@ int main(int argc, char **argv) {
             args.path = env_path;
             mx::system_out << "acmx2: Using ACMX2_PATH environment variable: " << args.path << "\n";
         } else {
-            args.path = ".";
-            mx::system_out << "acmx2: Path name not provided, using current path...\n";
+            const std::filesystem::path installed_assets = installed_assets_directory();
+            if (!installed_assets.empty()) {
+                args.path = installed_assets.string();
+                mx::system_out << "acmx2: Using installed assets relative to executable: "
+                               << args.path << "\n";
+            } else {
+                args.path = ".";
+                mx::system_out << "acmx2: Path name not provided, using current path...\n";
+            }
         }
     }
     if (args.library.empty() && args.fragment.empty()) {

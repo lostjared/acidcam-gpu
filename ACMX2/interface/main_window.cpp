@@ -123,7 +123,10 @@ namespace {
 #else
         if (QFileInfo::exists(dirPath + "/data/win-icon.png"))
             return dirPath;
-        return QStringLiteral("/usr/local/share/acmx2");
+        const QString installedPath = QDir::cleanPath(dirPath + "/../share/acmx2");
+        if (QFileInfo::exists(installedPath + "/data/win-icon.png"))
+            return installedPath;
+        return dirPath;
 #endif
     }
 
@@ -4808,12 +4811,7 @@ void MainWindow::menuBuildShaderCache() {
     return;
 #else
 
-    QString dirPath = QCoreApplication::applicationDirPath();
-#ifdef BUILD_BUNDLE
-    QString assets_path = dirPath + "/../Helpers";
-#else
-    QString assets_path = QFileInfo::exists(dirPath + "/data/win-icon.png") ? dirPath : QStringLiteral("/usr/local/share/acmx2");
-#endif
+    const QString assets_path = resolveAssetsPath();
 
     QStringList args;
     args << "--build" << build_path;
@@ -5014,14 +5012,7 @@ void MainWindow::menuRemoveBroken() {
     if (reply != QMessageBox::Yes)
         return;
 
-    QString dirPath = QCoreApplication::applicationDirPath();
-#ifdef BUILD_BUNDLE
-    QString assets_path = dirPath + "/../Helpers";
-#else
-    QString assets_path = QFileInfo::exists(dirPath + "/data/win-icon.png")
-                              ? dirPath
-                              : QStringLiteral("/usr/local/share/acmx2");
-#endif
+    const QString assets_path = resolveAssetsPath();
 
     QStringList args;
     args << "--remove-broken" << scan_path;
