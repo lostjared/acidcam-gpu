@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pcons"]
+# dependencies = ["pcons>=0.24"]
 # ///
 """pcons build for acidcam-gpu / ACMX2 (https://github.com/lostjared/acidcam-gpu).
 
@@ -26,6 +26,8 @@ parentheses:
     TIFF=1            (-DTIFF)               16-bit TIFF HDR snapshots
     VARIANT=debug     (-DCMAKE_BUILD_TYPE)   default: release
     PREFIX=<dir>      (-DCMAKE_PREFIX_PATH)  extra dependency search prefix
+    PCONS_INSTALL_PREFIX=<dir>                staged install prefix
+    PCONS_FINAL_PREFIX=<dir>                  final runtime install prefix
 
 Everything is found through pkg-config except libmx2
 (https://github.com/lostjared/libmx2) and glm, which install CMake config
@@ -341,7 +343,37 @@ shader_generator.link(package("libcurl"))
 programs = [acmx2, audio_transfer, shader_generator]
 if acidcam is not None:
     programs.append(acidcam)
-project.Install("bin", programs)
-project.InstallDir("share/acmx2", "ACMX2/data")
+
+installed: list[Target] = [
+    project.Install("bin", programs),
+    # CMake's install(DIRECTORY data DESTINATION share/acmx2) preserves the
+    # data directory itself; ACMX2's executable-relative lookup expects that.
+    project.InstallDir("share/acmx2", "ACMX2/data"),
+]
+
 if acidcam_gpu is not None:
-    project.Install("lib", [acidcam_gpu])
+    stage_prefix = Path(get_var("PCONS_INSTALL_PREFIX", str(project_dir / "dist")))
+    final_prefix = Path(get_var("PCONS_FINAL_PREFIX", str(stage_prefix)))
+    acidcam_pc = project.build_dir / "acidcam-gpu.pc"
+    acidcam_pc.parent.mkdir(parents=True, exist_ok=True)
+    acidcam_pc.write_text(
+        f"prefix={final_prefix}\n"
+        "exec_prefix=${prefix}\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\n\n"
+        "Name: acidcam-gpu\n"
+        "Description: CUDA-accelerated Acid Cam GPU filter library\n"
+        "Version: 1.1.0\n"
+        "Requires.private: opencv5 libavcodec libavformat libavutil libswscale\n"
+        "Libs: -L${libdir} -lacidcam-gpu\n"
+        "Libs.private: -lcudart\n"
+        "Cflags: -I${includedir}\n"
+    )
+    public_headers = sorted((project_dir / "acidcam-gpu" / "include" / "ac-gpu").glob("*.h*"))
+    installed.extend(
+        [
+            project.Install("lib", [acidcam_gpu]),
+            project.Install("include/ac-gpu", public_headers),
+            project.Install("lib/pkgconfig", [acidcam_pc]),
+        ]
+    )
+
+project.Alias("install", *installed)

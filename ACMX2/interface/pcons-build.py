@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pcons"]
+# dependencies = ["pcons>=0.24"]
 # ///
 """pcons build for the ACMX2 Qt 6 interface and MIDI map utility.
 
@@ -14,16 +14,24 @@ Note: the checked-in qrc_qresource.cpp is a stale generated file and is
 deliberately not a source; pcons generates its own from qresource.qrc.
 
 Usage:
-    uvx pcons          # configure + generate, then: ninja -C build
-    VARIANT=debug uvx pcons
+    pcons -B build/interface-pcons --reconfigure
+    pcons -B build/interface-pcons VARIANT=debug
+
+The install alias matches CMake's executable and desktop-entry installation:
+
+    pcons -B build/interface-pcons \
+        PCONS_INSTALL_PREFIX=/opt/acmx \
+        PCONS_FINAL_PREFIX=/opt/acmx all install
 """
 
 import os
+from pathlib import Path
 
 from pcons import Project, find_c_toolchain, get_platform
 from pcons.toolchains.qt import find_qt
 
 project = Project("acmx2_interface")
+project_dir = Path(__file__).parent.resolve()
 env = project.Environment(toolchain=find_c_toolchain())
 env.cxx.set_standard(17)
 env.set_variant(os.environ.get("VARIANT", "release"))
@@ -46,6 +54,7 @@ app = project.QtProgram(
     sources=[
         "audio-playlist.cpp",
         "audio-window.cpp",
+        "acmxvk-source-manifest.cpp",
         "custom-uniforms.cpp",
         "editor.cpp",
         "find-shader.cpp",
@@ -69,6 +78,19 @@ app = project.QtProgram(
     link=[qt.Widgets, qt.Gui, qt.Concurrent, qt.Network, qt.Core],
 )
 
+# The ACMXVK source-library builder is installed beside the interface just as
+# it is in CMake.  Keep its manifest implementation shared with the GUI.
+acmxvk_source_manifest = project.Program(
+    "create_acmxvk_source_manifest",
+    env,
+    sources=[
+        "acmxvk-source-manifest-cli.cpp",
+        "acmxvk-source-manifest.cpp",
+    ],
+)
+acmxvk_source_manifest.private.include_dirs.append(".")
+acmxvk_source_manifest.link(qt.Core)
+
 rtmidi = project.find_package("rtmidi")
 assert rtmidi is not None
 
@@ -88,6 +110,10 @@ midi_map = project.QtProgram(
 )
 midi_map.output_name = "midi-map"
 
-project.Install("bin", [app])
-project.InstallAs("bin/midi-map", midi_map, name="install_midi_map")
-project.Install("share/applications", ["acmx2-interface.desktop"])
+installed = [
+    project.Install("bin", [app, acmxvk_source_manifest]),
+    project.InstallAs("bin/midi-map", midi_map, name="install_midi_map"),
+    project.Install("share/applications", ["acmx2-interface.desktop"]),
+    project.Install("share/acmx2", [project_dir.parent / "data" / "win-icon.png"]),
+]
+project.Alias("install", *installed)

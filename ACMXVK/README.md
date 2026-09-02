@@ -100,6 +100,29 @@ cmake --build build/acmxvk --target uninstall
 Audio and MIDI support are optional and remain disabled when their CMake
 options are omitted.
 
+### Pcons
+
+`pcons-build.py` is a native Pcons alternative to the CMake build. Build and
+install MXVK first, then pass its installation prefix through `PREFIX`:
+
+```bash
+cd ACMXVK
+pcons -B build/pcons --reconfigure \
+    PREFIX=/opt/mxvk \
+    PCONS_INSTALL_PREFIX=/opt/acmxvk \
+    PCONS_FINAL_PREFIX=/opt/acmxvk \
+    AUDIO=1 MIDI=1 WEBP=1 TIFF=1 DNN=1 \
+    all install
+```
+
+`PREFIX` is only the MXVK dependency prefix; the two `PCONS_*_PREFIX` values
+choose ACMXVK's staged and final install location. The Pcons build bundles the
+repository MXWrite source and installs the executable, SPIR-V shaders,
+crossfades, playlists, MIDI examples, models, and overlay font under that
+prefix. Its CUDA filter path is intentionally unsupported for now; use the
+existing CMake build with `-DWITH_CUDA=ON` for a matching CUDA-enabled MXVK and
+acidcam-gpu installation.
+
 ### DNN and generic ONNX processing
 
 Build with OpenCV's DNN module to enable the first ported ACMX2 DNN effect:

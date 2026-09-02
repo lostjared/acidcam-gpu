@@ -2,3 +2,5 @@ build
 .acmxvk-build/
 *DS_Store
 *kdev4
+compile_commands.json
+__pycache__/
