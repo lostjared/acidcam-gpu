@@ -220,7 +220,7 @@ def find_by_prefix(
                     link_flags=(
                         [
                             "-Wl,-rpath,"
-                            + ("@loader_path/../lib" if platform.is_macos else "$ORIGIN/../lib")
+                            + ("@loader_path/../lib" if platform.is_macos else "$$ORIGIN/../lib")
                         ]
                         if libraries and not platform.is_windows
                         else []
