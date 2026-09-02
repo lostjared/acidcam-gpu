@@ -64,23 +64,32 @@ BREW_PACKAGES = (
 )
 
 
-def run(command: list[str], *, cwd: Path | None = None, dry_run: bool = False) -> None:
+def run(
+    command: list[str],
+    *,
+    cwd: Path | None = None,
+    environment: dict[str, str] | None = None,
+    dry_run: bool = False,
+) -> None:
     print("+", " ".join(command), flush=True)
     if not dry_run:
-        subprocess.run(command, cwd=cwd, check=True)
+        subprocess.run(command, cwd=cwd, env=environment, check=True)
 
 
-def require_command(name: str) -> None:
-    if shutil.which(name) is None:
+def require_command(name: str, environment: dict[str, str] | None = None) -> None:
+    path = None if environment is None else environment.get("PATH")
+    if shutil.which(name, path=path) is None:
         raise RuntimeError(f"required command was not found: {name}")
 
 
-def find_opencv_package(dry_run: bool) -> str:
+def find_opencv_package(environment: dict[str, str], dry_run: bool) -> str:
     """Homebrew has used both opencv4.pc and opencv5.pc across releases."""
     if dry_run:
         return "opencv5"
     for package in ("opencv5", "opencv4"):
-        if subprocess.run(["pkg-config", "--exists", package], check=False).returncode == 0:
+        if subprocess.run(
+            ["pkg-config", "--exists", package], env=environment, check=False
+        ).returncode == 0:
             return package
     raise RuntimeError("Homebrew OpenCV did not provide an opencv5.pc or opencv4.pc package")
 
@@ -103,6 +112,7 @@ def pcons_build(
     install_prefix: Path,
     options: list[str],
     *,
+    environment: dict[str, str],
     dry_run: bool,
 ) -> None:
     command = [
@@ -120,7 +130,37 @@ def pcons_build(
         "all",
         "install",
     ]
-    run(command, cwd=source_dir, dry_run=dry_run)
+    run(command, cwd=source_dir, environment=environment, dry_run=dry_run)
+
+
+def brew_environment() -> dict[str, str]:
+    """Expose non-default Homebrew pkg-config directories to Pcons."""
+    brew_prefix = Path(
+        subprocess.check_output(["brew", "--prefix"], text=True).strip()
+    )
+    formulae = (
+        "ffmpeg", "fontconfig", "freetype", "jpeg-turbo", "libpng", "libtiff",
+        "opencv", "qt", "rtaudio", "rtmidi", "sdl2", "sdl2_mixer", "sdl2_ttf",
+        "sdl3", "sdl3_mixer", "sdl3_ttf", "shaderc", "vulkan-loader", "webp",
+        "yaml-cpp", "zlib",
+    )
+    package_dirs = [brew_prefix / "lib" / "pkgconfig", brew_prefix / "share" / "pkgconfig"]
+    for formula in formulae:
+        result = subprocess.run(
+            ["brew", "--prefix", formula], text=True, capture_output=True, check=False
+        )
+        if result.returncode == 0:
+            prefix = Path(result.stdout.strip())
+            package_dirs.extend([prefix / "lib" / "pkgconfig", prefix / "share" / "pkgconfig"])
+    environment = os.environ.copy()
+    environment["PATH"] = os.pathsep.join(
+        [str(brew_prefix / "bin"), str(brew_prefix / "sbin"), environment.get("PATH", "")]
+    )
+    valid_dirs = [str(directory) for directory in package_dirs if directory.is_dir()]
+    environment["PKG_CONFIG_PATH"] = os.pathsep.join(
+        valid_dirs + [environment.get("PKG_CONFIG_PATH", "")]
+    )
+    return environment
 
 
 def parse_args() -> argparse.Namespace:
@@ -146,9 +186,10 @@ def main() -> int:
         require_command("brew")
         print("Installing required Homebrew packages...")
         run(["brew", "install", *BREW_PACKAGES], dry_run=args.dry_run)
-    for command in ("git", "uvx", "glslc"):
-        require_command(command)
-    opencv_package = find_opencv_package(args.dry_run)
+    environment = brew_environment()
+    for command in ("git", "uvx", "glslc", "pkg-config"):
+        require_command(command, environment)
+    opencv_package = find_opencv_package(environment, args.dry_run)
 
     build_dir = args.build_dir or Path(
         os.environ.get("ACMX_MACOS_BUILD_DIRECTORY", ROOT_DIR / "build" / "macos-pcons")
@@ -179,6 +220,7 @@ def main() -> int:
         build_dir / "libmx2",
         install_prefix,
         ["OPENGL=1", "VULKAN=0", "MOLTEN=0", "MIXER=1", "JPEG=1", "EXAMPLES=0"],
+        environment=environment,
         dry_run=args.dry_run,
     )
     print("Building MXVK with Pcons...")
@@ -194,6 +236,7 @@ def main() -> int:
             "VALIDATION=OFF",
             "OPENCV_PACKAGE=" + opencv_package,
         ],
+        environment=environment,
         dry_run=args.dry_run,
     )
     print("Building ACMX2 with Pcons...")
@@ -211,6 +254,7 @@ def main() -> int:
             "DNN=1",
             "WITH_CUDA=0",
         ],
+        environment=environment,
         dry_run=args.dry_run,
     )
     print("Building ACMXVK with Pcons...")
@@ -229,6 +273,7 @@ def main() -> int:
             "VALIDATION=0",
             "WITH_CUDA=0",
         ],
+        environment=environment,
         dry_run=args.dry_run,
     )
     print("Building the Qt interface with Pcons...")
@@ -237,6 +282,7 @@ def main() -> int:
         build_dir / "interface",
         install_prefix,
         [],
+        environment=environment,
         dry_run=args.dry_run,
     )
 

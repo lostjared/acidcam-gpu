@@ -32,10 +32,26 @@ from pcons.toolchains.qt import find_qt
 
 project = Project("acmx2_interface")
 project_dir = Path(__file__).parent.resolve()
+platform = get_platform()
+
+
+def configure_homebrew_paths() -> None:
+    """Let find_qt() locate an unlinked Homebrew Qt installation on macOS."""
+    if not platform.is_macos:
+        return
+    binary_dirs: list[str] = []
+    for prefix in (Path("/opt/homebrew"), Path("/usr/local")):
+        qt_bin = prefix / "opt" / "qt" / "bin"
+        if qt_bin.is_dir():
+            binary_dirs.append(str(qt_bin))
+    if binary_dirs:
+        os.environ["PATH"] = os.pathsep.join(binary_dirs + [os.environ.get("PATH", "")])
+
+
+configure_homebrew_paths()
 env = project.Environment(toolchain=find_c_toolchain())
 env.cxx.set_standard(17)
 env.set_variant(os.environ.get("VARIANT", "release"))
-platform = get_platform()
 
 qt = find_qt(
     project, env, modules=["Core", "Gui", "Widgets", "Concurrent", "Network"]
