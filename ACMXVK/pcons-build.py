@@ -117,6 +117,10 @@ if platform.is_linux:
     env.cxx.flags.append("-fPIC")
 if with_validation:
     env.cxx.defines.append("ENABLE_VALIDATION")
+if platform.is_macos:
+    # Match ACMXVK_USE_MOLTENVK=ON in CMake and keep Vulkan beta-extension
+    # declarations consistent with the installed MXVK package.
+    env.cxx.defines.extend(["MXVK_USE_MOLTENVK", "VK_ENABLE_BETA_EXTENSIONS"])
 
 mxvk = require_package("mxvk")
 mxvk_defines = " ".join(str(define) for define in mxvk.public.defines)
