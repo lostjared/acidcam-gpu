@@ -5,6 +5,14 @@
 #include <stdexcept>
 #include <string>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <vector>
+#endif
+
 #ifndef ACMXVK_BUILD_RESOURCE_DIRECTORY
 #define ACMXVK_BUILD_RESOURCE_DIRECTORY "."
 #endif
@@ -103,6 +111,30 @@
 
 namespace acmxvk {
     namespace {
+#ifdef _WIN32
+        [[nodiscard]] fs::path executable_resource_directory() {
+            std::vector<wchar_t> buffer(MAX_PATH);
+            for (;;) {
+                const DWORD length = GetModuleFileNameW(
+                    nullptr, buffer.data(),
+                    static_cast<DWORD>(buffer.size()));
+                if (length == 0U) {
+                    return {};
+                }
+                if (length < buffer.size() - 1U) {
+                    const std::wstring executable_name(buffer.data(), length);
+                    const fs::path executable(executable_name);
+                    return executable.parent_path().parent_path() / "share" /
+                           "acmxvk";
+                }
+                if (buffer.size() >= 32768U) {
+                    return {};
+                }
+                buffer.resize(buffer.size() * 2U);
+            }
+        }
+#endif
+
         [[nodiscard]] fs::path
         resolve_resource(const Options &options, const fs::path &relative_path,
                          const fs::path &installed_path,
@@ -134,6 +166,9 @@ namespace acmxvk {
         append(options.resource_directory);
         append(ACMXVK_INSTALL_RESOURCE_DIRECTORY);
         append(ACMXVK_BUILD_RESOURCE_DIRECTORY);
+#ifdef _WIN32
+        append(executable_resource_directory());
+#endif
         append(fs::current_path());
         return directories;
     }
