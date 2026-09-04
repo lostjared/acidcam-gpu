@@ -19,10 +19,15 @@
 
 namespace acmxvk {
     struct InterfaceClient::Impl {
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+        ipc::ShaderSelectionData *selection = nullptr;
 #if defined(__linux__) || defined(__APPLE__)
         int shm_fd = -1;
-        ipc::ShaderSelectionData *selection = nullptr;
-        sem_t *semaphore = SEM_FAILED;
+        sem_t *lock_handle = SEM_FAILED;
+#else
+        HANDLE mapping_handle = nullptr;
+        HANDLE lock_handle = nullptr;
+#endif
 #endif
     };
 
@@ -32,13 +37,14 @@ namespace acmxvk {
         close();
     }
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     bool InterfaceClient::open() {
         close();
 
-        impl->semaphore =
+#if defined(__linux__) || defined(__APPLE__)
+        impl->lock_handle =
             ::sem_open(ipc::SHADER_SELECTION_SEMAPHORE_NAME, 0);
-        if (impl->semaphore == SEM_FAILED) {
+        if (impl->lock_handle == SEM_FAILED) {
             std::cerr << "acmxvk: interface control unavailable: sem_open("
                       << ipc::SHADER_SELECTION_SEMAPHORE_NAME
                       << ") failed: " << std::strerror(errno) << '\n';
@@ -89,29 +95,90 @@ namespace acmxvk {
             return false;
         }
         impl->selection = static_cast<ipc::ShaderSelectionData *>(mapped);
+#else
+        impl->lock_handle = ::OpenMutexW(
+            SYNCHRONIZE | MUTEX_MODIFY_STATE, FALSE,
+            ipc::SHADER_SELECTION_MUTEX_NAME_WINDOWS);
+        if (impl->lock_handle == nullptr) {
+            std::cerr << "acmxvk: interface control unavailable: OpenMutexW "
+                         "failed with Windows error "
+                      << ::GetLastError() << '\n';
+            return false;
+        }
+
+        impl->mapping_handle = ::OpenFileMappingW(
+            FILE_MAP_READ, FALSE, ipc::SHADER_SELECTION_MAPPING_NAME_WINDOWS);
+        if (impl->mapping_handle == nullptr) {
+            const DWORD open_error = ::GetLastError();
+            std::cerr
+                << "acmxvk: interface control unavailable: OpenFileMappingW "
+                   "failed with Windows error "
+                << open_error << '\n';
+            close();
+            return false;
+        }
+
+        constexpr std::size_t SHARED_MEMORY_SIZE =
+            sizeof(ipc::ShaderSelectionData);
+        void *mapped = ::MapViewOfFile(impl->mapping_handle, FILE_MAP_READ, 0,
+                                       0, SHARED_MEMORY_SIZE);
+        if (mapped == nullptr) {
+            const DWORD map_error = ::GetLastError();
+            std::cerr << "acmxvk: interface control unavailable: MapViewOfFile "
+                         "failed with Windows error "
+                      << map_error << '\n';
+            close();
+            return false;
+        }
+        impl->selection = static_cast<ipc::ShaderSelectionData *>(mapped);
+#endif
         return true;
     }
 
     void InterfaceClient::close() noexcept {
         if (impl->selection != nullptr) {
+#if defined(__linux__) || defined(__APPLE__)
             ::munmap(impl->selection, sizeof(ipc::ShaderSelectionData));
+#else
+            ::UnmapViewOfFile(impl->selection);
+#endif
             impl->selection = nullptr;
         }
+#if defined(__linux__) || defined(__APPLE__)
         if (impl->shm_fd >= 0) {
             ::close(impl->shm_fd);
             impl->shm_fd = -1;
         }
-        if (impl->semaphore != SEM_FAILED) {
-            ::sem_close(impl->semaphore);
-            impl->semaphore = SEM_FAILED;
+        if (impl->lock_handle != SEM_FAILED) {
+            ::sem_close(impl->lock_handle);
+            impl->lock_handle = SEM_FAILED;
         }
+#else
+        if (impl->mapping_handle != nullptr) {
+            ::CloseHandle(impl->mapping_handle);
+            impl->mapping_handle = nullptr;
+        }
+        if (impl->lock_handle != nullptr) {
+            ::CloseHandle(impl->lock_handle);
+            impl->lock_handle = nullptr;
+        }
+#endif
     }
 
     bool InterfaceClient::read(InterfaceState &state) const {
-        if (impl->selection == nullptr || impl->semaphore == SEM_FAILED) {
+        if (impl->selection == nullptr) {
             return false;
         }
-        ipc::InterfaceLock lock(impl->semaphore);
+#if defined(__linux__) || defined(__APPLE__)
+        if (impl->lock_handle == SEM_FAILED) {
+            return false;
+        }
+#else
+        if (impl->lock_handle == nullptr) {
+            return false;
+        }
+#endif
+        ipc::InterfaceLock lock(impl->lock_handle);
         if (!lock) {
             return false;
         }
