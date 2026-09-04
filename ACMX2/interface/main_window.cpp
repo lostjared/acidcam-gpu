@@ -4007,6 +4007,11 @@ void MainWindow::runSelected() {
         }
     }
 
+    if (active_backend == acmx2::Backend::Acmxvk && !record_audio &&
+        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
+        arguments << "--mute-output";
+    }
+
     if (audio_available &&
         (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--sense" << QString::number(audio_sense);
@@ -4282,6 +4287,11 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
             arguments << "--record-audio" << wavPath;
             arguments << "--record-gain" << QString::number(record_volume, 'f', 2);
         }
+    }
+
+    if (active_backend == acmx2::Backend::Acmxvk && !record_audio &&
+        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
+        arguments << "--mute-output";
     }
 
     if (audio_available &&

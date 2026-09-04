@@ -300,10 +300,7 @@ void AudioSettings::updateAudioSourceControls() {
     audioPlaylistBrowseButton->setEnabled(playlistEnabled);
     audioTruncCheckBox->setEnabled(sourceEnabled);
     audioRepeatCheckBox->setEnabled(sourceEnabled);
-    if (sourceEnabled) {
-        audioPassThroughCheckBox->setChecked(true);
-        outputDeviceComboBox->setEnabled(true);
-    }
+    outputDeviceComboBox->setEnabled(audioPassThroughCheckBox->isChecked());
 
     // File and playlist audio replace microphone-specific input controls.
     // Pass-through and output selection remain available for playback.
