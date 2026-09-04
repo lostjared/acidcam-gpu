@@ -1,9 +1,11 @@
 #ifndef ACMXVK_INTERFACE_CONTROL_HPP
 #define ACMXVK_INTERFACE_CONTROL_HPP
 
-#include <cerrno>
 #include <cstdint>
+#if defined(__linux__) || defined(__APPLE__)
+#include <cerrno>
 #include <semaphore.h>
+#endif
 
 namespace acmxvk::ipc {
     // This layout intentionally mirrors ACMX2/shader_selection_shm.hpp version
@@ -63,6 +65,7 @@ namespace acmxvk::ipc {
         std::uint32_t sequence = 0;
     };
 
+#if defined(__linux__) || defined(__APPLE__)
     class SemaphoreLock {
       public:
         explicit SemaphoreLock(sem_t *value) : semaphore(value) {
@@ -89,6 +92,7 @@ namespace acmxvk::ipc {
         sem_t *semaphore = nullptr;
         bool locked = false;
     };
+#endif
 } // namespace acmxvk::ipc
 
 #endif

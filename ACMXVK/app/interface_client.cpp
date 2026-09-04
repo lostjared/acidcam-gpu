@@ -7,19 +7,23 @@
 #include <cstring>
 #include <iostream>
 #include <iterator>
-#include <semaphore.h>
 #include <utility>
 
+#if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
+#include <semaphore.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace acmxvk {
     struct InterfaceClient::Impl {
+#if defined(__linux__) || defined(__APPLE__)
         int shm_fd = -1;
         ipc::ShaderSelectionData *selection = nullptr;
         sem_t *semaphore = SEM_FAILED;
+#endif
     };
 
     InterfaceClient::InterfaceClient() : impl(std::make_unique<Impl>()) {}
@@ -28,6 +32,7 @@ namespace acmxvk {
         close();
     }
 
+#if defined(__linux__) || defined(__APPLE__)
     bool InterfaceClient::open() {
         close();
 
@@ -207,4 +212,17 @@ namespace acmxvk {
         state = std::move(next);
         return true;
     }
+#else
+    bool InterfaceClient::open() {
+        std::cerr << "acmxvk: interface control is unavailable on this platform\n";
+        return false;
+    }
+
+    void InterfaceClient::close() noexcept {}
+
+    bool InterfaceClient::read(InterfaceState &state) const {
+        static_cast<void>(state);
+        return false;
+    }
+#endif
 } // namespace acmxvk

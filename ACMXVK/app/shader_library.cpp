@@ -7,20 +7,25 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cerrno>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#if defined(__linux__) || defined(__APPLE__)
+#include <cerrno>
 #include <spawn.h>
-#include <stdexcept>
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
+#include <stdexcept>
 #include <unordered_set>
 
+#if defined(__linux__) || defined(__APPLE__)
 extern char **environ;
+#endif
 
 namespace acmxvk {
     [[nodiscard]] bool isValidCustomUniformName(const std::string &name) {
@@ -352,7 +357,11 @@ namespace acmxvk {
         static std::uint64_t sequence = 0;
         for (int attempt = 0; attempt < 100; ++attempt) {
             fs::path temporary = destination;
-            temporary += ".acmxvk-tmp-" + std::to_string(::getpid()) + "-" +
+            temporary += ".acmxvk-tmp-" +
+                         std::to_string(std::chrono::steady_clock::now()
+                                            .time_since_epoch()
+                                            .count()) +
+                         "-" +
                          std::to_string(++sequence);
             if (!fs::exists(temporary)) {
                 return temporary;
@@ -382,6 +391,7 @@ namespace acmxvk {
 
     void runGlslc(const std::string &executable, const fs::path &source_root,
                   const fs::path &source, const fs::path &output) {
+#if defined(__linux__) || defined(__APPLE__)
         std::vector<std::string> arguments{
             executable, "-I", source_root.string(), source.string(), "-o",
             output.string()};
@@ -417,6 +427,29 @@ namespace acmxvk {
                 "glslc failed for " + source.string() + " (exit status " +
                 std::to_string(WEXITSTATUS(status)) + ")");
         }
+#else
+        const auto quote = [](const std::string &value) {
+            std::string quoted{"\""};
+            for (const char character : value) {
+                if (character == '\"') {
+                    quoted += "\\\"";
+                } else {
+                    quoted += character;
+                }
+            }
+            quoted += '\"';
+            return quoted;
+        };
+        const std::string command =
+            quote(executable) + " -I " + quote(source_root.string()) + " " +
+            quote(source.string()) + " -o " + quote(output.string());
+        const int result = std::system(command.c_str());
+        if (result != 0) {
+            throw ShaderCompilationError(
+                "glslc failed for " + source.string() + " (exit status " +
+                std::to_string(result) + ")");
+        }
+#endif
     }
 
     [[nodiscard]] int buildShaderLibrary(const Options &options) {
