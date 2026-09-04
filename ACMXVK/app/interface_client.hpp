@@ -73,6 +73,7 @@ namespace acmxvk {
 
         [[nodiscard]] bool open();
         void close() noexcept;
+        [[nodiscard]] bool is_open() const noexcept;
         [[nodiscard]] bool read(InterfaceState &state) const;
 
       private:

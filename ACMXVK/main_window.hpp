@@ -143,6 +143,8 @@ namespace acmxvk {
         fs::path generate_output_directory;
         InterfaceClient interface_client;
         std::uint32_t interface_last_sequence = 0;
+        std::chrono::steady_clock::time_point interface_next_connect_attempt{};
+        bool interface_connection_warning_reported = false;
         std::uint32_t interface_last_audio_file_sequence = 0;
         std::uint32_t interface_last_reload_sequence = 0;
         std::size_t shader_index = 0;

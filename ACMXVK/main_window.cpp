@@ -2160,19 +2160,31 @@ namespace acmxvk {
             return;
         }
 
+        const auto now = std::chrono::steady_clock::now();
+        if (now < interface_next_connect_attempt) {
+            return;
+        }
+        interface_next_connect_attempt = now + std::chrono::seconds(2);
         if (!interface_client.open()) {
             return;
         }
 
         InterfaceState state;
         if (!interface_client.read(state)) {
-            std::cerr << "acmxvk: interface control protocol does not match "
-                         "this build\n";
+            if (!interface_connection_warning_reported) {
+                std::cerr << "acmxvk: could not read compatible interface "
+                             "control state; retrying\n";
+                interface_connection_warning_reported = true;
+            }
             interface_client.close();
             return;
         }
+        const bool reconnected = interface_connection_warning_reported;
+        interface_connection_warning_reported = false;
         interface_last_sequence = state.sequence;
+        apply_interface_shader_selection(state.selected_shader_name);
         apply_interface_multipass_state(state.multipass);
+        apply_interface_uniform_values(state.uniform_values);
         apply_interface_playback_state(state.playback, false);
         apply_interface_overlay_state(state.overlay, false);
         apply_interface_gpu_filter_state(state.gpu_filters, false);
@@ -2180,13 +2192,32 @@ namespace acmxvk {
             state.audio_file.request_sequence;
         interface_last_reload_sequence = state.reload.request_sequence;
         std::cout << "acmxvk: interface live shader, multipass, playback, "
-                     "overlay, GPU-filter, and audio-file control enabled\n";
+                     "overlay, GPU-filter, and audio-file control enabled"
+                  << (reconnected ? " (reconnected)" : "") << '\n';
     }
 
     void MainWindow::sync_interface_control() {
+        if (!options.interface_shm) {
+            return;
+        }
+        if (!interface_client.is_open()) {
+            initialize_interface_control();
+            return;
+        }
+
         InterfaceState state;
-        if (!interface_client.read(state) ||
-            state.sequence == interface_last_sequence) {
+        if (!interface_client.read(state)) {
+            if (!interface_connection_warning_reported) {
+                std::cerr << "acmxvk: interface control connection lost; "
+                             "retrying\n";
+                interface_connection_warning_reported = true;
+            }
+            interface_client.close();
+            interface_next_connect_attempt =
+                std::chrono::steady_clock::now() + std::chrono::seconds(2);
+            return;
+        }
+        if (state.sequence == interface_last_sequence) {
             return;
         }
         interface_last_sequence = state.sequence;

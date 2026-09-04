@@ -1,7 +1,9 @@
 #ifndef ACMXVK_INTERFACE_CONTROL_HPP
 #define ACMXVK_INTERFACE_CONTROL_HPP
 
+#include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #if defined(__linux__) || defined(__APPLE__)
 #include <cerrno>
 #include <semaphore.h>
@@ -36,6 +38,10 @@ namespace acmxvk::ipc {
     inline constexpr std::uint32_t MAX_UNIFORM_NAME = 64;
     inline constexpr std::uint32_t MAX_AUDIO_FILE_PATH = 4096;
     inline constexpr std::uint32_t MAX_SHADER_NAME = 1024;
+    inline constexpr std::size_t SHADER_SELECTION_DATA_SIZE = 76864;
+#ifdef _WIN32
+    inline constexpr DWORD INTERFACE_LOCK_TIMEOUT_MS = 1000;
+#endif
 
     struct ShaderSelectionData {
         std::uint32_t magic = SHADER_SELECTION_MAGIC;
@@ -76,6 +82,10 @@ namespace acmxvk::ipc {
         std::uint32_t sequence = 0;
     };
 
+    static_assert(std::is_standard_layout_v<ShaderSelectionData>);
+    static_assert(std::is_trivially_copyable_v<ShaderSelectionData>);
+    static_assert(sizeof(ShaderSelectionData) == SHADER_SELECTION_DATA_SIZE);
+
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     class InterfaceLock {
       public:
@@ -93,7 +103,8 @@ namespace acmxvk::ipc {
         explicit InterfaceLock(HANDLE value) : mutex(value) {
             if (mutex == nullptr)
                 return;
-            const DWORD result = ::WaitForSingleObject(mutex, INFINITE);
+            const DWORD result =
+                ::WaitForSingleObject(mutex, INTERFACE_LOCK_TIMEOUT_MS);
             locked = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
         }
 #endif

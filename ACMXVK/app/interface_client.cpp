@@ -19,6 +19,7 @@
 
 namespace acmxvk {
     struct InterfaceClient::Impl {
+        bool open_error_reported = false;
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
         ipc::ShaderSelectionData *selection = nullptr;
 #if defined(__linux__) || defined(__APPLE__)
@@ -45,9 +46,12 @@ namespace acmxvk {
         impl->lock_handle =
             ::sem_open(ipc::SHADER_SELECTION_SEMAPHORE_NAME, 0);
         if (impl->lock_handle == SEM_FAILED) {
-            std::cerr << "acmxvk: interface control unavailable: sem_open("
-                      << ipc::SHADER_SELECTION_SEMAPHORE_NAME
-                      << ") failed: " << std::strerror(errno) << '\n';
+            if (!impl->open_error_reported) {
+                std::cerr << "acmxvk: interface control unavailable: sem_open("
+                          << ipc::SHADER_SELECTION_SEMAPHORE_NAME
+                          << ") failed: " << std::strerror(errno) << '\n';
+                impl->open_error_reported = true;
+            }
             return false;
         }
 
@@ -55,9 +59,12 @@ namespace acmxvk {
             ::shm_open(ipc::SHADER_SELECTION_SHM_NAME, O_RDWR, 0666);
         if (impl->shm_fd < 0) {
             const int open_error = errno;
-            std::cerr << "acmxvk: interface control unavailable: shm_open("
-                      << ipc::SHADER_SELECTION_SHM_NAME
-                      << ") failed: " << std::strerror(open_error) << '\n';
+            if (!impl->open_error_reported) {
+                std::cerr << "acmxvk: interface control unavailable: shm_open("
+                          << ipc::SHADER_SELECTION_SHM_NAME
+                          << ") failed: " << std::strerror(open_error) << '\n';
+                impl->open_error_reported = true;
+            }
             close();
             return false;
         }
@@ -67,17 +74,23 @@ namespace acmxvk {
         struct stat shm_stat{};
         if (::fstat(impl->shm_fd, &shm_stat) != 0) {
             const int stat_error = errno;
-            std::cerr << "acmxvk: interface control unavailable: fstat("
-                      << ipc::SHADER_SELECTION_SHM_NAME
-                      << ") failed: " << std::strerror(stat_error) << '\n';
+            if (!impl->open_error_reported) {
+                std::cerr << "acmxvk: interface control unavailable: fstat("
+                          << ipc::SHADER_SELECTION_SHM_NAME
+                          << ") failed: " << std::strerror(stat_error) << '\n';
+                impl->open_error_reported = true;
+            }
             close();
             return false;
         }
         if (shm_stat.st_size < static_cast<off_t>(SHARED_MEMORY_SIZE)) {
-            std::cerr << "acmxvk: interface control unavailable: "
-                      << ipc::SHADER_SELECTION_SHM_NAME << " has size "
-                      << shm_stat.st_size << " bytes; expected "
-                      << SHARED_MEMORY_SIZE << '\n';
+            if (!impl->open_error_reported) {
+                std::cerr << "acmxvk: interface control unavailable: "
+                          << ipc::SHADER_SELECTION_SHM_NAME << " has size "
+                          << shm_stat.st_size << " bytes; expected "
+                          << SHARED_MEMORY_SIZE << '\n';
+                impl->open_error_reported = true;
+            }
             close();
             return false;
         }
@@ -87,10 +100,13 @@ namespace acmxvk {
                               impl->shm_fd, 0);
         if (mapped == MAP_FAILED) {
             const int map_error = errno;
-            std::cerr << "acmxvk: interface control unavailable: mmap("
-                      << ipc::SHADER_SELECTION_SHM_NAME << ", "
-                      << SHARED_MEMORY_SIZE
-                      << ") failed: " << std::strerror(map_error) << '\n';
+            if (!impl->open_error_reported) {
+                std::cerr << "acmxvk: interface control unavailable: mmap("
+                          << ipc::SHADER_SELECTION_SHM_NAME << ", "
+                          << SHARED_MEMORY_SIZE
+                          << ") failed: " << std::strerror(map_error) << '\n';
+                impl->open_error_reported = true;
+            }
             close();
             return false;
         }
@@ -100,9 +116,12 @@ namespace acmxvk {
             SYNCHRONIZE | MUTEX_MODIFY_STATE, FALSE,
             ipc::SHADER_SELECTION_MUTEX_NAME_WINDOWS);
         if (impl->lock_handle == nullptr) {
-            std::cerr << "acmxvk: interface control unavailable: OpenMutexW "
-                         "failed with Windows error "
-                      << ::GetLastError() << '\n';
+            if (!impl->open_error_reported) {
+                std::cerr << "acmxvk: interface control unavailable: OpenMutexW "
+                             "failed with Windows error "
+                          << ::GetLastError() << '\n';
+                impl->open_error_reported = true;
+            }
             return false;
         }
 
@@ -110,10 +129,13 @@ namespace acmxvk {
             FILE_MAP_READ, FALSE, ipc::SHADER_SELECTION_MAPPING_NAME_WINDOWS);
         if (impl->mapping_handle == nullptr) {
             const DWORD open_error = ::GetLastError();
-            std::cerr
-                << "acmxvk: interface control unavailable: OpenFileMappingW "
-                   "failed with Windows error "
-                << open_error << '\n';
+            if (!impl->open_error_reported) {
+                std::cerr
+                    << "acmxvk: interface control unavailable: OpenFileMappingW "
+                       "failed with Windows error "
+                    << open_error << '\n';
+                impl->open_error_reported = true;
+            }
             close();
             return false;
         }
@@ -124,14 +146,19 @@ namespace acmxvk {
                                        0, SHARED_MEMORY_SIZE);
         if (mapped == nullptr) {
             const DWORD map_error = ::GetLastError();
-            std::cerr << "acmxvk: interface control unavailable: MapViewOfFile "
-                         "failed with Windows error "
-                      << map_error << '\n';
+            if (!impl->open_error_reported) {
+                std::cerr
+                    << "acmxvk: interface control unavailable: MapViewOfFile "
+                       "failed with Windows error "
+                    << map_error << '\n';
+                impl->open_error_reported = true;
+            }
             close();
             return false;
         }
         impl->selection = static_cast<ipc::ShaderSelectionData *>(mapped);
 #endif
+        impl->open_error_reported = false;
         return true;
     }
 
@@ -165,19 +192,22 @@ namespace acmxvk {
 #endif
     }
 
-    bool InterfaceClient::read(InterfaceState &state) const {
-        if (impl->selection == nullptr) {
-            return false;
-        }
+    bool InterfaceClient::is_open() const noexcept {
 #if defined(__linux__) || defined(__APPLE__)
-        if (impl->lock_handle == SEM_FAILED) {
-            return false;
-        }
+        return impl->selection != nullptr && impl->shm_fd >= 0 &&
+               impl->lock_handle != SEM_FAILED;
+#elif defined(_WIN32)
+        return impl->selection != nullptr && impl->mapping_handle != nullptr &&
+               impl->lock_handle != nullptr;
 #else
-        if (impl->lock_handle == nullptr) {
+        return false;
+#endif
+    }
+
+    bool InterfaceClient::read(InterfaceState &state) const {
+        if (!is_open()) {
             return false;
         }
-#endif
         ipc::InterfaceLock lock(impl->lock_handle);
         if (!lock) {
             return false;
@@ -286,6 +316,8 @@ namespace acmxvk {
     }
 
     void InterfaceClient::close() noexcept {}
+
+    bool InterfaceClient::is_open() const noexcept { return false; }
 
     bool InterfaceClient::read(InterfaceState &state) const {
         static_cast<void>(state);

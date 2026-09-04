@@ -748,6 +748,20 @@ target_compile_definitions(acmxvk PRIVATE
 )
 
 if(BUILD_TESTING)
+    if(WIN32)
+        add_executable(acmxvk_interface_client_windows_tests
+            interface_client_windows_tests.cpp
+            app/interface_client.cpp
+            app/interface_client.hpp
+            interface_control.hpp
+        )
+        target_compile_options(acmxvk_interface_client_windows_tests PRIVATE
+            -Wall -Wextra -Wpedantic
+        )
+        add_test(NAME acmxvk_interface_client_windows
+            COMMAND acmxvk_interface_client_windows_tests
+        )
+    endif()
     add_executable(acmxvk_input_validation_tests
         input_validation_tests.cpp
         input_validation.cpp

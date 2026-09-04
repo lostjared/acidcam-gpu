@@ -1,7 +1,9 @@
 #ifndef ACMX2_SHADER_SELECTION_SHM_HPP
 #define ACMX2_SHADER_SELECTION_SHM_HPP
 
+#include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #if defined(__linux__) || defined(__APPLE__)
 #include <cerrno>
 #include <semaphore.h>
@@ -33,6 +35,10 @@ namespace acmx2::ipc {
     inline constexpr std::uint32_t kShaderSelectionMaxUniformName = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxAudioFilePath = 4096;
     inline constexpr std::uint32_t kShaderSelectionMaxShaderName = 1024;
+    inline constexpr std::size_t kShaderSelectionDataSize = 76864;
+#ifdef _WIN32
+    inline constexpr DWORD kShaderSelectionLockTimeoutMs = 1000;
+#endif
 
     struct ShaderSelectionShmData {
         std::uint32_t magic = kShaderSelectionMagic;
@@ -75,6 +81,10 @@ namespace acmx2::ipc {
         std::uint32_t sequence = 0;
     };
 
+    static_assert(std::is_standard_layout_v<ShaderSelectionShmData>);
+    static_assert(std::is_trivially_copyable_v<ShaderSelectionShmData>);
+    static_assert(sizeof(ShaderSelectionShmData) == kShaderSelectionDataSize);
+
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     class ShaderSelectionLock {
       public:
@@ -93,7 +103,8 @@ namespace acmx2::ipc {
         explicit ShaderSelectionLock(HANDLE mutexValue) : mutex(mutexValue) {
             if (mutex == nullptr)
                 return;
-            const DWORD result = ::WaitForSingleObject(mutex, INFINITE);
+            const DWORD result = ::WaitForSingleObject(
+                mutex, kShaderSelectionLockTimeoutMs);
             locked = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
         }
 #endif
