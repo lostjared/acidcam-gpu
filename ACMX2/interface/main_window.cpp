@@ -2010,6 +2010,7 @@ int MainWindow::currentShaderRow() const {
 }
 
 void MainWindow::initShaderSelectionSharedMemory() {
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #if defined(__linux__) || defined(__APPLE__)
     // A named semaphore can be unlinked while an existing process still owns
     // a usable handle. Verify that new child processes can still discover the
@@ -2105,11 +2106,59 @@ void MainWindow::initShaderSelectionSharedMemory() {
     }
 
     shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+#else
+    if (shaderSelectionSemaphore == nullptr) {
+        shaderSelectionSemaphore = ::CreateMutexW(
+            nullptr, FALSE, acmx2::ipc::kShaderSelectionMutexNameWindows);
+    }
+    if (shaderSelectionSemaphore == nullptr) {
+        Log(tr("Shared interface control unavailable: CreateMutexW failed "
+               "with Windows error %1")
+                .arg(static_cast<qulonglong>(::GetLastError())));
+        return;
+    }
+
+    if (shaderSelectionShm)
+        return;
+
+    constexpr std::size_t SHARED_MEMORY_SIZE =
+        sizeof(acmx2::ipc::ShaderSelectionShmData);
+    shaderSelectionMapping = ::CreateFileMappingW(
+        INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
+        static_cast<DWORD>(SHARED_MEMORY_SIZE),
+        acmx2::ipc::kShaderSelectionMappingNameWindows);
+    if (shaderSelectionMapping == nullptr) {
+        Log(tr("Shared interface control unavailable: CreateFileMappingW "
+               "failed with Windows error %1")
+                .arg(static_cast<qulonglong>(::GetLastError())));
+        cleanupShaderSelectionSharedMemory();
+        return;
+    }
+
+    void *mapped = ::MapViewOfFile(shaderSelectionMapping, FILE_MAP_ALL_ACCESS,
+                                   0, 0, SHARED_MEMORY_SIZE);
+    if (mapped == nullptr) {
+        Log(tr("Shared interface control unavailable: MapViewOfFile failed "
+               "with Windows error %1")
+                .arg(static_cast<qulonglong>(::GetLastError())));
+        cleanupShaderSelectionSharedMemory();
+        return;
+    }
+    shaderSelectionShm =
+        static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+#endif
+
     acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
+#if defined(__linux__) || defined(__APPLE__)
         Log(tr("Shared interface control unavailable: could not lock %1: %2")
                 .arg(acmx2::ipc::kShaderSelectionSemaphoreName,
                      QString::fromLocal8Bit(std::strerror(errno))));
+#else
+        Log(tr("Shared interface control unavailable: could not lock the "
+               "Windows control mutex (error %1)")
+                .arg(static_cast<qulonglong>(::GetLastError())));
+#endif
         cleanupShaderSelectionSharedMemory();
         return;
     }
@@ -2169,7 +2218,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
 }
 
 void MainWindow::publishSelectedShaderIndexToRunningProcess() {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (!shaderSelectionShm)
         return;
     const int row = currentShaderRow();
@@ -2194,7 +2243,7 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
 }
 
 void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (active_backend != acmx2::Backend::Acmx2 || !shaderSelectionShm || !process ||
         process->state() != QProcess::Running || cacheBuildInProgress) {
         return;
@@ -2242,7 +2291,7 @@ void MainWindow::handleSavedShader(const QString &filePath) {
 }
 
 void MainWindow::queueAcmxvkLiveCompile(const QString &filePath) {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     QString typeError;
     if (!is_acmxvk_source_library(shader_path, typeError)) {
         Log(typeError.isEmpty()
@@ -2279,7 +2328,7 @@ void MainWindow::queueAcmxvkLiveCompile(const QString &filePath) {
 }
 
 void MainWindow::startNextAcmxvkLiveCompile() {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (liveShaderCompileProcess &&
         liveShaderCompileProcess->state() != QProcess::NotRunning) {
         return;
@@ -2458,7 +2507,7 @@ void MainWindow::startNextAcmxvkLiveCompile() {
 
 void MainWindow::publishAcmxvkCompiledShaderReload(
     const QString &sourcePath, const QString &runtimePath) {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (active_backend != acmx2::Backend::Acmxvk || !shaderSelectionShm ||
         !process || process->state() != QProcess::Running) {
         return;
@@ -2498,7 +2547,7 @@ void MainWindow::publishAcmxvkCompiledShaderReload(
 }
 
 void MainWindow::publishMultipassShadersToRunningProcess() {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (!shaderSelectionShm)
         return;
 
@@ -2545,7 +2594,7 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
 }
 
 void MainWindow::publishRepeatStateToRunningProcess() {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (!shaderSelectionShm)
         return;
     acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
@@ -2559,7 +2608,7 @@ void MainWindow::publishRepeatStateToRunningProcess() {
 }
 
 void MainWindow::publishRuntimeSettingsToRunningProcess() {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (!shaderSelectionShm)
         return;
 
@@ -2608,7 +2657,7 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
 }
 
 void MainWindow::publishCustomUniformsToRunningProcess() {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (!shaderSelectionShm || !customUniformDialog)
         return;
 
@@ -2648,15 +2697,26 @@ void MainWindow::publishCustomUniformsToRunningProcess() {
 }
 
 void MainWindow::cleanupShaderSelectionSharedMemory() {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (shaderSelectionShm) {
+#if defined(__linux__) || defined(__APPLE__)
         ::munmap(shaderSelectionShm, sizeof(acmx2::ipc::ShaderSelectionShmData));
+#else
+        ::UnmapViewOfFile(shaderSelectionShm);
+#endif
         shaderSelectionShm = nullptr;
     }
+#if defined(__linux__) || defined(__APPLE__)
     if (shaderSelectionShmFd >= 0) {
         ::close(shaderSelectionShmFd);
         shaderSelectionShmFd = -1;
     }
+#else
+    if (shaderSelectionMapping != nullptr) {
+        ::CloseHandle(shaderSelectionMapping);
+        shaderSelectionMapping = nullptr;
+    }
+#endif
     cleanupShaderSelectionSemaphore();
 #endif
 }
@@ -2669,6 +2729,12 @@ void MainWindow::cleanupShaderSelectionSemaphore() {
     //::sem_unlink(acmx2::ipc::kShaderSelectionSemaphoreName);
     ::sem_close(shaderSelectionSemaphore);
     shaderSelectionSemaphore = SEM_FAILED;
+#elif defined(_WIN32)
+    if (shaderSelectionSemaphore == nullptr)
+        return;
+
+    ::CloseHandle(shaderSelectionSemaphore);
+    shaderSelectionSemaphore = nullptr;
 #endif
 }
 
@@ -3407,7 +3473,7 @@ void MainWindow::menuAudioSettings() {
         audio_buffer_frames = audio_set.getAudioBufferFrames();
         audio_warm_rate = audio_set.getAudioWarmRate();
         Log("Audio Settings Saved");
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
         const bool liveAudioSettingsChanged =
             QFileInfo(audio_file).absoluteFilePath() !=
                 QFileInfo(previousAudioFile).absoluteFilePath() ||

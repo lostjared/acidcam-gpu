@@ -384,10 +384,15 @@ class MainWindow : public QMainWindow {
     void publishCustomUniformsToRunningProcess();
     void cleanupShaderSelectionSharedMemory();
     void cleanupShaderSelectionSemaphore();
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+    acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
 #if defined(__linux__) || defined(__APPLE__)
     int shaderSelectionShmFd = -1;
-    acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
     sem_t *shaderSelectionSemaphore = SEM_FAILED;
+#else
+    HANDLE shaderSelectionMapping = nullptr;
+    HANDLE shaderSelectionSemaphore = nullptr;
+#endif
 #endif
 };
 
