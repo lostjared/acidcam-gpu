@@ -63,6 +63,8 @@ if not platform.is_windows:
 if platform.is_linux:
     # Qt on Linux is built with reduced relocations and requires PIC objects.
     env.cxx.flags.append("-fPIC")
+if platform.is_windows:
+    env.link.libs.extend(["ole32", "oleaut32", "strmiids"])
 
 app = project.QtProgram(
     "acmx2_interface",

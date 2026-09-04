@@ -51,6 +51,12 @@
 #include <functional>
 #include <random>
 #include <sstream>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -63,12 +69,39 @@ namespace {
     constexpr int RECENT_LIBRARY_LIMIT = 10;
 
     QString shellQuote(const QString &value) {
+#ifdef _WIN32
+        if (value.isEmpty()) {
+            return QStringLiteral("\"\"");
+        }
+
+        QString quoted = QStringLiteral("\"");
+        qsizetype backslash_count = 0;
+        for (const QChar character : value) {
+            if (character == QLatin1Char('\\')) {
+                ++backslash_count;
+                continue;
+            }
+            if (character == QLatin1Char('"')) {
+                quoted += QString(backslash_count * 2 + 1, QLatin1Char('\\'));
+                quoted += character;
+                backslash_count = 0;
+                continue;
+            }
+            quoted += QString(backslash_count, QLatin1Char('\\'));
+            backslash_count = 0;
+            quoted += character;
+        }
+        quoted += QString(backslash_count * 2, QLatin1Char('\\'));
+        quoted += QLatin1Char('"');
+        return quoted;
+#else
         if (value.isEmpty()) {
             return "''";
         }
         QString out = value;
         out.replace("'", "'\\''");
         return "'" + out + "'";
+#endif
     }
 
     QString buildShellCommand(const QStringList &envAssignments, const QString &program,
@@ -82,13 +115,35 @@ namespace {
             }
             QString key = entry.left(eq);
             QString value = entry.mid(eq + 1);
+#ifdef _WIN32
+            parts << (QStringLiteral("set \"") + key + QLatin1Char('=') +
+                      value + QStringLiteral("\" &&"));
+#else
             parts << (key + "=" + shellQuote(value));
+#endif
         }
         parts << shellQuote(program);
         for (const QString &arg : arguments) {
             parts << shellQuote(arg);
         }
         return parts.join(' ');
+    }
+
+    void replace_file(const std::filesystem::path &source,
+                      const std::filesystem::path &destination,
+                      std::error_code &error) {
+#ifdef _WIN32
+        if (MoveFileExW(source.c_str(), destination.c_str(),
+                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) !=
+            FALSE) {
+            error.clear();
+            return;
+        }
+        error = std::error_code(static_cast<int>(GetLastError()),
+                                std::system_category());
+#else
+        std::filesystem::rename(source, destination, error);
+#endif
     }
 
 #ifdef __linux__
@@ -2394,7 +2449,7 @@ void MainWindow::startNextAcmxvkLiveCompile() {
                                 .arg(liveShaderCompileOutput));
                     } else {
                         std::error_code error;
-                        std::filesystem::rename(
+                        replace_file(
                             std::filesystem::u8path(
                                 liveShaderCompileTemporary.toUtf8().constData()),
                             std::filesystem::u8path(

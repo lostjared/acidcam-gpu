@@ -24,7 +24,6 @@ a matching CUDA-enabled MXVK and installed acidcam-gpu library.
 """
 
 import os
-import shlex
 from pathlib import Path
 
 from pcons import Project, Target, find_c_toolchain, get_platform, get_var
@@ -80,10 +79,6 @@ def require_package(name: str) -> Target:
             "its prefix with PREFIX=/path/to/prefix when necessary."
         )
     return package
-
-
-def quoted(path: Path | str) -> str:
-    return shlex.quote(str(path))
 
 
 extra_prefixes = [
@@ -165,6 +160,9 @@ if platform.is_macos:
     env.Framework("AVFoundation")
     env.Framework("CoreMedia")
     env.Framework("Foundation")
+elif platform.is_windows:
+    sources.append(project_dir / "app" / "camera_probe_windows.cpp")
+    env.link.libs.extend(["ole32", "oleaut32", "strmiids"])
 else:
     sources.append(project_dir / "app" / "camera_probe.cpp")
 
@@ -195,22 +193,25 @@ runtime_dir = (project_dir / project.build_dir / "runtime").resolve()
 shader_output_dir = runtime_dir / "shaders"
 final_prefix = Path(get_var("PCONS_FINAL_PREFIX", str(project_dir / "dist")))
 install_resource_dir = final_prefix / "share" / "acmxvk"
+shader_output_dir.mkdir(parents=True, exist_ok=True)
 
 shader_targets: list[Target] = []
 shader_outputs: list[Path] = []
 
 
 def compile_shader(name: str, source: Path, output: Path, flags: str = "") -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    arguments = ["glslc"]
+    if flags:
+        arguments.append(flags)
+    arguments.extend(["$SOURCE", "-o", "$TARGET"])
     shader_targets.append(
         project.Command(
             name,
             env,
             target=output,
             source=source,
-            command=(
-                f"mkdir -p {quoted(output.parent)} && glslc {flags} "
-                f"{quoted(source)} -o {quoted(output)}"
-            ),
+            command=arguments,
         )
     )
     shader_outputs.append(output)
@@ -262,30 +263,22 @@ for shader in sorted((project_dir / "shaders" / "xfade").glob("xfade_*.glsl")):
 
 default_model_output = runtime_dir / "models" / "cube.obj"
 overlay_font_output = runtime_dir / "data" / "font.ttf"
-default_model_marker = runtime_dir / "models" / ".cube.pcons-asset"
-overlay_font_marker = runtime_dir / "data" / ".font.pcons-asset"
+default_model_output.parent.mkdir(parents=True, exist_ok=True)
+overlay_font_output.parent.mkdir(parents=True, exist_ok=True)
 resource_targets = [
     project.Command(
         "acmxvk-default-model",
         env,
-        target=default_model_marker,
+        target=default_model_output,
         source=project_dir / "models" / "cube.obj",
-        command=(
-            f"mkdir -p {quoted(default_model_output.parent)} && "
-            f"cp {quoted(project_dir / 'models' / 'cube.obj')} {quoted(default_model_output)} && "
-            f"touch {quoted(default_model_marker)}"
-        ),
+        command=["cmake", "-E", "copy_if_different", "$SOURCE", "$TARGET"],
     ),
     project.Command(
         "acmxvk-overlay-font",
         env,
-        target=overlay_font_marker,
+        target=overlay_font_output,
         source=project_dir.parent / "ACMX2" / "data" / "font.ttf",
-        command=(
-            f"mkdir -p {quoted(overlay_font_output.parent)} && "
-            f"cp {quoted(project_dir.parent / 'ACMX2' / 'data' / 'font.ttf')} {quoted(overlay_font_output)} && "
-            f"touch {quoted(overlay_font_marker)}"
-        ),
+        command=["cmake", "-E", "copy_if_different", "$SOURCE", "$TARGET"],
     ),
 ]
 

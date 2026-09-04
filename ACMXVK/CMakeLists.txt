@@ -636,6 +636,9 @@ if(APPLE)
         "${ACMXVK_COREMEDIA_FRAMEWORK}"
         "${ACMXVK_FOUNDATION_FRAMEWORK}"
     )
+elseif(WIN32)
+    target_sources(acmxvk PRIVATE app/camera_probe_windows.cpp)
+    target_link_libraries(acmxvk PRIVATE ole32 oleaut32 strmiids)
 else()
     target_sources(acmxvk PRIVATE app/camera_probe.cpp)
 endif()
@@ -648,7 +651,11 @@ target_link_libraries(acmxvk PRIVATE
     PkgConfig::AVUTIL
     ${OpenCV_LIBS}
 )
-target_compile_options(acmxvk PRIVATE -Wall -Wextra -Wpedantic)
+if(MSVC)
+    target_compile_options(acmxvk PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(acmxvk PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 if(APPLE AND ACMXVK_USE_MOLTENVK)
     target_compile_definitions(acmxvk PRIVATE
         MXVK_USE_MOLTENVK

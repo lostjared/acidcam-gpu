@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
-#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
@@ -22,6 +21,13 @@
 #endif
 #include <stdexcept>
 #include <unordered_set>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 #if defined(__linux__) || defined(__APPLE__)
 extern char **environ;
@@ -389,6 +395,89 @@ namespace acmxvk {
         using std::runtime_error::runtime_error;
     };
 
+#ifdef _WIN32
+    [[nodiscard]] std::wstring utf8_to_wide(const std::string &value) {
+        if (value.empty()) {
+            return {};
+        }
+        const int length = MultiByteToWideChar(
+            CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+            static_cast<int>(value.size()), nullptr, 0);
+        if (length <= 0) {
+            throw std::runtime_error("invalid UTF-8 in Windows command argument");
+        }
+        std::wstring result(static_cast<std::size_t>(length), L'\0');
+        if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+                                static_cast<int>(value.size()), result.data(),
+                                length) != length) {
+            throw std::runtime_error("unable to convert Windows command argument");
+        }
+        return result;
+    }
+
+    [[nodiscard]] std::wstring
+    quote_windows_argument(const std::wstring &value) {
+        std::wstring quoted{L"\""};
+        std::size_t backslash_count = 0;
+        for (const wchar_t character : value) {
+            if (character == L'\\') {
+                ++backslash_count;
+                continue;
+            }
+            if (character == L'"') {
+                quoted.append(backslash_count * 2U + 1U, L'\\');
+                quoted += character;
+                backslash_count = 0;
+                continue;
+            }
+            quoted.append(backslash_count, L'\\');
+            backslash_count = 0;
+            quoted += character;
+        }
+        quoted.append(backslash_count * 2U, L'\\');
+        quoted += L'"';
+        return quoted;
+    }
+
+    [[nodiscard]] DWORD run_windows_process(
+        const std::vector<std::wstring> &arguments) {
+        std::wstring command_line;
+        for (const std::wstring &argument : arguments) {
+            if (!command_line.empty()) {
+                command_line += L' ';
+            }
+            command_line += quote_windows_argument(argument);
+        }
+
+        STARTUPINFOW startup_info{};
+        startup_info.cb = sizeof(startup_info);
+        PROCESS_INFORMATION process_info{};
+        if (CreateProcessW(nullptr, command_line.data(), nullptr, nullptr,
+                           TRUE, 0, nullptr, nullptr, &startup_info,
+                           &process_info) == FALSE) {
+            const DWORD process_error = GetLastError();
+            throw std::runtime_error(
+                "unable to execute glslc (Windows error " +
+                std::to_string(process_error) + ")");
+        }
+
+        CloseHandle(process_info.hThread);
+        const DWORD wait_result =
+            WaitForSingleObject(process_info.hProcess, INFINITE);
+        DWORD exit_code = 1;
+        if (wait_result != WAIT_OBJECT_0 ||
+            GetExitCodeProcess(process_info.hProcess, &exit_code) == FALSE) {
+            const DWORD process_error = GetLastError();
+            CloseHandle(process_info.hProcess);
+            throw std::runtime_error(
+                "unable to wait for glslc (Windows error " +
+                std::to_string(process_error) + ")");
+        }
+        CloseHandle(process_info.hProcess);
+        return exit_code;
+    }
+#endif
+
     void runGlslc(const std::string &executable, const fs::path &source_root,
                   const fs::path &source, const fs::path &output) {
 #if defined(__linux__) || defined(__APPLE__)
@@ -427,28 +516,17 @@ namespace acmxvk {
                 "glslc failed for " + source.string() + " (exit status " +
                 std::to_string(WEXITSTATUS(status)) + ")");
         }
-#else
-        const auto quote = [](const std::string &value) {
-            std::string quoted{"\""};
-            for (const char character : value) {
-                if (character == '\"') {
-                    quoted += "\\\"";
-                } else {
-                    quoted += character;
-                }
-            }
-            quoted += '\"';
-            return quoted;
-        };
-        const std::string command =
-            quote(executable) + " -I " + quote(source_root.string()) + " " +
-            quote(source.string()) + " -o " + quote(output.string());
-        const int result = std::system(command.c_str());
-        if (result != 0) {
+#elif defined(_WIN32)
+        const DWORD result = run_windows_process(
+            {utf8_to_wide(executable), L"-I", source_root.wstring(),
+             source.wstring(), L"-o", output.wstring()});
+        if (result != 0U) {
             throw ShaderCompilationError(
                 "glslc failed for " + source.string() + " (exit status " +
                 std::to_string(result) + ")");
         }
+#else
+#error Unsupported platform
 #endif
     }
 
