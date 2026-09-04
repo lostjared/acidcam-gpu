@@ -5,6 +5,11 @@
 #if defined(__linux__) || defined(__APPLE__)
 #include <cerrno>
 #include <semaphore.h>
+#elif defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 #endif
 
 namespace acmxvk::ipc {
@@ -15,6 +20,12 @@ namespace acmxvk::ipc {
         "/acmx2_shader_selection";
     inline constexpr const char *SHADER_SELECTION_SEMAPHORE_NAME =
         "/acmx2_shm_v10";
+#ifdef _WIN32
+    inline constexpr const wchar_t *SHADER_SELECTION_MAPPING_NAME_WINDOWS =
+        L"Local\\ACMX2ShaderSelectionV10";
+    inline constexpr const wchar_t *SHADER_SELECTION_MUTEX_NAME_WINDOWS =
+        L"Local\\ACMX2ShaderSelectionMutexV10";
+#endif
     inline constexpr std::uint32_t SHADER_SELECTION_MAGIC = 0x41434D58;
     inline constexpr std::uint32_t SHADER_SELECTION_VERSION = 10;
     inline constexpr std::uint32_t MAX_PASS_COUNT = 64;
@@ -65,10 +76,11 @@ namespace acmxvk::ipc {
         std::uint32_t sequence = 0;
     };
 
-#if defined(__linux__) || defined(__APPLE__)
-    class SemaphoreLock {
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+    class InterfaceLock {
       public:
-        explicit SemaphoreLock(sem_t *value) : semaphore(value) {
+#if defined(__linux__) || defined(__APPLE__)
+        explicit InterfaceLock(sem_t *value) : semaphore(value) {
             if (semaphore == nullptr || semaphore == SEM_FAILED)
                 return;
             while (::sem_wait(semaphore) != 0) {
@@ -77,19 +89,36 @@ namespace acmxvk::ipc {
             }
             locked = true;
         }
+#else
+        explicit InterfaceLock(HANDLE value) : mutex(value) {
+            if (mutex == nullptr)
+                return;
+            const DWORD result = ::WaitForSingleObject(mutex, INFINITE);
+            locked = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
+        }
+#endif
 
-        ~SemaphoreLock() {
-            if (locked)
-                ::sem_post(semaphore);
+        ~InterfaceLock() {
+            if (!locked)
+                return;
+#if defined(__linux__) || defined(__APPLE__)
+            ::sem_post(semaphore);
+#else
+            ::ReleaseMutex(mutex);
+#endif
         }
 
-        SemaphoreLock(const SemaphoreLock &) = delete;
-        SemaphoreLock &operator=(const SemaphoreLock &) = delete;
+        InterfaceLock(const InterfaceLock &) = delete;
+        InterfaceLock &operator=(const InterfaceLock &) = delete;
 
         explicit operator bool() const { return locked; }
 
       private:
+#if defined(__linux__) || defined(__APPLE__)
         sem_t *semaphore = nullptr;
+#else
+        HANDLE mutex = nullptr;
+#endif
         bool locked = false;
     };
 #endif

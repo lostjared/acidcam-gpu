@@ -111,7 +111,7 @@ namespace acmxvk {
         if (impl->selection == nullptr || impl->semaphore == SEM_FAILED) {
             return false;
         }
-        ipc::SemaphoreLock lock(impl->semaphore);
+        ipc::InterfaceLock lock(impl->semaphore);
         if (!lock) {
             return false;
         }

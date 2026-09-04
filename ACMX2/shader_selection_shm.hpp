@@ -5,6 +5,11 @@
 #if defined(__linux__) || defined(__APPLE__)
 #include <cerrno>
 #include <semaphore.h>
+#elif defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 #endif
 
 namespace acmx2::ipc {
@@ -12,6 +17,12 @@ namespace acmx2::ipc {
     inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection";
     inline constexpr const char *kShaderSelectionSemaphoreName =
         "/acmx2_shm_v10";
+#ifdef _WIN32
+    inline constexpr const wchar_t *kShaderSelectionMappingNameWindows =
+        L"Local\\ACMX2ShaderSelectionV10";
+    inline constexpr const wchar_t *kShaderSelectionMutexNameWindows =
+        L"Local\\ACMX2ShaderSelectionMutexV10";
+#endif
     inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
     inline constexpr std::uint32_t kShaderSelectionVersion = 10;
     inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
@@ -64,10 +75,11 @@ namespace acmx2::ipc {
         std::uint32_t sequence = 0;
     };
 
-#if defined(__linux__) || defined(__APPLE__)
-    class ShaderSelectionSemaphoreLock {
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+    class ShaderSelectionLock {
       public:
-        explicit ShaderSelectionSemaphoreLock(sem_t *semaphoreValue)
+#if defined(__linux__) || defined(__APPLE__)
+        explicit ShaderSelectionLock(sem_t *semaphoreValue)
             : semaphore(semaphoreValue) {
             if (semaphore == nullptr || semaphore == SEM_FAILED)
                 return;
@@ -77,22 +89,38 @@ namespace acmx2::ipc {
             }
             locked = true;
         }
+#else
+        explicit ShaderSelectionLock(HANDLE mutexValue) : mutex(mutexValue) {
+            if (mutex == nullptr)
+                return;
+            const DWORD result = ::WaitForSingleObject(mutex, INFINITE);
+            locked = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
+        }
+#endif
 
-        ~ShaderSelectionSemaphoreLock() {
-            if (locked)
-                ::sem_post(semaphore);
+        ~ShaderSelectionLock() {
+            if (!locked)
+                return;
+#if defined(__linux__) || defined(__APPLE__)
+            ::sem_post(semaphore);
+#else
+            ::ReleaseMutex(mutex);
+#endif
         }
 
-        ShaderSelectionSemaphoreLock(const ShaderSelectionSemaphoreLock &) = delete;
-        ShaderSelectionSemaphoreLock &
-        operator=(const ShaderSelectionSemaphoreLock &) = delete;
+        ShaderSelectionLock(const ShaderSelectionLock &) = delete;
+        ShaderSelectionLock &operator=(const ShaderSelectionLock &) = delete;
 
         explicit operator bool() const {
             return locked;
         }
 
       private:
+#if defined(__linux__) || defined(__APPLE__)
         sem_t *semaphore = nullptr;
+#else
+        HANDLE mutex = nullptr;
+#endif
         bool locked = false;
     };
 #endif

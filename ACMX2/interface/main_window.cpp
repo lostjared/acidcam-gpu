@@ -2105,7 +2105,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
     }
 
     shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
-    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log(tr("Shared interface control unavailable: could not lock %1: %2")
                 .arg(acmx2::ipc::kShaderSelectionSemaphoreName,
@@ -2175,7 +2175,7 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
     const int row = currentShaderRow();
     if (row < 0 || row >= items.size())
         return;
-    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
@@ -2215,7 +2215,7 @@ void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
         return;
     }
 
-    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
@@ -2477,7 +2477,7 @@ void MainWindow::publishAcmxvkCompiledShaderReload(
         return;
     }
 
-    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log(tr("Could not lock the live shader reload channel."));
         return;
@@ -2528,7 +2528,7 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
         }
     }
 
-    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
@@ -2548,7 +2548,7 @@ void MainWindow::publishRepeatStateToRunningProcess() {
 #if defined(__linux__) || defined(__APPLE__)
     if (!shaderSelectionShm)
         return;
-    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
@@ -2563,7 +2563,7 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
     if (!shaderSelectionShm)
         return;
 
-    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
@@ -2612,7 +2612,7 @@ void MainWindow::publishCustomUniformsToRunningProcess() {
     if (!shaderSelectionShm || !customUniformDialog)
         return;
 
-    acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
@@ -3426,7 +3426,7 @@ void MainWindow::menuAudioSettings() {
                 Log("Audio file path is too long for live playback: " +
                     audio_file);
             } else {
-                acmx2::ipc::ShaderSelectionSemaphoreLock lock(
+                acmx2::ipc::ShaderSelectionLock lock(
                     shaderSelectionSemaphore);
                 if (!lock) {
                     Log("Could not lock the live playback control channel");
