@@ -11,14 +11,21 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -38,6 +45,36 @@ namespace acmxvk::audio {
             char message[AV_ERROR_MAX_STRING_SIZE]{};
             av_strerror(error, message, sizeof(message));
             return message;
+        }
+
+        [[nodiscard]] std::string
+        ffmpegPath(const std::filesystem::path &path) {
+#ifdef _WIN32
+            const std::u8string utf8 = path.u8string();
+            return {reinterpret_cast<const char *>(utf8.data()), utf8.size()};
+#else
+            return path.string();
+#endif
+        }
+
+        [[nodiscard]] bool
+        replaceFile(const std::filesystem::path &source,
+                    const std::filesystem::path &destination,
+                    std::error_code &error) {
+#ifdef _WIN32
+            if (::MoveFileExW(source.c_str(), destination.c_str(),
+                              MOVEFILE_REPLACE_EXISTING |
+                                  MOVEFILE_WRITE_THROUGH) != 0) {
+                error.clear();
+                return true;
+            }
+            error = std::error_code(static_cast<int>(::GetLastError()),
+                                    std::system_category());
+            return false;
+#else
+            std::filesystem::rename(source, destination, error);
+            return !error;
+#endif
         }
 
         [[nodiscard]] bool resampleMonoRecording(std::vector<float> &samples,
@@ -796,6 +833,8 @@ namespace acmxvk::audio {
                 video_path.parent_path() /
                 (video_path.stem().string() + ".acmxvk-mux-" +
                  std::to_string(unique_value) + video_path.extension().string());
+            const std::string video_url = ffmpegPath(video_path);
+            const std::string temporary_url = ffmpegPath(temporary_path);
 
             AVFormatContext *input_context = nullptr;
             AVFormatContext *output_context = nullptr;
@@ -833,7 +872,7 @@ namespace acmxvk::audio {
                 return false;
             };
 
-            int result = avformat_open_input(&input_context, video_path.c_str(),
+            int result = avformat_open_input(&input_context, video_url.c_str(),
                                              nullptr, nullptr);
             if (result < 0) {
                 return fail("could not open encoded video for audio mux", result);
@@ -851,7 +890,7 @@ namespace acmxvk::audio {
             }
 
             result = avformat_alloc_output_context2(
-                &output_context, nullptr, nullptr, temporary_path.c_str());
+                &output_context, nullptr, nullptr, temporary_url.c_str());
             if (result < 0 || output_context == nullptr) {
                 return fail("could not create audio-mux output container", result);
             }
@@ -934,7 +973,7 @@ namespace acmxvk::audio {
             }
 
             if ((output_context->oformat->flags & AVFMT_NOFILE) == 0) {
-                result = avio_open(&output_context->pb, temporary_path.c_str(),
+                result = avio_open(&output_context->pb, temporary_url.c_str(),
                                    AVIO_FLAG_WRITE);
                 if (result < 0) {
                     return fail("could not open temporary mux output", result);
@@ -1094,9 +1133,11 @@ namespace acmxvk::audio {
             }
 
             cleanup();
-            if (std::rename(temporary_path.c_str(), video_path.c_str()) != 0) {
+            std::error_code replace_error;
+            if (!replaceFile(temporary_path, video_path, replace_error)) {
                 std::cerr << "acmxvk: could not atomically replace encoded video "
-                             "with muxed output\n";
+                             "with muxed output: "
+                          << replace_error.message() << '\n';
                 std::error_code remove_error;
                 std::filesystem::remove(temporary_path, remove_error);
                 return false;
