@@ -1,0 +1,31 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e52e10e..91f9502 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -568,10 +568,10 @@ endif()
+ endif()
+ add_dependencies(mxvk mxvk_shaders)
+ target_compile_definitions(mxvk PUBLIC
+-    MXVK_SPRITE_SHADER_DIR="${mxvk_SHADER_OUTPUT_DIR}"
+-    MXVK_TEXT_SHADER_DIR="${mxvk_SHADER_OUTPUT_DIR}"
+-    MXVK_SPRITE3D_SHADER_DIR="${mxvk_SHADER_OUTPUT_DIR}"
+-    MXVK_DEFAULT_FONT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/mxvk/data"
++    MXVK_SPRITE_SHADER_DIR="${CMAKE_INSTALL_FULL_DATADIR}/mxvk/shaders"
++    MXVK_TEXT_SHADER_DIR="${CMAKE_INSTALL_FULL_DATADIR}/mxvk/shaders"
++    MXVK_SPRITE3D_SHADER_DIR="${CMAKE_INSTALL_FULL_DATADIR}/mxvk/shaders"
++    MXVK_DEFAULT_FONT_DIR="${CMAKE_INSTALL_FULL_DATADIR}/mxvk/data"
+ )
+ add_executable(mxmod2obj tools/mxmod2obj.cpp)
+ target_link_libraries(mxmod2obj PRIVATE mxvk)
+@@ -1020,6 +1020,11 @@ install(FILES
+     DESTINATION ${CMAKE_INSTALL_DATADIR}/mxvk/shaders
+ )
+ 
++install(FILES
++    ${mxvk_DEFAULT_FONT}
++    DESTINATION ${CMAKE_INSTALL_DATADIR}/mxvk/data
++)
++
+ install(FILES
+     ${mxvk_VERSION_HEADER_OUTPUT}
+     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mxvk

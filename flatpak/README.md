@@ -1,10 +1,17 @@
-# ACMX2 Flatpak
+# ACMX Flatpak
 
-This manifest builds ACMX2 without CUDA and includes the Qt interface, RtAudio
-support, MIDI support, and the `midi-map` utility. Runtime assets are installed below
-`/app/share/acmx2`, including the complete interface data set and tracked
-playlists. The separately maintained ACMX2 shader collection is pinned and
-installed below `/app/share/acmx2/shaders` as the default library.
+This manifest builds the current ACMX2 OpenGL and ACMXVK Vulkan backends without
+CUDA. It includes the shared Qt interface, RtAudio support, MIDI support, the
+`midi-map` utility, and the `create_acmxvk_source_manifest` utility. Select the
+backend from the interface's Backend menu.
+
+ACMX2 runtime assets are installed below `/app/share/acmx2`, including the
+complete interface data set and tracked playlists. The separately maintained
+ACMX2 shader collection is pinned and installed below
+`/app/share/acmx2/shaders` as the default OpenGL library. ACMXVK resources,
+test shaders, playlists, MIDI examples, models, and fonts are installed below
+`/app/share/acmxvk`. Editable ACMXVK source libraries can be stored in the home
+directory and built to SPIR-V from the interface with the packaged `glslc`.
 
 The x86_64 package builds OpenCV 4.12.0 with Intel IPP 2022.1.0 and the OpenCV
 IPP integration wrappers. OpenCV selects supported CPU paths at runtime,
@@ -35,5 +42,12 @@ The command-line programs can also be invoked directly:
 
 ```bash
 flatpak run --command=acmx2 io.github.lostjared.ACMX2 --help
+flatpak run --command=acmxvk io.github.lostjared.ACMX2 --help
+flatpak run --command=create_acmxvk_source_manifest \
+    io.github.lostjared.ACMX2 --help
 flatpak run --command=midi-map io.github.lostjared.ACMX2
 ```
+
+The Flatpak exposes the host GPU through the standard Flatpak graphics-driver
+extensions. CUDA remains disabled for portability; ACMXVK uses the Vulkan
+driver made available by the runtime.

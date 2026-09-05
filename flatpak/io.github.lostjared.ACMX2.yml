@@ -14,6 +14,8 @@ finish-args:
   - --filesystem=home
   - --env=ACMX2_PATH=/app/share/acmx2
   - --env=ACMX2_SHADER_PATH=/app/share/acmx2/shaders
+  - --env=ACMXVK_PATH=/app/share/acmxvk
+  - --env=ACMXVK_SHADER_PATH=/app/share/acmxvk/shaders
 
 cleanup:
   - /include
@@ -118,8 +120,29 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/libmx2.git
-        commit: 371f0f53aa32b4f6edc400178c1bddaf40b246c7
+        commit: 27f624172b95cc3bfa90d71ba5b5979ef5ce33cf
         disable-submodules: true
+
+  - name: mxvk
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DEXAMPLES=OFF
+      - -DVALIDATION=OFF
+      - -DWITH_CUDA=OFF
+      - -DWITH_EIGEN=OFF
+      - -DWITH_MIXER=OFF
+      - -DWITH_MXWRITE=ON
+      - -DCV=ON
+      - -DJPEG=OFF
+    sources:
+      - type: git
+        url: https://github.com/lostjared/MXVK.git
+        commit: 94d40ddb3be2b88c7f6ae042c75909e09bb82d9e
+        disable-submodules: true
+      - type: patch
+        path: mxvk-installed-resources.patch
 
   - name: acmx2-shaders
     buildsystem: simple
@@ -132,6 +155,12 @@ modules:
         commit: 40090a127ce7ad8f37f9dcde5835a43e7da51ee2
         disable-submodules: true
 
+  - name: glslc-runtime
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 /usr/bin/glslc /app/bin/glslc
+      - cp -a /usr/lib/${FLATPAK_ARCH}-linux-gnu/libglslang.so.15* /app/lib/
+
   - name: acmx2
     buildsystem: simple
     build-commands:
@@ -141,6 +170,9 @@ modules:
       - cmake -S ACMX2 -B _build-acmx2 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app -DWITH_CUDA=OFF -DWITH_OPENCV_DNN=OFF -DAUDIO=ON -DMIDI=ON -DWEBP=OFF -DTIFF=OFF
       - cmake --build _build-acmx2
       - cmake --install _build-acmx2
+      - cmake -S ACMXVK -B _build-acmxvk -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app -DVALIDATION=OFF -DAUDIO=ON -DMIDI=ON -DWEBP=OFF -DTIFF=OFF -DWITH_CUDA=OFF -DWITH_OPENCV_DNN=OFF -DBUILD_TESTING=OFF
+      - cmake --build _build-acmxvk
+      - cmake --install _build-acmxvk
       - cmake -S ACMX2/interface -B _build-interface -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app
       - cmake --build _build-interface
       - cmake --install _build-interface
@@ -158,8 +190,10 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/acidcam-gpu.git
-        commit: f293f47212adca9e8b3ba7aac7bdd781b4505b44
+        commit: e630ce7cc1afbb42260c910dded4b97f5f2464a7
         disable-submodules: true
+      - type: patch
+        path: acmxvk-live-reload-canonical-path.patch
       - type: file
         path: io.github.lostjared.ACMX2.desktop
       - type: file

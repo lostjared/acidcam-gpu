@@ -1,26 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>io.github.lostjared.ACMX2</id>
-  <name>ACMX2 Interface</name>
-  <summary>Real-time video shader and glitch processing interface</summary>
+  <name>ACMX Interface</name>
+  <summary>OpenGL and Vulkan real-time video shader interface</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>BSD-2-Clause AND GPL-3.0-only</project_license>
+  <developer id="io.github.lostjared">
+    <name>LostSideDead Software</name>
+  </developer>
   <description>
     <p>
-      ACMX2 is a real-time OpenGL video processing engine with a Qt interface.
-      This package includes the non-CUDA engine, live audio and MIDI support,
-      and the MIDI-map companion utility.
+      ACMX is a real-time video processing environment with a shared Qt
+      interface for the ACMX2 OpenGL and ACMXVK Vulkan backends. This package
+      includes both non-CUDA engines, fragment and compute shader workflows,
+      live audio and MIDI support, the ACMXVK shader-library builder, and the
+      MIDI-map companion utility.
     </p>
   </description>
   <launchable type="desktop-id">io.github.lostjared.ACMX2.desktop</launchable>
   <provides>
     <binary>acmx2</binary>
     <binary>acmx2_interface</binary>
+    <binary>acmxvk</binary>
+    <binary>create_acmxvk_source_manifest</binary>
     <binary>midi-map</binary>
   </provides>
   <url type="homepage">https://github.com/lostjared/acidcam-gpu</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.132.1" date="2026-09-05">
+      <description>
+        <ul>
+          <li>Fix ACMXVK live shader reload when Flatpak canonicalizes home paths from /home to /var/home.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2.132.0" date="2026-09-05">
+      <description>
+        <ul>
+          <li>Add the ACMXVK 0.33.1 Vulkan backend alongside ACMX2.</li>
+          <li>Add fragment and compute shader library building and live reload support.</li>
+          <li>Update the Qt interface and MIDI-map utility to their current versions.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.101.1" date="2026-08-22">
       <description>
         <ul>

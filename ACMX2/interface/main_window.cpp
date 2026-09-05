@@ -2568,15 +2568,38 @@ void MainWindow::publishAcmxvkCompiledShaderReload(
         return;
     }
 
-    const QString sourceName = QDir(shader_path).relativeFilePath(sourcePath);
-    const int shaderIndex =
-        items.indexOf(sourceName, 0, Qt::CaseInsensitive);
+    const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
+    const QString resolvedSourcePath = QFileInfo(sourcePath).canonicalFilePath();
+    const QString sourceName =
+        sourceRoot.isEmpty() || resolvedSourcePath.isEmpty()
+            ? QString()
+            : sanitizeShaderName(
+                  QDir(sourceRoot).relativeFilePath(resolvedSourcePath));
+    if (sourceName.isEmpty()) {
+        Log(tr("Compiled shader source cannot be resolved inside the active "
+               "library: %1")
+                .arg(sourcePath));
+        return;
+    }
+
+    const int shaderIndex = items.indexOf(sourceName, 0, Qt::CaseInsensitive);
+    if (shaderIndex < 0) {
+        Log(tr("Compiled shader is not present in the active library "
+               "manifest: %1")
+                .arg(sourceName));
+        return;
+    }
+
     const QByteArray reloadPath =
         QFileInfo(runtimePath).canonicalFilePath().toUtf8();
-    if (shaderIndex < 0 || reloadPath.isEmpty() ||
-        reloadPath.size() >=
-            static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
-        Log(tr("Compiled shader cannot be published for live reload: %1")
+    if (reloadPath.isEmpty()) {
+        Log(tr("Compiled shader output cannot be resolved for live reload: %1")
+                .arg(runtimePath));
+        return;
+    }
+    if (reloadPath.size() >=
+        static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
+        Log(tr("Compiled shader path is too long for live reload: %1")
                 .arg(runtimePath));
         return;
     }
