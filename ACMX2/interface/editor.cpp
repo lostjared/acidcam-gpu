@@ -1,9 +1,11 @@
 #include "editor.hpp"
 #include "custom_style.hpp"
+#include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
 #include <QColor>
+#include <QCompleter>
 #include <QFile>
 #include <QFileDialog>
 #include <QFont>
@@ -18,8 +20,10 @@
 #include <QPlainTextEdit>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QScrollBar>
 #include <QSettings>
 #include <QStatusBar>
+#include <QStringListModel>
 #include <QSyntaxHighlighter>
 #include <QTextBlock>
 #include <QTextCharFormat>
@@ -57,6 +61,16 @@ static QColor diagnosticColor(ShaderDiagnosticSeverity severity) {
 
 CustomTextEdit::CustomTextEdit(QWidget *parent) : QPlainTextEdit(parent) {
     m_lineNumberArea = new LineNumberArea(this);
+    m_completionModel = new QStringListModel(this);
+    m_completer = new QCompleter(m_completionModel, this);
+    m_completer->setWidget(this);
+    m_completer->setCompletionMode(QCompleter::PopupCompletion);
+    m_completer->setCaseSensitivity(Qt::CaseInsensitive);
+    m_completer->setFilterMode(Qt::MatchStartsWith);
+    connect(m_completer,
+            static_cast<void (QCompleter::*)(const QString &)>(
+                &QCompleter::activated),
+            this, &CustomTextEdit::insertCompletion);
 
     connect(this, &QPlainTextEdit::blockCountChanged, this, &CustomTextEdit::updateLineNumberAreaWidth);
     connect(this, &QPlainTextEdit::updateRequest, this, &CustomTextEdit::updateLineNumberArea);
@@ -94,6 +108,64 @@ void CustomTextEdit::setDiagnostics(
     m_diagnostics = diagnostics;
     m_lineNumberArea->update();
     matchBrackets();
+}
+
+void CustomTextEdit::setCompletionWords(const QStringList &words) {
+    QStringList uniqueWords = words;
+    uniqueWords.removeDuplicates();
+    uniqueWords.sort(Qt::CaseInsensitive);
+    m_completionModel->setStringList(uniqueWords);
+}
+
+QString CustomTextEdit::completionPrefix() const {
+    QTextCursor cursor = textCursor();
+    const int end = cursor.position();
+    int start = end;
+    while (start > 0) {
+        const QChar character = document()->characterAt(start - 1);
+        if (!character.isLetterOrNumber() && character != QLatin1Char('_') &&
+            character != QLatin1Char('.')) {
+            break;
+        }
+        --start;
+    }
+    cursor.setPosition(start);
+    cursor.setPosition(end, QTextCursor::KeepAnchor);
+    return cursor.selectedText();
+}
+
+void CustomTextEdit::insertCompletion(const QString &completion) {
+    QTextCursor cursor = textCursor();
+    const QString prefix = completionPrefix();
+    if (!prefix.isEmpty()) {
+        cursor.setPosition(cursor.position() - prefix.size());
+        cursor.setPosition(cursor.position() + prefix.size(),
+                           QTextCursor::KeepAnchor);
+    }
+    cursor.insertText(completion);
+    setTextCursor(cursor);
+}
+
+void CustomTextEdit::showCompletionPopup(bool forced) {
+    const QString prefix = completionPrefix();
+    if (!forced && prefix.size() < 3) {
+        m_completer->popup()->hide();
+        return;
+    }
+    m_completer->setCompletionPrefix(prefix);
+    if (m_completer->completionCount() == 0) {
+        m_completer->popup()->hide();
+        return;
+    }
+    m_completer->popup()->setCurrentIndex(
+        m_completer->completionModel()->index(0, 0));
+    QRect popupRect = cursorRect();
+    popupRect.setWidth(qMax(280, m_completer->popup()->sizeHintForColumn(0) +
+                                     m_completer->popup()
+                                         ->verticalScrollBar()
+                                         ->sizeHint()
+                                         .width()));
+    m_completer->complete(popupRect);
 }
 
 void CustomTextEdit::updateLineNumberAreaWidth(int /*newBlockCount*/) {
@@ -505,6 +577,26 @@ void CustomTextEdit::smartHome(bool shift) {
 }
 
 void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
+    if (m_completer->popup()->isVisible()) {
+        switch (event->key()) {
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+        case Qt::Key_Escape:
+        case Qt::Key_Tab:
+        case Qt::Key_Backtab:
+            event->ignore();
+            return;
+        default:
+            break;
+        }
+    }
+
+    if (event->key() == Qt::Key_Space &&
+        event->modifiers() == Qt::ControlModifier) {
+        showCompletionPopup(true);
+        return;
+    }
+
     // Ctrl+D: duplicate line
     if (event->key() == Qt::Key_D && (event->modifiers() & Qt::ControlModifier)) {
         duplicateLine();
@@ -657,6 +749,15 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
     }
 
     QPlainTextEdit::keyPressEvent(event);
+    const bool canComplete =
+        event->modifiers() == Qt::NoModifier ||
+        event->modifiers() == Qt::ShiftModifier;
+    if (canComplete &&
+        (!event->text().isEmpty() || event->key() == Qt::Key_Backspace)) {
+        showCompletionPopup(false);
+    } else {
+        m_completer->popup()->hide();
+    }
 }
 
 TextEditor::TextEditor(QWidget *parent)
@@ -670,6 +771,7 @@ void TextEditor::setText(const QString &text) {
     m_textEdit->document()->setModified(false);
     m_modified = false;
     updateWindowTitle();
+    updateCompletionWords();
 }
 
 void TextEditor::setFileName(const QString &filen) {
@@ -752,6 +854,120 @@ void TextEditor::setCompileResult(bool success,
             ? "Compilation failed; see the ACMX log for compiler output"
             : "Press F8 to visit the first compiler diagnostic",
         5000);
+}
+
+void TextEditor::setShaderContext(
+    bool acmxvk, const QVector<ShaderEditorUniform> &uniforms) {
+    m_acmxvkContext = acmxvk;
+    m_uniforms = uniforms;
+    m_snippetsMenu->setEnabled(acmxvk);
+    updateCompletionWords();
+}
+
+void TextEditor::updateCompletionWords() {
+    QStringList words{
+        "break", "case", "const", "continue",
+        "default", "discard", "do", "else",
+        "false", "for", "if", "in",
+        "inout", "layout", "out", "precision",
+        "return", "struct", "switch", "true",
+        "uniform", "while", "bool", "int",
+        "uint", "float", "double", "vec2",
+        "vec3", "vec4", "ivec2", "ivec3",
+        "ivec4", "uvec2", "uvec3", "uvec4",
+        "bvec2", "bvec3", "bvec4", "mat2",
+        "mat3", "mat4", "sampler1D", "sampler2D",
+        "sampler2DArray", "samplerCube", "image2D", "abs",
+        "acos", "all", "any", "asin",
+        "atan", "ceil", "clamp", "cos",
+        "cross", "degrees", "distance", "dot",
+        "exp", "exp2", "floor", "fract",
+        "imageLoad", "imageSize", "imageStore", "length",
+        "log", "log2", "max", "min",
+        "mix", "mod", "normalize", "pow",
+        "radians", "reflect", "refract", "round",
+        "sign", "sin", "smoothstep", "sqrt",
+        "step", "tan", "texelFetch", "texture",
+        "textureSize", "transpose"};
+
+    if (m_acmxvkContext) {
+        words << "input_image"
+              << "output_image"
+              << "history"
+              << "spectrum"
+              << "spectrum_history"
+              << "ext.mouse"
+              << "ext.u0"
+              << "ext.u1"
+              << "ext.u2"
+              << "ext.u3"
+              << "ext.custom_uniforms"
+              << "ext.audio_bands"
+              << "ext.audio_history"
+              << "pc.screen_width"
+              << "pc.screen_height"
+              << "pc.effects_on"
+              << "pc.rotation_degrees"
+              << "pc.params"
+              << "iResolution"
+              << "iTime"
+              << "iTimeDelta"
+              << "iFrame"
+              << "amp_low"
+              << "amp_mid"
+              << "amp_high"
+              << "gl_GlobalInvocationID"
+              << "gl_LocalInvocationID"
+              << "gl_LocalInvocationIndex"
+              << "gl_NumWorkGroups"
+              << "gl_WorkGroupID"
+              << "gl_WorkGroupSize"
+              << "gl_FragCoord";
+        for (const ShaderEditorUniform &uniform : m_uniforms)
+            words.append(uniform.name);
+    }
+
+    const QString source = m_textEdit->toPlainText();
+    const QRegularExpression declarations(
+        QStringLiteral("(?:#\\s*define|\\b(?:void|bool|int|uint|float|double|"
+                       "[biu]?vec[234]|mat[234])\\s+)\\s*"
+                       "([A-Za-z_][A-Za-z0-9_]*)"));
+    QRegularExpressionMatchIterator matches = declarations.globalMatch(source);
+    while (matches.hasNext())
+        words.append(matches.next().captured(1));
+    m_textEdit->setCompletionWords(words);
+}
+
+QString TextEditor::customUniformDefines() const {
+    QString defines;
+    static const QString components = QStringLiteral("xyzw");
+    for (int index = 0; index < m_uniforms.size(); ++index) {
+        const ShaderEditorUniform &uniform = m_uniforms[index];
+        const int slot = uniform.slot >= 0 ? uniform.slot : index;
+        defines += QString("#define %1 ext.custom_uniforms[%2].%3\n")
+                       .arg(uniform.name)
+                       .arg(slot / 4)
+                       .arg(components.at(slot % 4));
+    }
+    return defines;
+}
+
+void TextEditor::insertSnippet(const QString &snippet) {
+    if (snippet.isEmpty()) {
+        m_statusBar->showMessage("The active library has no custom uniforms",
+                                 3000);
+        return;
+    }
+    QTextCursor cursor = m_textEdit->textCursor();
+    QString insertion = snippet;
+    if (cursor.positionInBlock() != 0)
+        insertion.prepend(QLatin1Char('\n'));
+    if (!insertion.endsWith(QLatin1Char('\n')))
+        insertion.append(QLatin1Char('\n'));
+    cursor.insertText(insertion);
+    m_textEdit->setTextCursor(cursor);
+    m_textEdit->setFocus();
+    updateCompletionWords();
 }
 
 QVector<ShaderDiagnostic>
@@ -949,6 +1165,22 @@ void TextEditor::init() {
     m_previousDiagnosticAction->setShortcut(
         QKeySequence(Qt::SHIFT | Qt::Key_F8));
 
+    m_snippetsMenu = menuBar->addMenu("&Snippets");
+    QAction *engineStateSnippet =
+        m_snippetsMenu->addAction("Input and Engine State Bindings");
+    QAction *pushConstantsSnippet =
+        m_snippetsMenu->addAction("Fragment Push Constants");
+    QAction *historySnippet =
+        m_snippetsMenu->addAction("Frame History Binding");
+    QAction *audioSnippet =
+        m_snippetsMenu->addAction("FFT and FFT History Bindings");
+    QAction *uniformSnippet =
+        m_snippetsMenu->addAction("Custom Uniform Defines");
+    m_snippetsMenu->addSeparator();
+    QAction *computeMainSnippet =
+        m_snippetsMenu->addAction("Compute Output and Main Function");
+    m_snippetsMenu->setEnabled(false);
+
     QMenu *viewMenu = menuBar->addMenu("&View");
 
     QAction *increaseFontAction = viewMenu->addAction("Increase Font Size");
@@ -1043,6 +1275,66 @@ void TextEditor::init() {
     connect(m_previousDiagnosticAction, &QAction::triggered, this,
             [this]() { navigateDiagnostic(-1); });
     updateDiagnosticActions();
+    connect(engineStateSnippet, &QAction::triggered, this, [this]() {
+        insertSnippet(QStringLiteral(R"glsl(layout(set = 0, binding = 0) uniform sampler2D input_image;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+#define iResolution max(ext.u0.zw, vec2(1.0))
+#define iTime ext.u2.y
+#define iTimeDelta ext.u1.x
+#define iFrame ext.u2.x
+#define amp_low ext.audio_bands.x
+#define amp_mid ext.audio_bands.y
+#define amp_high ext.audio_bands.z)glsl"));
+    });
+    connect(pushConstantsSnippet, &QAction::triggered, this, [this]() {
+        insertSnippet(QStringLiteral(R"glsl(layout(push_constant) uniform SpritePushConstants {
+    float screen_width;
+    float screen_height;
+    float sprite_pos_x;
+    float sprite_pos_y;
+    float sprite_size_w;
+    float sprite_size_h;
+    float effects_on;
+    float rotation_degrees;
+    vec4 params;
+} pc;)glsl"));
+    });
+    connect(historySnippet, &QAction::triggered, this, [this]() {
+        insertSnippet(QStringLiteral(
+            "layout(set = 0, binding = 2) uniform sampler2DArray history;"));
+    });
+    connect(audioSnippet, &QAction::triggered, this, [this]() {
+        insertSnippet(QStringLiteral(R"glsl(layout(set = 0, binding = 3) uniform sampler1D spectrum;
+layout(set = 0, binding = 4) uniform sampler1DArray spectrum_history;)glsl"));
+    });
+    connect(uniformSnippet, &QAction::triggered, this,
+            [this]() { insertSnippet(customUniformDefines()); });
+    connect(computeMainSnippet, &QAction::triggered, this, [this]() {
+        insertSnippet(QStringLiteral(R"glsl(layout(set = 0, binding = 5, rgba8) writeonly uniform image2D output_image;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(output_image);
+    if (any(greaterThanEqual(pixel, size))) {
+        return;
+    }
+
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(size);
+    vec4 source_color = texture(input_image, uv);
+    imageStore(output_image, pixel, source_color);
+})glsl"));
+    });
 
     connect(m_textEdit->document(), &QTextDocument::modificationChanged,
             this, [this, saveAction](bool modified) {

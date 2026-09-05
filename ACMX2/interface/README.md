@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.133.0 includes the current ACMXVK integration increments:
+Interface version 2.134.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -162,6 +162,14 @@ Interface version 2.133.0 includes the current ACMXVK integration increments:
   and print the complete compiler diagnostic in the ACMX log. Use F8 and
   Shift+F8 to move between diagnostics. The editor status bar reports pending,
   successful, and failed compilation states.
+- The editor offers GLSL and ACMXVK completion automatically after three typed
+  characters or on Ctrl+Space. Suggestions include GLSL types and functions,
+  compute built-ins, MXVK engine fields and aliases, declarations from the
+  current document, and custom-uniform names loaded from `library.json`.
+  The ACMXVK-only **Snippets** menu inserts the engine uniform block, fragment
+  push constants, frame/FFT history bindings, a bounds-checked compute output
+  function, or `#define` lines generated from the current uniform slot map.
+  Open editors refresh their uniform completion data when definitions change.
 - **Properties** (`Ctrl+,`) includes an ACMXVK shader-compiler section. Use
   **Automatic glslc** to resolve `glslc` from `PATH` or `VULKAN_SDK`, or select
   a custom glslc-compatible executable. The selected compiler is used for

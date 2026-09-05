@@ -377,6 +377,7 @@ class MainWindow : public QMainWindow {
     void updateOpenEditorCompileStatus(const QString &sourcePath, bool pending,
                                        bool success = false,
                                        const QString &diagnostics = QString());
+    void updateOpenEditorShaderContexts();
     void publishAcmxvkCompiledShaderReload(const QString &sourcePath,
                                            const QString &runtimePath);
     void publishSelectedShaderIndexToRunningProcess();

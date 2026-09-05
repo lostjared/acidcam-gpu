@@ -1156,6 +1156,7 @@ void MainWindow::initControls() {
             &MainWindow::publishCustomUniformsToRunningProcess);
     connect(customUniformDialog, &CustomUniformDialog::uniformDefinitionsChanged,
             this, [this]() {
+                updateOpenEditorShaderContexts();
                 const QString shaderName = currentShaderName();
                 if (!shaderName.isEmpty())
                     publishShaderReloadToRunningProcess(
@@ -2041,6 +2042,7 @@ void MainWindow::openShaderEditor(const QString &filePath, int lineNumber,
         handleSavedShader(filePath);
     });
     open_files.append(editor);
+    updateOpenEditorShaderContexts();
     editor->show();
     editor->revealLocation(lineNumber, columnNumber, matchLength);
 }
@@ -2065,6 +2067,37 @@ void MainWindow::updateOpenEditorCompileStatus(
             editor->setCompilePending();
         else
             editor->setCompileResult(success, diagnostics);
+    }
+}
+
+void MainWindow::updateOpenEditorShaderContexts() {
+    const bool acmxvk = active_backend == acmx2::Backend::Acmxvk;
+    QList<acmx2::CustomUniformDefinition> definitions;
+    QString error;
+    if (acmxvk && !shader_path.isEmpty() &&
+        !acmx2::load_custom_uniforms(shader_path, definitions, error)) {
+        definitions.clear();
+    }
+
+    QVector<ShaderEditorUniform> uniforms;
+    uniforms.reserve(definitions.size());
+    for (const acmx2::CustomUniformDefinition &definition : definitions)
+        uniforms.append({definition.name, definition.slot});
+
+    const QString libraryRoot = QFileInfo(shader_path).canonicalFilePath();
+    for (const QPointer<TextEditor> &editor : open_files) {
+        if (!editor)
+            continue;
+        const QString editorPath = QFileInfo(editor->fileName()).canonicalFilePath();
+        const QString relative =
+            libraryRoot.isEmpty() || editorPath.isEmpty()
+                ? QStringLiteral("..")
+                : QDir(libraryRoot).relativeFilePath(editorPath);
+        const bool inActiveLibrary =
+            relative != QStringLiteral("..") &&
+            !relative.startsWith(QStringLiteral("../"));
+        if (inActiveLibrary)
+            editor->setShaderContext(acmxvk, uniforms);
     }
 }
 
@@ -3529,6 +3562,7 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
         if (!customUniformDialog->loadLibrary(path, active_backend, &uniformError))
             Log("Could not load custom uniforms: " + uniformError);
     }
+    updateOpenEditorShaderContexts();
     const int previousRow = currentShaderRow();
     const QString previouslySelected = currentShaderName();
     items.clear();

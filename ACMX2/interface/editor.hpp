@@ -15,12 +15,16 @@
 #include <QPlainTextEdit>
 #include <QStatusBar>
 #include <QString>
+#include <QStringList>
 #include <QSyntaxHighlighter>
 #include <QVector>
 #include <QWidget>
 
 class LineNumberArea;
 class QAction;
+class QCompleter;
+class QMenu;
+class QStringListModel;
 
 enum class ShaderDiagnosticSeverity { Error,
                                       Warning,
@@ -31,6 +35,11 @@ struct ShaderDiagnostic {
     int column = 0;
     ShaderDiagnosticSeverity severity = ShaderDiagnosticSeverity::Error;
     QString message;
+};
+
+struct ShaderEditorUniform {
+    QString name;
+    int slot = -1;
 };
 
 /**
@@ -48,6 +57,8 @@ class CustomTextEdit : public QPlainTextEdit {
     void updateLineNumberAreaWidth(int newBlockCount);
     /// @brief Replace the line markers and underlines shown for compiler messages.
     void setDiagnostics(const QVector<ShaderDiagnostic> &diagnostics);
+    /// @brief Replace the keywords offered by code completion.
+    void setCompletionWords(const QStringList &words);
 
   signals:
     void themeChanged();
@@ -74,9 +85,14 @@ class CustomTextEdit : public QPlainTextEdit {
     void autoIndentNewLine();
     void smartHome(bool shift);
     bool hasMultiLineSelection();
+    QString completionPrefix() const;
+    void insertCompletion(const QString &completion);
+    void showCompletionPopup(bool forced);
 
     LineNumberArea *m_lineNumberArea = nullptr;
     QVector<ShaderDiagnostic> m_diagnostics;
+    QCompleter *m_completer = nullptr;
+    QStringListModel *m_completionModel = nullptr;
 };
 
 class LineNumberArea : public QWidget {
@@ -116,6 +132,9 @@ class TextEditor : public QDialog {
     void setCompilePending();
     /// @brief Show compiler status and source diagnostics for the associated shader.
     void setCompileResult(bool success, const QString &compilerOutput);
+    /// @brief Configure ACMXVK completion and snippets from the active manifest.
+    void setShaderContext(bool acmxvk,
+                          const QVector<ShaderEditorUniform> &uniforms);
 
   signals:
     /// @brief Emitted after the editor successfully writes its contents to disk.
@@ -149,6 +168,9 @@ class TextEditor : public QDialog {
     void navigateDiagnostic(int offset);
     QVector<ShaderDiagnostic> parseDiagnostics(const QString &compilerOutput) const;
     void updateDiagnosticActions();
+    void updateCompletionWords();
+    void insertSnippet(const QString &snippet);
+    QString customUniformDefines() const;
 
     bool m_modified = false;
     CustomTextEdit *m_textEdit = nullptr;
@@ -158,8 +180,11 @@ class TextEditor : public QDialog {
     QLabel *m_compileStatusLabel = nullptr;
     QAction *m_nextDiagnosticAction = nullptr;
     QAction *m_previousDiagnosticAction = nullptr;
+    QMenu *m_snippetsMenu = nullptr;
     QVector<ShaderDiagnostic> m_diagnostics;
     int m_currentDiagnostic = -1;
+    bool m_acmxvkContext = false;
+    QVector<ShaderEditorUniform> m_uniforms;
     QString filename;
     QString m_lastSearchText;
     int m_fontSize = 24;
