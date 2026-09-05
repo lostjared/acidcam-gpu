@@ -1,6 +1,7 @@
 #include "custom-uniforms.hpp"
 #include "../shader_selection_shm.hpp"
 
+#include <QAbstractButton>
 #include <QClipboard>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -26,6 +27,13 @@ namespace {
     void configureDoubleSpinBox(QDoubleSpinBox *spin) {
         spin->setDecimals(8);
         spin->setRange(-1000000000.0, 1000000000.0);
+        spin->setKeyboardTracking(false);
+        spin->setMinimumWidth(130);
+    }
+
+    void disableDefaultButton(QPushButton *button) {
+        button->setAutoDefault(false);
+        button->setDefault(false);
     }
 
     int sliderStepCount(const acmx2::CustomUniformDefinition &uniform) {
@@ -106,6 +114,7 @@ CustomUniformDialog::CustomUniformDialog(QWidget *parent)
     addLayout->addWidget(new QLabel(tr("Step"), this));
     addLayout->addWidget(stepSpin);
     auto *addButton = new QPushButton(tr("Add Slider"), this);
+    disableDefaultButton(addButton);
     addLayout->addWidget(addButton);
     mainLayout->addLayout(addLayout);
 
@@ -125,6 +134,10 @@ CustomUniformDialog::CustomUniformDialog(QWidget *parent)
     mainLayout->addWidget(scrollArea, 1);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    for (QAbstractButton *button : buttons->buttons()) {
+        if (auto *pushButton = qobject_cast<QPushButton *>(button))
+            disableDefaultButton(pushButton);
+    }
     mainLayout->addWidget(buttons);
 
     saveTimer = new QTimer(this);
@@ -328,6 +341,7 @@ void CustomUniformDialog::rebuildUniformRows() {
         valueSpin->setSingleStep(uniform.step);
         valueSpin->setValue(uniform.value);
         valueSpin->setKeyboardTracking(false);
+        valueSpin->setMinimumWidth(130);
         auto *rangeLabel = new QLabel(
             tr("%1 to %2, step %3")
                 .arg(uniform.minimum, 0, 'g', 8)
@@ -346,6 +360,8 @@ void CustomUniformDialog::rebuildUniformRows() {
             tr("Copy the source declaration:\n%1")
                 .arg(uniformSourceDefinition(uniform, activeBackend)));
         auto *deleteButton = new QPushButton(tr("Delete"), row);
+        disableDefaultButton(copyButton);
+        disableDefaultButton(deleteButton);
 
         layout->addWidget(nameLabel, 0, 0);
         layout->addWidget(slider, 0, 1);

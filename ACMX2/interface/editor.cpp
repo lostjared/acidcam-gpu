@@ -1385,6 +1385,10 @@ void TextEditor::init() {
     auto *previewButton = new QPushButton(tr("Compile Preview"), this);
     auto *saveApplyButton = new QPushButton(tr("Save && Apply"), this);
     auto *revertButton = new QPushButton(tr("Revert"), this);
+    for (QPushButton *button : {previewButton, saveApplyButton, revertButton}) {
+        button->setAutoDefault(false);
+        button->setDefault(false);
+    }
     m_livePreviewCheck = new QCheckBox(tr("Live Preview"), this);
     m_livePreviewCheck->setChecked(
         editorSettings.value("editor/livePreview", false).toBool());
