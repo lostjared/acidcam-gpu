@@ -47,6 +47,7 @@ namespace acmxvk {
 
     struct InterfaceReloadState {
         std::uint32_t request_sequence = 0;
+        std::int32_t shader_index = -1;
         std::string path;
     };
 

@@ -2105,6 +2105,17 @@ namespace acmxvk {
         return shaders.empty() ? std::string{} : shaders[shader_index].string();
     }
 
+    [[nodiscard]] fs::path
+    MainWindow::resolvedShaderPath(const fs::path &shader) const {
+        std::error_code error;
+        const fs::path canonical = fs::weakly_canonical(shader, error);
+        const std::string key =
+            (error ? shader.lexically_normal() : canonical).string();
+        const auto override = shader_reload_overrides.find(key);
+        return override == shader_reload_overrides.end() ? shader
+                                                         : override->second;
+    }
+
     [[nodiscard]] bool MainWindow::historyCacheEnabled() const {
         return options.enable_texture_cache || shader_history_required;
     }
@@ -2478,21 +2489,42 @@ namespace acmxvk {
             return;
         }
 
+        std::size_t logical_index = shaders.size();
         const auto shader_match = std::find_if(
             shaders.begin(), shaders.end(),
             [&](const fs::path &shader) {
                 std::error_code shader_error;
                 const fs::path canonical_shader =
                     fs::weakly_canonical(shader, shader_error);
-                return !shader_error &&
-                       canonical_shader == requested_path;
+                return !shader_error && canonical_shader == requested_path;
             });
-        if (shader_match == shaders.end()) {
-            std::cerr << "acmxvk: interface shader reload is outside the "
-                         "active runtime library: "
+        if (shader_match != shaders.end()) {
+            logical_index = static_cast<std::size_t>(
+                std::distance(shaders.begin(), shader_match));
+        } else if (requested.shader_index >= 0 &&
+                   static_cast<std::size_t>(requested.shader_index) <
+                       shaders.size()) {
+            logical_index = static_cast<std::size_t>(requested.shader_index);
+        }
+        if (logical_index >= shaders.size()) {
+            std::cerr << "acmxvk: interface shader reload does not identify "
+                         "a shader in the active runtime library: "
                       << requested_path.string() << '\n';
             return;
         }
+
+        const fs::path logical_shader = shaders[logical_index];
+        std::error_code logical_error;
+        const fs::path canonical_logical =
+            fs::weakly_canonical(logical_shader, logical_error);
+        if (logical_error || canonical_logical.empty()) {
+            std::cerr << "acmxvk: interface shader reload could not resolve "
+                         "its runtime-library shader\n";
+            return;
+        }
+        const std::string logical_key = canonical_logical.string();
+        const fs::path previously_resolved =
+            resolvedShaderPath(logical_shader);
 
         mxvk::ShaderModuleInfo module_info;
         try {
@@ -2517,15 +2549,24 @@ namespace acmxvk {
             spectrum_history_before !=
                 shader_spectrum_history_required;
 
-        const std::vector<fs::path> active_pipeline =
-            activeShaderPipeline();
-        const bool active =
-            std::find(active_pipeline.begin(), active_pipeline.end(),
-                      *shader_match) != active_pipeline.end();
+        const std::vector<fs::path> active_pipeline = activeShaderPipeline();
+        std::error_code active_error;
+        const fs::path canonical_previous =
+            fs::weakly_canonical(previously_resolved, active_error);
+        const bool active = !active_error &&
+                            std::any_of(active_pipeline.begin(), active_pipeline.end(),
+                                        [&](const fs::path &shader) {
+                                            std::error_code shader_error;
+                                            return fs::weakly_canonical(shader, shader_error) ==
+                                                       canonical_previous &&
+                                                   !shader_error;
+                                        });
+        if (requested_path == canonical_logical)
+            shader_reload_overrides.erase(logical_key);
+        else
+            shader_reload_overrides[logical_key] = requested_path;
         if (active && frame_sprite != nullptr) {
-            if (model_effect_shader == *shader_match) {
-                model_effect_shader.clear();
-            }
+            model_effect_shader.clear();
             if (resources_grew) {
                 initializeSprite();
             } else {
@@ -4764,6 +4805,8 @@ namespace acmxvk {
         if (options.human_background) {
             pipeline.emplace_back(human_composite_shader_path(options));
         }
+        for (fs::path &shader : pipeline)
+            shader = resolvedShaderPath(shader);
         return pipeline;
     }
 
@@ -4775,7 +4818,7 @@ namespace acmxvk {
             return {};
         }
 
-        const fs::path shader(currentShader());
+        const fs::path shader = resolvedShaderPath(currentShader());
         const mxvk::ShaderModuleInfo module_info =
             mxvk::inspect_spirv(mxvk::load_spv(shader.string()));
         if (module_info.stage != mxvk::ShaderStage::Fragment ||

@@ -214,6 +214,19 @@ const QList<acmx2::CustomUniformDefinition> &CustomUniformDialog::uniforms() con
     return uniformDefinitions;
 }
 
+bool CustomUniformDialog::setUniformValue(const QString &name, double value) {
+    const int index = uniformIndex(name);
+    if (index < 0)
+        return false;
+    acmx2::CustomUniformDefinition &uniform = uniformDefinitions[index];
+    const double bounded = std::clamp(value, uniform.minimum, uniform.maximum);
+    const int position = sliderPosition(uniform, bounded);
+    uniform.value = sliderValue(uniform, position);
+    saveTimer->start();
+    emit uniformsChanged();
+    return true;
+}
+
 void CustomUniformDialog::addUniform() {
     if (libraryDirectory.isEmpty()) {
         QMessageBox::information(this, tr("Custom Uniforms"),

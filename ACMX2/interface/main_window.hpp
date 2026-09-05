@@ -21,6 +21,7 @@
 #include "version_info.hpp" //defines VERSION_INFO
 #include <QActionGroup>
 #include <QDateTime>
+#include <QFile>
 #include <QHash>
 #include <QMainWindow>
 #include <QMenuBar>
@@ -33,6 +34,8 @@
 
 class CustomUniformDialog;
 class LibraryBuilderDialog;
+class QDialog;
+class QTabWidget;
 class UniformReferenceDialog;
 
 /**
@@ -128,6 +131,13 @@ class MainWindow : public QMainWindow {
                 liveShaderCompileProcess->kill();
             }
         }
+        if (editorPreviewProcess &&
+            editorPreviewProcess->state() == QProcess::Running) {
+            editorPreviewProcess->kill();
+            editorPreviewProcess->waitForFinished(2000);
+        }
+        for (const QString &path : editorPreviewTemporaryFiles)
+            QFile::remove(path);
         cleanupShaderSelectionSharedMemory();
         QMainWindow::closeEvent(event);
     }
@@ -258,6 +268,8 @@ class MainWindow : public QMainWindow {
     ///        ffmpeg's stdout/stderr to the main log window.
     void runHdr10Conversion();
     QVector<QPointer<TextEditor>> open_files;
+    QPointer<QDialog> shaderEditorWorkspace;
+    QTabWidget *shaderEditorTabs = nullptr;
     /// @brief Read an entire text file into memory.
     /// @param filePath Path to source file.
     /// @return File contents, or empty string on failure.
@@ -267,6 +279,7 @@ class MainWindow : public QMainWindow {
     /// @return Sanitized shader name.
     QString sanitizeShaderName(const QString &name);
     void cleanupClosedEditors();
+    void ensureShaderEditorWorkspace();
     /// @brief Restore persisted Session Settings into the launcher's runtime state.
     void loadSessionSettings();
     bool audio_enabled = false;
@@ -369,11 +382,24 @@ class MainWindow : public QMainWindow {
     QString liveShaderCompileStdout;
     QString liveShaderCompileStderr;
     quint64 liveShaderCompileSequence = 0;
+    QProcess *editorPreviewProcess = nullptr;
+    QString pendingEditorPreviewPath;
+    QString pendingEditorPreviewSource;
+    QString editorPreviewPath;
+    QString editorPreviewInput;
+    QString editorPreviewOutput;
+    QString editorPreviewStdout;
+    QString editorPreviewStderr;
+    QStringList editorPreviewTemporaryFiles;
+    quint64 editorPreviewSequence = 0;
 
     void initShaderSelectionSharedMemory();
     void handleSavedShader(const QString &filePath);
     void queueAcmxvkLiveCompile(const QString &filePath);
     void startNextAcmxvkLiveCompile();
+    void queueAcmxvkEditorPreview(const QString &filePath,
+                                  const QString &source);
+    void startNextAcmxvkEditorPreview();
     void updateOpenEditorCompileStatus(const QString &sourcePath, bool pending,
                                        bool success = false,
                                        const QString &diagnostics = QString());

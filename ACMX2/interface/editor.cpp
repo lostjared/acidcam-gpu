@@ -3,25 +3,35 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QClipboard>
 #include <QColor>
 #include <QCompleter>
+#include <QDoubleSpinBox>
 #include <QFile>
 #include <QFileDialog>
 #include <QFont>
+#include <QHBoxLayout>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPalette>
 #include <QPlainTextEdit>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QSettings>
+#include <QSignalBlocker>
+#include <QSizePolicy>
+#include <QSlider>
+#include <QSplitter>
 #include <QStatusBar>
 #include <QStringListModel>
 #include <QSyntaxHighlighter>
@@ -29,6 +39,7 @@
 #include <QTextCharFormat>
 #include <QTextCursor>
 #include <QTextStream>
+#include <QTimer>
 #include <QVBoxLayout>
 
 // --- CustomTextEdit ---
@@ -760,6 +771,28 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
     }
 }
 
+void CustomTextEdit::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton &&
+        (event->modifiers() & Qt::ControlModifier)) {
+        const QTextCursor cursor = cursorForPosition(event->pos());
+        const QString line = cursor.block().text();
+        const QRegularExpression includeExpression(
+            QStringLiteral("^\\s*#\\s*include\\s*[<\"]([^>\"]+)[>\"]"));
+        const QRegularExpressionMatch match = includeExpression.match(line);
+        if (match.hasMatch()) {
+            const int column = cursor.positionInBlock();
+            const int start = match.capturedStart(1);
+            const int end = match.capturedEnd(1);
+            if (column >= start && column <= end) {
+                emit includeRequested(match.captured(1));
+                event->accept();
+                return;
+            }
+        }
+    }
+    QPlainTextEdit::mousePressEvent(event);
+}
+
 TextEditor::TextEditor(QWidget *parent)
     : QDialog(parent), m_modified(false), m_textEdit(nullptr), m_highlighter(nullptr),
       m_statusBar(nullptr), m_lineColLabel(nullptr), m_fontSize(24) {
@@ -857,11 +890,157 @@ void TextEditor::setCompileResult(bool success,
 }
 
 void TextEditor::setShaderContext(
-    bool acmxvk, const QVector<ShaderEditorUniform> &uniforms) {
+    bool acmxvk, const QVector<ShaderEditorUniform> &uniforms,
+    const QString &libraryDirectory) {
     m_acmxvkContext = acmxvk;
     m_uniforms = uniforms;
+    m_libraryDirectory = libraryDirectory;
     m_snippetsMenu->setEnabled(acmxvk);
+    m_livePreviewCheck->setEnabled(acmxvk);
+    if (!acmxvk)
+        m_livePreviewCheck->setChecked(false);
     updateCompletionWords();
+    rebuildUniformControls();
+}
+
+void TextEditor::setUniformValue(const QString &name, double value) {
+    for (ShaderEditorUniform &uniform : m_uniforms) {
+        if (uniform.name != name)
+            continue;
+        uniform.value = qBound(uniform.minimum, value, uniform.maximum);
+        if (QDoubleSpinBox *spin = m_uniformSpins.value(name)) {
+            const QSignalBlocker blocker(spin);
+            spin->setValue(uniform.value);
+        }
+        if (QSlider *slider = m_uniformSliders.value(name)) {
+            const QSignalBlocker blocker(slider);
+            const double range = uniform.maximum - uniform.minimum;
+            const int position = range > 0.0
+                                     ? qRound((uniform.value - uniform.minimum) /
+                                              range * slider->maximum())
+                                     : 0;
+            slider->setValue(position);
+        }
+        break;
+    }
+}
+
+void TextEditor::openInclude(const QString &includeName) {
+    const QFileInfo sourceInfo(filename);
+    const QStringList candidates{
+        sourceInfo.dir().filePath(includeName),
+        QDir(m_libraryDirectory).filePath(includeName)};
+    for (const QString &candidate : candidates) {
+        const QFileInfo includeInfo(candidate);
+        if (includeInfo.exists() && includeInfo.isFile()) {
+            emit openFileRequested(includeInfo.canonicalFilePath(), 1);
+            return;
+        }
+    }
+    m_statusBar->showMessage(
+        QStringLiteral("Include file not found: %1").arg(includeName), 4000);
+}
+
+void TextEditor::requestPreview() {
+    if (!m_acmxvkContext || filename.isEmpty())
+        return;
+    emit previewRequested(filename, m_textEdit->toPlainText());
+}
+
+void TextEditor::revertContents() {
+    if (filename.isEmpty())
+        return;
+    QFile file(filename);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Revert Shader"), file.errorString());
+        return;
+    }
+    setText(QString::fromUtf8(file.readAll()));
+    m_statusBar->showMessage(tr("Restored the saved shader"), 2500);
+}
+
+void TextEditor::rebuildUniformControls() {
+    m_uniformSpins.clear();
+    m_uniformSliders.clear();
+    while (QLayoutItem *item = m_uniformLayout->takeAt(0)) {
+        if (QWidget *widget = item->widget())
+            widget->deleteLater();
+        delete item;
+    }
+
+    const bool visible = m_acmxvkContext && !m_uniforms.isEmpty();
+    m_uniformPanel->setVisible(visible);
+    m_uniformScroll->setVisible(visible);
+    if (!visible)
+        return;
+
+    auto *heading = new QLabel(tr("Custom Uniforms"), m_uniformPanel);
+    QFont headingFont = heading->font();
+    headingFont.setBold(true);
+    heading->setFont(headingFont);
+    m_uniformLayout->addWidget(heading);
+
+    for (const ShaderEditorUniform &uniform : m_uniforms) {
+        auto *nameLabel = new QLabel(uniform.name, m_uniformPanel);
+        if (uniform.slot >= 0) {
+            nameLabel->setToolTip(
+                QStringLiteral("ext.custom_uniforms[%1].%2")
+                    .arg(uniform.slot / 4)
+                    .arg(QStringLiteral("xyzw").at(uniform.slot % 4)));
+        }
+        auto *slider = new QSlider(Qt::Horizontal, m_uniformPanel);
+        slider->setRange(0, 1000);
+        auto *spin = new QDoubleSpinBox(m_uniformPanel);
+        spin->setDecimals(8);
+        spin->setRange(uniform.minimum, uniform.maximum);
+        spin->setSingleStep(uniform.step);
+        spin->setValue(uniform.value);
+        const double range = uniform.maximum - uniform.minimum;
+        slider->setValue(range > 0.0
+                             ? qRound((uniform.value - uniform.minimum) /
+                                      range * slider->maximum())
+                             : 0);
+        m_uniformLayout->addWidget(nameLabel);
+        m_uniformLayout->addWidget(slider);
+        m_uniformLayout->addWidget(spin);
+        m_uniformSpins.insert(uniform.name, spin);
+        m_uniformSliders.insert(uniform.name, slider);
+
+        connect(slider, &QSlider::valueChanged, this,
+                [this, uniform, spin, slider](int position) {
+                    const double ratio = slider->maximum() > 0
+                                             ? static_cast<double>(position) /
+                                                   slider->maximum()
+                                             : 0.0;
+                    const double raw = uniform.minimum +
+                                       (uniform.maximum - uniform.minimum) * ratio;
+                    const double steps = uniform.step > 0.0
+                                             ? qRound((raw - uniform.minimum) /
+                                                      uniform.step)
+                                             : 0.0;
+                    const double value = qBound(
+                        uniform.minimum,
+                        uniform.minimum + steps * uniform.step,
+                        uniform.maximum);
+                    const QSignalBlocker blocker(spin);
+                    spin->setValue(value);
+                    emit uniformValueChanged(uniform.name, value);
+                });
+        connect(spin,
+                static_cast<void (QDoubleSpinBox::*)(double)>(
+                    &QDoubleSpinBox::valueChanged),
+                this, [this, uniform, slider](double value) {
+                    const double range = uniform.maximum - uniform.minimum;
+                    const int position = range > 0.0
+                                             ? qRound((value - uniform.minimum) /
+                                                      range * slider->maximum())
+                                             : 0;
+                    const QSignalBlocker blocker(slider);
+                    slider->setValue(position);
+                    emit uniformValueChanged(uniform.name, value);
+                });
+    }
+    m_uniformLayout->addStretch();
 }
 
 void TextEditor::updateCompletionWords() {
@@ -1066,6 +1245,7 @@ void TextEditor::updateWindowTitle() {
 
 void TextEditor::init() {
     m_modified = false;
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     QSettings editorSettings("LostSideDead");
     m_fontSize = qBound(8, editorSettings.value("editor/fontSize", 24).toInt(), 72);
     acmx2::applyCustomStyleIfEnabled(this);
@@ -1201,21 +1381,54 @@ void TextEditor::init() {
 
     layout->setMenuBar(menuBar);
 
-    m_textEdit = new CustomTextEdit(this);
+    auto *previewBar = new QHBoxLayout();
+    auto *previewButton = new QPushButton(tr("Compile Preview"), this);
+    auto *saveApplyButton = new QPushButton(tr("Save && Apply"), this);
+    auto *revertButton = new QPushButton(tr("Revert"), this);
+    m_livePreviewCheck = new QCheckBox(tr("Live Preview"), this);
+    m_livePreviewCheck->setChecked(
+        editorSettings.value("editor/livePreview", false).toBool());
+    m_livePreviewCheck->setEnabled(false);
+    previewBar->addWidget(previewButton);
+    previewBar->addWidget(saveApplyButton);
+    previewBar->addWidget(revertButton);
+    previewBar->addStretch();
+    previewBar->addWidget(m_livePreviewCheck);
+    layout->addLayout(previewBar);
+
+    auto *splitter = new QSplitter(Qt::Horizontal, this);
+    splitter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_textEdit = new CustomTextEdit(splitter);
     m_textEdit->setLineWrapMode(toggleWordWrapAction->isChecked()
                                     ? QPlainTextEdit::WidgetWidth
                                     : QPlainTextEdit::NoWrap);
     m_textEdit->setTabStopDistance(4 * m_textEdit->fontMetrics().horizontalAdvance(' '));
     updateFontSize();
 
-    layout->addWidget(m_textEdit);
+    splitter->addWidget(m_textEdit);
+
+    m_uniformScroll = new QScrollArea(splitter);
+    m_uniformScroll->setWidgetResizable(true);
+    m_uniformScroll->setMinimumWidth(220);
+    m_uniformScroll->setMaximumWidth(360);
+    m_uniformPanel = new QWidget(m_uniformScroll);
+    m_uniformLayout = new QVBoxLayout(m_uniformPanel);
+    m_uniformLayout->setAlignment(Qt::AlignTop);
+    m_uniformScroll->setWidget(m_uniformPanel);
+    splitter->addWidget(m_uniformScroll);
+    splitter->setStretchFactor(0, 1);
+    splitter->setStretchFactor(1, 0);
+    m_uniformPanel->hide();
+    m_uniformScroll->hide();
+    layout->addWidget(splitter, 1);
 
     m_statusBar = new QStatusBar(this);
+    m_statusBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_lineColLabel = new QLabel("Line: 1, Col: 1", this);
     m_compileStatusLabel = new QLabel("Not compiled", this);
     m_statusBar->addWidget(m_compileStatusLabel);
     m_statusBar->addPermanentWidget(m_lineColLabel);
-    layout->addWidget(m_statusBar);
+    layout->addWidget(m_statusBar, 0);
 
     m_highlighter = new GlslSyntaxHighlighter(m_textEdit->document());
     m_highlighter->setEditorPalette(m_textEdit->palette());
@@ -1237,6 +1450,18 @@ void TextEditor::init() {
     connect(saveAction, &QAction::triggered, this, &TextEditor::saveContents);
     connect(saveAsAction, &QAction::triggered, this, &TextEditor::saveAs);
     connect(closeAction, &QAction::triggered, this, &TextEditor::close);
+    connect(previewButton, &QPushButton::clicked, this,
+            &TextEditor::requestPreview);
+    connect(saveApplyButton, &QPushButton::clicked, this,
+            &TextEditor::saveContents);
+    connect(revertButton, &QPushButton::clicked, this,
+            &TextEditor::revertContents);
+    connect(m_livePreviewCheck, &QCheckBox::toggled, this,
+            [this](bool checked) {
+                QSettings("LostSideDead").setValue("editor/livePreview", checked);
+                if (checked)
+                    m_previewTimer->start();
+            });
 
     connect(undoAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::undo);
     connect(redoAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::redo);
@@ -1342,6 +1567,19 @@ void main() {
                 saveAction->setEnabled(modified);
                 updateWindowTitle();
             });
+    m_previewTimer = new QTimer(this);
+    m_previewTimer->setSingleShot(true);
+    m_previewTimer->setInterval(650);
+    connect(m_previewTimer, &QTimer::timeout, this,
+            &TextEditor::requestPreview);
+    connect(m_textEdit->document(), &QTextDocument::contentsChanged, this,
+            [this]() {
+                updateCompletionWords();
+                if (m_livePreviewCheck->isChecked() && m_acmxvkContext)
+                    m_previewTimer->start();
+            });
+    connect(m_textEdit, &CustomTextEdit::includeRequested, this,
+            &TextEditor::openInclude);
 
     connect(m_textEdit, &QPlainTextEdit::cursorPositionChanged, this, &TextEditor::updateCursorPosition);
     connect(m_textEdit, &QPlainTextEdit::copyAvailable, cutAction, &QAction::setEnabled);

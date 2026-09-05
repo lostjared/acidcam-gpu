@@ -65,6 +65,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -132,6 +133,7 @@ namespace acmxvk {
         cv::Mat human_overlay_rgba;
         cv::Mat latest_camera_history_rgba;
         std::vector<fs::path> shaders;
+        std::unordered_map<std::string, fs::path> shader_reload_overrides;
         std::vector<fs::path> configured_passes;
         std::vector<PlaylistNode> playlist;
         std::vector<mxvk::VK_Sprite *> post_process_sprites;
@@ -390,6 +392,7 @@ namespace acmxvk {
         void applyCustomUniformOverrides();
         void printCustomUniforms() const;
         [[nodiscard]] std::string currentShader() const;
+        [[nodiscard]] fs::path resolvedShaderPath(const fs::path &shader) const;
         [[nodiscard]] bool historyCacheEnabled() const;
         void recordShaderResources(const mxvk::ShaderModuleInfo &module_info,
                                    std::string_view source);

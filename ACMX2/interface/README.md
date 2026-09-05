@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.134.0 includes the current ACMXVK integration increments:
+Interface version 2.135.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -170,6 +170,20 @@ Interface version 2.134.0 includes the current ACMXVK integration increments:
   push constants, frame/FFT history bindings, a bounds-checked compute output
   function, or `#define` lines generated from the current uniform slot map.
   Open editors refresh their uniform completion data when definitions change.
+- Shader sources now open in one movable, closable tabbed editor workspace.
+  Ctrl-click an include path to open the referenced file in another tab; both
+  paths relative to the current source and paths relative to the active library
+  are resolved.
+- ACMXVK editor tabs include manifest-backed custom-uniform sliders. Changes
+  update `library.json`, the Custom Uniforms dialog state, every open editor,
+  and a running ACMXVK process through the existing synchronized control path.
+- **Compile Preview** compiles the current unsaved editor buffer into an
+  isolated temporary SPIR-V module and requests a running ACMXVK instance to
+  load it without replacing the source or cached module. **Live Preview**
+  performs the same operation after a short editing pause. Failed previews keep
+  the last working pipeline active and use the normal inline diagnostics;
+  **Save & Apply** retains the established atomic saved-file workflow, and
+  **Revert** restores the last saved source.
 - **Properties** (`Ctrl+,`) includes an ACMXVK shader-compiler section. Use
   **Automatic glslc** to resolve `glslc` from `PATH` or `VULKAN_SDK`, or select
   a custom glslc-compatible executable. The selected compiler is used for

@@ -38,8 +38,10 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QSpinBox>
 #include <QStandardPaths>
+#include <QTabWidget>
 #include <QTextStream>
 #include <QTimer>
 #include <QTreeWidgetItem>
@@ -2027,24 +2029,99 @@ void MainWindow::openShaderEditor(const QString &filePath, int lineNumber,
             continue;
         const QString openPath = QFileInfo(openEditor->fileName()).canonicalFilePath();
         if (!canonicalPath.isEmpty() && openPath == canonicalPath) {
-            openEditor->show();
-            openEditor->raise();
-            openEditor->activateWindow();
+            ensureShaderEditorWorkspace();
+            shaderEditorTabs->setCurrentWidget(openEditor);
+            shaderEditorWorkspace->show();
+            shaderEditorWorkspace->raise();
+            shaderEditorWorkspace->activateWindow();
             openEditor->revealLocation(lineNumber, columnNumber, matchLength);
             return;
         }
     }
 
-    TextEditor *editor = new TextEditor(this);
+    ensureShaderEditorWorkspace();
+    TextEditor *editor = new TextEditor(shaderEditorTabs);
+    editor->setWindowFlags(Qt::Widget);
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
     connect(editor, &TextEditor::fileSaved, this, [this](const QString &filePath) {
         handleSavedShader(filePath);
     });
+    connect(editor, &TextEditor::openFileRequested, this,
+            [this](const QString &includePath, int lineNumber) {
+                openShaderEditor(includePath, lineNumber);
+            });
+    connect(editor, &TextEditor::previewRequested, this,
+            &MainWindow::queueAcmxvkEditorPreview);
+    connect(editor, &TextEditor::uniformValueChanged, this,
+            [this](const QString &name, double value) {
+                if (!customUniformDialog ||
+                    !customUniformDialog->setUniformValue(name, value)) {
+                    return;
+                }
+                for (const QPointer<TextEditor> &openEditor : open_files) {
+                    if (openEditor)
+                        openEditor->setUniformValue(name, value);
+                }
+            });
     open_files.append(editor);
+    const int tabIndex = shaderEditorTabs->addTab(
+        editor, requestedFile.fileName());
+    connect(editor, &QWidget::windowTitleChanged, this,
+            [this, editor](const QString &title) {
+                if (!shaderEditorTabs)
+                    return;
+                const int index = shaderEditorTabs->indexOf(editor);
+                if (index < 0)
+                    return;
+                QString tabTitle = title;
+                const int separator = tabTitle.indexOf(QStringLiteral(" - "));
+                if (separator >= 0)
+                    tabTitle = tabTitle.mid(separator + 3);
+                shaderEditorTabs->setTabText(index, tabTitle);
+            });
     updateOpenEditorShaderContexts();
+    shaderEditorTabs->setCurrentIndex(tabIndex);
+    shaderEditorWorkspace->show();
+    shaderEditorWorkspace->raise();
+    shaderEditorWorkspace->activateWindow();
     editor->show();
     editor->revealLocation(lineNumber, columnNumber, matchLength);
+}
+
+void MainWindow::ensureShaderEditorWorkspace() {
+    if (shaderEditorWorkspace)
+        return;
+    shaderEditorWorkspace = new QDialog(this);
+    shaderEditorWorkspace->setWindowTitle(tr("ACMX Shader Editor"));
+    shaderEditorWorkspace->setModal(false);
+    auto *layout = new QVBoxLayout(shaderEditorWorkspace);
+    layout->setContentsMargins(4, 4, 4, 4);
+    shaderEditorTabs = new QTabWidget(shaderEditorWorkspace);
+    shaderEditorTabs->setTabsClosable(true);
+    shaderEditorTabs->setMovable(true);
+    shaderEditorTabs->setDocumentMode(true);
+    layout->addWidget(shaderEditorTabs);
+    connect(shaderEditorTabs, &QTabWidget::tabCloseRequested, this,
+            [this](int index) {
+                auto *editor = qobject_cast<TextEditor *>(
+                    shaderEditorTabs->widget(index));
+                if (editor && editor->close())
+                    shaderEditorTabs->removeTab(index);
+            });
+    QSettings settings("LostSideDead");
+    if (!shaderEditorWorkspace->restoreGeometry(
+            settings.value("editor/workspaceGeometry").toByteArray())) {
+        shaderEditorWorkspace->resize(1180, 820);
+    }
+    connect(shaderEditorWorkspace, &QDialog::finished, this,
+            [this](int) {
+                if (shaderEditorWorkspace) {
+                    QSettings("LostSideDead")
+                        .setValue("editor/workspaceGeometry",
+                                  shaderEditorWorkspace->saveGeometry());
+                }
+            });
 }
 
 void MainWindow::updateOpenEditorCompileStatus(
@@ -2082,7 +2159,8 @@ void MainWindow::updateOpenEditorShaderContexts() {
     QVector<ShaderEditorUniform> uniforms;
     uniforms.reserve(definitions.size());
     for (const acmx2::CustomUniformDefinition &definition : definitions)
-        uniforms.append({definition.name, definition.slot});
+        uniforms.append({definition.name, definition.slot, definition.minimum,
+                         definition.maximum, definition.step, definition.value});
 
     const QString libraryRoot = QFileInfo(shader_path).canonicalFilePath();
     for (const QPointer<TextEditor> &editor : open_files) {
@@ -2097,7 +2175,7 @@ void MainWindow::updateOpenEditorShaderContexts() {
             relative != QStringLiteral("..") &&
             !relative.startsWith(QStringLiteral("../"));
         if (inActiveLibrary)
-            editor->setShaderContext(acmxvk, uniforms);
+            editor->setShaderContext(acmxvk, uniforms, libraryRoot);
     }
 }
 
@@ -2653,6 +2731,149 @@ void MainWindow::startNextAcmxvkLiveCompile() {
                            &MainWindow::startNextAcmxvkLiveCompile);
     }
 #endif
+}
+
+void MainWindow::queueAcmxvkEditorPreview(const QString &filePath,
+                                          const QString &source) {
+    if (active_backend != acmx2::Backend::Acmxvk)
+        return;
+    pendingEditorPreviewPath = QFileInfo(filePath).absoluteFilePath();
+    pendingEditorPreviewSource = source;
+    startNextAcmxvkEditorPreview();
+}
+
+void MainWindow::startNextAcmxvkEditorPreview() {
+    if (editorPreviewProcess &&
+        editorPreviewProcess->state() != QProcess::NotRunning) {
+        return;
+    }
+    if (pendingEditorPreviewPath.isEmpty())
+        return;
+
+    if (!editorPreviewProcess) {
+        editorPreviewProcess = new QProcess(this);
+        editorPreviewProcess->setProcessChannelMode(QProcess::SeparateChannels);
+        connect(editorPreviewProcess, &QProcess::readyReadStandardOutput, this,
+                [this]() {
+                    editorPreviewStdout += QString::fromUtf8(
+                        editorPreviewProcess->readAllStandardOutput());
+                });
+        connect(editorPreviewProcess, &QProcess::readyReadStandardError, this,
+                [this]() {
+                    editorPreviewStderr += QString::fromUtf8(
+                        editorPreviewProcess->readAllStandardError());
+                });
+        connect(
+            editorPreviewProcess,
+            qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+            [this](int exitCode, QProcess::ExitStatus exitStatus) {
+                editorPreviewStdout += QString::fromUtf8(
+                    editorPreviewProcess->readAllStandardOutput());
+                editorPreviewStderr += QString::fromUtf8(
+                    editorPreviewProcess->readAllStandardError());
+                QString diagnostics = editorPreviewStderr.trimmed();
+                if (!editorPreviewStdout.trimmed().isEmpty()) {
+                    if (!diagnostics.isEmpty())
+                        diagnostics += QLatin1Char('\n');
+                    diagnostics += editorPreviewStdout.trimmed();
+                }
+                diagnostics.replace(editorPreviewInput, editorPreviewPath);
+                const bool success =
+                    exitStatus == QProcess::NormalExit && exitCode == 0 &&
+                    QFileInfo(editorPreviewOutput).isFile() &&
+                    QFileInfo(editorPreviewOutput).size() >= 20;
+                updateOpenEditorCompileStatus(editorPreviewPath, false, success,
+                                              diagnostics);
+                if (success) {
+                    editorPreviewTemporaryFiles.append(editorPreviewOutput);
+                    while (editorPreviewTemporaryFiles.size() > 16)
+                        QFile::remove(editorPreviewTemporaryFiles.takeFirst());
+                    publishAcmxvkCompiledShaderReload(editorPreviewPath,
+                                                      editorPreviewOutput);
+                    Log(tr("Compiled ACMXVK editor preview: %1")
+                            .arg(QFileInfo(editorPreviewPath).fileName()));
+                } else {
+                    QFile::remove(editorPreviewOutput);
+                    Log(tr("<b style='color:red;'>ACMXVK editor preview failed: "
+                           "%1</b><pre style='white-space:pre-wrap;'>%2</pre>")
+                            .arg(QFileInfo(editorPreviewPath).fileName(),
+                                 diagnostics.toHtmlEscaped()));
+                }
+                QFile::remove(editorPreviewInput);
+                editorPreviewPath.clear();
+                editorPreviewInput.clear();
+                editorPreviewOutput.clear();
+                editorPreviewStdout.clear();
+                editorPreviewStderr.clear();
+                QTimer::singleShot(
+                    0, this, &MainWindow::startNextAcmxvkEditorPreview);
+            });
+    }
+
+    QString compilerError;
+    const QString glslc = resolve_acmxvk_shader_compiler(compilerError);
+    editorPreviewPath = pendingEditorPreviewPath;
+    const QString source = pendingEditorPreviewSource;
+    pendingEditorPreviewPath.clear();
+    pendingEditorPreviewSource.clear();
+    if (glslc.isEmpty()) {
+        updateOpenEditorCompileStatus(editorPreviewPath, false, false,
+                                      compilerError);
+        editorPreviewPath.clear();
+        return;
+    }
+
+    const QFileInfo sourceInfo(editorPreviewPath);
+    const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
+    const QString previewDirectory =
+        QDir(acmxvk_build_directory(sourceRoot))
+            .filePath(QStringLiteral(".editor-preview"));
+    if (!QDir().mkpath(previewDirectory)) {
+        const QString error = tr("Could not create the editor preview directory.");
+        updateOpenEditorCompileStatus(editorPreviewPath, false, false, error);
+        editorPreviewPath.clear();
+        return;
+    }
+    const QString suffix = sourceInfo.suffix().toLower();
+    const QString baseName =
+        QStringLiteral("preview-%1-%2.%3")
+            .arg(QCoreApplication::applicationPid())
+            .arg(++editorPreviewSequence)
+            .arg(suffix == QStringLiteral("comp") ? QStringLiteral("comp")
+                                                  : QStringLiteral("frag"));
+    editorPreviewInput = QDir(previewDirectory).filePath(baseName);
+    editorPreviewOutput = editorPreviewInput + QStringLiteral(".spv");
+    QSaveFile inputFile(editorPreviewInput);
+    const QByteArray sourceBytes = source.toUtf8();
+    if (!inputFile.open(QIODevice::WriteOnly | QIODevice::Text) ||
+        inputFile.write(sourceBytes) != sourceBytes.size() ||
+        !inputFile.commit()) {
+        const QString error = tr("Could not write the temporary preview source.");
+        updateOpenEditorCompileStatus(editorPreviewPath, false, false, error);
+        editorPreviewPath.clear();
+        editorPreviewInput.clear();
+        editorPreviewOutput.clear();
+        return;
+    }
+
+    updateOpenEditorCompileStatus(editorPreviewPath, true);
+    QStringList arguments{QStringLiteral("-I"), sourceInfo.absolutePath()};
+    if (!sourceRoot.isEmpty() && sourceRoot != sourceInfo.absolutePath())
+        arguments << QStringLiteral("-I") << sourceRoot;
+    arguments << editorPreviewInput << QStringLiteral("-o")
+              << editorPreviewOutput;
+    editorPreviewStdout.clear();
+    editorPreviewStderr.clear();
+    editorPreviewProcess->start(glslc, arguments);
+    if (!editorPreviewProcess->waitForStarted()) {
+        const QString error = tr("Failed to start the shader compiler: %1")
+                                  .arg(editorPreviewProcess->errorString());
+        updateOpenEditorCompileStatus(editorPreviewPath, false, false, error);
+        QFile::remove(editorPreviewInput);
+        editorPreviewPath.clear();
+        editorPreviewInput.clear();
+        editorPreviewOutput.clear();
+    }
 }
 
 void MainWindow::publishAcmxvkCompiledShaderReload(

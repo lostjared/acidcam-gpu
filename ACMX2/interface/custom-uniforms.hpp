@@ -20,6 +20,7 @@ class CustomUniformDialog : public QDialog {
     bool loadLibrary(const QString &directory, acmx2::Backend backend,
                      QString *error = nullptr);
     const QList<acmx2::CustomUniformDefinition> &uniforms() const;
+    bool setUniformValue(const QString &name, double value);
 
   signals:
     void uniformsChanged();

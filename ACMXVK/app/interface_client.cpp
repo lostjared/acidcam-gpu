@@ -300,6 +300,7 @@ namespace acmxvk {
         next.audio_file.repeat = impl->selection->audio_repeat != 0;
 
         next.reload.request_sequence = impl->selection->reload_sequence;
+        next.reload.shader_index = impl->selection->reload_shader_index;
         const auto reload_path_end = std::find(
             std::begin(impl->selection->reload_shader_path),
             std::end(impl->selection->reload_shader_path), '\0');

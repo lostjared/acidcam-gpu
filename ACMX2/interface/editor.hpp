@@ -9,8 +9,10 @@
 #include "syntax.hpp"
 #include <QCloseEvent>
 #include <QDialog>
+#include <QHash>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPlainTextEdit>
 #include <QStatusBar>
@@ -24,6 +26,12 @@ class LineNumberArea;
 class QAction;
 class QCompleter;
 class QMenu;
+class QCheckBox;
+class QDoubleSpinBox;
+class QSlider;
+class QScrollArea;
+class QTimer;
+class QVBoxLayout;
 class QStringListModel;
 
 enum class ShaderDiagnosticSeverity { Error,
@@ -40,6 +48,10 @@ struct ShaderDiagnostic {
 struct ShaderEditorUniform {
     QString name;
     int slot = -1;
+    double minimum = 0.0;
+    double maximum = 1.0;
+    double step = 0.01;
+    double value = 0.0;
 };
 
 /**
@@ -62,10 +74,12 @@ class CustomTextEdit : public QPlainTextEdit {
 
   signals:
     void themeChanged();
+    void includeRequested(const QString &includeName);
 
   protected:
     void changeEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 
   private slots:
@@ -134,11 +148,16 @@ class TextEditor : public QDialog {
     void setCompileResult(bool success, const QString &compilerOutput);
     /// @brief Configure ACMXVK completion and snippets from the active manifest.
     void setShaderContext(bool acmxvk,
-                          const QVector<ShaderEditorUniform> &uniforms);
+                          const QVector<ShaderEditorUniform> &uniforms,
+                          const QString &libraryDirectory = QString());
+    void setUniformValue(const QString &name, double value);
 
   signals:
     /// @brief Emitted after the editor successfully writes its contents to disk.
     void fileSaved(const QString &path);
+    void openFileRequested(const QString &path, int lineNumber);
+    void previewRequested(const QString &path, const QString &source);
+    void uniformValueChanged(const QString &name, double value);
 
   protected:
     void closeEvent(QCloseEvent *event) override;
@@ -171,6 +190,10 @@ class TextEditor : public QDialog {
     void updateCompletionWords();
     void insertSnippet(const QString &snippet);
     QString customUniformDefines() const;
+    void openInclude(const QString &includeName);
+    void requestPreview();
+    void revertContents();
+    void rebuildUniformControls();
 
     bool m_modified = false;
     CustomTextEdit *m_textEdit = nullptr;
@@ -181,10 +204,18 @@ class TextEditor : public QDialog {
     QAction *m_nextDiagnosticAction = nullptr;
     QAction *m_previousDiagnosticAction = nullptr;
     QMenu *m_snippetsMenu = nullptr;
+    QWidget *m_uniformPanel = nullptr;
+    QScrollArea *m_uniformScroll = nullptr;
+    QVBoxLayout *m_uniformLayout = nullptr;
+    QCheckBox *m_livePreviewCheck = nullptr;
+    QTimer *m_previewTimer = nullptr;
+    QHash<QString, QDoubleSpinBox *> m_uniformSpins;
+    QHash<QString, QSlider *> m_uniformSliders;
     QVector<ShaderDiagnostic> m_diagnostics;
     int m_currentDiagnostic = -1;
     bool m_acmxvkContext = false;
     QVector<ShaderEditorUniform> m_uniforms;
+    QString m_libraryDirectory;
     QString filename;
     QString m_lastSearchText;
     int m_fontSize = 24;
