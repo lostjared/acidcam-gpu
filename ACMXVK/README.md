@@ -1474,6 +1474,44 @@ The same names work with MIDI Slider 1–4 actions. Direct CC mappings can also
 be supplied, for example `--midi-cc 20=slider1` through
 `--midi-cc 23=slider4`.
 
+### Procedural lotus and crystal mandalas
+
+`shaders/mandala_lotus.comp` draws nine interwoven petal rings, beads, and fine
+radial filigree. `shaders/mandala_crystal.comp` uses nine folded inversion
+iterations with ring and cross orbit traps for a crystalline mandala.
+Both generate their own opaque image, so the input picture is not visible.
+Animation uses media time (`ext.u2.y`), independently of processing speed.
+
+| Control | Lotus | Crystal |
+| --- | --- | --- |
+| `slider1` | 6–24 petals | 6–24 symmetry sectors |
+| `slider2` | Zoom and petal depth | Zoom and sharper fractal detail |
+| `slider3` | Rotation/animation speed | Rotation and orbit animation speed |
+| `slider4` | Palette hue | Palette hue |
+
+All four controls accept 0–1 and use slots 20–23
+(`ext.custom_uniforms[5].xyzw`), matching the bundled library and MIDI slider
+actions. A complete palette cycle occurs from slider4 = 0 to 1.
+The effects remain visible even with all sliders at zero.
+
+CMake builds both automatically into `build/acmxvk/shaders` and installs their
+SPIR-V files with the example library. Pcons also picks them up automatically.
+These examples use the standard SDR `rgba8` compute output.
+
+```bash
+./build/acmxvk/acmxvk \
+    --graphic image.jpg \
+    --shaders ./build/acmxvk/shaders \
+    --shader-file mandala_lotus.comp.spv \
+    --uniform slider1=0.5 --uniform slider2=0.6 \
+    --uniform slider3=0.35 --uniform slider4=0.8 \
+    --resolution 1280x720 --enable-vsync
+```
+
+Replace the shader filename with `mandala_crystal.comp.spv` for the second
+effect. Add `--midi-device 0 --midi-map ACMXVK/midi-examples/nanocontrol-slider.midi_cfg`
+to use the bundled nano controller slider mapping.
+
 ### Custom variables from `library.json`
 
 Custom uniforms use their explicit manifest `slot` when one is present; older

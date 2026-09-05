@@ -578,7 +578,23 @@ add_custom_command(
     VERBATIM
 )
 
+set(ACMXVK_MANDALA_EXAMPLE_SHADERS)
+foreach(name IN ITEMS mandala_lotus mandala_crystal)
+    set(output "${ACMXVK_SHADER_OUTPUT_DIR}/${name}.comp.spv")
+    add_custom_command(
+        OUTPUT "${output}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+        COMMAND "${GLSLC_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/shaders/${name}.comp" -o "${output}"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/${name}.comp"
+        COMMENT "Compiling ACMXVK ${name} compute shader"
+        VERBATIM
+    )
+    list(APPEND ACMXVK_MANDALA_EXAMPLE_SHADERS "${output}")
+endforeach()
+
 add_custom_target(acmxvk_shaders DEPENDS
+    ${ACMXVK_MANDALA_EXAMPLE_SHADERS}
     "${ACMXVK_SPRITE_VERTEX_SHADER}"
     "${ACMXVK_ECHO_CACHE_SHADER}"
     "${ACMXVK_FLIP_SHADER}"
@@ -837,6 +853,7 @@ endif()
 
 install(TARGETS acmxvk RUNTIME DESTINATION bin)
 install(FILES
+        ${ACMXVK_MANDALA_EXAMPLE_SHADERS}
         "${ACMXVK_SPRITE_VERTEX_SHADER}"
         "${ACMXVK_ECHO_CACHE_SHADER}"
         "${ACMXVK_FLIP_SHADER}"

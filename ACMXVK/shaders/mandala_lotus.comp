@@ -1,0 +1,65 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+layout(set = 0, binding = 5, rgba8) writeonly uniform image2D output_image;
+
+#define slider1 ext.custom_uniforms[5].x
+#define slider2 ext.custom_uniforms[5].y
+#define slider3 ext.custom_uniforms[5].z
+#define slider4 ext.custom_uniforms[5].w
+
+const float TAU = 6.28318530718;
+
+vec3 palette(float phase) {
+    return 0.5 + 0.5 * cos(TAU * (phase + vec3(0.0, 0.32, 0.67)));
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(output_image);
+    if (any(greaterThanEqual(pixel, size))) {
+        return;
+    }
+    vec4 controls = clamp(vec4(slider1, slider2, slider3, slider4), 0.0, 1.0);
+    vec2 point = (2.0 * (vec2(pixel) + 0.5) - vec2(size)) / float(min(size.x, size.y));
+    float radius = length(point);
+    float angle = atan(point.y, point.x + 0.000001);
+    float time = ext.u2.y * mix(0.04, 0.45, controls.z);
+    float symmetry = floor(mix(6.0, 24.0, controls.x) + 0.5);
+    vec3 color = vec3(0.005, 0.008, 0.02);
+
+    float radial = radius * mix(0.8, 1.6, controls.y);
+    float width = max(2.0 / float(min(size.x, size.y)), 0.0025);
+    for (int layer = 0; layer < 9; ++layer) {
+        float index = float(layer);
+        float turn = angle + time * 0.16 * (mod(index, 2.0) * 2.0 - 1.0);
+        float petals = 0.5 + 0.5 * cos(turn * symmetry + index * 1.7);
+        float ring_radius = 0.12 + index * 0.115;
+        float outline = ring_radius + mix(0.045, 0.11, controls.y) * pow(petals, 1.5);
+        float distance_value = abs(radial - outline);
+        float line = exp(-distance_value / width);
+        float glow = 0.035 * exp(-distance_value * 32.0);
+        float beads = pow(0.5 + 0.5 * cos(turn * symmetry * 3.0 + index), 18.0);
+        float bead_ring = exp(-abs(radial - ring_radius) * 100.0) * beads;
+        color += palette(index * 0.095 + controls.w + time * 0.04)
+               * (line * 1.5 + glow + bead_ring * 0.55);
+    }
+    float weave = sin(radial * 95.0 + cos(angle * symmetry) * 3.0 - time);
+    float filigree = exp(-abs(weave) * 35.0) * exp(-radius * 1.4);
+    color += palette(controls.w + radius * 0.4) * filigree * 0.22;
+    color *= 1.0 - smoothstep(1.25, 1.8, radius);
+    color = vec3(1.0) - exp(-color * 1.4);
+    imageStore(output_image, pixel, vec4(color, 1.0));
+}
