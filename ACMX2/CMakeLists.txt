@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 project(ACMX2 VERSION 2.101.1 LANGUAGES C CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -7,7 +7,9 @@ endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(OpenGL_GL_PREFERENCE GLVND)
+include(GNUInstallDirs)
 include(CheckIncludeFileCXX)
 include(CheckLibraryExists)
 include(CheckCXXSourceCompiles)
@@ -15,7 +17,11 @@ find_package(PkgConfig REQUIRED)
 if(NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "pkg-config not found. Please install pkg-config.")
 endif()
-option(WITH_CUDA "Enable CUDA / acidcam-gpu GPU acceleration" ON)
+set(ACMX2_CUDA_DEFAULT ON)
+if(APPLE OR WIN32)
+    set(ACMX2_CUDA_DEFAULT OFF)
+endif()
+option(WITH_CUDA "Enable CUDA / acidcam-gpu GPU acceleration" ${ACMX2_CUDA_DEFAULT})
 option(WITH_OPENCV_DNN "Enable OpenCV DNN/CUDA" OFF)
 option(WEBP "Save HDR snapshots as WebP instead of 16-bit PNG" OFF)
 option(TIFF "Enable saving HDR snapshots as 16-bit TIFF (key '4')" OFF)
@@ -142,7 +148,10 @@ endif()
 option(AUDIO "Audio support" OFF)
 if(AUDIO)
     find_library(RTAUDIO_LIBRARY NAMES rtaudio REQUIRED)
-    find_path(RTAUDIO_INCLUDE_DIR NAMES rtaudio/RtAudio.h PATHS /usr/include /usr/local/include)
+    find_path(RTAUDIO_INCLUDE_DIR
+        NAMES RtAudio.h
+        PATH_SUFFIXES rtaudio
+    )
     if(NOT RTAUDIO_LIBRARY)
         message(FATAL_ERROR "RtAudio library not found. Please install rtaudio or disable AUDIO option.")
     endif()
@@ -260,10 +269,18 @@ else()
 endif()
 add_executable(acmx2 acmx.cpp program.cpp ${AUDIO_SRC} ${ACMX2_DNN_SRC})
 set_target_properties(acmx2 PROPERTIES
-    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
-    BUILD_WITH_INSTALL_RPATH TRUE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
+if(UNIX)
+    set_target_properties(acmx2 PROPERTIES
+        INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+endif()
 target_compile_definitions(acmx2 PRIVATE WITH_GL)
+if(WIN32)
+    target_compile_definitions(acmx2 PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
 if(WITH_OPENCV_DNN)
     target_compile_definitions(acmx2 PRIVATE ACMX2_WITH_DNN)
     target_link_libraries(acmx2 PRIVATE PkgConfig::YAMLCPP)
@@ -305,10 +322,8 @@ target_include_directories(acmx2 PRIVATE
     ${SDL2_INCLUDE_DIRS} 
     ${SDL2_TTF_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
-    ${AUDIO_INCLUDE}/rtaudio
+    ${AUDIO_INCLUDE}
     ${MIDI_INCLUDE}
-    ${CMAKE_INSTALL_PREFIX}/include
-    ${CMAKE_PREFIX_PATH}/include
     ${MXWrite_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
@@ -317,7 +332,22 @@ target_include_directories(acmx2 PRIVATE
 if(WITH_CUDA)
     target_include_directories(acmx2 PRIVATE /opt/cuda/include)
 endif()
-target_link_libraries(acmx2 PRIVATE 
+if(MINGW)
+    target_sources(acmx2 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.rc
+        ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.ico
+    )
+    if(TARGET SDL2::SDL2main)
+        target_link_libraries(acmx2 PRIVATE SDL2::SDL2main)
+    elseif(SDL2MAIN_LIBRARY)
+        target_link_libraries(acmx2 PRIVATE ${SDL2MAIN_LIBRARY})
+    else()
+        message(FATAL_ERROR
+            "SDL2main is required for the MinGW ACMX2 executable, but it was not found."
+        )
+    endif()
+endif()
+target_link_libraries(acmx2 PRIVATE
     libmx2::mx 
     libmx2::mxgl
     ${OpenCV_LIBRARIES} 
@@ -330,14 +360,7 @@ target_link_libraries(acmx2 PRIVATE
     ${FFMPEG_LIBRARIES}
 )
 if(MINGW)
-    target_sources(acmx2 PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/interface/win-icon.rc
-        ${CMAKE_CURRENT_SOURCE_DIR}/interface/win-icon.ico
-    )
-    target_link_libraries(acmx2 PRIVATE
-        SDL2::SDL2main
-        opengl32
-    )
+    target_link_libraries(acmx2 PRIVATE opengl32)
     target_link_options(acmx2 PRIVATE -mwindows)
     set_target_properties(acmx2 PROPERTIES WIN32_EXECUTABLE TRUE)
 elseif(NOT APPLE)
@@ -352,12 +375,14 @@ if(WITH_CUDA)
         opencv_cudaarithm
     )
 endif()
-install(TARGETS acmx2 DESTINATION bin)
-install(TARGETS audio_transfer DESTINATION bin)
+install(TARGETS acmx2 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS audio_transfer RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # acmx2 is a command-line application; only the Qt interface (acmx2_interface)
 # installs a .desktop file into share/applications.
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/data/win-icon.png DESTINATION share/acmx2 RENAME acmx2.png)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data DESTINATION share/acmx2)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/data/win-icon.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/acmx2 RENAME acmx2.png)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/acmx2)
 
 if(NOT TARGET uninstall)
     configure_file(

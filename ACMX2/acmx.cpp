@@ -136,6 +136,13 @@ namespace ac_gpu {
 #include <opencv2/opencv.hpp>
 #include <string_view>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 /**
  * @brief Return the directory containing the running ACMX2 executable.
  *
@@ -174,8 +181,38 @@ static std::filesystem::path executable_directory() {
         std::filesystem::weakly_canonical(executable_path.data(), error);
     return error ? std::filesystem::path(executable_path.data()).parent_path()
                  : resolved_path.parent_path();
+#elif defined(_WIN32)
+    std::vector<wchar_t> executable_path(MAX_PATH);
+    while (true) {
+        const DWORD length = GetModuleFileNameW(
+            nullptr, executable_path.data(),
+            static_cast<DWORD>(executable_path.size()));
+        if (length == 0U) {
+            return {};
+        }
+        if (length < executable_path.size() - 1U) {
+            return std::filesystem::path(
+                       std::wstring(executable_path.data(), length))
+                .parent_path();
+        }
+        if (executable_path.size() >= 32768U) {
+            return {};
+        }
+        executable_path.resize(executable_path.size() * 2U);
+    }
 #else
     return {};
+#endif
+}
+
+static bool set_environment_if_missing(const char *name, const char *value) {
+    if (std::getenv(name) != nullptr) {
+        return true;
+    }
+#ifdef _WIN32
+    return _putenv_s(name, value) == 0;
+#else
+    return setenv(name, value, 0) == 0;
 #endif
 }
 
@@ -222,14 +259,14 @@ struct OpenGLContextConfig {
 /** True when the active ACMX2 context can run OpenGL compute shaders. */
 static bool compute_shader_supported = false;
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(_WIN32)
 /**
  * @brief Test whether SDL can create a core-profile context of a given version.
  *
  * OpenGL capabilities cannot be queried without first creating a context, so
- * Linux startup uses a small hidden probe window before constructing the real
- * ACMX2 window. The probe uses the already-selected SDL video driver, including
- * the offscreen driver selected by silent mode.
+ * Linux and Windows startup use a small hidden probe window before constructing
+ * the real ACMX2 window. The probe uses the already-selected SDL video driver,
+ * including the offscreen driver selected by Linux silent mode.
  */
 static bool probe_open_gl_context(int major, int minor, std::string &error_message) {
     const bool video_was_initialized = (SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) != 0;
@@ -305,7 +342,7 @@ static OpenGLContextConfig select_open_gl_context() {
 
 /** Update the feature flag from the real context rather than only the probe. */
 static void update_compute_shader_support() {
-#if defined(__linux__)
+#if defined(__linux__) || defined(_WIN32)
     GLint major = 0;
     GLint minor = 0;
     glGetIntegerv(GL_MAJOR_VERSION, &major);
@@ -713,7 +750,7 @@ static int shaderIndexForFile(const std::vector<std::string> &shader_files,
 namespace {
     std::atomic<bool> g_shutdown_requested{false};
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
     extern "C" void acmx2_signal_handler(int /*sig*/) {
         // Async-signal-safe: only a relaxed atomic store.
         g_shutdown_requested.store(true, std::memory_order_relaxed);
@@ -729,6 +766,15 @@ namespace {
         sigaction(SIGINT, &sa, nullptr);
         sigaction(SIGTERM, &sa, nullptr);
         sigaction(SIGHUP, &sa, nullptr);
+    }
+#elif defined(_WIN32)
+    extern "C" void acmx2_signal_handler(int) {
+        g_shutdown_requested.store(true, std::memory_order_relaxed);
+    }
+
+    void installHeadlessSignalHandlers() {
+        std::signal(SIGINT, &acmx2_signal_handler);
+        std::signal(SIGTERM, &acmx2_signal_handler);
     }
 #else
     void installHeadlessSignalHandlers() {}
@@ -8287,7 +8333,7 @@ class ACView : public gl::GLObject {
             initMidi(args.midi_map_file, args.midi_device);
         }
 #endif
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
         if (args.interface_shm) {
             initShaderSelectionSharedMemory();
         }
@@ -8395,10 +8441,18 @@ class ACView : public gl::GLObject {
     bool saved_pass_enabled_before_random = false;
     size_t saved_shader_index_before_random = 0;
 
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #if defined(__linux__) || defined(__APPLE__)
     int shaderSelectionShmFd = -1;
+#else
+    HANDLE shaderSelectionMapping = nullptr;
+#endif
     acmx2::ipc::ShaderSelectionShmData *shaderSelectionShm = nullptr;
+#if defined(__linux__) || defined(__APPLE__)
     sem_t *shaderSelectionSemaphore = SEM_FAILED;
+#else
+    HANDLE shaderSelectionSemaphore = nullptr;
+#endif
     uint32_t shaderSelectionLastSequence = 0;
     uint32_t shaderReloadLastSequence = 0;
     uint32_t audioFileLastSequence = 0;
@@ -8435,9 +8489,14 @@ class ACView : public gl::GLObject {
 
     bool copyShaderSelectionSnapshot(
         acmx2::ipc::ShaderSelectionShmData &snapshot) const {
+#if defined(__linux__) || defined(__APPLE__)
         if (!shaderSelectionShm || shaderSelectionSemaphore == SEM_FAILED)
             return false;
-        acmx2::ipc::ShaderSelectionSemaphoreLock lock(shaderSelectionSemaphore);
+#else
+        if (!shaderSelectionShm || shaderSelectionSemaphore == nullptr)
+            return false;
+#endif
+        acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
         if (!lock)
             return false;
         if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
@@ -8451,6 +8510,7 @@ class ACView : public gl::GLObject {
     void initShaderSelectionSharedMemory() {
         if (shaderSelectionShm)
             return;
+#if defined(__linux__) || defined(__APPLE__)
         shaderSelectionSemaphore =
             ::sem_open(acmx2::ipc::kShaderSelectionSemaphoreName, 0);
         if (shaderSelectionSemaphore == SEM_FAILED) {
@@ -8481,6 +8541,42 @@ class ACView : public gl::GLObject {
         }
 
         shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+#else
+        shaderSelectionSemaphore = ::OpenMutexW(
+            SYNCHRONIZE | MUTEX_MODIFY_STATE, FALSE,
+            acmx2::ipc::kShaderSelectionMutexNameWindows);
+        if (shaderSelectionSemaphore == nullptr) {
+            std::cerr
+                << "acmx2: interface control unavailable: OpenMutexW failed "
+                   "with Windows error "
+                << ::GetLastError() << '\n';
+            return;
+        }
+
+        shaderSelectionMapping = ::OpenFileMappingW(
+            FILE_MAP_READ, FALSE,
+            acmx2::ipc::kShaderSelectionMappingNameWindows);
+        if (shaderSelectionMapping == nullptr) {
+            std::cerr << "acmx2: interface control unavailable: "
+                         "OpenFileMappingW failed with Windows error "
+                      << ::GetLastError() << '\n';
+            cleanupShaderSelectionSharedMemory();
+            return;
+        }
+
+        void *mapped = ::MapViewOfFile(
+            shaderSelectionMapping, FILE_MAP_READ, 0, 0,
+            sizeof(acmx2::ipc::ShaderSelectionShmData));
+        if (mapped == nullptr) {
+            std::cerr << "acmx2: interface control unavailable: MapViewOfFile "
+                         "failed with Windows error "
+                      << ::GetLastError() << '\n';
+            cleanupShaderSelectionSharedMemory();
+            return;
+        }
+        shaderSelectionShm =
+            static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+#endif
         acmx2::ipc::ShaderSelectionShmData snapshot;
         if (!copyShaderSelectionSnapshot(snapshot)) {
             cleanupShaderSelectionSharedMemory();
@@ -8495,9 +8591,14 @@ class ACView : public gl::GLObject {
 
     void cleanupShaderSelectionSharedMemory() {
         if (shaderSelectionShm) {
+#if defined(__linux__) || defined(__APPLE__)
             ::munmap(shaderSelectionShm, sizeof(acmx2::ipc::ShaderSelectionShmData));
+#else
+            ::UnmapViewOfFile(shaderSelectionShm);
+#endif
             shaderSelectionShm = nullptr;
         }
+#if defined(__linux__) || defined(__APPLE__)
         if (shaderSelectionShmFd >= 0) {
             ::close(shaderSelectionShmFd);
             shaderSelectionShmFd = -1;
@@ -8506,6 +8607,16 @@ class ACView : public gl::GLObject {
             ::sem_close(shaderSelectionSemaphore);
             shaderSelectionSemaphore = SEM_FAILED;
         }
+#else
+        if (shaderSelectionMapping != nullptr) {
+            ::CloseHandle(shaderSelectionMapping);
+            shaderSelectionMapping = nullptr;
+        }
+        if (shaderSelectionSemaphore != nullptr) {
+            ::CloseHandle(shaderSelectionSemaphore);
+            shaderSelectionSemaphore = nullptr;
+        }
+#endif
     }
 
     void syncShaderSelectionFromInterface(gl::GLWindow *win) {
@@ -8598,8 +8709,12 @@ class ACView : public gl::GLObject {
                     std::error_code expectedError;
                     const auto canonicalExpected = std::filesystem::weakly_canonical(
                         std::filesystem::path(reloadPath), expectedError);
+                    std::error_code equivalentError;
                     if (requestedError || expectedError ||
-                        canonicalRequested != canonicalExpected) {
+                        !std::filesystem::equivalent(
+                            canonicalRequested, canonicalExpected,
+                            equivalentError) ||
+                        equivalentError) {
                         reloadError = "Shader reload path does not match the requested library index";
                     } else {
                         reloadIndex = static_cast<size_t>(requestedReloadIndex);
@@ -8612,7 +8727,12 @@ class ACView : public gl::GLObject {
                 std::error_code loadedError;
                 const auto canonicalLoaded = std::filesystem::weakly_canonical(
                     std::filesystem::path(std::get<1>(flib)), loadedError);
-                if (requestedError || loadedError || canonicalRequested != canonicalLoaded) {
+                std::error_code equivalentError;
+                if (requestedError || loadedError ||
+                    !std::filesystem::equivalent(
+                        canonicalRequested, canonicalLoaded,
+                        equivalentError) ||
+                    equivalentError) {
                     reloadError = "Saved shader is not the shader loaded by this process";
                 } else {
                     reloadPath = canonicalLoaded.string();
@@ -9117,7 +9237,7 @@ class ACView : public gl::GLObject {
      * 10.Release the VideoCapture.
      */
     ~ACView() override {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
         cleanupShaderSelectionSharedMemory();
 #endif
 #ifdef MIDI_ENABLED
@@ -9587,9 +9707,14 @@ class ACView : public gl::GLObject {
                 }
             } else {
                 decode_mode = "opencv-ffmpeg";
+#if CV_VERSION_MAJOR > 4 || \
+    (CV_VERSION_MAJOR == 4 && CV_VERSION_MINOR >= 5)
                 std::vector<int> file_params = {
                     cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY};
                 cap.open(filename, cv::CAP_FFMPEG, file_params);
+#else
+                cap.open(filename, cv::CAP_FFMPEG);
+#endif
                 if (!cap.isOpened()) {
                     throw mx::Exception("Could not open video file: " + filename);
                 }
@@ -9606,7 +9731,10 @@ class ACView : public gl::GLObject {
                                << " at FPS: " << fps
                                << " Total Frames: " << totalFrames << "\n";
 
-                int hw_accel = static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
+#if CV_VERSION_MAJOR > 4 || \
+    (CV_VERSION_MAJOR == 4 && CV_VERSION_MINOR >= 5)
+                int hw_accel =
+                    static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
                 mx::system_out << "acmx2: HW Acceleration result: " << hw_accel
                                << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (auto preference)"
                                                                                                   : hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)"
@@ -9615,6 +9743,12 @@ class ACView : public gl::GLObject {
                                                                                                   : hw_accel == cv::VIDEO_ACCELERATION_DRM   ? " (DRM)"
                                                                                                                                              : " (other)")
                                << "\n";
+#else
+                mx::system_out
+                    << "acmx2: OpenCV hardware-decoder reporting unavailable "
+                       "with OpenCV "
+                    << CV_VERSION << "\n";
+#endif
             }
 
             if (fps > 60.0) {
@@ -9784,7 +9918,7 @@ class ACView : public gl::GLObject {
         } else {
             library.loadProgram(win, std::get<1>(flib));
         }
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
         if (shaderSelectionShm) {
             acmx2::ipc::ShaderSelectionShmData snapshot;
             if (copyShaderSelectionSnapshot(snapshot))
@@ -10166,7 +10300,7 @@ class ACView : public gl::GLObject {
         pollMidi(win);
 #endif
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
         syncShaderSelectionFromInterface(win);
 #endif
 
@@ -10237,9 +10371,11 @@ class ACView : public gl::GLObject {
         }
 
         if (max_size_limit_bytes > 0.0 && writer.is_open() && writerRunning && !ofilename.empty()) {
-            struct stat out_stat{};
-            if (::stat(ofilename.c_str(), &out_stat) == 0) {
-                const double current_size = static_cast<double>(out_stat.st_size);
+            std::error_code size_error;
+            const std::uintmax_t output_size =
+                std::filesystem::file_size(ofilename, size_error);
+            if (!size_error) {
+                const double current_size = static_cast<double>(output_size);
                 if (current_size > max_size_limit_bytes) {
                     mx::system_out << "acmx2: Max size reached ("
                                    << std::fixed << std::setprecision(2) << max_size_limit_mb
@@ -12015,37 +12151,35 @@ class ACView : public gl::GLObject {
         }
 
         stream << " (Recording)";
-#ifdef __linux__
         if (const auto file_size_bytes = getOutputFileSizeBytes(); file_size_bytes.has_value()) {
             constexpr double kBytesPerMB = 1024.0 * 1024.0;
             const double file_size_mb = static_cast<double>(*file_size_bytes) / kBytesPerMB;
             stream << " [File: " << std::fixed << std::setprecision(2)
                    << file_size_mb << " MB]";
         }
-#endif
     }
 
-#ifdef __linux__
     std::optional<uintmax_t> getOutputFileSizeBytes() const {
         if (ofilename.empty()) {
             return std::nullopt;
         }
 
-        struct stat file_stat{};
-        if (::stat(ofilename.c_str(), &file_stat) != 0) {
+        std::error_code file_error;
+        if (!std::filesystem::is_regular_file(ofilename, file_error) ||
+            file_error) {
             return std::nullopt;
         }
-        if (!S_ISREG(file_stat.st_mode)) {
+        const std::uintmax_t file_size =
+            std::filesystem::file_size(ofilename, file_error);
+        if (file_error) {
             return std::nullopt;
         }
 
-        return static_cast<uintmax_t>(file_stat.st_size);
+        return file_size;
     }
-#endif
 
     /// @brief Append the current encoded output size to a silent progress line.
     void appendSilentProgressFileSize([[maybe_unused]] std::ostream &stream) const {
-#ifdef __linux__
         const auto file_size_bytes = getOutputFileSizeBytes();
         if (!file_size_bytes.has_value()) {
             return;
@@ -12056,7 +12190,6 @@ class ACView : public gl::GLObject {
         std::ostringstream size_stream;
         size_stream << std::fixed << std::setprecision(2) << file_size_mb;
         stream << " | Size: " << size_stream.str() << " MB";
-#endif
     }
 
     /**
@@ -13778,7 +13911,7 @@ class MainWindow : public gl::GLWindow {
         glClearColor(0.f, 0.f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glViewport(0, 0, w, h);
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
         if (silent_mode && g_shutdown_requested.load(std::memory_order_relaxed)) {
             auto *view = static_cast<ACView *>(object.get());
             if (view) {
@@ -14932,14 +15065,16 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
         try {
-#if defined(__linux__)
+#if defined(__linux__) || defined(_WIN32)
             if (args.silent) {
-                // Make remove-broken use the same offscreen path as silent batch mode.
-                setenv("SDL_VIDEODRIVER", "offscreen", 0);
-                setenv("SDL_AUDIODRIVER", "dummy", 0);
+#ifndef _WIN32
+                set_environment_if_missing("SDL_VIDEODRIVER", "offscreen");
+#endif
+                set_environment_if_missing("SDL_AUDIODRIVER", "dummy");
                 SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
                 installHeadlessSignalHandlers();
-                mx::system_out << "acmx2: remove-broken headless mode enabled (Linux)\n";
+                mx::system_out
+                    << "acmx2: remove-broken hidden build window enabled\n";
             }
 #endif
             mx::system_out << "acmx2: Creating scan window for remove-broken...\n";
@@ -15013,7 +15148,7 @@ int main(int argc, char **argv) {
                 }
             };
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(_WIN32)
             if (args.silent) {
                 RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d,
                                           args.path, context_config, true);
@@ -15050,14 +15185,15 @@ int main(int argc, char **argv) {
         }
 
         try {
-#if defined(__linux__)
+#if defined(__linux__) || defined(_WIN32)
             if (args.silent) {
-                // Make build-cache use the same offscreen path as silent batch mode.
-                setenv("SDL_VIDEODRIVER", "offscreen", 0);
-                setenv("SDL_AUDIODRIVER", "dummy", 0);
+#ifndef _WIN32
+                set_environment_if_missing("SDL_VIDEODRIVER", "offscreen");
+#endif
+                set_environment_if_missing("SDL_AUDIODRIVER", "dummy");
                 SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
                 installHeadlessSignalHandlers();
-                mx::system_out << "acmx2: build headless mode enabled (Linux)\n";
+                mx::system_out << "acmx2: hidden cache-build window enabled\n";
             }
 #endif
             mx::system_out << "acmx2: Creating build window...\n";
@@ -15207,7 +15343,7 @@ int main(int argc, char **argv) {
                 }
             };
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(_WIN32)
             if (args.silent) {
                 BuildWindow build_win(args.build_library_path, args.is3d,
                                       args.path, args.cache_size,
@@ -15303,20 +15439,26 @@ int main(int argc, char **argv) {
             // specific backend for debugging) is respected. Also disable
             // joystick / gamecontroller / audio subsystems that can block or
             // fail on a pure headless server.
-            setenv("SDL_VIDEODRIVER", "offscreen", 0);
-            setenv("SDL_AUDIODRIVER", "dummy", 0);
+#ifndef _WIN32
+            set_environment_if_missing("SDL_VIDEODRIVER", "offscreen");
+#endif
+            set_environment_if_missing("SDL_AUDIODRIVER", "dummy");
             SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
+#ifdef _WIN32
+            mx::system_out
+                << "acmx2: Headless: using a hidden native Windows OpenGL "
+                   "window\n";
+#else
             mx::system_out << "acmx2: Headless: SDL_VIDEODRIVER="
                            << (getenv("SDL_VIDEODRIVER") ? getenv("SDL_VIDEODRIVER") : "(unset)")
                            << ", SDL_AUDIODRIVER="
                            << (getenv("SDL_AUDIODRIVER") ? getenv("SDL_AUDIODRIVER") : "(unset)") << "\n";
-#if defined(__linux__)
+#endif
             // Install Ctrl+C / SIGTERM / SIGHUP handlers so batch/headless runs
             // can be interrupted cleanly: the writer flushes, mp4 trailer is
             // written, and the partial output file stays playable.
             installHeadlessSignalHandlers();
-            mx::system_out << "acmx2: Headless: signal handlers installed (SIGINT, SIGTERM, SIGHUP)\n";
-#endif
+            mx::system_out << "acmx2: Headless: signal handlers installed\n";
         }
 
         if (args.png_output && !args.filename.empty() && args.ofilename.empty()) {

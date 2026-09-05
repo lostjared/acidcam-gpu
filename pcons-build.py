@@ -112,7 +112,7 @@ env.cxx.set_standard(20)
 env.set_variant(get_var("VARIANT", "release"))
 
 cuda = find_cuda_toolchain()
-with_cuda = option("WITH_CUDA", default=cuda is not None)
+with_cuda = option("WITH_CUDA", default=cuda is not None and not platform.is_windows)
 if with_cuda:
     if cuda is None:
         raise SystemExit(
@@ -158,7 +158,15 @@ def find_opencv(*components: str) -> ImportedTarget:
     has no notion of components and lists every module, so filter its
     library list down to the transitive set named here.
     """
-    pkg = PkgConfigFinder().find("opencv5")
+    configured_package = get_var("OPENCV_PACKAGE")
+    package_names = (
+        [configured_package] if configured_package else ["opencv5", "opencv4"]
+    )
+    pkg = None
+    for package_name in package_names:
+        pkg = PkgConfigFinder().find(package_name)
+        if pkg is not None:
+            break
     if pkg is None:
         raise SystemExit("OpenCV not found: install OpenCV development libraries.")
     if not platform.is_windows:
@@ -181,11 +189,16 @@ if option("DNN"):
 opencv = find_opencv(*opencv_components)
 
 
-SEARCH_PREFIXES = extra_prefixes + [
-    Path("/usr/local"),
-    Path("/opt/homebrew"),
-    Path("/usr"),
-]
+SEARCH_PREFIXES = list(extra_prefixes)
+if platform.is_windows:
+    msys_prefix = os.environ.get("MSYSTEM_PREFIX")
+    if msys_prefix:
+        SEARCH_PREFIXES.append(Path(msys_prefix))
+    SEARCH_PREFIXES.extend([Path("/ucrt64"), Path("/mingw64")])
+else:
+    SEARCH_PREFIXES.extend(
+        [Path("/usr/local"), Path("/opt/homebrew"), Path("/usr")]
+    )
 
 
 def find_by_prefix(
@@ -348,6 +361,8 @@ if with_cuda:
 
 sources: list[str | Path | Node] = ["ACMX2/acmx.cpp", "ACMX2/program.cpp"]
 defines = ["WITH_GL"]
+if platform.is_windows:
+    defines.extend(["NOMINMAX", "WIN32_LEAN_AND_MEAN"])
 libs: list[Target] = [libmx2, opencv, sdl2, sdl2_ttf, mxwrite, ffmpeg]
 
 if acidcam_gpu is not None:

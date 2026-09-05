@@ -53,7 +53,8 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
 - **Find in Files** — recursively search shader sources with regular expressions
   and open any result directly at its matching line and column
 - **OpenGL compute shaders** — run `.comp` files as full-frame image passes on
-  Linux with OpenGL 4.3 or newer, including mixed fragment/compute multipass chains
+  Linux or Windows with OpenGL 4.3 or newer, including mixed
+  fragment/compute multipass chains
 - **Built-in uniform reference** — search runtime uniforms, availability notes,
   declarations, and examples from the Qt Help menu
 - **Custom interface themes** — choose from 25 built-in light and dark
@@ -426,6 +427,49 @@ See [macos/README.md](macos/README.md) for full details, troubleshooting, and CM
 
 ---
 
+### Windows (MSYS2 UCRT64)
+
+Build ACMX2 from an MSYS2 UCRT64 shell. Install the UCRT64 C++ toolchain,
+CMake/Ninja, pkg-config, SDL2, OpenCV, FFmpeg, GLM, and any enabled optional
+audio, MIDI, WebP, TIFF, or YAML dependencies. Build and install `libmx2` into
+the same prefix first; the repository-local `MXWrite/` source is built
+automatically with ACMX2.
+
+```bash
+cmake -S ACMX2 -B build/acmx2-windows -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH="$PWD/program_prefix" \
+    -DCMAKE_INSTALL_PREFIX="$PWD/program_prefix" \
+    -DWITH_CUDA=OFF \
+    -DAUDIO=ON \
+    -DMIDI=ON \
+    -DWEBP=ON \
+    -DTIFF=ON
+cmake --build build/acmx2-windows -j2
+cmake --install build/acmx2-windows
+```
+
+The installed executable resolves its data from
+`<prefix>/share/acmx2/data`, so it does not require `--path` when kept in the
+installed prefix layout. Runtime interface control uses Windows named shared
+memory and a named mutex. Compute shaders are enabled when the Windows OpenGL
+driver exposes OpenGL 4.3 or newer.
+
+Windows `--silent` processing uses a hidden native OpenGL window. It suppresses
+the preview but still requires an interactive Windows desktop and a working
+graphics driver.
+
+Basic checks after copying the required runtime DLLs beside the executable or
+adding their directory to `PATH`:
+
+```bash
+./program_prefix/bin/acmx2.exe --help
+./program_prefix/bin/acmx2.exe --check-audio
+./program_prefix/bin/acmx2.exe --check-midi
+```
+
+---
+
 ### Linux
 
 ACMX2 is part of the acidcam-gpu project. See the [main README](../README.md) for full build instructions.
@@ -452,7 +496,7 @@ is gated by a CMake option and a corresponding preprocessor definition:
 
 | Option | Default | Definition | Disables |
 |--------|---------|------------|----------|
-| `WITH_CUDA` | `ON`  | `ACMX2_WITH_CUDA` | CUDA GPU filters, zero-copy CUDA/GL interop, FFmpeg CUDA hw-decode, `--gpu-filter`, `--gpu-buffer`, `--cuda-device`, `--list-cuda-devices` |
+| `WITH_CUDA` | Linux: `ON`; macOS/Windows: `OFF` | `ACMX2_WITH_CUDA` | CUDA GPU filters, zero-copy CUDA/GL interop, FFmpeg CUDA hw-decode, `--gpu-filter`, `--gpu-buffer`, `--cuda-device`, `--list-cuda-devices` |
 | `AUDIO`     | `OFF` | `AUDIO_ENABLED`   | RtAudio capture, audio reactivity, `--enable-audio`, `--audio-file`, `--record-audio`, audio controls |
 | `MIDI`      | `OFF` | `MIDI_ENABLED`    | RtMidi input, `--midi-map`, `--midi-device`, `--list-midi`, MIDI overlay |
 
