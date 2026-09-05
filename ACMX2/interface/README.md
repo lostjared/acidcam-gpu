@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
 
 ## Backend Integration
 
-Interface version 2.132.1 includes the current ACMXVK integration increments:
+Interface version 2.133.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.
@@ -154,11 +154,14 @@ Interface version 2.132.1 includes the current ACMXVK integration increments:
   file-audio session without restarting it. The new source is decoded before
   replacing the current source, together with repeat, truncation, output-device,
   and pass-through settings.
-- Saving a `.frag` or `.comp` source in the built-in editor while ACMXVK is
-  running invokes `glslc` for only that source. The interface validates and
-  atomically installs the resulting `.spv` in `.acmxvk-build`, then requests a
-  live Vulkan pipeline reload. Compile failures preserve the previous module
-  and print the complete compiler diagnostic in the ACMX log.
+- Saving a `.frag` or `.comp` source in the built-in editor invokes `glslc` for
+  only that source. The interface validates and atomically installs the
+  resulting `.spv` in `.acmxvk-build`; when ACMXVK is running, it then requests
+  a live Vulkan pipeline reload. Compile failures preserve the previous module,
+  mark affected source lines in the editor gutter, underline them by severity,
+  and print the complete compiler diagnostic in the ACMX log. Use F8 and
+  Shift+F8 to move between diagnostics. The editor status bar reports pending,
+  successful, and failed compilation states.
 - **Properties** (`Ctrl+,`) includes an ACMXVK shader-compiler section. Use
   **Automatic glslc** to resolve `glslc` from `PATH` or `VULKAN_SDK`, or select
   a custom glslc-compatible executable. The selected compiler is used for

@@ -43,6 +43,18 @@ static QColor currentLineBackground(const QPalette &palette) {
                   blendChannel(base.blue(), text.blue()));
 }
 
+static QColor diagnosticColor(ShaderDiagnosticSeverity severity) {
+    switch (severity) {
+    case ShaderDiagnosticSeverity::Warning:
+        return QColor(240, 178, 50);
+    case ShaderDiagnosticSeverity::Note:
+        return QColor(80, 165, 230);
+    case ShaderDiagnosticSeverity::Error:
+        return QColor(225, 65, 65);
+    }
+    return QColor(225, 65, 65);
+}
+
 CustomTextEdit::CustomTextEdit(QWidget *parent) : QPlainTextEdit(parent) {
     m_lineNumberArea = new LineNumberArea(this);
 
@@ -74,7 +86,14 @@ int CustomTextEdit::lineNumberAreaWidth() {
         ++digits;
     }
     digits = qMax(digits, 3);
-    return 10 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+    return 24 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+}
+
+void CustomTextEdit::setDiagnostics(
+    const QVector<ShaderDiagnostic> &diagnostics) {
+    m_diagnostics = diagnostics;
+    m_lineNumberArea->update();
+    matchBrackets();
 }
 
 void CustomTextEdit::updateLineNumberAreaWidth(int /*newBlockCount*/) {
@@ -112,8 +131,19 @@ void CustomTextEdit::lineNumberAreaPaintEvent(QPaintEvent *event) {
             painter.setPen(QColor(120, 120, 120));
             if (blockNumber == textCursor().blockNumber())
                 painter.setPen(QColor(220, 220, 220));
-            painter.drawText(0, top, m_lineNumberArea->width() - 5, fontMetrics().height(),
+            painter.drawText(14, top, m_lineNumberArea->width() - 19,
+                             fontMetrics().height(),
                              Qt::AlignRight, number);
+            for (const ShaderDiagnostic &diagnostic : m_diagnostics) {
+                if (diagnostic.line != blockNumber + 1)
+                    continue;
+                painter.setBrush(diagnosticColor(diagnostic.severity));
+                painter.setPen(Qt::NoPen);
+                const int diameter = qMin(9, fontMetrics().height() - 2);
+                painter.drawEllipse(2, top + (fontMetrics().height() - diameter) / 2,
+                                    diameter, diameter);
+                break;
+            }
         }
         block = block.next();
         top = bottom;
@@ -123,16 +153,7 @@ void CustomTextEdit::lineNumberAreaPaintEvent(QPaintEvent *event) {
 }
 
 void CustomTextEdit::highlightCurrentLine() {
-    QList<QTextEdit::ExtraSelection> extraSelections;
-
-    QTextEdit::ExtraSelection selection;
-    selection.format.setBackground(currentLineBackground(palette()));
-    selection.format.setProperty(QTextFormat::FullWidthSelection, true);
-    selection.cursor = textCursor();
-    selection.cursor.clearSelection();
-    extraSelections.append(selection);
-
-    setExtraSelections(extraSelections);
+    matchBrackets();
 }
 
 static QChar matchingBracket(QChar ch) {
@@ -218,6 +239,28 @@ void CustomTextEdit::matchBrackets() {
 
     if (!tryMatch(pos))
         tryMatch(pos - 1);
+
+    for (const ShaderDiagnostic &diagnostic : m_diagnostics) {
+        const QTextBlock block =
+            doc->findBlockByLineNumber(qMax(0, diagnostic.line - 1));
+        if (!block.isValid())
+            continue;
+
+        const int lineLength = qMax(0, block.length() - 1);
+        const int column = qBound(0, diagnostic.column, lineLength);
+        QTextEdit::ExtraSelection diagnosticSelection;
+        diagnosticSelection.cursor = QTextCursor(block);
+        diagnosticSelection.cursor.setPosition(block.position() + column);
+        diagnosticSelection.cursor.setPosition(
+            block.position() + qMin(lineLength, column + qMax(1, lineLength - column)),
+            QTextCursor::KeepAnchor);
+        diagnosticSelection.format.setUnderlineStyle(
+            QTextCharFormat::WaveUnderline);
+        diagnosticSelection.format.setUnderlineColor(
+            diagnosticColor(diagnostic.severity));
+        diagnosticSelection.format.setToolTip(diagnostic.message);
+        selections.append(diagnosticSelection);
+    }
 
     setExtraSelections(selections);
 }
@@ -658,6 +701,142 @@ void TextEditor::revealLocation(int lineNumber, int columnNumber, int matchLengt
     m_textEdit->setFocus();
 }
 
+void TextEditor::setCompilePending() {
+    m_diagnostics.clear();
+    m_currentDiagnostic = -1;
+    m_textEdit->setDiagnostics(m_diagnostics);
+    updateDiagnosticActions();
+    m_compileStatusLabel->setText("Compiling...");
+    m_compileStatusLabel->setStyleSheet("color: #e5b84b;");
+    m_compileStatusLabel->setToolTip(QString());
+}
+
+void TextEditor::setCompileResult(bool success,
+                                  const QString &compilerOutput) {
+    m_diagnostics = parseDiagnostics(compilerOutput);
+    m_currentDiagnostic = -1;
+    m_textEdit->setDiagnostics(m_diagnostics);
+    updateDiagnosticActions();
+
+    int errors = 0;
+    int warnings = 0;
+    for (const ShaderDiagnostic &diagnostic : m_diagnostics) {
+        errors += diagnostic.severity == ShaderDiagnosticSeverity::Error;
+        warnings += diagnostic.severity == ShaderDiagnosticSeverity::Warning;
+    }
+    if (success) {
+        m_compileStatusLabel->setText(
+            warnings > 0
+                ? QString("Compiled successfully · %1 warning(s)").arg(warnings)
+                : QStringLiteral("Compiled successfully"));
+        m_compileStatusLabel->setStyleSheet(
+            warnings > 0 ? "color: #e5b84b;" : "color: #55c878;");
+        m_compileStatusLabel->setToolTip(compilerOutput.left(8192));
+        m_statusBar->showMessage(
+            warnings > 0 ? "Shader applied; press F8 to review warnings"
+                         : "Shader compiled and applied",
+            3000);
+        return;
+    }
+    QString status = "Compile failed";
+    if (!m_diagnostics.isEmpty()) {
+        status += QString(" · %1 error(s), %2 warning(s)")
+                      .arg(errors)
+                      .arg(warnings);
+    }
+    m_compileStatusLabel->setText(status);
+    m_compileStatusLabel->setStyleSheet("color: #e14b4b;");
+    m_compileStatusLabel->setToolTip(compilerOutput.left(8192));
+    m_statusBar->showMessage(
+        m_diagnostics.isEmpty()
+            ? "Compilation failed; see the ACMX log for compiler output"
+            : "Press F8 to visit the first compiler diagnostic",
+        5000);
+}
+
+QVector<ShaderDiagnostic>
+TextEditor::parseDiagnostics(const QString &compilerOutput) const {
+    QVector<ShaderDiagnostic> diagnostics;
+    const QFileInfo editedFile(filename);
+    const QString editedCanonical = editedFile.canonicalFilePath();
+    const QRegularExpression withColumn(
+        QStringLiteral("^(.+):(\\d+):(\\d+):\\s*"
+                       "(?:(error|warning|note)\\s*:\\s*)?(.*)$"),
+        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpression withoutColumn(
+        QStringLiteral("^(.+):(\\d+):\\s*"
+                       "(?:(error|warning|note)\\s*:\\s*)?(.*)$"),
+        QRegularExpression::CaseInsensitiveOption);
+
+    const QStringList lines = compilerOutput.split(QLatin1Char('\n'));
+    for (const QString &line : lines) {
+        QRegularExpressionMatch match = withColumn.match(line.trimmed());
+        const bool hasColumn = match.hasMatch();
+        if (!hasColumn)
+            match = withoutColumn.match(line.trimmed());
+        if (!match.hasMatch())
+            continue;
+
+        QString reportedPath = match.captured(1).trimmed();
+        if (reportedPath.startsWith(QLatin1Char('"')) &&
+            reportedPath.endsWith(QLatin1Char('"'))) {
+            reportedPath = reportedPath.mid(1, reportedPath.size() - 2);
+        }
+        QFileInfo reportedFile(reportedPath);
+        if (reportedFile.isRelative()) {
+            reportedFile = QFileInfo(editedFile.absoluteDir(), reportedPath);
+        }
+        const QString reportedCanonical = reportedFile.canonicalFilePath();
+        const bool sameFile =
+            (!editedCanonical.isEmpty() && !reportedCanonical.isEmpty() &&
+             editedCanonical == reportedCanonical) ||
+            QFileInfo(reportedPath).fileName() == editedFile.fileName();
+        if (!sameFile)
+            continue;
+
+        ShaderDiagnostic diagnostic;
+        diagnostic.line = qMax(1, match.captured(2).toInt());
+        diagnostic.column = hasColumn
+                                ? qMax(0, match.captured(3).toInt() - 1)
+                                : 0;
+        const QString severity =
+            match.captured(hasColumn ? 4 : 3).toLower();
+        if (severity == QStringLiteral("warning"))
+            diagnostic.severity = ShaderDiagnosticSeverity::Warning;
+        else if (severity == QStringLiteral("note"))
+            diagnostic.severity = ShaderDiagnosticSeverity::Note;
+        const QString detail = match.captured(hasColumn ? 5 : 4).trimmed();
+        diagnostic.message =
+            detail.isEmpty() ? line.trimmed() : detail;
+        diagnostics.append(diagnostic);
+    }
+    return diagnostics;
+}
+
+void TextEditor::navigateDiagnostic(int offset) {
+    if (m_diagnostics.isEmpty())
+        return;
+    if (m_currentDiagnostic < 0)
+        m_currentDiagnostic = offset < 0 ? m_diagnostics.size() - 1 : 0;
+    else
+        m_currentDiagnostic =
+            (m_currentDiagnostic + offset + m_diagnostics.size()) %
+            m_diagnostics.size();
+    const ShaderDiagnostic &diagnostic = m_diagnostics[m_currentDiagnostic];
+    revealLocation(diagnostic.line, diagnostic.column, 1);
+    m_statusBar->showMessage(
+        QString("Diagnostic %1 of %2: %3")
+            .arg(m_currentDiagnostic + 1)
+            .arg(m_diagnostics.size())
+            .arg(diagnostic.message));
+}
+
+void TextEditor::updateDiagnosticActions() {
+    const bool available = !m_diagnostics.isEmpty();
+    m_nextDiagnosticAction->setEnabled(available);
+    m_previousDiagnosticAction->setEnabled(available);
+}
+
 void TextEditor::updateWindowTitle() {
     QString title = "ACMX2";
     if (!filename.isEmpty()) {
@@ -762,6 +941,14 @@ void TextEditor::init() {
     QAction *shiftLeftAction = editMenu->addAction("Shift &Left");
     shiftLeftAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
 
+    QMenu *diagnosticsMenu = menuBar->addMenu("&Diagnostics");
+    m_nextDiagnosticAction = diagnosticsMenu->addAction("&Next Diagnostic");
+    m_nextDiagnosticAction->setShortcut(QKeySequence(Qt::Key_F8));
+    m_previousDiagnosticAction =
+        diagnosticsMenu->addAction("&Previous Diagnostic");
+    m_previousDiagnosticAction->setShortcut(
+        QKeySequence(Qt::SHIFT | Qt::Key_F8));
+
     QMenu *viewMenu = menuBar->addMenu("&View");
 
     QAction *increaseFontAction = viewMenu->addAction("Increase Font Size");
@@ -793,6 +980,8 @@ void TextEditor::init() {
 
     m_statusBar = new QStatusBar(this);
     m_lineColLabel = new QLabel("Line: 1, Col: 1", this);
+    m_compileStatusLabel = new QLabel("Not compiled", this);
+    m_statusBar->addWidget(m_compileStatusLabel);
     m_statusBar->addPermanentWidget(m_lineColLabel);
     layout->addWidget(m_statusBar);
 
@@ -849,6 +1038,11 @@ void TextEditor::init() {
     connect(shiftLeftAction, &QAction::triggered, this, [this]() {
         m_textEdit->unindentSelection();
     });
+    connect(m_nextDiagnosticAction, &QAction::triggered, this,
+            [this]() { navigateDiagnostic(1); });
+    connect(m_previousDiagnosticAction, &QAction::triggered, this,
+            [this]() { navigateDiagnostic(-1); });
+    updateDiagnosticActions();
 
     connect(m_textEdit->document(), &QTextDocument::modificationChanged,
             this, [this, saveAction](bool modified) {

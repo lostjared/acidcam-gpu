@@ -374,6 +374,9 @@ class MainWindow : public QMainWindow {
     void handleSavedShader(const QString &filePath);
     void queueAcmxvkLiveCompile(const QString &filePath);
     void startNextAcmxvkLiveCompile();
+    void updateOpenEditorCompileStatus(const QString &sourcePath, bool pending,
+                                       bool success = false,
+                                       const QString &diagnostics = QString());
     void publishAcmxvkCompiledShaderReload(const QString &sourcePath,
                                            const QString &runtimePath);
     void publishSelectedShaderIndexToRunningProcess();

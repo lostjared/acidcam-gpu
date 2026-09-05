@@ -14,11 +14,24 @@
 #include <QPaintEvent>
 #include <QPlainTextEdit>
 #include <QStatusBar>
+#include <QString>
 #include <QSyntaxHighlighter>
 #include <QVector>
 #include <QWidget>
 
 class LineNumberArea;
+class QAction;
+
+enum class ShaderDiagnosticSeverity { Error,
+                                      Warning,
+                                      Note };
+
+struct ShaderDiagnostic {
+    int line = 1;
+    int column = 0;
+    ShaderDiagnosticSeverity severity = ShaderDiagnosticSeverity::Error;
+    QString message;
+};
 
 /**
  * @brief Plain-text editor with line numbers and code-editing helpers.
@@ -33,6 +46,8 @@ class CustomTextEdit : public QPlainTextEdit {
     /// @brief Compute width required for current line-number digit count.
     int lineNumberAreaWidth();
     void updateLineNumberAreaWidth(int newBlockCount);
+    /// @brief Replace the line markers and underlines shown for compiler messages.
+    void setDiagnostics(const QVector<ShaderDiagnostic> &diagnostics);
 
   signals:
     void themeChanged();
@@ -61,6 +76,7 @@ class CustomTextEdit : public QPlainTextEdit {
     bool hasMultiLineSelection();
 
     LineNumberArea *m_lineNumberArea = nullptr;
+    QVector<ShaderDiagnostic> m_diagnostics;
 };
 
 class LineNumberArea : public QWidget {
@@ -96,6 +112,10 @@ class TextEditor : public QDialog {
     QString fileName() const;
     /// @brief Move to a one-based line and select the requested source match.
     void revealLocation(int lineNumber, int columnNumber = 0, int matchLength = 0);
+    /// @brief Mark the associated shader as being compiled.
+    void setCompilePending();
+    /// @brief Show compiler status and source diagnostics for the associated shader.
+    void setCompileResult(bool success, const QString &compilerOutput);
 
   signals:
     /// @brief Emitted after the editor successfully writes its contents to disk.
@@ -126,12 +146,20 @@ class TextEditor : public QDialog {
     void updateFontSize();
     void updateCursorPosition();
     void updateWindowTitle();
+    void navigateDiagnostic(int offset);
+    QVector<ShaderDiagnostic> parseDiagnostics(const QString &compilerOutput) const;
+    void updateDiagnosticActions();
 
     bool m_modified = false;
     CustomTextEdit *m_textEdit = nullptr;
     GlslSyntaxHighlighter *m_highlighter = nullptr;
     QStatusBar *m_statusBar = nullptr;
     QLabel *m_lineColLabel = nullptr;
+    QLabel *m_compileStatusLabel = nullptr;
+    QAction *m_nextDiagnosticAction = nullptr;
+    QAction *m_previousDiagnosticAction = nullptr;
+    QVector<ShaderDiagnostic> m_diagnostics;
+    int m_currentDiagnostic = -1;
     QString filename;
     QString m_lastSearchText;
     int m_fontSize = 24;
