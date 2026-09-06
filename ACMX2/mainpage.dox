@@ -1,5 +1,5 @@
 /**
-@mainpage ACMX2 — Real-Time GPU-Accelerated Video Glitch Engine
+@mainpage ACMX — Dual-Backend Real-Time GPU Video Synthesis
 
 @htmlonly
 <p><img src="https://lostsidedead.biz/screenshot3.jpg?v=1" style="max-width:800px; width:80%; height:auto;" /></p>
@@ -8,10 +8,22 @@
 
 @section intro Introduction
 
-<b>acidcam-gpu / ACMX2</b> is a high-performance, real-time video manipulation engine
-designed to push the boundaries of psychedelic glitch art. Part of the <b>ACMX2</b> and
-<b>libmx2</b> ecosystem, it can optionally offload complex glitch filters to <b>NVIDIA GPUs</b>
-via CUDA, enabling fluid, high-resolution visual transformations at 60+ FPS.
+<b>ACMX</b> is a high-performance, real-time video synthesis and glitch-art
+workstation with one Qt interface and two GPU rendering backends. The mature
+<b>ACMX2</b> backend uses libmx2 and OpenGL. The newer <b>ACMXVK</b> backend uses
+MXVK and Vulkan, including mixed fragment/compute SPIR-V pipelines, HDR video,
+and recorded headless processing. Both paths share the central workflow for
+media selection, shader libraries, multipass effects, playlists, audio/MIDI
+control, live editing, snapshots, and recording.
+
+See @ref acmxvk_backend for a structured overview of the Vulkan backend,
+its architecture, shader ABI, library builder, media clocks, HDR and headless
+paths, portability, and current implementation status.
+
+The optional <b>acidcam-gpu</b> library can offload complex glitch filters to
+<b>NVIDIA GPUs</b> through CUDA. ACMX2 uses it with the OpenGL pipeline, while a
+compatible ACMXVK/MXVK build can keep decoded, filtered, history, and uploaded
+frames resident across CUDA and Vulkan.
 
 <b>CUDA acceleration is a compile-time option</b> (<tt>-DWITH_CUDA=ON/OFF</tt>, default
 <tt>ON</tt>). The project now uses OpenCV 5. When CUDA is enabled, OpenCV 5
@@ -27,13 +39,42 @@ including <tt>cudaimgproc</tt>. On Arch Linux, install <tt>opencv-cuda</tt>
 instead of the stock <tt>opencv</tt> package. On other distributions, use an
 equivalent CUDA-enabled OpenCV package or build OpenCV with CUDA enabled.
 
-@section flatpak_download Download the ACMX2 Flatpak
+@section backends Rendering Backends
+
+Choose the renderer from the Qt interface's <b>Backend</b> menu:
+
+| Backend | Graphics API | Shader workflow | Best fit |
+| --- | --- | --- | --- |
+| ACMX2 | OpenGL / libmx2 | Runtime GLSL fragment and compute shaders | Existing ACMX2 libraries and mature compatibility |
+| ACMXVK | Vulkan / MXVK | Manifest-based source compiled to SPIR-V | Explicit Vulkan pipelines, HDR, headless recording, and modern fragment/compute chains |
+
+ACMX2 and ACMXVK are separate executables supervised by the same interface.
+Changing the backend changes the rendering implementation and shader format;
+it does not change the basic creative workflow.
+
+@section project_status Overall Project Status
+
+ACMX 2.135.0 packages the shared interface, ACMX2, ACMXVK, and MIDI mapping
+tool as one evolving project. ACMX2 remains the established OpenGL engine.
+ACMXVK has completed its six-increment HDR path and implements camera/video/
+image input, fragment and compute multipass, playlists and crossfades, texture
+and FFT history, custom uniforms, audio/MIDI control, 3D model texturing,
+recording, snapshots, live shader rebuild/reload, and surface-free headless
+recording. Vulkan shaders require the ACMXVK descriptor ABI and SPIR-V build
+workflow; legacy ACMX2 GLSL is not automatically interchangeable.
+
+The project currently targets native Linux, macOS/Apple Silicon through
+MoltenVK, and Windows. Portable builds do not require CUDA. CUDA acceleration,
+OpenCV DNN, audio, MIDI, TIFF, and WebP remain optional build features. Driver,
+codec, camera, and hardware combinations continue to be tested and hardened.
+
+@section flatpak_download Download the ACMX Flatpak
 
 The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
 the shader library without requiring NVIDIA CUDA. Download it from the
-<a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
-The current bundle is <b>ACMX2 v2.101.1</b> (24,017,976 bytes) with SHA-256
-<tt>ab8a0282aae2b6d90f8e02f69711f4609604b4810769cacb8c256d702befe886</tt>.
+<a href="https://lostsidedead.biz/acmx2/release">ACMX Linux Flatpak release page</a>.
+The current bundle is <b>ACMX v2.135.0</b> (28,930,176 bytes) with SHA-256
+<tt>dfec3e69a79b0eec4358dff5e954c802025597e5a3c82a9587e5e89b132550a2</tt>.
 
 @code{.sh}
 sha256sum ACMX2.flatpak

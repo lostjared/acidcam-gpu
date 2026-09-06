@@ -146,8 +146,8 @@ namespace ac_gpu {
 /**
  * @brief Return the directory containing the running ACMX2 executable.
  *
- * Installed ACMX2 layouts place the program in @c <prefix>/bin and its runtime
- * data in @c <prefix>/share/acmx2. Resolving this from the executable keeps a
+ * Installed ACMX2 layouts place the program in @c PREFIX/bin and its runtime
+ * data in @c PREFIX/share/acmx2. Resolving this from the executable keeps a
  * relocated installation self-contained instead of assuming @c /usr/local.
  */
 static std::filesystem::path executable_directory() {

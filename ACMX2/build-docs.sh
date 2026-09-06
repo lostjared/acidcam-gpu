@@ -49,7 +49,7 @@ cat > "$DOCS_DIR/index.html" <<'HTML'
   <meta charset="utf-8">
   <meta http-equiv="refresh" content="0; url=./latest/index.html">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ACMX2 Docs</title>
+  <title>ACMX Docs</title>
 </head>
 <body>
   <p>Redirecting to latest docs...</p>

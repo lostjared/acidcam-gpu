@@ -1,30 +1,33 @@
-# Doxyfile for ACMX2 — Delphi / Borland–themed documentation
+# Doxyfile for ACMX — Delphi / Borland–themed documentation
 #
 # Generate with:   doxygen Doxyfile
 #
-# Version 2.101.1 (August 2026)
-# Recent additions: OpenGL compute shaders, searchable built-in uniform reference,
-# multipass replacement controls, and Linux camera-node filtering
+# Version 2.135.0 (September 2026)
+# Documents the shared interface and both the ACMX2/OpenGL and ACMXVK/Vulkan
+# rendering backends.
 
 #---------------------------------------------------------------------------
 # Project
 #---------------------------------------------------------------------------
-PROJECT_NAME           = "ACMX2"
-PROJECT_NUMBER         = "2.101.1"
-PROJECT_BRIEF          = "Real-Time GPU-Accelerated Video Glitch Engine"
+PROJECT_NAME           = "ACMX"
+PROJECT_NUMBER         = "2.135.0"
+PROJECT_BRIEF          = "Dual-Backend Real-Time GPU Video Synthesis"
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = docs
 
 #---------------------------------------------------------------------------
 # Input
 #---------------------------------------------------------------------------
-INPUT                  = .
-FILE_PATTERNS          = *.cpp *.hpp *.h *.dox
+INPUT                  = . \
+                         ../ACMXVK
+FILE_PATTERNS          = *.cpp *.hpp *.h *.dox *.md
 RECURSIVE              = YES
 EXCLUDE                = build \
                          ACMX2/build \
                          build-nocuda \
-                         docs
+                         docs \
+                         ../ACMXVK/build \
+                         ../ACMXVK/docs
 EXCLUDE_PATTERNS       = */CMakeFiles/* \
                          */build/* \
                          */*_autogen/* \
@@ -67,7 +70,7 @@ REFERENCES_RELATION    = YES
 # HTML output — light Delphi/Borland theme
 #---------------------------------------------------------------------------
 GENERATE_HTML          = YES
-HTML_OUTPUT            = versions/2.101.1
+HTML_OUTPUT            = versions/2.135.0
 HTML_EXTRA_STYLESHEET  = doxygen-custom.css
 HTML_COLORSTYLE        = LIGHT
 HTML_COLORSTYLE_HUE    = 220
@@ -78,6 +81,7 @@ HTML_INDEX_NUM_ENTRIES = 100
 DISABLE_INDEX          = NO
 GENERATE_TREEVIEW      = YES
 TREEVIEW_WIDTH         = 280
+FULL_SIDEBAR           = YES
 USE_MATHJAX            = YES
 
 #---------------------------------------------------------------------------
@@ -107,7 +111,7 @@ WARN_IF_DOC_ERROR      = YES
 SORT_MEMBER_DOCS       = YES
 SORT_BRIEF_DOCS        = YES
 FULL_PATH_NAMES        = NO
-STRIP_FROM_PATH        = .
+STRIP_FROM_PATH        = ..
 JAVADOC_AUTOBRIEF      = YES
 TAB_SIZE               = 4
 OPTIMIZE_OUTPUT_FOR_C  = NO

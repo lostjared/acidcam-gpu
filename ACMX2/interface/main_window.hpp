@@ -259,6 +259,7 @@ class MainWindow : public QMainWindow {
     QString concatList(const QStringList lst);
     /// @brief Build acmx2 command-line arguments from current UI state.
     /// @param arguments Output list to populate with command-line tokens.
+    /// @param resume_action Action to resume after an ACMXVK build, if needed.
     /// @return true if arguments were built, false on user-facing error.
     bool buildRunArguments(
         QStringList &arguments,

@@ -472,7 +472,9 @@ adding their directory to `PATH`:
 
 ### Linux
 
-ACMX2 is part of the acidcam-gpu project. See the [main README](../README.md) for full build instructions.
+ACMX2 is part of the acidcam-gpu project. See the
+[main README](https://github.com/lostjared/acidcam-gpu/blob/main/README.md) for
+full build instructions.
 
 ```bash
 cd ACMX2
