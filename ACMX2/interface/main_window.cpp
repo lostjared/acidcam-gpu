@@ -2599,6 +2599,7 @@ void MainWindow::startNextAcmxvkLiveCompile() {
                         stream.setByteOrder(QDataStream::LittleEndian);
                         stream >> magic;
                     }
+                    compiled.close();
                     constexpr quint32 SPIRV_MAGIC = 0x07230203U;
                     if (magic != SPIRV_MAGIC) {
                         editorDiagnostics =
