@@ -663,6 +663,7 @@ target_include_directories(acmxvk PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(acmxvk PRIVATE
     mxvk::mxvk
     MXWrite::mxwrite
+    Threads::Threads
     PkgConfig::AVFORMAT
     PkgConfig::AVUTIL
     ${OpenCV_LIBS}
@@ -839,6 +840,7 @@ if(BUILD_TESTING)
         COMMAND acmxvk
             --build "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_library/library.json"
             --builddir "${CMAKE_CURRENT_BINARY_DIR}/shader-library-build-test"
+            --parallel 2
             --glslc "${GLSLC_EXECUTABLE}"
     )
     add_test(NAME acmxvk_shader_library_fix

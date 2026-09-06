@@ -51,6 +51,7 @@ namespace acmxvk {
         int autopilot_random_timeout = 0;
         int generate_interval = 0;
         int cache_delay = 1;
+        int build_parallel = 1;
         int texture_cache_size = 8;
         int audio_channels = 2;
         int audio_input_device = -1;
@@ -122,6 +123,7 @@ namespace acmxvk {
         bool build_fix = false;
         bool build_prune = false;
         bool build_force = false;
+        bool build_parallel_specified = false;
         bool unbuffered_output = false;
         bool interface_shm = false;
         bool show_help = false;

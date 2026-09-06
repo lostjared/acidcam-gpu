@@ -1002,7 +1002,8 @@ Build it without opening an ACMXVK window:
 ```bash
 ./build/acmxvk/acmxvk \
     --build ./shader-source/library.json \
-    --builddir ./shader-library
+    --builddir ./shader-library \
+    --parallel 8
 ```
 
 To repair a large library while omitting shaders that do not compile, replace
@@ -1047,6 +1048,15 @@ module, omits it from the new runtime manifest, reports it in the summary, and
 returns success after all recoverable entries have been examined. This lets an
 interface choose between fail-fast compilation and producing the largest valid
 library from a mixed set of sources.
+
+`--parallel <jobs>` runs between 1 and 256 shader build jobs concurrently and
+is valid only with `--build`. The default is one job, preserving the original
+serial behavior. Parallel mode applies equally to strict `--builddir` and
+recovery-oriented `--fix` builds, including confirmed pruning. Output manifest
+entries retain source-manifest order even when jobs finish in a different
+order. Progress reflects completed entries across all workers.
+If a strict parallel build fails, already-running jobs are allowed to finish
+before ACMXVK returns the compiler error; the runtime manifest is not replaced.
 
 ACMXVK-generated manifests include `"backend": "acmxvk"` so a compatible
 launcher can validate its active engine. Source manifests use

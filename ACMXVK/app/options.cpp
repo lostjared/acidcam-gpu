@@ -390,7 +390,8 @@ namespace acmxvk {
                 const std::string_view argument(argv[index]);
                 if (argument == "--build" || argument == "--builddir" ||
                     argument == "--fix" || argument == "--prune" ||
-                    argument == "--force" || argument == "--glslc") {
+                    argument == "--force" || argument == "--glslc" ||
+                    argument == "--parallel") {
                     return true;
                 }
             }
@@ -443,6 +444,14 @@ namespace acmxvk {
                 } else if (option == "--glslc") {
                     options.glslc_executable =
                         optionValue(index, argc, argv, option);
+                } else if (option == "--parallel") {
+                    if (options.build_parallel_specified) {
+                        throw std::runtime_error(
+                            "--parallel may only be supplied once");
+                    }
+                    options.build_parallel = parseInteger(
+                        optionValue(index, argc, argv, option), option);
+                    options.build_parallel_specified = true;
                 } else {
                     throw std::runtime_error(
                         "library build mode cannot be combined with option: " +
@@ -457,9 +466,13 @@ namespace acmxvk {
                                    true);
             input::validate_string(options.glslc_executable,
                                    input::StringKind::Path, "--glslc");
+            if (options.build_parallel < 1 || options.build_parallel > 256) {
+                throw std::runtime_error(
+                    "--parallel job count must be between 1 and 256");
+            }
             if (!options.show_help && options.build_manifest.empty()) {
                 throw std::runtime_error(
-                    "--builddir/--fix/--prune/--force/--glslc requires "
+                    "--builddir/--fix/--prune/--force/--glslc/--parallel requires "
                     "--build <library.json>");
             }
             if (!options.show_help && options.build_directory.empty()) {
@@ -1215,6 +1228,7 @@ namespace acmxvk {
                << "      --prune                Delete GLSL sources that fail compilation\n"
                << "      --force                Confirm permanent deletion by --prune\n"
                << "      --glslc <executable>   GLSL compiler for --build (default: glslc)\n"
+               << "      --parallel <jobs>      Concurrent shader jobs for --build (default: 1)\n"
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
                << "      --compute <file.spv>    Use one SPIR-V compute shader\n"

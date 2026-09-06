@@ -6,13 +6,16 @@
 #include <opencv2/core.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <mutex>
 #if defined(__linux__) || defined(__APPLE__)
 #include <cerrno>
 #include <spawn.h>
@@ -20,6 +23,7 @@
 #include <unistd.h>
 #endif
 #include <stdexcept>
+#include <thread>
 #include <unordered_set>
 
 #ifdef _WIN32
@@ -360,7 +364,7 @@ namespace acmxvk {
     }
 
     [[nodiscard]] fs::path temporaryBuildPath(const fs::path &destination) {
-        static std::uint64_t sequence = 0;
+        static std::atomic<std::uint64_t> sequence{0};
         for (int attempt = 0; attempt < 100; ++attempt) {
             fs::path temporary = destination;
             temporary += ".acmxvk-tmp-" +
@@ -368,7 +372,7 @@ namespace acmxvk {
                                             .time_since_epoch()
                                             .count()) +
                          "-" +
-                         std::to_string(++sequence);
+                         std::to_string(sequence.fetch_add(1U) + 1U);
             if (!fs::exists(temporary)) {
                 return temporary;
             }
@@ -570,41 +574,52 @@ namespace acmxvk {
                 "source library.json contains no shader entries");
         }
 
-        std::vector<std::string> output_entries;
-        output_entries.reserve(manifest.entries.size());
+        struct PreparedEntry {
+            fs::path relative;
+            std::string output_entry;
+            bool ready = false;
+        };
+
+        std::vector<PreparedEntry> prepared_entries(manifest.entries.size());
+        std::vector<std::string> output_entries_by_index(
+            manifest.entries.size());
         std::unordered_set<std::string> unique_outputs;
-        std::size_t compiled = 0;
-        std::size_t copied = 0;
-        std::size_t current = 0;
-        std::size_t failed = 0;
-        std::size_t pruned = 0;
-        std::size_t processed = 0;
+        std::atomic<std::size_t> compiled{0};
+        std::atomic<std::size_t> copied{0};
+        std::atomic<std::size_t> current{0};
+        std::atomic<std::size_t> failed{0};
+        std::atomic<std::size_t> pruned{0};
+        std::atomic<std::size_t> processed{0};
         int next_progress = 5;
+        std::mutex progress_mutex;
+        std::mutex error_mutex;
+        std::mutex failure_mutex;
+        std::exception_ptr first_failure;
 
         const auto report_progress = [&] {
-            ++processed;
+            const std::size_t completed = processed.fetch_add(1U) + 1U;
             const int percentage = static_cast<int>(
-                processed * 100U / manifest.entries.size());
+                completed * 100U / manifest.entries.size());
+            const std::lock_guard lock(progress_mutex);
             while (next_progress <= 100 && percentage >= next_progress) {
                 std::cout << "acmxvk: build progress: " << next_progress
-                          << "% (" << processed << '/'
+                          << "% (" << completed << '/'
                           << manifest.entries.size() << ")\n"
                           << std::flush;
                 next_progress += 5;
             }
         };
 
-        for (const std::string &entry : manifest.entries) {
-            fs::path source;
-            fs::path destination;
-            try {
-                source = resolveShaderBuildEntry(source_root, entry);
-                if (source.empty()) {
-                    throw std::runtime_error(
-                        "source library contains an unavailable or unsafe shader: " +
-                        entry);
-                }
+        const auto store_failure = [&](std::exception_ptr failure) {
+            const std::lock_guard lock(failure_mutex);
+            if (!first_failure) {
+                first_failure = std::move(failure);
+            }
+        };
 
+        for (std::size_t index = 0; index < manifest.entries.size(); ++index) {
+            const std::string &entry = manifest.entries[index];
+            try {
                 std::string normalized_entry = entry;
                 std::replace(normalized_entry.begin(), normalized_entry.end(),
                              '\\', '/');
@@ -625,36 +640,64 @@ namespace acmxvk {
                         "source library produces a duplicate output path: " +
                         output_entry);
                 }
+                prepared_entries[index] =
+                    PreparedEntry{relative, output_entry, true};
+            } catch (const std::exception &failure_value) {
+                if (!options.build_fix) {
+                    throw;
+                }
+                ++failed;
+                std::cerr << "acmxvk: fix omitted '" << entry
+                          << "': " << failure_value.what() << '\n';
+                report_progress();
+            }
+        }
 
-                destination = output_root / relative;
-                error.clear();
-                fs::create_directories(destination.parent_path(), error);
-                if (error) {
+        const auto process_entry = [&](std::size_t index) {
+            const PreparedEntry &prepared = prepared_entries[index];
+            if (!prepared.ready) {
+                return;
+            }
+            const std::string &entry = manifest.entries[index];
+            fs::path source;
+            fs::path destination;
+            try {
+                source = resolveShaderBuildEntry(source_root, entry);
+                if (source.empty()) {
+                    throw std::runtime_error(
+                        "source library contains an unavailable or unsafe shader: " +
+                        entry);
+                }
+
+                destination = output_root / prepared.relative;
+                std::error_code entry_error;
+                fs::create_directories(destination.parent_path(), entry_error);
+                if (entry_error) {
                     throw std::runtime_error(
                         "unable to create shader output directory: " +
-                        error.message());
+                        entry_error.message());
                 }
                 const fs::path destination_parent =
-                    fs::weakly_canonical(destination.parent_path(), error);
+                    fs::weakly_canonical(destination.parent_path(), entry_error);
                 const std::string parent_relative =
-                    error ? std::string{}
-                          : destination_parent.lexically_relative(output_root)
-                                .generic_string();
-                if (error || parent_relative == ".." ||
+                    entry_error ? std::string{}
+                                : destination_parent.lexically_relative(output_root)
+                                      .generic_string();
+                if (entry_error || parent_relative == ".." ||
                     parent_relative.starts_with("../") ||
                     fs::is_symlink(destination)) {
                     throw std::runtime_error(
                         "shader output resolves outside the output directory: " +
-                        output_entry);
+                        prepared.output_entry);
                 }
 
                 bool needs_build = !fs::is_regular_file(destination);
                 if (!needs_build) {
-                    needs_build = fs::last_write_time(destination, error) <
+                    needs_build = fs::last_write_time(destination, entry_error) <
                                   fs::last_write_time(source);
-                    if (error) {
+                    if (entry_error) {
                         needs_build = true;
-                        error.clear();
+                        entry_error.clear();
                     }
                 }
                 if (!needs_build) {
@@ -697,46 +740,92 @@ namespace acmxvk {
                 } else {
                     ++current;
                 }
-                output_entries.push_back(output_entry);
-            } catch (const std::exception &failure) {
+                output_entries_by_index[index] = prepared.output_entry;
+            } catch (const std::exception &failure_value) {
                 if (!options.build_fix) {
-                    throw;
-                }
-                const bool compilation_failed =
-                    dynamic_cast<const ShaderCompilationError *>(&failure) !=
-                    nullptr;
-                if (!destination.empty()) {
-                    std::error_code remove_error;
-                    fs::remove(destination, remove_error);
-                    if (remove_error) {
-                        throw std::runtime_error(
-                            "unable to remove failed shader output " +
-                            destination.string() + ": " +
-                            remove_error.message());
+                    store_failure(std::current_exception());
+                } else {
+                    try {
+                        const bool compilation_failed =
+                            dynamic_cast<const ShaderCompilationError *>(
+                                &failure_value) != nullptr;
+                        if (!destination.empty()) {
+                            std::error_code remove_error;
+                            fs::remove(destination, remove_error);
+                            if (remove_error) {
+                                throw std::runtime_error(
+                                    "unable to remove failed shader output " +
+                                    destination.string() + ": " +
+                                    remove_error.message());
+                            }
+                        }
+                        if (options.build_prune && compilation_failed &&
+                            !source.empty() &&
+                            (source.extension() == ".frag" ||
+                             source.extension() == ".comp")) {
+                            std::error_code remove_error;
+                            const bool removed =
+                                fs::remove(source, remove_error);
+                            if (remove_error || !removed) {
+                                throw std::runtime_error(
+                                    "unable to prune failed shader source " +
+                                    source.string() +
+                                    (remove_error
+                                         ? ": " + remove_error.message()
+                                         : ": file was not removed"));
+                            }
+                            ++pruned;
+                            const std::lock_guard lock(error_mutex);
+                            std::cerr << "acmxvk: pruned failed source '"
+                                      << source.string() << "'\n";
+                        }
+                        ++failed;
+                        const std::lock_guard lock(error_mutex);
+                        std::cerr << "acmxvk: fix omitted '" << entry
+                                  << "': " << failure_value.what() << '\n';
+                    } catch (...) {
+                        store_failure(std::current_exception());
                     }
                 }
-                if (options.build_prune && compilation_failed &&
-                    !source.empty() &&
-                    (source.extension() == ".frag" ||
-                     source.extension() == ".comp")) {
-                    std::error_code remove_error;
-                    const bool removed = fs::remove(source, remove_error);
-                    if (remove_error || !removed) {
-                        throw std::runtime_error(
-                            "unable to prune failed shader source " +
-                            source.string() +
-                            (remove_error ? ": " + remove_error.message()
-                                          : ": file was not removed"));
-                    }
-                    ++pruned;
-                    std::cerr << "acmxvk: pruned failed source '"
-                              << source.string() << "'\n";
-                }
-                ++failed;
-                std::cerr << "acmxvk: fix omitted '" << entry
-                          << "': " << failure.what() << '\n';
             }
             report_progress();
+        };
+
+        const std::size_t worker_count = std::min(
+            static_cast<std::size_t>(options.build_parallel),
+            manifest.entries.size());
+        if (worker_count > 1U) {
+            std::cout << "acmxvk: building shader library with "
+                      << worker_count << " parallel jobs\n";
+        }
+        std::atomic<std::size_t> next_entry{0};
+        const auto worker = [&] {
+            while (true) {
+                const std::size_t index = next_entry.fetch_add(1U);
+                if (index >= manifest.entries.size()) {
+                    return;
+                }
+                process_entry(index);
+            }
+        };
+        std::vector<std::thread> workers;
+        workers.reserve(worker_count);
+        for (std::size_t index = 0; index < worker_count; ++index) {
+            workers.emplace_back(worker);
+        }
+        for (std::thread &thread : workers) {
+            thread.join();
+        }
+        if (first_failure) {
+            std::rethrow_exception(first_failure);
+        }
+
+        std::vector<std::string> output_entries;
+        output_entries.reserve(manifest.entries.size());
+        for (std::string &entry : output_entries_by_index) {
+            if (!entry.empty()) {
+                output_entries.push_back(std::move(entry));
+            }
         }
 
         const fs::path output_manifest = output_root / "library.json";

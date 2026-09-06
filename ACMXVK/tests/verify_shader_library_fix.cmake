@@ -13,6 +13,7 @@ execute_process(
     COMMAND "${ACMXVK_EXECUTABLE}"
         --build "${SOURCE_DIRECTORY}/library.json"
         --fix "${OUTPUT_DIRECTORY}"
+        --parallel 2
         --glslc "${GLSLC_EXECUTABLE}"
     RESULT_VARIABLE build_result
     OUTPUT_VARIABLE build_output
@@ -108,6 +109,7 @@ execute_process(
         --fix "${prune_output}"
         --prune
         --force
+        --parallel 2
         --glslc "${GLSLC_EXECUTABLE}"
     RESULT_VARIABLE prune_result
     OUTPUT_VARIABLE prune_output_text
