@@ -60,6 +60,7 @@ namespace acmxvk {
         int midi_device = -1;
         int gpu_frame_buffer_size = 10;
         int cuda_device = 0;
+        int dream_iterations = 1;
         double requested_fps = 0.0;
         double duration = 0.0;
         double cross_fade_duration = 0.5;
@@ -71,6 +72,7 @@ namespace acmxvk {
         double audio_recording_gain = 1.0;
         double human_black_point = 0.35;
         double human_white_point = 0.75;
+        double dream_strength = 0.05;
         bool resolution_specified = false;
         bool use_yuv = false;
         bool maximize_fps = false;
@@ -115,6 +117,8 @@ namespace acmxvk {
         bool check_cuda = false;
         bool check_dnn = false;
         bool check_deep_dream = false;
+        bool dream_iterations_specified = false;
+        bool dream_strength_specified = false;
         bool human_background = false;
         bool human_black_specified = false;
         bool human_white_specified = false;

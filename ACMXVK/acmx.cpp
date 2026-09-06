@@ -104,7 +104,9 @@ int main(int argc, char **argv) {
 #ifdef ACMXVK_WITH_DEEP_DREAM
             return acmxvk::dream::probe(
                        options.cuda_device, options.dream_model,
-                       options.dream_layer, std::cout, std::cerr)
+                       options.dream_layer, options.dream_iterations,
+                       static_cast<float>(options.dream_strength), std::cout,
+                       std::cerr)
                        ? EXIT_SUCCESS
                        : EXIT_FAILURE;
 #else
@@ -180,6 +182,13 @@ int main(int argc, char **argv) {
                 "MIDI input requires an ACMXVK build configured with -DMIDI=ON");
         }
 #endif
+#ifndef ACMXVK_WITH_DEEP_DREAM
+        if (!options.dream_model.empty()) {
+            throw std::runtime_error(
+                "--dream-model requires an ACMXVK build configured with "
+                "-DWITH_DEEP_DREAM=ON");
+        }
+#endif
 #ifndef ACMXVK_WITH_CUDA
         if (!options.gpu_filter_indices.empty()) {
             throw std::runtime_error(
@@ -188,7 +197,7 @@ int main(int argc, char **argv) {
         }
 #endif
 #ifndef ACMXVK_WITH_MXVK_CUDA
-        if (options.cuda_device_specified) {
+        if (options.cuda_device_specified && options.dream_model.empty()) {
             throw std::runtime_error(
                 "--cuda-device requires a CUDA-enabled MXVK installation");
         }

@@ -601,6 +601,24 @@ namespace acmxvk {
                 options.dream_model = optionValue(index, argc, argv, option);
             } else if (option == "--dream-layer") {
                 options.dream_layer = optionValue(index, argc, argv, option);
+            } else if (option == "--dream-iterations") {
+                options.dream_iterations =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_iterations_specified = true;
+                if (options.dream_iterations < 1 ||
+                    options.dream_iterations > 100) {
+                    throw std::runtime_error(
+                        "--dream-iterations must be between 1 and 100");
+                }
+            } else if (option == "--dream-strength") {
+                options.dream_strength =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_strength_specified = true;
+                if (options.dream_strength <= 0.0 ||
+                    options.dream_strength > 10.0) {
+                    throw std::runtime_error(
+                        "--dream-strength must be greater than 0 and no more than 10");
+                }
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1010,12 +1028,14 @@ namespace acmxvk {
         if (!options.input_file.empty() && !options.graphic_file.empty()) {
             throw std::runtime_error("--input and --graphic cannot be used together");
         }
-        if (!options.dream_model.empty() && !options.check_deep_dream) {
-            throw std::runtime_error(
-                "--dream-model currently requires --check-deep-dream");
-        }
         if (!options.dream_layer.empty() && options.dream_model.empty()) {
             throw std::runtime_error("--dream-layer requires --dream-model");
+        }
+        if ((options.dream_iterations_specified ||
+             options.dream_strength_specified) &&
+            options.dream_model.empty()) {
+            throw std::runtime_error(
+                "--dream-iterations and --dream-strength require --dream-model");
         }
         const int shader_source_count =
             static_cast<int>(!options.shader_directory.empty()) +
@@ -1240,8 +1260,11 @@ namespace acmxvk {
                << "                              Backend is benchmarked on the first frame\n\n"
                << "Deep Dream (requires WITH_DEEP_DREAM=ON build):\n"
                << "      --check-deep-dream      Probe LibTorch CPU/CUDA autograd support\n"
-               << "      --dream-model <file.pt> Validate a TorchScript feature model\n"
-               << "      --dream-layer <name|N>  Select a named or numbered feature layer\n\n"
+               << "      --dream-model <file.pt> Apply a TorchScript feature model\n"
+               << "      --dream-layer <name|N>  Select a named or numbered feature layer\n"
+               << "      --dream-iterations <N> Number of ascent steps per input frame (1-100; default 1)\n"
+               << "      --dream-strength <N>   Gradient step size (0-10; default 0.05)\n"
+               << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"
                << "      --builddir <directory> Output directory required by --build\n"

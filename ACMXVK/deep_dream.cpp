@@ -27,7 +27,8 @@ namespace acmxvk::dream {
     } // namespace
 
     [[nodiscard]] bool probe(int cuda_device, std::string_view model_file,
-                             std::string_view layer, std::ostream &output,
+                             std::string_view layer, int iterations,
+                             float strength, std::ostream &output,
                              std::ostream &error) {
         output << "Deep Dream: enabled\n"
                << "LibTorch version: " << TORCH_VERSION << '\n';
@@ -90,8 +91,8 @@ namespace acmxvk::dream {
                             255U};
                     }
                 }
-                const GradientAscentResult result =
-                    model.apply_gradient_ascent(test_image);
+                const GradientAscentResult result = model.apply_gradient_ascent(
+                    test_image, GradientAscentOptions{iterations, strength});
                 output << std::fixed << std::setprecision(6)
                        << "Deep Dream gradient ascent: ready"
                        << " (loss=" << result.activation_loss

@@ -36,7 +36,7 @@ complete replacement for ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
-| Deep Dream | Increment 3 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. The model exporter packages VGG16 feature activations and typed metadata in TorchScript; `--check-deep-dream` verifies model loading, a selected feature layer, and normalized pixel-gradient ascent on CUDA. Runtime frame integration follows in later increments. |
+| Deep Dream | Increment 4 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent can preprocess camera, video, or image frames before the existing fragment/compute shader chain. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
 
@@ -161,10 +161,31 @@ activation while model weights remain frozen, normalizes and validates each
 gradient, clamps values to the model's valid input range, and preserves the
 original alpha channel. Model inspection now runs one real gradient-ascent step
 on a synthetic image and reports its loss, mean gradient, and mean pixel change.
-This verifies the complete forward/backward pixel path before runtime video-frame
-integration in the next increment. For now, `--dream-model` remains combined
-with `--check-deep-dream`.
+This verifies the complete forward/backward pixel path.
 Only load TorchScript models from sources you trust.
+
+Increment 4 integrates that processor into camera, video, and still-image input.
+Deep Dream runs before acidcam-gpu filters and the existing Vulkan
+fragment/compute multipass chain, so existing shaders, history, playlists,
+crossfades, MIDI controls, audio reactivity, recording, and 3D texture mapping
+remain available. One iteration per source frame is the real-time-oriented
+default:
+
+```bash
+./build/acmxvk-dream/acmxvk \
+    --input input.mp4 \
+    --dream-model models/deep-dream-vgg16.pt \
+    --dream-layer relu4_2 \
+    --dream-iterations 1 \
+    --dream-strength 0.05 \
+    --shaders shaders_acmxvk \
+    --shader-file color-effect.frag.spv
+```
+
+`--dream-iterations` accepts 1–100 and `--dream-strength` accepts values greater
+than zero through 10. Higher values can be substantially slower or visually
+unstable. The current integration stages RGBA pixels through host memory around
+LibTorch; CUDA/Vulkan zero-copy and temporal feedback are later increments.
 
 ### Pcons
 
