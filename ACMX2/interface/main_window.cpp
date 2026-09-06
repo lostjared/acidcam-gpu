@@ -228,13 +228,24 @@ namespace {
             return compilerInfo.absoluteFilePath();
         }
 
-        QString compiler =
-            QStandardPaths::findExecutable(QStringLiteral("glslc"));
+        QString compiler;
+#ifdef _WIN32
+        const QString compilerName = QStringLiteral("glslc.exe");
+        const QFileInfo bundledCompiler(
+            QDir(QCoreApplication::applicationDirPath())
+                .filePath(compilerName));
+        if (bundledCompiler.isFile() && bundledCompiler.isExecutable())
+            compiler = bundledCompiler.absoluteFilePath();
+#else
+        const QString compilerName = QStringLiteral("glslc");
+#endif
+        if (compiler.isEmpty())
+            compiler = QStandardPaths::findExecutable(compilerName);
         if (compiler.isEmpty()) {
             const QString sdk =
                 QString::fromLocal8Bit(qgetenv("VULKAN_SDK"));
             const QString sdkCompiler =
-                QDir(sdk).filePath(QStringLiteral("bin/glslc"));
+                QDir(sdk).filePath(QStringLiteral("bin/") + compilerName);
             if (!sdk.isEmpty() && QFileInfo(sdkCompiler).isExecutable())
                 compiler = sdkCompiler;
         }
