@@ -6,6 +6,7 @@
 #include <torch/torch.h>
 
 #include <exception>
+#include <iomanip>
 #include <ostream>
 
 namespace acmxvk::dream {
@@ -75,6 +76,28 @@ namespace acmxvk::dream {
             if (!model_file.empty()) {
                 Model model = Model::load(model_file, cuda_device, layer);
                 model.print(output);
+                cv::Mat test_image(64, 64, CV_8UC4);
+                for (int y = 0; y < test_image.rows; ++y) {
+                    for (int x = 0; x < test_image.cols; ++x) {
+                        test_image.at<cv::Vec4b>(y, x) = cv::Vec4b{
+                            static_cast<std::uint8_t>((x * 255) /
+                                                      (test_image.cols - 1)),
+                            static_cast<std::uint8_t>((y * 255) /
+                                                      (test_image.rows - 1)),
+                            static_cast<std::uint8_t>(((x + y) * 255) /
+                                                      (test_image.cols +
+                                                       test_image.rows - 2)),
+                            255U};
+                    }
+                }
+                const GradientAscentResult result =
+                    model.apply_gradient_ascent(test_image);
+                output << std::fixed << std::setprecision(6)
+                       << "Deep Dream gradient ascent: ready"
+                       << " (loss=" << result.activation_loss
+                       << ", mean gradient=" << result.mean_gradient
+                       << ", mean pixel change="
+                       << result.mean_pixel_change << ")\n";
             }
         } catch (const std::exception &exception) {
             error << "Deep Dream LibTorch probe failed: " << exception.what()

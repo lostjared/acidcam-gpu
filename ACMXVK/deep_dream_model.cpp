@@ -6,6 +6,8 @@
 #include <torch/script.h>
 #include <torch/torch.h>
 
+#include <opencv2/imgproc.hpp>
+
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -23,6 +25,9 @@ namespace acmxvk::dream {
         constexpr std::size_t MAX_LAYERS = 128;
         constexpr std::int64_t MAX_SOURCE_LAYER_INDEX = 4096;
         constexpr std::int64_t MAX_TEST_INPUT_SIZE = 256;
+        constexpr int MAX_GRADIENT_ASCENT_ITERATIONS = 100;
+        constexpr float MAX_GRADIENT_ASCENT_STEP = 10.0F;
+        constexpr float GRADIENT_EPSILON = 1.0e-8F;
 
         [[nodiscard]] c10::IValue require_attribute(
             const torch::jit::Module &module, const std::string &name) {
@@ -212,6 +217,27 @@ namespace acmxvk::dream {
             }
             return value.toTensorVector();
         }
+
+        void validate_gradient_options(const GradientAscentOptions &options) {
+            if (options.iterations < 1 ||
+                options.iterations > MAX_GRADIENT_ASCENT_ITERATIONS) {
+                throw std::runtime_error(
+                    "Deep Dream iterations must be between 1 and 100");
+            }
+            if (!std::isfinite(options.step_size) || options.step_size <= 0.0F ||
+                options.step_size > MAX_GRADIENT_ASCENT_STEP) {
+                throw std::runtime_error(
+                    "Deep Dream step size must be greater than 0 and no more than 10");
+            }
+        }
+
+        [[nodiscard]] torch::Tensor normalization_tensor(
+            const std::vector<double> &values, const torch::Device &device) {
+            return torch::tensor(
+                       values,
+                       torch::TensorOptions().dtype(torch::kFloat32).device(device))
+                .view({1, 3, 1, 1});
+        }
     } // namespace
 
     struct Model::Impl {
@@ -301,6 +327,111 @@ namespace acmxvk::dream {
 
     [[nodiscard]] std::size_t Model::selected_layer() const {
         return implementation->selected_layer;
+    }
+
+    [[nodiscard]] GradientAscentResult Model::apply_gradient_ascent(
+        cv::Mat &rgba, const GradientAscentOptions &options) {
+        validate_gradient_options(options);
+        if (rgba.empty() || rgba.type() != CV_8UC4 || rgba.cols < 1 ||
+            rgba.rows < 1) {
+            throw std::runtime_error(
+                "Deep Dream input must be a non-empty RGBA8 image");
+        }
+
+        cv::Mat rgb;
+        cv::cvtColor(rgba, rgb, cv::COLOR_RGBA2RGB);
+        cv::Mat rgb_float;
+        rgb.convertTo(rgb_float, CV_32FC3, 1.0 / 255.0);
+
+        const torch::Device device(torch::kCUDA,
+                                   implementation->cuda_device);
+        const torch::Tensor input =
+            torch::from_blob(rgb_float.data, {rgb_float.rows, rgb_float.cols, 3},
+                             torch::TensorOptions().dtype(torch::kFloat32))
+                .permute({2, 0, 1})
+                .unsqueeze(0)
+                .to(device)
+                .contiguous();
+        const torch::Tensor mean = normalization_tensor(
+            implementation->metadata.input_mean, device);
+        const torch::Tensor standard_deviation = normalization_tensor(
+            implementation->metadata.input_std, device);
+        torch::Tensor dream_input =
+            ((input - mean) / standard_deviation).detach();
+        dream_input.requires_grad_(true);
+        const torch::Tensor minimum = (torch::zeros_like(mean) - mean) /
+                                      standard_deviation;
+        const torch::Tensor maximum = (torch::ones_like(mean) - mean) /
+                                      standard_deviation;
+
+        GradientAscentResult result;
+        for (int iteration = 0; iteration < options.iterations; ++iteration) {
+            const std::vector<torch::Tensor> outputs = feature_outputs(
+                implementation->module.forward({dream_input}));
+            if (outputs.size() != implementation->metadata.layers.size()) {
+                throw std::runtime_error(
+                    "Deep Dream model output count changed during gradient ascent");
+            }
+            const torch::Tensor activation =
+                outputs[implementation->selected_layer];
+            const torch::Tensor loss = activation.square().mean();
+            if (!torch::isfinite(loss).item<bool>()) {
+                throw std::runtime_error(
+                    "Deep Dream activation loss is not finite");
+            }
+            loss.backward();
+
+            torch::Tensor gradient = dream_input.grad();
+            if (!gradient.defined() || !torch::isfinite(gradient).all().item<bool>()) {
+                throw std::runtime_error(
+                    "Deep Dream produced an invalid input gradient");
+            }
+            const torch::Tensor mean_gradient = gradient.abs().mean();
+            const float gradient_value = mean_gradient.item<float>();
+            if (!std::isfinite(gradient_value) ||
+                gradient_value <= GRADIENT_EPSILON) {
+                throw std::runtime_error(
+                    "Deep Dream selected layer produced no usable input gradient");
+            }
+
+            {
+                torch::NoGradGuard no_grad;
+                dream_input.add_(gradient *
+                                 (options.step_size /
+                                  (mean_gradient + GRADIENT_EPSILON)));
+                dream_input.copy_(torch::maximum(
+                    torch::minimum(dream_input, maximum), minimum));
+            }
+            dream_input.grad().zero_();
+            result.activation_loss = loss.item<float>();
+            result.mean_gradient = gradient_value;
+        }
+
+        torch::Tensor output =
+            (dream_input.detach() * standard_deviation + mean)
+                .clamp(0.0F, 1.0F);
+        result.mean_pixel_change =
+            (output - input).abs().mean().item<float>();
+        output = output.squeeze(0)
+                     .permute({1, 2, 0})
+                     .mul(255.0F)
+                     .round()
+                     .to(torch::kUInt8)
+                     .to(torch::kCPU)
+                     .contiguous();
+        torch::cuda::synchronize(implementation->cuda_device);
+
+        cv::Mat dreamed_rgb(rgb.rows, rgb.cols, CV_8UC3,
+                            output.data_ptr<std::uint8_t>());
+        cv::Mat dreamed_rgba;
+        cv::cvtColor(dreamed_rgb, dreamed_rgba, cv::COLOR_RGB2RGBA);
+        std::vector<cv::Mat> original_channels;
+        std::vector<cv::Mat> dreamed_channels;
+        cv::split(rgba, original_channels);
+        cv::split(dreamed_rgba, dreamed_channels);
+        dreamed_channels[3] = original_channels[3];
+        cv::merge(dreamed_channels, rgba);
+        return result;
     }
 
     void Model::print(std::ostream &output) const {

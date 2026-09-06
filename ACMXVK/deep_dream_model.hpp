@@ -9,6 +9,8 @@
 #include <string_view>
 #include <vector>
 
+#include <opencv2/core/mat.hpp>
+
 namespace acmxvk::dream {
 
     struct LayerMetadata {
@@ -26,6 +28,17 @@ namespace acmxvk::dream {
         std::int64_t minimum_input_size = 0;
     };
 
+    struct GradientAscentOptions {
+        int iterations = 1;
+        float step_size = 0.05F;
+    };
+
+    struct GradientAscentResult {
+        float activation_loss = 0.0F;
+        float mean_gradient = 0.0F;
+        float mean_pixel_change = 0.0F;
+    };
+
     class Model {
       public:
         Model(Model &&) noexcept;
@@ -40,6 +53,8 @@ namespace acmxvk::dream {
                                         std::string_view layer = {});
         [[nodiscard]] const ModelMetadata &metadata() const;
         [[nodiscard]] std::size_t selected_layer() const;
+        [[nodiscard]] GradientAscentResult apply_gradient_ascent(
+            cv::Mat &rgba, const GradientAscentOptions &options = {});
         void print(std::ostream &output) const;
 
       private:
