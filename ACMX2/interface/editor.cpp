@@ -940,7 +940,7 @@ void TextEditor::openInclude(const QString &includeName) {
 }
 
 void TextEditor::requestPreview() {
-    if (!m_acmxvkContext || filename.isEmpty())
+    if (filename.isEmpty() || m_libraryDirectory.isEmpty())
         return;
     emit previewRequested(filename, m_textEdit->toPlainText());
 }
