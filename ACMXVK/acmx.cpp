@@ -105,7 +105,10 @@ int main(int argc, char **argv) {
             return acmxvk::dream::probe(
                        options.cuda_device, options.dream_model,
                        options.dream_layer, options.dream_iterations,
-                       static_cast<float>(options.dream_strength), std::cout,
+                       static_cast<float>(options.dream_strength),
+                       static_cast<float>(options.dream_feedback),
+                       static_cast<float>(options.dream_zoom),
+                       static_cast<float>(options.dream_rotation), std::cout,
                        std::cerr)
                        ? EXIT_SUCCESS
                        : EXIT_FAILURE;

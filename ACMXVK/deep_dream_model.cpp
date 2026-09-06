@@ -7,6 +7,9 @@
 #include <torch/torch.h>
 
 #include <opencv2/imgproc.hpp>
+#if __has_include(<opencv2/geometry/2d.hpp>)
+#include <opencv2/geometry/2d.hpp>
+#endif
 
 #include <algorithm>
 #include <charconv>
@@ -28,6 +31,10 @@ namespace acmxvk::dream {
         constexpr int MAX_GRADIENT_ASCENT_ITERATIONS = 100;
         constexpr float MAX_GRADIENT_ASCENT_STEP = 10.0F;
         constexpr float GRADIENT_EPSILON = 1.0e-8F;
+        constexpr float MAX_FEEDBACK = 0.99F;
+        constexpr float MIN_ZOOM = 0.9F;
+        constexpr float MAX_ZOOM = 1.1F;
+        constexpr float MAX_ROTATION_DEGREES = 5.0F;
 
         [[nodiscard]] c10::IValue require_attribute(
             const torch::jit::Module &module, const std::string &name) {
@@ -229,6 +236,21 @@ namespace acmxvk::dream {
                 throw std::runtime_error(
                     "Deep Dream step size must be greater than 0 and no more than 10");
             }
+            if (!std::isfinite(options.feedback) || options.feedback < 0.0F ||
+                options.feedback > MAX_FEEDBACK) {
+                throw std::runtime_error(
+                    "Deep Dream feedback must be between 0 and 0.99");
+            }
+            if (!std::isfinite(options.zoom) || options.zoom < MIN_ZOOM ||
+                options.zoom > MAX_ZOOM) {
+                throw std::runtime_error(
+                    "Deep Dream zoom must be between 0.9 and 1.1");
+            }
+            if (!std::isfinite(options.rotation_degrees) ||
+                std::abs(options.rotation_degrees) > MAX_ROTATION_DEGREES) {
+                throw std::runtime_error(
+                    "Deep Dream rotation must be between -5 and 5 degrees");
+            }
         }
 
         [[nodiscard]] torch::Tensor normalization_tensor(
@@ -245,6 +267,7 @@ namespace acmxvk::dream {
         ModelMetadata metadata;
         std::filesystem::path filename;
         std::vector<std::vector<std::int64_t>> output_shapes;
+        cv::Mat previous_output;
         std::size_t selected_layer = 0;
         int cuda_device = 0;
     };
@@ -338,8 +361,28 @@ namespace acmxvk::dream {
                 "Deep Dream input must be a non-empty RGBA8 image");
         }
 
+        cv::Mat dream_source = rgba;
+        cv::Mat transformed_feedback;
+        cv::Mat blended_source;
+        if (options.feedback > 0.0F &&
+            !implementation->previous_output.empty() &&
+            implementation->previous_output.type() == rgba.type() &&
+            implementation->previous_output.size() == rgba.size()) {
+            const cv::Point2f center(
+                static_cast<float>(rgba.cols - 1) * 0.5F,
+                static_cast<float>(rgba.rows - 1) * 0.5F);
+            const cv::Mat transform = cv::getRotationMatrix2D(
+                center, options.rotation_degrees, options.zoom);
+            cv::warpAffine(implementation->previous_output,
+                           transformed_feedback, transform, rgba.size(),
+                           cv::INTER_LINEAR, cv::BORDER_REFLECT_101);
+            cv::addWeighted(transformed_feedback, options.feedback, rgba,
+                            1.0F - options.feedback, 0.0, blended_source);
+            dream_source = blended_source;
+        }
+
         cv::Mat rgb;
-        cv::cvtColor(rgba, rgb, cv::COLOR_RGBA2RGB);
+        cv::cvtColor(dream_source, rgb, cv::COLOR_RGBA2RGB);
         cv::Mat rgb_float;
         rgb.convertTo(rgb_float, CV_32FC3, 1.0 / 255.0);
 
@@ -431,6 +474,7 @@ namespace acmxvk::dream {
         cv::split(dreamed_rgba, dreamed_channels);
         dreamed_channels[3] = original_channels[3];
         cv::merge(dreamed_channels, rgba);
+        implementation->previous_output = rgba.clone();
         return result;
     }
 

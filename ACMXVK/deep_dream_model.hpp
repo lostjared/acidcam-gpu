@@ -31,6 +31,9 @@ namespace acmxvk::dream {
     struct GradientAscentOptions {
         int iterations = 1;
         float step_size = 0.05F;
+        float feedback = 0.9F;
+        float zoom = 1.01F;
+        float rotation_degrees = 0.1F;
     };
 
     struct GradientAscentResult {

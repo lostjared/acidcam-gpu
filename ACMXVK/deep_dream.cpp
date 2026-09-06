@@ -28,7 +28,8 @@ namespace acmxvk::dream {
 
     [[nodiscard]] bool probe(int cuda_device, std::string_view model_file,
                              std::string_view layer, int iterations,
-                             float strength, std::ostream &output,
+                             float strength, float feedback, float zoom,
+                             float rotation_degrees, std::ostream &output,
                              std::ostream &error) {
         output << "Deep Dream: enabled\n"
                << "LibTorch version: " << TORCH_VERSION << '\n';
@@ -91,14 +92,27 @@ namespace acmxvk::dream {
                             255U};
                     }
                 }
-                const GradientAscentResult result = model.apply_gradient_ascent(
-                    test_image, GradientAscentOptions{iterations, strength});
+                GradientAscentResult result = model.apply_gradient_ascent(
+                    test_image,
+                    GradientAscentOptions{iterations, strength, feedback, zoom,
+                                          rotation_degrees});
                 output << std::fixed << std::setprecision(6)
                        << "Deep Dream gradient ascent: ready"
                        << " (loss=" << result.activation_loss
                        << ", mean gradient=" << result.mean_gradient
                        << ", mean pixel change="
                        << result.mean_pixel_change << ")\n";
+                if (feedback > 0.0F) {
+                    result = model.apply_gradient_ascent(
+                        test_image,
+                        GradientAscentOptions{iterations, strength, feedback,
+                                              zoom, rotation_degrees});
+                    output << "Deep Dream temporal feedback: ready"
+                           << " (blend=" << feedback << ", zoom=" << zoom
+                           << ", rotation=" << rotation_degrees
+                           << ", next-frame change="
+                           << result.mean_pixel_change << ")\n";
+                }
             }
         } catch (const std::exception &exception) {
             error << "Deep Dream LibTorch probe failed: " << exception.what()

@@ -619,6 +619,32 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "--dream-strength must be greater than 0 and no more than 10");
                 }
+            } else if (option == "--dream-feedback") {
+                options.dream_feedback =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_feedback_specified = true;
+                if (options.dream_feedback < 0.0 ||
+                    options.dream_feedback > 0.99) {
+                    throw std::runtime_error(
+                        "--dream-feedback must be between 0 and 0.99");
+                }
+            } else if (option == "--dream-zoom") {
+                options.dream_zoom =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_zoom_specified = true;
+                if (options.dream_zoom < 0.9 || options.dream_zoom > 1.1) {
+                    throw std::runtime_error(
+                        "--dream-zoom must be between 0.9 and 1.1");
+                }
+            } else if (option == "--dream-rotation") {
+                options.dream_rotation =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_rotation_specified = true;
+                if (options.dream_rotation < -5.0 ||
+                    options.dream_rotation > 5.0) {
+                    throw std::runtime_error(
+                        "--dream-rotation must be between -5 and 5 degrees");
+                }
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1032,10 +1058,12 @@ namespace acmxvk {
             throw std::runtime_error("--dream-layer requires --dream-model");
         }
         if ((options.dream_iterations_specified ||
-             options.dream_strength_specified) &&
+             options.dream_strength_specified ||
+             options.dream_feedback_specified || options.dream_zoom_specified ||
+             options.dream_rotation_specified) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
-                "--dream-iterations and --dream-strength require --dream-model");
+                "Deep Dream processing options require --dream-model");
         }
         const int shader_source_count =
             static_cast<int>(!options.shader_directory.empty()) +
@@ -1264,6 +1292,9 @@ namespace acmxvk {
                << "      --dream-layer <name|N>  Select a named or numbered feature layer\n"
                << "      --dream-iterations <N> Number of ascent steps per input frame (1-100; default 1)\n"
                << "      --dream-strength <N>   Gradient step size (0-10; default 0.05)\n"
+               << "      --dream-feedback <N>   Previous dreamed-frame blend (0-0.99; default 0.9)\n"
+               << "      --dream-zoom <N>       Feedback zoom per source frame (0.9-1.1; default 1.01)\n"
+               << "      --dream-rotation <N>   Feedback rotation degrees per frame (-5 to 5; default 0.1)\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"

@@ -73,6 +73,9 @@ namespace acmxvk {
         double human_black_point = 0.35;
         double human_white_point = 0.75;
         double dream_strength = 0.05;
+        double dream_feedback = 0.9;
+        double dream_zoom = 1.01;
+        double dream_rotation = 0.1;
         bool resolution_specified = false;
         bool use_yuv = false;
         bool maximize_fps = false;
@@ -119,6 +122,9 @@ namespace acmxvk {
         bool check_deep_dream = false;
         bool dream_iterations_specified = false;
         bool dream_strength_specified = false;
+        bool dream_feedback_specified = false;
+        bool dream_zoom_specified = false;
+        bool dream_rotation_specified = false;
         bool human_background = false;
         bool human_black_specified = false;
         bool human_white_specified = false;

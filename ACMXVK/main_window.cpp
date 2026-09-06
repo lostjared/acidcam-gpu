@@ -1061,7 +1061,9 @@ namespace acmxvk {
         std::cout << "acmxvk: Deep Dream preprocessing enabled: "
                   << metadata.architecture << '/' << layer.name << ", "
                   << options.dream_iterations << " iteration(s), strength "
-                  << options.dream_strength
+                  << options.dream_strength << ", feedback "
+                  << options.dream_feedback << ", zoom " << options.dream_zoom
+                  << ", rotation " << options.dream_rotation << " degrees"
                   << "; output feeds the existing Vulkan shader chain\n";
 #endif
     }
@@ -3537,7 +3539,10 @@ namespace acmxvk {
             deep_dream_model->apply_gradient_ascent(
                 rgba, dream::GradientAscentOptions{
                           options.dream_iterations,
-                          static_cast<float>(options.dream_strength)});
+                          static_cast<float>(options.dream_strength),
+                          static_cast<float>(options.dream_feedback),
+                          static_cast<float>(options.dream_zoom),
+                          static_cast<float>(options.dream_rotation)});
         if (!std::isfinite(result.mean_pixel_change)) {
             throw std::runtime_error(
                 "Deep Dream returned a non-finite processed frame");

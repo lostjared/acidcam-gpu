@@ -36,7 +36,7 @@ complete replacement for ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
-| Deep Dream | Increment 4 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent can preprocess camera, video, or image frames before the existing fragment/compute shader chain. |
+| Deep Dream | Increment 5 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, zoom, and rotation for accumulating real-time dream structure. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
 
@@ -185,7 +185,26 @@ default:
 `--dream-iterations` accepts 1–100 and `--dream-strength` accepts values greater
 than zero through 10. Higher values can be substantially slower or visually
 unstable. The current integration stages RGBA pixels through host memory around
-LibTorch; CUDA/Vulkan zero-copy and temporal feedback are later increments.
+LibTorch; CUDA/Vulkan zero-copy is a later optimization.
+
+Increment 5 adds a temporal feedback loop. Each new source frame is blended with
+the previous dreamed result after a small centered zoom and rotation, then the
+combined image receives the next gradient-ascent step. This allows the default
+single iteration to accumulate structure over time while fresh camera or video
+detail continuously anchors the image. The controls are:
+
+```text
+--dream-feedback 0.9
+--dream-zoom 1.01
+--dream-rotation 0.1
+```
+
+Feedback accepts 0–0.99; zero restores independent per-frame processing. Zoom
+accepts 0.9–1.1, and rotation accepts -5 through 5 degrees per source frame.
+The transformed feedback uses reflected borders to avoid introducing black
+edges. `--check-deep-dream` exercises a second synthetic frame and reports that
+the feedback path is ready. Existing Vulkan shaders still process the completed
+dreamed frame.
 
 ### Pcons
 
