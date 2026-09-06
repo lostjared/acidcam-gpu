@@ -5214,8 +5214,9 @@ void MainWindow::copyCommand() {
     QString commandText = buildShellCommand(envAssignments, exe, arguments).trimmed();
 
     QDialog dialog(this);
-    dialog.setWindowTitle(tr("Copy Command"));
-    dialog.resize(720, 320);
+    dialog.setWindowTitle(tr("Edit Command"));
+    dialog.resize(720,
+                  active_backend == acmx2::Backend::Acmxvk ? 360 : 320);
     acmx2::applyCustomStyleIfEnabled(&dialog);
 
     QVBoxLayout *layout = new QVBoxLayout(&dialog);
@@ -5234,6 +5235,44 @@ void MainWindow::copyCommand() {
         textBox->setFont(commandFont);
     }
     layout->addWidget(textBox);
+
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        QSettings settings("LostSideDead");
+        const QString enabledKey = acmx2::backend_settings_key(
+            acmx2::Backend::Acmxvk, "parallel_build_enabled");
+        const QString jobsKey = acmx2::backend_settings_key(
+            acmx2::Backend::Acmxvk, "parallel_build_jobs");
+        auto *parallelBuildCheckBox =
+            new QCheckBox(tr("Enable parallel build"), &dialog);
+        auto *parallelBuildJobsSpinBox = new QSpinBox(&dialog);
+        parallelBuildJobsSpinBox->setRange(1, 256);
+        parallelBuildJobsSpinBox->setValue(
+            qBound(1, settings.value(jobsKey, 2).toInt(), 256));
+        parallelBuildCheckBox->setChecked(
+            settings.value(enabledKey, false).toBool());
+        parallelBuildJobsSpinBox->setEnabled(
+            parallelBuildCheckBox->isChecked());
+        parallelBuildJobsSpinBox->setToolTip(
+            tr("Number of concurrent ACMXVK shader compiler jobs (1-256)."));
+        auto *parallelBuildLayout = new QHBoxLayout();
+        parallelBuildLayout->addWidget(parallelBuildCheckBox);
+        parallelBuildLayout->addWidget(new QLabel(tr("Jobs:"), &dialog));
+        parallelBuildLayout->addWidget(parallelBuildJobsSpinBox);
+        parallelBuildLayout->addStretch(1);
+        layout->addLayout(parallelBuildLayout);
+        connect(parallelBuildCheckBox, &QCheckBox::toggled, &dialog,
+                [parallelBuildJobsSpinBox, enabledKey](bool enabled) {
+                    parallelBuildJobsSpinBox->setEnabled(enabled);
+                    QSettings settings("LostSideDead");
+                    settings.setValue(enabledKey, enabled);
+                });
+        connect(parallelBuildJobsSpinBox,
+                QOverload<int>::of(&QSpinBox::valueChanged), &dialog,
+                [jobsKey](int jobs) {
+                    QSettings settings("LostSideDead");
+                    settings.setValue(jobsKey, jobs);
+                });
+    }
 
     QDialogButtonBox *buttonBox = new QDialogButtonBox(&dialog);
     QPushButton *copyButton = buttonBox->addButton(tr("Copy to Clipboard"), QDialogButtonBox::ActionRole);
@@ -5502,6 +5541,25 @@ void MainWindow::start_acmxvk_build(const QString &build_path,
                       : QStringLiteral("--builddir"))
               << output_path;
     arguments << QStringLiteral("--glslc") << compiler;
+    QSettings settings("LostSideDead");
+    const bool parallelBuildEnabled =
+        settings
+            .value(acmx2::backend_settings_key(
+                       acmx2::Backend::Acmxvk, "parallel_build_enabled"),
+                   false)
+            .toBool();
+    if (parallelBuildEnabled) {
+        const int parallelBuildJobs = qBound(
+            1,
+            settings
+                .value(acmx2::backend_settings_key(
+                           acmx2::Backend::Acmxvk, "parallel_build_jobs"),
+                       2)
+                .toInt(),
+            256);
+        arguments << QStringLiteral("--parallel")
+                  << QString::number(parallelBuildJobs);
+    }
     if (prune)
         arguments << QStringLiteral("--prune") << QStringLiteral("--force");
     Log(prune ? tr("Removing broken ACMXVK shader sources from: %1")

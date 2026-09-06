@@ -34,139 +34,142 @@
 
 namespace {
 
-QString jsonValueToString(const QJsonValue &v) {
-    switch (v.type()) {
-    case QJsonValue::Bool:
-        return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
-    case QJsonValue::Double: {
-        const double d = v.toDouble();
-        if (d == static_cast<qint64>(d))
-            return QString::number(static_cast<qint64>(d));
-        return QString::number(d, 'g', 10);
-    }
-    case QJsonValue::String:
-        return v.toString();
-    case QJsonValue::Null:
-        return QStringLiteral("null");
-    case QJsonValue::Array:
-    case QJsonValue::Object:
-        return QString::fromUtf8(QJsonDocument(v.isArray()
-                                                   ? QJsonDocument(v.toArray())
-                                                   : QJsonDocument(v.toObject()))
-                                     .toJson(QJsonDocument::Compact));
-    default:
-        return QString();
-    }
-}
-
-QString humanBitrate(qint64 bps) {
-    if (bps <= 0)
-        return QString();
-    if (bps >= 1'000'000)
-        return QString::number(bps / 1'000'000.0, 'f', 2) + " Mb/s";
-    if (bps >= 1'000)
-        return QString::number(bps / 1'000.0, 'f', 1) + " kb/s";
-    return QString::number(bps) + " b/s";
-}
-
-QString humanSize(qint64 bytes) {
-    if (bytes <= 0)
-        return QString();
-    constexpr double KiB = 1024.0;
-    constexpr double MiB = KiB * 1024.0;
-    constexpr double GiB = MiB * 1024.0;
-    if (bytes >= GiB)
-        return QString::number(bytes / GiB, 'f', 2) + " GiB";
-    if (bytes >= MiB)
-        return QString::number(bytes / MiB, 'f', 2) + " MiB";
-    if (bytes >= KiB)
-        return QString::number(bytes / KiB, 'f', 1) + " KiB";
-    return QString::number(bytes) + " B";
-}
-
-struct StreamRow {
-    int index = 0;
-    QString type;
-    QString codec;
-    QString profile;
-    QString fmtPix;
-    QString sizeRate;
-    QString color;
-    QString bitrate;
-};
-
-QList<StreamRow> collectStreams(const QJsonArray &streams) {
-    QList<StreamRow> rows;
-    rows.reserve(streams.size());
-    for (int i = 0; i < streams.size(); ++i) {
-        const QJsonObject s = streams.at(i).toObject();
-        StreamRow r;
-        r.index = i;
-        r.type = s.value("codec_type").toString();
-        r.codec = s.value("codec_name").toString();
-        r.profile = s.value("profile").toString();
-        if (r.type == "video") {
-            r.fmtPix = s.value("pix_fmt").toString();
-            const int w = s.value("width").toInt();
-            const int h = s.value("height").toInt();
-            const QString fps = s.value("avg_frame_rate").toString();
-            r.sizeRate = QString("%1x%2 @ %3").arg(w).arg(h).arg(fps);
-            QStringList tags;
-            const QString cs = s.value("color_space").toString();
-            const QString cp = s.value("color_primaries").toString();
-            const QString tr = s.value("color_transfer").toString();
-            if (!cp.isEmpty()) tags << cp;
-            if (!tr.isEmpty()) tags << tr;
-            if (!cs.isEmpty()) tags << cs;
-            r.color = tags.join('/');
-        } else if (r.type == "audio") {
-            r.fmtPix = s.value("sample_fmt").toString();
-            const int sr = s.value("sample_rate").toString().toInt();
-            const int ch = s.value("channels").toInt();
-            r.sizeRate = QString("%1 Hz, %2 ch").arg(sr).arg(ch);
+    QString jsonValueToString(const QJsonValue &v) {
+        switch (v.type()) {
+        case QJsonValue::Bool:
+            return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+        case QJsonValue::Double: {
+            const double d = v.toDouble();
+            if (d == static_cast<qint64>(d))
+                return QString::number(static_cast<qint64>(d));
+            return QString::number(d, 'g', 10);
         }
-        const qint64 sBrate = s.value("bit_rate").toString().toLongLong();
-        r.bitrate = humanBitrate(sBrate);
-        rows.append(r);
+        case QJsonValue::String:
+            return v.toString();
+        case QJsonValue::Null:
+            return QStringLiteral("null");
+        case QJsonValue::Array:
+        case QJsonValue::Object:
+            return QString::fromUtf8(QJsonDocument(v.isArray()
+                                                       ? QJsonDocument(v.toArray())
+                                                       : QJsonDocument(v.toObject()))
+                                         .toJson(QJsonDocument::Compact));
+        default:
+            return QString();
+        }
     }
-    return rows;
-}
 
-struct HdrInfo {
-    bool hasMastering = false;
-    QString redX, redY, greenX, greenY, blueX, blueY, whiteX, whiteY, maxLum, minLum;
-    bool hasCll = false;
-    QString maxCll, maxFall;
-};
+    QString humanBitrate(qint64 bps) {
+        if (bps <= 0)
+            return QString();
+        if (bps >= 1'000'000)
+            return QString::number(bps / 1'000'000.0, 'f', 2) + " Mb/s";
+        if (bps >= 1'000)
+            return QString::number(bps / 1'000.0, 'f', 1) + " kb/s";
+        return QString::number(bps) + " b/s";
+    }
 
-HdrInfo collectHdr(const QJsonArray &frames) {
-    HdrInfo info;
-    if (frames.isEmpty())
+    QString humanSize(qint64 bytes) {
+        if (bytes <= 0)
+            return QString();
+        constexpr double KiB = 1024.0;
+        constexpr double MiB = KiB * 1024.0;
+        constexpr double GiB = MiB * 1024.0;
+        if (bytes >= GiB)
+            return QString::number(bytes / GiB, 'f', 2) + " GiB";
+        if (bytes >= MiB)
+            return QString::number(bytes / MiB, 'f', 2) + " MiB";
+        if (bytes >= KiB)
+            return QString::number(bytes / KiB, 'f', 1) + " KiB";
+        return QString::number(bytes) + " B";
+    }
+
+    struct StreamRow {
+        int index = 0;
+        QString type;
+        QString codec;
+        QString profile;
+        QString fmtPix;
+        QString sizeRate;
+        QString color;
+        QString bitrate;
+    };
+
+    QList<StreamRow> collectStreams(const QJsonArray &streams) {
+        QList<StreamRow> rows;
+        rows.reserve(streams.size());
+        for (int i = 0; i < streams.size(); ++i) {
+            const QJsonObject s = streams.at(i).toObject();
+            StreamRow r;
+            r.index = i;
+            r.type = s.value("codec_type").toString();
+            r.codec = s.value("codec_name").toString();
+            r.profile = s.value("profile").toString();
+            if (r.type == "video") {
+                r.fmtPix = s.value("pix_fmt").toString();
+                const int w = s.value("width").toInt();
+                const int h = s.value("height").toInt();
+                const QString fps = s.value("avg_frame_rate").toString();
+                r.sizeRate = QString("%1x%2 @ %3").arg(w).arg(h).arg(fps);
+                QStringList tags;
+                const QString cs = s.value("color_space").toString();
+                const QString cp = s.value("color_primaries").toString();
+                const QString tr = s.value("color_transfer").toString();
+                if (!cp.isEmpty())
+                    tags << cp;
+                if (!tr.isEmpty())
+                    tags << tr;
+                if (!cs.isEmpty())
+                    tags << cs;
+                r.color = tags.join('/');
+            } else if (r.type == "audio") {
+                r.fmtPix = s.value("sample_fmt").toString();
+                const int sr = s.value("sample_rate").toString().toInt();
+                const int ch = s.value("channels").toInt();
+                r.sizeRate = QString("%1 Hz, %2 ch").arg(sr).arg(ch);
+            }
+            const qint64 sBrate = s.value("bit_rate").toString().toLongLong();
+            r.bitrate = humanBitrate(sBrate);
+            rows.append(r);
+        }
+        return rows;
+    }
+
+    struct HdrInfo {
+        bool hasMastering = false;
+        QString redX, redY, greenX, greenY, blueX, blueY, whiteX, whiteY, maxLum, minLum;
+        bool hasCll = false;
+        QString maxCll, maxFall;
+    };
+
+    HdrInfo collectHdr(const QJsonArray &frames) {
+        HdrInfo info;
+        if (frames.isEmpty())
+            return info;
+        const QJsonArray sideData = frames.first().toObject().value("side_data_list").toArray();
+        for (const QJsonValue &sv : sideData) {
+            const QJsonObject so = sv.toObject();
+            const QString type = so.value("side_data_type").toString();
+            if (type == "Mastering display metadata") {
+                info.hasMastering = true;
+                info.redX = so.value("red_x").toString();
+                info.redY = so.value("red_y").toString();
+                info.greenX = so.value("green_x").toString();
+                info.greenY = so.value("green_y").toString();
+                info.blueX = so.value("blue_x").toString();
+                info.blueY = so.value("blue_y").toString();
+                info.whiteX = so.value("white_point_x").toString();
+                info.whiteY = so.value("white_point_y").toString();
+                info.maxLum = so.value("max_luminance").toString();
+                info.minLum = so.value("min_luminance").toString();
+            } else if (type == "Content light level metadata") {
+                info.hasCll = true;
+                info.maxCll = so.value("max_content").toVariant().toString();
+                info.maxFall = so.value("max_average").toVariant().toString();
+            }
+        }
         return info;
-    const QJsonArray sideData = frames.first().toObject().value("side_data_list").toArray();
-    for (const QJsonValue &sv : sideData) {
-        const QJsonObject so = sv.toObject();
-        const QString type = so.value("side_data_type").toString();
-        if (type == "Mastering display metadata") {
-            info.hasMastering = true;
-            info.redX = so.value("red_x").toString();
-            info.redY = so.value("red_y").toString();
-            info.greenX = so.value("green_x").toString();
-            info.greenY = so.value("green_y").toString();
-            info.blueX = so.value("blue_x").toString();
-            info.blueY = so.value("blue_y").toString();
-            info.whiteX = so.value("white_point_x").toString();
-            info.whiteY = so.value("white_point_y").toString();
-            info.maxLum = so.value("max_luminance").toString();
-            info.minLum = so.value("min_luminance").toString();
-        } else if (type == "Content light level metadata") {
-            info.hasCll = true;
-            info.maxCll = so.value("max_content").toVariant().toString();
-            info.maxFall = so.value("max_average").toVariant().toString();
-        }
     }
-    return info;
-}
 
 } // namespace
 
@@ -235,7 +238,7 @@ MetadataViewer::MetadataViewer(QWidget *parent) : QDialog(parent) {
         if (auto *vp = w->findChild<QWidget *>("qt_scrollarea_viewport"))
             vp->setPalette(viewPalette);
     }
-    
+
     root->addWidget(tabs, 1);
 
     // Action row.
@@ -318,9 +321,7 @@ void MetadataViewer::analyzeFile() {
     if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
         const QString err = QString::fromUtf8(proc.readAllStandardError());
         QMessageBox::critical(this, tr("Metadata Viewer"),
-                              tr("ffprobe failed:\n%1").arg(err.isEmpty()
-                                                                ? tr("(no error output)")
-                                                                : err));
+                              tr("ffprobe failed:\n%1").arg(err.isEmpty() ? tr("(no error output)") : err));
         return;
     }
 
@@ -564,12 +565,18 @@ QString MetadataViewer::buildPlainText(const QJsonObject &root) const {
         out << "-------\n";
         for (const StreamRow &r : rows) {
             out << "[" << r.index << "] " << r.type;
-            if (!r.codec.isEmpty()) out << " | codec=" << r.codec;
-            if (!r.profile.isEmpty()) out << " | profile=" << r.profile;
-            if (!r.fmtPix.isEmpty()) out << " | fmt=" << r.fmtPix;
-            if (!r.sizeRate.isEmpty()) out << " | " << r.sizeRate;
-            if (!r.color.isEmpty()) out << " | color=" << r.color;
-            if (!r.bitrate.isEmpty()) out << " | bitrate=" << r.bitrate;
+            if (!r.codec.isEmpty())
+                out << " | codec=" << r.codec;
+            if (!r.profile.isEmpty())
+                out << " | profile=" << r.profile;
+            if (!r.fmtPix.isEmpty())
+                out << " | fmt=" << r.fmtPix;
+            if (!r.sizeRate.isEmpty())
+                out << " | " << r.sizeRate;
+            if (!r.color.isEmpty())
+                out << " | color=" << r.color;
+            if (!r.bitrate.isEmpty())
+                out << " | bitrate=" << r.bitrate;
             out << "\n";
         }
         out << "\n";

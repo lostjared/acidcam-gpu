@@ -9,8 +9,8 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <windows.h>
 #include <vector>
+#include <windows.h>
 #endif
 
 #ifndef ACMXVK_BUILD_RESOURCE_DIRECTORY

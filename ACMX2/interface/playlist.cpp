@@ -599,7 +599,8 @@ bool PlaylistDialog::isAutopilotRandom() const {
 
 void PlaylistDialog::setAutopilotFrames(int frames) {
     if (autopilotFramesSpinBox) {
-        if (frames < 4) frames = 4;
+        if (frames < 4)
+            frames = 4;
         autopilotFramesSpinBox->setValue(frames);
     }
 }

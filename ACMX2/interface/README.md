@@ -188,6 +188,11 @@ Interface version 2.135.0 includes the current ACMXVK integration increments:
   **Automatic glslc** to resolve `glslc` from `PATH` or `VULKAN_SDK`, or select
   a custom glslc-compatible executable. The selected compiler is used for
   **Build**, **Fix Build**, and live single-shader compilation.
+- The ACMXVK **Edit Command** dialog includes **Enable parallel build** and a
+  jobs field constrained to 1 through 256, with 2 jobs as the initial value.
+  When enabled, **Build**, **Fix Build**, and **Remove Broken** append
+  `--parallel <jobs>` to their ACMXVK library-build command. Both values persist
+  between interface sessions.
 
 The remaining shared runtime controls are still ACMX2-only. ACMX2-specific
 binary-cache maintenance actions remain disabled when ACMXVK is selected.

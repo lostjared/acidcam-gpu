@@ -357,21 +357,19 @@ void MidiMapWindow::updateTable() {
         table->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(m.description)));
 
         QString keys = (m.key2 != 0)
-            ? QString("%1:%2").arg(m.key1).arg(m.key2)
-            : QString("%1:0").arg(m.key1);
+                           ? QString("%1:%2").arg(m.key1).arg(m.key2)
+                           : QString("%1:0").arg(m.key1);
         table->setItem(i, 2, new QTableWidgetItem(keys));
 
         if (m.captured) {
             if (m.key2 != 0) {
                 // Knob: only byte0:byte1 matter for matching
-                table->setItem(i, 3, new QTableWidgetItem(
-                    QString("CC %1 %2 (knob)").arg(m.byte0).arg(m.byte1)));
+                table->setItem(i, 3, new QTableWidgetItem(QString("CC %1 %2 (knob)").arg(m.byte0).arg(m.byte1)));
                 auto *statusItem = new QTableWidgetItem("Knob mapped");
                 statusItem->setForeground(QBrush(QColor("#00ff00")));
                 table->setItem(i, 4, statusItem);
             } else {
-                table->setItem(i, 3, new QTableWidgetItem(
-                    QString("%1 %2 %3").arg(m.byte0).arg(m.byte1).arg(m.byte2)));
+                table->setItem(i, 3, new QTableWidgetItem(QString("%1 %2 %3").arg(m.byte0).arg(m.byte1).arg(m.byte2)));
                 auto *statusItem = new QTableWidgetItem("Mapped");
                 statusItem->setForeground(QBrush(QColor("#00ff00")));
                 table->setItem(i, 4, statusItem);
@@ -387,7 +385,8 @@ void MidiMapWindow::updateTable() {
 
 void MidiMapWindow::refreshDevices() {
     deviceCombo->clear();
-    if (!midiIn) return;
+    if (!midiIn)
+        return;
 
     unsigned int ports = midiIn->getPortCount();
     if (ports == 0) {
@@ -405,7 +404,8 @@ void MidiMapWindow::refreshDevices() {
 }
 
 void MidiMapWindow::openDevice(int index) {
-    if (!midiIn || index < 0) return;
+    if (!midiIn || index < 0)
+        return;
 
     if (deviceOpen) {
         midiIn->closePort();
@@ -420,7 +420,7 @@ void MidiMapWindow::openDevice(int index) {
         setStatus(QString("Opened: %1").arg(deviceCombo->currentText()));
     } catch (RtMidiError &e) {
         QMessageBox::critical(this, "Error",
-            QString("Could not open port: %1").arg(e.getMessage().c_str()));
+                              QString("Could not open port: %1").arg(e.getMessage().c_str()));
         setStatus("Failed to open device");
     }
 }
@@ -428,23 +428,23 @@ void MidiMapWindow::openDevice(int index) {
 void MidiMapWindow::captureMapping() {
     if (!deviceOpen) {
         QMessageBox::warning(this, "No Device",
-            "Please select and open a MIDI device first.\n"
-            "Click a device in the dropdown to connect.");
+                             "Please select and open a MIDI device first.\n"
+                             "Click a device in the dropdown to connect.");
         return;
     }
 
     int row = table->currentRow();
     if (row < 0 || row >= static_cast<int>(mappings.size())) {
         QMessageBox::information(this, "Select Action",
-            "Select a row in the table, then click Capture.\n"
-            "Move a knob or press a button on your MIDI controller.");
+                                 "Select a row in the table, then click Capture.\n"
+                                 "Move a knob or press a button on your MIDI controller.");
         return;
     }
 
     capturing = true;
     captureRow = row;
     setStatus(QString("Waiting for MIDI input for: %1 — move a knob or press a button...")
-        .arg(QString::fromStdString(mappings[row].actionName)));
+                  .arg(QString::fromStdString(mappings[row].actionName)));
     captureButton->setText("Listening...");
     captureButton->setEnabled(false);
 }
@@ -453,7 +453,7 @@ void MidiMapWindow::clearMapping() {
     int row = table->currentRow();
     if (row < 0 || row >= static_cast<int>(mappings.size())) {
         QMessageBox::information(this, "Select Action",
-            "Select a row in the table to clear its mapping.");
+                                 "Select a row in the table to clear its mapping.");
         return;
     }
 
@@ -467,16 +467,20 @@ void MidiMapWindow::clearMapping() {
 }
 
 void MidiMapWindow::pollMidi() {
-    if (!midiIn || !deviceOpen) return;
+    if (!midiIn || !deviceOpen)
+        return;
 
     std::vector<unsigned char> message;
     midiIn->getMessage(&message);
 
-    if (message.size() < 3) return;
+    if (message.size() < 3)
+        return;
 
     midiMonitorLabel->setText(QString("Last MIDI: [%1 %2 %3]  (ch %4)")
-        .arg(message[0]).arg(message[1]).arg(message[2])
-        .arg((message[0] & 0x0F) + 1));
+                                  .arg(message[0])
+                                  .arg(message[1])
+                                  .arg(message[2])
+                                  .arg((message[0] & 0x0F) + 1));
 
     if (capturing && captureRow >= 0 && captureRow < static_cast<int>(mappings.size())) {
         mappings[captureRow].byte0 = message[0];
@@ -493,14 +497,17 @@ void MidiMapWindow::pollMidi() {
         QString statusMsg;
         if (mappings[captureRow].key2 != 0) {
             statusMsg = QString("Captured knob CC [%1 %2] for: %3 — value >64 = %4, <=64 = %5")
-                .arg(message[0]).arg(message[1])
-                .arg(QString::fromStdString(mappings[captureRow].actionName))
-                .arg(QString::fromStdString(mappings[captureRow].actionName).split('/').first().trimmed())
-                .arg(QString::fromStdString(mappings[captureRow].actionName).split('/').last().trimmed());
+                            .arg(message[0])
+                            .arg(message[1])
+                            .arg(QString::fromStdString(mappings[captureRow].actionName))
+                            .arg(QString::fromStdString(mappings[captureRow].actionName).split('/').first().trimmed())
+                            .arg(QString::fromStdString(mappings[captureRow].actionName).split('/').last().trimmed());
         } else {
             statusMsg = QString("Captured [%1 %2 %3] for: %4")
-                .arg(message[0]).arg(message[1]).arg(message[2])
-                .arg(QString::fromStdString(mappings[captureRow].actionName));
+                            .arg(message[0])
+                            .arg(message[1])
+                            .arg(message[2])
+                            .arg(QString::fromStdString(mappings[captureRow].actionName));
         }
         setStatus(statusMsg);
 
@@ -513,8 +520,9 @@ void MidiMapWindow::pollMidi() {
 
 void MidiMapWindow::saveConfig() {
     QString fileName = QFileDialog::getSaveFileName(this, "Save MIDI Config",
-        fileEdit->text(), "MIDI Config (*.midi_cfg);;All Files (*)");
-    if (fileName.isEmpty()) return;
+                                                    fileEdit->text(), "MIDI Config (*.midi_cfg);;All Files (*)");
+    if (fileName.isEmpty())
+        return;
 
     std::ofstream file(fileName.toStdString());
     if (!file.is_open()) {
@@ -524,7 +532,8 @@ void MidiMapWindow::saveConfig() {
 
     int count = 0;
     for (const auto &m : mappings) {
-        if (!m.captured) continue;
+        if (!m.captured)
+            continue;
         file << m.key1 << ":" << m.key2 << " {"
              << static_cast<int>(m.byte0) << " "
              << static_cast<int>(m.byte1) << " "
@@ -538,8 +547,9 @@ void MidiMapWindow::saveConfig() {
 
 void MidiMapWindow::loadConfig() {
     QString fileName = QFileDialog::getOpenFileName(this, "Load MIDI Config",
-        fileEdit->text(), "MIDI Config (*.midi_cfg);;All Files (*)");
-    if (fileName.isEmpty()) return;
+                                                    fileEdit->text(), "MIDI Config (*.midi_cfg);;All Files (*)");
+    if (fileName.isEmpty())
+        return;
 
     std::ifstream file(fileName.toStdString());
     if (!file.is_open()) {
@@ -560,19 +570,23 @@ void MidiMapWindow::loadConfig() {
     while (std::getline(file, line)) {
         std::istringstream iss(line);
         std::string keyPair;
-        if (!(iss >> keyPair)) continue;
+        if (!(iss >> keyPair))
+            continue;
 
         auto colonPos = keyPair.find(':');
-        if (colonPos == std::string::npos) continue;
+        if (colonPos == std::string::npos)
+            continue;
 
         int k1 = std::stoi(keyPair.substr(0, colonPos));
         int k2 = std::stoi(keyPair.substr(colonPos + 1));
 
         char brace;
-        if (!(iss >> brace) || brace != '{') continue;
+        if (!(iss >> brace) || brace != '{')
+            continue;
 
         int b0, b1, b2;
-        if (!(iss >> b0 >> b1 >> b2)) continue;
+        if (!(iss >> b0 >> b1 >> b2))
+            continue;
 
         for (auto &m : mappings) {
             if (m.key1 == k1 && m.key2 == k2) {
