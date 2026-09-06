@@ -4744,20 +4744,36 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
     QString launchShaderName = items.at(index);
     if (active_backend == acmx2::Backend::Acmxvk) {
         QString runtimeError;
-        if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
-                                            runtimeError)) {
-            prompt_acmxvk_rebuild(runtimeError, resume_action);
-            return false;
-        }
-        if (launchShaderPath != shader_path)
-            launchShaderName = acmxvk_runtime_shader_name(launchShaderName);
-        if (!QFileInfo(QDir(launchShaderPath).filePath(launchShaderName)).isFile()) {
-            QMessageBox::warning(
-                this, tr("Build ACMXVK Library"),
-                tr("The compiled shader is missing. Choose Playback > Build "
-                   "and try again.\n\n%1")
-                    .arg(QDir(launchShaderPath).filePath(launchShaderName)));
-            return false;
+        if (resume_action == PendingAcmxvkAction::CopyCommand) {
+            if (is_acmxvk_source_library(shader_path, runtimeError)) {
+                launchShaderPath = acmxvk_build_directory(shader_path);
+                launchShaderName =
+                    acmxvk_runtime_shader_name(launchShaderName);
+            } else if (!runtimeError.isEmpty()) {
+                QMessageBox::warning(this, tr("ACMXVK Library"),
+                                     runtimeError);
+                return false;
+            }
+        } else {
+            if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
+                                                runtimeError)) {
+                prompt_acmxvk_rebuild(runtimeError, resume_action);
+                return false;
+            }
+            if (launchShaderPath != shader_path)
+                launchShaderName =
+                    acmxvk_runtime_shader_name(launchShaderName);
+            if (!QFileInfo(QDir(launchShaderPath)
+                               .filePath(launchShaderName))
+                     .isFile()) {
+                QMessageBox::warning(
+                    this, tr("Build ACMXVK Library"),
+                    tr("The compiled shader is missing. Choose Playback > "
+                       "Build and try again.\n\n%1")
+                        .arg(QDir(launchShaderPath)
+                                 .filePath(launchShaderName)));
+                return false;
+            }
         }
     }
     QString dirPath = QCoreApplication::applicationDirPath();
