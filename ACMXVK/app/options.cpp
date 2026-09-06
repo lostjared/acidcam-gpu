@@ -127,6 +127,10 @@ namespace acmxvk {
                                "--human", true);
         input::validate_string(options.onnx_configuration,
                                input::StringKind::Path, "--onnx", true);
+        input::validate_string(options.dream_model, input::StringKind::Path,
+                               "--dream-model", true);
+        input::validate_string(options.dream_layer, input::StringKind::Token,
+                               "--dream-layer", true);
 
         for (const std::string &path : options.shader_pass_files) {
             input::validate_string(path, input::StringKind::Path,
@@ -287,7 +291,7 @@ namespace acmxvk {
                options.check_audio || options.list_midi_devices ||
                options.check_midi || options.list_gpu_filters ||
                options.list_cuda_devices || options.check_cuda ||
-               options.check_dnn ||
+               options.check_dnn || options.check_deep_dream ||
                !options.probe_hdr_file.empty() ||
                options.enumerate_camera_device >= 0 ||
                options.list_encoders || !options.list_encoder_options.empty();
@@ -591,6 +595,12 @@ namespace acmxvk {
                 }
             } else if (option == "--check-dnn") {
                 options.check_dnn = true;
+            } else if (option == "--check-deep-dream") {
+                options.check_deep_dream = true;
+            } else if (option == "--dream-model") {
+                options.dream_model = optionValue(index, argc, argv, option);
+            } else if (option == "--dream-layer") {
+                options.dream_layer = optionValue(index, argc, argv, option);
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1000,6 +1010,13 @@ namespace acmxvk {
         if (!options.input_file.empty() && !options.graphic_file.empty()) {
             throw std::runtime_error("--input and --graphic cannot be used together");
         }
+        if (!options.dream_model.empty() && !options.check_deep_dream) {
+            throw std::runtime_error(
+                "--dream-model currently requires --check-deep-dream");
+        }
+        if (!options.dream_layer.empty() && options.dream_model.empty()) {
+            throw std::runtime_error("--dream-layer requires --dream-model");
+        }
         const int shader_source_count =
             static_cast<int>(!options.shader_directory.empty()) +
             static_cast<int>(!options.fragment_shader.empty()) +
@@ -1221,6 +1238,10 @@ namespace acmxvk {
                << "      --white <0.0-1.0>      Alpha white point (default 0.75)\n"
                << "      --check-dnn             Report compiled OpenCV DNN support\n"
                << "                              Backend is benchmarked on the first frame\n\n"
+               << "Deep Dream (requires WITH_DEEP_DREAM=ON build):\n"
+               << "      --check-deep-dream      Probe LibTorch CPU/CUDA autograd support\n"
+               << "      --dream-model <file.pt> Validate a TorchScript feature model\n"
+               << "      --dream-layer <name|N>  Select a named or numbered feature layer\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"
                << "      --builddir <directory> Output directory required by --build\n"

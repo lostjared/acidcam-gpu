@@ -14,6 +14,9 @@
 #ifdef ACMXVK_WITH_CUDA
 #include "gpu_filters.hpp"
 #endif
+#ifdef ACMXVK_WITH_DEEP_DREAM
+#include "deep_dream.hpp"
+#endif
 #include "app/camera_probe.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
@@ -96,6 +99,23 @@ int main(int argc, char **argv) {
             std::cout << "OpenCV DNN effects: disabled\n";
 #endif
             return EXIT_SUCCESS;
+        }
+        if (options.check_deep_dream) {
+#ifdef ACMXVK_WITH_DEEP_DREAM
+            return acmxvk::dream::probe(
+                       options.cuda_device, options.dream_model,
+                       options.dream_layer, std::cout, std::cerr)
+                       ? EXIT_SUCCESS
+                       : EXIT_FAILURE;
+#else
+            if (!options.dream_model.empty()) {
+                std::cerr << "Deep Dream model inspection requires an ACMXVK "
+                             "build configured with -DWITH_DEEP_DREAM=ON\n";
+                return EXIT_FAILURE;
+            }
+            std::cout << "Deep Dream: disabled\n";
+            return EXIT_SUCCESS;
+#endif
         }
         if (!options.probe_hdr_file.empty()) {
             const acmxvk::VideoHdrInfo info =

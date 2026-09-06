@@ -36,6 +36,7 @@ complete replacement for ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
+| Deep Dream | Increment 2 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. The model exporter packages VGG16 feature activations and typed metadata in TorchScript; `--check-deep-dream` verifies autograd and validates a selected model layer on CUDA. Image processing follows in later increments. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
 
@@ -74,6 +75,9 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
 - Optional OpenCV DNN module when building with `-DWITH_OPENCV_DNN=ON`
 - Optional CUDA Toolkit, CUDA-enabled OpenCV and MXVK, and an installed
   `acidcam-gpu` CMake package when building with `-DWITH_CUDA=ON`
+- Optional CUDA Toolkit and CUDA-enabled LibTorch when building with
+  `-DWITH_DEEP_DREAM=ON`; on Arch Linux these are provided by `cuda`, `cudnn`,
+  and `python-pytorch-cuda`
 
 Ensure the selected Vulkan SDK's `bin` directory is on `PATH` so CMake can
 find tools such as `glslc`. If the SDK is installed outside the platform's
@@ -99,6 +103,59 @@ cmake --build build/acmxvk --target uninstall
 
 Audio and MIDI support are optional and remain disabled when their CMake
 options are omitted.
+
+### Deep Dream development support
+
+Increment 1 adds optional CUDA LibTorch discovery and a runtime autograd probe.
+It does not yet load a model or alter rendered frames. On Arch Linux, configure
+and verify it with:
+
+```bash
+sudo pacman -S --needed cuda cudnn python-pytorch-cuda
+cmake -S ACMXVK -B build/acmxvk-dream -DWITH_DEEP_DREAM=ON
+cmake --build build/acmxvk-dream -j2
+./build/acmxvk-dream/acmxvk --check-deep-dream
+```
+
+The probe always exercises CPU autograd. When NVIDIA device access is available,
+it also creates a CUDA tensor, runs a forward and backward operation, validates
+the gradient, synchronizes the selected device, and reports cuDNN availability.
+Use `--cuda-device N` with the probe to select a device. A container that reports
+zero CUDA devices must be recreated or configured with NVIDIA device access
+before the GPU portion can run.
+
+Increment 2 adds the VGG16 TorchScript exporter and model inspector. Install
+Torchvision for the exporter, then create a model containing the standard 13
+VGG16 ReLU feature layers:
+
+```bash
+sudo pacman -S --needed python-torchvision-cuda
+python ACMXVK/scripts/export_deep_dream_model.py \
+    --output models/deep-dream-vgg16.pt
+```
+
+The default weights may be downloaded into PyTorch's user cache on the first
+run. `--weights none` avoids a download for structural testing but does not
+produce a useful dream model. Use `--layers` to export a subset and
+`--default-layer` to choose the initial target. The exporter writes a readable
+`.pt.json` sidecar and embeds the authoritative typed metadata in the
+TorchScript module.
+
+Inspect the model and select a layer by name or zero-based output index:
+
+```bash
+./build/acmxvk-dream/acmxvk --check-deep-dream \
+    --dream-model models/deep-dream-vgg16.pt \
+    --dream-layer relu4_2 \
+    --cuda-device 0
+```
+
+The loader bounds the model file size, validates the ACMXVK format version,
+normalization and layer metadata, loads directly onto the selected CUDA device,
+freezes model parameters, runs a small forward pass, and verifies every feature
+output before accepting the model. Until increment 3, `--dream-model` is an
+inspection option and must be combined with `--check-deep-dream`.
+Only load TorchScript models from sources you trust.
 
 ### Pcons
 

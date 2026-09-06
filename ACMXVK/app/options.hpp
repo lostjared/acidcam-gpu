@@ -114,6 +114,7 @@ namespace acmxvk {
         bool list_cuda_devices = false;
         bool check_cuda = false;
         bool check_dnn = false;
+        bool check_deep_dream = false;
         bool human_background = false;
         bool human_black_specified = false;
         bool human_white_specified = false;
@@ -157,6 +158,8 @@ namespace acmxvk {
         std::string edge_model;
         std::string human_model;
         std::string onnx_configuration;
+        std::string dream_model;
+        std::string dream_layer;
         std::string snapshot_directory = ".";
         std::string resource_directory;
         std::string watermark_text;
