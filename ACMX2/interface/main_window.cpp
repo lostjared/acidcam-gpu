@@ -2735,11 +2735,125 @@ void MainWindow::startNextAcmxvkLiveCompile() {
 
 void MainWindow::queueAcmxvkEditorPreview(const QString &filePath,
                                           const QString &source) {
+    if (active_backend == acmx2::Backend::Acmx2) {
+        publishAcmx2EditorPreview(filePath, source);
+        return;
+    }
     if (active_backend != acmx2::Backend::Acmxvk)
         return;
     pendingEditorPreviewPath = QFileInfo(filePath).absoluteFilePath();
     pendingEditorPreviewSource = source;
     startNextAcmxvkEditorPreview();
+}
+
+bool MainWindow::publishAcmx2EditorPreview(const QString &filePath,
+                                           const QString &source) {
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+    if (!shaderSelectionShm || !process ||
+        process->state() != QProcess::Running) {
+        const QString error =
+            tr("Start ACMX2 before using shader live preview.");
+        updateOpenEditorCompileStatus(filePath, false, false, error);
+        Log(error);
+        return false;
+    }
+
+    const QFileInfo sourceInfo(filePath);
+    const QString sourcePath = sourceInfo.canonicalFilePath();
+    const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
+    if (sourcePath.isEmpty() || sourceRoot.isEmpty()) {
+        const QString error =
+            tr("Could not resolve the ACMX2 shader preview path: %1")
+                .arg(filePath);
+        updateOpenEditorCompileStatus(filePath, false, false, error);
+        Log(error);
+        return false;
+    }
+
+    const QString shaderName =
+        sanitizeShaderName(QDir(sourceRoot).relativeFilePath(sourcePath));
+    const int shaderIndex = items.indexOf(shaderName, 0, Qt::CaseInsensitive);
+    const QString suffix = sourceInfo.suffix().toLower();
+    if (shaderIndex < 0 ||
+        (suffix != QStringLiteral("glsl") &&
+         suffix != QStringLiteral("frag") &&
+         suffix != QStringLiteral("comp"))) {
+        const QString error =
+            tr("The editor file is not an active ACMX2 fragment or compute "
+               "shader: %1")
+                .arg(filePath);
+        updateOpenEditorCompileStatus(filePath, false, false, error);
+        Log(error);
+        return false;
+    }
+
+    const QString previewDirectory =
+        QDir(sourceRoot).filePath(QStringLiteral(".acmx2-editor-preview"));
+    if (!QDir().mkpath(previewDirectory)) {
+        const QString error =
+            tr("Could not create the ACMX2 editor preview directory.");
+        updateOpenEditorCompileStatus(filePath, false, false, error);
+        Log(error);
+        return false;
+    }
+
+    const QString previewPath = QDir(previewDirectory)
+                                    .filePath(QStringLiteral("preview-%1-%2.%3")
+                                                  .arg(QCoreApplication::applicationPid())
+                                                  .arg(++editorPreviewSequence)
+                                                  .arg(suffix));
+    QSaveFile previewFile(previewPath);
+    const QByteArray sourceBytes = source.toUtf8();
+    if (!previewFile.open(QIODevice::WriteOnly | QIODevice::Text) ||
+        previewFile.write(sourceBytes) != sourceBytes.size() ||
+        !previewFile.commit()) {
+        const QString error =
+            tr("Could not write the temporary ACMX2 shader preview.");
+        updateOpenEditorCompileStatus(filePath, false, false, error);
+        Log(error);
+        return false;
+    }
+
+    const QByteArray reloadPath = QFileInfo(previewPath).canonicalFilePath().toUtf8();
+    if (reloadPath.isEmpty() ||
+        reloadPath.size() >=
+            static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
+        QFile::remove(previewPath);
+        const QString error = tr("The ACMX2 shader preview path is too long.");
+        updateOpenEditorCompileStatus(filePath, false, false, error);
+        Log(error);
+        return false;
+    }
+
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
+    if (!lock) {
+        QFile::remove(previewPath);
+        const QString error = tr("Could not lock ACMX2 interface control.");
+        updateOpenEditorCompileStatus(filePath, false, false, error);
+        Log(error);
+        return false;
+    }
+    shaderSelectionShm->reload_shader_index = shaderIndex;
+    std::fill(std::begin(shaderSelectionShm->reload_shader_path),
+              std::end(shaderSelectionShm->reload_shader_path), '\0');
+    std::copy(reloadPath.cbegin(), reloadPath.cend(),
+              shaderSelectionShm->reload_shader_path);
+    ++shaderSelectionShm->reload_sequence;
+    ++shaderSelectionShm->sequence;
+
+    editorPreviewTemporaryFiles.append(previewPath);
+    while (editorPreviewTemporaryFiles.size() > 16)
+        QFile::remove(editorPreviewTemporaryFiles.takeFirst());
+    updateOpenEditorCompileStatus(
+        filePath, false, true,
+        tr("Preview source sent to the running ACMX2 backend."));
+    Log(tr("Requested ACMX2 editor preview: %1").arg(shaderName));
+    return true;
+#else
+    Q_UNUSED(filePath);
+    Q_UNUSED(source);
+    return false;
+#endif
 }
 
 void MainWindow::startNextAcmxvkEditorPreview() {

@@ -502,6 +502,35 @@ static bool resolveShaderPathInLibrary(const std::string &library_path,
     return true;
 }
 
+static bool isEditorPreviewPath(const std::filesystem::path &library_path,
+                                const std::filesystem::path &requested_path) {
+    std::error_code error;
+    const std::filesystem::path preview_root =
+        std::filesystem::weakly_canonical(
+            library_path / ".acmx2-editor-preview", error);
+    if (error)
+        return false;
+    const std::filesystem::path relative =
+        requested_path.lexically_relative(preview_root);
+    const std::string relative_text = relative.generic_string();
+    return !relative.empty() && relative_text != ".." &&
+           relative_text.rfind("../", 0) != 0;
+}
+
+static bool isEditorPreviewForShader(
+    const std::filesystem::path &loaded_shader,
+    const std::filesystem::path &requested_path) {
+    if (requested_path.parent_path().filename() != ".acmx2-editor-preview")
+        return false;
+    const std::filesystem::path source_root =
+        requested_path.parent_path().parent_path();
+    const std::filesystem::path relative =
+        loaded_shader.lexically_relative(source_root);
+    const std::string relative_text = relative.generic_string();
+    return !relative.empty() && relative_text != ".." &&
+           relative_text.rfind("../", 0) != 0;
+}
+
 enum class ShaderManifestFormat { Json,
                                   Text };
 
@@ -8710,14 +8739,25 @@ class ACView : public gl::GLObject {
                     const auto canonicalExpected = std::filesystem::weakly_canonical(
                         std::filesystem::path(reloadPath), expectedError);
                     std::error_code equivalentError;
-                    if (requestedError || expectedError ||
-                        !std::filesystem::equivalent(
+                    const bool isExpected =
+                        !requestedError && !expectedError &&
+                        std::filesystem::equivalent(
                             canonicalRequested, canonicalExpected,
-                            equivalentError) ||
-                        equivalentError) {
+                            equivalentError) &&
+                        !equivalentError;
+                    const bool isPreview =
+                        !requestedError && !expectedError &&
+                        std::filesystem::is_regular_file(canonicalRequested) &&
+                        isComputeShaderFile(canonicalRequested.string()) ==
+                            isComputeShaderFile(canonicalExpected.string()) &&
+                        isEditorPreviewPath(
+                            std::filesystem::path(std::get<1>(flib)),
+                            canonicalRequested);
+                    if (!isExpected && !isPreview) {
                         reloadError = "Shader reload path does not match the requested library index";
                     } else {
                         reloadIndex = static_cast<size_t>(requestedReloadIndex);
+                        reloadPath = canonicalRequested.string();
                     }
                 }
             } else {
@@ -8728,14 +8768,23 @@ class ACView : public gl::GLObject {
                 const auto canonicalLoaded = std::filesystem::weakly_canonical(
                     std::filesystem::path(std::get<1>(flib)), loadedError);
                 std::error_code equivalentError;
-                if (requestedError || loadedError ||
-                    !std::filesystem::equivalent(
+                const bool isExpected =
+                    !requestedError && !loadedError &&
+                    std::filesystem::equivalent(
                         canonicalRequested, canonicalLoaded,
-                        equivalentError) ||
-                    equivalentError) {
+                        equivalentError) &&
+                    !equivalentError;
+                const bool isPreview =
+                    !requestedError && !loadedError &&
+                    std::filesystem::is_regular_file(canonicalRequested) &&
+                    isComputeShaderFile(canonicalRequested.string()) ==
+                        isComputeShaderFile(canonicalLoaded.string()) &&
+                    isEditorPreviewForShader(canonicalLoaded,
+                                             canonicalRequested);
+                if (!isExpected && !isPreview) {
                     reloadError = "Saved shader is not the shader loaded by this process";
                 } else {
-                    reloadPath = canonicalLoaded.string();
+                    reloadPath = canonicalRequested.string();
                 }
             }
 

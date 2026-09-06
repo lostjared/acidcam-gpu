@@ -28,6 +28,14 @@
   <url type="homepage">https://github.com/lostjared/acidcam-gpu</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.135.0" date="2026-09-05">
+      <description>
+        <ul>
+          <li>Add tabbed ACMXVK shader editing, inline diagnostics, completion, snippets, and live preview.</li>
+          <li>Add editor-side custom-uniform controls and fix Enter-key handling for custom-uniform values.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.132.1" date="2026-09-05">
       <description>
         <ul>

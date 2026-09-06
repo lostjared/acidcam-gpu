@@ -399,6 +399,8 @@ class MainWindow : public QMainWindow {
     void startNextAcmxvkLiveCompile();
     void queueAcmxvkEditorPreview(const QString &filePath,
                                   const QString &source);
+    bool publishAcmx2EditorPreview(const QString &filePath,
+                                   const QString &source);
     void startNextAcmxvkEditorPreview();
     void updateOpenEditorCompileStatus(const QString &sourcePath, bool pending,
                                        bool success = false,

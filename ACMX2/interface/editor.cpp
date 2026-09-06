@@ -896,9 +896,7 @@ void TextEditor::setShaderContext(
     m_uniforms = uniforms;
     m_libraryDirectory = libraryDirectory;
     m_snippetsMenu->setEnabled(acmxvk);
-    m_livePreviewCheck->setEnabled(acmxvk);
-    if (!acmxvk)
-        m_livePreviewCheck->setChecked(false);
+    m_livePreviewCheck->setEnabled(!libraryDirectory.isEmpty());
     updateCompletionWords();
     rebuildUniformControls();
 }
@@ -1579,7 +1577,7 @@ void main() {
     connect(m_textEdit->document(), &QTextDocument::contentsChanged, this,
             [this]() {
                 updateCompletionWords();
-                if (m_livePreviewCheck->isChecked() && m_acmxvkContext)
+                if (m_livePreviewCheck->isChecked())
                     m_previewTimer->start();
             });
     connect(m_textEdit, &CustomTextEdit::includeRequested, this,
