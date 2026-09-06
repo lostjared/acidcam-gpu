@@ -38,6 +38,18 @@ if [[ ! -d "$version_dir" ]]; then
     exit 1
 fi
 
+while IFS= read -r -d '' html_file; do
+    ACMX_DOC_ASSET_VERSION="$version" perl -0pi -e '
+        s{((?:src|href)="(?!https?://|//)[^"]+\.(?:js|css))(?:\?[^"#]*)?"}
+         {$1 . "?v=" . $ENV{ACMX_DOC_ASSET_VERSION} . "\""}ge
+    ' "$html_file"
+done < <(find "$version_dir" -type f -name '*.html' -print0)
+
+perl -pi -e "s{scriptName\+'\\.js'}{scriptName+'.js?v=$version'}g" \
+    "$version_dir/navtree.js"
+perl -pi -e "s{scriptTag\\.src = url;}{scriptTag.src = url + '?v=$version';}g" \
+    "$version_dir/search/search.js"
+
 rm -rf "$latest_dir"
 mkdir -p "$latest_dir"
 cp -a "$version_dir/." "$latest_dir/"

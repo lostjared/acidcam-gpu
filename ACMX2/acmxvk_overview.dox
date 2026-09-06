@@ -1,0 +1,293 @@
+/**
+@page acmxvk_backend ACMXVK Vulkan Backend
+
+@tableofcontents
+
+@section acmxvk_summary Overview
+
+ACMXVK is the Vulkan rendering backend for ACMX. It preserves the media,
+performance, shader-library, audio, MIDI, playlist, recording, and live-coding
+workflow of ACMX2 while replacing the libmx2/OpenGL renderer with MXVK and
+Vulkan SPIR-V pipelines. The same Qt interface can select either backend from
+the <b>Backend</b> menu.
+
+ACMXVK is usable for camera, video, and still-image processing on Linux,
+macOS, and Windows. Its principal runtime paths, shader authoring tools,
+recording system, HDR pipeline, headless processing, and interface integration
+are implemented. It is not a byte-for-byte replacement for ACMX2: OpenGL GLSL
+sources must be adapted to the Vulkan descriptor interface and compiled to
+SPIR-V, and a subset of legacy MIDI actions and CUDA-filter combinations remain
+backend-specific.
+
+@section acmxvk_visual_demo Visual Tour and Linux Demonstration
+
+The shared ACMX interface manages Vulkan source libraries, build health,
+custom controls, shader editing, and the running ACMXVK process from one
+workspace.
+
+@htmlonly
+<div style="max-width:1100px; margin:1.5rem auto 2.5rem;">
+  <figure style="margin:0 0 1.5rem;">
+    <a href="https://lostsidedead.biz/acmx2/release/acmx-linux-studio.webp">
+      <img src="https://lostsidedead.biz/acmx2/release/acmx-linux-studio.webp"
+           alt="ACMX on Linux showing its shader library, source editor, and ACMXVK preview"
+           width="2476" height="2051" loading="lazy"
+           style="display:block; width:100%; height:auto; border-radius:12px;" />
+    </a>
+    <figcaption style="margin-top:.55rem; text-align:center;">
+      The shared ACMX workspace with shader browsing, GLSL editing, and a live
+      ACMXVK Vulkan preview.
+    </figcaption>
+  </figure>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1rem; margin-bottom:2rem;">
+    <figure style="margin:0;">
+      <a href="https://lostsidedead.biz/acmx2/release/acmx-compute-workspace.webp">
+        <img src="https://lostsidedead.biz/acmx2/release/acmx-compute-workspace.webp"
+             alt="ACMXVK interface beside a compute shader source editor"
+             width="1800" height="820" loading="lazy"
+             style="display:block; width:100%; height:auto; border-radius:10px;" />
+      </a>
+      <figcaption style="margin-top:.45rem;">
+        Fragment and compute shader authoring with the running Vulkan backend.
+      </figcaption>
+    </figure>
+    <figure style="margin:0;">
+      <a href="https://lostsidedead.biz/acmx2/release/acmxvk-library.webp">
+        <img src="https://lostsidedead.biz/acmx2/release/acmxvk-library.webp"
+             alt="ACMXVK shader library showing build status and runtime output"
+             width="1341" height="801" loading="lazy"
+             style="display:block; width:100%; height:auto; border-radius:10px;" />
+      </a>
+      <figcaption style="margin-top:.45rem;">
+        ACMXVK library build status, shader selection, and process logging.
+      </figcaption>
+    </figure>
+  </div>
+  <div style="position:relative; width:100%; overflow:hidden; border-radius:12px; background:#000; aspect-ratio:16/9;">
+    <iframe src="https://www.youtube-nocookie.com/embed/g3ZYLV2vW3M"
+            title="ACMX demonstration on Linux" loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen
+            style="position:absolute; inset:0; width:100%; height:100%; border:0;"></iframe>
+  </div>
+  <p style="margin-top:.65rem; text-align:center;">
+    ACMX running on Linux with its dual-backend shader workflow.
+  </p>
+</div>
+@endhtmlonly
+
+@section acmxvk_architecture Architecture
+
+ACMXVK is organized around several cooperating layers:
+
+- <b>ACMX interface:</b> Selects the backend, media source, shader library,
+  custom uniforms, multipass chain, playlist, audio/MIDI configuration, and
+  recording options. It builds Vulkan source libraries and forwards live
+  control changes through a synchronized shared-memory channel.
+- <b>ACMXVK application:</b> Validates command-line and configuration input,
+  manages media clocks and runtime state, assembles shader passes, and
+  coordinates capture, processing, overlays, snapshots, and encoded output.
+- <b>MXVK:</b> Owns Vulkan instance/device setup, presentation or surface-free
+  headless rendering, sprites, model rendering, descriptor resources,
+  fragment/compute pipelines, offscreen targets, frame history, and optional
+  CUDA/Vulkan interoperability.
+- <b>MXWrite:</b> Encodes video through FFmpeg libraries and supports timestamped
+  output, software and hardware codecs, HDR Main10 output, and audio muxing.
+- <b>Optional processors:</b> RtAudio, RtMidi, OpenCV DNN, and acidcam-gpu add
+  live audio analysis, hardware control, ONNX effects, and CUDA filters when
+  enabled at build time.
+
+The application entry point is kept small. The render-window class is declared
+in <tt>ACMXVK/main_window.hpp</tt>, while reusable application services are
+grouped under <tt>ACMXVK/app/</tt>. These services cover options, resource
+discovery, manifests, playlists, media probing, output paths, interface IPC,
+and asynchronous snapshots.
+
+@section acmxvk_pipeline Rendering Pipeline
+
+Each frame moves through a source-sized rendering pipeline. Window dimensions
+affect only presentation: an oversized or portrait source is fitted into the
+available display while shader evaluation, snapshots, readback, and recording
+retain the requested or negotiated source resolution.
+
+The typical order is:
+
+-# Acquire a camera, video, or still-image frame.
+-# Rotate or preprocess it, optionally using DNN or CUDA filters.
+-# Upload it to the Vulkan source texture.
+-# Execute the selected fragment/compute pass or ordered multipass chain.
+-# Update and expose texture history when required.
+-# Apply optional crossfade, 3D model mapping, watermark, or output labels.
+-# Read back the source-sized result for snapshots or MXWrite recording.
+-# Tone-map HDR content for an SDR preview and present a fitted window image.
+
+Fragment and compute passes can be mixed. MXVK records the necessary resource
+transitions and synchronization between dependent passes so that the output of
+one stage is safe to consume by the next stage. Compatible fragment shaders can
+run directly on model UVs in 3D mode; compute, history-dependent, and multipass
+effects render to an offscreen image that becomes the model texture.
+
+@section acmxvk_libraries Shader Libraries and Live Coding
+
+The preferred source-library manifest is <tt>library.json</tt>. Entries identify
+relative <tt>.frag</tt>, <tt>.comp</tt>, or precompiled <tt>.spv</tt> files and
+may declare custom uniforms. ACMXVK also reads legacy <tt>index.txt</tt>
+libraries. Relative paths may include subdirectories, which allows fragment and
+compute sources to remain logically grouped.
+
+An ACMXVK source library is built with:
+
+@code{.sh}
+acmxvk --build /path/to/library.json --builddir /path/to/.acmxvk-build
+@endcode
+
+The build is incremental: unchanged valid modules are reused. <tt>--fix</tt>
+continues after compiler failures and omits failed entries from the generated
+runtime manifest. Destructive archival pruning requires both <tt>--prune</tt>
+and <tt>--force</tt>. The Qt interface exposes these workflows as Build, Fix
+Build, and Remove Broken actions and reports each source's build health as
+<b>Up to Date</b>, <b>Stale</b>, or <b>Not Built</b>.
+
+While a backend is running, saving an active <tt>.frag</tt> or <tt>.comp</tt>
+file compiles only that source to a unique temporary module. The interface
+checks the SPIR-V header and atomically publishes it only after a successful
+compile. ACMXVK then validates the replacement against the active manifest and
+rebuilds the affected fragment, compute, multipass, playlist, or 3D pipeline.
+Compiler failure leaves the previous working module active and sends the full
+diagnostic to the interface log.
+
+@section acmxvk_shader_abi Shader Interface
+
+Vulkan shaders use explicit descriptor bindings and a shared extended-uniform
+block. The complete authoritative layouts and examples are documented in
+<tt>ACMXVK/README.md</tt>; the key resources are:
+
+- Binding 0: current input image or sampler used by the pass.
+- Binding 1: extended runtime uniform data, including resolution, time, mouse,
+  audio metrics, history state, and up to 64 custom float values.
+- Binding 2: the runtime-sized <tt>sampler2DArray</tt> frame-history ring when a
+  shader declares it.
+- FFT bindings: current spectrum and optional spectrum-history textures for
+  audio-reactive effects.
+
+Custom values declared in <tt>library.json</tt> map by slot into
+<tt>custom_uniforms[16]</tt>, four floats per vector. The interface can create,
+remove, range-limit, copy the generated GLSL definition for, and modify these
+values. Standard names such as <tt>slider1</tt> through <tt>slider4</tt> can be
+driven by command-line overrides, the interface, or MIDI maps.
+
+Shaders should use the supplied video/media clock rather than assuming that
+wall-clock time equals processing time. This makes an effect advance
+consistently whether a frame renders faster or slower than real time.
+
+@section acmxvk_media Media, Timing, and Audio
+
+Video files prefer MXVK's FFmpeg capture path. On a compatible NVIDIA build,
+NVDEC frames can remain on the GPU through rotation, optional acidcam-gpu
+filters, history upload, and Vulkan texture ingestion. Other systems use the
+portable decode/upload path.
+
+<tt>--use-source-fps</tt> provides real-time playback paced by the media clock,
+waiting when rendering is early and skipping decode work when late.
+<tt>--maximize-fps</tt> decouples camera acquisition from presentation so the
+shader can render at a requested rate while the camera updates at its measured
+rate. File processing that is intended to run as fast as possible still uses
+decoded media timestamps for shader time, so visual motion is independent of
+machine throughput.
+
+When audio support is enabled, reactivity can come from a microphone, audio
+file, playlist, or the input video's own track. Shaders receive amplitude,
+peak, RMS, low/mid/high bands, current FFT data, and optional FFT history.
+Audio may be passed to a selected output device, recorded independently to WAV,
+or muxed into video. <tt>--mute-output</tt> keeps audio analysis and optional
+pass-through active while excluding audio from the recorded video.
+
+@section acmxvk_recording Recording, HDR, and Headless Processing
+
+MXWrite accepts source-timeline presentation timestamps, which keeps camera
+recordings at wall-clock duration even when high-resolution effects render
+below the requested frame rate. Video-file output remains synchronized to the
+decoded media timeline. Encoder selection supports software and hardware
+codecs, codec-specific options, constant-quality settings, target bit rate,
+duration/size limits, and optional audio muxing.
+
+The completed HDR path detects 10-bit BT.2020 PQ or HLG input, decodes it to
+linear BT.2020, preserves high precision through source, multipass, compute,
+history, crossfade, and 3D targets, and writes HEVC Main10 output with color and
+luminance metadata. Windowed previews and ordinary PNG/WebP snapshots are
+tone-mapped to SDR; TIFF and raw snapshots can retain normalized 16-bit data.
+
+<tt>--headless</tt> and its compatibility alias <tt>--silent</tt> run a
+surface-free Vulkan render without creating an SDL window. Headless operation
+is restricted to recording jobs. Ctrl+C requests an orderly shutdown so the
+writer can flush and finalize its container. Repeating headless input requires
+a duration limit and reports percentage, frame, encoded-size, and elapsed-time
+progress in the terminal.
+
+@section acmxvk_3d Three-Dimensional Mode
+
+ACMXVK uses MXVK's OBJ/MXMOD loader for 3D rendering. The input image or video
+becomes the object's texture, and the initial camera is centered inside the
+normalized model as a wide-angle skybox view with automatic rotation disabled.
+OBJ, MXMOD, and compressed MXMOD files are accepted. Controls provide mouse or
+keyboard look, forward/back movement, model scaling, automatic rotation,
+camera-distance oscillation, and model-wave deformation. See
+<tt>ACMXVK/Controls.md</tt> for the complete keyboard, mouse, and MIDI mapping.
+
+@section acmxvk_security Validation and Portability
+
+User-controlled strings pass through centralized validation before use. This
+includes command-line values, environment paths, manifests, playlists, MIDI
+maps, encoder options, live-control messages, dimensions, numeric ranges, and
+SPIR-V binaries. File sizes, line lengths, entry counts, and supported
+extensions are bounded to reject malformed input early.
+
+The backend supports Linux, macOS through MoltenVK, and Windows. Camera-mode
+probing uses V4L2, AVFoundation, or DirectShow as appropriate. Runtime resource
+discovery supports an explicit path, an environment override, executable-
+relative installed data, and development-tree fallbacks. The interface-control
+transport uses the platform's native shared-memory implementation; Windows and
+POSIX platforms expose the same versioned protocol behavior.
+
+@section acmxvk_build Building ACMXVK
+
+From the repository root, after installing MXVK and its dependencies:
+
+@code{.sh}
+cmake -S ACMXVK -B build/acmxvk \
+    -DVALIDATION=ON \
+    -DAUDIO=ON \
+    -DMIDI=ON \
+    -DWITH_CUDA=OFF
+cmake --build build/acmxvk -j
+./build/acmxvk/acmxvk --help
+@endcode
+
+Optional switches include <tt>WEBP</tt>, <tt>TIFF</tt>,
+<tt>WITH_OPENCV_DNN</tt>, and <tt>WITH_CUDA</tt>. CUDA requires compatible
+CUDA-enabled MXVK, OpenCV, and acidcam-gpu installations and is not available
+on macOS. A Pcons build is also provided; its current portable path does not
+build the optional acidcam-gpu CUDA filter integration.
+
+@section acmxvk_status Current Project Status
+
+As of ACMX 2.135.0, both rendering backends are delivered through one Qt
+interface and are actively usable:
+
+- <b>ACMX2/OpenGL</b> remains the mature compatibility path for existing GLSL
+  libraries and the complete legacy performance workflow.
+- <b>ACMXVK/Vulkan</b> is the modern path for explicit fragment/compute SPIR-V
+  pipelines, source-library builds, HDR, headless recording, Vulkan history,
+  and direct MXVK integration.
+- <b>Cross-platform delivery</b> covers the Linux Flatpak and a Windows beta;
+  native Linux, macOS/Apple Silicon, and Windows builds have been exercised.
+- <b>Shared authoring</b> includes shader browsing, custom uniforms, multipass
+  editing, playlists, compiler diagnostics, incremental builds, and live
+  preview/reload for both backends.
+
+Remaining work is primarily compatibility hardening and continued validation
+across drivers, codecs, capture devices, and older ACMX2 shader or MIDI assets.
+The Vulkan backend's feature status is tracked in <tt>ACMXVK/README.md</tt>, and
+the command's <tt>--help</tt> output remains the definitive CLI reference.
+*/
