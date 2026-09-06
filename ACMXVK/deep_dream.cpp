@@ -29,7 +29,8 @@ namespace acmxvk::dream {
     [[nodiscard]] bool probe(int cuda_device, std::string_view model_file,
                              std::string_view layer, int iterations,
                              float strength, float feedback, float zoom,
-                             float rotation_degrees, std::ostream &output,
+                             float rotation_degrees, int max_dimension,
+                             bool use_half, std::ostream &output,
                              std::ostream &error) {
         output << "Deep Dream: enabled\n"
                << "LibTorch version: " << TORCH_VERSION << '\n';
@@ -76,7 +77,8 @@ namespace acmxvk::dream {
                    << '\n';
 
             if (!model_file.empty()) {
-                Model model = Model::load(model_file, cuda_device, layer);
+                Model model =
+                    Model::load(model_file, cuda_device, layer, use_half);
                 model.print(output);
                 cv::Mat test_image(64, 64, CV_8UC4);
                 for (int y = 0; y < test_image.rows; ++y) {
@@ -95,18 +97,21 @@ namespace acmxvk::dream {
                 GradientAscentResult result = model.apply_gradient_ascent(
                     test_image,
                     GradientAscentOptions{iterations, strength, feedback, zoom,
-                                          rotation_degrees});
+                                          rotation_degrees, max_dimension});
                 output << std::fixed << std::setprecision(6)
                        << "Deep Dream gradient ascent: ready"
                        << " (loss=" << result.activation_loss
                        << ", mean gradient=" << result.mean_gradient
                        << ", mean pixel change="
-                       << result.mean_pixel_change << ")\n";
+                       << result.mean_pixel_change << ", working size="
+                       << result.processed_width << 'x'
+                       << result.processed_height << ")\n";
                 if (feedback > 0.0F) {
                     result = model.apply_gradient_ascent(
                         test_image,
                         GradientAscentOptions{iterations, strength, feedback,
-                                              zoom, rotation_degrees});
+                                              zoom, rotation_degrees,
+                                              max_dimension});
                     output << "Deep Dream temporal feedback: ready"
                            << " (blend=" << feedback << ", zoom=" << zoom
                            << ", rotation=" << rotation_degrees

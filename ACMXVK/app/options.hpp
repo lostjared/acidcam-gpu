@@ -61,6 +61,7 @@ namespace acmxvk {
         int gpu_frame_buffer_size = 10;
         int cuda_device = 0;
         int dream_iterations = 1;
+        int dream_size = 512;
         double requested_fps = 0.0;
         double duration = 0.0;
         double cross_fade_duration = 0.5;
@@ -125,6 +126,8 @@ namespace acmxvk {
         bool dream_feedback_specified = false;
         bool dream_zoom_specified = false;
         bool dream_rotation_specified = false;
+        bool dream_size_specified = false;
+        bool dream_fp16 = false;
         bool human_background = false;
         bool human_black_specified = false;
         bool human_white_specified = false;

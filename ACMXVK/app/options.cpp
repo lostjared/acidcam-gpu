@@ -645,6 +645,17 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "--dream-rotation must be between -5 and 5 degrees");
                 }
+            } else if (option == "--dream-size") {
+                options.dream_size =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_size_specified = true;
+                if (options.dream_size != 0 &&
+                    (options.dream_size < 64 || options.dream_size > 4096)) {
+                    throw std::runtime_error(
+                        "--dream-size must be 0 or between 64 and 4096");
+                }
+            } else if (option == "--dream-fp16") {
+                options.dream_fp16 = true;
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1060,7 +1071,8 @@ namespace acmxvk {
         if ((options.dream_iterations_specified ||
              options.dream_strength_specified ||
              options.dream_feedback_specified || options.dream_zoom_specified ||
-             options.dream_rotation_specified) &&
+             options.dream_rotation_specified || options.dream_size_specified ||
+             options.dream_fp16) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
                 "Deep Dream processing options require --dream-model");
@@ -1295,6 +1307,8 @@ namespace acmxvk {
                << "      --dream-feedback <N>   Previous dreamed-frame blend (0-0.99; default 0.9)\n"
                << "      --dream-zoom <N>       Feedback zoom per source frame (0.9-1.1; default 1.01)\n"
                << "      --dream-rotation <N>   Feedback rotation degrees per frame (-5 to 5; default 0.1)\n"
+               << "      --dream-size <N>       Maximum neural working dimension (default 512; 0=native)\n"
+               << "      --dream-fp16           Use FP16 model and tensors on CUDA\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"

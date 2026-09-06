@@ -227,6 +227,7 @@ namespace acmxvk {
         bool hdr_readback_logged = false;
         bool hdr_dnn_compatibility_logged = false;
         bool hdr_dream_compatibility_logged = false;
+        bool dream_processing_logged = false;
         bool hdr_cuda_filter_bypass_logged = false;
         bool hdr_input_upload_logged = false;
         double camera_reported_fps = 0.0;

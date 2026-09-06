@@ -9,7 +9,8 @@ namespace acmxvk::dream {
     [[nodiscard]] bool probe(int cuda_device, std::string_view model_file,
                              std::string_view layer, int iterations,
                              float strength, float feedback, float zoom,
-                             float rotation_degrees, std::ostream &output,
+                             float rotation_degrees, int max_dimension,
+                             bool use_half, std::ostream &output,
                              std::ostream &error);
 
 } // namespace acmxvk::dream

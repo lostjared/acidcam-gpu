@@ -34,12 +34,15 @@ namespace acmxvk::dream {
         float feedback = 0.9F;
         float zoom = 1.01F;
         float rotation_degrees = 0.1F;
+        int max_dimension = 512;
     };
 
     struct GradientAscentResult {
         float activation_loss = 0.0F;
         float mean_gradient = 0.0F;
         float mean_pixel_change = 0.0F;
+        int processed_width = 0;
+        int processed_height = 0;
     };
 
     class Model {
@@ -53,7 +56,8 @@ namespace acmxvk::dream {
 
         [[nodiscard]] static Model load(std::string_view filename,
                                         int cuda_device,
-                                        std::string_view layer = {});
+                                        std::string_view layer = {},
+                                        bool use_half = false);
         [[nodiscard]] const ModelMetadata &metadata() const;
         [[nodiscard]] std::size_t selected_layer() const;
         [[nodiscard]] GradientAscentResult apply_gradient_ascent(

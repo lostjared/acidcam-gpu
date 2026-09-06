@@ -35,6 +35,7 @@ namespace acmxvk::dream {
         constexpr float MIN_ZOOM = 0.9F;
         constexpr float MAX_ZOOM = 1.1F;
         constexpr float MAX_ROTATION_DEGREES = 5.0F;
+        constexpr int MAX_DREAM_DIMENSION = 4096;
 
         [[nodiscard]] c10::IValue require_attribute(
             const torch::jit::Module &module, const std::string &name) {
@@ -251,13 +252,20 @@ namespace acmxvk::dream {
                 throw std::runtime_error(
                     "Deep Dream rotation must be between -5 and 5 degrees");
             }
+            if (options.max_dimension != 0 &&
+                (options.max_dimension < 64 ||
+                 options.max_dimension > MAX_DREAM_DIMENSION)) {
+                throw std::runtime_error(
+                    "Deep Dream working size must be 0 or between 64 and 4096");
+            }
         }
 
         [[nodiscard]] torch::Tensor normalization_tensor(
-            const std::vector<double> &values, const torch::Device &device) {
+            const std::vector<double> &values, const torch::Device &device,
+            torch::ScalarType scalar_type) {
             return torch::tensor(
                        values,
-                       torch::TensorOptions().dtype(torch::kFloat32).device(device))
+                       torch::TensorOptions().dtype(scalar_type).device(device))
                 .view({1, 3, 1, 1});
         }
     } // namespace
@@ -270,6 +278,7 @@ namespace acmxvk::dream {
         cv::Mat previous_output;
         std::size_t selected_layer = 0;
         int cuda_device = 0;
+        torch::ScalarType scalar_type = torch::kFloat32;
     };
 
     Model::Model(std::unique_ptr<Impl> implementation)
@@ -280,7 +289,7 @@ namespace acmxvk::dream {
     Model::~Model() = default;
 
     [[nodiscard]] Model Model::load(std::string_view filename, int cuda_device,
-                                    std::string_view layer) {
+                                    std::string_view layer, bool use_half) {
         input::validate_string(filename, input::StringKind::Path,
                                "Deep Dream model path");
         const std::filesystem::path model_path =
@@ -304,6 +313,9 @@ namespace acmxvk::dream {
 
         const torch::Device device(torch::kCUDA, cuda_device);
         torch::jit::Module module = torch::jit::load(model_path.string(), device);
+        const torch::ScalarType scalar_type =
+            use_half ? torch::kFloat16 : torch::kFloat32;
+        module.to(device, scalar_type);
         module.eval();
         for (torch::Tensor parameter : module.parameters()) {
             parameter.set_requires_grad(false);
@@ -315,6 +327,7 @@ namespace acmxvk::dream {
             resolve_layer(implementation->metadata, layer);
         implementation->filename = model_path;
         implementation->cuda_device = cuda_device;
+        implementation->scalar_type = scalar_type;
         implementation->module = std::move(module);
 
         const std::int64_t input_size =
@@ -322,7 +335,7 @@ namespace acmxvk::dream {
         torch::NoGradGuard no_grad;
         const torch::Tensor input = torch::zeros(
             {1, implementation->metadata.input_channels, input_size, input_size},
-            torch::TensorOptions().dtype(torch::kFloat32).device(device));
+            torch::TensorOptions().dtype(scalar_type).device(device));
         const std::vector<torch::Tensor> outputs = feature_outputs(
             implementation->module.forward({input}));
         if (outputs.size() != implementation->metadata.layers.size()) {
@@ -361,23 +374,48 @@ namespace acmxvk::dream {
                 "Deep Dream input must be a non-empty RGBA8 image");
         }
 
-        cv::Mat dream_source = rgba;
+        cv::Mat working_rgba;
+        const int source_max_dimension = std::max(rgba.cols, rgba.rows);
+        double resize_scale = 1.0;
+        if (options.max_dimension > 0 &&
+            source_max_dimension > options.max_dimension) {
+            resize_scale = static_cast<double>(options.max_dimension) /
+                           source_max_dimension;
+        }
+        if (resize_scale < 1.0) {
+            const cv::Size working_size(
+                std::max(1, static_cast<int>(std::lround(rgba.cols * resize_scale))),
+                std::max(1, static_cast<int>(std::lround(rgba.rows * resize_scale))));
+            cv::resize(rgba, working_rgba, working_size, 0.0, 0.0,
+                       cv::INTER_AREA);
+        } else {
+            working_rgba = rgba;
+        }
+        if (working_rgba.cols < implementation->metadata.minimum_input_size ||
+            working_rgba.rows < implementation->metadata.minimum_input_size) {
+            throw std::runtime_error(
+                "Deep Dream working image is smaller than the model minimum");
+        }
+
+        cv::Mat dream_source = working_rgba;
         cv::Mat transformed_feedback;
         cv::Mat blended_source;
         if (options.feedback > 0.0F &&
             !implementation->previous_output.empty() &&
-            implementation->previous_output.type() == rgba.type() &&
-            implementation->previous_output.size() == rgba.size()) {
+            implementation->previous_output.type() == working_rgba.type() &&
+            implementation->previous_output.size() == working_rgba.size()) {
             const cv::Point2f center(
-                static_cast<float>(rgba.cols - 1) * 0.5F,
-                static_cast<float>(rgba.rows - 1) * 0.5F);
+                static_cast<float>(working_rgba.cols - 1) * 0.5F,
+                static_cast<float>(working_rgba.rows - 1) * 0.5F);
             const cv::Mat transform = cv::getRotationMatrix2D(
                 center, options.rotation_degrees, options.zoom);
             cv::warpAffine(implementation->previous_output,
-                           transformed_feedback, transform, rgba.size(),
+                           transformed_feedback, transform,
+                           working_rgba.size(),
                            cv::INTER_LINEAR, cv::BORDER_REFLECT_101);
-            cv::addWeighted(transformed_feedback, options.feedback, rgba,
-                            1.0F - options.feedback, 0.0, blended_source);
+            cv::addWeighted(transformed_feedback, options.feedback,
+                            working_rgba, 1.0F - options.feedback, 0.0,
+                            blended_source);
             dream_source = blended_source;
         }
 
@@ -393,12 +431,14 @@ namespace acmxvk::dream {
                              torch::TensorOptions().dtype(torch::kFloat32))
                 .permute({2, 0, 1})
                 .unsqueeze(0)
-                .to(device)
+                .to(device, implementation->scalar_type)
                 .contiguous();
         const torch::Tensor mean = normalization_tensor(
-            implementation->metadata.input_mean, device);
+            implementation->metadata.input_mean, device,
+            implementation->scalar_type);
         const torch::Tensor standard_deviation = normalization_tensor(
-            implementation->metadata.input_std, device);
+            implementation->metadata.input_std, device,
+            implementation->scalar_type);
         torch::Tensor dream_input =
             ((input - mean) / standard_deviation).detach();
         dream_input.requires_grad_(true);
@@ -417,7 +457,8 @@ namespace acmxvk::dream {
             }
             const torch::Tensor activation =
                 outputs[implementation->selected_layer];
-            const torch::Tensor loss = activation.square().mean();
+            const torch::Tensor loss =
+                activation.to(torch::kFloat32).square().mean();
             if (!torch::isfinite(loss).item<bool>()) {
                 throw std::runtime_error(
                     "Deep Dream activation loss is not finite");
@@ -429,7 +470,8 @@ namespace acmxvk::dream {
                 throw std::runtime_error(
                     "Deep Dream produced an invalid input gradient");
             }
-            const torch::Tensor mean_gradient = gradient.abs().mean();
+            const torch::Tensor mean_gradient =
+                gradient.to(torch::kFloat32).abs().mean();
             const float gradient_value = mean_gradient.item<float>();
             if (!std::isfinite(gradient_value) ||
                 gradient_value <= GRADIENT_EPSILON) {
@@ -454,7 +496,12 @@ namespace acmxvk::dream {
             (dream_input.detach() * standard_deviation + mean)
                 .clamp(0.0F, 1.0F);
         result.mean_pixel_change =
-            (output - input).abs().mean().item<float>();
+            (output.to(torch::kFloat32) - input.to(torch::kFloat32))
+                .abs()
+                .mean()
+                .item<float>();
+        result.processed_width = rgb.cols;
+        result.processed_height = rgb.rows;
         output = output.squeeze(0)
                      .permute({1, 2, 0})
                      .mul(255.0F)
@@ -468,13 +515,19 @@ namespace acmxvk::dream {
                             output.data_ptr<std::uint8_t>());
         cv::Mat dreamed_rgba;
         cv::cvtColor(dreamed_rgb, dreamed_rgba, cv::COLOR_RGB2RGBA);
+        implementation->previous_output = dreamed_rgba.clone();
+        if (dreamed_rgba.size() != rgba.size()) {
+            cv::Mat restored;
+            cv::resize(dreamed_rgba, restored, rgba.size(), 0.0, 0.0,
+                       cv::INTER_LINEAR);
+            dreamed_rgba = restored;
+        }
         std::vector<cv::Mat> original_channels;
         std::vector<cv::Mat> dreamed_channels;
         cv::split(rgba, original_channels);
         cv::split(dreamed_rgba, dreamed_channels);
         dreamed_channels[3] = original_channels[3];
         cv::merge(dreamed_channels, rgba);
-        implementation->previous_output = rgba.clone();
         return result;
     }
 
@@ -484,6 +537,10 @@ namespace acmxvk::dream {
                << "Deep Dream architecture: "
                << implementation->metadata.architecture << '\n'
                << "Deep Dream CUDA device: " << implementation->cuda_device
+               << '\n'
+               << "Deep Dream precision: "
+               << (implementation->scalar_type == torch::kFloat16 ? "FP16"
+                                                                  : "FP32")
                << '\n'
                << "Deep Dream feature layers: "
                << implementation->metadata.layers.size() << '\n';

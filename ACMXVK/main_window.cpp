@@ -1054,7 +1054,8 @@ namespace acmxvk {
             return;
         }
         deep_dream_model = std::make_unique<dream::Model>(dream::Model::load(
-            options.dream_model, options.cuda_device, options.dream_layer));
+            options.dream_model, options.cuda_device, options.dream_layer,
+            options.dream_fp16));
         const dream::ModelMetadata &metadata = deep_dream_model->metadata();
         const dream::LayerMetadata &layer =
             metadata.layers[deep_dream_model->selected_layer()];
@@ -1064,6 +1065,11 @@ namespace acmxvk {
                   << options.dream_strength << ", feedback "
                   << options.dream_feedback << ", zoom " << options.dream_zoom
                   << ", rotation " << options.dream_rotation << " degrees"
+                  << ", working size "
+                  << (options.dream_size == 0
+                          ? std::string("native")
+                          : std::to_string(options.dream_size) + " max")
+                  << ", " << (options.dream_fp16 ? "FP16" : "FP32")
                   << "; output feeds the existing Vulkan shader chain\n";
 #endif
     }
@@ -3542,10 +3548,18 @@ namespace acmxvk {
                           static_cast<float>(options.dream_strength),
                           static_cast<float>(options.dream_feedback),
                           static_cast<float>(options.dream_zoom),
-                          static_cast<float>(options.dream_rotation)});
+                          static_cast<float>(options.dream_rotation),
+                          options.dream_size});
         if (!std::isfinite(result.mean_pixel_change)) {
             throw std::runtime_error(
                 "Deep Dream returned a non-finite processed frame");
+        }
+        if (!dream_processing_logged) {
+            std::cout << "acmxvk: Deep Dream working frame: "
+                      << result.processed_width << 'x'
+                      << result.processed_height << " -> " << rgba.cols << 'x'
+                      << rgba.rows << " source texture\n";
+            dream_processing_logged = true;
         }
 #else
         static_cast<void>(rgba);
