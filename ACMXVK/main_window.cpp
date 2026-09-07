@@ -1095,8 +1095,10 @@ namespace acmxvk {
                       << options.random_dream_interval
                       << " media second(s)\n";
         }
-        if (options.dream_headless) {
-            std::cout << "acmxvk: traditional headless Deep Dream video mode: "
+        if (options.dream_headless || options.deep_original) {
+            std::cout << "acmxvk: traditional "
+                      << (options.dream_headless ? "headless" : "preview")
+                      << " Deep Dream video mode: "
                          "independent source frames, temporal feedback/zoom/"
                          "rotation disabled, no-drop output\n";
         }

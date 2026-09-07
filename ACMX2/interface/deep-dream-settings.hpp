@@ -29,6 +29,7 @@ struct DeepDreamConfiguration {
     int jitter = 0;
     int smoothing = 0;
     bool gpu_filter_first = false;
+    bool deep_original = false;
 };
 
 class DeepDreamSettingsDialog : public QDialog {
@@ -76,6 +77,7 @@ class DeepDreamSettingsDialog : public QDialog {
     QSpinBox *jitter_spin_box = nullptr;
     QSpinBox *smoothing_spin_box = nullptr;
     QCheckBox *gpu_filter_first_check_box = nullptr;
+    QCheckBox *deep_original_check_box = nullptr;
 };
 
 #endif

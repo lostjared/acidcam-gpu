@@ -319,6 +319,20 @@ encoding so every decoded source frame is processed independently:
 This mode cannot be combined with `--random-dream`. It does not affect the
 windowed Deep Dream path or ordinary headless processing.
 
+Use `--deep-orig` for the same independent-frame processing with the preview
+window visible. It still requires video input, recorded output, and a Deep
+Dream model, and it retains no-drop encoding:
+
+```bash
+./build/acmxvk-dream/acmxvk \
+    --input input.mp4 --output dreamed.mp4 --deep-orig \
+    --dream-model models/deep-dream-vgg16.pt --dream-layer relu4_2 \
+    --dream-iterations 2 --dream-octaves 2
+```
+
+`--deep-orig` and `--dream-headless` are mutually exclusive because they select
+windowed and headless forms of the same processing mode.
+
 Increment 11 adds the CUDA/Vulkan interop path for Deep Dream. When MXVK was
 built with CUDA support, compatible camera and video frames remain on the GPU
 across capture or NVDEC, LibTorch preprocessing, optional input rotation,

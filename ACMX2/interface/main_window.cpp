@@ -1416,6 +1416,13 @@ void MainWindow::loadSessionSettings() {
         settings.value("deep_dream/smoothing", 0).toInt(), 0, 16);
     deep_dream_gpu_filter_first =
         settings.value("deep_dream/gpu_filter_first", false).toBool();
+    deep_dream_original =
+        settings.value("deep_dream/deep_original", false).toBool();
+    if (deep_dream_original) {
+        deep_dream_feedback = 0.0;
+        deep_dream_zoom = 1.0;
+        deep_dream_rotation = 0.0;
+    }
     cuda_device = settings.value("interface/cuda_device", 0).toInt();
     time_speed = settings.value("interface/time_speed", 1.0).toFloat();
     normalized_time =
@@ -4255,18 +4262,22 @@ void MainWindow::menuDeepDreamSettings() {
                 deep_dream_jitter = config.jitter;
                 deep_dream_smoothing = config.smoothing;
                 deep_dream_gpu_filter_first = config.gpu_filter_first;
+                deep_dream_original = config.deep_original;
                 publishRuntimeSettingsToRunningProcess();
 
                 if (deep_dream_enabled) {
                     Log(tr("Deep Dream Settings Applied: %1/%2, %3 "
-                           "iteration(s), rotation %4 degrees, %5")
+                           "iteration(s), rotation %4 degrees, %5, %6")
                             .arg(QFileInfo(deep_dream_model).fileName(),
                                  deep_dream_layer)
                             .arg(deep_dream_iterations)
                             .arg(deep_dream_rotation, 0, 'f', 3)
                             .arg(deep_dream_gpu_filter_first
                                      ? tr("acidcam-gpu first")
-                                     : tr("Deep Dream first")));
+                                     : tr("Deep Dream first"))
+                            .arg(deep_dream_original
+                                     ? tr("independent-frame preview")
+                                     : tr("temporal feedback")));
                 } else {
                     Log("Deep Dream Disabled");
                 }
@@ -4294,6 +4305,12 @@ bool MainWindow::validateDeepDreamLaunch(QString &error) const {
     }
     if (deep_dream_layer.trimmed().isEmpty()) {
         error = tr("Select a Deep Dream feature layer.");
+        return false;
+    }
+    if (deep_dream_original &&
+        (video_file.isEmpty() || output_file.isEmpty())) {
+        error = tr("Independent-frame preview requires video input and an "
+                   "enabled video output file.");
         return false;
     }
     if (!deep_dream_gpu_filter_first) {
@@ -4358,6 +4375,9 @@ void MainWindow::appendDeepDreamArguments(QStringList &arguments) const {
               << QString::number(deep_dream_smoothing);
     if (deep_dream_gpu_filter_first) {
         arguments << "--gpu-filter-before-dream";
+    }
+    if (deep_dream_original) {
+        arguments << "--deep-orig";
     }
 }
 

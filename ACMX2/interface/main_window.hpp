@@ -330,6 +330,7 @@ class MainWindow : public QMainWindow {
     int deep_dream_jitter = 0;
     int deep_dream_smoothing = 0;
     bool deep_dream_gpu_filter_first = false;
+    bool deep_dream_original = false;
     QAction *deepDreamAction = nullptr;
     QPointer<DeepDreamSettingsDialog> deepDreamSettingsDialog;
     QAction *shaderPassAction;

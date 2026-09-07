@@ -141,6 +141,7 @@ namespace acmxvk {
         bool dream_smoothing_specified = false;
         bool random_dream_specified = false;
         bool dream_headless = false;
+        bool deep_original = false;
         bool gpu_filter_before_dream = false;
         bool human_background = false;
         bool human_black_specified = false;
