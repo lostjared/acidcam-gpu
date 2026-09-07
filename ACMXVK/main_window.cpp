@@ -1085,6 +1085,7 @@ namespace acmxvk {
         std::cout << ", " << options.dream_octaves << " octave(s) at "
                   << options.dream_octave_scale
                   << "x, jitter " << options.dream_jitter << " px"
+                  << ", smoothing " << options.dream_smoothing << " px"
                   << "; output feeds the existing Vulkan shader chain\n";
 #endif
     }
@@ -3567,7 +3568,7 @@ namespace acmxvk {
                           options.dream_size, options.dream_channel,
                           options.dream_octaves,
                           static_cast<float>(options.dream_octave_scale),
-                          options.dream_jitter});
+                          options.dream_jitter, options.dream_smoothing});
         if (!std::isfinite(result.mean_pixel_change)) {
             throw std::runtime_error(
                 "Deep Dream returned a non-finite processed frame");

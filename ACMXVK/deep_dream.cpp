@@ -32,7 +32,7 @@ namespace acmxvk::dream {
                              float rotation_degrees, int max_dimension,
                              bool use_half, int target_channel,
                              int octaves, float octave_scale,
-                             int jitter,
+                             int jitter, int smoothing,
                              std::ostream &output,
                              std::ostream &error) {
         output << "Deep Dream: enabled\n"
@@ -108,7 +108,7 @@ namespace acmxvk::dream {
                     GradientAscentOptions{iterations, strength, feedback, zoom,
                                           rotation_degrees, max_dimension,
                                           target_channel, octaves,
-                                          octave_scale, jitter});
+                                          octave_scale, jitter, smoothing});
                 output << std::fixed << std::setprecision(6)
                        << "Deep Dream gradient ascent: ready"
                        << " (loss=" << result.activation_loss
@@ -118,14 +118,15 @@ namespace acmxvk::dream {
                        << result.processed_width << 'x'
                        << result.processed_height << ", octaves="
                        << result.processed_octaves << ", jitter=" << jitter
-                       << ")\n";
+                       << ", smoothing=" << smoothing << ")\n";
                 if (feedback > 0.0F) {
                     result = model.apply_gradient_ascent(
                         test_image,
                         GradientAscentOptions{iterations, strength, feedback,
                                               zoom, rotation_degrees,
                                               max_dimension, target_channel,
-                                              octaves, octave_scale, jitter});
+                                              octaves, octave_scale, jitter,
+                                              smoothing});
                     output << "Deep Dream temporal feedback: ready"
                            << " (blend=" << feedback << ", zoom=" << zoom
                            << ", rotation=" << rotation_degrees

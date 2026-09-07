@@ -695,6 +695,15 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "--dream-jitter must be between 0 and 64");
                 }
+            } else if (option == "--dream-smoothing") {
+                options.dream_smoothing =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_smoothing_specified = true;
+                if (options.dream_smoothing < 0 ||
+                    options.dream_smoothing > 16) {
+                    throw std::runtime_error(
+                        "--dream-smoothing must be between 0 and 16");
+                }
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1114,7 +1123,8 @@ namespace acmxvk {
              options.dream_fp16 || options.dream_channel_specified ||
              options.dream_octaves_specified ||
              options.dream_octave_scale_specified ||
-             options.dream_jitter_specified) &&
+             options.dream_jitter_specified ||
+             options.dream_smoothing_specified) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
                 "Deep Dream processing options require --dream-model");
@@ -1355,6 +1365,7 @@ namespace acmxvk {
                << "      --dream-octaves <N>    Progressive dream scales (1-8; default 1)\n"
                << "      --dream-octave-scale <N> Scale ratio between octaves (1.1-3; default 1.4)\n"
                << "      --dream-jitter <N>     Spatial gradient jitter in pixels (0-64; default 0)\n"
+               << "      --dream-smoothing <N>  Gradient smoothing radius (0-16; default 0)\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"

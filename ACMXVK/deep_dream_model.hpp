@@ -39,6 +39,7 @@ namespace acmxvk::dream {
         int octaves = 1;
         float octave_scale = 1.4F;
         int jitter = 0;
+        int smoothing = 0;
     };
 
     struct GradientAscentResult {

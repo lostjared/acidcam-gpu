@@ -3,6 +3,7 @@
 #include "input_validation.hpp"
 
 #include <torch/cuda.h>
+#include <torch/nn/functional/pooling.h>
 #include <torch/nn/functional/upsampling.h>
 #include <torch/script.h>
 #include <torch/torch.h>
@@ -42,6 +43,7 @@ namespace acmxvk::dream {
         constexpr float MIN_OCTAVE_SCALE = 1.1F;
         constexpr float MAX_OCTAVE_SCALE = 3.0F;
         constexpr int MAX_JITTER = 64;
+        constexpr int MAX_SMOOTHING = 16;
 
         [[nodiscard]] c10::IValue require_attribute(
             const torch::jit::Module &module, const std::string &name) {
@@ -282,6 +284,11 @@ namespace acmxvk::dream {
             if (options.jitter < 0 || options.jitter > MAX_JITTER) {
                 throw std::runtime_error(
                     "Deep Dream jitter must be between 0 and 64 pixels");
+            }
+            if (options.smoothing < 0 ||
+                options.smoothing > MAX_SMOOTHING) {
+                throw std::runtime_error(
+                    "Deep Dream smoothing must be between 0 and 16 pixels");
             }
         }
 
@@ -594,6 +601,18 @@ namespace acmxvk::dream {
                     !torch::isfinite(gradient).all().item<bool>()) {
                     throw std::runtime_error(
                         "Deep Dream produced an invalid input gradient");
+                }
+                if (options.smoothing > 0) {
+                    const std::int64_t kernel_size =
+                        options.smoothing * 2 + 1;
+                    gradient = torch::nn::functional::avg_pool2d(
+                        gradient,
+                        torch::nn::functional::AvgPool2dFuncOptions(
+                            {kernel_size, kernel_size})
+                            .stride({1, 1})
+                            .padding(
+                                {options.smoothing, options.smoothing})
+                            .count_include_pad(false));
                 }
                 const torch::Tensor mean_gradient =
                     gradient.to(torch::kFloat32).abs().mean();

@@ -36,7 +36,7 @@ complete replacement for ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
-| Deep Dream | Increment 9 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, performance controls, feature-channel targeting, progressive multi-octave detail, and deterministic spatial jitter. |
+| Deep Dream | Increment 10 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, performance controls, feature-channel targeting, progressive multi-octave detail, deterministic spatial jitter, and GPU gradient smoothing. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
 
@@ -268,6 +268,20 @@ the source-frame, octave, and iteration sequence rather than the system clock,
 so identical inputs and settings are independent of processing speed. Jitter
 does not add another model pass and can be combined with channel targeting,
 FP16, temporal feedback, and the existing Vulkan shader chain.
+
+Increment 10 adds optional CUDA gradient smoothing. It applies a centered box
+filter to the input gradient before its magnitude is measured and normalized,
+encouraging wider coherent structures instead of isolated pixel noise:
+
+```bash
+--dream-smoothing 2
+```
+
+The value is a pixel radius from 0–16; zero preserves the previous gradient
+path. Radius 1 or 2 is a useful starting point, while large radii produce
+broader and softer structures and add more GPU work. Smoothing operates on the
+existing gradient and does not introduce another VGG forward/backward pass. It
+can be combined with jitter, octaves, individual channels, feedback, and FP16.
 
 ### Pcons
 
