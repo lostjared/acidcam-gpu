@@ -22,6 +22,9 @@
 #ifdef ACMXVK_WITH_DNN
 #include "edge_dnn.hpp"
 #endif
+#ifdef ACMXVK_WITH_DEEP_DREAM
+#include "deep_dream_model.hpp"
+#endif
 #include "app/interface_client.hpp"
 #include "app/media_helpers.hpp"
 #include "app/media_utils.hpp"
@@ -223,6 +226,8 @@ namespace acmxvk {
         bool hdr_output_enabled = false;
         bool hdr_readback_logged = false;
         bool hdr_dnn_compatibility_logged = false;
+        bool hdr_dream_compatibility_logged = false;
+        bool dream_processing_logged = false;
         bool hdr_cuda_filter_bypass_logged = false;
         bool hdr_input_upload_logged = false;
         double camera_reported_fps = 0.0;
@@ -306,8 +311,12 @@ namespace acmxvk {
         std::unique_ptr<dnn::HumanSegmenter> human_segmenter;
         std::unique_ptr<dnn::GenericOnnxProcessor> generic_onnx_processor;
 #endif
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        std::unique_ptr<dream::Model> deep_dream_model;
+#endif
 #ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::GpuMat cuda_input_rgba;
+        cv::cuda::GpuMat cuda_dream_rgba;
         cv::cuda::GpuMat cuda_rotated_rgba;
         cv::cuda::GpuMat cuda_rotation_transpose;
         cv::Mat cuda_input_fallback_rgba;
@@ -355,6 +364,7 @@ namespace acmxvk {
             std::chrono::steady_clock::time_point now);
 #endif
         void initializeDnn();
+        void initializeDeepDream();
         void initializeGpuFilters();
         void selectGpuFilter(int direction);
         void openMidi();
@@ -407,6 +417,8 @@ namespace acmxvk {
             const InterfaceOverlayState &requested, bool announce);
         void apply_interface_gpu_filter_state(
             const InterfaceGpuFilterState &requested, bool announce);
+        void apply_interface_deep_dream_state(
+            const InterfaceDeepDreamState &requested, bool announce);
         void apply_interface_audio_file_state(
             const InterfaceAudioFileState &requested);
         void apply_interface_shader_reload(
@@ -443,8 +455,9 @@ namespace acmxvk {
         void queueRuntimeHud(int &y, int line_height);
         void queueOverlayText();
         [[nodiscard]] static std::string captureFourccName(double value);
-        [[nodiscard]] bool dnnHostProcessingEnabled() const;
+        [[nodiscard]] bool hostPreprocessingEnabled() const;
         void applyDnnEffects(cv::Mat &rgba);
+        void applyDeepDreamEffect(cv::Mat &rgba);
         void updateHumanOverlayTexture();
 
         void openInput();
@@ -509,6 +522,9 @@ namespace acmxvk {
                                    bool filtered);
         void uploadInputFrame(const cv::cuda::GpuMat &rgba,
                               cv::cuda::Stream &source_stream);
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        [[nodiscard]] bool readCudaDeepDreamFrame();
+#endif
         [[nodiscard]] const cv::cuda::GpuMat &
         rotateCudaFrame(const cv::cuda::GpuMat &rgba,
                         cv::cuda::Stream &source_stream);

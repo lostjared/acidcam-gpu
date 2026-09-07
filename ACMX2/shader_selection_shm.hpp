@@ -16,17 +16,18 @@
 
 namespace acmx2::ipc {
 
-    inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection";
+    inline constexpr const char *kShaderSelectionShmName =
+        "/acmx2_shader_selection_v11";
     inline constexpr const char *kShaderSelectionSemaphoreName =
-        "/acmx2_shm_v10";
+        "/acmx2_shm_v11";
 #ifdef _WIN32
     inline constexpr const wchar_t *kShaderSelectionMappingNameWindows =
-        L"Local\\ACMX2ShaderSelectionV10";
+        L"Local\\ACMX2ShaderSelectionV11";
     inline constexpr const wchar_t *kShaderSelectionMutexNameWindows =
-        L"Local\\ACMX2ShaderSelectionMutexV10";
+        L"Local\\ACMX2ShaderSelectionMutexV11";
 #endif
     inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
-    inline constexpr std::uint32_t kShaderSelectionVersion = 10;
+    inline constexpr std::uint32_t kShaderSelectionVersion = 11;
     inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxGpuFilterCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxWatermarkText = 256;
@@ -34,8 +35,10 @@ namespace acmx2::ipc {
     inline constexpr std::uint32_t kShaderSelectionMaxCustomUniforms = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxUniformName = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxAudioFilePath = 4096;
+    inline constexpr std::uint32_t kShaderSelectionMaxDreamModelPath = 4096;
+    inline constexpr std::uint32_t kShaderSelectionMaxDreamLayer = 128;
     inline constexpr std::uint32_t kShaderSelectionMaxShaderName = 1024;
-    inline constexpr std::size_t kShaderSelectionDataSize = 76864;
+    inline constexpr std::size_t kShaderSelectionDataSize = 81136;
 #ifdef _WIN32
     inline constexpr DWORD kShaderSelectionLockTimeoutMs = 1000;
 #endif
@@ -77,6 +80,23 @@ namespace acmx2::ipc {
         std::uint8_t audio_repeat = 0;
         std::uint8_t audio_reserved = 0;
         std::uint32_t audio_file_sequence = 0;
+        std::uint8_t dream_enabled = 0;
+        std::uint8_t dream_fp16 = 0;
+        std::uint8_t dream_gpu_filter_first = 0;
+        std::uint8_t dream_reserved = 0;
+        std::int32_t dream_iterations = 1;
+        std::int32_t dream_maximum_dimension = 512;
+        std::int32_t dream_channel = -1;
+        std::int32_t dream_octaves = 1;
+        std::int32_t dream_jitter = 0;
+        std::int32_t dream_smoothing = 0;
+        float dream_strength = 0.05F;
+        float dream_feedback = 0.9F;
+        float dream_zoom = 1.01F;
+        float dream_rotation = 0.1F;
+        float dream_octave_scale = 1.4F;
+        char dream_model_path[kShaderSelectionMaxDreamModelPath] = {};
+        char dream_layer[kShaderSelectionMaxDreamLayer] = {};
         char selected_shader_name[kShaderSelectionMaxShaderName] = {};
         std::uint32_t sequence = 0;
     };

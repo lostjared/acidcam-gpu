@@ -27,6 +27,7 @@ option(WEBP "Enable lossless WebP snapshots" OFF)
 option(TIFF "Enable lossless TIFF snapshots" OFF)
 option(WITH_CUDA "Enable acidcam-gpu CUDA filters" OFF)
 option(WITH_OPENCV_DNN "Enable OpenCV DNN effects" OFF)
+option(WITH_DEEP_DREAM "Enable CUDA LibTorch Deep Dream support" OFF)
 option(ACMXVK_USE_MOLTENVK "Enable MoltenVK portability support on Apple platforms" ${APPLE})
 
 set(ACMXVK_MXWRITE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite" CACHE PATH
@@ -257,6 +258,25 @@ if(WITH_CUDA)
     endif()
     find_package(CUDAToolkit REQUIRED)
     find_package(acidcam-gpu CONFIG REQUIRED)
+endif()
+
+if(WITH_DEEP_DREAM)
+    find_package(CUDAToolkit REQUIRED)
+    find_package(Torch CONFIG REQUIRED)
+    find_package(OpenCV REQUIRED COMPONENTS
+        core
+        imgproc
+        imgcodecs
+        highgui
+        videoio
+        cudaarithm
+        cudawarping
+    )
+    if(NOT CAFFE2_USE_CUDA)
+        message(FATAL_ERROR
+            "WITH_DEEP_DREAM requires a CUDA-enabled LibTorch installation."
+        )
+    endif()
 endif()
 
 set(ACMXVK_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
@@ -729,6 +749,24 @@ if(WITH_OPENCV_DNN)
 else()
     message(STATUS "OpenCV DNN effects: DISABLED")
 endif()
+if(WITH_DEEP_DREAM)
+    target_sources(acmxvk PRIVATE
+        deep_dream.cpp
+        deep_dream.hpp
+        deep_dream_model.cpp
+        deep_dream_model.hpp
+    )
+    target_link_libraries(acmxvk PRIVATE
+        torch
+        CUDA::cudart
+        opencv_cudaarithm
+        opencv_cudawarping
+    )
+    target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_DEEP_DREAM)
+    message(STATUS "Deep Dream: ENABLED (CUDA LibTorch ${Torch_VERSION})")
+else()
+    message(STATUS "Deep Dream: DISABLED")
+endif()
 if(ACMXVK_MXVK_CUDA_AVAILABLE)
     target_link_libraries(acmxvk PRIVATE opencv_cudaarithm)
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_MXVK_CUDA)
@@ -836,6 +874,9 @@ if(BUILD_TESTING)
     add_test(NAME acmxvk_output_paths
         COMMAND acmxvk_output_paths_tests
     )
+    add_test(NAME acmxvk_deep_dream_probe
+        COMMAND acmxvk --check-deep-dream
+    )
     add_test(NAME acmxvk_shader_library_build
         COMMAND acmxvk
             --build "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_library/library.json"
@@ -883,6 +924,11 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/midi-examples/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/midi-examples")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/models/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/models")
+if(WITH_DEEP_DREAM)
+    install(PROGRAMS
+        "${CMAKE_CURRENT_SOURCE_DIR}/scripts/export_deep_dream_model.py"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/scripts")
+endif()
 install(FILES "${ACMXVK_OVERLAY_FONT}"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/data"
         RENAME font.ttf)

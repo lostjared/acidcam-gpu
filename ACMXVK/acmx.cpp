@@ -14,6 +14,9 @@
 #ifdef ACMXVK_WITH_CUDA
 #include "gpu_filters.hpp"
 #endif
+#ifdef ACMXVK_WITH_DEEP_DREAM
+#include "deep_dream.hpp"
+#endif
 #include "app/camera_probe.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
@@ -97,6 +100,32 @@ int main(int argc, char **argv) {
 #endif
             return EXIT_SUCCESS;
         }
+        if (options.check_deep_dream) {
+#ifdef ACMXVK_WITH_DEEP_DREAM
+            return acmxvk::dream::probe(
+                       options.cuda_device, options.dream_model,
+                       options.dream_layer, options.dream_iterations,
+                       static_cast<float>(options.dream_strength),
+                       static_cast<float>(options.dream_feedback),
+                       static_cast<float>(options.dream_zoom),
+                       static_cast<float>(options.dream_rotation),
+                       options.dream_size, options.dream_fp16,
+                       options.dream_channel, options.dream_octaves,
+                       static_cast<float>(options.dream_octave_scale),
+                       options.dream_jitter, options.dream_smoothing,
+                       std::cout, std::cerr)
+                       ? EXIT_SUCCESS
+                       : EXIT_FAILURE;
+#else
+            if (!options.dream_model.empty()) {
+                std::cerr << "Deep Dream model inspection requires an ACMXVK "
+                             "build configured with -DWITH_DEEP_DREAM=ON\n";
+                return EXIT_FAILURE;
+            }
+            std::cout << "Deep Dream: disabled\n";
+            return EXIT_SUCCESS;
+#endif
+        }
         if (!options.probe_hdr_file.empty()) {
             const acmxvk::VideoHdrInfo info =
                 acmxvk::probeVideoHdrInfo(options.probe_hdr_file);
@@ -160,6 +189,13 @@ int main(int argc, char **argv) {
                 "MIDI input requires an ACMXVK build configured with -DMIDI=ON");
         }
 #endif
+#ifndef ACMXVK_WITH_DEEP_DREAM
+        if (!options.dream_model.empty()) {
+            throw std::runtime_error(
+                "--dream-model requires an ACMXVK build configured with "
+                "-DWITH_DEEP_DREAM=ON");
+        }
+#endif
 #ifndef ACMXVK_WITH_CUDA
         if (!options.gpu_filter_indices.empty()) {
             throw std::runtime_error(
@@ -168,7 +204,7 @@ int main(int argc, char **argv) {
         }
 #endif
 #ifndef ACMXVK_WITH_MXVK_CUDA
-        if (options.cuda_device_specified) {
+        if (options.cuda_device_specified && options.dream_model.empty()) {
             throw std::runtime_error(
                 "--cuda-device requires a CUDA-enabled MXVK installation");
         }

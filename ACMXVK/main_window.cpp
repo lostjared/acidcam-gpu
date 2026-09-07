@@ -162,6 +162,7 @@ namespace acmxvk {
         setEnableScreenshot(this->options.enable_screenshot);
         resolveConfiguredResourcePaths();
         initializeDnn();
+        initializeDeepDream();
         initializeGpuFilters();
         openAudio();
         loadShaders();
@@ -1044,6 +1045,51 @@ namespace acmxvk {
                       << options.onnx_configuration
                       << " (automatic CPU/CUDA backend selection)\n";
         }
+#endif
+    }
+
+    void MainWindow::initializeDeepDream() {
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        if (options.dream_model.empty()) {
+            return;
+        }
+        deep_dream_model = std::make_unique<dream::Model>(dream::Model::load(
+            options.dream_model, options.cuda_device, options.dream_layer,
+            options.dream_fp16));
+        const dream::ModelMetadata &metadata = deep_dream_model->metadata();
+        const dream::LayerMetadata &layer =
+            metadata.layers[deep_dream_model->selected_layer()];
+        if (options.dream_channel >= 0 &&
+            static_cast<std::size_t>(options.dream_channel) >=
+                deep_dream_model->selected_channels()) {
+            throw std::runtime_error(
+                "--dream-channel is outside the selected layer's channel range");
+        }
+        std::cout << "acmxvk: Deep Dream preprocessing enabled: "
+                  << metadata.architecture << '/' << layer.name << ", "
+                  << options.dream_iterations << " iteration(s), strength "
+                  << options.dream_strength << ", feedback "
+                  << options.dream_feedback << ", zoom " << options.dream_zoom
+                  << ", rotation " << options.dream_rotation << " degrees"
+                  << ", working size "
+                  << (options.dream_size == 0
+                          ? std::string("native")
+                          : std::to_string(options.dream_size) + " max")
+                  << ", " << (options.dream_fp16 ? "FP16" : "FP32")
+                  << ", channel ";
+        if (options.dream_channel < 0) {
+            std::cout << "all";
+        } else {
+            std::cout << options.dream_channel;
+        }
+        std::cout << ", " << options.dream_octaves << " octave(s) at "
+                  << options.dream_octave_scale
+                  << "x, jitter " << options.dream_jitter << " px"
+                  << ", smoothing " << options.dream_smoothing << " px"
+                  << ", acidcam-gpu order "
+                  << (options.gpu_filter_before_dream ? "before" : "after")
+                  << " Deep Dream"
+                  << "; output feeds the existing Vulkan shader chain\n";
 #endif
     }
 
@@ -2199,11 +2245,13 @@ namespace acmxvk {
         apply_interface_playback_state(state.playback, false);
         apply_interface_overlay_state(state.overlay, false);
         apply_interface_gpu_filter_state(state.gpu_filters, false);
+        apply_interface_deep_dream_state(state.deep_dream, false);
         interface_last_audio_file_sequence =
             state.audio_file.request_sequence;
         interface_last_reload_sequence = state.reload.request_sequence;
         std::cout << "acmxvk: interface live shader, multipass, playback, "
-                     "overlay, GPU-filter, and audio-file control enabled"
+                     "overlay, GPU-filter, Deep Dream, and audio-file control "
+                     "enabled"
                   << (reconnected ? " (reconnected)" : "") << '\n';
     }
 
@@ -2238,6 +2286,7 @@ namespace acmxvk {
         apply_interface_playback_state(state.playback, true);
         apply_interface_overlay_state(state.overlay, true);
         apply_interface_gpu_filter_state(state.gpu_filters, true);
+        apply_interface_deep_dream_state(state.deep_dream, true);
         if (state.audio_file.request_sequence !=
             interface_last_audio_file_sequence) {
             interface_last_audio_file_sequence =
@@ -2395,6 +2444,206 @@ namespace acmxvk {
         if (announce && requested.enabled) {
             std::cerr << "acmxvk: ignored interface GPU-filter state: this "
                          "build does not include acidcam-gpu\n";
+        }
+#endif
+    }
+
+    void MainWindow::apply_interface_deep_dream_state(
+        const InterfaceDeepDreamState &requested, bool announce) {
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        const bool currently_enabled = deep_dream_model != nullptr;
+        if (!requested.enabled) {
+            if (!currently_enabled) {
+                return;
+            }
+            deep_dream_model.reset();
+#ifdef ACMXVK_WITH_MXVK_CUDA
+            cuda_dream_rgba.release();
+#endif
+            options.dream_model.clear();
+            options.dream_layer.clear();
+            options.gpu_filter_before_dream = false;
+            dream_processing_logged = false;
+            if (announce) {
+                std::cout << "acmxvk: interface Deep Dream disabled\n";
+            }
+            return;
+        }
+
+        try {
+            input::validate_string(requested.model_path,
+                                   input::StringKind::Path,
+                                   "interface Deep Dream model path");
+            input::validate_string(requested.layer,
+                                   input::StringKind::Token,
+                                   "interface Deep Dream layer");
+            if (requested.iterations < 1 || requested.iterations > 100) {
+                throw std::runtime_error(
+                    "iterations must be between 1 and 100");
+            }
+            if (!std::isfinite(requested.strength) ||
+                requested.strength <= 0.0F || requested.strength > 10.0F) {
+                throw std::runtime_error(
+                    "strength must be greater than 0 and no more than 10");
+            }
+            if (!std::isfinite(requested.feedback) ||
+                requested.feedback < 0.0F || requested.feedback > 0.99F) {
+                throw std::runtime_error(
+                    "feedback must be between 0 and 0.99");
+            }
+            if (!std::isfinite(requested.zoom) || requested.zoom < 0.9F ||
+                requested.zoom > 1.1F) {
+                throw std::runtime_error("zoom must be between 0.9 and 1.1");
+            }
+            if (!std::isfinite(requested.rotation) ||
+                requested.rotation < -5.0F || requested.rotation > 5.0F) {
+                throw std::runtime_error(
+                    "rotation must be between -5 and 5 degrees");
+            }
+            if (requested.maximum_dimension != 0 &&
+                (requested.maximum_dimension < 64 ||
+                 requested.maximum_dimension > 4096)) {
+                throw std::runtime_error(
+                    "maximum dimension must be 0 or between 64 and 4096");
+            }
+            if (requested.channel < -1 || requested.channel > 65535) {
+                throw std::runtime_error(
+                    "channel must be all channels or between 0 and 65535");
+            }
+            if (requested.octaves < 1 || requested.octaves > 8) {
+                throw std::runtime_error("octaves must be between 1 and 8");
+            }
+            if (!std::isfinite(requested.octave_scale) ||
+                requested.octave_scale < 1.1F ||
+                requested.octave_scale > 3.0F) {
+                throw std::runtime_error(
+                    "octave scale must be between 1.1 and 3.0");
+            }
+            if (requested.jitter < 0 || requested.jitter > 64) {
+                throw std::runtime_error("jitter must be between 0 and 64");
+            }
+            if (requested.smoothing < 0 || requested.smoothing > 16) {
+                throw std::runtime_error(
+                    "smoothing must be between 0 and 16");
+            }
+            if (requested.gpu_filter_first) {
+#ifdef ACMXVK_WITH_CUDA
+                if (gpu_filter_engine == nullptr) {
+                    throw std::runtime_error(
+                        "acidcam-gpu-first requires an enabled GPU filter chain");
+                }
+#else
+                throw std::runtime_error(
+                    "acidcam-gpu-first requires acidcam-gpu support");
+#endif
+                if (options.maximize_fps) {
+                    throw std::runtime_error(
+                        "acidcam-gpu-first cannot be used with maximize FPS");
+                }
+                if (source_kind == SourceKind::Graphic) {
+                    throw std::runtime_error(
+                        "acidcam-gpu-first supports camera and video input");
+                }
+                if (!options.edge_model.empty() ||
+                    !options.human_model.empty() ||
+                    !options.onnx_configuration.empty()) {
+                    throw std::runtime_error(
+                        "acidcam-gpu-first cannot be combined with DNN input effects");
+                }
+                if (hdr_input_precision_enabled) {
+                    throw std::runtime_error(
+                        "acidcam-gpu-first cannot be enabled for HDR input");
+                }
+            }
+
+            const bool settings_changed =
+                !currently_enabled ||
+                options.dream_model != requested.model_path ||
+                options.dream_layer != requested.layer ||
+                options.dream_fp16 != requested.fp16 ||
+                options.dream_iterations != requested.iterations ||
+                options.dream_size != requested.maximum_dimension ||
+                options.dream_channel != requested.channel ||
+                options.dream_octaves != requested.octaves ||
+                options.dream_jitter != requested.jitter ||
+                options.dream_smoothing != requested.smoothing ||
+                options.dream_strength != requested.strength ||
+                options.dream_feedback != requested.feedback ||
+                options.dream_zoom != requested.zoom ||
+                options.dream_rotation != requested.rotation ||
+                options.dream_octave_scale != requested.octave_scale ||
+                options.gpu_filter_before_dream !=
+                    requested.gpu_filter_first;
+            if (!settings_changed) {
+                return;
+            }
+
+            const bool reload_model =
+                !currently_enabled ||
+                options.dream_model != requested.model_path ||
+                options.dream_layer != requested.layer ||
+                options.dream_fp16 != requested.fp16;
+            std::unique_ptr<dream::Model> replacement;
+            dream::Model *validated_model = deep_dream_model.get();
+            if (reload_model) {
+                replacement = std::make_unique<dream::Model>(
+                    dream::Model::load(requested.model_path,
+                                       options.cuda_device, requested.layer,
+                                       requested.fp16));
+                validated_model = replacement.get();
+            }
+            if (requested.channel >= 0 &&
+                static_cast<std::size_t>(requested.channel) >=
+                    validated_model->selected_channels()) {
+                throw std::runtime_error(
+                    "channel is outside the selected layer's channel range");
+            }
+
+            if (replacement != nullptr) {
+                deep_dream_model = std::move(replacement);
+#ifdef ACMXVK_WITH_MXVK_CUDA
+                cuda_dream_rgba.release();
+#endif
+            }
+            options.dream_model = requested.model_path;
+            options.dream_layer = requested.layer;
+            options.dream_fp16 = requested.fp16;
+            options.dream_iterations = requested.iterations;
+            options.dream_size = requested.maximum_dimension;
+            options.dream_channel = requested.channel;
+            options.dream_octaves = requested.octaves;
+            options.dream_jitter = requested.jitter;
+            options.dream_smoothing = requested.smoothing;
+            options.dream_strength = requested.strength;
+            options.dream_feedback = requested.feedback;
+            options.dream_zoom = requested.zoom;
+            options.dream_rotation = requested.rotation;
+            options.dream_octave_scale = requested.octave_scale;
+            options.gpu_filter_before_dream = requested.gpu_filter_first;
+            dream_processing_logged = false;
+
+            if (announce) {
+                std::cout << "acmxvk: interface Deep Dream settings applied: "
+                          << requested.layer << ", "
+                          << requested.iterations << " iteration(s), strength "
+                          << requested.strength << ", feedback "
+                          << requested.feedback << ", zoom " << requested.zoom
+                          << ", rotation " << requested.rotation
+                          << " degrees, "
+                          << (requested.gpu_filter_first
+                                  ? "acidcam-gpu first"
+                                  : "Deep Dream first")
+                          << (reload_model ? " (model reloaded)" : "")
+                          << '\n';
+            }
+        } catch (const std::exception &error) {
+            std::cerr << "acmxvk: rejected interface Deep Dream settings: "
+                      << error.what() << '\n';
+        }
+#else
+        if (announce && requested.enabled) {
+            std::cerr << "acmxvk: ignored interface Deep Dream settings: this "
+                         "build does not include Deep Dream support\n";
         }
 #endif
     }
@@ -3484,12 +3733,62 @@ namespace acmxvk {
         return name;
     }
 
-    [[nodiscard]] bool MainWindow::dnnHostProcessingEnabled() const {
+    [[nodiscard]] bool MainWindow::hostPreprocessingEnabled() const {
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        if (deep_dream_model != nullptr) {
+            return true;
+        }
+#endif
 #ifdef ACMXVK_WITH_DNN
         return edge_detector != nullptr || human_segmenter != nullptr ||
                generic_onnx_processor != nullptr;
 #else
         return false;
+#endif
+    }
+
+    void MainWindow::applyDeepDreamEffect(cv::Mat &rgba) {
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        if (deep_dream_model == nullptr || rgba.empty()) {
+            return;
+        }
+        if (rgba.type() == CV_16UC4) {
+            cv::Mat compatible = rgba16ToRgba8(rgba);
+            if (!hdr_dream_compatibility_logged) {
+                std::cout << "acmxvk: Deep Dream uses an RGBA8 compatibility "
+                             "copy for HDR input\n";
+                hdr_dream_compatibility_logged = true;
+            }
+            applyDeepDreamEffect(compatible);
+            compatible.convertTo(rgba, CV_16UC4, 257.0);
+            return;
+        }
+        const dream::GradientAscentResult result =
+            deep_dream_model->apply_gradient_ascent(
+                rgba, dream::GradientAscentOptions{
+                          options.dream_iterations,
+                          static_cast<float>(options.dream_strength),
+                          static_cast<float>(options.dream_feedback),
+                          static_cast<float>(options.dream_zoom),
+                          static_cast<float>(options.dream_rotation),
+                          options.dream_size, options.dream_channel,
+                          options.dream_octaves,
+                          static_cast<float>(options.dream_octave_scale),
+                          options.dream_jitter, options.dream_smoothing});
+        if (!std::isfinite(result.mean_pixel_change)) {
+            throw std::runtime_error(
+                "Deep Dream returned a non-finite processed frame");
+        }
+        if (!dream_processing_logged) {
+            std::cout << "acmxvk: Deep Dream working frame: "
+                      << result.processed_width << 'x'
+                      << result.processed_height << " -> " << rgba.cols << 'x'
+                      << rgba.rows << " source texture ("
+                      << result.processed_octaves << " octave(s))\n";
+            dream_processing_logged = true;
+        }
+#else
+        static_cast<void>(rgba);
 #endif
     }
 
@@ -3624,6 +3923,7 @@ namespace acmxvk {
             source_kind = SourceKind::Graphic;
             graphic_rgba = loadRgbaImage(options.graphic_file);
             applyDnnEffects(graphic_rgba);
+            applyDeepDreamEffect(graphic_rgba);
             rotateFrame(graphic_rgba, options.frame_rotation);
             if (!human_overlay_rgba.empty()) {
                 rotateFrame(human_overlay_rgba, options.frame_rotation);
@@ -3656,6 +3956,11 @@ namespace acmxvk {
 #else
             hdr_input_precision_enabled = false;
 #endif
+            if (options.gpu_filter_before_dream &&
+                hdr_input_precision_enabled) {
+                throw std::runtime_error(
+                    "--gpu-filter-before-dream does not support HDR input");
+            }
             hdr_transfer_processing_enabled =
                 hdr_input_precision_enabled &&
                 (video_hdr_info.color_transfer ==
@@ -5216,8 +5521,22 @@ namespace acmxvk {
         }
 
         bool history_updated = false;
+#if defined(ACMXVK_WITH_CUDA) && defined(ACMXVK_WITH_DEEP_DREAM) && \
+    defined(ACMXVK_WITH_MXVK_CUDA)
+        if (options.gpu_filter_before_dream &&
+            deep_dream_model != nullptr && gpu_filter_engine != nullptr &&
+            !cuda_dream_rgba.empty()) {
+            const cv::cuda::GpuMat &history_input =
+                options.frame_rotation == FrameRotation::None
+                    ? cuda_dream_rgba
+                    : cuda_rotated_rgba;
+            updateCudaHistoryFrame(history_input,
+                                   gpu_filter_engine->stream());
+            history_updated = true;
+        }
+#endif
 #ifdef ACMXVK_WITH_CUDA
-        if (gpu_filter_engine != nullptr) {
+        if (!history_updated && gpu_filter_engine != nullptr) {
             updateFilteredCudaHistoryFrame();
             history_updated = true;
         }
@@ -5418,6 +5737,7 @@ namespace acmxvk {
         cv::Mat rgba;
         cv::cvtColor(bgr, rgba, cv::COLOR_BGR2RGBA);
         applyDnnEffects(rgba);
+        applyDeepDreamEffect(rgba);
         rotateFrame(rgba, options.frame_rotation);
         if (!human_overlay_rgba.empty()) {
             rotateFrame(human_overlay_rgba, options.frame_rotation);
@@ -5439,12 +5759,152 @@ namespace acmxvk {
         return true;
     }
 
+#if defined(ACMXVK_WITH_MXVK_CUDA) && defined(ACMXVK_WITH_DEEP_DREAM)
+    [[nodiscard]] bool MainWindow::readCudaDeepDreamFrame() {
+        cv::cuda::Stream *capture_stream = nullptr;
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+        if (using_ffmpeg_capture) {
+            if (!ffmpeg_capture.readGpuRgba(cuda_input_rgba,
+                                            ffmpeg_cuda_stream, false)) {
+                return false;
+            }
+            capture_stream = &ffmpeg_cuda_stream;
+        } else
+#endif
+        {
+            if (!capture.readGpuRgba(cuda_input_rgba, false)) {
+                return false;
+            }
+            capture_stream = &capture.cudaStream();
+        }
+
+        const cv::cuda::GpuMat *dream_input = &cuda_input_rgba;
+        cv::cuda::Stream *dream_stream = capture_stream;
+        bool filtered = false;
+#ifdef ACMXVK_WITH_CUDA
+        if (options.gpu_filter_before_dream &&
+            gpu_filter_engine != nullptr) {
+            if (!gpu_filter_engine->process(cuda_input_rgba,
+                                            *capture_stream)) {
+                throw std::runtime_error(
+                    "acidcam-gpu rejected the pre-dream CUDA frame");
+            }
+            dream_input = &gpu_filter_engine->output();
+            dream_stream = &gpu_filter_engine->stream();
+            filtered = true;
+        }
+#endif
+
+        const dream::GradientAscentResult dream_result =
+            deep_dream_model->apply_gradient_ascent_cuda(
+                *dream_input, cuda_dream_rgba, *dream_stream,
+                dream::GradientAscentOptions{
+                    options.dream_iterations,
+                    static_cast<float>(options.dream_strength),
+                    static_cast<float>(options.dream_feedback),
+                    static_cast<float>(options.dream_zoom),
+                    static_cast<float>(options.dream_rotation),
+                    options.dream_size, options.dream_channel,
+                    options.dream_octaves,
+                    static_cast<float>(options.dream_octave_scale),
+                    options.dream_jitter, options.dream_smoothing});
+        if (!std::isfinite(dream_result.mean_pixel_change)) {
+            throw std::runtime_error(
+                "Deep Dream returned a non-finite CUDA frame");
+        }
+
+        const cv::cuda::GpuMat &render_input =
+            rotateCudaFrame(cuda_dream_rgba, *dream_stream);
+        const cv::cuda::GpuMat *final_input = &render_input;
+        cv::cuda::Stream *final_stream = dream_stream;
+#ifdef ACMXVK_WITH_CUDA
+        if (!options.gpu_filter_before_dream &&
+            gpu_filter_engine != nullptr) {
+            if (!gpu_filter_engine->process(render_input, *dream_stream)) {
+                throw std::runtime_error(
+                    "acidcam-gpu rejected the post-dream CUDA frame");
+            }
+            final_input = &gpu_filter_engine->output();
+            final_stream = &gpu_filter_engine->stream();
+            filtered = true;
+        }
+#endif
+        if (!frame_sprite->updateTextureCuda(*final_input, *final_stream)) {
+            final_input->download(cuda_input_fallback_rgba, *final_stream);
+            final_stream->waitForCompletion();
+            if (!cuda_input_fallback_logged) {
+                std::cerr
+                    << "acmxvk: direct Deep Dream/Vulkan upload "
+                       "unavailable; using host staging\n";
+                cuda_input_fallback_logged = true;
+            }
+            frame_sprite->updateTexture(
+                cuda_input_fallback_rgba.ptr(), cuda_input_fallback_rgba.cols,
+                cuda_input_fallback_rgba.rows,
+                static_cast<int>(cuda_input_fallback_rgba.step));
+        }
+        updateModelTextureCuda(*final_input, *final_stream);
+
+        if (!dream_processing_logged) {
+            std::cout << "acmxvk: Deep Dream CUDA working frame: "
+                      << dream_result.processed_width << 'x'
+                      << dream_result.processed_height << " -> "
+                      << render_input.cols << 'x' << render_input.rows
+                      << " Vulkan texture ("
+                      << dream_result.processed_octaves << " octave(s))\n";
+            dream_processing_logged = true;
+        }
+        if (!cuda_input_path_logged) {
+            std::cout
+                << "acmxvk: CUDA interop path active: capture/NVDEC -> ";
+            if (options.gpu_filter_before_dream && filtered) {
+                std::cout << "acidcam-gpu -> ";
+            }
+            std::cout << "LibTorch Deep Dream -> ";
+            if (options.frame_rotation != FrameRotation::None) {
+                std::cout << "CUDA rotation -> ";
+            }
+            if (!options.gpu_filter_before_dream && filtered) {
+                std::cout << "acidcam-gpu -> ";
+            }
+            std::cout << "Vulkan texture";
+            if (cuda_input_fallback_logged) {
+                std::cout << " (host-staging upload fallback)";
+            }
+            std::cout << '\n';
+            cuda_input_path_logged = true;
+        }
+
+        const bool history_was_initialized = history_initialized;
+        initializeCudaHistory(*final_input, *final_stream, filtered);
+        if (source_kind != SourceKind::Camera && history_was_initialized &&
+            ++history_delay_counter > options.cache_delay) {
+            updateCudaHistoryFrame(*final_input, *final_stream);
+            history_delay_counter = 0;
+        }
+        if (source_kind == SourceKind::Camera) {
+            camera_history_clock_started = false;
+        }
+        return true;
+    }
+#endif
+
     [[nodiscard]] bool MainWindow::readInputFrame() {
         if (source_kind == SourceKind::Camera && options.maximize_fps) {
             return readLatestCameraFrame();
         }
+#if defined(ACMXVK_WITH_MXVK_CUDA) && defined(ACMXVK_WITH_DEEP_DREAM)
+        if (deep_dream_model != nullptr && !hdr_input_precision_enabled
+#ifdef ACMXVK_WITH_DNN
+            && edge_detector == nullptr && human_segmenter == nullptr &&
+            generic_onnx_processor == nullptr
+#endif
+        ) {
+            return readCudaDeepDreamFrame();
+        }
+#endif
 #ifdef ACMXVK_WITH_CUDA
-        if (gpu_filter_engine != nullptr && !dnnHostProcessingEnabled() &&
+        if (gpu_filter_engine != nullptr && !hostPreprocessingEnabled() &&
             !hdr_input_precision_enabled) {
             cv::cuda::Stream *capture_stream = nullptr;
 #ifdef MXVK_WITH_FFMPEG_CAPTURE
@@ -5501,7 +5961,7 @@ namespace acmxvk {
 #if defined(MXVK_WITH_FFMPEG_CAPTURE)
         if (using_ffmpeg_capture &&
             ffmpeg_capture.using_hardware_decode() &&
-            !dnnHostProcessingEnabled() && !hdr_input_precision_enabled) {
+            !hostPreprocessingEnabled() && !hdr_input_precision_enabled) {
             if (!ffmpeg_capture.readGpuRgba(cuda_input_rgba,
                                             ffmpeg_cuda_stream, false)) {
                 return false;
@@ -5552,7 +6012,7 @@ namespace acmxvk {
 #endif
 
         bool requires_host_frame = hdr_input_precision_enabled ||
-                                   dnnHostProcessingEnabled() ||
+                                   hostPreprocessingEnabled() ||
                                    historyCacheEnabled() ||
                                    options.frame_rotation != FrameRotation::None ||
                                    model_initialized;
@@ -5569,6 +6029,7 @@ namespace acmxvk {
             return false;
         }
         applyDnnEffects(rgba);
+        applyDeepDreamEffect(rgba);
         rotateFrame(rgba, options.frame_rotation);
         if (!human_overlay_rgba.empty()) {
             rotateFrame(human_overlay_rgba, options.frame_rotation);

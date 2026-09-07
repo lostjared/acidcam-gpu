@@ -285,6 +285,34 @@ namespace acmxvk {
             }
         }
 
+        next.deep_dream.enabled = impl->selection->dream_enabled != 0;
+        next.deep_dream.fp16 = impl->selection->dream_fp16 != 0;
+        next.deep_dream.gpu_filter_first =
+            impl->selection->dream_gpu_filter_first != 0;
+        next.deep_dream.iterations = impl->selection->dream_iterations;
+        next.deep_dream.maximum_dimension =
+            impl->selection->dream_maximum_dimension;
+        next.deep_dream.channel = impl->selection->dream_channel;
+        next.deep_dream.octaves = impl->selection->dream_octaves;
+        next.deep_dream.jitter = impl->selection->dream_jitter;
+        next.deep_dream.smoothing = impl->selection->dream_smoothing;
+        next.deep_dream.strength = impl->selection->dream_strength;
+        next.deep_dream.feedback = impl->selection->dream_feedback;
+        next.deep_dream.zoom = impl->selection->dream_zoom;
+        next.deep_dream.rotation = impl->selection->dream_rotation;
+        next.deep_dream.octave_scale =
+            impl->selection->dream_octave_scale;
+        const auto dream_model_end = std::find(
+            std::begin(impl->selection->dream_model_path),
+            std::end(impl->selection->dream_model_path), '\0');
+        next.deep_dream.model_path.assign(
+            std::begin(impl->selection->dream_model_path), dream_model_end);
+        const auto dream_layer_end = std::find(
+            std::begin(impl->selection->dream_layer),
+            std::end(impl->selection->dream_layer), '\0');
+        next.deep_dream.layer.assign(
+            std::begin(impl->selection->dream_layer), dream_layer_end);
+
         next.audio_file.request_sequence =
             impl->selection->audio_file_sequence;
         const auto audio_path_end = std::find(

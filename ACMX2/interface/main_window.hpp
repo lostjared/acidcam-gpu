@@ -33,6 +33,7 @@
 #include <random>
 
 class CustomUniformDialog;
+class DeepDreamSettingsDialog;
 class LibraryBuilderDialog;
 class QDialog;
 class QTabWidget;
@@ -89,6 +90,7 @@ class MainWindow : public QMainWindow {
     void menuSearch();
     void menuFindNext();
     void menuGPUFilterSettings();
+    void menuDeepDreamSettings();
     void menuShaderPassSettings();
     void menuPlaylistSettings();
     void menuLibraryBuilder();
@@ -227,6 +229,7 @@ class MainWindow : public QMainWindow {
     bool audio_available = false;
     bool midi_available = false;
     bool dnn_available = false;
+    bool deep_dream_available = false;
     void detectCudaSupport();
     void detectFeatureSupport();
     QAction *listMenu_search = nullptr;
@@ -310,6 +313,24 @@ class MainWindow : public QMainWindow {
     QString gpu_filter_indices;
     int gpu_buffer_size = 8;
     QAction *gpuFilterAction;
+    bool deep_dream_enabled = false;
+    QString deep_dream_model;
+    QString deep_dream_layer = "relu4_2";
+    int deep_dream_iterations = 1;
+    double deep_dream_strength = 0.05;
+    double deep_dream_feedback = 0.9;
+    double deep_dream_zoom = 1.01;
+    double deep_dream_rotation = 0.1;
+    int deep_dream_maximum_dimension = 512;
+    bool deep_dream_fp16 = false;
+    int deep_dream_channel = -1;
+    int deep_dream_octaves = 1;
+    double deep_dream_octave_scale = 1.4;
+    int deep_dream_jitter = 0;
+    int deep_dream_smoothing = 0;
+    bool deep_dream_gpu_filter_first = false;
+    QAction *deepDreamAction = nullptr;
+    QPointer<DeepDreamSettingsDialog> deepDreamSettingsDialog;
     QAction *shaderPassAction;
     QPointer<ShaderPassDialog> shaderPassDialog;
     QPointer<PlaylistDialog> playlistDialog;
@@ -414,6 +435,8 @@ class MainWindow : public QMainWindow {
     void publishMultipassShadersToRunningProcess();
     void publishRepeatStateToRunningProcess();
     void publishRuntimeSettingsToRunningProcess();
+    [[nodiscard]] bool validateDeepDreamLaunch(QString &error) const;
+    void appendDeepDreamArguments(QStringList &arguments) const;
     void publishCustomUniformsToRunningProcess();
     void cleanupShaderSelectionSharedMemory();
     void cleanupShaderSelectionSemaphore();

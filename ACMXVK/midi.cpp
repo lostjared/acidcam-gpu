@@ -14,8 +14,42 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include<charconv>
 
 namespace acmxvk::midi {
+
+    void parse_block(std::string_view b) {
+	    int stat = 0, value = 0, code = 0;
+	    const char *cur = b.data();
+	    const char *end = b.data() + b.size();
+	    auto [ptr_value, e] = std::from_chars(cur, end, stat);
+	    if(e  != std::errc{}) {
+		    std::cerr << "failed to parse status bytesn\n";
+		    return;
+	    }
+	    cur = ptr_value;
+	    while(cur != end && *cur == ' ') {
+		    cur ++;
+	    }
+
+	    auto [ptr_value2, e2] = std::from_chars(cur, end, code);
+	    if(e2 != std::errc{}) {
+		    std::cerr << "Failed to parse code\n";
+		    return;
+	    }
+	    cur = ptr_value2;
+	    while(cur != end && *cur == ' ') {
+		    cur++;
+	    }
+	    auto [ptr3, e3] = std::from_chars(cur, end, value);
+	    if(e3 != std::errc{}) {
+		    std::cerr << "Error failed to pasre  value\n";
+		    return;
+	    }
+
+	    std::cout <<  "Status: " << stat << " CC: " << code << " Value: " << value << "\n";
+    }
+
     std::vector<MidiMapping> load_mapping_file(const std::string &filename) {
         input::validate_string(filename, input::StringKind::Path,
                                "MIDI map path");
@@ -30,6 +64,8 @@ namespace acmxvk::midi {
         std::size_t line_number = 0;
         while (input::read_bounded_line(mapping_input, line, "MIDI map file",
                                         line_number + 1)) {
+
+	    parse_block(line);
             ++line_number;
             const std::size_t first = line.find_first_not_of(" \t\r");
             if (first == std::string::npos || line[first] == '#') {

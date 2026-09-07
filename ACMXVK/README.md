@@ -36,8 +36,9 @@ complete replacement for ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
+| Deep Dream | Increment 11 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, performance controls, feature-channel targeting, progressive multi-octave detail, deterministic spatial jitter, GPU gradient smoothing, and a CUDA-resident capture-to-Vulkan path. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
-| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
+| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, Deep Dream configuration, and file-audio replacement are integrated into the ACMXVK workflow. |
 
 ## Source layout
 
@@ -74,6 +75,9 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
 - Optional OpenCV DNN module when building with `-DWITH_OPENCV_DNN=ON`
 - Optional CUDA Toolkit, CUDA-enabled OpenCV and MXVK, and an installed
   `acidcam-gpu` CMake package when building with `-DWITH_CUDA=ON`
+- Optional CUDA Toolkit and CUDA-enabled LibTorch when building with
+  `-DWITH_DEEP_DREAM=ON`; on Arch Linux these are provided by `cuda`, `cudnn`,
+  and `python-pytorch-cuda`
 
 Ensure the selected Vulkan SDK's `bin` directory is on `PATH` so CMake can
 find tools such as `glslc`. If the SDK is installed outside the platform's
@@ -99,6 +103,230 @@ cmake --build build/acmxvk --target uninstall
 
 Audio and MIDI support are optional and remain disabled when their CMake
 options are omitted.
+
+### Deep Dream development support
+
+Increment 1 adds optional CUDA LibTorch discovery and a runtime autograd probe.
+It does not yet load a model or alter rendered frames. On Arch Linux, configure
+and verify it with:
+
+```bash
+sudo pacman -S --needed cuda cudnn python-pytorch-cuda
+cmake -S ACMXVK -B build/acmxvk-dream -DWITH_DEEP_DREAM=ON
+cmake --build build/acmxvk-dream -j2
+./build/acmxvk-dream/acmxvk --check-deep-dream
+```
+
+The probe always exercises CPU autograd. When NVIDIA device access is available,
+it also creates a CUDA tensor, runs a forward and backward operation, validates
+the gradient, synchronizes the selected device, and reports cuDNN availability.
+Use `--cuda-device N` with the probe to select a device. A container that reports
+zero CUDA devices must be recreated or configured with NVIDIA device access
+before the GPU portion can run.
+
+Increment 2 adds the VGG16 TorchScript exporter and model inspector. Install
+Torchvision for the exporter, then create a model containing the standard 13
+VGG16 ReLU feature layers:
+
+```bash
+sudo pacman -S --needed python-torchvision-cuda
+python ACMXVK/scripts/export_deep_dream_model.py \
+    --output models/deep-dream-vgg16.pt
+```
+
+The default weights may be downloaded into PyTorch's user cache on the first
+run. `--weights none` avoids a download for structural testing but does not
+produce a useful dream model. Use `--layers` to export a subset and
+`--default-layer` to choose the initial target. The exporter writes a readable
+`.pt.json` sidecar and embeds the authoritative typed metadata in the
+TorchScript module.
+
+Inspect the model and select a layer by name or zero-based output index:
+
+```bash
+./build/acmxvk-dream/acmxvk --check-deep-dream \
+    --dream-model models/deep-dream-vgg16.pt \
+    --dream-layer relu4_2 \
+    --cuda-device 0
+```
+
+The loader bounds the model file size, validates the ACMXVK format version,
+normalization and layer metadata, loads directly onto the selected CUDA device,
+freezes model parameters, runs a small forward pass, and verifies every feature
+output before accepting the model.
+
+Increment 3 adds the reusable RGBA8 gradient-ascent processor. It converts input
+pixels to normalized NCHW tensors, optimizes the pixels against the selected
+activation while model weights remain frozen, normalizes and validates each
+gradient, clamps values to the model's valid input range, and preserves the
+original alpha channel. Model inspection now runs one real gradient-ascent step
+on a synthetic image and reports its loss, mean gradient, and mean pixel change.
+This verifies the complete forward/backward pixel path.
+Only load TorchScript models from sources you trust.
+
+Increment 4 integrates that processor into camera, video, and still-image input.
+Deep Dream runs before acidcam-gpu filters and the existing Vulkan
+fragment/compute multipass chain, so existing shaders, history, playlists,
+crossfades, MIDI controls, audio reactivity, recording, and 3D texture mapping
+remain available. One iteration per source frame is the real-time-oriented
+default:
+
+```bash
+./build/acmxvk-dream/acmxvk \
+    --input input.mp4 \
+    --dream-model models/deep-dream-vgg16.pt \
+    --dream-layer relu4_2 \
+    --dream-iterations 1 \
+    --dream-strength 0.05 \
+    --dream-size 512 \
+    --dream-fp16 \
+    --shaders shaders_acmxvk \
+    --shader-file color-effect.frag.spv
+```
+
+`--dream-iterations` accepts 1–100 and `--dream-strength` accepts values greater
+than zero through 10. Higher values can be substantially slower or visually
+unstable. CUDA-enabled MXVK builds keep compatible capture and NVDEC frames
+resident through LibTorch and MXVK's imported Vulkan texture. Other
+configurations use the host-compatible path.
+
+Increment 5 adds a temporal feedback loop. Each new source frame is blended with
+the previous dreamed result after a small centered zoom and rotation, then the
+combined image receives the next gradient-ascent step. This allows the default
+single iteration to accumulate structure over time while fresh camera or video
+detail continuously anchors the image. The controls are:
+
+```text
+--dream-feedback 0.9
+--dream-zoom 1.01
+--dream-rotation 0.1
+```
+
+Feedback accepts 0–0.99; zero restores independent per-frame processing. Zoom
+accepts 0.9–1.1, and rotation accepts -5 through 5 degrees per source frame.
+The transformed feedback uses reflected borders to avoid introducing black
+edges. `--check-deep-dream` exercises a second synthetic frame and reports that
+the feedback path is ready. Existing Vulkan shaders still process the completed
+dreamed frame.
+
+Increment 6 bounds neural processing independently from output resolution. By
+default, an input larger than 512 pixels on its longest axis is reduced with an
+area filter for gradient ascent, then restored to the exact source dimensions
+before Vulkan shaders and recording. This makes 1080p and 4K sources practical
+without changing shader resolution. Use `--dream-size 0` for native-resolution
+processing or choose 64–4096 for a different maximum.
+
+`--dream-fp16` converts the model and working tensors to half precision on CUDA.
+This can improve throughput and reduce VRAM use on NVIDIA GPUs with efficient
+FP16 support, including the RTX 2070. Loss and gradient normalization remain in
+FP32 for numerical stability. FP32 remains the default compatibility mode.
+
+Increment 7 adds individual feature-channel targeting. The default
+`--dream-channel all` maximizes the complete selected activation as before.
+Choose a zero-based channel to isolate a narrower learned visual feature:
+
+```bash
+--dream-layer relu4_2 --dream-channel 42
+```
+
+The selected layer's channel count is printed by `--check-deep-dream`, and an
+out-of-range channel is rejected before media processing begins. VGG16 was
+trained for ImageNet classification and does not label a particular channel as
+"faces"; channel targeting provides a controlled way to explore which channels
+produce face-like, eye-like, architectural, or textural structures. Earlier
+layers tend toward edges and textures, while later layers produce larger and
+more semantic forms.
+
+Increment 8 adds progressive multi-octave processing. One octave remains the
+default and follows the previous real-time path. Increasing the count starts at
+a smaller image, performs the configured gradient iterations, then advances
+toward the full neural working size. At each transition ACMXVK restores the
+source detail that would otherwise be lost during upscaling:
+
+```bash
+--dream-octaves 3 --dream-octave-scale 1.4
+```
+
+`--dream-octaves` accepts 1–8. `--dream-octave-scale` accepts 1.1–3.0 and
+controls the size ratio between adjacent scales. Very small duplicate scales
+are collapsed when the model's minimum input size is reached. Each octave runs
+the selected number of gradient iterations, so three octaves are approximately
+three times as expensive as one. Multi-octave processing still completes
+before the existing Vulkan fragment/compute shader chain.
+
+Increment 9 adds deterministic spatial jitter to gradient ascent. Jitter rolls
+the neural input before each forward pass and lets autograd map the gradient
+back to the unshifted image. This reduces persistent border bias and fixed-grid
+patterns, especially when several iterations or octaves are used:
+
+```bash
+--dream-jitter 16
+```
+
+The value is the maximum horizontal and vertical displacement in pixels and
+accepts 0–64; zero preserves the previous behavior. Offsets are derived from
+the source-frame, octave, and iteration sequence rather than the system clock,
+so identical inputs and settings are independent of processing speed. Jitter
+does not add another model pass and can be combined with channel targeting,
+FP16, temporal feedback, and the existing Vulkan shader chain.
+
+Increment 10 adds optional CUDA gradient smoothing. It applies a centered box
+filter to the input gradient before its magnitude is measured and normalized,
+encouraging wider coherent structures instead of isolated pixel noise:
+
+```bash
+--dream-smoothing 2
+```
+
+The value is a pixel radius from 0–16; zero preserves the previous gradient
+path. Radius 1 or 2 is a useful starting point, while large radii produce
+broader and softer structures and add more GPU work. Smoothing operates on the
+existing gradient and does not introduce another VGG forward/backward pass. It
+can be combined with jitter, octaves, individual channels, feedback, and FP16.
+
+Increment 11 adds the CUDA/Vulkan interop path for Deep Dream. When MXVK was
+built with CUDA support, compatible camera and video frames remain on the GPU
+across capture or NVDEC, LibTorch preprocessing, optional input rotation,
+optional acidcam-gpu filters, MXVK texture/history upload, and Vulkan shader
+processing. LibTorch wraps the pitched CUDA RGBA allocation without copying it
+to the CPU, and the dreamed RGBA result is copied device-to-device into MXVK's
+Vulkan-imported image.
+
+The handoff waits for the producing OpenCV CUDA stream before LibTorch reads
+the frame and completes LibTorch work before publishing the result. Temporal
+feedback, octaves, channel targeting, jitter, smoothing, alpha preservation,
+history, 3D textures, recording, and fragment/compute chains remain supported.
+HDR compatibility conversion, active OpenCV DNN effects, asynchronous
+maximize-FPS camera capture, or an MXVK installation without CUDA use the
+established host path. `--check-deep-dream` reports whether CUDA/Vulkan interop
+was compiled into the executable.
+
+Use `--gpu-filter-before-dream` with `--gpu-filter` to run the selected
+acidcam-gpu chain on the source CUDA frame before LibTorch processes it. Without
+this option, the established order remains Deep Dream followed by acidcam-gpu.
+Both orders remain GPU-resident and publish their final combined result to the
+Vulkan texture, model texture, and history cache. The initial implementation is
+for SDR camera and video input and cannot be combined with `--maximize-fps`, a
+still graphic, HDR input, or an OpenCV DNN input effect.
+
+When the ACMX Qt interface detects a Deep Dream-enabled ACMXVK executable, its
+**Session > Deep Dream Settings** dialog exposes the model, feature layer,
+gradient-ascent, temporal-feedback, detail, and performance controls. The
+settings persist between sessions and apply to Run Selected, Run All, and Edit
+Command. While ACMXVK is running, **Apply** publishes the complete Deep Dream
+configuration through the versioned interface-control block. Scalar controls
+take effect between frames; changing the model, layer, or precision safely
+rebuilds the LibTorch model before replacing the active instance. Invalid live
+settings are rejected without disturbing the current effect. The optional
+acidcam-gpu-first order is available when a CUDA filter chain is enabled.
+
+The interface reads the exporter-generated `<model>.pt.json` sidecar when a
+model is selected. Valid ACMXVK metadata replaces the generic
+VGG16 layer choices with the exact layer list embedded by the exporter, reports
+the architecture and minimum input size, and preserves a previously selected
+layer when the new model supports it. Missing sidecars retain editable manual
+layer entry; malformed, oversized, duplicate, or unsupported metadata is
+reported without loading it into the interface.
 
 ### Pcons
 

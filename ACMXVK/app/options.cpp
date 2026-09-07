@@ -127,6 +127,10 @@ namespace acmxvk {
                                "--human", true);
         input::validate_string(options.onnx_configuration,
                                input::StringKind::Path, "--onnx", true);
+        input::validate_string(options.dream_model, input::StringKind::Path,
+                               "--dream-model", true);
+        input::validate_string(options.dream_layer, input::StringKind::Token,
+                               "--dream-layer", true);
 
         for (const std::string &path : options.shader_pass_files) {
             input::validate_string(path, input::StringKind::Path,
@@ -287,7 +291,7 @@ namespace acmxvk {
                options.check_audio || options.list_midi_devices ||
                options.check_midi || options.list_gpu_filters ||
                options.list_cuda_devices || options.check_cuda ||
-               options.check_dnn ||
+               options.check_dnn || options.check_deep_dream ||
                !options.probe_hdr_file.empty() ||
                options.enumerate_camera_device >= 0 ||
                options.list_encoders || !options.list_encoder_options.empty();
@@ -591,6 +595,117 @@ namespace acmxvk {
                 }
             } else if (option == "--check-dnn") {
                 options.check_dnn = true;
+            } else if (option == "--check-deep-dream") {
+                options.check_deep_dream = true;
+            } else if (option == "--dream-model") {
+                options.dream_model = optionValue(index, argc, argv, option);
+            } else if (option == "--dream-layer") {
+                options.dream_layer = optionValue(index, argc, argv, option);
+            } else if (option == "--dream-iterations") {
+                options.dream_iterations =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_iterations_specified = true;
+                if (options.dream_iterations < 1 ||
+                    options.dream_iterations > 100) {
+                    throw std::runtime_error(
+                        "--dream-iterations must be between 1 and 100");
+                }
+            } else if (option == "--dream-strength") {
+                options.dream_strength =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_strength_specified = true;
+                if (options.dream_strength <= 0.0 ||
+                    options.dream_strength > 10.0) {
+                    throw std::runtime_error(
+                        "--dream-strength must be greater than 0 and no more than 10");
+                }
+            } else if (option == "--dream-feedback") {
+                options.dream_feedback =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_feedback_specified = true;
+                if (options.dream_feedback < 0.0 ||
+                    options.dream_feedback > 0.99) {
+                    throw std::runtime_error(
+                        "--dream-feedback must be between 0 and 0.99");
+                }
+            } else if (option == "--dream-zoom") {
+                options.dream_zoom =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_zoom_specified = true;
+                if (options.dream_zoom < 0.9 || options.dream_zoom > 1.1) {
+                    throw std::runtime_error(
+                        "--dream-zoom must be between 0.9 and 1.1");
+                }
+            } else if (option == "--dream-rotation") {
+                options.dream_rotation =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_rotation_specified = true;
+                if (options.dream_rotation < -5.0 ||
+                    options.dream_rotation > 5.0) {
+                    throw std::runtime_error(
+                        "--dream-rotation must be between -5 and 5 degrees");
+                }
+            } else if (option == "--dream-size") {
+                options.dream_size =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_size_specified = true;
+                if (options.dream_size != 0 &&
+                    (options.dream_size < 64 || options.dream_size > 4096)) {
+                    throw std::runtime_error(
+                        "--dream-size must be 0 or between 64 and 4096");
+                }
+            } else if (option == "--dream-fp16") {
+                options.dream_fp16 = true;
+            } else if (option == "--dream-channel") {
+                const std::string value =
+                    optionValue(index, argc, argv, option);
+                options.dream_channel_specified = true;
+                if (value == "all") {
+                    options.dream_channel = -1;
+                } else {
+                    options.dream_channel = parseInteger(value, option);
+                    if (options.dream_channel < 0 ||
+                        options.dream_channel > 65535) {
+                        throw std::runtime_error(
+                            "--dream-channel must be 'all' or between 0 and 65535");
+                    }
+                }
+            } else if (option == "--dream-octaves") {
+                options.dream_octaves =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_octaves_specified = true;
+                if (options.dream_octaves < 1 || options.dream_octaves > 8) {
+                    throw std::runtime_error(
+                        "--dream-octaves must be between 1 and 8");
+                }
+            } else if (option == "--dream-octave-scale") {
+                options.dream_octave_scale =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_octave_scale_specified = true;
+                if (options.dream_octave_scale < 1.1 ||
+                    options.dream_octave_scale > 3.0) {
+                    throw std::runtime_error(
+                        "--dream-octave-scale must be between 1.1 and 3.0");
+                }
+            } else if (option == "--dream-jitter") {
+                options.dream_jitter =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_jitter_specified = true;
+                if (options.dream_jitter < 0 || options.dream_jitter > 64) {
+                    throw std::runtime_error(
+                        "--dream-jitter must be between 0 and 64");
+                }
+            } else if (option == "--dream-smoothing") {
+                options.dream_smoothing =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_smoothing_specified = true;
+                if (options.dream_smoothing < 0 ||
+                    options.dream_smoothing > 16) {
+                    throw std::runtime_error(
+                        "--dream-smoothing must be between 0 and 16");
+                }
+            } else if (option == "--gpu-filter-before-dream") {
+                options.gpu_filter_before_dream = true;
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1000,6 +1115,23 @@ namespace acmxvk {
         if (!options.input_file.empty() && !options.graphic_file.empty()) {
             throw std::runtime_error("--input and --graphic cannot be used together");
         }
+        if (!options.dream_layer.empty() && options.dream_model.empty()) {
+            throw std::runtime_error("--dream-layer requires --dream-model");
+        }
+        if ((options.dream_iterations_specified ||
+             options.dream_strength_specified ||
+             options.dream_feedback_specified || options.dream_zoom_specified ||
+             options.dream_rotation_specified || options.dream_size_specified ||
+             options.dream_fp16 || options.dream_channel_specified ||
+             options.dream_octaves_specified ||
+             options.dream_octave_scale_specified ||
+             options.dream_jitter_specified ||
+             options.dream_smoothing_specified ||
+             options.gpu_filter_before_dream) &&
+            options.dream_model.empty()) {
+            throw std::runtime_error(
+                "Deep Dream processing options require --dream-model");
+        }
         const int shader_source_count =
             static_cast<int>(!options.shader_directory.empty()) +
             static_cast<int>(!options.fragment_shader.empty()) +
@@ -1018,6 +1150,25 @@ namespace acmxvk {
         }
         if (options.gpu_buffer_specified && options.gpu_filter_indices.empty()) {
             throw std::runtime_error("--gpu-buffer requires --gpu-filter <list>");
+        }
+        if (options.gpu_filter_before_dream &&
+            options.gpu_filter_indices.empty()) {
+            throw std::runtime_error(
+                "--gpu-filter-before-dream requires --gpu-filter <list>");
+        }
+        if (options.gpu_filter_before_dream && options.maximize_fps) {
+            throw std::runtime_error(
+                "--gpu-filter-before-dream cannot be combined with --maximize-fps");
+        }
+        if (options.gpu_filter_before_dream && !options.graphic_file.empty()) {
+            throw std::runtime_error(
+                "--gpu-filter-before-dream currently supports camera and video input");
+        }
+        if (options.gpu_filter_before_dream &&
+            (!options.edge_model.empty() || !options.human_model.empty() ||
+             !options.onnx_configuration.empty())) {
+            throw std::runtime_error(
+                "--gpu-filter-before-dream cannot be combined with DNN input effects");
         }
         if ((!options.shader_pass_indices.empty() || !options.shader_pass_files.empty() ||
              !options.playlist_file.empty() || options.enable_playlist) &&
@@ -1221,6 +1372,25 @@ namespace acmxvk {
                << "      --white <0.0-1.0>      Alpha white point (default 0.75)\n"
                << "      --check-dnn             Report compiled OpenCV DNN support\n"
                << "                              Backend is benchmarked on the first frame\n\n"
+               << "Deep Dream (requires WITH_DEEP_DREAM=ON build):\n"
+               << "      --check-deep-dream      Probe LibTorch CPU/CUDA autograd support\n"
+               << "      --dream-model <file.pt> Apply a TorchScript feature model\n"
+               << "      --dream-layer <name|N>  Select a named or numbered feature layer\n"
+               << "      --dream-iterations <N> Number of ascent steps per input frame (1-100; default 1)\n"
+               << "      --dream-strength <N>   Gradient step size (0-10; default 0.05)\n"
+               << "      --dream-feedback <N>   Previous dreamed-frame blend (0-0.99; default 0.9)\n"
+               << "      --dream-zoom <N>       Feedback zoom per source frame (0.9-1.1; default 1.01)\n"
+               << "      --dream-rotation <N>   Feedback rotation degrees per frame (-5 to 5; default 0.1)\n"
+               << "      --dream-size <N>       Maximum neural working dimension (default 512; 0=native)\n"
+               << "      --dream-fp16           Use FP16 model and tensors on CUDA\n"
+               << "      --dream-channel <N|all> Target one feature channel (default: all)\n"
+               << "      --dream-octaves <N>    Progressive dream scales (1-8; default 1)\n"
+               << "      --dream-octave-scale <N> Scale ratio between octaves (1.1-3; default 1.4)\n"
+               << "      --dream-jitter <N>     Spatial gradient jitter in pixels (0-64; default 0)\n"
+               << "      --dream-smoothing <N>  Gradient smoothing radius (0-16; default 0)\n"
+               << "      --gpu-filter-before-dream\n"
+               << "                              Run acidcam-gpu before Deep Dream\n"
+               << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"
                << "      --builddir <directory> Output directory required by --build\n"

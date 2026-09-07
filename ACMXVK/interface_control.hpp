@@ -16,20 +16,20 @@
 
 namespace acmxvk::ipc {
     // This layout intentionally mirrors ACMX2/shader_selection_shm.hpp version
-    // 10. Keeping a local protocol declaration lets ACMXVK remain buildable as
+    // 11. Keeping a local protocol declaration lets ACMXVK remain buildable as
     // a standalone source tree while sharing the Qt launcher's control block.
     inline constexpr const char *SHADER_SELECTION_SHM_NAME =
-        "/acmx2_shader_selection";
+        "/acmx2_shader_selection_v11";
     inline constexpr const char *SHADER_SELECTION_SEMAPHORE_NAME =
-        "/acmx2_shm_v10";
+        "/acmx2_shm_v11";
 #ifdef _WIN32
     inline constexpr const wchar_t *SHADER_SELECTION_MAPPING_NAME_WINDOWS =
-        L"Local\\ACMX2ShaderSelectionV10";
+        L"Local\\ACMX2ShaderSelectionV11";
     inline constexpr const wchar_t *SHADER_SELECTION_MUTEX_NAME_WINDOWS =
-        L"Local\\ACMX2ShaderSelectionMutexV10";
+        L"Local\\ACMX2ShaderSelectionMutexV11";
 #endif
     inline constexpr std::uint32_t SHADER_SELECTION_MAGIC = 0x41434D58;
-    inline constexpr std::uint32_t SHADER_SELECTION_VERSION = 10;
+    inline constexpr std::uint32_t SHADER_SELECTION_VERSION = 11;
     inline constexpr std::uint32_t MAX_PASS_COUNT = 64;
     inline constexpr std::uint32_t MAX_GPU_FILTER_COUNT = 64;
     inline constexpr std::uint32_t MAX_WATERMARK_TEXT = 256;
@@ -37,8 +37,10 @@ namespace acmxvk::ipc {
     inline constexpr std::uint32_t MAX_CUSTOM_UNIFORMS = 64;
     inline constexpr std::uint32_t MAX_UNIFORM_NAME = 64;
     inline constexpr std::uint32_t MAX_AUDIO_FILE_PATH = 4096;
+    inline constexpr std::uint32_t MAX_DREAM_MODEL_PATH = 4096;
+    inline constexpr std::uint32_t MAX_DREAM_LAYER = 128;
     inline constexpr std::uint32_t MAX_SHADER_NAME = 1024;
-    inline constexpr std::size_t SHADER_SELECTION_DATA_SIZE = 76864;
+    inline constexpr std::size_t SHADER_SELECTION_DATA_SIZE = 81136;
 #ifdef _WIN32
     inline constexpr DWORD INTERFACE_LOCK_TIMEOUT_MS = 1000;
 #endif
@@ -78,6 +80,23 @@ namespace acmxvk::ipc {
         std::uint8_t audio_repeat = 0;
         std::uint8_t audio_reserved = 0;
         std::uint32_t audio_file_sequence = 0;
+        std::uint8_t dream_enabled = 0;
+        std::uint8_t dream_fp16 = 0;
+        std::uint8_t dream_gpu_filter_first = 0;
+        std::uint8_t dream_reserved = 0;
+        std::int32_t dream_iterations = 1;
+        std::int32_t dream_maximum_dimension = 512;
+        std::int32_t dream_channel = -1;
+        std::int32_t dream_octaves = 1;
+        std::int32_t dream_jitter = 0;
+        std::int32_t dream_smoothing = 0;
+        float dream_strength = 0.05F;
+        float dream_feedback = 0.9F;
+        float dream_zoom = 1.01F;
+        float dream_rotation = 0.1F;
+        float dream_octave_scale = 1.4F;
+        char dream_model_path[MAX_DREAM_MODEL_PATH] = {};
+        char dream_layer[MAX_DREAM_LAYER] = {};
         char selected_shader_name[MAX_SHADER_NAME] = {};
         std::uint32_t sequence = 0;
     };
