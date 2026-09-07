@@ -2626,7 +2626,10 @@ namespace acmxvk {
                 std::cout << "acmxvk: interface Deep Dream settings applied: "
                           << requested.layer << ", "
                           << requested.iterations << " iteration(s), strength "
-                          << requested.strength << ", "
+                          << requested.strength << ", feedback "
+                          << requested.feedback << ", zoom " << requested.zoom
+                          << ", rotation " << requested.rotation
+                          << " degrees, "
                           << (requested.gpu_filter_first
                                   ? "acidcam-gpu first"
                                   : "Deep Dream first")

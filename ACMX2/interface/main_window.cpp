@@ -4227,10 +4227,11 @@ void MainWindow::menuDeepDreamSettings() {
 
                 if (deep_dream_enabled) {
                     Log(tr("Deep Dream Settings Applied: %1/%2, %3 "
-                           "iteration(s), %4")
+                           "iteration(s), rotation %4 degrees, %5")
                             .arg(QFileInfo(deep_dream_model).fileName(),
                                  deep_dream_layer)
                             .arg(deep_dream_iterations)
+                            .arg(deep_dream_rotation, 0, 'f', 3)
                             .arg(deep_dream_gpu_filter_first
                                      ? tr("acidcam-gpu first")
                                      : tr("Deep Dream first")));

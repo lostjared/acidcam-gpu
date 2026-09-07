@@ -49,6 +49,7 @@ class DeepDreamSettingsDialog : public QDialog {
 
   private:
     [[nodiscard]] bool validate_settings();
+    void commit_editor_values();
     void load_ui_state();
     void save_ui_state();
     void update_enabled_state();

@@ -346,7 +346,22 @@ bool DeepDreamSettingsDialog::validate_settings() {
     return true;
 }
 
+void DeepDreamSettingsDialog::commit_editor_values() {
+    iterations_spin_box->interpretText();
+    strength_spin_box->interpretText();
+    feedback_spin_box->interpretText();
+    zoom_spin_box->interpretText();
+    rotation_spin_box->interpretText();
+    maximum_dimension_spin_box->interpretText();
+    channel_spin_box->interpretText();
+    octaves_spin_box->interpretText();
+    octave_scale_spin_box->interpretText();
+    jitter_spin_box->interpretText();
+    smoothing_spin_box->interpretText();
+}
+
 void DeepDreamSettingsDialog::apply_settings() {
+    commit_editor_values();
     if (!validate_settings()) {
         return;
     }
@@ -355,6 +370,7 @@ void DeepDreamSettingsDialog::apply_settings() {
 }
 
 void DeepDreamSettingsDialog::accept_settings() {
+    commit_editor_values();
     if (!validate_settings()) {
         return;
     }
