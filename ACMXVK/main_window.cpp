@@ -3763,8 +3763,9 @@ namespace acmxvk {
             compatible.convertTo(rgba, CV_16UC4, 257.0);
             return;
         }
-        const dream::GradientAscentResult result =
-            deep_dream_model->apply_gradient_ascent(
+        dream::GradientAscentResult result;
+        try {
+            result = deep_dream_model->apply_gradient_ascent(
                 rgba, dream::GradientAscentOptions{
                           options.dream_iterations,
                           static_cast<float>(options.dream_strength),
@@ -3775,9 +3776,14 @@ namespace acmxvk {
                           options.dream_octaves,
                           static_cast<float>(options.dream_octave_scale),
                           options.dream_jitter, options.dream_smoothing});
+        } catch (const std::exception &error) {
+            handleDeepDreamRuntimeError(error.what());
+            return;
+        }
         if (!std::isfinite(result.mean_pixel_change)) {
-            throw std::runtime_error(
+            handleDeepDreamRuntimeError(
                 "Deep Dream returned a non-finite processed frame");
+            return;
         }
         if (!dream_processing_logged) {
             std::cout << "acmxvk: Deep Dream working frame: "
@@ -3789,6 +3795,23 @@ namespace acmxvk {
         }
 #else
         static_cast<void>(rgba);
+#endif
+    }
+
+    void MainWindow::handleDeepDreamRuntimeError(std::string_view message) {
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        std::cerr << "acmxvk: Deep Dream frame failed: " << message
+                  << "; disabling Deep Dream while keeping ACMXVK running\n";
+        deep_dream_model.reset();
+#ifdef ACMXVK_WITH_MXVK_CUDA
+        cuda_dream_rgba.release();
+#endif
+        options.dream_model.clear();
+        options.dream_layer.clear();
+        options.gpu_filter_before_dream = false;
+        dream_processing_logged = false;
+#else
+        static_cast<void>(message);
 #endif
     }
 
@@ -5795,8 +5818,9 @@ namespace acmxvk {
         }
 #endif
 
-        const dream::GradientAscentResult dream_result =
-            deep_dream_model->apply_gradient_ascent_cuda(
+        dream::GradientAscentResult dream_result;
+        try {
+            dream_result = deep_dream_model->apply_gradient_ascent_cuda(
                 *dream_input, cuda_dream_rgba, *dream_stream,
                 dream::GradientAscentOptions{
                     options.dream_iterations,
@@ -5808,9 +5832,14 @@ namespace acmxvk {
                     options.dream_octaves,
                     static_cast<float>(options.dream_octave_scale),
                     options.dream_jitter, options.dream_smoothing});
+        } catch (const std::exception &error) {
+            handleDeepDreamRuntimeError(error.what());
+            return false;
+        }
         if (!std::isfinite(dream_result.mean_pixel_change)) {
-            throw std::runtime_error(
+            handleDeepDreamRuntimeError(
                 "Deep Dream returned a non-finite CUDA frame");
+            return false;
         }
 
         const cv::cuda::GpuMat &render_input =

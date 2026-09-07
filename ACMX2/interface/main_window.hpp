@@ -313,6 +313,7 @@ class MainWindow : public QMainWindow {
     QString gpu_filter_indices;
     int gpu_buffer_size = 8;
     QAction *gpuFilterAction;
+    QPointer<GPUFilterDialog> gpuFilterDialog;
     bool deep_dream_enabled = false;
     QString deep_dream_model;
     QString deep_dream_layer = "relu4_2";

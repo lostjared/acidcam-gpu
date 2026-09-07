@@ -381,22 +381,22 @@ void DeepDreamSettingsDialog::randomize_settings() {
         layer_combo_box->setCurrentIndex(
             random->bounded(layer_combo_box->count()));
     }
-    iterations_spin_box->setValue(random->bounded(1, 4));
-    strength_spin_box->setValue(0.02 + random->generateDouble() * 0.13);
+    iterations_spin_box->setValue(1);
+    strength_spin_box->setValue(0.01 + random->generateDouble() * 0.04);
     channel_spin_box->setValue(-1);
-    octaves_spin_box->setValue(random->bounded(1, 4));
-    octave_scale_spin_box->setValue(1.2 + random->generateDouble() * 0.6);
-    jitter_spin_box->setValue(random->bounded(0, 9));
-    smoothing_spin_box->setValue(random->bounded(0, 4));
-    feedback_spin_box->setValue(0.7 + random->generateDouble() * 0.28);
-    zoom_spin_box->setValue(0.975 + random->generateDouble() * 0.05);
+    octaves_spin_box->setValue(random->bounded(1, 3));
+    octave_scale_spin_box->setValue(1.2 + random->generateDouble() * 0.4);
+    jitter_spin_box->setValue(random->bounded(0, 5));
+    smoothing_spin_box->setValue(random->bounded(1, 4));
+    feedback_spin_box->setValue(0.55 + random->generateDouble() * 0.35);
+    zoom_spin_box->setValue(0.985 + random->generateDouble() * 0.03);
     const double rotation_magnitude =
-        0.75 + random->generateDouble() * 3.75;
+        0.5 + random->generateDouble() * 2.5;
     rotation_spin_box->setValue(random->bounded(2) == 0
                                     ? -rotation_magnitude
                                     : rotation_magnitude);
-    static constexpr std::array<int, 5> RANDOM_DIMENSIONS = {
-        256, 384, 512, 640, 768};
+    static constexpr std::array<int, 4> RANDOM_DIMENSIONS = {256, 384, 512,
+                                                             640};
     native_size_check_box->setChecked(false);
     maximum_dimension_spin_box->setValue(
         RANDOM_DIMENSIONS[static_cast<std::size_t>(

@@ -3679,6 +3679,10 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
         deepDreamSettingsDialog->close();
         deepDreamSettingsDialog = nullptr;
     }
+    if (gpuFilterDialog) {
+        gpuFilterDialog->close();
+        gpuFilterDialog = nullptr;
+    }
 
     QSettings settings("LostSideDead");
     settings.setValue(
@@ -4159,9 +4163,19 @@ void MainWindow::menuGPUFilterSettings() {
                                  tr("GPU filters are unavailable: acmx2 was built without CUDA support."));
         return;
     }
-    GPUFilterDialog gpuDialog(executable_path, this);
 
-    auto applyGpuDialogSettings = [&](bool enabled, const QString &filters, int bufferSize) {
+    if (gpuFilterDialog) {
+        gpuFilterDialog->show();
+        gpuFilterDialog->raise();
+        gpuFilterDialog->activateWindow();
+        return;
+    }
+
+    gpuFilterDialog = new GPUFilterDialog(executable_path, this);
+    gpuFilterDialog->setAttribute(Qt::WA_DeleteOnClose);
+    GPUFilterDialog *dialog = gpuFilterDialog;
+
+    auto applyGpuDialogSettings = [this](bool enabled, const QString &filters, int bufferSize) {
         gpu_filter_enabled = enabled;
         gpu_filter_indices = filters;
         gpu_buffer_size = bufferSize;
@@ -4180,16 +4194,20 @@ void MainWindow::menuGPUFilterSettings() {
         publishRuntimeSettingsToRunningProcess();
     };
 
-    connect(&gpuDialog, &GPUFilterDialog::settingsApplied, this,
-            [&](bool enabled, const QString &filterArgument, int bufferSize) {
+    connect(dialog, &GPUFilterDialog::settingsApplied, this,
+            [applyGpuDialogSettings](bool enabled, const QString &filterArgument, int bufferSize) {
                 applyGpuDialogSettings(enabled, filterArgument, bufferSize);
             });
+    connect(dialog, &QDialog::accepted, this,
+            [dialog, applyGpuDialogSettings]() {
+                applyGpuDialogSettings(dialog->isGPUFilterEnabled(),
+                                       dialog->getFilterArgument(),
+                                       dialog->getBufferSize());
+            });
 
-    if (gpuDialog.exec() == QDialog::Accepted) {
-        applyGpuDialogSettings(gpuDialog.isGPUFilterEnabled(),
-                               gpuDialog.getFilterArgument(),
-                               gpuDialog.getBufferSize());
-    }
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
 }
 
 void MainWindow::menuDeepDreamSettings() {
