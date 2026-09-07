@@ -486,10 +486,15 @@ namespace acmxvk::dream {
                 const torch::Tensor mean_gradient =
                     gradient.to(torch::kFloat32).abs().mean();
                 const float gradient_value = mean_gradient.item<float>();
-                if (!std::isfinite(gradient_value) ||
-                    gradient_value <= GRADIENT_EPSILON) {
+                if (!std::isfinite(gradient_value)) {
                     throw std::runtime_error(
-                        "Deep Dream selected layer produced no usable input gradient");
+                        "Deep Dream produced a non-finite input gradient magnitude");
+                }
+                result.activation_loss = loss.item<float>();
+                result.mean_gradient = gradient_value;
+                if (gradient_value <= 0.0F) {
+                    dream_input.grad().zero_();
+                    continue;
                 }
 
                 {
@@ -502,8 +507,6 @@ namespace acmxvk::dream {
                         torch::minimum(dream_input, maximum), minimum));
                 }
                 dream_input.grad().zero_();
-                result.activation_loss = loss.item<float>();
-                result.mean_gradient = gradient_value;
             }
         }
 

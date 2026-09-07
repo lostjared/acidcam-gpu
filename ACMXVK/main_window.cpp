@@ -5873,9 +5873,9 @@ namespace acmxvk {
         const cv::cuda::GpuMat *dream_input = &cuda_input_rgba;
         cv::cuda::Stream *dream_stream = capture_stream;
         bool filtered = false;
+        const bool filter_before_dream = options.gpu_filter_before_dream;
 #ifdef ACMXVK_WITH_CUDA
-        if (options.gpu_filter_before_dream &&
-            gpu_filter_engine != nullptr) {
+        if (filter_before_dream && gpu_filter_engine != nullptr) {
             if (!gpu_filter_engine->process(cuda_input_rgba,
                                             *capture_stream)) {
                 throw std::runtime_error(
@@ -5889,6 +5889,8 @@ namespace acmxvk {
 
         updateRandomDreamSettings();
         dream::GradientAscentResult dream_result;
+        const cv::cuda::GpuMat *processed_input = dream_input;
+        bool dream_processed = false;
         try {
             dream_result = deep_dream_model->apply_gradient_ascent_cuda(
                 *dream_input, cuda_dream_rgba, *dream_stream,
@@ -5902,23 +5904,24 @@ namespace acmxvk {
                     options.dream_octaves,
                     static_cast<float>(options.dream_octave_scale),
                     options.dream_jitter, options.dream_smoothing});
+            dream_processed =
+                std::isfinite(dream_result.mean_pixel_change);
+            if (dream_processed) {
+                processed_input = &cuda_dream_rgba;
+            } else {
+                handleDeepDreamRuntimeError(
+                    "Deep Dream returned a non-finite CUDA frame");
+            }
         } catch (const std::exception &error) {
             handleDeepDreamRuntimeError(error.what());
-            return false;
-        }
-        if (!std::isfinite(dream_result.mean_pixel_change)) {
-            handleDeepDreamRuntimeError(
-                "Deep Dream returned a non-finite CUDA frame");
-            return false;
         }
 
         const cv::cuda::GpuMat &render_input =
-            rotateCudaFrame(cuda_dream_rgba, *dream_stream);
+            rotateCudaFrame(*processed_input, *dream_stream);
         const cv::cuda::GpuMat *final_input = &render_input;
         cv::cuda::Stream *final_stream = dream_stream;
 #ifdef ACMXVK_WITH_CUDA
-        if (!options.gpu_filter_before_dream &&
-            gpu_filter_engine != nullptr) {
+        if (!filtered && gpu_filter_engine != nullptr) {
             if (!gpu_filter_engine->process(render_input, *dream_stream)) {
                 throw std::runtime_error(
                     "acidcam-gpu rejected the post-dream CUDA frame");
@@ -5944,7 +5947,7 @@ namespace acmxvk {
         }
         updateModelTextureCuda(*final_input, *final_stream);
 
-        if (!dream_processing_logged) {
+        if (dream_processed && !dream_processing_logged) {
             std::cout << "acmxvk: Deep Dream CUDA working frame: "
                       << dream_result.processed_width << 'x'
                       << dream_result.processed_height << " -> "
@@ -5956,14 +5959,16 @@ namespace acmxvk {
         if (!cuda_input_path_logged) {
             std::cout
                 << "acmxvk: CUDA interop path active: capture/NVDEC -> ";
-            if (options.gpu_filter_before_dream && filtered) {
+            if (filter_before_dream && filtered) {
                 std::cout << "acidcam-gpu -> ";
             }
-            std::cout << "LibTorch Deep Dream -> ";
+            if (dream_processed) {
+                std::cout << "LibTorch Deep Dream -> ";
+            }
             if (options.frame_rotation != FrameRotation::None) {
                 std::cout << "CUDA rotation -> ";
             }
-            if (!options.gpu_filter_before_dream && filtered) {
+            if (!filter_before_dream && filtered) {
                 std::cout << "acidcam-gpu -> ";
             }
             std::cout << "Vulkan texture";

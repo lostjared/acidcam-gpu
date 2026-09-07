@@ -134,6 +134,20 @@ python ACMXVK/scripts/export_deep_dream_model.py \
     --output models/deep-dream-vgg16.pt
 ```
 
+The exporter also supports pretrained Inception V3 feature blocks. Its default
+layer is `Mixed_6c`, a useful middle-to-late activation for complex Deep Dream
+structures:
+
+```bash
+python ACMXVK/scripts/export_deep_dream_model.py \
+    --architecture inception_v3 \
+    --output models/deep-dream-inception-v3.pt
+```
+
+The Inception export exposes `Mixed_5b` through `Mixed_7c` and writes the same
+embedded metadata and `.pt.json` interface sidecar as the VGG16 export. Select
+one at runtime with, for example, `--dream-layer Mixed_6c`.
+
 The default weights may be downloaded into PyTorch's user cache on the first
 run. `--weights none` avoids a download for structural testing but does not
 produce a useful dream model. Use `--layers` to export a subset and
