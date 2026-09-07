@@ -20,6 +20,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSettings>
@@ -151,6 +152,10 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
         QDialogButtonBox::Ok | QDialogButtonBox::Apply |
             QDialogButtonBox::Cancel,
         this);
+    QPushButton *randomize_button =
+        buttons->addButton("Randomize", QDialogButtonBox::ActionRole);
+    randomize_button->setToolTip(
+        "Generate and immediately apply a random Deep Dream preset.");
     auto *layout = new QVBoxLayout(this);
     layout->addWidget(scroll_area, 1);
     layout->addWidget(buttons);
@@ -165,6 +170,8 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
             &DeepDreamSettingsDialog::accept_settings);
     connect(buttons->button(QDialogButtonBox::Apply), &QPushButton::clicked,
             this, &DeepDreamSettingsDialog::apply_settings);
+    connect(randomize_button, &QPushButton::clicked, this,
+            &DeepDreamSettingsDialog::randomize_settings);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     load_ui_state();
@@ -358,6 +365,43 @@ void DeepDreamSettingsDialog::commit_editor_values() {
     octave_scale_spin_box->interpretText();
     jitter_spin_box->interpretText();
     smoothing_spin_box->interpretText();
+}
+
+void DeepDreamSettingsDialog::randomize_settings() {
+    if (!QFileInfo(model_file_edit->text().trimmed()).isFile()) {
+        QMessageBox::warning(this, "Deep Dream Model Required",
+                             "Select a TorchScript model before randomizing.");
+        model_file_edit->setFocus();
+        return;
+    }
+
+    QRandomGenerator *random = QRandomGenerator::global();
+    enable_check_box->setChecked(true);
+    if (layer_combo_box->count() > 0) {
+        layer_combo_box->setCurrentIndex(
+            random->bounded(layer_combo_box->count()));
+    }
+    iterations_spin_box->setValue(random->bounded(1, 4));
+    strength_spin_box->setValue(0.02 + random->generateDouble() * 0.13);
+    channel_spin_box->setValue(-1);
+    octaves_spin_box->setValue(random->bounded(1, 4));
+    octave_scale_spin_box->setValue(1.2 + random->generateDouble() * 0.6);
+    jitter_spin_box->setValue(random->bounded(0, 9));
+    smoothing_spin_box->setValue(random->bounded(0, 4));
+    feedback_spin_box->setValue(0.7 + random->generateDouble() * 0.28);
+    zoom_spin_box->setValue(0.975 + random->generateDouble() * 0.05);
+    const double rotation_magnitude =
+        0.75 + random->generateDouble() * 3.75;
+    rotation_spin_box->setValue(random->bounded(2) == 0
+                                    ? -rotation_magnitude
+                                    : rotation_magnitude);
+    static constexpr std::array<int, 5> RANDOM_DIMENSIONS = {
+        256, 384, 512, 640, 768};
+    native_size_check_box->setChecked(false);
+    maximum_dimension_spin_box->setValue(
+        RANDOM_DIMENSIONS[static_cast<std::size_t>(
+            random->bounded(static_cast<int>(RANDOM_DIMENSIONS.size())))]);
+    apply_settings();
 }
 
 void DeepDreamSettingsDialog::apply_settings() {

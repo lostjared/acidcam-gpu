@@ -44,6 +44,7 @@ class DeepDreamSettingsDialog : public QDialog {
 
   private slots:
     void browse_model();
+    void randomize_settings();
     void apply_settings();
     void accept_settings();
 

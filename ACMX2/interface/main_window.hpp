@@ -33,6 +33,7 @@
 #include <random>
 
 class CustomUniformDialog;
+class DeepDreamSettingsDialog;
 class LibraryBuilderDialog;
 class QDialog;
 class QTabWidget;
@@ -329,6 +330,7 @@ class MainWindow : public QMainWindow {
     int deep_dream_smoothing = 0;
     bool deep_dream_gpu_filter_first = false;
     QAction *deepDreamAction = nullptr;
+    QPointer<DeepDreamSettingsDialog> deepDreamSettingsDialog;
     QAction *shaderPassAction;
     QPointer<ShaderPassDialog> shaderPassDialog;
     QPointer<PlaylistDialog> playlistDialog;

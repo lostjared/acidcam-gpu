@@ -3675,6 +3675,10 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
         libraryBuilderDialog->close();
         libraryBuilderDialog = nullptr;
     }
+    if (deepDreamSettingsDialog) {
+        deepDreamSettingsDialog->close();
+        deepDreamSettingsDialog = nullptr;
+    }
 
     QSettings settings("LostSideDead");
     settings.setValue(
@@ -4198,14 +4202,24 @@ void MainWindow::menuDeepDreamSettings() {
         return;
     }
 
+    if (deepDreamSettingsDialog) {
+        deepDreamSettingsDialog->show();
+        deepDreamSettingsDialog->raise();
+        deepDreamSettingsDialog->activateWindow();
+        return;
+    }
+
     const bool gpu_filter_configured =
         cuda_available && gpu_filter_enabled &&
         !gpu_filter_indices.trimmed().isEmpty();
-    DeepDreamSettingsDialog dialog(gpu_filter_configured, this);
-    connect(&dialog, &DeepDreamSettingsDialog::settingsApplied, this,
-            [this, &dialog]() {
+    deepDreamSettingsDialog =
+        new DeepDreamSettingsDialog(gpu_filter_configured, this);
+    deepDreamSettingsDialog->setAttribute(Qt::WA_DeleteOnClose);
+    DeepDreamSettingsDialog *dialog = deepDreamSettingsDialog;
+    connect(dialog, &DeepDreamSettingsDialog::settingsApplied, this,
+            [this, dialog]() {
                 const DeepDreamConfiguration config =
-                    dialog.configuration();
+                    dialog->configuration();
                 deep_dream_enabled = config.enabled;
                 deep_dream_model = config.model_file;
                 deep_dream_layer = config.layer;
@@ -4239,7 +4253,9 @@ void MainWindow::menuDeepDreamSettings() {
                     Log("Deep Dream Disabled");
                 }
             });
-    dialog.exec();
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
 }
 
 bool MainWindow::validateDeepDreamLaunch(QString &error) const {
