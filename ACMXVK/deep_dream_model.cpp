@@ -41,6 +41,7 @@ namespace acmxvk::dream {
         constexpr int MAX_OCTAVES = 8;
         constexpr float MIN_OCTAVE_SCALE = 1.1F;
         constexpr float MAX_OCTAVE_SCALE = 3.0F;
+        constexpr int MAX_JITTER = 64;
 
         [[nodiscard]] c10::IValue require_attribute(
             const torch::jit::Module &module, const std::string &name) {
@@ -278,6 +279,10 @@ namespace acmxvk::dream {
                 throw std::runtime_error(
                     "Deep Dream octave scale must be between 1.1 and 3.0");
             }
+            if (options.jitter < 0 || options.jitter > MAX_JITTER) {
+                throw std::runtime_error(
+                    "Deep Dream jitter must be between 0 and 64 pixels");
+            }
         }
 
         [[nodiscard]] torch::Tensor normalization_tensor(
@@ -299,6 +304,7 @@ namespace acmxvk::dream {
         std::size_t selected_layer = 0;
         int cuda_device = 0;
         torch::ScalarType scalar_type = torch::kFloat32;
+        std::uint64_t frame_sequence = 0;
     };
 
     Model::Model(std::unique_ptr<Impl> implementation)
@@ -512,9 +518,14 @@ namespace acmxvk::dream {
 
         GradientAscentResult result;
         result.processed_octaves = static_cast<int>(octave_sizes.size());
+        const std::uint64_t frame_sequence =
+            implementation->frame_sequence++;
         torch::Tensor dream_input;
         torch::Tensor previous_source;
-        for (const auto &[octave_height, octave_width] : octave_sizes) {
+        for (std::size_t octave_index = 0;
+             octave_index < octave_sizes.size(); ++octave_index) {
+            const auto [octave_height, octave_width] =
+                octave_sizes[octave_index];
             const torch::Tensor octave_source = resize_tensor(
                 normalized_source, octave_height, octave_width);
             if (!dream_input.defined()) {
@@ -536,8 +547,25 @@ namespace acmxvk::dream {
 
             for (int iteration = 0; iteration < options.iterations;
                  ++iteration) {
+                torch::Tensor model_input = dream_input;
+                if (options.jitter > 0) {
+                    const std::uint64_t span =
+                        static_cast<std::uint64_t>(options.jitter * 2 + 1);
+                    const std::uint64_t phase =
+                        frame_sequence * 1315423911ULL +
+                        octave_index * 2654435761ULL +
+                        static_cast<std::uint64_t>(iteration) * 2246822519ULL;
+                    const std::int64_t shift_x =
+                        static_cast<std::int64_t>(phase % span) -
+                        options.jitter;
+                    const std::int64_t shift_y =
+                        static_cast<std::int64_t>((phase / span) % span) -
+                        options.jitter;
+                    model_input = torch::roll(
+                        dream_input, {shift_y, shift_x}, {2, 3});
+                }
                 const std::vector<torch::Tensor> outputs = feature_outputs(
-                    implementation->module.forward({dream_input}));
+                    implementation->module.forward({model_input}));
                 if (outputs.size() != implementation->metadata.layers.size()) {
                     throw std::runtime_error(
                         "Deep Dream model output count changed during gradient ascent");

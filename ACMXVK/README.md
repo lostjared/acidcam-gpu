@@ -36,7 +36,7 @@ complete replacement for ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
-| Deep Dream | Increment 8 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, performance controls, feature-channel targeting, and progressive multi-octave detail. |
+| Deep Dream | Increment 9 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, performance controls, feature-channel targeting, progressive multi-octave detail, and deterministic spatial jitter. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
 
@@ -252,6 +252,22 @@ are collapsed when the model's minimum input size is reached. Each octave runs
 the selected number of gradient iterations, so three octaves are approximately
 three times as expensive as one. Multi-octave processing still completes
 before the existing Vulkan fragment/compute shader chain.
+
+Increment 9 adds deterministic spatial jitter to gradient ascent. Jitter rolls
+the neural input before each forward pass and lets autograd map the gradient
+back to the unshifted image. This reduces persistent border bias and fixed-grid
+patterns, especially when several iterations or octaves are used:
+
+```bash
+--dream-jitter 16
+```
+
+The value is the maximum horizontal and vertical displacement in pixels and
+accepts 0–64; zero preserves the previous behavior. Offsets are derived from
+the source-frame, octave, and iteration sequence rather than the system clock,
+so identical inputs and settings are independent of processing speed. Jitter
+does not add another model pass and can be combined with channel targeting,
+FP16, temporal feedback, and the existing Vulkan shader chain.
 
 ### Pcons
 

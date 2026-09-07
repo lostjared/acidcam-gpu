@@ -112,6 +112,7 @@ int main(int argc, char **argv) {
                        options.dream_size, options.dream_fp16,
                        options.dream_channel, options.dream_octaves,
                        static_cast<float>(options.dream_octave_scale),
+                       options.dream_jitter,
                        std::cout, std::cerr)
                        ? EXIT_SUCCESS
                        : EXIT_FAILURE;
