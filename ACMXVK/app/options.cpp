@@ -704,6 +704,19 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "--dream-smoothing must be between 0 and 16");
                 }
+            } else if (option == "--random-dream" ||
+                       option == "--random_dream") {
+                options.random_dream_interval =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.random_dream_specified = true;
+                if (options.random_dream_interval <= 0.0) {
+                    throw std::runtime_error(
+                        std::string(option) + " must be greater than 0");
+                }
+            } else if (option == "--dream-headless") {
+                options.dream_headless = true;
+            } else if (option == "--deep-orig") {
+                options.deep_original = true;
             } else if (option == "--gpu-filter-before-dream") {
                 options.gpu_filter_before_dream = true;
             } else if (option == "--probe-hdr") {
@@ -1127,10 +1140,39 @@ namespace acmxvk {
              options.dream_octave_scale_specified ||
              options.dream_jitter_specified ||
              options.dream_smoothing_specified ||
+             options.random_dream_specified ||
+             options.dream_headless ||
+             options.deep_original ||
              options.gpu_filter_before_dream) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
                 "Deep Dream processing options require --dream-model");
+        }
+        if (options.dream_headless || options.deep_original) {
+            if (options.dream_headless && !options.headless) {
+                throw std::runtime_error(
+                    "--dream-headless requires --headless or --silent");
+            }
+            if (options.dream_headless && options.deep_original) {
+                throw std::runtime_error(
+                    "--dream-headless and --deep-orig are mutually exclusive");
+            }
+            if (options.input_file.empty()) {
+                throw std::runtime_error(
+                    "independent-frame Deep Dream mode requires --input <video>");
+            }
+            if (options.output_file.empty()) {
+                throw std::runtime_error(
+                    "independent-frame Deep Dream mode requires --output <file>");
+            }
+            if (options.random_dream_specified) {
+                throw std::runtime_error(
+                    "independent-frame Deep Dream mode cannot be combined with --random-dream");
+            }
+            options.dream_feedback = 0.0;
+            options.dream_zoom = 1.0;
+            options.dream_rotation = 0.0;
+            options.no_drop = true;
         }
         const int shader_source_count =
             static_cast<int>(!options.shader_directory.empty()) +
@@ -1388,6 +1430,10 @@ namespace acmxvk {
                << "      --dream-octave-scale <N> Scale ratio between octaves (1.1-3; default 1.4)\n"
                << "      --dream-jitter <N>     Spatial gradient jitter in pixels (0-64; default 0)\n"
                << "      --dream-smoothing <N>  Gradient smoothing radius (0-16; default 0)\n"
+               << "      --random-dream <seconds>\n"
+               << "                              Randomize safe dream controls at a media-time interval\n"
+               << "      --dream-headless       Offline per-frame video dreaming without temporal zoom\n"
+               << "      --deep-orig            Same independent-frame mode with a preview window\n"
                << "      --gpu-filter-before-dream\n"
                << "                              Run acidcam-gpu before Deep Dream\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"

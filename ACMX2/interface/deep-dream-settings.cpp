@@ -101,6 +101,11 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
         gpu_filter_available
             ? "Transform the CUDA source with acidcam-gpu before LibTorch."
             : "Enable an acidcam-gpu filter chain first.");
+    deep_original_check_box =
+        new QCheckBox("Independent-frame preview (--deep-orig)", this);
+    deep_original_check_box->setToolTip(
+        "Process each video frame independently without temporal feedback, "
+        "zoom, or rotation. Fully applies on the next launch.");
 
     auto *model_group = new QGroupBox("Model", this);
     auto *model_layout = new QFormLayout(model_group);
@@ -133,6 +138,7 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
     performance_layout->addRow("Maximum dimension:",
                                maximum_dimension_spin_box);
     performance_layout->addRow(fp16_check_box);
+    performance_layout->addRow(deep_original_check_box);
 
     auto *contents = new QWidget(this);
     auto *contents_layout = new QVBoxLayout(contents);
@@ -164,6 +170,8 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
             [this](bool) { update_enabled_state(); });
     connect(native_size_check_box, &QCheckBox::toggled, this,
             [this](bool) { update_enabled_state(); });
+    connect(deep_original_check_box, &QCheckBox::toggled, this,
+            [this](bool) { update_enabled_state(); });
     connect(browse_model_button, &QPushButton::clicked, this,
             &DeepDreamSettingsDialog::browse_model);
     connect(buttons, &QDialogButtonBox::accepted, this,
@@ -187,9 +195,10 @@ DeepDreamConfiguration DeepDreamSettingsDialog::configuration() const {
     result.layer = layer_combo_box->currentText().trimmed();
     result.iterations = iterations_spin_box->value();
     result.strength = strength_spin_box->value();
-    result.feedback = feedback_spin_box->value();
-    result.zoom = zoom_spin_box->value();
-    result.rotation = rotation_spin_box->value();
+    result.deep_original = deep_original_check_box->isChecked();
+    result.feedback = result.deep_original ? 0.0 : feedback_spin_box->value();
+    result.zoom = result.deep_original ? 1.0 : zoom_spin_box->value();
+    result.rotation = result.deep_original ? 0.0 : rotation_spin_box->value();
     result.maximum_dimension =
         native_size_check_box->isChecked()
             ? 0
@@ -461,6 +470,8 @@ void DeepDreamSettingsDialog::load_ui_state() {
     gpu_filter_first_check_box->setChecked(
         gpu_filter_available &&
         settings.value("deep_dream/gpu_filter_first", false).toBool());
+    deep_original_check_box->setChecked(
+        settings.value("deep_dream/deep_original", false).toBool());
 }
 
 void DeepDreamSettingsDialog::save_ui_state() {
@@ -471,9 +482,9 @@ void DeepDreamSettingsDialog::save_ui_state() {
     settings.setValue("deep_dream/layer", current.layer);
     settings.setValue("deep_dream/iterations", current.iterations);
     settings.setValue("deep_dream/strength", current.strength);
-    settings.setValue("deep_dream/feedback", current.feedback);
-    settings.setValue("deep_dream/zoom", current.zoom);
-    settings.setValue("deep_dream/rotation", current.rotation);
+    settings.setValue("deep_dream/feedback", feedback_spin_box->value());
+    settings.setValue("deep_dream/zoom", zoom_spin_box->value());
+    settings.setValue("deep_dream/rotation", rotation_spin_box->value());
     settings.setValue("deep_dream/maximum_dimension",
                       current.maximum_dimension);
     settings.setValue("deep_dream/fp16", current.fp16);
@@ -484,6 +495,7 @@ void DeepDreamSettingsDialog::save_ui_state() {
     settings.setValue("deep_dream/smoothing", current.smoothing);
     settings.setValue("deep_dream/gpu_filter_first",
                       current.gpu_filter_first);
+    settings.setValue("deep_dream/deep_original", current.deep_original);
 }
 
 void DeepDreamSettingsDialog::update_enabled_state() {
@@ -500,6 +512,12 @@ void DeepDreamSettingsDialog::update_enabled_state() {
     }
     maximum_dimension_spin_box->setEnabled(
         enabled && !native_size_check_box->isChecked());
+    const bool temporal_feedback_enabled =
+        enabled && !deep_original_check_box->isChecked();
+    feedback_spin_box->setEnabled(temporal_feedback_enabled);
+    zoom_spin_box->setEnabled(temporal_feedback_enabled);
+    rotation_spin_box->setEnabled(temporal_feedback_enabled);
+    deep_original_check_box->setEnabled(enabled);
     gpu_filter_first_check_box->setEnabled(enabled && gpu_filter_available);
     if (!gpu_filter_available) {
         gpu_filter_first_check_box->setChecked(false);

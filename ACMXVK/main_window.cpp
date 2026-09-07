@@ -1090,6 +1090,18 @@ namespace acmxvk {
                   << (options.gpu_filter_before_dream ? "before" : "after")
                   << " Deep Dream"
                   << "; output feeds the existing Vulkan shader chain\n";
+        if (options.random_dream_specified) {
+            std::cout << "acmxvk: randomized Deep Dream controls every "
+                      << options.random_dream_interval
+                      << " media second(s)\n";
+        }
+        if (options.dream_headless || options.deep_original) {
+            std::cout << "acmxvk: traditional "
+                      << (options.dream_headless ? "headless" : "preview")
+                      << " Deep Dream video mode: "
+                         "independent source frames, temporal feedback/zoom/"
+                         "rotation disabled, no-drop output\n";
+        }
 #endif
     }
 
@@ -3747,6 +3759,62 @@ namespace acmxvk {
 #endif
     }
 
+    void MainWindow::updateRandomDreamSettings() {
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        if (deep_dream_model == nullptr ||
+            !options.random_dream_specified) {
+            return;
+        }
+
+        double timeline = 0.0;
+        if (!currentVideoTimeline(timeline)) {
+            timeline = hudWallElapsedSeconds();
+        }
+        if (!std::isfinite(timeline) || timeline < 0.0) {
+            timeline = 0.0;
+        }
+        if (!random_dream_timeline_initialized ||
+            timeline < previous_random_dream_timeline) {
+            random_dream_period =
+                std::numeric_limits<std::uint64_t>::max();
+            random_dream_timeline_initialized = true;
+        }
+        previous_random_dream_timeline = timeline;
+
+        const auto period = static_cast<std::uint64_t>(
+            std::floor(timeline / options.random_dream_interval));
+        if (period == random_dream_period) {
+            return;
+        }
+        random_dream_period = period;
+
+        std::uniform_real_distribution<double> strength(0.01, 0.05);
+        std::uniform_real_distribution<double> feedback(0.55, 0.90);
+        std::uniform_real_distribution<double> zoom(0.985, 1.015);
+        std::uniform_real_distribution<double> rotation_magnitude(0.5, 3.0);
+        std::uniform_real_distribution<double> octave_scale(1.2, 1.6);
+        std::uniform_int_distribution<int> rotation_direction(0, 1);
+        std::uniform_int_distribution<int> octaves(1, 8);
+
+        options.dream_strength = strength(random_dream_rng);
+        options.dream_feedback = feedback(random_dream_rng);
+        options.dream_zoom = zoom(random_dream_rng);
+        const double magnitude = rotation_magnitude(random_dream_rng);
+        options.dream_rotation =
+            rotation_direction(random_dream_rng) == 0 ? -magnitude : magnitude;
+        options.dream_octaves = octaves(random_dream_rng);
+        options.dream_octave_scale = octave_scale(random_dream_rng);
+
+        std::cout << "acmxvk: random dream: strength "
+                  << options.dream_strength << ", feedback "
+                  << options.dream_feedback << ", zoom "
+                  << options.dream_zoom << ", rotation "
+                  << options.dream_rotation << ", octaves "
+                  << options.dream_octaves << ", octave scale "
+                  << options.dream_octave_scale << '\n';
+#endif
+    }
+
     void MainWindow::applyDeepDreamEffect(cv::Mat &rgba) {
 #ifdef ACMXVK_WITH_DEEP_DREAM
         if (deep_dream_model == nullptr || rgba.empty()) {
@@ -3763,6 +3831,7 @@ namespace acmxvk {
             compatible.convertTo(rgba, CV_16UC4, 257.0);
             return;
         }
+        updateRandomDreamSettings();
         dream::GradientAscentResult result;
         try {
             result = deep_dream_model->apply_gradient_ascent(
@@ -5818,6 +5887,7 @@ namespace acmxvk {
         }
 #endif
 
+        updateRandomDreamSettings();
         dream::GradientAscentResult dream_result;
         try {
             dream_result = deep_dream_model->apply_gradient_ascent_cuda(
