@@ -36,6 +36,25 @@ namespace acmxvk {
         std::vector<int> filter_indices;
     };
 
+    struct InterfaceDeepDreamState {
+        bool enabled = false;
+        bool fp16 = false;
+        bool gpu_filter_first = false;
+        int iterations = 1;
+        int maximum_dimension = 512;
+        int channel = -1;
+        int octaves = 1;
+        int jitter = 0;
+        int smoothing = 0;
+        float strength = 0.05F;
+        float feedback = 0.9F;
+        float zoom = 1.01F;
+        float rotation = 0.1F;
+        float octave_scale = 1.4F;
+        std::string model_path;
+        std::string layer;
+    };
+
     struct InterfaceAudioFileState {
         std::uint32_t request_sequence = 0;
         std::string path;
@@ -59,6 +78,7 @@ namespace acmxvk {
         InterfacePlaybackState playback;
         InterfaceOverlayState overlay;
         InterfaceGpuFilterState gpu_filters;
+        InterfaceDeepDreamState deep_dream;
         InterfaceAudioFileState audio_file;
         InterfaceReloadState reload;
     };

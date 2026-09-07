@@ -39,11 +39,16 @@ class DeepDreamSettingsDialog : public QDialog {
                                      QWidget *parent = nullptr);
     [[nodiscard]] DeepDreamConfiguration configuration() const;
 
+  signals:
+    void settingsApplied();
+
   private slots:
     void browse_model();
+    void apply_settings();
     void accept_settings();
 
   private:
+    [[nodiscard]] bool validate_settings();
     void load_ui_state();
     void save_ui_state();
     void update_enabled_state();

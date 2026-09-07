@@ -2454,6 +2454,25 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->audio_repeat = 0;
         shaderSelectionShm->audio_reserved = 0;
         shaderSelectionShm->audio_file_sequence = 0;
+        shaderSelectionShm->dream_enabled = 0;
+        shaderSelectionShm->dream_fp16 = 0;
+        shaderSelectionShm->dream_gpu_filter_first = 0;
+        shaderSelectionShm->dream_reserved = 0;
+        shaderSelectionShm->dream_iterations = 1;
+        shaderSelectionShm->dream_maximum_dimension = 512;
+        shaderSelectionShm->dream_channel = -1;
+        shaderSelectionShm->dream_octaves = 1;
+        shaderSelectionShm->dream_jitter = 0;
+        shaderSelectionShm->dream_smoothing = 0;
+        shaderSelectionShm->dream_strength = 0.05F;
+        shaderSelectionShm->dream_feedback = 0.9F;
+        shaderSelectionShm->dream_zoom = 1.01F;
+        shaderSelectionShm->dream_rotation = 0.1F;
+        shaderSelectionShm->dream_octave_scale = 1.4F;
+        std::fill(std::begin(shaderSelectionShm->dream_model_path),
+                  std::end(shaderSelectionShm->dream_model_path), '\0');
+        std::fill(std::begin(shaderSelectionShm->dream_layer),
+                  std::end(shaderSelectionShm->dream_layer), '\0');
         std::fill(std::begin(shaderSelectionShm->selected_shader_name),
                   std::end(shaderSelectionShm->selected_shader_name), '\0');
         shaderSelectionShm->sequence = 0;
@@ -3215,6 +3234,50 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
     shaderSelectionShm->gpu_filter_count = gpuCount;
     shaderSelectionShm->gpu_buffer_size = static_cast<uint8_t>(std::clamp(gpu_buffer_size, 4, 32));
     std::copy(gpuIndices.begin(), gpuIndices.end(), std::begin(shaderSelectionShm->gpu_filter_indices));
+
+    const QByteArray dreamModel = deep_dream_model.toUtf8();
+    const QByteArray dreamLayer = deep_dream_layer.toUtf8();
+    const bool dreamStringsFit =
+        dreamModel.size() < static_cast<int>(
+                                acmx2::ipc::kShaderSelectionMaxDreamModelPath) &&
+        dreamLayer.size() <
+            static_cast<int>(acmx2::ipc::kShaderSelectionMaxDreamLayer);
+    const bool dreamActive =
+        active_backend == acmx2::Backend::Acmxvk && deep_dream_available &&
+        deep_dream_enabled && !dreamModel.isEmpty() && dreamStringsFit;
+    shaderSelectionShm->dream_enabled = dreamActive ? 1 : 0;
+    shaderSelectionShm->dream_fp16 = deep_dream_fp16 ? 1 : 0;
+    shaderSelectionShm->dream_gpu_filter_first =
+        deep_dream_gpu_filter_first ? 1 : 0;
+    shaderSelectionShm->dream_iterations = deep_dream_iterations;
+    shaderSelectionShm->dream_maximum_dimension =
+        deep_dream_maximum_dimension;
+    shaderSelectionShm->dream_channel = deep_dream_channel;
+    shaderSelectionShm->dream_octaves = deep_dream_octaves;
+    shaderSelectionShm->dream_jitter = deep_dream_jitter;
+    shaderSelectionShm->dream_smoothing = deep_dream_smoothing;
+    shaderSelectionShm->dream_strength =
+        static_cast<float>(deep_dream_strength);
+    shaderSelectionShm->dream_feedback =
+        static_cast<float>(deep_dream_feedback);
+    shaderSelectionShm->dream_zoom = static_cast<float>(deep_dream_zoom);
+    shaderSelectionShm->dream_rotation =
+        static_cast<float>(deep_dream_rotation);
+    shaderSelectionShm->dream_octave_scale =
+        static_cast<float>(deep_dream_octave_scale);
+    std::fill(std::begin(shaderSelectionShm->dream_model_path),
+              std::end(shaderSelectionShm->dream_model_path), '\0');
+    std::fill(std::begin(shaderSelectionShm->dream_layer),
+              std::end(shaderSelectionShm->dream_layer), '\0');
+    if (dreamStringsFit) {
+        std::copy(dreamModel.cbegin(), dreamModel.cend(),
+                  shaderSelectionShm->dream_model_path);
+        std::copy(dreamLayer.cbegin(), dreamLayer.cend(),
+                  shaderSelectionShm->dream_layer);
+    } else if (deep_dream_enabled) {
+        Log("Deep Dream settings were not published because the model path "
+            "or layer name is too long");
+    }
 
     ++shaderSelectionShm->sequence;
 #endif
@@ -4139,39 +4202,43 @@ void MainWindow::menuDeepDreamSettings() {
         cuda_available && gpu_filter_enabled &&
         !gpu_filter_indices.trimmed().isEmpty();
     DeepDreamSettingsDialog dialog(gpu_filter_configured, this);
-    if (dialog.exec() != QDialog::Accepted) {
-        return;
-    }
+    connect(&dialog, &DeepDreamSettingsDialog::settingsApplied, this,
+            [this, &dialog]() {
+                const DeepDreamConfiguration config =
+                    dialog.configuration();
+                deep_dream_enabled = config.enabled;
+                deep_dream_model = config.model_file;
+                deep_dream_layer = config.layer;
+                deep_dream_iterations = config.iterations;
+                deep_dream_strength = config.strength;
+                deep_dream_feedback = config.feedback;
+                deep_dream_zoom = config.zoom;
+                deep_dream_rotation = config.rotation;
+                deep_dream_maximum_dimension =
+                    config.maximum_dimension;
+                deep_dream_fp16 = config.fp16;
+                deep_dream_channel = config.channel;
+                deep_dream_octaves = config.octaves;
+                deep_dream_octave_scale = config.octave_scale;
+                deep_dream_jitter = config.jitter;
+                deep_dream_smoothing = config.smoothing;
+                deep_dream_gpu_filter_first = config.gpu_filter_first;
+                publishRuntimeSettingsToRunningProcess();
 
-    const DeepDreamConfiguration config = dialog.configuration();
-    deep_dream_enabled = config.enabled;
-    deep_dream_model = config.model_file;
-    deep_dream_layer = config.layer;
-    deep_dream_iterations = config.iterations;
-    deep_dream_strength = config.strength;
-    deep_dream_feedback = config.feedback;
-    deep_dream_zoom = config.zoom;
-    deep_dream_rotation = config.rotation;
-    deep_dream_maximum_dimension = config.maximum_dimension;
-    deep_dream_fp16 = config.fp16;
-    deep_dream_channel = config.channel;
-    deep_dream_octaves = config.octaves;
-    deep_dream_octave_scale = config.octave_scale;
-    deep_dream_jitter = config.jitter;
-    deep_dream_smoothing = config.smoothing;
-    deep_dream_gpu_filter_first = config.gpu_filter_first;
-
-    if (deep_dream_enabled) {
-        Log(tr("Deep Dream Settings Saved: %1/%2, %3 iteration(s), %4")
-                .arg(QFileInfo(deep_dream_model).fileName(),
-                     deep_dream_layer)
-                .arg(deep_dream_iterations)
-                .arg(deep_dream_gpu_filter_first
-                         ? tr("acidcam-gpu first")
-                         : tr("Deep Dream first")));
-    } else {
-        Log("Deep Dream Disabled");
-    }
+                if (deep_dream_enabled) {
+                    Log(tr("Deep Dream Settings Applied: %1/%2, %3 "
+                           "iteration(s), %4")
+                            .arg(QFileInfo(deep_dream_model).fileName(),
+                                 deep_dream_layer)
+                            .arg(deep_dream_iterations)
+                            .arg(deep_dream_gpu_filter_first
+                                     ? tr("acidcam-gpu first")
+                                     : tr("Deep Dream first")));
+                } else {
+                    Log("Deep Dream Disabled");
+                }
+            });
+    dialog.exec();
 }
 
 bool MainWindow::validateDeepDreamLaunch(QString &error) const {

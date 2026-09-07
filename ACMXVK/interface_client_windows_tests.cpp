@@ -57,6 +57,22 @@ int main() {
         selection->audio_file_sequence = 7;
         std::strcpy(selection->audio_file_path, "C:/audio/test.wav");
         selection->audio_pass_through = 1;
+        selection->dream_enabled = 1;
+        selection->dream_fp16 = 1;
+        selection->dream_gpu_filter_first = 1;
+        selection->dream_iterations = 3;
+        selection->dream_maximum_dimension = 768;
+        selection->dream_channel = 12;
+        selection->dream_octaves = 2;
+        selection->dream_jitter = 4;
+        selection->dream_smoothing = 2;
+        selection->dream_strength = 0.125F;
+        selection->dream_feedback = 0.8F;
+        selection->dream_zoom = 1.02F;
+        selection->dream_rotation = -0.25F;
+        selection->dream_octave_scale = 1.6F;
+        std::strcpy(selection->dream_model_path, "C:/models/dream.pt");
+        std::strcpy(selection->dream_layer, "relu4_2");
     }
 
     acmxvk::InterfaceClient client;
@@ -74,7 +90,19 @@ int main() {
         state.uniform_values[0].value == 0.75F &&
         state.audio_file.request_sequence == 7 &&
         state.audio_file.path == "C:/audio/test.wav" &&
-        state.audio_file.pass_through;
+        state.audio_file.pass_through && state.deep_dream.enabled &&
+        state.deep_dream.fp16 && state.deep_dream.gpu_filter_first &&
+        state.deep_dream.iterations == 3 &&
+        state.deep_dream.maximum_dimension == 768 &&
+        state.deep_dream.channel == 12 && state.deep_dream.octaves == 2 &&
+        state.deep_dream.jitter == 4 && state.deep_dream.smoothing == 2 &&
+        state.deep_dream.strength == 0.125F &&
+        state.deep_dream.feedback == 0.8F &&
+        state.deep_dream.zoom == 1.02F &&
+        state.deep_dream.rotation == -0.25F &&
+        state.deep_dream.octave_scale == 1.6F &&
+        state.deep_dream.model_path == "C:/models/dream.pt" &&
+        state.deep_dream.layer == "relu4_2";
 
     client.close();
     ::UnmapViewOfFile(view);

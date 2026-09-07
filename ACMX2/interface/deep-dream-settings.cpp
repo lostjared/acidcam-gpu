@@ -148,7 +148,9 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
     scroll_area->setWidget(contents);
 
     auto *buttons = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+        QDialogButtonBox::Ok | QDialogButtonBox::Apply |
+            QDialogButtonBox::Cancel,
+        this);
     auto *layout = new QVBoxLayout(this);
     layout->addWidget(scroll_area, 1);
     layout->addWidget(buttons);
@@ -161,6 +163,8 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
             &DeepDreamSettingsDialog::browse_model);
     connect(buttons, &QDialogButtonBox::accepted, this,
             &DeepDreamSettingsDialog::accept_settings);
+    connect(buttons->button(QDialogButtonBox::Apply), &QPushButton::clicked,
+            this, &DeepDreamSettingsDialog::apply_settings);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     load_ui_state();
@@ -311,14 +315,14 @@ void DeepDreamSettingsDialog::refresh_model_metadata(bool report_error) {
     model_metadata_label->setToolTip(metadata_filename);
 }
 
-void DeepDreamSettingsDialog::accept_settings() {
+bool DeepDreamSettingsDialog::validate_settings() {
     if (enable_check_box->isChecked()) {
         const QFileInfo model(model_file_edit->text().trimmed());
         if (!model.isFile()) {
             QMessageBox::warning(this, "Deep Dream Model Required",
                                  "Select an existing TorchScript model file.");
             model_file_edit->setFocus();
-            return;
+            return false;
         }
         static const QRegularExpression layer_pattern(
             QStringLiteral("^[A-Za-z0-9_.-]+$"));
@@ -328,7 +332,7 @@ void DeepDreamSettingsDialog::accept_settings() {
                 this, "Invalid Deep Dream Layer",
                 "Enter a named layer such as relu4_2 or a numeric layer index.");
             layer_combo_box->setFocus();
-            return;
+            return false;
         }
         if (gpu_filter_first_check_box->isChecked() &&
             !gpu_filter_available) {
@@ -336,10 +340,26 @@ void DeepDreamSettingsDialog::accept_settings() {
                 this, "GPU Filter Required",
                 "Configure and enable an acidcam-gpu filter chain before "
                 "selecting GPU filters before Deep Dream.");
-            return;
+            return false;
         }
     }
+    return true;
+}
+
+void DeepDreamSettingsDialog::apply_settings() {
+    if (!validate_settings()) {
+        return;
+    }
     save_ui_state();
+    emit settingsApplied();
+}
+
+void DeepDreamSettingsDialog::accept_settings() {
+    if (!validate_settings()) {
+        return;
+    }
+    save_ui_state();
+    emit settingsApplied();
     accept();
 }
 

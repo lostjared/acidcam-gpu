@@ -417,6 +417,8 @@ namespace acmxvk {
             const InterfaceOverlayState &requested, bool announce);
         void apply_interface_gpu_filter_state(
             const InterfaceGpuFilterState &requested, bool announce);
+        void apply_interface_deep_dream_state(
+            const InterfaceDeepDreamState &requested, bool announce);
         void apply_interface_audio_file_state(
             const InterfaceAudioFileState &requested);
         void apply_interface_shader_reload(

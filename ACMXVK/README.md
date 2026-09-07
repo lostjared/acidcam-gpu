@@ -313,11 +313,15 @@ When the ACMX Qt interface detects a Deep Dream-enabled ACMXVK executable, its
 **Session > Deep Dream Settings** dialog exposes the model, feature layer,
 gradient-ascent, temporal-feedback, detail, and performance controls. The
 settings persist between sessions and apply to Run Selected, Run All, and Edit
-Command. The optional acidcam-gpu-first order is available when a CUDA filter
-chain is enabled.
+Command. While ACMXVK is running, **Apply** publishes the complete Deep Dream
+configuration through the versioned interface-control block. Scalar controls
+take effect between frames; changing the model, layer, or precision safely
+rebuilds the LibTorch model before replacing the active instance. Invalid live
+settings are rejected without disturbing the current effect. The optional
+acidcam-gpu-first order is available when a CUDA filter chain is enabled.
 
-The next interface increment reads the exporter-generated `<model>.pt.json`
-sidecar when a model is selected. Valid ACMXVK metadata replaces the generic
+The interface reads the exporter-generated `<model>.pt.json` sidecar when a
+model is selected. Valid ACMXVK metadata replaces the generic
 VGG16 layer choices with the exact layer list embedded by the exporter, reports
 the architecture and minimum input size, and preserves a previously selected
 layer when the new model supports it. Missing sidecars retain editable manual
