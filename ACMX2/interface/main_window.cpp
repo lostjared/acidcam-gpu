@@ -2,6 +2,7 @@
 #include "audio-window.hpp"
 #include "custom-uniforms.hpp"
 #include "custom_style.hpp"
+#include "deep-dream-settings.hpp"
 #include "find-shader.hpp"
 #include "library-builder.hpp"
 #include "metadata-viewer.hpp"
@@ -908,6 +909,11 @@ void MainWindow::initControls() {
     gpuFilterAction->setShortcut(QKeySequence("Ctrl+Shift+G"));
     connect(gpuFilterAction, &QAction::triggered, this, &MainWindow::menuGPUFilterSettings);
     cameraMenu->addAction(gpuFilterAction);
+    deepDreamAction = new QAction(tr("Deep Dream Settings..."), this);
+    deepDreamAction->setShortcut(QKeySequence("Ctrl+Shift+D"));
+    connect(deepDreamAction, &QAction::triggered, this,
+            &MainWindow::menuDeepDreamSettings);
+    cameraMenu->addAction(deepDreamAction);
     cameraMenu->addSeparator();
     styleSheetAction = new QAction(tr("Use Custom Style"), this);
     styleSheetAction->setShortcut(QKeySequence("Ctrl+Shift+T"));
@@ -1372,6 +1378,44 @@ void MainWindow::loadSessionSettings() {
     model_file = settings.value("interface/model_file", "cube.mxmod.z").toString();
     onnx_model_enabled = settings.value("interface/use_onnx_model", false).toBool();
     onnx_model = settings.value("interface/onnx_model_file", "").toString();
+    deep_dream_enabled =
+        settings.value("deep_dream/enabled", false).toBool();
+    deep_dream_model =
+        settings.value("deep_dream/model_file", QString()).toString();
+    deep_dream_layer =
+        settings.value("deep_dream/layer", "relu4_2").toString();
+    deep_dream_iterations = std::clamp(
+        settings.value("deep_dream/iterations", 1).toInt(), 1, 100);
+    deep_dream_strength = std::clamp(
+        settings.value("deep_dream/strength", 0.05).toDouble(), 0.0001,
+        10.0);
+    deep_dream_feedback = std::clamp(
+        settings.value("deep_dream/feedback", 0.9).toDouble(), 0.0, 0.99);
+    deep_dream_zoom = std::clamp(
+        settings.value("deep_dream/zoom", 1.01).toDouble(), 0.9, 1.1);
+    deep_dream_rotation = std::clamp(
+        settings.value("deep_dream/rotation", 0.1).toDouble(), -5.0, 5.0);
+    deep_dream_maximum_dimension =
+        settings.value("deep_dream/maximum_dimension", 512).toInt();
+    if (deep_dream_maximum_dimension != 0) {
+        deep_dream_maximum_dimension =
+            std::clamp(deep_dream_maximum_dimension, 64, 4096);
+    }
+    deep_dream_fp16 =
+        settings.value("deep_dream/fp16", false).toBool();
+    deep_dream_channel = std::clamp(
+        settings.value("deep_dream/channel", -1).toInt(), -1, 65535);
+    deep_dream_octaves = std::clamp(
+        settings.value("deep_dream/octaves", 1).toInt(), 1, 8);
+    deep_dream_octave_scale = std::clamp(
+        settings.value("deep_dream/octave_scale", 1.4).toDouble(), 1.1,
+        3.0);
+    deep_dream_jitter = std::clamp(
+        settings.value("deep_dream/jitter", 0).toInt(), 0, 64);
+    deep_dream_smoothing = std::clamp(
+        settings.value("deep_dream/smoothing", 0).toInt(), 0, 16);
+    deep_dream_gpu_filter_first =
+        settings.value("deep_dream/gpu_filter_first", false).toBool();
     cuda_device = settings.value("interface/cuda_device", 0).toInt();
     time_speed = settings.value("interface/time_speed", 1.0).toFloat();
     normalized_time =
@@ -3465,6 +3509,9 @@ void MainWindow::update_backend_ui() {
 
     const bool launchAvailable = backend_launch_available();
     const bool acmx2Tools = active_backend == acmx2::Backend::Acmx2;
+    if (deepDreamAction) {
+        deepDreamAction->setVisible(!acmx2Tools);
+    }
     QString sourceTypeError;
     const bool acmxvkSource =
         active_backend == acmx2::Backend::Acmxvk && !shader_path.isEmpty() &&
@@ -3617,6 +3664,7 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
     audio_available = false;
     midi_available = false;
     dnn_available = false;
+    deep_dream_available = false;
     initShaderSelectionSharedMemory();
     detectFeatureSupport();
     updateRecentLibrariesMenu();
@@ -4050,6 +4098,13 @@ void MainWindow::menuGPUFilterSettings() {
         gpu_filter_enabled = enabled;
         gpu_filter_indices = filters;
         gpu_buffer_size = bufferSize;
+        if ((!gpu_filter_enabled || gpu_filter_indices.isEmpty()) &&
+            deep_dream_gpu_filter_first) {
+            deep_dream_gpu_filter_first = false;
+            QSettings("LostSideDead", "acmx2")
+                .setValue("deep_dream/gpu_filter_first", false);
+            Log("Deep Dream pipeline order reset because GPU filtering was disabled");
+        }
         if (gpu_filter_enabled) {
             Log("GPU Filter Settings Saved: Filters=" + gpu_filter_indices + ", Buffer=" + QString::number(gpu_buffer_size));
         } else {
@@ -4067,6 +4122,140 @@ void MainWindow::menuGPUFilterSettings() {
         applyGpuDialogSettings(gpuDialog.isGPUFilterEnabled(),
                                gpuDialog.getFilterArgument(),
                                gpuDialog.getBufferSize());
+    }
+}
+
+void MainWindow::menuDeepDreamSettings() {
+    if (active_backend != acmx2::Backend::Acmxvk ||
+        !deep_dream_available) {
+        QMessageBox::information(
+            this, tr("Deep Dream Settings"),
+            tr("Deep Dream is unavailable: ACMXVK must be built with "
+               "-DWITH_DEEP_DREAM=ON and CUDA-enabled LibTorch."));
+        return;
+    }
+
+    const bool gpu_filter_configured =
+        cuda_available && gpu_filter_enabled &&
+        !gpu_filter_indices.trimmed().isEmpty();
+    DeepDreamSettingsDialog dialog(gpu_filter_configured, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const DeepDreamConfiguration config = dialog.configuration();
+    deep_dream_enabled = config.enabled;
+    deep_dream_model = config.model_file;
+    deep_dream_layer = config.layer;
+    deep_dream_iterations = config.iterations;
+    deep_dream_strength = config.strength;
+    deep_dream_feedback = config.feedback;
+    deep_dream_zoom = config.zoom;
+    deep_dream_rotation = config.rotation;
+    deep_dream_maximum_dimension = config.maximum_dimension;
+    deep_dream_fp16 = config.fp16;
+    deep_dream_channel = config.channel;
+    deep_dream_octaves = config.octaves;
+    deep_dream_octave_scale = config.octave_scale;
+    deep_dream_jitter = config.jitter;
+    deep_dream_smoothing = config.smoothing;
+    deep_dream_gpu_filter_first = config.gpu_filter_first;
+
+    if (deep_dream_enabled) {
+        Log(tr("Deep Dream Settings Saved: %1/%2, %3 iteration(s), %4")
+                .arg(QFileInfo(deep_dream_model).fileName(),
+                     deep_dream_layer)
+                .arg(deep_dream_iterations)
+                .arg(deep_dream_gpu_filter_first
+                         ? tr("acidcam-gpu first")
+                         : tr("Deep Dream first")));
+    } else {
+        Log("Deep Dream Disabled");
+    }
+}
+
+bool MainWindow::validateDeepDreamLaunch(QString &error) const {
+    error.clear();
+    if (!deep_dream_enabled ||
+        active_backend != acmx2::Backend::Acmxvk) {
+        return true;
+    }
+    if (!deep_dream_available) {
+        error = tr("The selected ACMXVK executable does not provide Deep "
+                   "Dream support.");
+        return false;
+    }
+    if (!QFileInfo(deep_dream_model).isFile()) {
+        error = tr("The configured Deep Dream model does not exist:\n%1")
+                    .arg(deep_dream_model);
+        return false;
+    }
+    if (deep_dream_layer.trimmed().isEmpty()) {
+        error = tr("Select a Deep Dream feature layer.");
+        return false;
+    }
+    if (!deep_dream_gpu_filter_first) {
+        return true;
+    }
+    if (!cuda_available || !gpu_filter_enabled ||
+        gpu_filter_indices.trimmed().isEmpty()) {
+        error = tr("Running acidcam-gpu before Deep Dream requires an enabled "
+                   "GPU filter chain.");
+        return false;
+    }
+    if (!graphics_file.isEmpty()) {
+        error = tr("Running acidcam-gpu before Deep Dream currently supports "
+                   "camera and video input, not still graphics.");
+        return false;
+    }
+    if (maximize_fps) {
+        error = tr("Running acidcam-gpu before Deep Dream cannot be combined "
+                   "with Maximize FPS.");
+        return false;
+    }
+    if (onnx_model_enabled && !onnx_model.isEmpty()) {
+        error = tr("Running acidcam-gpu before Deep Dream cannot be combined "
+                   "with an ONNX input effect.");
+        return false;
+    }
+    return true;
+}
+
+void MainWindow::appendDeepDreamArguments(QStringList &arguments) const {
+    if (!deep_dream_enabled ||
+        active_backend != acmx2::Backend::Acmxvk) {
+        return;
+    }
+
+    arguments << "--dream-model" << deep_dream_model;
+    arguments << "--dream-layer" << deep_dream_layer;
+    arguments << "--dream-iterations"
+              << QString::number(deep_dream_iterations);
+    arguments << "--dream-strength"
+              << QString::number(deep_dream_strength, 'g', 12);
+    arguments << "--dream-feedback"
+              << QString::number(deep_dream_feedback, 'g', 12);
+    arguments << "--dream-zoom"
+              << QString::number(deep_dream_zoom, 'g', 12);
+    arguments << "--dream-rotation"
+              << QString::number(deep_dream_rotation, 'g', 12);
+    arguments << "--dream-size"
+              << QString::number(deep_dream_maximum_dimension);
+    if (deep_dream_fp16) {
+        arguments << "--dream-fp16";
+    }
+    arguments << "--dream-channel"
+              << (deep_dream_channel < 0
+                      ? QString("all")
+                      : QString::number(deep_dream_channel));
+    arguments << "--dream-octaves" << QString::number(deep_dream_octaves);
+    arguments << "--dream-octave-scale"
+              << QString::number(deep_dream_octave_scale, 'g', 12);
+    arguments << "--dream-jitter" << QString::number(deep_dream_jitter);
+    arguments << "--dream-smoothing"
+              << QString::number(deep_dream_smoothing);
+    if (deep_dream_gpu_filter_first) {
+        arguments << "--gpu-filter-before-dream";
     }
 }
 
@@ -4407,6 +4596,13 @@ void MainWindow::runSelected() {
         return;
     }
 
+    QString deep_dream_error;
+    if (!validateDeepDreamLaunch(deep_dream_error)) {
+        QMessageBox::warning(this, tr("Deep Dream Settings"),
+                             deep_dream_error);
+        return;
+    }
+
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     QString uid = QString::number(getuid());
@@ -4644,6 +4840,8 @@ void MainWindow::runSelected() {
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
 
+    appendDeepDreamArguments(arguments);
+
     if (cuda_device_available) {
         arguments << "--cuda-device" << QString::number(cuda_device);
     }
@@ -4716,6 +4914,12 @@ void MainWindow::runSelected() {
 
 bool MainWindow::buildRunArguments(QStringList &arguments,
                                    PendingAcmxvkAction resume_action) {
+    QString deep_dream_error;
+    if (!validateDeepDreamLaunch(deep_dream_error)) {
+        QMessageBox::warning(this, tr("Deep Dream Settings"),
+                             deep_dream_error);
+        return false;
+    }
     if (shader_path.length() == 0) {
         QMessageBox::information(this, "Select Shaders", "Select Shader Path");
         return false;
@@ -4925,6 +5129,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         arguments << "--gpu-filter" << gpu_filter_indices;
         arguments << "--gpu-buffer" << QString::number(gpu_buffer_size);
     }
+
+    appendDeepDreamArguments(arguments);
 
     if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
         QString passIndices = getShaderPassIndicesFromNames();
@@ -5855,6 +6061,9 @@ void MainWindow::detectFeatureSupport() {
     dnn_available = probeFeature(
         executable_path, "--check-dnn",
         isAcmxvk ? "OpenCV DNN effects: enabled" : "OpenCV DNN: enabled");
+    deep_dream_available =
+        isAcmxvk && probeFeature(executable_path, "--check-deep-dream",
+                                "Deep Dream: enabled");
 
     Log(QString("CUDA filters: %1 (%2)")
             .arg(cuda_available ? "enabled" : "disabled", backendName));
@@ -5869,12 +6078,29 @@ void MainWindow::detectFeatureSupport() {
             .arg(midi_available ? "enabled" : "disabled", backendName));
     Log(QString("OpenCV DNN: %1 (%2)")
             .arg(dnn_available ? "enabled" : "disabled", backendName));
+    if (isAcmxvk) {
+        Log(QString("Deep Dream: %1 (%2)")
+                .arg(deep_dream_available ? "enabled" : "disabled",
+                     backendName));
+    }
 
     if (!dnn_available) {
         onnx_model_enabled = false;
         onnx_model.clear();
     }
 
+    if (deepDreamAction) {
+        deepDreamAction->setVisible(isAcmxvk);
+        deepDreamAction->setEnabled(deep_dream_available);
+        deepDreamAction->setToolTip(
+            deep_dream_available
+                ? QString()
+                : tr("Disabled: ACMXVK was built without Deep Dream support."));
+    }
+    if (isAcmxvk && !deep_dream_available) {
+        deep_dream_enabled = false;
+        deep_dream_gpu_filter_first = false;
+    }
     if (gpuFilterAction) {
         gpuFilterAction->setEnabled(cuda_available);
         gpuFilterAction->setToolTip(

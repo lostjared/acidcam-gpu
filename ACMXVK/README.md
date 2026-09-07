@@ -38,7 +38,7 @@ complete replacement for ACMX2.
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | Deep Dream | Increment 11 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, performance controls, feature-channel targeting, progressive multi-octave detail, deterministic spatial jitter, GPU gradient smoothing, and a CUDA-resident capture-to-Vulkan path. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
-| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
+| Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, Deep Dream configuration, and file-audio replacement are integrated into the ACMXVK workflow. |
 
 ## Source layout
 
@@ -308,6 +308,13 @@ Both orders remain GPU-resident and publish their final combined result to the
 Vulkan texture, model texture, and history cache. The initial implementation is
 for SDR camera and video input and cannot be combined with `--maximize-fps`, a
 still graphic, HDR input, or an OpenCV DNN input effect.
+
+When the ACMX Qt interface detects a Deep Dream-enabled ACMXVK executable, its
+**Session > Deep Dream Settings** dialog exposes the model, feature layer,
+gradient-ascent, temporal-feedback, detail, and performance controls. The
+settings persist between sessions and apply to Run Selected, Run All, and Edit
+Command. The optional acidcam-gpu-first order is available when a CUDA filter
+chain is enabled.
 
 ### Pcons
 

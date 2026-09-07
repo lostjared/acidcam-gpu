@@ -74,6 +74,7 @@ app = project.QtProgram(
         "audio-window.cpp",
         "acmxvk-source-manifest.cpp",
         "custom-uniforms.cpp",
+        "deep-dream-settings.cpp",
         "editor.cpp",
         "find-shader.cpp",
         "gpufilter.cpp",
