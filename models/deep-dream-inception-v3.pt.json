@@ -1,0 +1,72 @@
+{
+  "format": "acmxvk-deep-dream",
+  "version": 1,
+  "architecture": "inception_v3",
+  "weights": "default",
+  "default_layer": "Mixed_6c",
+  "input": {
+    "channels": 3,
+    "minimum_size": 75,
+    "color": "RGB",
+    "range": [
+      0.0,
+      1.0
+    ],
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  },
+  "layers": [
+    {
+      "name": "Mixed_5b",
+      "source_index": 7
+    },
+    {
+      "name": "Mixed_5c",
+      "source_index": 8
+    },
+    {
+      "name": "Mixed_5d",
+      "source_index": 9
+    },
+    {
+      "name": "Mixed_6a",
+      "source_index": 10
+    },
+    {
+      "name": "Mixed_6b",
+      "source_index": 11
+    },
+    {
+      "name": "Mixed_6c",
+      "source_index": 12
+    },
+    {
+      "name": "Mixed_6d",
+      "source_index": 13
+    },
+    {
+      "name": "Mixed_6e",
+      "source_index": 14
+    },
+    {
+      "name": "Mixed_7a",
+      "source_index": 15
+    },
+    {
+      "name": "Mixed_7b",
+      "source_index": 16
+    },
+    {
+      "name": "Mixed_7c",
+      "source_index": 17
+    }
+  ]
+}

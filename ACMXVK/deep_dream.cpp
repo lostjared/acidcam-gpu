@@ -5,6 +5,7 @@
 #include <torch/headeronly/version.h>
 #include <torch/torch.h>
 
+#include <algorithm>
 #include <exception>
 #include <iomanip>
 #include <ostream>
@@ -95,7 +96,9 @@ namespace acmxvk::dream {
                 } else {
                     output << target_channel << '\n';
                 }
-                cv::Mat test_image(64, 64, CV_8UC4);
+                const int test_size = std::max(
+                    64, static_cast<int>(model.metadata().minimum_input_size));
+                cv::Mat test_image(test_size, test_size, CV_8UC4);
                 for (int y = 0; y < test_image.rows; ++y) {
                     for (int x = 0; x < test_image.cols; ++x) {
                         test_image.at<cv::Vec4b>(y, x) = cv::Vec4b{
