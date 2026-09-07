@@ -8,7 +8,7 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin"
     set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "macOS target architectures")
 endif()
 
-project(ACMXVK VERSION 0.1.0 LANGUAGES CXX)
+project(ACMXVK VERSION 2.136.0 LANGUAGES CXX)
 
 if(APPLE)
     enable_language(OBJCXX)
@@ -638,6 +638,7 @@ add_custom_target(acmxvk_shaders DEPENDS
 
 add_executable(acmxvk
     acmx.cpp
+    version_info.hpp
     main_window.cpp
     main_window.hpp
     app/interface_client.cpp

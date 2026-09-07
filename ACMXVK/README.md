@@ -1,5 +1,7 @@
 # ACMXVK
 
+Current ACMX project version: **2.136.0**.
+
 ACMXVK is an in-progress Vulkan port of the ACMX2 real-time video shader
 engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
@@ -36,7 +38,7 @@ complete replacement for ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
-| Deep Dream | Increment 11 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, performance controls, feature-channel targeting, progressive multi-octave detail, deterministic spatial jitter, GPU gradient smoothing, and a CUDA-resident capture-to-Vulkan path. |
+| Deep Dream | Implemented | Optional `-DWITH_DEEP_DREAM=ON` builds use CUDA LibTorch with exported VGG16 or Inception V3 feature models. Pixel-gradient ascent can process camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, original independent-frame modes, random animation, feature-layer/channel targeting, progressive octaves, jitter, gradient smoothing, FP16, optional acidcam-gpu-first ordering, interface live control, and a CUDA-resident capture-to-Vulkan path. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, Deep Dream configuration, and file-audio replacement are integrated into the ACMXVK workflow. |
 
@@ -75,9 +77,11 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
 - Optional OpenCV DNN module when building with `-DWITH_OPENCV_DNN=ON`
 - Optional CUDA Toolkit, CUDA-enabled OpenCV and MXVK, and an installed
   `acidcam-gpu` CMake package when building with `-DWITH_CUDA=ON`
-- Optional CUDA Toolkit and CUDA-enabled LibTorch when building with
-  `-DWITH_DEEP_DREAM=ON`; on Arch Linux these are provided by `cuda`, `cudnn`,
-  and `python-pytorch-cuda`
+- Optional NVIDIA CUDA Toolkit, cuDNN, CUDA-enabled OpenCV, and CUDA-enabled
+  LibTorch when building with `-DWITH_DEEP_DREAM=ON`; Torchvision is required
+  only to export the supplied VGG16 and Inception V3 model formats. On Arch
+  Linux these are commonly provided by `cuda`, `cudnn`, `opencv-cuda`,
+  `python-pytorch-cuda`, and `python-torchvision-cuda`.
 
 Ensure the selected Vulkan SDK's `bin` directory is on `PATH` so CMake can
 find tools such as `glslc`. If the SDK is installed outside the platform's
@@ -104,29 +108,95 @@ cmake --build build/acmxvk --target uninstall
 Audio and MIDI support are optional and remain disabled when their CMake
 options are omitted.
 
-### Deep Dream development support
+### Deep Dream support
 
-Increment 1 adds optional CUDA LibTorch discovery and a runtime autograd probe.
-It does not yet load a model or alter rendered frames. On Arch Linux, configure
-and verify it with:
+Deep Dream performs gradient ascent on the input pixels instead of training or
+changing the neural network. A selected feature activation becomes the
+objective, LibTorch computes its gradient with respect to the current image,
+and ACMXVK moves the pixels in the direction that strengthens that activation.
+The dreamed result then enters the normal Vulkan fragment/compute shader chain.
+The model weights remain frozen.
+
+This feature currently requires an NVIDIA CUDA GPU. It is independent of the
+acidcam-gpu filter option: `-DWITH_DEEP_DREAM=ON -DWITH_CUDA=OFF` enables Deep
+Dream without linking `libacidcam-gpu`, while adding `-DWITH_CUDA=ON` also
+enables the optional CUDA filter chain and `--gpu-filter-before-dream`.
+
+The complete Doxygen guide is available on the **Deep Dream** related page and
+covers architecture, every runtime control, the Qt interface, model export,
+performance, error recovery, and troubleshooting.
+
+#### Compile with Deep Dream
+
+Install a CUDA toolkit, cuDNN, a CUDA-enabled OpenCV containing
+`cudaarithm`/`cudawarping`, and CUDA-enabled LibTorch. For an Arch Linux system
+using the CUDA PyTorch packages:
 
 ```bash
-sudo pacman -S --needed cuda cudnn python-pytorch-cuda
-cmake -S ACMXVK -B build/acmxvk-dream -DWITH_DEEP_DREAM=ON
-cmake --build build/acmxvk-dream -j2
+sudo pacman -S --needed base-devel cmake ninja cuda cudnn opencv-cuda \
+    python-pytorch-cuda python-torchvision-cuda
+```
+
+MXVK must be installed with OpenCV capture support. Build it with CUDA enabled
+to obtain the direct CUDA/Vulkan path:
+
+```bash
+cmake -S /path/to/MXVK -B /path/to/MXVK/build-deep-dream \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCV=ON \
+    -DWITH_CUDA=ON
+cmake --build /path/to/MXVK/build-deep-dream --parallel
+cmake --install /path/to/MXVK/build-deep-dream
+```
+
+Then configure ACMXVK. This example uses the CUDA LibTorch distribution in
+`/opt/libtorch`; omit `Torch_DIR` when the system PyTorch package already
+installs `TorchConfig.cmake` in CMake's default search path:
+
+```bash
+TORCH_CUDA_ARCH_LIST=7.5 cmake -S ACMXVK -B build/acmxvk-dream \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DWITH_DEEP_DREAM=ON \
+    -DWITH_CUDA=OFF \
+    -DTorch_DIR=/opt/libtorch/share/cmake/Torch
+cmake --build build/acmxvk-dream --parallel 2
 ./build/acmxvk-dream/acmxvk --check-deep-dream
 ```
 
-The probe always exercises CPU autograd. When NVIDIA device access is available,
-it also creates a CUDA tensor, runs a forward and backward operation, validates
-the gradient, synchronizes the selected device, and reports cuDNN availability.
-Use `--cuda-device N` with the probe to select a device. A container that reports
-zero CUDA devices must be recreated or configured with NVIDIA device access
-before the GPU portion can run.
+Change `TORCH_CUDA_ARCH_LIST` to the compute capability of the target GPU or
+omit it to let PyTorch autodetect the device. Use `-DWITH_CUDA=ON` in the ACMXVK
+command only when the separately installed `acidcam-gpu` package is also
+required. A successful configure prints `Deep Dream: ENABLED`; a successful
+probe reports CPU autograd, the CUDA device count, CUDA autograd, cuDNN, and
+whether direct CUDA/Vulkan interop was compiled in.
 
-Increment 2 adds the VGG16 TorchScript exporter and model inspector. Install
-Torchvision for the exporter, then create a model containing the standard 13
-VGG16 ReLU feature layers:
+The probe always exercises CPU autograd. With `--dream-model`, it additionally
+loads the model on the selected GPU, validates all metadata and feature outputs,
+and runs real forward/backward gradient-ascent and feedback steps:
+
+```bash
+./build/acmxvk-dream/acmxvk --check-deep-dream \
+    --dream-model models/deep-dream-inception-v3.pt \
+    --dream-layer Mixed_6c \
+    --dream-channel all \
+    --cuda-device 0
+```
+
+Use `--cuda-device N` to select a device. A container reporting zero CUDA
+devices must be launched with NVIDIA device access. If an installed executable
+cannot locate LibTorch shared libraries, add `/opt/libtorch/lib` to the system
+dynamic-loader configuration or to `LD_LIBRARY_PATH` for that invocation.
+
+Deep Dream is not built by the current Pcons path; use CMake. CUDA and LibTorch
+make this feature unavailable on macOS. Linux with an NVIDIA GPU is the primary
+tested configuration.
+
+#### Models
+
+The exporter creates a frozen TorchScript feature model, embeds the authoritative
+ACMXVK metadata, and writes a matching `.pt.json` sidecar used by the interface.
+Create the standard 13 VGG16 ReLU feature layers with:
 
 ```bash
 sudo pacman -S --needed python-torchvision-cuda
@@ -153,7 +223,54 @@ run. `--weights none` avoids a download for structural testing but does not
 produce a useful dream model. Use `--layers` to export a subset and
 `--default-layer` to choose the initial target. The exporter writes a readable
 `.pt.json` sidecar and embeds the authoritative typed metadata in the
-TorchScript module.
+TorchScript module. Only load TorchScript models from sources you trust.
+
+#### Runtime controls
+
+| Option | Purpose | Range/default |
+| --- | --- | --- |
+| `--dream-model file.pt` | Select an exported TorchScript feature model. | Required |
+| `--dream-layer name` | Choose a named or numbered feature endpoint. | Model default |
+| `--dream-iterations N` | Gradient-ascent steps at each octave per frame. | 1–100; `1` |
+| `--dream-strength N` | Pixel-gradient step size. | >0–10; `0.05` |
+| `--dream-feedback N` | Blend the previous dreamed frame into the next input. | 0–0.99; `0.9` |
+| `--dream-zoom N` | Scale the feedback image per frame. | 0.9–1.1; `1.01` |
+| `--dream-rotation N` | Rotate feedback per frame in degrees. | -5–5; `0.1` |
+| `--dream-size N` | Bound the longest neural working dimension; `0` uses native size. | 0 or 64–4096; `512` |
+| `--dream-fp16` | Use half-precision model/input tensors. | Off |
+| `--dream-channel N\|all` | Target one zero-based feature channel or all channels. | `all`/`-1` |
+| `--dream-octaves N` | Process progressively larger scales. | 1–8; `1` |
+| `--dream-octave-scale N` | Size ratio between adjacent octaves. | 1.1–3; `1.4` |
+| `--dream-jitter N` | Deterministically shift each ascent input. | 0–64 pixels; `0` |
+| `--dream-smoothing N` | Smooth the input gradient spatially. | 0–16 pixels; `0` |
+| `--random-dream seconds` | Randomize safe animation controls on the media clock. | Positive interval |
+| `--gpu-filter-before-dream` | Run an enabled acidcam-gpu chain before Deep Dream. | Off |
+| `--dream-headless` | Traditional independent-frame dreaming in a headless recording. | Off |
+| `--deep-orig` | Independent-frame dreaming with a preview window. | Off |
+
+`--dream-channel all` and `--dream-channel -1` are equivalent. All-channel mode
+is the recommended starting point for Inception because an individual ReLU
+channel can be inactive for a particular image. A finite zero-gradient frame
+is handled as a no-op iteration and does not disable Deep Dream.
+
+#### Real-time example
+
+```bash
+./build/acmxvk-dream/acmxvk \
+    --input input.mp4 \
+    --dream-model models/deep-dream-inception-v3.pt \
+    --dream-layer Mixed_6c \
+    --dream-channel all \
+    --dream-iterations 1 \
+    --dream-strength 0.05 \
+    --dream-size 512 \
+    --dream-fp16 \
+    --shaders shaders_acmxvk \
+    --shader-file color-effect.frag.spv
+```
+
+The following sections describe the implementation and tuning behavior in more
+detail.
 
 Inspect the model and select a layer by name or zero-based output index:
 
