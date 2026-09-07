@@ -303,6 +303,22 @@ channel, working resolution, jitter, and smoothing unchanged. Octaves range
 from 1 through 8; higher random values require proportionally more neural
 processing.
 
+`--dream-headless` provides a traditional offline frame-by-frame Deep Dream
+video render. It is restricted to headless video recording and requires
+`--headless`, `--input`, `--output`, and `--dream-model`. The mode disables
+temporal feedback, forced zoom, and feedback rotation, then enables no-drop
+encoding so every decoded source frame is processed independently:
+
+```bash
+./build/acmxvk-dream/acmxvk \
+    --input input.mp4 --output dreamed.mp4 --headless --dream-headless \
+    --dream-model models/deep-dream-vgg16.pt --dream-layer relu4_2 \
+    --dream-iterations 4 --dream-octaves 3 --dream-strength 0.04
+```
+
+This mode cannot be combined with `--random-dream`. It does not affect the
+windowed Deep Dream path or ordinary headless processing.
+
 Increment 11 adds the CUDA/Vulkan interop path for Deep Dream. When MXVK was
 built with CUDA support, compatible camera and video frames remain on the GPU
 across capture or NVDEC, LibTorch preprocessing, optional input rotation,

@@ -713,6 +713,8 @@ namespace acmxvk {
                     throw std::runtime_error(
                         std::string(option) + " must be greater than 0");
                 }
+            } else if (option == "--dream-headless") {
+                options.dream_headless = true;
             } else if (option == "--gpu-filter-before-dream") {
                 options.gpu_filter_before_dream = true;
             } else if (option == "--probe-hdr") {
@@ -1137,10 +1139,33 @@ namespace acmxvk {
              options.dream_jitter_specified ||
              options.dream_smoothing_specified ||
              options.random_dream_specified ||
+             options.dream_headless ||
              options.gpu_filter_before_dream) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
                 "Deep Dream processing options require --dream-model");
+        }
+        if (options.dream_headless) {
+            if (!options.headless) {
+                throw std::runtime_error(
+                    "--dream-headless requires --headless or --silent");
+            }
+            if (options.input_file.empty()) {
+                throw std::runtime_error(
+                    "--dream-headless requires --input <video>");
+            }
+            if (options.output_file.empty()) {
+                throw std::runtime_error(
+                    "--dream-headless requires --output <file>");
+            }
+            if (options.random_dream_specified) {
+                throw std::runtime_error(
+                    "--dream-headless cannot be combined with --random-dream");
+            }
+            options.dream_feedback = 0.0;
+            options.dream_zoom = 1.0;
+            options.dream_rotation = 0.0;
+            options.no_drop = true;
         }
         const int shader_source_count =
             static_cast<int>(!options.shader_directory.empty()) +
@@ -1400,6 +1425,7 @@ namespace acmxvk {
                << "      --dream-smoothing <N>  Gradient smoothing radius (0-16; default 0)\n"
                << "      --random-dream <seconds>\n"
                << "                              Randomize safe dream controls at a media-time interval\n"
+               << "      --dream-headless       Offline per-frame video dreaming without temporal zoom\n"
                << "      --gpu-filter-before-dream\n"
                << "                              Run acidcam-gpu before Deep Dream\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
