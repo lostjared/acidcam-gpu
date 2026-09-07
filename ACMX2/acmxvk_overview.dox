@@ -272,7 +272,7 @@ build the optional acidcam-gpu CUDA filter integration.
 
 @section acmxvk_status Current Project Status
 
-As of ACMX 2.135.0, both rendering backends are delivered through one Qt
+As of ACMX 2.136.0, both rendering backends are delivered through one Qt
 interface and are actively usable:
 
 - <b>ACMX2/OpenGL</b> remains the mature compatibility path for existing GLSL
@@ -290,4 +290,7 @@ Remaining work is primarily compatibility hardening and continued validation
 across drivers, codecs, capture devices, and older ACMX2 shader or MIDI assets.
 The Vulkan backend's feature status is tracked in <tt>ACMXVK/README.md</tt>, and
 the command's <tt>--help</tt> output remains the definitive CLI reference.
+
+For neural pixel-gradient processing, supported models, interface controls, and
+the complete CUDA LibTorch build procedure, see @ref deep_dream.
 */

@@ -1,6 +1,7 @@
 #include "options.hpp"
 
 #include "../input_validation.hpp"
+#include "../version_info.hpp"
 #include "resource_paths.hpp"
 #include <mxvk/mxvk.hpp>
 #include <mxwrite.hpp>
@@ -1379,7 +1380,8 @@ namespace acmxvk {
     }
 
     void printHelp(std::ostream &output) {
-        output << "ACMXVK - Vulkan video shader engine (Increment 9Z / HDR 5)\n\n"
+        output << "ACMXVK v" << ACMXVK_VERSION_INFO
+               << " - Vulkan video shader engine\n\n"
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"

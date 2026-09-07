@@ -20,6 +20,10 @@ See @ref acmxvk_backend for a structured overview of the Vulkan backend,
 its architecture, shader ABI, library builder, media clocks, HDR and headless
 paths, portability, and current implementation status.
 
+See @ref deep_dream for the complete CUDA LibTorch Deep Dream guide, including
+model export, every runtime control, Qt interface operation, performance,
+recovery behavior, and explicit build instructions.
+
 The optional <b>acidcam-gpu</b> library can offload complex glitch filters to
 <b>NVIDIA GPUs</b> through CUDA. ACMX2 uses it with the OpenGL pipeline, while a
 compatible ACMXVK/MXVK build can keep decoded, filtered, history, and uploaded
@@ -54,7 +58,7 @@ it does not change the basic creative workflow.
 
 @section project_status Overall Project Status
 
-ACMX 2.135.0 packages the shared interface, ACMX2, ACMXVK, and MIDI mapping
+ACMX 2.136.0 packages the shared interface, ACMX2, ACMXVK, and MIDI mapping
 tool as one evolving project. ACMX2 remains the established OpenGL engine.
 ACMXVK has completed its six-increment HDR path and implements camera/video/
 image input, fragment and compute multipass, playlists and crossfades, texture
