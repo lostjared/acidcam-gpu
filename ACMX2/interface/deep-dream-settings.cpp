@@ -30,6 +30,38 @@
 
 #include <array>
 
+namespace {
+    class DreamChannelSpinBox final : public QSpinBox {
+      public:
+        explicit DreamChannelSpinBox(QWidget *parent = nullptr)
+            : QSpinBox(parent) {}
+
+      protected:
+        QValidator::State validate(QString &text, int &position) const override {
+            const QString value = text.trimmed();
+            if (value.compare("A", Qt::CaseInsensitive) == 0 ||
+                value.compare("All", Qt::CaseInsensitive) == 0 ||
+                value.compare("All channels", Qt::CaseInsensitive) == 0) {
+                return QValidator::Acceptable;
+            }
+            if (QStringLiteral("All").startsWith(value, Qt::CaseInsensitive)) {
+                return QValidator::Intermediate;
+            }
+            return QSpinBox::validate(text, position);
+        }
+
+        int valueFromText(const QString &text) const override {
+            const QString value = text.trimmed();
+            if (value.compare("A", Qt::CaseInsensitive) == 0 ||
+                value.compare("All", Qt::CaseInsensitive) == 0 ||
+                value.compare("All channels", Qt::CaseInsensitive) == 0) {
+                return minimum();
+            }
+            return QSpinBox::valueFromText(text);
+        }
+    };
+}
+
 DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
                                                  QWidget *parent)
     : QDialog(parent), gpu_filter_available(gpu_filter_enabled) {
@@ -80,9 +112,11 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
     fp16_check_box->setToolTip(
         "Use half-precision model and working tensors to reduce CUDA memory "
         "and improve performance.");
-    channel_spin_box = new QSpinBox(this);
+    channel_spin_box = new DreamChannelSpinBox(this);
     channel_spin_box->setRange(-1, 65535);
     channel_spin_box->setSpecialValueText("All channels");
+    channel_spin_box->setToolTip(
+        "Enter a channel number, A, or All to select every channel.");
     octaves_spin_box = new QSpinBox(this);
     octaves_spin_box->setRange(1, 8);
     octave_scale_spin_box = new QDoubleSpinBox(this);
