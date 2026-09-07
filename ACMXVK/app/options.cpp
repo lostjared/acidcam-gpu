@@ -704,6 +704,15 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "--dream-smoothing must be between 0 and 16");
                 }
+            } else if (option == "--random-dream" ||
+                       option == "--random_dream") {
+                options.random_dream_interval =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.random_dream_specified = true;
+                if (options.random_dream_interval <= 0.0) {
+                    throw std::runtime_error(
+                        std::string(option) + " must be greater than 0");
+                }
             } else if (option == "--gpu-filter-before-dream") {
                 options.gpu_filter_before_dream = true;
             } else if (option == "--probe-hdr") {
@@ -1127,6 +1136,7 @@ namespace acmxvk {
              options.dream_octave_scale_specified ||
              options.dream_jitter_specified ||
              options.dream_smoothing_specified ||
+             options.random_dream_specified ||
              options.gpu_filter_before_dream) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
@@ -1388,6 +1398,8 @@ namespace acmxvk {
                << "      --dream-octave-scale <N> Scale ratio between octaves (1.1-3; default 1.4)\n"
                << "      --dream-jitter <N>     Spatial gradient jitter in pixels (0-64; default 0)\n"
                << "      --dream-smoothing <N>  Gradient smoothing radius (0-16; default 0)\n"
+               << "      --random-dream <seconds>\n"
+               << "                              Randomize safe dream controls at a media-time interval\n"
                << "      --gpu-filter-before-dream\n"
                << "                              Run acidcam-gpu before Deep Dream\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"

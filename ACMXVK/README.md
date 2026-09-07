@@ -284,6 +284,25 @@ broader and softer structures and add more GPU work. Smoothing operates on the
 existing gradient and does not introduce another VGG forward/backward pass. It
 can be combined with jitter, octaves, individual channels, feedback, and FP16.
 
+For continuously changing visuals, `--random-dream <seconds>` randomizes the
+strength, temporal feedback, zoom, rotation, octave count, and octave scale at
+the requested interval. `--random_dream` is accepted as an alias. Video files
+use their decoded media timeline, so headless and offline output is independent
+of processing speed; cameras use elapsed capture time. For example:
+
+```bash
+./build/acmxvk-dream/acmxvk \
+    --input input.mp4 --output randomized.mp4 --headless \
+    --dream-model models/deep-dream-vgg16.pt \
+    --dream-layer relu4_2 --random-dream 0.5 \
+    --shaders shaders_acmxvk --shader-file color-effect.frag.spv
+```
+
+The randomizer deliberately leaves the model, feature layer, iteration count,
+channel, working resolution, jitter, and smoothing unchanged. Octaves range
+from 1 through 8; higher random values require proportionally more neural
+processing.
+
 Increment 11 adds the CUDA/Vulkan interop path for Deep Dream. When MXVK was
 built with CUDA support, compatible camera and video frames remain on the GPU
 across capture or NVDEC, LibTorch preprocessing, optional input rotation,

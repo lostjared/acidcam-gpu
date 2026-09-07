@@ -303,6 +303,11 @@ namespace acmxvk {
         bool crossfade_uses_video_timeline = false;
         bool autopilot_video_timeline_initialized = false;
         std::mt19937 autopilot_rng{std::random_device{}()};
+        std::mt19937 random_dream_rng{std::random_device{}()};
+        std::uint64_t random_dream_period =
+            std::numeric_limits<std::uint64_t>::max();
+        double previous_random_dream_timeline = 0.0;
+        bool random_dream_timeline_initialized = false;
 #ifdef ACMXVK_WITH_CUDA
         std::unique_ptr<gpu::FilterEngine> gpu_filter_engine;
 #endif
@@ -457,6 +462,7 @@ namespace acmxvk {
         [[nodiscard]] static std::string captureFourccName(double value);
         [[nodiscard]] bool hostPreprocessingEnabled() const;
         void applyDnnEffects(cv::Mat &rgba);
+        void updateRandomDreamSettings();
         void applyDeepDreamEffect(cv::Mat &rgba);
         void handleDeepDreamRuntimeError(std::string_view message);
         void updateHumanOverlayTexture();

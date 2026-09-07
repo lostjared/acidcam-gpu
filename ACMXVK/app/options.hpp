@@ -82,6 +82,7 @@ namespace acmxvk {
         double dream_zoom = 1.01;
         double dream_rotation = 0.1;
         double dream_octave_scale = 1.4;
+        double random_dream_interval = 0.0;
         bool resolution_specified = false;
         bool use_yuv = false;
         bool maximize_fps = false;
@@ -138,6 +139,7 @@ namespace acmxvk {
         bool dream_octave_scale_specified = false;
         bool dream_jitter_specified = false;
         bool dream_smoothing_specified = false;
+        bool random_dream_specified = false;
         bool gpu_filter_before_dream = false;
         bool human_background = false;
         bool human_black_specified = false;
