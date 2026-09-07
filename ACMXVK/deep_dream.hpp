@@ -10,7 +10,8 @@ namespace acmxvk::dream {
                              std::string_view layer, int iterations,
                              float strength, float feedback, float zoom,
                              float rotation_degrees, int max_dimension,
-                             bool use_half, std::ostream &output,
+                             bool use_half, int target_channel,
+                             std::ostream &output,
                              std::ostream &error);
 
 } // namespace acmxvk::dream

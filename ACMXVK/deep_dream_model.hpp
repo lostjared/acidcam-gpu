@@ -35,6 +35,7 @@ namespace acmxvk::dream {
         float zoom = 1.01F;
         float rotation_degrees = 0.1F;
         int max_dimension = 512;
+        int target_channel = -1;
     };
 
     struct GradientAscentResult {
@@ -60,6 +61,7 @@ namespace acmxvk::dream {
                                         bool use_half = false);
         [[nodiscard]] const ModelMetadata &metadata() const;
         [[nodiscard]] std::size_t selected_layer() const;
+        [[nodiscard]] std::size_t selected_channels() const;
         [[nodiscard]] GradientAscentResult apply_gradient_ascent(
             cv::Mat &rgba, const GradientAscentOptions &options = {});
         void print(std::ostream &output) const;

@@ -36,7 +36,7 @@ complete replacement for ACMX2.
 | MIDI controls | Partial | Optional RtMidi support handles input enumeration, a bounded callback queue, live monitoring, ACMX2 MIDI Map `.midi_cfg` files, Slider 1–4 custom uniforms, ACMXVK-equivalent playback actions, PNG/TIFF/WebP/raw snapshots, HUD and watermark toggling, audio-time/delta/FFT sensitivity actions, and direct three-axis 3D model rotation/scale controls. Paired knobs use ACMX2's centered, velocity-sensitive repeat behavior. |
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
-| Deep Dream | Increment 6 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback and bounded working-resolution/FP16 performance controls. |
+| Deep Dream | Increment 7 | Optional `-DWITH_DEEP_DREAM=ON` builds discover and link CUDA LibTorch. VGG16 pixel-gradient ascent preprocesses camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, performance controls, and whole-layer or individual feature-channel targeting. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, and file-audio replacement use synchronized shared-memory control. |
 
@@ -219,6 +219,22 @@ processing or choose 64–4096 for a different maximum.
 This can improve throughput and reduce VRAM use on NVIDIA GPUs with efficient
 FP16 support, including the RTX 2070. Loss and gradient normalization remain in
 FP32 for numerical stability. FP32 remains the default compatibility mode.
+
+Increment 7 adds individual feature-channel targeting. The default
+`--dream-channel all` maximizes the complete selected activation as before.
+Choose a zero-based channel to isolate a narrower learned visual feature:
+
+```bash
+--dream-layer relu4_2 --dream-channel 42
+```
+
+The selected layer's channel count is printed by `--check-deep-dream`, and an
+out-of-range channel is rejected before media processing begins. VGG16 was
+trained for ImageNet classification and does not label a particular channel as
+"faces"; channel targeting provides a controlled way to explore which channels
+produce face-like, eye-like, architectural, or textural structures. Earlier
+layers tend toward edges and textures, while later layers produce larger and
+more semantic forms.
 
 ### Pcons
 

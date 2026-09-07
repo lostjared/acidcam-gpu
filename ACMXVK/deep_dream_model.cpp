@@ -36,6 +36,7 @@ namespace acmxvk::dream {
         constexpr float MAX_ZOOM = 1.1F;
         constexpr float MAX_ROTATION_DEGREES = 5.0F;
         constexpr int MAX_DREAM_DIMENSION = 4096;
+        constexpr int MAX_TARGET_CHANNEL = 65535;
 
         [[nodiscard]] c10::IValue require_attribute(
             const torch::jit::Module &module, const std::string &name) {
@@ -258,6 +259,11 @@ namespace acmxvk::dream {
                 throw std::runtime_error(
                     "Deep Dream working size must be 0 or between 64 and 4096");
             }
+            if (options.target_channel < -1 ||
+                options.target_channel > MAX_TARGET_CHANNEL) {
+                throw std::runtime_error(
+                    "Deep Dream target channel must be -1 or between 0 and 65535");
+            }
         }
 
         [[nodiscard]] torch::Tensor normalization_tensor(
@@ -365,6 +371,11 @@ namespace acmxvk::dream {
         return implementation->selected_layer;
     }
 
+    [[nodiscard]] std::size_t Model::selected_channels() const {
+        return static_cast<std::size_t>(
+            implementation->output_shapes[implementation->selected_layer][1]);
+    }
+
     [[nodiscard]] GradientAscentResult Model::apply_gradient_ascent(
         cv::Mat &rgba, const GradientAscentOptions &options) {
         validate_gradient_options(options);
@@ -457,8 +468,17 @@ namespace acmxvk::dream {
             }
             const torch::Tensor activation =
                 outputs[implementation->selected_layer];
+            torch::Tensor target_activation = activation;
+            if (options.target_channel >= 0) {
+                if (options.target_channel >= activation.size(1)) {
+                    throw std::runtime_error(
+                        "Deep Dream target channel is outside the selected layer's range");
+                }
+                target_activation = activation.select(1,
+                                                      options.target_channel);
+            }
             const torch::Tensor loss =
-                activation.to(torch::kFloat32).square().mean();
+                target_activation.to(torch::kFloat32).square().mean();
             if (!torch::isfinite(loss).item<bool>()) {
                 throw std::runtime_error(
                     "Deep Dream activation loss is not finite");
@@ -563,7 +583,9 @@ namespace acmxvk::dream {
             }
             output << shape[index];
         }
-        output << '\n';
+        output << '\n'
+               << "Deep Dream selected channels: " << selected_channels()
+               << '\n';
     }
 
 } // namespace acmxvk::dream

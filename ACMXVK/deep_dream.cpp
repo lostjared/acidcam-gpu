@@ -30,7 +30,8 @@ namespace acmxvk::dream {
                              std::string_view layer, int iterations,
                              float strength, float feedback, float zoom,
                              float rotation_degrees, int max_dimension,
-                             bool use_half, std::ostream &output,
+                             bool use_half, int target_channel,
+                             std::ostream &output,
                              std::ostream &error) {
         output << "Deep Dream: enabled\n"
                << "LibTorch version: " << TORCH_VERSION << '\n';
@@ -80,6 +81,12 @@ namespace acmxvk::dream {
                 Model model =
                     Model::load(model_file, cuda_device, layer, use_half);
                 model.print(output);
+                output << "Deep Dream target channel: ";
+                if (target_channel < 0) {
+                    output << "all\n";
+                } else {
+                    output << target_channel << '\n';
+                }
                 cv::Mat test_image(64, 64, CV_8UC4);
                 for (int y = 0; y < test_image.rows; ++y) {
                     for (int x = 0; x < test_image.cols; ++x) {
@@ -97,7 +104,8 @@ namespace acmxvk::dream {
                 GradientAscentResult result = model.apply_gradient_ascent(
                     test_image,
                     GradientAscentOptions{iterations, strength, feedback, zoom,
-                                          rotation_degrees, max_dimension});
+                                          rotation_degrees, max_dimension,
+                                          target_channel});
                 output << std::fixed << std::setprecision(6)
                        << "Deep Dream gradient ascent: ready"
                        << " (loss=" << result.activation_loss
@@ -111,7 +119,7 @@ namespace acmxvk::dream {
                         test_image,
                         GradientAscentOptions{iterations, strength, feedback,
                                               zoom, rotation_degrees,
-                                              max_dimension});
+                                              max_dimension, target_channel});
                     output << "Deep Dream temporal feedback: ready"
                            << " (blend=" << feedback << ", zoom=" << zoom
                            << ", rotation=" << rotation_degrees

@@ -656,6 +656,20 @@ namespace acmxvk {
                 }
             } else if (option == "--dream-fp16") {
                 options.dream_fp16 = true;
+            } else if (option == "--dream-channel") {
+                const std::string value =
+                    optionValue(index, argc, argv, option);
+                options.dream_channel_specified = true;
+                if (value == "all") {
+                    options.dream_channel = -1;
+                } else {
+                    options.dream_channel = parseInteger(value, option);
+                    if (options.dream_channel < 0 ||
+                        options.dream_channel > 65535) {
+                        throw std::runtime_error(
+                            "--dream-channel must be 'all' or between 0 and 65535");
+                    }
+                }
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1072,7 +1086,7 @@ namespace acmxvk {
              options.dream_strength_specified ||
              options.dream_feedback_specified || options.dream_zoom_specified ||
              options.dream_rotation_specified || options.dream_size_specified ||
-             options.dream_fp16) &&
+             options.dream_fp16 || options.dream_channel_specified) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
                 "Deep Dream processing options require --dream-model");
@@ -1309,6 +1323,7 @@ namespace acmxvk {
                << "      --dream-rotation <N>   Feedback rotation degrees per frame (-5 to 5; default 0.1)\n"
                << "      --dream-size <N>       Maximum neural working dimension (default 512; 0=native)\n"
                << "      --dream-fp16           Use FP16 model and tensors on CUDA\n"
+               << "      --dream-channel <N|all> Target one feature channel (default: all)\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"

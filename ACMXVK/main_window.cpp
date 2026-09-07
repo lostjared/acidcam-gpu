@@ -1059,6 +1059,12 @@ namespace acmxvk {
         const dream::ModelMetadata &metadata = deep_dream_model->metadata();
         const dream::LayerMetadata &layer =
             metadata.layers[deep_dream_model->selected_layer()];
+        if (options.dream_channel >= 0 &&
+            static_cast<std::size_t>(options.dream_channel) >=
+                deep_dream_model->selected_channels()) {
+            throw std::runtime_error(
+                "--dream-channel is outside the selected layer's channel range");
+        }
         std::cout << "acmxvk: Deep Dream preprocessing enabled: "
                   << metadata.architecture << '/' << layer.name << ", "
                   << options.dream_iterations << " iteration(s), strength "
@@ -1070,7 +1076,14 @@ namespace acmxvk {
                           ? std::string("native")
                           : std::to_string(options.dream_size) + " max")
                   << ", " << (options.dream_fp16 ? "FP16" : "FP32")
-                  << "; output feeds the existing Vulkan shader chain\n";
+                  << ", channel ";
+        if (options.dream_channel < 0) {
+            std::cout << "all";
+        } else {
+            std::cout << options.dream_channel;
+        }
+        std::cout
+            << "; output feeds the existing Vulkan shader chain\n";
 #endif
     }
 
@@ -3549,7 +3562,7 @@ namespace acmxvk {
                           static_cast<float>(options.dream_feedback),
                           static_cast<float>(options.dream_zoom),
                           static_cast<float>(options.dream_rotation),
-                          options.dream_size});
+                          options.dream_size, options.dream_channel});
         if (!std::isfinite(result.mean_pixel_change)) {
             throw std::runtime_error(
                 "Deep Dream returned a non-finite processed frame");
