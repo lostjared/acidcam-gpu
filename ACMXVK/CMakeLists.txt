@@ -263,6 +263,15 @@ endif()
 if(WITH_DEEP_DREAM)
     find_package(CUDAToolkit REQUIRED)
     find_package(Torch CONFIG REQUIRED)
+    find_package(OpenCV REQUIRED COMPONENTS
+        core
+        imgproc
+        imgcodecs
+        highgui
+        videoio
+        cudaarithm
+        cudawarping
+    )
     if(NOT CAFFE2_USE_CUDA)
         message(FATAL_ERROR
             "WITH_DEEP_DREAM requires a CUDA-enabled LibTorch installation."
@@ -747,7 +756,12 @@ if(WITH_DEEP_DREAM)
         deep_dream_model.cpp
         deep_dream_model.hpp
     )
-    target_link_libraries(acmxvk PRIVATE torch)
+    target_link_libraries(acmxvk PRIVATE
+        torch
+        CUDA::cudart
+        opencv_cudaarithm
+        opencv_cudawarping
+    )
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_DEEP_DREAM)
     message(STATUS "Deep Dream: ENABLED (CUDA LibTorch ${Torch_VERSION})")
 else()

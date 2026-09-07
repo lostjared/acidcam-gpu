@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include <opencv2/core/cuda.hpp>
 #include <opencv2/core/mat.hpp>
 
 namespace acmxvk::dream {
@@ -69,6 +70,10 @@ namespace acmxvk::dream {
         [[nodiscard]] std::size_t selected_channels() const;
         [[nodiscard]] GradientAscentResult apply_gradient_ascent(
             cv::Mat &rgba, const GradientAscentOptions &options = {});
+        [[nodiscard]] GradientAscentResult apply_gradient_ascent_cuda(
+            const cv::cuda::GpuMat &rgba, cv::cuda::GpuMat &output,
+            cv::cuda::Stream &stream,
+            const GradientAscentOptions &options = {});
         void print(std::ostream &output) const;
 
       private:

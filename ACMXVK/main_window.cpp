@@ -1086,6 +1086,9 @@ namespace acmxvk {
                   << options.dream_octave_scale
                   << "x, jitter " << options.dream_jitter << " px"
                   << ", smoothing " << options.dream_smoothing << " px"
+                  << ", acidcam-gpu order "
+                  << (options.gpu_filter_before_dream ? "before" : "after")
+                  << " Deep Dream"
                   << "; output feeds the existing Vulkan shader chain\n";
 #endif
     }
@@ -3750,6 +3753,11 @@ namespace acmxvk {
 #else
             hdr_input_precision_enabled = false;
 #endif
+            if (options.gpu_filter_before_dream &&
+                hdr_input_precision_enabled) {
+                throw std::runtime_error(
+                    "--gpu-filter-before-dream does not support HDR input");
+            }
             hdr_transfer_processing_enabled =
                 hdr_input_precision_enabled &&
                 (video_hdr_info.color_transfer ==
@@ -5310,8 +5318,22 @@ namespace acmxvk {
         }
 
         bool history_updated = false;
+#if defined(ACMXVK_WITH_CUDA) && defined(ACMXVK_WITH_DEEP_DREAM) && \
+    defined(ACMXVK_WITH_MXVK_CUDA)
+        if (options.gpu_filter_before_dream &&
+            deep_dream_model != nullptr && gpu_filter_engine != nullptr &&
+            !cuda_dream_rgba.empty()) {
+            const cv::cuda::GpuMat &history_input =
+                options.frame_rotation == FrameRotation::None
+                    ? cuda_dream_rgba
+                    : cuda_rotated_rgba;
+            updateCudaHistoryFrame(history_input,
+                                   gpu_filter_engine->stream());
+            history_updated = true;
+        }
+#endif
 #ifdef ACMXVK_WITH_CUDA
-        if (gpu_filter_engine != nullptr) {
+        if (!history_updated && gpu_filter_engine != nullptr) {
             updateFilteredCudaHistoryFrame();
             history_updated = true;
         }
@@ -5534,10 +5556,150 @@ namespace acmxvk {
         return true;
     }
 
+#if defined(ACMXVK_WITH_MXVK_CUDA) && defined(ACMXVK_WITH_DEEP_DREAM)
+    [[nodiscard]] bool MainWindow::readCudaDeepDreamFrame() {
+        cv::cuda::Stream *capture_stream = nullptr;
+#ifdef MXVK_WITH_FFMPEG_CAPTURE
+        if (using_ffmpeg_capture) {
+            if (!ffmpeg_capture.readGpuRgba(cuda_input_rgba,
+                                            ffmpeg_cuda_stream, false)) {
+                return false;
+            }
+            capture_stream = &ffmpeg_cuda_stream;
+        } else
+#endif
+        {
+            if (!capture.readGpuRgba(cuda_input_rgba, false)) {
+                return false;
+            }
+            capture_stream = &capture.cudaStream();
+        }
+
+        const cv::cuda::GpuMat *dream_input = &cuda_input_rgba;
+        cv::cuda::Stream *dream_stream = capture_stream;
+        bool filtered = false;
+#ifdef ACMXVK_WITH_CUDA
+        if (options.gpu_filter_before_dream &&
+            gpu_filter_engine != nullptr) {
+            if (!gpu_filter_engine->process(cuda_input_rgba,
+                                            *capture_stream)) {
+                throw std::runtime_error(
+                    "acidcam-gpu rejected the pre-dream CUDA frame");
+            }
+            dream_input = &gpu_filter_engine->output();
+            dream_stream = &gpu_filter_engine->stream();
+            filtered = true;
+        }
+#endif
+
+        const dream::GradientAscentResult dream_result =
+            deep_dream_model->apply_gradient_ascent_cuda(
+                *dream_input, cuda_dream_rgba, *dream_stream,
+                dream::GradientAscentOptions{
+                    options.dream_iterations,
+                    static_cast<float>(options.dream_strength),
+                    static_cast<float>(options.dream_feedback),
+                    static_cast<float>(options.dream_zoom),
+                    static_cast<float>(options.dream_rotation),
+                    options.dream_size, options.dream_channel,
+                    options.dream_octaves,
+                    static_cast<float>(options.dream_octave_scale),
+                    options.dream_jitter, options.dream_smoothing});
+        if (!std::isfinite(dream_result.mean_pixel_change)) {
+            throw std::runtime_error(
+                "Deep Dream returned a non-finite CUDA frame");
+        }
+
+        const cv::cuda::GpuMat &render_input =
+            rotateCudaFrame(cuda_dream_rgba, *dream_stream);
+        const cv::cuda::GpuMat *final_input = &render_input;
+        cv::cuda::Stream *final_stream = dream_stream;
+#ifdef ACMXVK_WITH_CUDA
+        if (!options.gpu_filter_before_dream &&
+            gpu_filter_engine != nullptr) {
+            if (!gpu_filter_engine->process(render_input, *dream_stream)) {
+                throw std::runtime_error(
+                    "acidcam-gpu rejected the post-dream CUDA frame");
+            }
+            final_input = &gpu_filter_engine->output();
+            final_stream = &gpu_filter_engine->stream();
+            filtered = true;
+        }
+#endif
+        if (!frame_sprite->updateTextureCuda(*final_input, *final_stream)) {
+            final_input->download(cuda_input_fallback_rgba, *final_stream);
+            final_stream->waitForCompletion();
+            if (!cuda_input_fallback_logged) {
+                std::cerr
+                    << "acmxvk: direct Deep Dream/Vulkan upload "
+                       "unavailable; using host staging\n";
+                cuda_input_fallback_logged = true;
+            }
+            frame_sprite->updateTexture(
+                cuda_input_fallback_rgba.ptr(), cuda_input_fallback_rgba.cols,
+                cuda_input_fallback_rgba.rows,
+                static_cast<int>(cuda_input_fallback_rgba.step));
+        }
+        updateModelTextureCuda(*final_input, *final_stream);
+
+        if (!dream_processing_logged) {
+            std::cout << "acmxvk: Deep Dream CUDA working frame: "
+                      << dream_result.processed_width << 'x'
+                      << dream_result.processed_height << " -> "
+                      << render_input.cols << 'x' << render_input.rows
+                      << " Vulkan texture ("
+                      << dream_result.processed_octaves << " octave(s))\n";
+            dream_processing_logged = true;
+        }
+        if (!cuda_input_path_logged) {
+            std::cout
+                << "acmxvk: CUDA interop path active: capture/NVDEC -> ";
+            if (options.gpu_filter_before_dream && filtered) {
+                std::cout << "acidcam-gpu -> ";
+            }
+            std::cout << "LibTorch Deep Dream -> ";
+            if (options.frame_rotation != FrameRotation::None) {
+                std::cout << "CUDA rotation -> ";
+            }
+            if (!options.gpu_filter_before_dream && filtered) {
+                std::cout << "acidcam-gpu -> ";
+            }
+            std::cout << "Vulkan texture";
+            if (cuda_input_fallback_logged) {
+                std::cout << " (host-staging upload fallback)";
+            }
+            std::cout << '\n';
+            cuda_input_path_logged = true;
+        }
+
+        const bool history_was_initialized = history_initialized;
+        initializeCudaHistory(*final_input, *final_stream, filtered);
+        if (source_kind != SourceKind::Camera && history_was_initialized &&
+            ++history_delay_counter > options.cache_delay) {
+            updateCudaHistoryFrame(*final_input, *final_stream);
+            history_delay_counter = 0;
+        }
+        if (source_kind == SourceKind::Camera) {
+            camera_history_clock_started = false;
+        }
+        return true;
+    }
+#endif
+
     [[nodiscard]] bool MainWindow::readInputFrame() {
         if (source_kind == SourceKind::Camera && options.maximize_fps) {
             return readLatestCameraFrame();
         }
+#if defined(ACMXVK_WITH_MXVK_CUDA) && defined(ACMXVK_WITH_DEEP_DREAM)
+        if (deep_dream_model != nullptr && !hdr_input_precision_enabled
+#ifdef ACMXVK_WITH_DNN
+            && edge_detector == nullptr && human_segmenter == nullptr &&
+            generic_onnx_processor == nullptr
+#endif
+        ) {
+            return readCudaDeepDreamFrame();
+        }
+#endif
 #ifdef ACMXVK_WITH_CUDA
         if (gpu_filter_engine != nullptr && !hostPreprocessingEnabled() &&
             !hdr_input_precision_enabled) {

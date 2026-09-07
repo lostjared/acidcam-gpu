@@ -316,6 +316,7 @@ namespace acmxvk {
 #endif
 #ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::GpuMat cuda_input_rgba;
+        cv::cuda::GpuMat cuda_dream_rgba;
         cv::cuda::GpuMat cuda_rotated_rgba;
         cv::cuda::GpuMat cuda_rotation_transpose;
         cv::Mat cuda_input_fallback_rgba;
@@ -519,6 +520,9 @@ namespace acmxvk {
                                    bool filtered);
         void uploadInputFrame(const cv::cuda::GpuMat &rgba,
                               cv::cuda::Stream &source_stream);
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        [[nodiscard]] bool readCudaDeepDreamFrame();
+#endif
         [[nodiscard]] const cv::cuda::GpuMat &
         rotateCudaFrame(const cv::cuda::GpuMat &rgba,
                         cv::cuda::Stream &source_stream);

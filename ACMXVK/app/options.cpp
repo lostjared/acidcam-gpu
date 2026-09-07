@@ -704,6 +704,8 @@ namespace acmxvk {
                     throw std::runtime_error(
                         "--dream-smoothing must be between 0 and 16");
                 }
+            } else if (option == "--gpu-filter-before-dream") {
+                options.gpu_filter_before_dream = true;
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1124,7 +1126,8 @@ namespace acmxvk {
              options.dream_octaves_specified ||
              options.dream_octave_scale_specified ||
              options.dream_jitter_specified ||
-             options.dream_smoothing_specified) &&
+             options.dream_smoothing_specified ||
+             options.gpu_filter_before_dream) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
                 "Deep Dream processing options require --dream-model");
@@ -1147,6 +1150,25 @@ namespace acmxvk {
         }
         if (options.gpu_buffer_specified && options.gpu_filter_indices.empty()) {
             throw std::runtime_error("--gpu-buffer requires --gpu-filter <list>");
+        }
+        if (options.gpu_filter_before_dream &&
+            options.gpu_filter_indices.empty()) {
+            throw std::runtime_error(
+                "--gpu-filter-before-dream requires --gpu-filter <list>");
+        }
+        if (options.gpu_filter_before_dream && options.maximize_fps) {
+            throw std::runtime_error(
+                "--gpu-filter-before-dream cannot be combined with --maximize-fps");
+        }
+        if (options.gpu_filter_before_dream && !options.graphic_file.empty()) {
+            throw std::runtime_error(
+                "--gpu-filter-before-dream currently supports camera and video input");
+        }
+        if (options.gpu_filter_before_dream &&
+            (!options.edge_model.empty() || !options.human_model.empty() ||
+             !options.onnx_configuration.empty())) {
+            throw std::runtime_error(
+                "--gpu-filter-before-dream cannot be combined with DNN input effects");
         }
         if ((!options.shader_pass_indices.empty() || !options.shader_pass_files.empty() ||
              !options.playlist_file.empty() || options.enable_playlist) &&
@@ -1366,6 +1388,8 @@ namespace acmxvk {
                << "      --dream-octave-scale <N> Scale ratio between octaves (1.1-3; default 1.4)\n"
                << "      --dream-jitter <N>     Spatial gradient jitter in pixels (0-64; default 0)\n"
                << "      --dream-smoothing <N>  Gradient smoothing radius (0-16; default 0)\n"
+               << "      --gpu-filter-before-dream\n"
+               << "                              Run acidcam-gpu before Deep Dream\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"

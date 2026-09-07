@@ -37,6 +37,12 @@ namespace acmxvk::dream {
                              std::ostream &error) {
         output << "Deep Dream: enabled\n"
                << "LibTorch version: " << TORCH_VERSION << '\n';
+#ifdef ACMXVK_WITH_MXVK_CUDA
+        output << "Deep Dream CUDA/Vulkan interop: enabled\n";
+#else
+        output << "Deep Dream CUDA/Vulkan interop: unavailable "
+                  "(MXVK has no CUDA interop)\n";
+#endif
 
         try {
             if (!autograd_smoke_test(torch::Device(torch::kCPU))) {

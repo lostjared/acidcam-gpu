@@ -138,6 +138,7 @@ namespace acmxvk {
         bool dream_octave_scale_specified = false;
         bool dream_jitter_specified = false;
         bool dream_smoothing_specified = false;
+        bool gpu_filter_before_dream = false;
         bool human_background = false;
         bool human_black_specified = false;
         bool human_white_specified = false;
