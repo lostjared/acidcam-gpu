@@ -11,6 +11,7 @@ namespace acmxvk::dream {
                              float strength, float feedback, float zoom,
                              float rotation_degrees, int max_dimension,
                              bool use_half, int target_channel,
+                             int octaves, float octave_scale,
                              std::ostream &output,
                              std::ostream &error);
 

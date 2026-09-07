@@ -63,6 +63,7 @@ namespace acmxvk {
         int dream_iterations = 1;
         int dream_size = 512;
         int dream_channel = -1;
+        int dream_octaves = 1;
         double requested_fps = 0.0;
         double duration = 0.0;
         double cross_fade_duration = 0.5;
@@ -78,6 +79,7 @@ namespace acmxvk {
         double dream_feedback = 0.9;
         double dream_zoom = 1.01;
         double dream_rotation = 0.1;
+        double dream_octave_scale = 1.4;
         bool resolution_specified = false;
         bool use_yuv = false;
         bool maximize_fps = false;
@@ -130,6 +132,8 @@ namespace acmxvk {
         bool dream_size_specified = false;
         bool dream_fp16 = false;
         bool dream_channel_specified = false;
+        bool dream_octaves_specified = false;
+        bool dream_octave_scale_specified = false;
         bool human_background = false;
         bool human_black_specified = false;
         bool human_white_specified = false;

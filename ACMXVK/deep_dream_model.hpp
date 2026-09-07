@@ -36,6 +36,8 @@ namespace acmxvk::dream {
         float rotation_degrees = 0.1F;
         int max_dimension = 512;
         int target_channel = -1;
+        int octaves = 1;
+        float octave_scale = 1.4F;
     };
 
     struct GradientAscentResult {
@@ -44,6 +46,7 @@ namespace acmxvk::dream {
         float mean_pixel_change = 0.0F;
         int processed_width = 0;
         int processed_height = 0;
+        int processed_octaves = 0;
     };
 
     class Model {

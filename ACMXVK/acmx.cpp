@@ -110,7 +110,9 @@ int main(int argc, char **argv) {
                        static_cast<float>(options.dream_zoom),
                        static_cast<float>(options.dream_rotation),
                        options.dream_size, options.dream_fp16,
-                       options.dream_channel, std::cout, std::cerr)
+                       options.dream_channel, options.dream_octaves,
+                       static_cast<float>(options.dream_octave_scale),
+                       std::cout, std::cerr)
                        ? EXIT_SUCCESS
                        : EXIT_FAILURE;
 #else

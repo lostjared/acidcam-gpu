@@ -670,6 +670,23 @@ namespace acmxvk {
                             "--dream-channel must be 'all' or between 0 and 65535");
                     }
                 }
+            } else if (option == "--dream-octaves") {
+                options.dream_octaves =
+                    parseInteger(optionValue(index, argc, argv, option), option);
+                options.dream_octaves_specified = true;
+                if (options.dream_octaves < 1 || options.dream_octaves > 8) {
+                    throw std::runtime_error(
+                        "--dream-octaves must be between 1 and 8");
+                }
+            } else if (option == "--dream-octave-scale") {
+                options.dream_octave_scale =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                options.dream_octave_scale_specified = true;
+                if (options.dream_octave_scale < 1.1 ||
+                    options.dream_octave_scale > 3.0) {
+                    throw std::runtime_error(
+                        "--dream-octave-scale must be between 1.1 and 3.0");
+                }
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1086,7 +1103,9 @@ namespace acmxvk {
              options.dream_strength_specified ||
              options.dream_feedback_specified || options.dream_zoom_specified ||
              options.dream_rotation_specified || options.dream_size_specified ||
-             options.dream_fp16 || options.dream_channel_specified) &&
+             options.dream_fp16 || options.dream_channel_specified ||
+             options.dream_octaves_specified ||
+             options.dream_octave_scale_specified) &&
             options.dream_model.empty()) {
             throw std::runtime_error(
                 "Deep Dream processing options require --dream-model");
@@ -1324,6 +1343,8 @@ namespace acmxvk {
                << "      --dream-size <N>       Maximum neural working dimension (default 512; 0=native)\n"
                << "      --dream-fp16           Use FP16 model and tensors on CUDA\n"
                << "      --dream-channel <N|all> Target one feature channel (default: all)\n"
+               << "      --dream-octaves <N>    Progressive dream scales (1-8; default 1)\n"
+               << "      --dream-octave-scale <N> Scale ratio between octaves (1.1-3; default 1.4)\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"

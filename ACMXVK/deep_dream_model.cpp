@@ -3,6 +3,7 @@
 #include "input_validation.hpp"
 
 #include <torch/cuda.h>
+#include <torch/nn/functional/upsampling.h>
 #include <torch/script.h>
 #include <torch/torch.h>
 
@@ -37,6 +38,9 @@ namespace acmxvk::dream {
         constexpr float MAX_ROTATION_DEGREES = 5.0F;
         constexpr int MAX_DREAM_DIMENSION = 4096;
         constexpr int MAX_TARGET_CHANNEL = 65535;
+        constexpr int MAX_OCTAVES = 8;
+        constexpr float MIN_OCTAVE_SCALE = 1.1F;
+        constexpr float MAX_OCTAVE_SCALE = 3.0F;
 
         [[nodiscard]] c10::IValue require_attribute(
             const torch::jit::Module &module, const std::string &name) {
@@ -264,6 +268,16 @@ namespace acmxvk::dream {
                 throw std::runtime_error(
                     "Deep Dream target channel must be -1 or between 0 and 65535");
             }
+            if (options.octaves < 1 || options.octaves > MAX_OCTAVES) {
+                throw std::runtime_error(
+                    "Deep Dream octaves must be between 1 and 8");
+            }
+            if (!std::isfinite(options.octave_scale) ||
+                options.octave_scale < MIN_OCTAVE_SCALE ||
+                options.octave_scale > MAX_OCTAVE_SCALE) {
+                throw std::runtime_error(
+                    "Deep Dream octave scale must be between 1.1 and 3.0");
+            }
         }
 
         [[nodiscard]] torch::Tensor normalization_tensor(
@@ -450,66 +464,131 @@ namespace acmxvk::dream {
         const torch::Tensor standard_deviation = normalization_tensor(
             implementation->metadata.input_std, device,
             implementation->scalar_type);
-        torch::Tensor dream_input =
+        const torch::Tensor normalized_source =
             ((input - mean) / standard_deviation).detach();
-        dream_input.requires_grad_(true);
         const torch::Tensor minimum = (torch::zeros_like(mean) - mean) /
                                       standard_deviation;
         const torch::Tensor maximum = (torch::ones_like(mean) - mean) /
                                       standard_deviation;
 
+        const auto resize_tensor = [](const torch::Tensor &tensor,
+                                      std::int64_t height,
+                                      std::int64_t width) {
+            if (tensor.size(2) == height && tensor.size(3) == width) {
+                return tensor;
+            }
+            return torch::nn::functional::interpolate(
+                tensor,
+                torch::nn::functional::InterpolateFuncOptions()
+                    .size(std::vector<std::int64_t>{height, width})
+                    .mode(torch::kBilinear)
+                    .align_corners(false));
+        };
+
+        std::vector<std::pair<std::int64_t, std::int64_t>> octave_sizes;
+        octave_sizes.reserve(static_cast<std::size_t>(options.octaves));
+        const double minimum_scale = std::min(
+            1.0, std::max(
+                     static_cast<double>(implementation->metadata.minimum_input_size) /
+                         rgb.rows,
+                     static_cast<double>(implementation->metadata.minimum_input_size) /
+                         rgb.cols));
+        for (int octave = options.octaves - 1; octave >= 0; --octave) {
+            const double scale = std::max(
+                minimum_scale,
+                1.0 / std::pow(static_cast<double>(options.octave_scale),
+                               octave));
+            const std::int64_t height = std::max<std::int64_t>(
+                implementation->metadata.minimum_input_size,
+                static_cast<std::int64_t>(std::lround(rgb.rows * scale)));
+            const std::int64_t width = std::max<std::int64_t>(
+                implementation->metadata.minimum_input_size,
+                static_cast<std::int64_t>(std::lround(rgb.cols * scale)));
+            const std::pair<std::int64_t, std::int64_t> size{height, width};
+            if (octave_sizes.empty() || octave_sizes.back() != size) {
+                octave_sizes.push_back(size);
+            }
+        }
+
         GradientAscentResult result;
-        for (int iteration = 0; iteration < options.iterations; ++iteration) {
-            const std::vector<torch::Tensor> outputs = feature_outputs(
-                implementation->module.forward({dream_input}));
-            if (outputs.size() != implementation->metadata.layers.size()) {
-                throw std::runtime_error(
-                    "Deep Dream model output count changed during gradient ascent");
+        result.processed_octaves = static_cast<int>(octave_sizes.size());
+        torch::Tensor dream_input;
+        torch::Tensor previous_source;
+        for (const auto &[octave_height, octave_width] : octave_sizes) {
+            const torch::Tensor octave_source = resize_tensor(
+                normalized_source, octave_height, octave_width);
+            if (!dream_input.defined()) {
+                dream_input = octave_source.detach();
+            } else {
+                const torch::Tensor restored_detail =
+                    octave_source - resize_tensor(previous_source,
+                                                  octave_height,
+                                                  octave_width);
+                dream_input =
+                    (resize_tensor(dream_input.detach(), octave_height,
+                                   octave_width) +
+                     restored_detail)
+                        .clamp(minimum, maximum)
+                        .detach();
             }
-            const torch::Tensor activation =
-                outputs[implementation->selected_layer];
-            torch::Tensor target_activation = activation;
-            if (options.target_channel >= 0) {
-                if (options.target_channel >= activation.size(1)) {
+            previous_source = octave_source;
+            dream_input.requires_grad_(true);
+
+            for (int iteration = 0; iteration < options.iterations;
+                 ++iteration) {
+                const std::vector<torch::Tensor> outputs = feature_outputs(
+                    implementation->module.forward({dream_input}));
+                if (outputs.size() != implementation->metadata.layers.size()) {
                     throw std::runtime_error(
-                        "Deep Dream target channel is outside the selected layer's range");
+                        "Deep Dream model output count changed during gradient ascent");
                 }
-                target_activation = activation.select(1,
-                                                      options.target_channel);
-            }
-            const torch::Tensor loss =
-                target_activation.to(torch::kFloat32).square().mean();
-            if (!torch::isfinite(loss).item<bool>()) {
-                throw std::runtime_error(
-                    "Deep Dream activation loss is not finite");
-            }
-            loss.backward();
+                const torch::Tensor activation =
+                    outputs[implementation->selected_layer];
+                torch::Tensor target_activation = activation;
+                if (options.target_channel >= 0) {
+                    if (options.target_channel >= activation.size(1)) {
+                        throw std::runtime_error(
+                            "Deep Dream target channel is outside the selected layer's range");
+                    }
+                    target_activation =
+                        activation.select(1, options.target_channel);
+                }
+                const torch::Tensor loss =
+                    target_activation.to(torch::kFloat32).square().mean();
+                if (!torch::isfinite(loss).item<bool>()) {
+                    throw std::runtime_error(
+                        "Deep Dream activation loss is not finite");
+                }
+                loss.backward();
 
-            torch::Tensor gradient = dream_input.grad();
-            if (!gradient.defined() || !torch::isfinite(gradient).all().item<bool>()) {
-                throw std::runtime_error(
-                    "Deep Dream produced an invalid input gradient");
-            }
-            const torch::Tensor mean_gradient =
-                gradient.to(torch::kFloat32).abs().mean();
-            const float gradient_value = mean_gradient.item<float>();
-            if (!std::isfinite(gradient_value) ||
-                gradient_value <= GRADIENT_EPSILON) {
-                throw std::runtime_error(
-                    "Deep Dream selected layer produced no usable input gradient");
-            }
+                torch::Tensor gradient = dream_input.grad();
+                if (!gradient.defined() ||
+                    !torch::isfinite(gradient).all().item<bool>()) {
+                    throw std::runtime_error(
+                        "Deep Dream produced an invalid input gradient");
+                }
+                const torch::Tensor mean_gradient =
+                    gradient.to(torch::kFloat32).abs().mean();
+                const float gradient_value = mean_gradient.item<float>();
+                if (!std::isfinite(gradient_value) ||
+                    gradient_value <= GRADIENT_EPSILON) {
+                    throw std::runtime_error(
+                        "Deep Dream selected layer produced no usable input gradient");
+                }
 
-            {
-                torch::NoGradGuard no_grad;
-                dream_input.add_(gradient *
-                                 (options.step_size /
-                                  (mean_gradient + GRADIENT_EPSILON)));
-                dream_input.copy_(torch::maximum(
-                    torch::minimum(dream_input, maximum), minimum));
+                {
+                    torch::NoGradGuard no_grad;
+                    dream_input.add_(
+                        gradient *
+                        (options.step_size /
+                         (mean_gradient + GRADIENT_EPSILON)));
+                    dream_input.copy_(torch::maximum(
+                        torch::minimum(dream_input, maximum), minimum));
+                }
+                dream_input.grad().zero_();
+                result.activation_loss = loss.item<float>();
+                result.mean_gradient = gradient_value;
             }
-            dream_input.grad().zero_();
-            result.activation_loss = loss.item<float>();
-            result.mean_gradient = gradient_value;
         }
 
         torch::Tensor output =

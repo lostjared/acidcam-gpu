@@ -1082,8 +1082,9 @@ namespace acmxvk {
         } else {
             std::cout << options.dream_channel;
         }
-        std::cout
-            << "; output feeds the existing Vulkan shader chain\n";
+        std::cout << ", " << options.dream_octaves << " octave(s) at "
+                  << options.dream_octave_scale
+                  << "x; output feeds the existing Vulkan shader chain\n";
 #endif
     }
 
@@ -3562,7 +3563,9 @@ namespace acmxvk {
                           static_cast<float>(options.dream_feedback),
                           static_cast<float>(options.dream_zoom),
                           static_cast<float>(options.dream_rotation),
-                          options.dream_size, options.dream_channel});
+                          options.dream_size, options.dream_channel,
+                          options.dream_octaves,
+                          static_cast<float>(options.dream_octave_scale)});
         if (!std::isfinite(result.mean_pixel_change)) {
             throw std::runtime_error(
                 "Deep Dream returned a non-finite processed frame");
@@ -3571,7 +3574,8 @@ namespace acmxvk {
             std::cout << "acmxvk: Deep Dream working frame: "
                       << result.processed_width << 'x'
                       << result.processed_height << " -> " << rgba.cols << 'x'
-                      << rgba.rows << " source texture\n";
+                      << rgba.rows << " source texture ("
+                      << result.processed_octaves << " octave(s))\n";
             dream_processing_logged = true;
         }
 #else
