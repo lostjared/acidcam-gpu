@@ -7,6 +7,7 @@
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QLabel;
 class QLineEdit;
 class QPushButton;
 class QSpinBox;
@@ -46,11 +47,13 @@ class DeepDreamSettingsDialog : public QDialog {
     void load_ui_state();
     void save_ui_state();
     void update_enabled_state();
+    void refresh_model_metadata(bool report_error);
 
     bool gpu_filter_available = false;
     QCheckBox *enable_check_box = nullptr;
     QLineEdit *model_file_edit = nullptr;
     QPushButton *browse_model_button = nullptr;
+    QLabel *model_metadata_label = nullptr;
     QComboBox *layer_combo_box = nullptr;
     QSpinBox *iterations_spin_box = nullptr;
     QDoubleSpinBox *strength_spin_box = nullptr;

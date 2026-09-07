@@ -6,11 +6,16 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -19,6 +24,7 @@
 #include <QScrollArea>
 #include <QSettings>
 #include <QSpinBox>
+#include <QStringList>
 #include <QVBoxLayout>
 
 #include <array>
@@ -34,6 +40,9 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
     model_file_edit->setReadOnly(true);
     model_file_edit->setPlaceholderText("Select a TorchScript .pt model...");
     browse_model_button = new QPushButton("Browse...", this);
+    model_metadata_label = new QLabel(this);
+    model_metadata_label->setTextFormat(Qt::PlainText);
+    model_metadata_label->setWordWrap(true);
 
     layer_combo_box = new QComboBox(this);
     layer_combo_box->setEditable(true);
@@ -98,6 +107,7 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
     model_row->addWidget(model_file_edit, 1);
     model_row->addWidget(browse_model_button);
     model_layout->addRow("TorchScript model:", model_row);
+    model_layout->addRow("Model information:", model_metadata_label);
     model_layout->addRow("Feature layer:", layer_combo_box);
 
     auto *dream_group = new QGroupBox("Gradient Ascent", this);
@@ -122,11 +132,11 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
     performance_layout->addRow("Maximum dimension:",
                                maximum_dimension_spin_box);
     performance_layout->addRow(fp16_check_box);
-    performance_layout->addRow(gpu_filter_first_check_box);
 
     auto *contents = new QWidget(this);
     auto *contents_layout = new QVBoxLayout(contents);
     contents_layout->addWidget(enable_check_box);
+    contents_layout->addWidget(gpu_filter_first_check_box);
     contents_layout->addWidget(model_group);
     contents_layout->addWidget(dream_group);
     contents_layout->addWidget(feedback_group);
@@ -154,6 +164,7 @@ DeepDreamSettingsDialog::DeepDreamSettingsDialog(bool gpu_filter_enabled,
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     load_ui_state();
+    refresh_model_metadata(false);
     update_enabled_state();
     acmx2::applyCustomStyleIfEnabled(this);
 }
@@ -196,8 +207,108 @@ void DeepDreamSettingsDialog::browse_model() {
         return;
     }
     model_file_edit->setText(filename);
+    refresh_model_metadata(true);
     settings.setValue("deep_dream/last_model_directory",
                       QFileInfo(filename).absolutePath());
+}
+
+void DeepDreamSettingsDialog::refresh_model_metadata(bool report_error) {
+    const QString model_filename = model_file_edit->text().trimmed();
+    if (model_filename.isEmpty()) {
+        model_metadata_label->setText("Select a model to inspect its layers.");
+        return;
+    }
+
+    const QString metadata_filename = model_filename + ".json";
+    QFile metadata_file(metadata_filename);
+    const QFileInfo metadata_info(metadata_file);
+    QString error;
+    if (!metadata_info.isFile()) {
+        model_metadata_label->setText(
+            "No .pt.json sidecar found; enter a feature layer manually.");
+        return;
+    }
+    constexpr qint64 MAXIMUM_METADATA_BYTES = 1024 * 1024;
+    if (metadata_info.size() <= 0 ||
+        metadata_info.size() > MAXIMUM_METADATA_BYTES) {
+        error = "The model metadata sidecar has an invalid size.";
+    } else if (!metadata_file.open(QIODevice::ReadOnly)) {
+        error = "The model metadata sidecar could not be opened.";
+    }
+
+    QJsonDocument document;
+    if (error.isEmpty()) {
+        QJsonParseError parse_error;
+        document = QJsonDocument::fromJson(metadata_file.readAll(),
+                                           &parse_error);
+        if (parse_error.error != QJsonParseError::NoError ||
+            !document.isObject()) {
+            error = "The model metadata sidecar is not valid JSON.";
+        }
+    }
+
+    QString architecture;
+    QString default_layer;
+    QStringList layers;
+    int minimum_size = 0;
+    if (error.isEmpty()) {
+        const QJsonObject root = document.object();
+        if (root.value("format").toString() != "acmxvk-deep-dream" ||
+            root.value("version").toInt(-1) != 1) {
+            error = "The sidecar is not supported ACMXVK Deep Dream metadata.";
+        } else {
+            architecture = root.value("architecture").toString().trimmed();
+            default_layer = root.value("default_layer").toString().trimmed();
+            const QJsonArray layer_array = root.value("layers").toArray();
+            static const QRegularExpression name_pattern(
+                QStringLiteral("^[A-Za-z0-9_.-]{1,64}$"));
+            if (!name_pattern.match(architecture).hasMatch() ||
+                layer_array.isEmpty() || layer_array.size() > 256) {
+                error = "The model metadata fields are invalid.";
+            } else {
+                for (const QJsonValue value : layer_array) {
+                    const QString name =
+                        value.toObject().value("name").toString().trimmed();
+                    if (!name_pattern.match(name).hasMatch() ||
+                        layers.contains(name)) {
+                        error = "The model metadata contains an invalid or duplicate layer.";
+                        break;
+                    }
+                    layers.append(name);
+                }
+            }
+            const QJsonObject input = root.value("input").toObject();
+            minimum_size = input.value("minimum_size").toInt(0);
+            if (error.isEmpty() &&
+                (!layers.contains(default_layer) || minimum_size < 1 ||
+                 minimum_size > 4096)) {
+                error = "The model default layer or input size is invalid.";
+            }
+        }
+    }
+
+    if (!error.isEmpty()) {
+        model_metadata_label->setText(error + " Enter a feature layer manually.");
+        model_metadata_label->setToolTip(metadata_filename);
+        if (report_error) {
+            QMessageBox::warning(this, "Invalid Deep Dream Metadata",
+                                 error + "\n\n" + metadata_filename);
+        }
+        return;
+    }
+
+    const QString selected_layer = layer_combo_box->currentText().trimmed();
+    layer_combo_box->clear();
+    layer_combo_box->addItems(layers);
+    layer_combo_box->setCurrentText(layers.contains(selected_layer)
+                                        ? selected_layer
+                                        : default_layer);
+    model_metadata_label->setText(
+        QString("%1, %2 feature layers, minimum input %3 px")
+            .arg(architecture)
+            .arg(layers.size())
+            .arg(minimum_size));
+    model_metadata_label->setToolTip(metadata_filename);
 }
 
 void DeepDreamSettingsDialog::accept_settings() {
@@ -297,12 +408,13 @@ void DeepDreamSettingsDialog::save_ui_state() {
 
 void DeepDreamSettingsDialog::update_enabled_state() {
     const bool enabled = enable_check_box->isChecked();
-    const std::array<QWidget *, 15> controls = {
+    const std::array<QWidget *, 16> controls = {
         model_file_edit, browse_model_button, layer_combo_box,
-        iterations_spin_box, strength_spin_box, feedback_spin_box,
-        zoom_spin_box, rotation_spin_box, native_size_check_box,
-        fp16_check_box, channel_spin_box, octaves_spin_box,
-        octave_scale_spin_box, jitter_spin_box, smoothing_spin_box};
+        model_metadata_label, iterations_spin_box, strength_spin_box,
+        feedback_spin_box, zoom_spin_box, rotation_spin_box,
+        native_size_check_box, fp16_check_box, channel_spin_box,
+        octaves_spin_box, octave_scale_spin_box, jitter_spin_box,
+        smoothing_spin_box};
     for (QWidget *widget : controls) {
         widget->setEnabled(enabled);
     }

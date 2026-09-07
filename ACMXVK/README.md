@@ -316,6 +316,14 @@ settings persist between sessions and apply to Run Selected, Run All, and Edit
 Command. The optional acidcam-gpu-first order is available when a CUDA filter
 chain is enabled.
 
+The next interface increment reads the exporter-generated `<model>.pt.json`
+sidecar when a model is selected. Valid ACMXVK metadata replaces the generic
+VGG16 layer choices with the exact layer list embedded by the exporter, reports
+the architecture and minimum input size, and preserves a previously selected
+layer when the new model supports it. Missing sidecars retain editable manual
+layer entry; malformed, oversized, duplicate, or unsupported metadata is
+reported without loading it into the interface.
+
 ### Pcons
 
 `pcons-build.py` is a native Pcons alternative to the CMake build. Build and
