@@ -458,6 +458,7 @@ namespace acmxvk {
         [[nodiscard]] bool hostPreprocessingEnabled() const;
         void applyDnnEffects(cv::Mat &rgba);
         void applyDeepDreamEffect(cv::Mat &rgba);
+        void handleDeepDreamRuntimeError(std::string_view message);
         void updateHumanOverlayTexture();
 
         void openInput();
