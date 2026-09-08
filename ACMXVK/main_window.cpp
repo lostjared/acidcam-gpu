@@ -190,6 +190,7 @@ namespace acmxvk {
         }
         openInput();
         configureRenderResolution();
+        initializeStableDiffusion();
         initializeSprite();
         initializeOverlayFont();
         start_requested_audio_recording();
@@ -1124,6 +1125,73 @@ namespace acmxvk {
                          "independent source frames, temporal feedback/zoom/"
                          "rotation disabled, no-drop output\n";
         }
+#endif
+    }
+
+    void MainWindow::initializeStableDiffusion() {
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+        if (options.stable_diffusion_model.empty()) {
+            return;
+        }
+        const fs::path model =
+            fs::absolute(options.stable_diffusion_model).lexically_normal();
+        if (!fs::is_regular_file(model)) {
+            throw std::runtime_error(
+                "Stable Diffusion model is not a regular file: " +
+                model.string());
+        }
+        if (hdr_input_precision_enabled) {
+            throw std::runtime_error(
+                "Stable Diffusion video preview currently supports SDR input only");
+        }
+        stable_diffusion::Settings settings;
+        settings.server_executable = options.stable_diffusion_server;
+        settings.model = model;
+        settings.prompt = options.stable_diffusion_prompt;
+        settings.negative_prompt =
+            options.stable_diffusion_negative_prompt;
+        settings.sampler = options.stable_diffusion_sampler;
+        settings.scheduler = options.stable_diffusion_scheduler;
+        settings.width = options.stable_diffusion_width;
+        settings.height = options.stable_diffusion_height;
+        settings.steps = options.stable_diffusion_steps;
+        settings.seed = options.stable_diffusion_seed;
+        settings.port = options.stable_diffusion_server_port;
+        settings.strength = options.stable_diffusion_strength;
+        settings.cfg_scale = options.stable_diffusion_cfg_scale;
+        settings.resize_to_input = !options.stable_diffusion_upscale;
+        settings.cancelled = [] {
+            return HEADLESS_SHUTDOWN_REQUESTED != 0;
+        };
+        stable_diffusion_server =
+            std::make_unique<stable_diffusion::Server>(std::move(settings));
+        if (options.stable_diffusion_after_shaders) {
+            std::cout
+                << "acmxvk: Stable Diffusion frame processing enabled after "
+                   "the Vulkan shader chain; MXWrite CFR output enabled\n";
+        } else {
+            std::cout
+                << "acmxvk: Stable Diffusion frame processing enabled before "
+                   "the Vulkan shader chain"
+                << (options.stable_diffusion_upscale
+                        ? "; high-quality compute upscale enabled"
+                        : "")
+                << (options.output_file.empty()
+                        ? "; windowed preview mode\n"
+                        : "; MXWrite CFR output enabled\n");
+        }
+#endif
+    }
+
+    void MainWindow::applyStableDiffusionEffect(cv::Mat &rgba) {
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+        if (stable_diffusion_server == nullptr ||
+            options.stable_diffusion_after_shaders || rgba.empty()) {
+            return;
+        }
+        rgba = stable_diffusion_server->process(rgba);
+#else
+        static_cast<void>(rgba);
 #endif
     }
 
@@ -3785,6 +3853,12 @@ namespace acmxvk {
     }
 
     [[nodiscard]] bool MainWindow::hostPreprocessingEnabled() const {
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+        if (stable_diffusion_server != nullptr &&
+            !options.stable_diffusion_after_shaders) {
+            return true;
+        }
+#endif
 #ifdef ACMXVK_WITH_DEEP_DREAM
         if (deep_dream_model != nullptr) {
             return true;
@@ -4692,6 +4766,24 @@ namespace acmxvk {
             }
         }
 
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+        cv::Mat stable_diffusion_output;
+        if (stable_diffusion_server != nullptr &&
+            options.stable_diffusion_after_shaders) {
+            const cv::Mat source(recording_height, recording_width, CV_8UC4,
+                                 output_pixels);
+            stable_diffusion_output = stable_diffusion_server->process(source);
+            if (stable_diffusion_output.empty() ||
+                stable_diffusion_output.type() != CV_8UC4 ||
+                stable_diffusion_output.cols != recording_width ||
+                stable_diffusion_output.rows != recording_height) {
+                throw std::runtime_error(
+                    "Stable Diffusion returned an incompatible output frame");
+            }
+            output_pixels = stable_diffusion_output.ptr<std::uint8_t>();
+        }
+#endif
+
         if (writer.is_open()) {
             if (hdr_output_enabled && hdr_output_pixels == nullptr) {
                 throw std::runtime_error(
@@ -4879,13 +4971,22 @@ namespace acmxvk {
                 static_cast<std::uint32_t>(options.audio_buffers));
         }
         if (historyCacheEnabled()) {
+            int history_width = source_width;
+            int history_height = source_height;
+            if (options.stable_diffusion_upscale) {
+                history_width = options.stable_diffusion_width;
+                history_height = options.stable_diffusion_height;
+                if (rotationSwapsDimensions(options.frame_rotation)) {
+                    std::swap(history_width, history_height);
+                }
+            }
             if (hdr_input_precision_enabled) {
                 frame_sprite->enableHistoryTextureRgba16Float(
-                    source_width, source_height,
+                    history_width, history_height,
                     static_cast<uint32_t>(options.texture_cache_size));
             } else {
                 frame_sprite->enableHistoryTexture(
-                    source_width, source_height,
+                    history_width, history_height,
                     static_cast<uint32_t>(options.texture_cache_size));
             }
         }
@@ -5315,6 +5416,11 @@ namespace acmxvk {
             if (!currentShader().empty()) {
                 pipeline.emplace_back(currentShader());
             }
+        }
+        if (options.stable_diffusion_upscale) {
+            pipeline.insert(
+                pipeline.begin(),
+                stable_diffusion_upscale_shader_path(options));
         }
         if (options.flip_output) {
             pipeline.emplace_back(flip_shader_path(options));
@@ -6130,6 +6236,10 @@ namespace acmxvk {
             && edge_detector == nullptr && human_segmenter == nullptr &&
             generic_onnx_processor == nullptr
 #endif
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+            && (stable_diffusion_server == nullptr ||
+                options.stable_diffusion_after_shaders)
+#endif
         ) {
             return readCudaDeepDreamFrame();
         }
@@ -6261,6 +6371,7 @@ namespace acmxvk {
         }
         applyDnnEffects(rgba);
         applyDeepDreamEffect(rgba);
+        applyStableDiffusionEffect(rgba);
         rotateFrame(rgba, options.frame_rotation);
         if (!human_overlay_rgba.empty()) {
             rotateFrame(human_overlay_rgba, options.frame_rotation);

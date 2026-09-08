@@ -15,6 +15,7 @@ then pass its prefix here when it is not discoverable through pkg-config:
 Options mirror the CMake project where applicable:
 
     AUDIO=0|1, MIDI=0|1, WEBP=0|1, TIFF=0|1, DNN=0|1,
+    STABLE_DIFFUSION=0|1,
     VALIDATION=0|1, WITH_CUDA=0|1, VARIANT=release|debug,
     PREFIX=<dependency-prefix>, PCONS_INSTALL_PREFIX=<stage-prefix>,
     PCONS_FINAL_PREFIX=<installed-prefix>.
@@ -97,11 +98,16 @@ with_midi = option("MIDI")
 with_webp = option("WEBP")
 with_tiff = option("TIFF")
 with_dnn = option("DNN")
+with_stable_diffusion = option("STABLE_DIFFUSION")
 with_validation = option("VALIDATION")
 with_cuda = option("WITH_CUDA")
 
 if with_cuda and platform.is_macos:
     raise SystemExit("WITH_CUDA=1 is unavailable with MoltenVK on macOS.")
+if with_stable_diffusion and platform.is_windows:
+    raise SystemExit(
+        "STABLE_DIFFUSION=1 currently requires a POSIX platform."
+    )
 
 project = Project("acmxvk", root_dir=project_dir)
 env = project.Environment(toolchain=find_c_toolchain())
@@ -183,6 +189,12 @@ if with_tiff:
 if with_dnn:
     sources.append(project_dir / "edge_dnn.cpp")
     env.cxx.defines.append("ACMXVK_WITH_DNN")
+if with_stable_diffusion:
+    sources.append(project_dir / "stable_diffusion.cpp")
+    libraries.extend(
+        [require_package("libcurl"), require_package("jsoncpp")]
+    )
+    env.cxx.defines.append("ACMXVK_WITH_STABLE_DIFFUSION")
 if with_cuda:
     raise SystemExit(
         "WITH_CUDA=1 is not yet supported by the ACMXVK pcons target. "
@@ -298,6 +310,8 @@ build_defines = {
     "ACMXVK_INSTALL_FLIP_SHADER": install_resource_dir / "shaders" / "flip.frag.spv",
     "ACMXVK_BUILD_PASSTHROUGH_SHADER": shader_output_dir / "passthrough.frag.spv",
     "ACMXVK_INSTALL_PASSTHROUGH_SHADER": install_resource_dir / "shaders" / "passthrough.frag.spv",
+    "ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER": shader_output_dir / "sd_upscale.comp.spv",
+    "ACMXVK_INSTALL_STABLE_DIFFUSION_UPSCALE_SHADER": install_resource_dir / "shaders" / "sd_upscale.comp.spv",
     "ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY": shader_output_dir,
     "ACMXVK_INSTALL_HDR_TRANSFER_DIRECTORY": install_resource_dir / "shaders",
     "ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER": shader_output_dir / "human_composite.frag.spv",

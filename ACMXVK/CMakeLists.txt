@@ -28,6 +28,8 @@ option(TIFF "Enable lossless TIFF snapshots" OFF)
 option(WITH_CUDA "Enable acidcam-gpu CUDA filters" OFF)
 option(WITH_OPENCV_DNN "Enable OpenCV DNN effects" OFF)
 option(WITH_DEEP_DREAM "Enable CUDA LibTorch Deep Dream support" OFF)
+option(WITH_STABLE_DIFFUSION
+    "Enable stable-diffusion.cpp img2img video processing" OFF)
 option(ACMXVK_USE_MOLTENVK "Enable MoltenVK portability support on Apple platforms" ${APPLE})
 
 set(ACMXVK_MXWRITE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite" CACHE PATH
@@ -279,6 +281,15 @@ if(WITH_DEEP_DREAM)
     endif()
 endif()
 
+if(WITH_STABLE_DIFFUSION)
+    if(WIN32)
+        message(FATAL_ERROR
+            "WITH_STABLE_DIFFUSION currently requires a POSIX platform")
+    endif()
+    pkg_check_modules(ACMXVK_CURL REQUIRED IMPORTED_TARGET libcurl)
+    pkg_check_modules(ACMXVK_JSONCPP REQUIRED IMPORTED_TARGET jsoncpp)
+endif()
+
 set(ACMXVK_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
 set(ACMXVK_TEST_SHADER_MANIFEST
     "${ACMXVK_SHADER_OUTPUT_DIR}/library.json"
@@ -294,6 +305,9 @@ set(ACMXVK_FLIP_SHADER
 )
 set(ACMXVK_PASSTHROUGH_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/passthrough.frag.spv"
+)
+set(ACMXVK_STABLE_DIFFUSION_UPSCALE_SHADER
+    "${ACMXVK_SHADER_OUTPUT_DIR}/sd_upscale.comp.spv"
 )
 set(ACMXVK_HUMAN_COMPOSITE_SHADER
     "${ACMXVK_SHADER_OUTPUT_DIR}/human_composite.frag.spv"
@@ -504,6 +518,17 @@ add_custom_command(
 )
 
 add_custom_command(
+    OUTPUT "${ACMXVK_STABLE_DIFFUSION_UPSCALE_SHADER}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
+    COMMAND "${GLSLC_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/sd_upscale.comp"
+            -o "${ACMXVK_STABLE_DIFFUSION_UPSCALE_SHADER}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/sd_upscale.comp"
+    COMMENT "Compiling ACMXVK Stable Diffusion upscale compute shader"
+    VERBATIM
+)
+
+add_custom_command(
     OUTPUT "${ACMXVK_HUMAN_COMPOSITE_SHADER}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${ACMXVK_SHADER_OUTPUT_DIR}"
     COMMAND "${GLSLC_EXECUTABLE}"
@@ -619,6 +644,7 @@ add_custom_target(acmxvk_shaders DEPENDS
     "${ACMXVK_ECHO_CACHE_SHADER}"
     "${ACMXVK_FLIP_SHADER}"
     "${ACMXVK_PASSTHROUGH_SHADER}"
+    "${ACMXVK_STABLE_DIFFUSION_UPSCALE_SHADER}"
     "${ACMXVK_HUMAN_COMPOSITE_SHADER}"
     "${ACMXVK_MODEL_VERTEX_SHADER}"
     "${ACMXVK_MODEL_FRAGMENT_SHADER}"
@@ -768,6 +794,21 @@ if(WITH_DEEP_DREAM)
 else()
     message(STATUS "Deep Dream: DISABLED")
 endif()
+if(WITH_STABLE_DIFFUSION)
+    target_sources(acmxvk PRIVATE
+        stable_diffusion.cpp
+        stable_diffusion.hpp
+    )
+    target_link_libraries(acmxvk PRIVATE
+        PkgConfig::ACMXVK_CURL
+        PkgConfig::ACMXVK_JSONCPP
+    )
+    target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_STABLE_DIFFUSION)
+    message(STATUS
+        "Stable Diffusion video: ENABLED (sd-server client)")
+else()
+    message(STATUS "Stable Diffusion video: DISABLED")
+endif()
 if(ACMXVK_MXVK_CUDA_AVAILABLE)
     target_link_libraries(acmxvk PRIVATE opencv_cudaarithm)
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_MXVK_CUDA)
@@ -792,6 +833,8 @@ target_compile_definitions(acmxvk PRIVATE
     ACMXVK_INSTALL_FLIP_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/flip.frag.spv"
     ACMXVK_BUILD_PASSTHROUGH_SHADER="${ACMXVK_PASSTHROUGH_SHADER}"
     ACMXVK_INSTALL_PASSTHROUGH_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/passthrough.frag.spv"
+    ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER="${ACMXVK_STABLE_DIFFUSION_UPSCALE_SHADER}"
+    ACMXVK_INSTALL_STABLE_DIFFUSION_UPSCALE_SHADER="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders/sd_upscale.comp.spv"
     ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY="${ACMXVK_SHADER_OUTPUT_DIR}"
     ACMXVK_INSTALL_HDR_TRANSFER_DIRECTORY="${CMAKE_INSTALL_FULL_DATADIR}/acmxvk/shaders"
     ACMXVK_BUILD_HUMAN_COMPOSITE_SHADER="${ACMXVK_HUMAN_COMPOSITE_SHADER}"
@@ -902,6 +945,7 @@ install(FILES
         "${ACMXVK_ECHO_CACHE_SHADER}"
         "${ACMXVK_FLIP_SHADER}"
         "${ACMXVK_PASSTHROUGH_SHADER}"
+        "${ACMXVK_STABLE_DIFFUSION_UPSCALE_SHADER}"
         "${ACMXVK_HUMAN_COMPOSITE_SHADER}"
         "${ACMXVK_MODEL_VERTEX_SHADER}"
         "${ACMXVK_MODEL_FRAGMENT_SHADER}"

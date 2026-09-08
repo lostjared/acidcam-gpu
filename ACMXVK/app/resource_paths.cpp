@@ -53,6 +53,14 @@
 #define ACMXVK_INSTALL_PASSTHROUGH_SHADER "passthrough.frag.spv"
 #endif
 
+#ifndef ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER
+#define ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER "sd_upscale.comp.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_STABLE_DIFFUSION_UPSCALE_SHADER
+#define ACMXVK_INSTALL_STABLE_DIFFUSION_UPSCALE_SHADER "sd_upscale.comp.spv"
+#endif
+
 #ifndef ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY
 #define ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY "."
 #endif
@@ -216,6 +224,13 @@ namespace acmxvk {
         return resolve_resource(options, "shaders/passthrough.frag.spv",
                                 ACMXVK_INSTALL_PASSTHROUGH_SHADER,
                                 ACMXVK_BUILD_PASSTHROUGH_SHADER);
+    }
+
+    fs::path stable_diffusion_upscale_shader_path(const Options &options) {
+        return resolve_resource(
+            options, "shaders/sd_upscale.comp.spv",
+            ACMXVK_INSTALL_STABLE_DIFFUSION_UPSCALE_SHADER,
+            ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER);
     }
 
     fs::path hdr_transfer_shader_path(const Options &options, bool hlg,

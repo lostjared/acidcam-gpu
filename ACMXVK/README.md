@@ -39,6 +39,7 @@ complete replacement for ACMX2.
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | Deep Dream | Implemented | Optional `-DWITH_DEEP_DREAM=ON` builds use CUDA LibTorch with exported VGG16 or Inception V3 feature models. Pixel-gradient ascent can process camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, original independent-frame modes, random animation, feature-layer/channel targeting, progressive octaves, jitter, gradient smoothing, FP16, optional acidcam-gpu-first ordering, interface live control, and a CUDA-resident capture-to-Vulkan path. |
+| Stable Diffusion video | Initial implementation | Optional `-DWITH_STABLE_DIFFUSION=ON` builds launch one local stable-diffusion.cpp `sd-server`, load a safetensors model once, and process video frames through image-to-image generation. Windowed preview feeds generated frames through the Vulkan shader chain; headless encoded output uses sequential constant-frame-rate MXWrite recording. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, Deep Dream configuration, and file-audio replacement are integrated into the ACMXVK workflow. |
 
@@ -82,6 +83,9 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
   only to export the supplied VGG16 and Inception V3 model formats. On Arch
   Linux these are commonly provided by `cuda`, `cudnn`, `opencv-cuda`,
   `python-pytorch-cuda`, and `python-torchvision-cuda`.
+- Optional libcurl and jsoncpp development files, plus a compatible
+  stable-diffusion.cpp `sd-server` executable, when building with
+  `-DWITH_STABLE_DIFFUSION=ON`.
 
 Ensure the selected Vulkan SDK's `bin` directory is on `PATH` so CMake can
 find tools such as `glslc`. If the SDK is installed outside the platform's
@@ -513,6 +517,75 @@ layer when the new model supports it. Missing sidecars retain editable manual
 layer entry; malformed, oversized, duplicate, or unsupported metadata is
 reported without loading it into the interface.
 
+### Stable Diffusion video
+
+`WITH_STABLE_DIFFUSION` adds an offline image-to-image video path backed by
+stable-diffusion.cpp's `sd-server`. ACMXVK starts one local server process,
+loads the selected model once, sends each decoded video frame to its
+`/sdapi/v1/img2img` endpoint, and stops the child process when processing
+finishes. By default the generated frame becomes the input to the normal Vulkan
+fragment/compute chain, allowing the same result to appear in a preview window
+and making shaders available as post-SD effects. When encoded output is
+selected, ACMXVK automatically enables constant-frame-rate and no-drop output,
+so render speed does not change the output video's duration or frame rate.
+
+Install libcurl and jsoncpp development packages and make `sd-server`
+available on `PATH`, then build the optional client:
+
+```bash
+cmake -S ACMXVK -B build/acmxvk-sd \
+    -DWITH_STABLE_DIFFUSION=ON \
+    -DCMAKE_BUILD_TYPE=Release
+cmake --build build/acmxvk-sd -j
+```
+
+The native Pcons equivalent is `STABLE_DIFFUSION=1`. The server executable is
+external and is not downloaded or bundled by either build.
+
+Preview a video with an SD 1.5 model while retaining the normal ACMXVK shader
+pipeline:
+
+```bash
+./build/acmxvk-sd/acmxvk \
+    --input input.mp4 \
+    --fragment shaders/passthrough.frag.spv \
+    --sd-model /path/to/v1-5-pruned-emaonly.safetensors \
+    --sd-prompt "psychedelic oil painting, intricate flowing patterns" \
+    --sd-negative-prompt "blurry, text, watermark" \
+    --sd-size 576x320 \
+    --sd-steps 12 \
+    --sd-strength 0.35 \
+    --sd-cfg-scale 5.0 \
+    --sd-sampler euler_a \
+    --sd-scheduler discrete \
+    --sd-seed 1234
+```
+
+Add `--output dreamed.mp4 --encode-codec libx264` to record while retaining the
+window, or add `--headless` for surface-free offline encoding. Use
+`--sd-upscale` to keep the server's native neural output and insert ACMXVK's
+high-quality bicubic/detail-preserving compute upscaler before the selected
+shader chain. This avoids the normal CPU linear resize and gives every user
+shader a full-resolution input. The upscaler is optional and does not change
+existing renders when omitted.
+
+Use `--sd-after-shaders` with headless encoded output to preserve the original
+shader-chain-to-SD path instead. That ordering is intentionally unavailable in
+windowed mode because its CPU result is produced from final Vulkan readback;
+the default SD-to-shader path is what provides an immediate, non-recursive
+preview.
+
+`--sd-upscale` and `--sd-after-shaders` are mutually exclusive because the
+latter sends final Vulkan readback directly through Stable Diffusion to
+MXWrite.
+
+Use `--sd-server /path/to/sd-server` when it is not on `PATH`, and choose an
+unused loopback port with `--sd-server-port`. The model warm-up makes the first
+frame slower; subsequent frames reuse the same loaded model. Existing source
+audio and audio-reactive options remain available and follow the media
+timeline. This first implementation supports SDR video input; it does not
+support still images, HDR output, PNG sequences, or `--fill-pts-gaps`.
+
 ### Pcons
 
 `pcons-build.py` is a native Pcons alternative to the CMake build. Build and
@@ -524,7 +597,7 @@ pcons -B build/pcons --reconfigure \
     PREFIX=/opt/mxvk \
     PCONS_INSTALL_PREFIX=/opt/acmxvk \
     PCONS_FINAL_PREFIX=/opt/acmxvk \
-    AUDIO=1 MIDI=1 WEBP=1 TIFF=1 DNN=1 \
+    AUDIO=1 MIDI=1 WEBP=1 TIFF=1 DNN=1 STABLE_DIFFUSION=1 \
     all install
 ```
 

@@ -1,0 +1,6 @@
+#ifndef ACMXVK_VERSION_INFO_HPP
+#define ACMXVK_VERSION_INFO_HPP
+
+#define ACMXVK_VERSION_INFO "2.137.0"
+
+#endif

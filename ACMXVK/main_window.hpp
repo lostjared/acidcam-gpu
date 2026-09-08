@@ -25,6 +25,9 @@
 #ifdef ACMXVK_WITH_DEEP_DREAM
 #include "deep_dream_model.hpp"
 #endif
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+#include "stable_diffusion.hpp"
+#endif
 #include "app/interface_client.hpp"
 #include "app/media_helpers.hpp"
 #include "app/media_utils.hpp"
@@ -324,6 +327,9 @@ namespace acmxvk {
 #ifdef ACMXVK_WITH_DEEP_DREAM
         std::unique_ptr<dream::Model> deep_dream_model;
 #endif
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+        std::unique_ptr<stable_diffusion::Server> stable_diffusion_server;
+#endif
 #ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::GpuMat cuda_input_rgba;
         cv::cuda::GpuMat cuda_dream_rgba;
@@ -375,6 +381,8 @@ namespace acmxvk {
 #endif
         void initializeDnn();
         void initializeDeepDream();
+        void initializeStableDiffusion();
+        void applyStableDiffusionEffect(cv::Mat &rgba);
         void initializeGpuFilters();
         void selectGpuFilter(int direction);
         void openMidi();

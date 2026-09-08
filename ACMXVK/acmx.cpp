@@ -196,6 +196,13 @@ int main(int argc, char **argv) {
                 "-DWITH_DEEP_DREAM=ON");
         }
 #endif
+#ifndef ACMXVK_WITH_STABLE_DIFFUSION
+        if (!options.stable_diffusion_model.empty()) {
+            throw std::runtime_error(
+                "--sd-model requires an ACMXVK build configured with "
+                "-DWITH_STABLE_DIFFUSION=ON");
+        }
+#endif
 #ifndef ACMXVK_WITH_CUDA
         if (!options.gpu_filter_indices.empty()) {
             throw std::runtime_error(

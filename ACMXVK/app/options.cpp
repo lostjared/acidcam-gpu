@@ -118,6 +118,19 @@ namespace acmxvk {
                                "--shader-file", true);
         input::validate_string(options.model_file, input::StringKind::Path,
                                "--model", true);
+        input::validate_string(options.stable_diffusion_model,
+                               input::StringKind::Path, "--sd-model", true);
+        input::validate_string(options.stable_diffusion_server,
+                               input::StringKind::Path, "--sd-server");
+        input::validate_string(options.stable_diffusion_prompt,
+                               input::StringKind::Argument, "--sd-prompt", true);
+        input::validate_string(options.stable_diffusion_negative_prompt,
+                               input::StringKind::Argument,
+                               "--sd-negative-prompt", true);
+        input::validate_string(options.stable_diffusion_sampler,
+                               input::StringKind::Token, "--sd-sampler");
+        input::validate_string(options.stable_diffusion_scheduler,
+                               input::StringKind::Token, "--sd-scheduler");
         input::validate_string(options.playlist_file, input::StringKind::Path,
                                "--playlist", true);
         input::validate_string(options.midi_map_file, input::StringKind::Path,
@@ -720,6 +733,89 @@ namespace acmxvk {
                 options.deep_original = true;
             } else if (option == "--gpu-filter-before-dream") {
                 options.gpu_filter_before_dream = true;
+            } else if (option == "--sd-model") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_model =
+                    optionValue(index, argc, argv, option);
+            } else if (option == "--sd-prompt") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_prompt =
+                    optionValue(index, argc, argv, option);
+            } else if (option == "--sd-negative-prompt") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_negative_prompt =
+                    optionValue(index, argc, argv, option);
+            } else if (option == "--sd-server") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_server =
+                    optionValue(index, argc, argv, option);
+            } else if (option == "--sd-server-port") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_server_port = parseInteger(
+                    optionValue(index, argc, argv, option), option);
+                if (options.stable_diffusion_server_port < 1024 ||
+                    options.stable_diffusion_server_port > 65535) {
+                    throw std::runtime_error(
+                        "--sd-server-port must be between 1024 and 65535");
+                }
+            } else if (option == "--sd-size") {
+                options.stable_diffusion_option_specified = true;
+                parseDimensions(optionValue(index, argc, argv, option),
+                                options.stable_diffusion_width,
+                                options.stable_diffusion_height, option);
+                if ((options.stable_diffusion_width % 64) != 0 ||
+                    (options.stable_diffusion_height % 64) != 0 ||
+                    options.stable_diffusion_width > 2048 ||
+                    options.stable_diffusion_height > 2048) {
+                    throw std::runtime_error(
+                        "--sd-size dimensions must be multiples of 64 and no "
+                        "larger than 2048");
+                }
+            } else if (option == "--sd-steps") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_steps = parseInteger(
+                    optionValue(index, argc, argv, option), option);
+                if (options.stable_diffusion_steps < 1 ||
+                    options.stable_diffusion_steps > 150) {
+                    throw std::runtime_error(
+                        "--sd-steps must be between 1 and 150");
+                }
+            } else if (option == "--sd-strength") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_strength = parseNumber(
+                    optionValue(index, argc, argv, option), option);
+                if (options.stable_diffusion_strength <= 0.0 ||
+                    options.stable_diffusion_strength > 1.0) {
+                    throw std::runtime_error(
+                        "--sd-strength must be greater than 0 and no more than 1");
+                }
+            } else if (option == "--sd-cfg-scale") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_cfg_scale = parseNumber(
+                    optionValue(index, argc, argv, option), option);
+                if (options.stable_diffusion_cfg_scale < 0.0 ||
+                    options.stable_diffusion_cfg_scale > 50.0) {
+                    throw std::runtime_error(
+                        "--sd-cfg-scale must be between 0 and 50");
+                }
+            } else if (option == "--sd-seed") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_seed = parseInteger(
+                    optionValue(index, argc, argv, option), option);
+            } else if (option == "--sd-sampler") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_sampler =
+                    optionValue(index, argc, argv, option);
+            } else if (option == "--sd-scheduler") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_scheduler =
+                    optionValue(index, argc, argv, option);
+            } else if (option == "--sd-after-shaders") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_after_shaders = true;
+            } else if (option == "--sd-upscale") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_upscale = true;
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1116,6 +1212,12 @@ namespace acmxvk {
             }
         }
 
+        if (!options.stable_diffusion_model.empty() &&
+            !options.output_file.empty()) {
+            options.constant_frame_rate = true;
+            options.no_drop = true;
+        }
+
         if (options.headless && options.audio_pass_through) {
             throw std::runtime_error(
                 "--pass-through cannot be used with --headless or --silent");
@@ -1166,6 +1268,38 @@ namespace acmxvk {
             options.dream_model.empty()) {
             throw std::runtime_error(
                 "Deep Dream processing options require --dream-model");
+        }
+        if (!options.stable_diffusion_model.empty()) {
+            if (options.input_file.empty() ||
+                !options.graphic_file.empty()) {
+                throw std::runtime_error(
+                    "Stable Diffusion processing requires --input <video>");
+            }
+            if (options.png_output) {
+                throw std::runtime_error(
+                    "Stable Diffusion processing does not support PNG output");
+            }
+            if (options.stable_diffusion_prompt.empty()) {
+                throw std::runtime_error(
+                    "--sd-model requires --sd-prompt <text>");
+            }
+            if (options.fill_pts_gaps) {
+                throw std::runtime_error(
+                    "Stable Diffusion processing cannot be combined with --fill-pts-gaps");
+            }
+            if (options.stable_diffusion_after_shaders &&
+                (!options.headless || options.output_file.empty())) {
+                throw std::runtime_error(
+                    "--sd-after-shaders requires --headless and encoded --output <video>");
+            }
+            if (options.stable_diffusion_after_shaders &&
+                options.stable_diffusion_upscale) {
+                throw std::runtime_error(
+                    "--sd-upscale cannot be combined with --sd-after-shaders");
+            }
+        } else if (options.stable_diffusion_option_specified) {
+            throw std::runtime_error(
+                "Stable Diffusion options require --sd-model");
         }
         if (options.dream_headless || options.deep_original) {
             if (options.dream_headless && !options.headless) {
@@ -1481,6 +1615,24 @@ namespace acmxvk {
                << "      --gpu-filter-before-dream\n"
                << "                              Run acidcam-gpu before Deep Dream\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
+               << "Stable Diffusion video (requires WITH_STABLE_DIFFUSION=ON):\n"
+               << "      --sd-model <file>       Process video through a full model\n"
+               << "      --sd-prompt <text>      Required image-to-image prompt\n"
+               << "      --sd-negative-prompt <text>\n"
+               << "                              Optional negative prompt\n"
+               << "      --sd-size <WxH>         Neural size, multiples of 64 (default 576x320)\n"
+               << "      --sd-steps <N>          Sampling steps, 1-150 (default 12)\n"
+               << "      --sd-strength <N>       Image denoising strength, 0-1 (default 0.35)\n"
+               << "      --sd-cfg-scale <N>      Text guidance, 0-50 (default 5.0)\n"
+               << "      --sd-seed <N>           Fixed per-frame seed (default 1234)\n"
+               << "      --sd-sampler <name>     Sampler (default euler_a)\n"
+               << "      --sd-scheduler <name>   Scheduler (default discrete)\n"
+               << "      --sd-server <file>      sd-server executable (default sd-server)\n"
+               << "      --sd-server-port <N>    Local server port (default 1234)\n"
+               << "      --sd-after-shaders      Preserve shader-chain-then-SD ordering\n"
+               << "      --sd-upscale            High-quality compute upscale before shaders\n"
+               << "                              Encoded output implies CFR and no-drop\n"
+               << "                              Output feeds the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"
                << "      --builddir <directory> Output directory required by --build\n"

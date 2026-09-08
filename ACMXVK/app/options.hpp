@@ -66,6 +66,11 @@ namespace acmxvk {
         int dream_octaves = 1;
         int dream_jitter = 0;
         int dream_smoothing = 0;
+        int stable_diffusion_width = 576;
+        int stable_diffusion_height = 320;
+        int stable_diffusion_steps = 12;
+        int stable_diffusion_seed = 1234;
+        int stable_diffusion_server_port = 1234;
         double requested_fps = 0.0;
         double duration = 0.0;
         double cross_fade_duration = 0.5;
@@ -83,6 +88,8 @@ namespace acmxvk {
         double dream_rotation = 0.1;
         double dream_octave_scale = 1.4;
         double random_dream_interval = 0.0;
+        double stable_diffusion_strength = 0.35;
+        double stable_diffusion_cfg_scale = 5.0;
         bool resolution_specified = false;
         bool use_yuv = false;
         bool maximize_fps = false;
@@ -147,6 +154,9 @@ namespace acmxvk {
         bool dream_headless = false;
         bool deep_original = false;
         bool gpu_filter_before_dream = false;
+        bool stable_diffusion_option_specified = false;
+        bool stable_diffusion_after_shaders = false;
+        bool stable_diffusion_upscale = false;
         bool human_background = false;
         bool human_black_specified = false;
         bool human_white_specified = false;
@@ -192,6 +202,12 @@ namespace acmxvk {
         std::string onnx_configuration;
         std::string dream_model;
         std::string dream_layer;
+        std::string stable_diffusion_model;
+        std::string stable_diffusion_prompt;
+        std::string stable_diffusion_negative_prompt;
+        std::string stable_diffusion_server = "sd-server";
+        std::string stable_diffusion_sampler = "euler_a";
+        std::string stable_diffusion_scheduler = "discrete";
         std::string snapshot_directory = ".";
         std::string resource_directory;
         std::string watermark_text;

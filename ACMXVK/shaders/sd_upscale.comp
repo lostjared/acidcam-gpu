@@ -1,0 +1,75 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D input_image;
+layout(set = 0, binding = 5, rgba8) writeonly uniform image2D output_image;
+
+float cubic_weight(float value) {
+    float distance = abs(value);
+    if (distance <= 1.0) {
+        return ((1.5 * distance - 2.5) * distance * distance) + 1.0;
+    }
+    if (distance < 2.0) {
+        return (((-0.5 * distance + 2.5) * distance - 4.0) * distance) + 2.0;
+    }
+    return 0.0;
+}
+
+ivec2 clamp_source(ivec2 position, ivec2 size) {
+    return clamp(position, ivec2(0), size - ivec2(1));
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 output_size = imageSize(output_image);
+    if (any(greaterThanEqual(pixel, output_size))) {
+        return;
+    }
+
+    ivec2 input_size = textureSize(input_image, 0);
+    vec2 source_position =
+        (vec2(pixel) + vec2(0.5)) * vec2(input_size) / vec2(output_size) -
+        vec2(0.5);
+    ivec2 source_base = ivec2(floor(source_position));
+    vec2 fraction = fract(source_position);
+
+    vec4 reconstructed = vec4(0.0);
+    float total_weight = 0.0;
+    for (int y = -1; y <= 2; ++y) {
+        float weight_y = cubic_weight(float(y) - fraction.y);
+        for (int x = -1; x <= 2; ++x) {
+            float weight = weight_y * cubic_weight(float(x) - fraction.x);
+            reconstructed += texelFetch(
+                input_image,
+                clamp_source(source_base + ivec2(x, y), input_size), 0) *
+                weight;
+            total_weight += weight;
+        }
+    }
+    reconstructed /= max(total_weight, 0.00001);
+
+    vec3 local_min = vec3(1.0);
+    vec3 local_max = vec3(0.0);
+    vec3 local_average = vec3(0.0);
+    for (int y = -1; y <= 1; ++y) {
+        for (int x = -1; x <= 1; ++x) {
+            vec3 sample_color = texelFetch(
+                input_image,
+                clamp_source(source_base + ivec2(x, y), input_size), 0).rgb;
+            local_min = min(local_min, sample_color);
+            local_max = max(local_max, sample_color);
+            local_average += sample_color;
+        }
+    }
+    local_average /= 9.0;
+
+    vec3 detail = reconstructed.rgb - local_average;
+    vec3 sharpened = reconstructed.rgb + detail * 0.28;
+    vec3 range = local_max - local_min;
+    sharpened = clamp(sharpened, local_min - range * 0.04,
+                      local_max + range * 0.04);
+    imageStore(output_image, pixel,
+               vec4(clamp(sharpened, 0.0, 1.0),
+                    clamp(reconstructed.a, 0.0, 1.0)));
+}
