@@ -856,6 +856,9 @@ namespace acmxvk {
                 }
             } else if (option == "-w" || option == "--enable-audio") {
                 options.enable_audio = true;
+            } else if (option == "--audio-time" ||
+                       option == "--enable-audio-time") {
+                options.enable_audio_time = true;
             } else if (option == "-l" || option == "--channels") {
                 options.audio_channels =
                     parseInteger(optionValue(index, argc, argv, option), option);
@@ -1331,6 +1334,10 @@ namespace acmxvk {
             throw std::runtime_error(
                 "--enable-audio-buffers requires --enable-audio");
         }
+        if (options.enable_audio_time && !options.enable_audio) {
+            throw std::runtime_error(
+                "--audio-time requires an enabled audio source");
+        }
         if (options.audio_warm_rate_specified && !options.enable_audio) {
             throw std::runtime_error(
                 "--audio-warm-rate requires an enabled audio source");
@@ -1532,6 +1539,8 @@ namespace acmxvk {
                << "  -w, --enable-audio          Enable live audio-reactive metrics\n"
                << "  -l, --channels <N>          Capture channels (default 2)\n"
                << "  -q, --sense <0.1-5.0>       Audio sensitivity (default 1.0)\n"
+               << "      --audio-time            Enable audio-reactive shader time at startup\n"
+               << "      --enable-audio-time     Alias for --audio-time\n"
                << "      --audio-warm-rate N     Shader ramp per second (default 0.5; 0 off)\n"
                << "      --audio-input <device>  Input index or default\n"
                << "      --audio-file <media>    Media file or M3U/M3U8 reactivity source\n"

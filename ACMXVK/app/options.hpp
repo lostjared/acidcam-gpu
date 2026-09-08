@@ -107,6 +107,7 @@ namespace acmxvk {
         bool copy_audio = false;
         bool mute_output = false;
         bool enable_audio = false;
+        bool enable_audio_time = false;
         bool audio_input_specified = false;
         bool audio_warm_rate_specified = false;
         bool audio_output_specified = false;

@@ -2173,10 +2173,15 @@ recording, frequency estimation, or the reported sample rate.
 
 The ACMX2 audio-time controls are available while a live or file audio source
 is active. Press `Q` to make audio amplitude advance shader time instead of the
-wall clock. `Home` toggles frame-delta scaling for both reactive time and the
-`amp` value, which makes their behavior less dependent on rendering frame rate.
-`End` toggles sensitivity scaling for the current FFT and FFT-history textures.
-The same actions are accepted from ACMX2 MIDI Map codes 81, 268, and 269.
+wall clock. Use `--audio-time` (or `--enable-audio-time`) to enable the same mode
+at startup, including during headless encoding. The option requires an enabled
+live, file, or source-video audio input. If the requested source cannot be
+opened, ACMXVK retains its normal shader clock instead of freezing time on
+zero-valued audio. `Home` toggles frame-delta scaling for both reactive time and
+the `amp` value, which makes their behavior less dependent on rendering frame
+rate. `End` toggles sensitivity scaling for the current FFT and FFT-history
+textures. The same actions are accepted from ACMX2 MIDI Map codes 81, 268, and
+269.
 
 Without repeat, the muxed result is limited to the shorter of the recorded
 video and decoded audio. With `--audio-repeat`, the complete file or playlist

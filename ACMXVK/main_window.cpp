@@ -165,6 +165,19 @@ namespace acmxvk {
         initializeDeepDream();
         initializeGpuFilters();
         openAudio();
+        if (this->options.enable_audio_time) {
+#ifdef AUDIO_ENABLED
+            if (audioSourceOpen()) {
+                audio_time_active = true;
+                std::cout << "acmxvk: audio-reactive shader time enabled at "
+                             "startup (--audio-time)\n";
+            } else {
+                std::cerr
+                    << "acmxvk: --audio-time requested but no audio source "
+                       "is active; shader time remains on its normal clock\n";
+            }
+#endif
+        }
         loadShaders();
         loadShaderPasses();
         initialize_interface_control();
