@@ -4512,6 +4512,11 @@ namespace acmxvk {
                       << recording_height << " at " << recording_fps << " FPS to "
                       << options.output_file
                       << (options.no_drop ? " (no-drop)\n" : "\n");
+            if (options.constant_frame_rate) {
+                std::cout
+                    << "acmxvk: constant-frame-rate encoding active; rendered "
+                       "video frames use sequential output timestamps\n";
+            }
             if (options.mute_output) {
                 std::cout
                     << "acmxvk: recorded video audio disabled (--mute-output); "
@@ -4528,7 +4533,8 @@ namespace acmxvk {
         request.snapshot_format = pending_snapshot_format;
         request.continuous = continuousReadbackEnabled();
         request.frame_due = recording_frame_due;
-        request.has_pts = recording_frame_has_pts;
+        request.has_pts =
+            recording_frame_has_pts && !options.constant_frame_rate;
         request.pts = recording_frame_pts;
         readback_requests.push_back(request);
 

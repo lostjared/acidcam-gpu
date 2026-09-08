@@ -102,6 +102,7 @@ namespace acmxvk {
         bool png_output = false;
         bool encode_realtime = false;
         bool no_drop = false;
+        bool constant_frame_rate = false;
         bool copy_audio = false;
         bool mute_output = false;
         bool enable_audio = false;

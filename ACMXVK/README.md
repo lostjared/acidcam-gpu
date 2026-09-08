@@ -27,7 +27,7 @@ complete replacement for ACMX2.
 | Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides and live updates from the ACMX Qt interface. |
-| Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, audio-clock synchronization, and pipelined Vulkan readback. |
+| Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, optional constant-frame-rate sequential encoding, audio-clock synchronization, and pipelined Vulkan readback. |
 | Snapshot and PNG output | Implemented | Supports full PNG sequences, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, optional lossless WebP snapshots on `5`, and headerless raw snapshots on `6`. HDR PNG/WebP output is SDR tone-mapped; HDR TIFF/raw output retains normalized RGBA16 samples. |
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter`, a configured watermark, or F9 hides the HUD; F9 can show it again when a watermark selected the hidden default. When both are visible, the HUD starts below the watermark. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
@@ -2551,6 +2551,16 @@ queue drops work, while audible file audio and muxed live input use their
 hardware sample counters as the master clock. Late file-video frames are
 decoded and discarded through MXVK without RGBA conversion, CUDA transfer, or
 Vulkan upload. Readback is requested only when a new recording frame is due.
+
+Use `--constant-frame-rate` (or its `--sequential-encode` alias) with video
+input and encoded output to select MXWrite's sequential path instead. Every
+rendered frame accepted by the encoder receives the next consecutive timestamp
+at the output FPS; source-timeline gaps are not retained. This produces a
+constant-rate output whose duration is based on the number of encoded frames.
+If processing cannot keep pace or `--use-source-fps` skips late source frames,
+the result is correspondingly shorter than the source timeline. Add
+`--no-drop` when every rendered frame must wait for an available encoder-queue
+slot.
 
 Increment 7R hardens every ACMXVK text-input boundary with the shared
 `input_validation` module. It covers command-line arguments, relevant

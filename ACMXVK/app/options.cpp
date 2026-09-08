@@ -1050,6 +1050,9 @@ namespace acmxvk {
                 options.encode_realtime = true;
             } else if (option == "--no-drop") {
                 options.no_drop = true;
+            } else if (option == "--constant-frame-rate" ||
+                       option == "--sequential-encode") {
+                options.constant_frame_rate = true;
             } else if (option == "--display-filter") {
                 options.display_filter = true;
             } else if (option == "--disable-counter") {
@@ -1241,6 +1244,12 @@ namespace acmxvk {
         if (options.max_size_mb > 0.0 &&
             (options.output_file.empty() || options.png_output)) {
             throw std::runtime_error("--max-size requires encoded video output");
+        }
+        if (options.constant_frame_rate &&
+            (options.input_file.empty() || options.output_file.empty() ||
+             options.png_output)) {
+            throw std::runtime_error(
+                "--constant-frame-rate requires video input and encoded output");
         }
         if (options.copy_audio &&
             (options.input_file.empty() || options.output_file.empty() ||
@@ -1493,6 +1502,8 @@ namespace acmxvk {
                << "                              List one encoder's options and exit\n"
                << "      --encode-realtime       Enable low-latency encoder settings\n"
                << "      --no-drop               Block when the encoder queue is full\n"
+               << "      --constant-frame-rate   Encode rendered video frames sequentially\n"
+               << "      --sequential-encode     Alias for --constant-frame-rate\n"
                << "      --display-filter        Show active shader/filter details\n"
                << "      --disable-counter       Hide the shader/timer/FPS HUD at startup\n"
                << "      --use-watermark <text>  Show a text watermark in the upper-left\n"
