@@ -1395,6 +1395,22 @@ playlist entry. Set a fixed change interval with `--autopilot-frames N`, or use
 `--autopilot-random N` for a randomized interval. If neither interval option is
 supplied, random autopilot changes nodes every 300 frames.
 
+Generate a random playlist directly from a source or runtime ACMXVK manifest
+with `scripts/create_random_acmxvk_playlist.pl`. Each node receives between one
+and the requested maximum number of unique shaders. Use `--seed` when the same
+playlist must be reproducible:
+
+```bash
+./scripts/create_random_acmxvk_playlist.pl \
+    --entries 1000 --max-shaders 4 \
+    --output vkplaylist.txt --seed 12345 \
+    /path/to/library.json
+```
+
+The script refuses to replace an existing output unless `--force` is supplied.
+Source `.frag` and `.comp` entries are converted to their corresponding `.spv`
+playlist paths.
+
 The bundled set matches ACMX2: linear, block, wipe, radial, pixelate,
 dissolve, swirl, glitch, diamond, burn, fade-to-black, fade-to-white, four
 slides, diagonal wipe, iris open/close, checker, horizontal/vertical blinds,
