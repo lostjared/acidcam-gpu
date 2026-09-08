@@ -416,10 +416,14 @@ existing gradient and does not introduce another VGG forward/backward pass. It
 can be combined with jitter, octaves, individual channels, feedback, and FP16.
 
 For continuously changing visuals, `--random-dream <seconds>` randomizes the
-strength, temporal feedback, zoom, rotation, octave count, and octave scale at
-the requested interval. `--random_dream` is accepted as an alias. Video files
-use their decoded media timeline, so headless and offline output is independent
-of processing speed; cameras use elapsed capture time. For example:
+safe numeric controls that were not explicitly supplied on the command line:
+iterations, strength, zoom, rotation, working size, octave count, octave scale,
+jitter, and smoothing. An explicitly supplied value is locked; for example,
+`--dream-jitter 12` keeps jitter at 12 while the other unspecified controls
+continue changing. Temporal feedback is always preserved. `--random_dream` is
+accepted as an alias. Video files use their decoded media timeline, so headless
+and offline output is independent of processing speed; cameras use elapsed
+capture time. For example:
 
 ```bash
 ./build/acmxvk-dream/acmxvk \
@@ -429,10 +433,11 @@ of processing speed; cameras use elapsed capture time. For example:
     --shaders shaders_acmxvk --shader-file color-effect.frag.spv
 ```
 
-The randomizer deliberately leaves the model, feature layer, iteration count,
-channel, working resolution, jitter, and smoothing unchanged. Octaves range
-from 1 through 8; higher random values require proportionally more neural
-processing.
+The randomizer deliberately leaves temporal feedback, the model, feature layer,
+channel, precision mode, and processing order unchanged. Random iterations
+range from 1 through 3, working sizes use 256, 384, 512, or 640 pixels, and
+octaves range from 1 through 8. Higher random values require proportionally more
+neural processing.
 
 `--dream-headless` provides a traditional offline frame-by-frame Deep Dream
 video render. It is restricted to headless video recording and requires

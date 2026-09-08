@@ -1448,7 +1448,7 @@ namespace acmxvk {
                << "      --dream-jitter <N>     Spatial gradient jitter in pixels (0-64; default 0)\n"
                << "      --dream-smoothing <N>  Gradient smoothing radius (0-16; default 0)\n"
                << "      --random-dream <seconds>\n"
-               << "                              Randomize safe dream controls at a media-time interval\n"
+               << "                              Randomize unspecified safe dream controls at a media-time interval\n"
                << "      --dream-headless       Offline per-frame video dreaming without temporal zoom\n"
                << "      --deep-orig            Same independent-frame mode with a preview window\n"
                << "      --gpu-filter-before-dream\n"

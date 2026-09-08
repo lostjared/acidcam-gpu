@@ -3798,30 +3798,60 @@ namespace acmxvk {
         }
         random_dream_period = period;
 
+        std::uniform_int_distribution<int> iterations(1, 3);
         std::uniform_real_distribution<double> strength(0.01, 0.05);
-        std::uniform_real_distribution<double> feedback(0.55, 0.90);
         std::uniform_real_distribution<double> zoom(0.985, 1.015);
         std::uniform_real_distribution<double> rotation_magnitude(0.5, 3.0);
         std::uniform_real_distribution<double> octave_scale(1.2, 1.6);
         std::uniform_int_distribution<int> rotation_direction(0, 1);
         std::uniform_int_distribution<int> octaves(1, 8);
+        std::uniform_int_distribution<int> jitter(0, 4);
+        std::uniform_int_distribution<int> smoothing(0, 3);
+        static constexpr std::array<int, 4> RANDOM_DIMENSIONS = {256, 384, 512,
+                                                                 640};
+        std::uniform_int_distribution<std::size_t> dimension(
+            0, RANDOM_DIMENSIONS.size() - 1);
 
-        options.dream_strength = strength(random_dream_rng);
-        options.dream_feedback = feedback(random_dream_rng);
-        options.dream_zoom = zoom(random_dream_rng);
-        const double magnitude = rotation_magnitude(random_dream_rng);
-        options.dream_rotation =
-            rotation_direction(random_dream_rng) == 0 ? -magnitude : magnitude;
-        options.dream_octaves = octaves(random_dream_rng);
-        options.dream_octave_scale = octave_scale(random_dream_rng);
+        if (!options.dream_iterations_specified) {
+            options.dream_iterations = iterations(random_dream_rng);
+        }
+        if (!options.dream_strength_specified) {
+            options.dream_strength = strength(random_dream_rng);
+        }
+        if (!options.dream_zoom_specified) {
+            options.dream_zoom = zoom(random_dream_rng);
+        }
+        if (!options.dream_rotation_specified) {
+            const double magnitude = rotation_magnitude(random_dream_rng);
+            options.dream_rotation = rotation_direction(random_dream_rng) == 0
+                                         ? -magnitude
+                                         : magnitude;
+        }
+        if (!options.dream_size_specified) {
+            options.dream_size = RANDOM_DIMENSIONS[dimension(random_dream_rng)];
+        }
+        if (!options.dream_octaves_specified) {
+            options.dream_octaves = octaves(random_dream_rng);
+        }
+        if (!options.dream_octave_scale_specified) {
+            options.dream_octave_scale = octave_scale(random_dream_rng);
+        }
+        if (!options.dream_jitter_specified) {
+            options.dream_jitter = jitter(random_dream_rng);
+        }
+        if (!options.dream_smoothing_specified) {
+            options.dream_smoothing = smoothing(random_dream_rng);
+        }
 
-        std::cout << "acmxvk: random dream: strength "
-                  << options.dream_strength << ", feedback "
-                  << options.dream_feedback << ", zoom "
-                  << options.dream_zoom << ", rotation "
+        std::cout << "acmxvk: random dream settings: iterations "
+                  << options.dream_iterations << ", strength "
+                  << options.dream_strength << ", zoom " << options.dream_zoom
+                  << ", rotation "
                   << options.dream_rotation << ", octaves "
                   << options.dream_octaves << ", octave scale "
-                  << options.dream_octave_scale << '\n';
+                  << options.dream_octave_scale << ", size "
+                  << options.dream_size << ", jitter " << options.dream_jitter
+                  << ", smoothing " << options.dream_smoothing << '\n';
 #endif
     }
 
