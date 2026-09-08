@@ -272,7 +272,7 @@ build the optional acidcam-gpu CUDA filter integration.
 
 @section acmxvk_status Current Project Status
 
-As of ACMX 2.136.0, both rendering backends are delivered through one Qt
+As of ACMX 2.137.0, both rendering backends are delivered through one Qt
 interface and are actively usable:
 
 - <b>ACMX2/OpenGL</b> remains the mature compatibility path for existing GLSL

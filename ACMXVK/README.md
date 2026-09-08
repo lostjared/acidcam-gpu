@@ -1,6 +1,6 @@
 # ACMXVK
 
-Current ACMX project version: **2.136.0**.
+Current ACMX project version: **2.137.0**.
 
 ACMXVK is an in-progress Vulkan port of the ACMX2 real-time video shader
 engine. The goal is to preserve ACMX2's workflow and behavior while replacing

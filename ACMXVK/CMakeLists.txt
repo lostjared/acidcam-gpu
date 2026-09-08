@@ -8,7 +8,7 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin"
     set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "macOS target architectures")
 endif()
 
-project(ACMXVK VERSION 2.136.0 LANGUAGES CXX)
+project(ACMXVK VERSION 2.137.0 LANGUAGES CXX)
 
 if(APPLE)
     enable_language(OBJCXX)

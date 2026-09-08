@@ -58,7 +58,7 @@ it does not change the basic creative workflow.
 
 @section project_status Overall Project Status
 
-ACMX 2.136.0 packages the shared interface, ACMX2, ACMXVK, and MIDI mapping
+ACMX 2.137.0 packages the shared interface, ACMX2, ACMXVK, and MIDI mapping
 tool as one evolving project. ACMX2 remains the established OpenGL engine.
 ACMXVK has completed its six-increment HDR path and implements camera/video/
 image input, fragment and compute multipass, playlists and crossfades, texture
