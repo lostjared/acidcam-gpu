@@ -34,6 +34,7 @@
 
 class CustomUniformDialog;
 class DeepDreamSettingsDialog;
+class StableDiffusionSettingsDialog;
 class LibraryBuilderDialog;
 class QDialog;
 class QTabWidget;
@@ -91,6 +92,7 @@ class MainWindow : public QMainWindow {
     void menuFindNext();
     void menuGPUFilterSettings();
     void menuDeepDreamSettings();
+    void menuStableDiffusionSettings();
     void menuShaderPassSettings();
     void menuPlaylistSettings();
     void menuLibraryBuilder();
@@ -230,6 +232,7 @@ class MainWindow : public QMainWindow {
     bool midi_available = false;
     bool dnn_available = false;
     bool deep_dream_available = false;
+    bool stable_diffusion_available = false;
     void detectCudaSupport();
     void detectFeatureSupport();
     QAction *listMenu_search = nullptr;
@@ -335,6 +338,23 @@ class MainWindow : public QMainWindow {
     bool deep_dream_original = false;
     QAction *deepDreamAction = nullptr;
     QPointer<DeepDreamSettingsDialog> deepDreamSettingsDialog;
+    bool stable_diffusion_enabled = false;
+    QString stable_diffusion_model;
+    QString stable_diffusion_prompt;
+    QString stable_diffusion_negative_prompt;
+    QString stable_diffusion_server = "sd-server";
+    int stable_diffusion_server_port = 1234;
+    int stable_diffusion_width = 576;
+    int stable_diffusion_height = 320;
+    int stable_diffusion_steps = 12;
+    double stable_diffusion_strength = 0.35;
+    double stable_diffusion_cfg_scale = 5.0;
+    int stable_diffusion_seed = 1234;
+    QString stable_diffusion_sampler = "euler_a";
+    QString stable_diffusion_scheduler = "discrete";
+    bool stable_diffusion_upscale = false;
+    QAction *stableDiffusionAction = nullptr;
+    QPointer<StableDiffusionSettingsDialog> stableDiffusionSettingsDialog;
     QAction *shaderPassAction;
     QPointer<ShaderPassDialog> shaderPassDialog;
     QPointer<PlaylistDialog> playlistDialog;
@@ -441,6 +461,8 @@ class MainWindow : public QMainWindow {
     void publishRuntimeSettingsToRunningProcess();
     [[nodiscard]] bool validateDeepDreamLaunch(QString &error) const;
     void appendDeepDreamArguments(QStringList &arguments) const;
+    [[nodiscard]] bool validateStableDiffusionLaunch(QString &error) const;
+    void appendStableDiffusionArguments(QStringList &arguments) const;
     void publishCustomUniformsToRunningProcess();
     void cleanupShaderSelectionSharedMemory();
     void cleanupShaderSelectionSemaphore();

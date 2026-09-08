@@ -88,6 +88,7 @@ set(LAUNCHER_GUI_HEADERS
     backend.hpp
     custom-uniforms.hpp
     deep-dream-settings.hpp
+    stable-diffusion-settings.hpp
     editor.hpp
     find-shader.hpp
     gpufilter.hpp
@@ -113,6 +114,7 @@ set(LAUNCHER_GUI_SOURCES
     audio-window.cpp
     custom-uniforms.cpp
     deep-dream-settings.cpp
+    stable-diffusion-settings.cpp
     editor.cpp
     find-shader.cpp
     gpufilter.cpp

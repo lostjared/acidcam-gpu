@@ -306,6 +306,7 @@ namespace acmxvk {
                options.check_midi || options.list_gpu_filters ||
                options.list_cuda_devices || options.check_cuda ||
                options.check_dnn || options.check_deep_dream ||
+               options.check_stable_diffusion ||
                !options.probe_hdr_file.empty() ||
                options.enumerate_camera_device >= 0 ||
                options.list_encoders || !options.list_encoder_options.empty();
@@ -611,6 +612,8 @@ namespace acmxvk {
                 options.check_dnn = true;
             } else if (option == "--check-deep-dream") {
                 options.check_deep_dream = true;
+            } else if (option == "--check-stable-diffusion") {
+                options.check_stable_diffusion = true;
             } else if (option == "--dream-model") {
                 options.dream_model = optionValue(index, argc, argv, option);
             } else if (option == "--dream-layer") {
@@ -1616,6 +1619,8 @@ namespace acmxvk {
                << "                              Run acidcam-gpu before Deep Dream\n"
                << "                              Deep Dream runs before the Vulkan shader chain\n\n"
                << "Stable Diffusion video (requires WITH_STABLE_DIFFUSION=ON):\n"
+               << "      --check-stable-diffusion\n"
+               << "                              Report compiled Stable Diffusion support\n"
                << "      --sd-model <file>       Process video through a full model\n"
                << "      --sd-prompt <text>      Required image-to-image prompt\n"
                << "      --sd-negative-prompt <text>\n"

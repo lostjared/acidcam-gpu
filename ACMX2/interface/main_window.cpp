@@ -8,6 +8,7 @@
 #include "metadata-viewer.hpp"
 #include "settings.hpp"
 #include "shader-manifest.hpp"
+#include "stable-diffusion-settings.hpp"
 #include "uniform-reference.hpp"
 #include <QApplication>
 #include <QCheckBox>
@@ -914,6 +915,11 @@ void MainWindow::initControls() {
     connect(deepDreamAction, &QAction::triggered, this,
             &MainWindow::menuDeepDreamSettings);
     cameraMenu->addAction(deepDreamAction);
+    stableDiffusionAction =
+        new QAction(tr("Stable Diffusion Settings..."), this);
+    connect(stableDiffusionAction, &QAction::triggered, this,
+            &MainWindow::menuStableDiffusionSettings);
+    cameraMenu->addAction(stableDiffusionAction);
     cameraMenu->addSeparator();
     styleSheetAction = new QAction(tr("Use Custom Style"), this);
     styleSheetAction->setShortcut(QKeySequence("Ctrl+Shift+T"));
@@ -1423,6 +1429,38 @@ void MainWindow::loadSessionSettings() {
         deep_dream_zoom = 1.0;
         deep_dream_rotation = 0.0;
     }
+    stable_diffusion_enabled =
+        settings.value("stable_diffusion/enabled", false).toBool();
+    stable_diffusion_model =
+        settings.value("stable_diffusion/model_file").toString();
+    stable_diffusion_prompt =
+        settings.value("stable_diffusion/prompt").toString();
+    stable_diffusion_negative_prompt =
+        settings.value("stable_diffusion/negative_prompt").toString();
+    stable_diffusion_server =
+        settings.value("stable_diffusion/server", "sd-server").toString();
+    stable_diffusion_server_port = std::clamp(
+        settings.value("stable_diffusion/port", 1234).toInt(), 1024, 65535);
+    stable_diffusion_width = std::clamp(
+        settings.value("stable_diffusion/width", 576).toInt(), 64, 2048);
+    stable_diffusion_height = std::clamp(
+        settings.value("stable_diffusion/height", 320).toInt(), 64, 2048);
+    stable_diffusion_steps = std::clamp(
+        settings.value("stable_diffusion/steps", 12).toInt(), 1, 150);
+    stable_diffusion_strength = std::clamp(
+        settings.value("stable_diffusion/strength", 0.35).toDouble(), 0.01,
+        1.0);
+    stable_diffusion_cfg_scale = std::clamp(
+        settings.value("stable_diffusion/cfg_scale", 5.0).toDouble(), 0.0,
+        50.0);
+    stable_diffusion_seed =
+        settings.value("stable_diffusion/seed", 1234).toInt();
+    stable_diffusion_sampler =
+        settings.value("stable_diffusion/sampler", "euler_a").toString();
+    stable_diffusion_scheduler =
+        settings.value("stable_diffusion/scheduler", "discrete").toString();
+    stable_diffusion_upscale =
+        settings.value("stable_diffusion/upscale", false).toBool();
     cuda_device = settings.value("interface/cuda_device", 0).toInt();
     time_speed = settings.value("interface/time_speed", 1.0).toFloat();
     normalized_time =
@@ -3747,6 +3785,7 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
     midi_available = false;
     dnn_available = false;
     deep_dream_available = false;
+    stable_diffusion_available = false;
     initShaderSelectionSharedMemory();
     detectFeatureSupport();
     updateRecentLibrariesMenu();
@@ -4385,6 +4424,148 @@ void MainWindow::appendDeepDreamArguments(QStringList &arguments) const {
     }
 }
 
+void MainWindow::menuStableDiffusionSettings() {
+    if (active_backend != acmx2::Backend::Acmxvk ||
+        !stable_diffusion_available) {
+        QMessageBox::information(
+            this, tr("Stable Diffusion Settings"),
+            tr("Stable Diffusion is unavailable: ACMXVK must be built with "
+               "-DWITH_STABLE_DIFFUSION=ON."));
+        return;
+    }
+
+    if (stableDiffusionSettingsDialog) {
+        stableDiffusionSettingsDialog->show();
+        stableDiffusionSettingsDialog->raise();
+        stableDiffusionSettingsDialog->activateWindow();
+        return;
+    }
+
+    stableDiffusionSettingsDialog =
+        new StableDiffusionSettingsDialog(this);
+    stableDiffusionSettingsDialog->setAttribute(Qt::WA_DeleteOnClose);
+    StableDiffusionSettingsDialog *dialog =
+        stableDiffusionSettingsDialog;
+    connect(dialog, &StableDiffusionSettingsDialog::settingsApplied, this,
+            [this, dialog]() {
+                const StableDiffusionConfiguration config =
+                    dialog->configuration();
+                stable_diffusion_enabled = config.enabled;
+                stable_diffusion_model = config.model_file;
+                stable_diffusion_prompt = config.prompt;
+                stable_diffusion_negative_prompt = config.negative_prompt;
+                stable_diffusion_server = config.server_executable;
+                stable_diffusion_server_port = config.server_port;
+                stable_diffusion_width = config.width;
+                stable_diffusion_height = config.height;
+                stable_diffusion_steps = config.steps;
+                stable_diffusion_strength = config.strength;
+                stable_diffusion_cfg_scale = config.cfg_scale;
+                stable_diffusion_seed = config.seed;
+                stable_diffusion_sampler = config.sampler;
+                stable_diffusion_scheduler = config.scheduler;
+                stable_diffusion_upscale = config.upscale;
+
+                if (stable_diffusion_enabled) {
+                    Log(tr("Stable Diffusion Settings Applied: %1, %2x%3, "
+                           "%4 step(s)%5; changes apply on the next launch")
+                            .arg(QFileInfo(stable_diffusion_model).fileName())
+                            .arg(stable_diffusion_width)
+                            .arg(stable_diffusion_height)
+                            .arg(stable_diffusion_steps)
+                            .arg(stable_diffusion_upscale
+                                     ? tr(", compute upscale")
+                                     : QString()));
+                } else {
+                    Log("Stable Diffusion Disabled");
+                }
+            });
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+}
+
+bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
+    error.clear();
+    if (!stable_diffusion_enabled ||
+        active_backend != acmx2::Backend::Acmxvk) {
+        return true;
+    }
+    if (!stable_diffusion_available) {
+        error = tr("The selected ACMXVK executable does not provide Stable "
+                   "Diffusion support.");
+        return false;
+    }
+    if (video_file.trimmed().isEmpty() ||
+        !QFileInfo(video_file).isFile()) {
+        error = tr("Stable Diffusion requires an existing video input file.");
+        return false;
+    }
+    if (!graphics_file.trimmed().isEmpty()) {
+        error = tr("Stable Diffusion cannot be used with still-image input.");
+        return false;
+    }
+    if (!QFileInfo(stable_diffusion_model).isFile()) {
+        error = tr("The configured Stable Diffusion model does not exist:\n%1")
+                    .arg(stable_diffusion_model);
+        return false;
+    }
+    if (stable_diffusion_prompt.trimmed().isEmpty()) {
+        error = tr("Enter a Stable Diffusion image-to-image prompt.");
+        return false;
+    }
+    if (stable_diffusion_server.trimmed().isEmpty()) {
+        error = tr("Enter the sd-server executable name or path.");
+        return false;
+    }
+    if ((stable_diffusion_width % 64) != 0 ||
+        (stable_diffusion_height % 64) != 0) {
+        error = tr("Stable Diffusion dimensions must be multiples of 64.");
+        return false;
+    }
+    if (png_output) {
+        error = tr("Stable Diffusion does not support PNG-sequence output.");
+        return false;
+    }
+    if (encode_fill_pts_gaps) {
+        error = tr("Stable Diffusion cannot be combined with Fill PTS Gaps.");
+        return false;
+    }
+    return true;
+}
+
+void MainWindow::appendStableDiffusionArguments(
+    QStringList &arguments) const {
+    if (!stable_diffusion_enabled ||
+        active_backend != acmx2::Backend::Acmxvk) {
+        return;
+    }
+    arguments << "--sd-model" << stable_diffusion_model;
+    arguments << "--sd-prompt" << stable_diffusion_prompt;
+    if (!stable_diffusion_negative_prompt.trimmed().isEmpty()) {
+        arguments << "--sd-negative-prompt"
+                  << stable_diffusion_negative_prompt;
+    }
+    arguments << "--sd-server" << stable_diffusion_server;
+    arguments << "--sd-server-port"
+              << QString::number(stable_diffusion_server_port);
+    arguments << "--sd-size"
+              << QString("%1x%2")
+                     .arg(stable_diffusion_width)
+                     .arg(stable_diffusion_height);
+    arguments << "--sd-steps" << QString::number(stable_diffusion_steps);
+    arguments << "--sd-strength"
+              << QString::number(stable_diffusion_strength, 'g', 12);
+    arguments << "--sd-cfg-scale"
+              << QString::number(stable_diffusion_cfg_scale, 'g', 12);
+    arguments << "--sd-seed" << QString::number(stable_diffusion_seed);
+    arguments << "--sd-sampler" << stable_diffusion_sampler;
+    arguments << "--sd-scheduler" << stable_diffusion_scheduler;
+    if (stable_diffusion_upscale) {
+        arguments << "--sd-upscale";
+    }
+}
+
 void MainWindow::menuMidiSettings() {
     if (!midi_available) {
         QMessageBox::information(this, tr("MIDI Settings"),
@@ -4731,6 +4912,12 @@ void MainWindow::runSelected() {
                              deep_dream_error);
         return;
     }
+    QString stable_diffusion_error;
+    if (!validateStableDiffusionLaunch(stable_diffusion_error)) {
+        QMessageBox::warning(this, tr("Stable Diffusion Settings"),
+                             stable_diffusion_error);
+        return;
+    }
 
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -4976,6 +5163,7 @@ void MainWindow::runSelected() {
     }
 
     appendDeepDreamArguments(arguments);
+    appendStableDiffusionArguments(arguments);
 
     if (cuda_device_available) {
         arguments << "--cuda-device" << QString::number(cuda_device);
@@ -5053,6 +5241,12 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
     if (!validateDeepDreamLaunch(deep_dream_error)) {
         QMessageBox::warning(this, tr("Deep Dream Settings"),
                              deep_dream_error);
+        return false;
+    }
+    QString stable_diffusion_error;
+    if (!validateStableDiffusionLaunch(stable_diffusion_error)) {
+        QMessageBox::warning(this, tr("Stable Diffusion Settings"),
+                             stable_diffusion_error);
         return false;
     }
     if (shader_path.length() == 0) {
@@ -5288,6 +5482,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
     }
 
     appendDeepDreamArguments(arguments);
+    appendStableDiffusionArguments(arguments);
 
     if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
         QString passIndices = getShaderPassIndicesFromNames();
@@ -6221,6 +6416,10 @@ void MainWindow::detectFeatureSupport() {
     deep_dream_available =
         isAcmxvk && probeFeature(executable_path, "--check-deep-dream",
                                  "Deep Dream: enabled");
+    stable_diffusion_available =
+        isAcmxvk &&
+        probeFeature(executable_path, "--check-stable-diffusion",
+                     "Stable Diffusion: enabled");
 
     Log(QString("CUDA filters: %1 (%2)")
             .arg(cuda_available ? "enabled" : "disabled", backendName));
@@ -6238,6 +6437,9 @@ void MainWindow::detectFeatureSupport() {
     if (isAcmxvk) {
         Log(QString("Deep Dream: %1 (%2)")
                 .arg(deep_dream_available ? "enabled" : "disabled",
+                     backendName));
+        Log(QString("Stable Diffusion: %1 (%2)")
+                .arg(stable_diffusion_available ? "enabled" : "disabled",
                      backendName));
     }
 
@@ -6257,6 +6459,18 @@ void MainWindow::detectFeatureSupport() {
     if (isAcmxvk && !deep_dream_available) {
         deep_dream_enabled = false;
         deep_dream_gpu_filter_first = false;
+    }
+    if (stableDiffusionAction) {
+        stableDiffusionAction->setVisible(isAcmxvk);
+        stableDiffusionAction->setEnabled(stable_diffusion_available);
+        stableDiffusionAction->setToolTip(
+            stable_diffusion_available
+                ? QString()
+                : tr("Disabled: ACMXVK was built without Stable Diffusion "
+                     "support."));
+    }
+    if (isAcmxvk && !stable_diffusion_available) {
+        stable_diffusion_enabled = false;
     }
     if (gpuFilterAction) {
         gpuFilterAction->setEnabled(cuda_available);

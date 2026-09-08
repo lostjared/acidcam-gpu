@@ -138,6 +138,7 @@ namespace acmxvk {
         bool check_cuda = false;
         bool check_dnn = false;
         bool check_deep_dream = false;
+        bool check_stable_diffusion = false;
         bool dream_iterations_specified = false;
         bool dream_strength_specified = false;
         bool dream_feedback_specified = false;

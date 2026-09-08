@@ -921,6 +921,9 @@ if(BUILD_TESTING)
     add_test(NAME acmxvk_deep_dream_probe
         COMMAND acmxvk --check-deep-dream
     )
+    add_test(NAME acmxvk_stable_diffusion_probe
+        COMMAND acmxvk --check-stable-diffusion
+    )
     add_test(NAME acmxvk_shader_library_build
         COMMAND acmxvk
             --build "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_library/library.json"

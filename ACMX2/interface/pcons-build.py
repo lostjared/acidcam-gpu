@@ -75,6 +75,7 @@ app = project.QtProgram(
         "acmxvk-source-manifest.cpp",
         "custom-uniforms.cpp",
         "deep-dream-settings.cpp",
+        "stable-diffusion-settings.cpp",
         "editor.cpp",
         "find-shader.cpp",
         "gpufilter.cpp",

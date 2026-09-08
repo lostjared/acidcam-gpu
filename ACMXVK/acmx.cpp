@@ -126,6 +126,14 @@ int main(int argc, char **argv) {
             return EXIT_SUCCESS;
 #endif
         }
+        if (options.check_stable_diffusion) {
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+            std::cout << "Stable Diffusion: enabled\n";
+#else
+            std::cout << "Stable Diffusion: disabled\n";
+#endif
+            return EXIT_SUCCESS;
+        }
         if (!options.probe_hdr_file.empty()) {
             const acmxvk::VideoHdrInfo info =
                 acmxvk::probeVideoHdrInfo(options.probe_hdr_file);
