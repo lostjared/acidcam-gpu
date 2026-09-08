@@ -425,12 +425,20 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
 
 void Writer::calculateFPSFraction(float fps, int &fps_num, int &fps_den) {
     const float epsilon = 0.001f;
-    fps_den = 1001;
-    if (std::fabs(fps - 29.97f) < epsilon) {
+    if (std::fabs(fps - 23.976f) < epsilon) {
+        fps_num = 24000;
+        fps_den = 1001;
+    } else if (std::fabs(fps - 29.97f) < epsilon) {
         fps_num = 30000;
+        fps_den = 1001;
+    } else if (std::fabs(fps - 47.952f) < epsilon) {
+        fps_num = 48000;
         fps_den = 1001;
     } else if (std::fabs(fps - 59.94f) < epsilon) {
         fps_num = 60000;
+        fps_den = 1001;
+    } else if (std::fabs(fps - 119.88f) < epsilon) {
+        fps_num = 120000;
         fps_den = 1001;
     } else {
         float precision = 1000.0f;
@@ -2268,6 +2276,9 @@ void Writer::drainEncoderPackets() {
             break;
         }
 
+        if (pkt->duration <= 0) {
+            pkt->duration = 1;
+        }
         av_packet_rescale_ts(pkt, codec_ctx->time_base, stream->time_base);
         pkt->stream_index = stream->index;
 
@@ -2442,10 +2453,17 @@ void Writer::close() {
 
     stopEncoderThread();
 
-    if (stream && stream->duration > 0) {
-        last_duration = static_cast<double>(stream->duration) * av_q2d(stream->time_base);
-    } else if (fps_num > 0 && fps_den > 0) {
-        last_duration = static_cast<double>(frame_count) * static_cast<double>(fps_den) / static_cast<double>(fps_num);
+    if (stream && codec_ctx && frame_count > 0) {
+        stream->duration = av_rescale_q(frame_count, codec_ctx->time_base,
+                                        stream->time_base);
+    }
+    if (fps_num > 0 && fps_den > 0) {
+        last_duration = static_cast<double>(frame_count) *
+                        static_cast<double>(fps_den) /
+                        static_cast<double>(fps_num);
+    } else if (stream && stream->duration > 0) {
+        last_duration = static_cast<double>(stream->duration) *
+                        av_q2d(stream->time_base);
     }
 
     av_write_trailer(format_ctx);
