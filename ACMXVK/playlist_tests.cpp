@@ -1,4 +1,5 @@
 #include "app/playlist.hpp"
+#include "input_validation.hpp"
 
 #include <chrono>
 #include <fstream>
@@ -104,6 +105,30 @@ int main() {
             rejected_malformed = true;
         }
         expect(rejected_malformed, "malformed playlist node was accepted");
+
+        const fs::path maximum_path = temporary.path / "maximum.txt";
+        std::ostringstream maximum_playlist;
+        for (std::size_t index = 0;
+             index < acmxvk::input::MAX_PLAYLIST_NODES; ++index) {
+            maximum_playlist << "[Node " << index << "]\none.frag\n";
+        }
+        write_text(maximum_path, maximum_playlist.str());
+        const std::vector<acmxvk::PlaylistNode> maximum_nodes =
+            acmxvk::load_playlist(maximum_path, shaders, library, warnings);
+        expect(maximum_nodes.size() == acmxvk::input::MAX_PLAYLIST_NODES,
+               "maximum playlist node count was not accepted");
+
+        maximum_playlist << "[Too many]\none.frag\n";
+        write_text(maximum_path, maximum_playlist.str());
+        bool rejected_excess_nodes = false;
+        try {
+            static_cast<void>(acmxvk::load_playlist(
+                maximum_path, shaders, library, warnings));
+        } catch (const std::runtime_error &) {
+            rejected_excess_nodes = true;
+        }
+        expect(rejected_excess_nodes,
+               "excess playlist node count was accepted");
     } catch (const std::exception &error) {
         std::cerr << "playlist test failed: " << error.what() << '\n';
         return 1;

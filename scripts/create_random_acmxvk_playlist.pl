@@ -6,8 +6,8 @@ use warnings;
 use Getopt::Long qw(GetOptions);
 use JSON::PP qw(decode_json);
 
-use constant MAX_PLAYLIST_NODES   => 1_024;
-use constant MAX_PLAYLIST_ENTRIES => 16_384;
+use constant MAX_PLAYLIST_NODES   => 10_000;
+use constant MAX_PLAYLIST_ENTRIES => 65_536;
 
 sub usage {
     my ($exit_code) = @_;
@@ -17,7 +17,7 @@ Usage:
   create_random_acmxvk_playlist.pl [options] library.json
 
 Options:
-  --entries N       Number of playlist nodes to create (1-1024)
+  --entries N       Number of playlist nodes to create (1-10000)
   --max-shaders N   Maximum shaders per node; each node gets 1..N
   --output FILE     Output playlist path (default: random.playlist.txt)
   --seed N          Repeatable non-negative random seed

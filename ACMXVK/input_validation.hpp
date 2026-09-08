@@ -30,8 +30,8 @@ namespace acmxvk::input {
     constexpr std::size_t MAX_CONFIGURATION_LINE_BYTES = 4096;
     constexpr std::uintmax_t MAX_CONFIGURATION_FILE_BYTES = 4U * 1024U * 1024U;
     constexpr std::size_t MAX_SHADER_ENTRIES = 16384;
-    constexpr std::size_t MAX_PLAYLIST_NODES = 1024;
-    constexpr std::size_t MAX_PLAYLIST_ENTRIES = 16384;
+    constexpr std::size_t MAX_PLAYLIST_NODES = 10000;
+    constexpr std::size_t MAX_PLAYLIST_ENTRIES = 65536;
     constexpr std::size_t MAX_MIDI_MAPPINGS = 4096;
     constexpr std::size_t MAX_AUDIO_PLAYLIST_ENTRIES = 4096;
 

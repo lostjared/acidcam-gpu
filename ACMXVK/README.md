@@ -1402,10 +1402,14 @@ playlist must be reproducible:
 
 ```bash
 ./scripts/create_random_acmxvk_playlist.pl \
-    --entries 1000 --max-shaders 4 \
+    --entries 10000 --max-shaders 4 \
     --output vkplaylist.txt --seed 12345 \
     /path/to/library.json
 ```
+
+ACMXVK accepts up to 10,000 playlist nodes and 65,536 total shader entries.
+The larger entry allowance supports four-shader chains throughout a
+10,000-node playlist with room to spare.
 
 The script refuses to replace an existing output unless `--force` is supplied.
 Source `.frag` and `.comp` entries are converted to their corresponding `.spv`
