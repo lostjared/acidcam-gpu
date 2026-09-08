@@ -1111,14 +1111,22 @@ namespace acmxvk {
             }
         }
 
+        if (options.headless && options.audio_pass_through) {
+            throw std::runtime_error(
+                "--pass-through cannot be used with --headless or --silent");
+        }
+
         if (options.use_source_audio) {
             if (options.input_file.empty()) {
                 throw std::runtime_error(
                     "--use-source-audio requires --input <video>");
             }
-            if (!options.use_source_fps) {
+            const bool offline_constant_rate =
+                options.headless && options.constant_frame_rate;
+            if (!options.use_source_fps && !offline_constant_rate) {
                 throw std::runtime_error(
-                    "--use-source-audio requires --use-source-fps");
+                    "--use-source-audio requires --use-source-fps or "
+                    "--headless --constant-frame-rate");
             }
             if (!options.audio_file.empty()) {
                 throw std::runtime_error(
@@ -1418,7 +1426,8 @@ namespace acmxvk {
                << "      --use-yuv               Prefer YUYV camera capture over MJPG\n"
                << "      --maximize-fps          Render at --fps using the latest camera frame\n"
                << "      --use-source-fps        Play video on its reported source clock\n"
-               << "      --use-source-audio      Use the video's audio for shader reactivity\n"
+               << "      --use-source-audio      Use video audio for shader reactivity and output\n"
+               << "                              Requires source FPS or headless constant-frame-rate mode\n"
                << "      --probe-hdr <video>     Print HDR/color metadata and exit\n"
                << "  -u, --fps <rate>            Camera/output FPS\n"
                << "                              Video files prefer FFmpeg/NVDEC capture\n\n"
@@ -1571,6 +1580,7 @@ namespace acmxvk {
                << "      --headless              Surface-free terminal/batch rendering\n"
                << "      --silent                Alias for --headless\n"
                << "                              Requires video/image input and --output\n"
+               << "                              Cannot be combined with --pass-through\n"
                << "                              Image input and --repeat require --duration\n\n"
                << "Output:\n"
                << "      --unbuffered           Flush stdout/stderr after each write for GUI capture\n"

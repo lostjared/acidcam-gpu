@@ -907,6 +907,7 @@ namespace acmxvk {
                 double clock_seconds = 0.0;
                 if (source_kind == SourceKind::Video &&
                     media_timeline_started &&
+                    !offlineSourceAudioEnabled() &&
                     mediaClockSeconds(clock_seconds)) {
                     clocked_video_handled = true;
                     if (!readClockedVideoFrame(clock_seconds)) {
@@ -1857,6 +1858,11 @@ namespace acmxvk {
             if (options.use_source_audio) {
                 std::cout << "acmxvk: source video audio drives shader "
                              "reactivity\n";
+                if (offlineSourceAudioEnabled()) {
+                    std::cout
+                        << "acmxvk: offline source-audio synchronization: "
+                           "analysis follows each decoded video frame\n";
+                }
             }
             file_audio_source->set_repeat(options.audio_repeat);
             if (options.audio_pass_through &&
@@ -2019,6 +2025,11 @@ namespace acmxvk {
         }
         seconds = 0.0;
         return false;
+    }
+
+    [[nodiscard]] bool MainWindow::offlineSourceAudioEnabled() const {
+        return options.use_source_audio && options.headless &&
+               options.constant_frame_rate && !options.use_source_fps;
     }
     // Shader discovery, custom uniforms, interface IPC, and playlists.
     void MainWindow::loadShaders() {
@@ -6257,9 +6268,15 @@ namespace acmxvk {
             (file_audio_source->has_output_clock() ||
              source_frame_received)) {
             double source_audio_time = 0.0;
-            if (options.use_source_audio &&
-                !file_audio_source->has_output_clock() &&
-                mediaClockSeconds(source_audio_time)) {
+            const bool offline_source_audio = offlineSourceAudioEnabled();
+            const bool source_audio_timeline =
+                options.use_source_audio &&
+                ((offline_source_audio &&
+                  currentVideoTimeline(source_audio_time)) ||
+                 (!offline_source_audio &&
+                  !file_audio_source->has_output_clock() &&
+                  mediaClockSeconds(source_audio_time)));
+            if (source_audio_timeline) {
                 file_audio_source->process_at_time(
                     source_audio_time, outputFrameRate(), *audio_engine);
             } else {
@@ -6274,7 +6291,15 @@ namespace acmxvk {
         }
         if (audioSourceOpen()) {
             const audio::AudioMetrics metrics = audio_engine->metrics();
-            const float warmup = updateAudioWarmup(now);
+            const float warmup =
+                offlineSourceAudioEnabled() && video_timeline_available
+                    ? (options.audio_warm_rate <= 0.0
+                           ? 1.0F
+                           : std::min(
+                                 static_cast<float>(
+                                     video_timeline * options.audio_warm_rate),
+                                 1.0F))
+                    : updateAudioWarmup(now);
             raw_audio_amplitude = metrics.amplitude;
             audio_sensitivity = audio_engine->sensitivity();
             const float delta_scale = audio_delta_time ? delta : 1.0F;

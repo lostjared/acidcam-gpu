@@ -1181,6 +1181,23 @@ which then becomes the more accurate A/V master clock. If the video has no
 decodable audio track, ACMXVK warns once, continues with zero-valued audio
 inputs, and disables pass-through.
 
+For offline processing, combine `--use-source-audio` with `--headless` and
+`--constant-frame-rate`; `--use-source-fps` is not required in this mode. ACMXVK
+decodes every video frame sequentially and samples audio reactivity at that
+frame's source-media timestamp, so results do not depend on rendering speed.
+The source track is muxed into the completed CFR video and trimmed to its exact
+encoded duration. Headless mode cannot use `--pass-through`; audio-device
+playback is only available in windowed mode and would reintroduce a real-time
+clock during offline processing.
+
+```bash
+./build/acmxvk/acmxvk \
+    --input phone-video.mp4 --output rendered.mp4 \
+    --headless --constant-frame-rate --no-drop \
+    --use-source-audio \
+    --shaders ./shaders_acmxvk --shader-file audio-reactive.frag.spv
+```
+
 ```bash
 ./build/acmxvk/acmxvk \
     --input input.mp4 \
@@ -2573,6 +2590,11 @@ If processing cannot keep pace or `--use-source-fps` skips late source frames,
 the result is correspondingly shorter than the source timeline. Add
 `--no-drop` when every rendered frame must wait for an available encoder-queue
 slot.
+
+In headless mode, adding `--use-source-audio` to this sequential path enables
+offline frame-accurate audio analysis without `--use-source-fps`. Every decoded
+frame is rendered, its audio metrics come from the matching source timestamp,
+and the source audio is muxed into the CFR result after encoding.
 
 Increment 7R hardens every ACMXVK text-input boundary with the shared
 `input_validation` module. It covers command-line arguments, relevant

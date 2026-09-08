@@ -402,6 +402,7 @@ namespace acmxvk {
         void startMediaTimelineIfReady();
         void setSourcePlaybackClockPaused(bool paused);
         [[nodiscard]] bool mediaClockSeconds(double &seconds) const;
+        [[nodiscard]] bool offlineSourceAudioEnabled() const;
 
         void loadShaders();
         void applyCustomUniformOverrides();
