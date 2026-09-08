@@ -1118,6 +1118,16 @@ void SettingsWindow::init() {
         "as encoder capacity becomes available. Webcam recording always uses wall-clock "
         "timestamps and drops late frames to remain synchronized.");
     encodeNoDropCheckBox->setEnabled(false);
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        encodeConstantFrameRateCheckBox =
+            new QCheckBox("Constant Frame Rate", this);
+        encodeConstantFrameRateCheckBox->setChecked(
+            encSettings.value("recording/constant_frame_rate", false).toBool());
+        encodeConstantFrameRateCheckBox->setToolTip(
+            "Video mode: encode rendered frames with consecutive output "
+            "timestamps instead of source-timeline PTS "
+            "(--constant-frame-rate).");
+    }
 
     // ── Input Source group ────────────────────────────────────────────
     auto *sourceGroup = new QGroupBox("Input Source", this);
@@ -1198,6 +1208,10 @@ void SettingsWindow::init() {
     encodingGrid->addWidget(encodeParametersLineEdit, r, 1);
     encodingGrid->addWidget(encodeRealtimeCheckBox, ++r, 0, 1, 2);
     encodingGrid->addWidget(encodeNoDropCheckBox, ++r, 0, 1, 2);
+    if (encodeConstantFrameRateCheckBox) {
+        encodingGrid->addWidget(encodeConstantFrameRateCheckBox, ++r, 0, 1,
+                                2);
+    }
 
     // ── Playback group ────────────────────────────────────────────────
     auto *playbackGroup = new QGroupBox("Playback", this);
@@ -1461,6 +1475,30 @@ void SettingsWindow::init() {
             copyAudioCheckBox->setChecked(false);
     });
 
+    const auto updateConstantFrameRateControl = [this] {
+        if (!encodeConstantFrameRateCheckBox) {
+            return;
+        }
+        encodeConstantFrameRateCheckBox->setEnabled(
+            inputVideoOptionRadioButton->isChecked() &&
+            saveOutputVideoCheckBox->isChecked() &&
+            !writePngCheckBox->isChecked());
+    };
+    if (encodeConstantFrameRateCheckBox) {
+        connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this,
+                [updateConstantFrameRateControl](bool) {
+                    updateConstantFrameRateControl();
+                });
+        connect(saveOutputVideoCheckBox, &QCheckBox::toggled, this,
+                [updateConstantFrameRateControl](bool) {
+                    updateConstantFrameRateControl();
+                });
+        connect(writePngCheckBox, &QCheckBox::toggled, this,
+                [updateConstantFrameRateControl](bool) {
+                    updateConstantFrameRateControl();
+                });
+    }
+
     connect(okButton, &QPushButton::clicked, this, &SettingsWindow::acceptSettings);
     connect(cancelButton, &QPushButton::clicked, this, &SettingsWindow::rejectSettings);
     connect(browseInputVideoButton, &QPushButton::clicked, this, &SettingsWindow::browseInputVideoFile);
@@ -1478,6 +1516,7 @@ void SettingsWindow::init() {
 
     loadUiState();
     updateAcmxvkTimingControls();
+    updateConstantFrameRateControl();
     if (cameraOptionRadioButton->isChecked()) {
         encodeNoDropCheckBox->setChecked(false);
         encodeNoDropCheckBox->setEnabled(false);
@@ -2010,6 +2049,12 @@ bool SettingsWindow::isEncodeNoDrop() const {
            encodeNoDropCheckBox->isChecked();
 }
 
+bool SettingsWindow::isEncodeConstantFrameRate() const {
+    return encodeConstantFrameRateCheckBox &&
+           encodeConstantFrameRateCheckBox->isEnabled() &&
+           encodeConstantFrameRateCheckBox->isChecked();
+}
+
 QString SettingsWindow::getCameraName(int device_index) {
     if (activeBackend == acmx2::Backend::Acmxvk) {
         for (int index = 0; index < cameraIndexComboBox->count(); ++index) {
@@ -2205,6 +2250,9 @@ void SettingsWindow::acceptSettings() {
         encSettings.setValue("recording/realtime", encodeRealtimeCheckBox->isChecked());
     if (encodeNoDropCheckBox)
         encSettings.setValue("recording/no_drop", encodeNoDropCheckBox->isChecked());
+    if (encodeConstantFrameRateCheckBox)
+        encSettings.setValue("recording/constant_frame_rate",
+                             encodeConstantFrameRateCheckBox->isChecked());
 
     accept();
 }

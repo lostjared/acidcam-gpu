@@ -141,6 +141,8 @@ class SettingsWindow : public QDialog {
     bool isEncodeRealtime() const;
     /// @return True if no-drop encoder backpressure mode is enabled.
     bool isEncodeNoDrop() const;
+    /// @return True if sequential constant-frame-rate encoding is enabled.
+    bool isEncodeConstantFrameRate() const;
   private slots:
     void acceptSettings();
     void rejectSettings();
@@ -240,6 +242,7 @@ class SettingsWindow : public QDialog {
     QLineEdit *encodeParametersLineEdit = nullptr;
     QCheckBox *encodeRealtimeCheckBox = nullptr;
     QCheckBox *encodeNoDropCheckBox = nullptr;
+    QCheckBox *encodeConstantFrameRateCheckBox = nullptr;
     QCheckBox *writePngCheckBox = nullptr;
     QCheckBox *generateCheckBox = nullptr;
     QSpinBox *generateIntervalSpinBox = nullptr;

@@ -253,6 +253,7 @@ class MainWindow : public QMainWindow {
     QString encode_parameters;
     bool encode_realtime = false;
     bool encode_no_drop = false;
+    bool encode_constant_frame_rate = false;
     bool maximize_fps = false;
     bool use_source_fps = false;
     bool use_source_audio = false;

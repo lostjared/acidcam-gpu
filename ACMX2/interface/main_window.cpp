@@ -1457,6 +1457,8 @@ void MainWindow::loadSessionSettings() {
     encode_realtime = settings.value("recording/realtime", false).toBool();
     encode_no_drop = !cameraMode &&
                      settings.value("recording/no_drop", false).toBool();
+    encode_constant_frame_rate =
+        settings.value("recording/constant_frame_rate", false).toBool();
     maximize_fps =
         settings.value("interface/acmxvk_maximize_fps", false).toBool();
     use_source_fps =
@@ -4710,6 +4712,8 @@ void MainWindow::cameraSettings() {
     encode_parameters = settingsWindow.getEncodeParameters();
     encode_realtime = settingsWindow.isEncodeRealtime();
     encode_no_drop = settingsWindow.isEncodeNoDrop();
+    encode_constant_frame_rate =
+        settingsWindow.isEncodeConstantFrameRate();
 }
 
 void MainWindow::runSelected() {
@@ -4886,6 +4890,9 @@ void MainWindow::runSelected() {
         if (encode_no_drop &&
             (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
+        if (active_backend == acmx2::Backend::Acmxvk &&
+            encode_constant_frame_rate && !video_file.isEmpty() && !png_output)
+            arguments << "--constant-frame-rate";
     }
     const bool sourceAudioActive =
         active_backend == acmx2::Backend::Acmxvk && !video_file.isEmpty() &&
@@ -5190,6 +5197,9 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         if (encode_no_drop &&
             (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
+        if (active_backend == acmx2::Backend::Acmxvk &&
+            encode_constant_frame_rate && !video_file.isEmpty() && !png_output)
+            arguments << "--constant-frame-rate";
     }
     arguments << "--shader-file" << launchShaderName;
 
@@ -6201,7 +6211,7 @@ void MainWindow::detectFeatureSupport() {
         isAcmxvk ? "OpenCV DNN effects: enabled" : "OpenCV DNN: enabled");
     deep_dream_available =
         isAcmxvk && probeFeature(executable_path, "--check-deep-dream",
-                                "Deep Dream: enabled");
+                                 "Deep Dream: enabled");
 
     Log(QString("CUDA filters: %1 (%2)")
             .arg(cuda_available ? "enabled" : "disabled", backendName));
