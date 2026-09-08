@@ -66,6 +66,7 @@ class PlaylistDialog : public QDialog {
     void moveDown();
     void clearAll();
     void shufflePlaylist();
+    void generateRandomPlaylist();
     void concatPlaylist();
     void filterSearchChanged(const QString &text);
     void savePlaylist();
@@ -91,6 +92,7 @@ class PlaylistDialog : public QDialog {
     QPushButton *downButton;
     QPushButton *clearButton;
     QPushButton *shuffleButton;
+    QPushButton *generateRandomButton = nullptr;
     QPushButton *concatButton;
     QPushButton *saveButton;
     QPushButton *loadButton;

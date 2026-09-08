@@ -147,6 +147,11 @@ Interface version 2.137.0 includes the current ACMXVK integration increments:
 - Multipass settings are published to ACMXVK at startup and while it is
   running. Applying, reordering, or disabling passes in the interface rebuilds
   the Vulkan fragment/compute chain without restarting the engine.
+- The ACMXVK playlist editor can generate randomized multipass playlists from
+  the active shader library. **Generate Random** accepts up to 10,000 nodes,
+  chooses between one and the requested maximum number of unique shaders per
+  node, supports an optional repeatable seed, and enforces ACMXVK's 65,536
+  shader-entry limit before the playlist is saved.
 - Playback **Repeat** and **Normalized Time** changes are published to a running
   ACMXVK process. Video looping and fixed-per-output-frame shader timing can be
   enabled or disabled without restarting the engine.
