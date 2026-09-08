@@ -826,6 +826,8 @@ namespace acmxvk {
                 }
             } else if (option == "--normalized") {
                 options.normalized_time = true;
+            } else if (option == "--enable-random-autopilot") {
+                options.enable_random_autopilot = true;
             } else if (option == "--autopilot-frames" ||
                        option == "--autopilot-timeout") {
                 options.autopilot_frames = parseInteger(
@@ -1225,6 +1227,10 @@ namespace acmxvk {
         if (options.enable_playlist && options.playlist_file.empty()) {
             throw std::runtime_error("--enable-playlist requires --playlist <file>");
         }
+        if (options.enable_random_autopilot && !options.enable_playlist) {
+            throw std::runtime_error(
+                "--enable-random-autopilot requires --enable-playlist");
+        }
         if ((options.autopilot_frames > 0 || options.autopilot_random_timeout > 0) &&
             options.playlist_file.empty()) {
             throw std::runtime_error("autopilot requires --playlist <file>");
@@ -1477,6 +1483,7 @@ namespace acmxvk {
                << "                              Uses decoded frames for video input\n"
                << "  --autopilot-timeout <N>     Alias for --autopilot-frames\n"
                << "  --autopilot-random <N>      Random playlist interval from 4..N\n\n"
+               << "  --enable-random-autopilot  Start random playlist-node selection\n\n"
                << "History cache:\n"
                << "      --texture-cache         Enable Vulkan texture history\n"
                << "      --texture-cache-array   Alias using sampler2DArray history\n"

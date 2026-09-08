@@ -24,7 +24,7 @@ complete replacement for ACMX2.
 | Shader libraries | Complete | Prefers `library.json` and falls back to `index.txt`; supports nested paths and object or string entries. Offline `--build` mode incrementally compiles source manifests containing `.frag`, `.comp`, or `.spv` entries into a validated runtime library. |
 | Shader selection | Complete | Supports selection by index or filename, keyboard switching, and live selection from the ACMX Qt interface through `--interface-shm`. |
 | Shader crossfades | Implemented | Shader, playlist, multipass, and bypass changes crossfade from a snapshot of the preceding rendered result. All 35 ACMX2 transition styles are bundled as Vulkan SPIR-V shaders, with selectable duration/style and optional random transition selection during autopilot. |
-| Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot. Shader stages are detected from SPIR-V entry points rather than filenames. |
+| Multipass and playlists | Implemented | Includes named playlist nodes, mixed fragment/compute chains, sequential autopilot, and random autopilot with optional startup activation. Shader stages are detected from SPIR-V entry points rather than filenames. |
 | Frame history/texture cache | Implemented | Uses one shared Vulkan `sampler2DArray` ring buffer with configurable size and write delay. Fragment and compute post-processing passes can sample it at binding 2, and SPIR-V reflection enables it automatically for history-capable libraries. CUDA-filter builds place the post-filter image in history through direct CUDA/Vulkan layered-image interop. |
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides and live updates from the ACMX Qt interface. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, optional constant-frame-rate sequential encoding, audio-clock synchronization, and pipelined Vulkan readback. |
@@ -1365,6 +1365,12 @@ Pausing the video or presenting the same frame more than once does not consume
 the countdown, while source frames discarded to catch up during
 `--use-source-fps` playback do count. Camera and still-image modes count
 rendered frames as before.
+
+Use `--enable-random-autopilot` with `--playlist` and `--enable-playlist` to
+start the same random playlist-node mode normally toggled with `J`. Set a fixed
+change interval with `--autopilot-frames N`, or use `--autopilot-random N` for
+a randomized interval. If neither interval option is supplied, random
+autopilot changes nodes every 300 frames.
 
 The bundled set matches ACMX2: linear, block, wipe, radial, pixelate,
 dissolve, swirl, glitch, diamond, burn, fade-to-black, fade-to-white, four

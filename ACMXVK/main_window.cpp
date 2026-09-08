@@ -172,6 +172,9 @@ namespace acmxvk {
         openMidi();
         loadPlaylist();
         resetAutopilotInterval();
+        if (this->options.enable_random_autopilot) {
+            toggleAutopilot(false);
+        }
         openInput();
         configureRenderResolution();
         initializeSprite();

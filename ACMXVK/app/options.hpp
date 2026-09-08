@@ -94,6 +94,7 @@ namespace acmxvk {
         bool enable_vsync = false;
         bool enable_screenshot = false;
         bool enable_playlist = false;
+        bool enable_random_autopilot = false;
         bool enable_texture_cache = false;
         bool history_test = false;
         bool enable_3d = false;
