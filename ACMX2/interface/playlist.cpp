@@ -1,5 +1,6 @@
 #include "playlist.hpp"
 #include "custom_style.hpp"
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
@@ -9,8 +10,9 @@
 #include <algorithm>
 #include <random>
 
-PlaylistDialog::PlaylistDialog(const QStringList &shaderNames, QWidget *parent)
-    : QDialog(parent) {
+PlaylistDialog::PlaylistDialog(const QStringList &shaderNames,
+                               acmx2::Backend backend, QWidget *parent)
+    : QDialog(parent), backend(backend) {
     setWindowTitle("Shader Playlist Settings");
     setMinimumSize(600, 600);
     setupUI();
@@ -195,12 +197,25 @@ void PlaylistDialog::loadShaders(const QStringList &shaderNames) {
 
     shaderNamesList.clear();
     shaderNameToIndex.clear();
+    shaderAliasToName.clear();
     shaderModel->clear();
 
     for (int i = 0; i < shaderNames.size(); ++i) {
         QString name = shaderNames[i];
         shaderNamesList.append(name);
         shaderNameToIndex[name] = i;
+        const QString normalizedName = QDir::fromNativeSeparators(name);
+        shaderAliasToName.insert(normalizedName.toLower(), name);
+        if (backend == acmx2::Backend::Acmxvk) {
+            if (normalizedName.endsWith(QStringLiteral(".spv"),
+                                        Qt::CaseInsensitive)) {
+                shaderAliasToName.insert(
+                    normalizedName.chopped(4).toLower(), name);
+            } else {
+                shaderAliasToName.insert(
+                    (normalizedName + QStringLiteral(".spv")).toLower(), name);
+            }
+        }
         QStandardItem *item = new QStandardItem(name);
         item->setData(i, Qt::UserRole);
         shaderModel->appendRow(item);
@@ -209,6 +224,21 @@ void PlaylistDialog::loadShaders(const QStringList &shaderNames) {
     if (!selectedNames.isEmpty()) {
         setSelectedShaderNames(selectedNames);
     }
+}
+
+QString
+PlaylistDialog::resolvePlaylistShaderName(const QString &name) const {
+    const QString key = QDir::fromNativeSeparators(name.trimmed()).toLower();
+    return shaderAliasToName.value(key);
+}
+
+QString
+PlaylistDialog::runtimePlaylistShaderName(const QString &name) const {
+    if (backend == acmx2::Backend::Acmxvk &&
+        !name.endsWith(QStringLiteral(".spv"), Qt::CaseInsensitive)) {
+        return name + QStringLiteral(".spv");
+    }
+    return name;
 }
 
 void PlaylistDialog::filterSearchChanged(const QString &text) {
@@ -416,7 +446,7 @@ void PlaylistDialog::concatPlaylist() {
 
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
-        if (line.isEmpty())
+        if (line.isEmpty() || line.startsWith('#'))
             continue;
 
         if (line.startsWith('[') && line.endsWith(']')) {
@@ -437,10 +467,12 @@ void PlaylistDialog::concatPlaylist() {
                 currentNode->setExpanded(true);
                 ++nodesAdded;
             }
-            if (shaderNameToIndex.contains(line)) {
+            const QString shaderName = resolvePlaylistShaderName(line);
+            if (!shaderName.isEmpty()) {
                 auto *item = new QTreeWidgetItem(currentNode);
-                item->setText(0, line);
-                item->setData(0, Qt::UserRole, shaderNameToIndex[line]);
+                item->setText(0, shaderName);
+                item->setData(0, Qt::UserRole,
+                              shaderNameToIndex[shaderName]);
                 ++loadedCount;
             } else {
                 ++skippedCount;
@@ -485,7 +517,8 @@ void PlaylistDialog::savePlaylist() {
         QTreeWidgetItem *node = playlistTree->topLevelItem(i);
         out << "[" << node->text(0) << "]\n";
         for (int j = 0; j < node->childCount(); ++j) {
-            out << node->child(j)->text(0) << "\n";
+            out << runtimePlaylistShaderName(node->child(j)->text(0))
+                << "\n";
         }
     }
     file.close();
@@ -516,7 +549,7 @@ void PlaylistDialog::loadPlaylist() {
 
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
-        if (line.isEmpty())
+        if (line.isEmpty() || line.startsWith('#'))
             continue;
 
         if (line.startsWith('[') && line.endsWith(']')) {
@@ -532,10 +565,12 @@ void PlaylistDialog::loadPlaylist() {
                 currentNode->setFlags(currentNode->flags() | Qt::ItemIsEditable);
                 currentNode->setExpanded(true);
             }
-            if (shaderNameToIndex.contains(line)) {
+            const QString shaderName = resolvePlaylistShaderName(line);
+            if (!shaderName.isEmpty()) {
                 auto *item = new QTreeWidgetItem(currentNode);
-                item->setText(0, line);
-                item->setData(0, Qt::UserRole, shaderNameToIndex[line]);
+                item->setText(0, shaderName);
+                item->setData(0, Qt::UserRole,
+                              shaderNameToIndex[shaderName]);
                 ++loadedCount;
             } else {
                 ++skippedCount;
@@ -626,10 +661,12 @@ void PlaylistDialog::setSelectedShaderNames(const QStringList &names) {
     node->setExpanded(true);
 
     for (const QString &name : names) {
-        if (shaderNameToIndex.contains(name)) {
+        const QString shaderName = resolvePlaylistShaderName(name);
+        if (!shaderName.isEmpty()) {
             auto *item = new QTreeWidgetItem(node);
-            item->setText(0, name);
-            item->setData(0, Qt::UserRole, shaderNameToIndex[name]);
+            item->setText(0, shaderName);
+            item->setData(0, Qt::UserRole,
+                          shaderNameToIndex[shaderName]);
         }
     }
 }
@@ -642,10 +679,12 @@ void PlaylistDialog::setPlaylistTree(const QList<QPair<QString, QStringList>> &t
         node->setFlags(node->flags() | Qt::ItemIsEditable);
         node->setExpanded(true);
         for (const QString &name : shaders) {
-            if (shaderNameToIndex.contains(name)) {
+            const QString shaderName = resolvePlaylistShaderName(name);
+            if (!shaderName.isEmpty()) {
                 auto *item = new QTreeWidgetItem(node);
-                item->setText(0, name);
-                item->setData(0, Qt::UserRole, shaderNameToIndex[name]);
+                item->setText(0, shaderName);
+                item->setData(0, Qt::UserRole,
+                              shaderNameToIndex[shaderName]);
             }
         }
     }
@@ -673,7 +712,7 @@ void PlaylistDialog::setPlaylistFile(const QString &path) {
                 QTreeWidgetItem *currentNode = nullptr;
                 while (!in2.atEnd()) {
                     QString line = in2.readLine().trimmed();
-                    if (line.isEmpty())
+                    if (line.isEmpty() || line.startsWith('#'))
                         continue;
                     if (line.startsWith('[') && line.endsWith(']')) {
                         QString nodeName = line.mid(1, line.length() - 2);
@@ -681,10 +720,15 @@ void PlaylistDialog::setPlaylistFile(const QString &path) {
                         currentNode->setText(0, nodeName);
                         currentNode->setFlags(currentNode->flags() | Qt::ItemIsEditable);
                         currentNode->setExpanded(true);
-                    } else if (currentNode && shaderNameToIndex.contains(line)) {
+                    } else if (currentNode) {
+                        const QString shaderName =
+                            resolvePlaylistShaderName(line);
+                        if (shaderName.isEmpty())
+                            continue;
                         auto *item = new QTreeWidgetItem(currentNode);
-                        item->setText(0, line);
-                        item->setData(0, Qt::UserRole, shaderNameToIndex[line]);
+                        item->setText(0, shaderName);
+                        item->setData(0, Qt::UserRole,
+                                      shaderNameToIndex[shaderName]);
                     }
                 }
                 file.close();

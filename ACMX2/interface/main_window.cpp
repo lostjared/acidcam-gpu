@@ -4584,7 +4584,7 @@ void MainWindow::menuPlaylistSettings() {
         return;
     }
 
-    playlistDialog = new PlaylistDialog(items, this);
+    playlistDialog = new PlaylistDialog(items, active_backend, this);
     playlistDialog->setAttribute(Qt::WA_DeleteOnClose);
     playlistDialog->setEnabled(playlist_enabled);
     if (!playlist_tree_data.isEmpty()) {

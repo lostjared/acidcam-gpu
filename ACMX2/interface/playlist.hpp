@@ -1,6 +1,8 @@
 #ifndef __PLAYLIST_HPP__
 #define __PLAYLIST_HPP__
 
+#include "backend.hpp"
+
 /**
  * @file playlist.hpp
  * @brief Dialog for building nested shader playlists.
@@ -27,7 +29,9 @@
 class PlaylistDialog : public QDialog {
     Q_OBJECT
   public:
-    explicit PlaylistDialog(const QStringList &shaderNames, QWidget *parent = nullptr);
+    explicit PlaylistDialog(const QStringList &shaderNames,
+                            acmx2::Backend backend,
+                            QWidget *parent = nullptr);
 
     /// @brief Return whether playlist mode is enabled.
     bool isPlaylistEnabled() const;
@@ -71,6 +75,8 @@ class PlaylistDialog : public QDialog {
     void setupUI();
     void loadShaders(const QStringList &shaderNames);
     QTreeWidgetItem *currentNodeItem() const;
+    QString resolvePlaylistShaderName(const QString &name) const;
+    QString runtimePlaylistShaderName(const QString &name) const;
 
     QCheckBox *enableCheckBox;
     QComboBox *shaderComboBox;
@@ -98,8 +104,10 @@ class PlaylistDialog : public QDialog {
     QSortFilterProxyModel *proxyModel;
 
     QMap<QString, int> shaderNameToIndex;
+    QMap<QString, QString> shaderAliasToName;
     QStringList shaderNamesList;
     QString playlistFilePath;
+    acmx2::Backend backend;
 };
 
 #endif
