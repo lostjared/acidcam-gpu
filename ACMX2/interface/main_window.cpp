@@ -1459,6 +1459,8 @@ void MainWindow::loadSessionSettings() {
                      settings.value("recording/no_drop", false).toBool();
     encode_constant_frame_rate =
         settings.value("recording/constant_frame_rate", false).toBool();
+    encode_fill_pts_gaps =
+        settings.value("recording/fill_pts_gaps", false).toBool();
     maximize_fps =
         settings.value("interface/acmxvk_maximize_fps", false).toBool();
     use_source_fps =
@@ -4714,6 +4716,7 @@ void MainWindow::cameraSettings() {
     encode_no_drop = settingsWindow.isEncodeNoDrop();
     encode_constant_frame_rate =
         settingsWindow.isEncodeConstantFrameRate();
+    encode_fill_pts_gaps = settingsWindow.isEncodeFillPtsGaps();
 }
 
 void MainWindow::runSelected() {
@@ -4893,6 +4896,9 @@ void MainWindow::runSelected() {
         if (active_backend == acmx2::Backend::Acmxvk &&
             encode_constant_frame_rate && !video_file.isEmpty() && !png_output)
             arguments << "--constant-frame-rate";
+        if (active_backend == acmx2::Backend::Acmxvk &&
+            encode_fill_pts_gaps && !png_output)
+            arguments << "--fill-pts-gaps";
     }
     const bool sourceAudioActive =
         active_backend == acmx2::Backend::Acmxvk && !video_file.isEmpty() &&
@@ -5200,6 +5206,9 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         if (active_backend == acmx2::Backend::Acmxvk &&
             encode_constant_frame_rate && !video_file.isEmpty() && !png_output)
             arguments << "--constant-frame-rate";
+        if (active_backend == acmx2::Backend::Acmxvk &&
+            encode_fill_pts_gaps && !png_output)
+            arguments << "--fill-pts-gaps";
     }
     arguments << "--shader-file" << launchShaderName;
 

@@ -125,6 +125,12 @@ Interface version 2.137.0 includes the current ACMXVK integration increments:
   and **Use Source Audio** controls. They are enabled only for compatible input
   modes and emit `--maximize-fps`, `--use-source-fps`, and
   `--use-source-audio` respectively.
+- ACMXVK video encoding settings include **Fill PTS Gaps
+  (Editing-compatible CFR)** for camera and video sources. It preserves the
+  real media timeline while duplicating the preceding rendered frame into
+  missing nominal frame slots, producing constant-rate files for editors such
+  as Kdenlive without a separate transcode. It is mutually exclusive with the
+  shorter, sequential **Constant Frame Rate** mode.
 - With the ACMXVK backend selected, the Settings dialog obtains camera names,
   native formats, resolutions, and FPS choices from ACMXVK's
   `--list-camera-devices` and `--enumerate-device` probes. ACMX2 selection

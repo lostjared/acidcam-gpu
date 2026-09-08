@@ -601,6 +601,8 @@ steps above. ACMX2's high-frame-rate path requires the current `libmx2`
 | | `--list-encoder-options` | `<name>` | List FFmpeg AVOptions exposed by one encoder |
 | | `--encode-realtime` | | Enable low-latency realtime encoding flags |
 | | `--no-drop` | | Video-file/graphics processing: never drop frames and pace processing to encoder throughput; ignored in webcam mode |
+| | `--constant-frame-rate` | | Give rendered video frames consecutive timestamps; output duration follows the rendered frame count |
+| | `--fill-pts-gaps` | | Preserve video/camera timeline duration while duplicating held frames into missing slots for editing-compatible CFR output |
 | | `--use-watermark` | `<text>` | Embed a text watermark (upper-left) into recorded video |
 | | `--use-watermark-color` | `<r,g,b>` | Watermark text color as 0-255 RGB components (default: `255,0,150`) |
 | | `--display-filter` | | Show active shader/stack/GPU filter in upper-left corner of window and recording |

@@ -269,6 +269,8 @@ namespace acmxvk {
             std::chrono::steady_clock::now();
         double crossfade_start_video_timeline = 0.0;
         std::uint64_t output_frame_count = 0;
+        std::uint64_t gap_fill_next_pts = 0;
+        std::uint64_t gap_fill_duplicate_count = 0;
         std::uint64_t decoded_video_frame_count = 0;
         std::uint64_t video_source_frame_count = 0;
         std::uint64_t recording_frame_pts = 0;
@@ -282,6 +284,9 @@ namespace acmxvk {
         std::uint64_t camera_fps_frame_count = 0;
         double hud_display_fps = 0.0;
         std::deque<ReadbackRequest> readback_requests;
+        std::vector<std::uint8_t> gap_fill_previous_rgba;
+        std::vector<std::uint16_t> gap_fill_previous_rgba16;
+        bool gap_fill_previous_valid = false;
         std::chrono::steady_clock::time_point hud_session_start{
             std::chrono::steady_clock::now()};
         std::chrono::steady_clock::time_point hud_fps_last_tick{

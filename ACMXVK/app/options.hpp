@@ -104,6 +104,7 @@ namespace acmxvk {
         bool encode_realtime = false;
         bool no_drop = false;
         bool constant_frame_rate = false;
+        bool fill_pts_gaps = false;
         bool copy_audio = false;
         bool mute_output = false;
         bool enable_audio = false;

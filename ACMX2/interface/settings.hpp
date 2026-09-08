@@ -143,6 +143,8 @@ class SettingsWindow : public QDialog {
     bool isEncodeNoDrop() const;
     /// @return True if sequential constant-frame-rate encoding is enabled.
     bool isEncodeConstantFrameRate() const;
+    /// @return True if source PTS gaps should be filled with held frames.
+    bool isEncodeFillPtsGaps() const;
   private slots:
     void acceptSettings();
     void rejectSettings();
@@ -243,6 +245,7 @@ class SettingsWindow : public QDialog {
     QCheckBox *encodeRealtimeCheckBox = nullptr;
     QCheckBox *encodeNoDropCheckBox = nullptr;
     QCheckBox *encodeConstantFrameRateCheckBox = nullptr;
+    QCheckBox *encodeFillPtsGapsCheckBox = nullptr;
     QCheckBox *writePngCheckBox = nullptr;
     QCheckBox *generateCheckBox = nullptr;
     QSpinBox *generateIntervalSpinBox = nullptr;

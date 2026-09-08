@@ -242,7 +242,12 @@ namespace acmxvk {
         if (writer.is_open()) {
             writer.close();
             std::cout << "acmxvk: recording closed after " << output_frame_count
-                      << " frames\n";
+                      << " rendered frames";
+            if (options.fill_pts_gaps) {
+                std::cout << " (" << gap_fill_duplicate_count
+                          << " held-frame duplicates added)";
+            }
+            std::cout << '\n';
         }
         if (options.png_output) {
             std::cout << "acmxvk: PNG sequence closed after " << png_frame_count
@@ -4531,7 +4536,8 @@ namespace acmxvk {
             encode_options.codec = options.encode_codec;
             encode_options.ffmpeg_options = options.encode_params;
             encode_options.realtime = options.encode_realtime;
-            encode_options.block_when_full = options.no_drop;
+            encode_options.block_when_full =
+                options.no_drop || options.fill_pts_gaps;
             hdr_output_enabled = hdr_transfer_processing_enabled;
             if (hdr_output_enabled) {
                 if ((recording_width & 1) != 0 ||
@@ -4571,7 +4577,7 @@ namespace acmxvk {
                 throw std::runtime_error("unable to open output video: " +
                                          options.output_file);
             }
-            writer.set_block_when_full(options.no_drop);
+            writer.set_block_when_full(options.no_drop || options.fill_pts_gaps);
             std::cout << "acmxvk: recording " << recording_width << 'x'
                       << recording_height << " at " << recording_fps << " FPS to "
                       << options.output_file
@@ -4580,6 +4586,11 @@ namespace acmxvk {
                 std::cout
                     << "acmxvk: constant-frame-rate encoding active; rendered "
                        "video frames use sequential output timestamps\n";
+            }
+            if (options.fill_pts_gaps) {
+                std::cout
+                    << "acmxvk: PTS gap filling active; held frames will be "
+                       "duplicated for editing-compatible constant frame rate\n";
             }
             if (options.mute_output) {
                 std::cout
@@ -4682,25 +4693,71 @@ namespace acmxvk {
         }
 
         if (writer.is_open()) {
-            if (hdr_output_enabled) {
-                if (hdr_output_pixels == nullptr) {
-                    throw std::runtime_error(
-                        "HDR Main10 recording did not receive an RGBA16 "
-                        "Vulkan readback");
+            if (hdr_output_enabled && hdr_output_pixels == nullptr) {
+                throw std::runtime_error(
+                    "HDR Main10 recording did not receive an RGBA16 "
+                    "Vulkan readback");
+            }
+
+            const auto write_sequential_frame =
+                [this](std::uint8_t *rgba_pixels,
+                       const std::uint16_t *rgba16_pixels) {
+                    if (hdr_output_enabled) {
+                        writer.write_hdr_rgba16(
+                            const_cast<std::uint16_t *>(rgba16_pixels));
+                    } else {
+                        writer.write(rgba_pixels);
+                    }
+                };
+
+            if (options.fill_pts_gaps && request.has_pts &&
+                request.pts >= gap_fill_next_pts) {
+                while (gap_fill_next_pts < request.pts) {
+                    if (gap_fill_previous_valid) {
+                        write_sequential_frame(
+                            gap_fill_previous_rgba.data(),
+                            hdr_output_enabled
+                                ? gap_fill_previous_rgba16.data()
+                                : nullptr);
+                    } else {
+                        write_sequential_frame(output_pixels,
+                                               hdr_output_pixels);
+                    }
+                    ++gap_fill_next_pts;
+                    ++gap_fill_duplicate_count;
                 }
-                if (request.has_pts) {
-                    writer.write_hdr_rgba16_at_pts(
-                        const_cast<std::uint16_t *>(hdr_output_pixels),
-                        static_cast<std::int64_t>(request.pts));
+                write_sequential_frame(output_pixels, hdr_output_pixels);
+                gap_fill_next_pts = request.pts + 1;
+
+                const std::size_t pixel_count =
+                    static_cast<std::size_t>(recording_width) *
+                    static_cast<std::size_t>(recording_height) * 4U;
+                if (hdr_output_enabled) {
+                    gap_fill_previous_rgba16.assign(
+                        hdr_output_pixels, hdr_output_pixels + pixel_count);
                 } else {
-                    writer.write_hdr_rgba16(
-                        const_cast<std::uint16_t *>(hdr_output_pixels));
+                    gap_fill_previous_rgba.assign(output_pixels,
+                                                  output_pixels + pixel_count);
                 }
-            } else if (request.has_pts) {
-                writer.write_at_pts(output_pixels,
-                                    static_cast<std::int64_t>(request.pts));
-            } else {
-                writer.write(output_pixels);
+                gap_fill_previous_valid = true;
+            } else if (options.fill_pts_gaps && !request.has_pts) {
+                write_sequential_frame(output_pixels, hdr_output_pixels);
+            } else if (!options.fill_pts_gaps) {
+                if (hdr_output_enabled) {
+                    if (request.has_pts) {
+                        writer.write_hdr_rgba16_at_pts(
+                            const_cast<std::uint16_t *>(hdr_output_pixels),
+                            static_cast<std::int64_t>(request.pts));
+                    } else {
+                        writer.write_hdr_rgba16(
+                            const_cast<std::uint16_t *>(hdr_output_pixels));
+                    }
+                } else if (request.has_pts) {
+                    writer.write_at_pts(
+                        output_pixels, static_cast<std::int64_t>(request.pts));
+                } else {
+                    writer.write(output_pixels);
+                }
             }
         }
         if (options.png_output) {

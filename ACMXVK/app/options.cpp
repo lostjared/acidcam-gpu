@@ -1058,6 +1058,8 @@ namespace acmxvk {
             } else if (option == "--constant-frame-rate" ||
                        option == "--sequential-encode") {
                 options.constant_frame_rate = true;
+            } else if (option == "--fill-pts-gaps") {
+                options.fill_pts_gaps = true;
             } else if (option == "--display-filter") {
                 options.display_filter = true;
             } else if (option == "--disable-counter") {
@@ -1267,6 +1269,15 @@ namespace acmxvk {
              options.png_output)) {
             throw std::runtime_error(
                 "--constant-frame-rate requires video input and encoded output");
+        }
+        if (options.fill_pts_gaps &&
+            (options.output_file.empty() || options.png_output)) {
+            throw std::runtime_error(
+                "--fill-pts-gaps requires encoded video output");
+        }
+        if (options.fill_pts_gaps && options.constant_frame_rate) {
+            throw std::runtime_error(
+                "--fill-pts-gaps and --constant-frame-rate are mutually exclusive");
         }
         if (options.copy_audio &&
             (options.input_file.empty() || options.output_file.empty() ||
@@ -1527,6 +1538,7 @@ namespace acmxvk {
                << "      --no-drop               Block when the encoder queue is full\n"
                << "      --constant-frame-rate   Encode rendered video frames sequentially\n"
                << "      --sequential-encode     Alias for --constant-frame-rate\n"
+               << "      --fill-pts-gaps         Duplicate held frames for editing-compatible CFR\n"
                << "      --display-filter        Show active shader/filter details\n"
                << "      --disable-counter       Hide the shader/timer/FPS HUD at startup\n"
                << "      --use-watermark <text>  Show a text watermark in the upper-left\n"

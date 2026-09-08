@@ -1127,6 +1127,15 @@ void SettingsWindow::init() {
             "Video mode: encode rendered frames with consecutive output "
             "timestamps instead of source-timeline PTS "
             "(--constant-frame-rate).");
+        encodeFillPtsGapsCheckBox =
+            new QCheckBox("Fill PTS Gaps (Editing-compatible CFR)", this);
+        encodeFillPtsGapsCheckBox->setChecked(
+            encSettings.value("recording/fill_pts_gaps", false).toBool());
+        encodeFillPtsGapsCheckBox->setToolTip(
+            "Preserve the real recording timeline while duplicating the "
+            "previous rendered frame into missing timestamp slots. This "
+            "produces constant-rate output suitable for quick editing "
+            "without a later transcode (--fill-pts-gaps).");
     }
 
     // ── Input Source group ────────────────────────────────────────────
@@ -1211,6 +1220,9 @@ void SettingsWindow::init() {
     if (encodeConstantFrameRateCheckBox) {
         encodingGrid->addWidget(encodeConstantFrameRateCheckBox, ++r, 0, 1,
                                 2);
+    }
+    if (encodeFillPtsGapsCheckBox) {
+        encodingGrid->addWidget(encodeFillPtsGapsCheckBox, ++r, 0, 1, 2);
     }
 
     // ── Playback group ────────────────────────────────────────────────
@@ -1476,13 +1488,16 @@ void SettingsWindow::init() {
     });
 
     const auto updateConstantFrameRateControl = [this] {
-        if (!encodeConstantFrameRateCheckBox) {
+        if (!encodeConstantFrameRateCheckBox || !encodeFillPtsGapsCheckBox) {
             return;
         }
+        const bool encodedOutput = saveOutputVideoCheckBox->isChecked() &&
+                                   !writePngCheckBox->isChecked();
+        const bool timelineInput = inputVideoOptionRadioButton->isChecked() ||
+                                   cameraOptionRadioButton->isChecked();
         encodeConstantFrameRateCheckBox->setEnabled(
-            inputVideoOptionRadioButton->isChecked() &&
-            saveOutputVideoCheckBox->isChecked() &&
-            !writePngCheckBox->isChecked());
+            inputVideoOptionRadioButton->isChecked() && encodedOutput);
+        encodeFillPtsGapsCheckBox->setEnabled(timelineInput && encodedOutput);
     };
     if (encodeConstantFrameRateCheckBox) {
         connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this,
@@ -1496,6 +1511,16 @@ void SettingsWindow::init() {
         connect(writePngCheckBox, &QCheckBox::toggled, this,
                 [updateConstantFrameRateControl](bool) {
                     updateConstantFrameRateControl();
+                });
+        connect(encodeConstantFrameRateCheckBox, &QCheckBox::toggled, this,
+                [this](bool checked) {
+                    if (checked && encodeFillPtsGapsCheckBox)
+                        encodeFillPtsGapsCheckBox->setChecked(false);
+                });
+        connect(encodeFillPtsGapsCheckBox, &QCheckBox::toggled, this,
+                [this](bool checked) {
+                    if (checked && encodeConstantFrameRateCheckBox)
+                        encodeConstantFrameRateCheckBox->setChecked(false);
                 });
     }
 
@@ -2055,6 +2080,11 @@ bool SettingsWindow::isEncodeConstantFrameRate() const {
            encodeConstantFrameRateCheckBox->isChecked();
 }
 
+bool SettingsWindow::isEncodeFillPtsGaps() const {
+    return encodeFillPtsGapsCheckBox && encodeFillPtsGapsCheckBox->isEnabled() &&
+           encodeFillPtsGapsCheckBox->isChecked();
+}
+
 QString SettingsWindow::getCameraName(int device_index) {
     if (activeBackend == acmx2::Backend::Acmxvk) {
         for (int index = 0; index < cameraIndexComboBox->count(); ++index) {
@@ -2253,6 +2283,9 @@ void SettingsWindow::acceptSettings() {
     if (encodeConstantFrameRateCheckBox)
         encSettings.setValue("recording/constant_frame_rate",
                              encodeConstantFrameRateCheckBox->isChecked());
+    if (encodeFillPtsGapsCheckBox)
+        encSettings.setValue("recording/fill_pts_gaps",
+                             encodeFillPtsGapsCheckBox->isChecked());
 
     accept();
 }
