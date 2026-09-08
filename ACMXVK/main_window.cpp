@@ -3045,7 +3045,14 @@ namespace acmxvk {
                   << playlist_shader_count(playlist) << " shaders in "
                   << playlist.size() << " nodes from "
                   << options.playlist_file << '\n';
-        logSelectedPlaylistNode("selected");
+        if (options.enable_random_autopilot && !playlist.empty()) {
+            std::uniform_int_distribution<std::size_t> distribution(
+                0, playlist.size() - 1);
+            playlist_index = distribution(autopilot_rng);
+            logSelectedPlaylistNode("randomly selected initial");
+        } else {
+            logSelectedPlaylistNode("selected");
+        }
     }
     // Resource resolution, HUD/watermark drawing, and DNN overlays.
     void MainWindow::resolveConfiguredResourcePaths() {

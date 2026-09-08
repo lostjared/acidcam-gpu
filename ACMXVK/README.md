@@ -1367,10 +1367,11 @@ the countdown, while source frames discarded to catch up during
 rendered frames as before.
 
 Use `--enable-random-autopilot` with `--playlist` and `--enable-playlist` to
-start the same random playlist-node mode normally toggled with `J`. Set a fixed
-change interval with `--autopilot-frames N`, or use `--autopilot-random N` for
-a randomized interval. If neither interval option is supplied, random
-autopilot changes nodes every 300 frames.
+start the same random playlist-node mode normally toggled with `J`. The initial
+node is selected randomly at startup instead of beginning with the first
+playlist entry. Set a fixed change interval with `--autopilot-frames N`, or use
+`--autopilot-random N` for a randomized interval. If neither interval option is
+supplied, random autopilot changes nodes every 300 frames.
 
 The bundled set matches ACMX2: linear, block, wipe, radial, pixelate,
 dissolve, swirl, glitch, diamond, burn, fade-to-black, fade-to-white, four
