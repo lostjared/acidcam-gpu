@@ -53,12 +53,14 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <future>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -329,6 +331,12 @@ namespace acmxvk {
 #endif
 #ifdef ACMXVK_WITH_STABLE_DIFFUSION
         std::unique_ptr<stable_diffusion::Server> stable_diffusion_server;
+        std::future<std::unique_ptr<stable_diffusion::Server>>
+            stable_diffusion_initialization;
+        std::shared_ptr<std::atomic_bool> stable_diffusion_cancelled =
+            std::make_shared<std::atomic_bool>(false);
+        bool stable_diffusion_initialization_pending = false;
+        bool stable_diffusion_initial_frame_deferred = false;
 #endif
 #ifdef ACMXVK_WITH_MXVK_CUDA
         cv::cuda::GpuMat cuda_input_rgba;
@@ -382,6 +390,8 @@ namespace acmxvk {
         void initializeDnn();
         void initializeDeepDream();
         void initializeStableDiffusion();
+        [[nodiscard]] bool pollStableDiffusionInitialization();
+        void cancelStableDiffusionInitialization() noexcept;
         void applyStableDiffusionEffect(cv::Mat &rgba);
         void initializeGpuFilters();
         void selectGpuFilter(int direction);

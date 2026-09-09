@@ -416,6 +416,7 @@ class MainWindow : public QMainWindow {
     bool autopilot_random = false;
     QAction *playlistAction;
     QString stderrBuffer;
+    QString stdoutBuffer;
     /// @brief True while an ACMX2 cache rebuild or ACMXVK source build is running.
     bool cacheBuildInProgress = false;
     PendingAcmxvkAction pending_acmxvk_action = PendingAcmxvkAction::None;

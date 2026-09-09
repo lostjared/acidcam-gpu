@@ -10,6 +10,7 @@
 #include <chrono>
 #include <csignal>
 #include <cstring>
+#include <fcntl.h>
 #include <iostream>
 #include <limits>
 #include <spawn.h>
@@ -267,8 +268,35 @@ namespace acmxvk::stable_diffusion {
             const_cast<char *>("--diffusion-conv-direct"),
             const_cast<char *>("--vae-conv-direct"), nullptr};
         pid_t child = -1;
-        const int result = posix_spawnp(&child, executable.c_str(), nullptr,
+        posix_spawn_file_actions_t file_actions;
+        posix_spawn_file_actions_t *actions = nullptr;
+        if (settings.quiet) {
+            const int init_result =
+                posix_spawn_file_actions_init(&file_actions);
+            if (init_result != 0) {
+                throw std::runtime_error(
+                    "unable to configure sd-server output: " +
+                    std::string(std::strerror(init_result)));
+            }
+            actions = &file_actions;
+            const int stdout_result = posix_spawn_file_actions_addopen(
+                actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+            const int stderr_result = posix_spawn_file_actions_addopen(
+                actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+            if (stdout_result != 0 || stderr_result != 0) {
+                posix_spawn_file_actions_destroy(actions);
+                const int error =
+                    stdout_result != 0 ? stdout_result : stderr_result;
+                throw std::runtime_error(
+                    "unable to redirect sd-server output: " +
+                    std::string(std::strerror(error)));
+            }
+        }
+        const int result = posix_spawnp(&child, executable.c_str(), actions,
                                         nullptr, arguments.data(), environ);
+        if (actions != nullptr) {
+            posix_spawn_file_actions_destroy(actions);
+        }
         if (result != 0) {
             throw std::runtime_error("unable to launch sd-server: " +
                                      std::string(std::strerror(result)));

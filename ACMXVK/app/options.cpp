@@ -819,6 +819,9 @@ namespace acmxvk {
             } else if (option == "--sd-upscale") {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_upscale = true;
+            } else if (option == "--sd-quiet") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_quiet = true;
             } else if (option == "--probe-hdr") {
                 options.probe_hdr_file =
                     optionValue(index, argc, argv, option);
@@ -1636,6 +1639,7 @@ namespace acmxvk {
                << "      --sd-server-port <N>    Local server port (default 1234)\n"
                << "      --sd-after-shaders      Preserve shader-chain-then-SD ordering\n"
                << "      --sd-upscale            High-quality compute upscale before shaders\n"
+               << "      --sd-quiet              Suppress verbose sd-server output\n"
                << "                              Encoded output implies CFR and no-drop\n"
                << "                              Output feeds the Vulkan shader chain\n\n"
                << "Shaders:\n"

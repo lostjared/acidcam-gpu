@@ -199,6 +199,7 @@ namespace acmxvk {
     }
 
     MainWindow::~MainWindow() {
+        cancelStableDiffusionInitialization();
         interface_client.close();
         latest_camera_frame.stop();
         try {
@@ -892,9 +893,9 @@ namespace acmxvk {
     }
 
     void MainWindow::proc() {
-        if (options.headless && HEADLESS_SHUTDOWN_REQUESTED != 0) {
+        if (HEADLESS_SHUTDOWN_REQUESTED != 0) {
             if (!headless_shutdown_logged) {
-                std::cout << "acmxvk: Ctrl+C received; draining rendered "
+                std::cout << "acmxvk: shutdown requested; draining rendered "
                              "frames and closing output\n";
                 headless_shutdown_logged = true;
             }
@@ -903,6 +904,10 @@ namespace acmxvk {
             return;
         }
         if (recording_complete) {
+            return;
+        }
+
+        if (!pollStableDiffusionInitialization()) {
             return;
         }
 
@@ -1160,11 +1165,44 @@ namespace acmxvk {
         settings.strength = options.stable_diffusion_strength;
         settings.cfg_scale = options.stable_diffusion_cfg_scale;
         settings.resize_to_input = !options.stable_diffusion_upscale;
-        settings.cancelled = [] {
-            return HEADLESS_SHUTDOWN_REQUESTED != 0;
+        settings.quiet = options.stable_diffusion_quiet;
+        const std::shared_ptr<std::atomic_bool> cancelled =
+            stable_diffusion_cancelled;
+        settings.cancelled = [cancelled] {
+            return cancelled->load(std::memory_order_relaxed) ||
+                   HEADLESS_SHUTDOWN_REQUESTED != 0;
         };
-        stable_diffusion_server =
-            std::make_unique<stable_diffusion::Server>(std::move(settings));
+        std::cout << "acmxvk: loading Stable Diffusion model asynchronously; "
+                     "the preview will begin when the model is ready\n";
+        stable_diffusion_initialization = std::async(
+            std::launch::async, [settings = std::move(settings)]() mutable {
+                return std::make_unique<stable_diffusion::Server>(
+                    std::move(settings));
+            });
+        stable_diffusion_initialization_pending = true;
+#endif
+    }
+
+    bool MainWindow::pollStableDiffusionInitialization() {
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+        if (!stable_diffusion_initialization_pending) {
+            return true;
+        }
+        if (stable_diffusion_initialization.wait_for(
+                std::chrono::seconds(0)) != std::future_status::ready) {
+            return false;
+        }
+        stable_diffusion_server = stable_diffusion_initialization.get();
+        stable_diffusion_initialization_pending = false;
+        if (stable_diffusion_initial_frame_deferred) {
+            stable_diffusion_initial_frame_deferred = false;
+            if (!readTrackedInputFrame()) {
+                throw std::runtime_error(
+                    "capture did not provide an initial frame after Stable "
+                    "Diffusion startup");
+            }
+            initial_frame_pending = true;
+        }
         if (options.stable_diffusion_after_shaders) {
             std::cout
                 << "acmxvk: Stable Diffusion frame processing enabled after "
@@ -1180,6 +1218,26 @@ namespace acmxvk {
                         ? "; windowed preview mode\n"
                         : "; MXWrite CFR output enabled\n");
         }
+        return true;
+#else
+        return true;
+#endif
+    }
+
+    void MainWindow::cancelStableDiffusionInitialization() noexcept {
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+        stable_diffusion_cancelled->store(true, std::memory_order_relaxed);
+        if (!stable_diffusion_initialization.valid()) {
+            return;
+        }
+        try {
+            std::unique_ptr<stable_diffusion::Server> pending_server =
+                stable_diffusion_initialization.get();
+        } catch (const std::exception &error) {
+            std::cerr << "acmxvk: Stable Diffusion startup stopped: "
+                      << error.what() << '\n';
+        }
+        stable_diffusion_initialization_pending = false;
 #endif
     }
 
@@ -5021,7 +5079,12 @@ namespace acmxvk {
 
         initializeModel();
 
-        if (source_kind == SourceKind::Graphic) {
+#ifdef ACMXVK_WITH_STABLE_DIFFUSION
+        if (stable_diffusion_initialization_pending) {
+            stable_diffusion_initial_frame_deferred = true;
+        } else
+#endif
+            if (source_kind == SourceKind::Graphic) {
             initial_frame_pending = false;
             uploadInputFrame(graphic_rgba);
             updateHumanOverlayTexture();

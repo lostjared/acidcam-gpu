@@ -16,10 +16,27 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
+
+namespace {
+    constexpr int STABLE_DIMENSION_STEP = 64;
+    constexpr int STABLE_DIMENSION_MINIMUM = 64;
+    constexpr int STABLE_DIMENSION_MAXIMUM = 2048;
+
+    int nearest_stable_dimension(double value) {
+        const int steps = static_cast<int>(
+            std::lround(value / STABLE_DIMENSION_STEP));
+        return std::clamp(steps * STABLE_DIMENSION_STEP,
+                          STABLE_DIMENSION_MINIMUM,
+                          STABLE_DIMENSION_MAXIMUM);
+    }
+} // namespace
 
 StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     : QDialog(parent) {
@@ -46,10 +63,16 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     width_spin_box->setRange(64, 2048);
     width_spin_box->setSingleStep(64);
     width_spin_box->setSuffix(" px");
+    width_spin_box->setToolTip(
+        "Changing width automatically updates height while preserving the "
+        "current aspect ratio.");
     height_spin_box = new QSpinBox(this);
     height_spin_box->setRange(64, 2048);
     height_spin_box->setSingleStep(64);
     height_spin_box->setSuffix(" px");
+    height_spin_box->setToolTip(
+        "Changing height automatically updates width while preserving the "
+        "current aspect ratio.");
     steps_spin_box = new QSpinBox(this);
     steps_spin_box->setRange(1, 150);
     strength_spin_box = new QDoubleSpinBox(this);
@@ -139,6 +162,12 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     load_ui_state();
+    aspect_ratio = static_cast<double>(width_spin_box->value()) /
+                   static_cast<double>(height_spin_box->value());
+    connect(width_spin_box, qOverload<int>(&QSpinBox::valueChanged), this,
+            &StableDiffusionSettingsDialog::update_height_from_width);
+    connect(height_spin_box, qOverload<int>(&QSpinBox::valueChanged), this,
+            &StableDiffusionSettingsDialog::update_width_from_height);
     update_enabled_state();
     acmx2::applyCustomStyleIfEnabled(this);
 }
@@ -187,6 +216,24 @@ void StableDiffusionSettingsDialog::browse_server() {
     if (!filename.isEmpty()) {
         server_edit->setText(QFileInfo(filename).absoluteFilePath());
     }
+}
+
+void StableDiffusionSettingsDialog::update_height_from_width(int width) {
+    if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0) {
+        return;
+    }
+    const QSignalBlocker blocker(height_spin_box);
+    height_spin_box->setValue(
+        nearest_stable_dimension(static_cast<double>(width) / aspect_ratio));
+}
+
+void StableDiffusionSettingsDialog::update_width_from_height(int height) {
+    if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0) {
+        return;
+    }
+    const QSignalBlocker blocker(width_spin_box);
+    width_spin_box->setValue(
+        nearest_stable_dimension(static_cast<double>(height) * aspect_ratio));
 }
 
 void StableDiffusionSettingsDialog::apply_settings() {

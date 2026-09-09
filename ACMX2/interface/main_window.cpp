@@ -72,6 +72,47 @@
 namespace {
     constexpr int RECENT_LIBRARY_LIMIT = 10;
 
+    bool take_process_output_line(QString &buffer, QString &line) {
+        const qsizetype newline = buffer.indexOf('\n');
+        const qsizetype carriage = buffer.indexOf('\r');
+        qsizetype separator = newline;
+        if (separator < 0 || (carriage >= 0 && carriage < separator)) {
+            separator = carriage;
+        }
+        if (separator < 0) {
+            return false;
+        }
+
+        line = buffer.left(separator);
+        qsizetype consumed = 1;
+        if (buffer.at(separator) == QLatin1Char('\r') &&
+            separator + 1 < buffer.size() &&
+            buffer.at(separator + 1) == QLatin1Char('\n')) {
+            consumed = 2;
+        }
+        buffer.remove(0, separator + consumed);
+        return true;
+    }
+
+    bool is_stable_diffusion_diagnostic(const QString &line) {
+        QString normalized = line;
+        static const QRegularExpression ANSI_ESCAPE(
+            QStringLiteral("\\x1b\\[[0-9;?]*[ -/]*[@-~]"));
+        normalized.remove(ANSI_ESCAPE);
+        normalized = normalized.trimmed();
+        if (normalized.startsWith("[INFO ]") ||
+            normalized.startsWith("[DEBUG]") ||
+            normalized.startsWith("[TRACE]")) {
+            return true;
+        }
+        if (normalized.startsWith(QLatin1Char('|')) &&
+            normalized.contains(QRegularExpression(
+                QStringLiteral("\\d+\\s*/\\s*\\d+")))) {
+            return true;
+        }
+        return false;
+    }
+
     QString shellQuote(const QString &value) {
 #ifdef _WIN32
         if (value.isEmpty()) {
@@ -155,15 +196,14 @@ namespace {
         QStringList envAssignments;
         QString uid = QString::number(getuid());
         QString userRunPath = "/run/user/" + uid;
-        // Only force the X11 backend when an X server is actually reachable.
-        // On Wayland-only sessions (no XWayland) forcing x11 makes SDL fail with
-        // "'x11' not available". Leave SDL to auto-detect in that case.
         QByteArray display = qgetenv("DISPLAY");
         QByteArray waylandDisplay = qgetenv("WAYLAND_DISPLAY");
         QByteArray sessionType = qgetenv("XDG_SESSION_TYPE");
-        if (!display.isEmpty()) {
+        if (!waylandDisplay.isEmpty() && sessionType == "wayland") {
+            envAssignments << "SDL_VIDEODRIVER=wayland";
+        } else if (!display.isEmpty()) {
             envAssignments << "SDL_VIDEODRIVER=x11";
-        } else if (!waylandDisplay.isEmpty() || sessionType == "wayland") {
+        } else if (!waylandDisplay.isEmpty()) {
             envAssignments << "SDL_VIDEODRIVER=wayland";
         }
         if (QDir(userRunPath).exists()) {
@@ -627,26 +667,38 @@ void MainWindow::initControls() {
     connect(process, &QProcess::stateChanged, this, updateShaderMenuState);
     updateShaderMenuState(process->state());
     connect(process, &QProcess::readyReadStandardOutput, this, [this]() {
-        QString output = process->readAllStandardOutput();
-        output.replace("\n", "<br>");
-        this->Write(output);
+        stdoutBuffer +=
+            QString::fromLocal8Bit(process->readAllStandardOutput());
+        QString line;
+        while (take_process_output_line(stdoutBuffer, line)) {
+            if (active_backend == acmx2::Backend::Acmxvk &&
+                stable_diffusion_enabled &&
+                is_stable_diffusion_diagnostic(line)) {
+                continue;
+            }
+            this->Write(line + "<br>");
+        }
     });
 
     connect(process, &QProcess::readyReadStandardError, this, [this]() {
         auto writeStderrLine = [this](const QString &line) {
             if (line.contains("GStreamer"))
                 return;
-            if (line.contains("[ WARN:"))
+            if (active_backend == acmx2::Backend::Acmxvk &&
+                stable_diffusion_enabled &&
+                is_stable_diffusion_diagnostic(line)) {
+                return;
+            }
+            if (line.contains("[ WARN:") || line.contains("[WARN "))
                 this->Write("<b style='color:#ccaa00;'>Warning:</b> " + line + "<br>");
             else
                 this->Write("<b style='color:red;'>Error:</b> " + line + "<br>");
         };
 
-        stderrBuffer += process->readAllStandardError();
-        int idx;
-        while ((idx = stderrBuffer.indexOf('\n')) != -1) {
-            QString line = stderrBuffer.left(idx);
-            stderrBuffer.remove(0, idx + 1);
+        stderrBuffer +=
+            QString::fromLocal8Bit(process->readAllStandardError());
+        QString line;
+        while (take_process_output_line(stderrBuffer, line)) {
             writeStderrLine(line);
         }
         if (stderrBuffer.size() > 4096) {
@@ -659,13 +711,25 @@ void MainWindow::initControls() {
             static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
             this,
             [this](int exitCode, QProcess::ExitStatus exitStatus) {
-                if (!stderrBuffer.isEmpty() && !stderrBuffer.contains("GStreamer")) {
-                    if (stderrBuffer.contains("[ WARN:"))
+                if (!stdoutBuffer.isEmpty() &&
+                    !(active_backend == acmx2::Backend::Acmxvk &&
+                      stable_diffusion_enabled &&
+                      is_stable_diffusion_diagnostic(stdoutBuffer))) {
+                    this->Write(stdoutBuffer + "<br>");
+                }
+                stdoutBuffer.clear();
+                if (!stderrBuffer.isEmpty() &&
+                    !stderrBuffer.contains("GStreamer") &&
+                    !(active_backend == acmx2::Backend::Acmxvk &&
+                      stable_diffusion_enabled &&
+                      is_stable_diffusion_diagnostic(stderrBuffer))) {
+                    if (stderrBuffer.contains("[ WARN:") ||
+                        stderrBuffer.contains("[WARN "))
                         this->Write("<b style='color:#ccaa00;'>Warning:</b> " + stderrBuffer + "<br>");
                     else
                         this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
-                    stderrBuffer.clear();
                 }
+                stderrBuffer.clear();
                 QString text;
                 QTextStream stream(&text);
                 stream << acmx2::backend_name(active_backend)
@@ -4561,6 +4625,7 @@ void MainWindow::appendStableDiffusionArguments(
     arguments << "--sd-seed" << QString::number(stable_diffusion_seed);
     arguments << "--sd-sampler" << stable_diffusion_sampler;
     arguments << "--sd-scheduler" << stable_diffusion_scheduler;
+    arguments << "--sd-quiet";
     if (stable_diffusion_upscale) {
         arguments << "--sd-upscale";
     }
@@ -4921,23 +4986,12 @@ void MainWindow::runSelected() {
 
 #ifdef __linux__
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    QString uid = QString::number(getuid());
-    QString user_run_path = "/run/user/" + uid;
-    // Only force x11 when DISPLAY is set; on Wayland-only sessions the x11
-    // SDL backend is not available and SDL would error out.
-    QByteArray display = qgetenv("DISPLAY");
-    QByteArray waylandDisplay = qgetenv("WAYLAND_DISPLAY");
-    QByteArray sessionType = qgetenv("XDG_SESSION_TYPE");
-    if (!display.isEmpty()) {
-        env.insert("SDL_VIDEODRIVER", "x11");
-    } else if (!waylandDisplay.isEmpty() || sessionType == "wayland") {
-        env.insert("SDL_VIDEODRIVER", "wayland");
+    for (const QString &entry : defaultLinuxRunEnvAssignments()) {
+        const int equals = entry.indexOf('=');
+        if (equals > 0) {
+            env.insert(entry.left(equals), entry.mid(equals + 1));
+        }
     }
-    if (QDir(user_run_path).exists()) {
-        env.insert("XDG_RUNTIME_DIR", user_run_path);
-        env.insert("PULSE_SERVER", "unix:" + user_run_path + "/pulse/native");
-    }
-    env.insert("vblank_mode", "0");
     process->setProcessEnvironment(env);
 #endif
 

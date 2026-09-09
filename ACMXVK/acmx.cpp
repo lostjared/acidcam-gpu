@@ -245,11 +245,11 @@ int main(int argc, char **argv) {
                        : EXIT_FAILURE;
         }
 
-        if (options.headless &&
-            std::signal(SIGINT, acmxvk::request_headless_shutdown) ==
+        if (std::signal(SIGINT, acmxvk::request_headless_shutdown) == SIG_ERR ||
+            std::signal(SIGTERM, acmxvk::request_headless_shutdown) ==
                 SIG_ERR) {
             throw std::runtime_error(
-                "unable to install Ctrl+C handler for headless mode");
+                "unable to install ACMXVK shutdown signal handlers");
         }
 
 #ifdef ACMXVK_WITH_CUDA

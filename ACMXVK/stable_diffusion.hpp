@@ -24,6 +24,7 @@ namespace acmxvk::stable_diffusion {
         double strength = 0.35;
         double cfg_scale = 5.0;
         bool resize_to_input = true;
+        bool quiet = false;
         std::function<bool()> cancelled;
     };
 
