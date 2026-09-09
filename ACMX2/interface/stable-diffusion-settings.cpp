@@ -14,27 +14,41 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QSettings>
-#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
-#include <algorithm>
-#include <cmath>
 #include <limits>
 
 namespace {
-    constexpr int STABLE_DIMENSION_STEP = 64;
     constexpr int STABLE_DIMENSION_MINIMUM = 64;
     constexpr int STABLE_DIMENSION_MAXIMUM = 2048;
 
-    int nearest_stable_dimension(double value) {
-        const int steps = static_cast<int>(
-            std::lround(value / STABLE_DIMENSION_STEP));
-        return std::clamp(steps * STABLE_DIMENSION_STEP,
-                          STABLE_DIMENSION_MINIMUM,
-                          STABLE_DIMENSION_MAXIMUM);
+    bool parse_stable_resolution(const QString &text, int &width, int &height) {
+        static const QRegularExpression RESOLUTION_PATTERN(
+            QStringLiteral("^\\s*(\\d+)\\s*[xX]\\s*(\\d+)\\s*$"));
+        const QRegularExpressionMatch match = RESOLUTION_PATTERN.match(text);
+        if (!match.hasMatch()) {
+            return false;
+        }
+
+        bool width_ok = false;
+        bool height_ok = false;
+        const int parsed_width = match.captured(1).toInt(&width_ok);
+        const int parsed_height = match.captured(2).toInt(&height_ok);
+        if (!width_ok || !height_ok) {
+            return false;
+        }
+
+        width = parsed_width;
+        height = parsed_height;
+        return true;
+    }
+
+    QString resolution_text(int width, int height) {
+        return QStringLiteral("%1x%2").arg(width).arg(height);
     }
 } // namespace
 
@@ -59,20 +73,18 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     server_port_spin_box = new QSpinBox(this);
     server_port_spin_box->setRange(1024, 65535);
 
-    width_spin_box = new QSpinBox(this);
-    width_spin_box->setRange(64, 2048);
-    width_spin_box->setSingleStep(64);
-    width_spin_box->setSuffix(" px");
-    width_spin_box->setToolTip(
-        "Changing width automatically updates height while preserving the "
-        "current aspect ratio.");
-    height_spin_box = new QSpinBox(this);
-    height_spin_box->setRange(64, 2048);
-    height_spin_box->setSingleStep(64);
-    height_spin_box->setSuffix(" px");
-    height_spin_box->setToolTip(
-        "Changing height automatically updates width while preserving the "
-        "current aspect ratio.");
+    resolution_combo_box = new QComboBox(this);
+    resolution_combo_box->setEditable(true);
+    resolution_combo_box->setInsertPolicy(QComboBox::NoInsert);
+    resolution_combo_box->lineEdit()->setPlaceholderText("WIDTHxHEIGHT");
+    resolution_combo_box->addItems(
+        {"512x512", "576x320", "640x384", "704x448", "768x448",
+         "768x512", "832x512", "896x512", "1024x576", "1024x1024",
+         "1152x640", "1280x768", "1344x768", "1536x896",
+         "1920x1088"});
+    resolution_combo_box->setToolTip(
+        "Choose a preset or enter WIDTHxHEIGHT. Both dimensions must be "
+        "multiples of 64 between 64 and 2048 pixels.");
     steps_spin_box = new QSpinBox(this);
     steps_spin_box->setRange(1, 150);
     strength_spin_box = new QDoubleSpinBox(this);
@@ -111,8 +123,7 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
 
     auto *generation_group = new QGroupBox("Generation", this);
     auto *generation_layout = new QFormLayout(generation_group);
-    generation_layout->addRow("Width:", width_spin_box);
-    generation_layout->addRow("Height:", height_spin_box);
+    generation_layout->addRow("Resolution:", resolution_combo_box);
     generation_layout->addRow("Steps:", steps_spin_box);
     generation_layout->addRow("Denoising strength:", strength_spin_box);
     generation_layout->addRow("CFG scale:", cfg_scale_spin_box);
@@ -162,12 +173,6 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     load_ui_state();
-    aspect_ratio = static_cast<double>(width_spin_box->value()) /
-                   static_cast<double>(height_spin_box->value());
-    connect(width_spin_box, qOverload<int>(&QSpinBox::valueChanged), this,
-            &StableDiffusionSettingsDialog::update_height_from_width);
-    connect(height_spin_box, qOverload<int>(&QSpinBox::valueChanged), this,
-            &StableDiffusionSettingsDialog::update_width_from_height);
     update_enabled_state();
     acmx2::applyCustomStyleIfEnabled(this);
 }
@@ -181,8 +186,8 @@ StableDiffusionSettingsDialog::configuration() const {
     result.negative_prompt = negative_prompt_edit->text().trimmed();
     result.server_executable = server_edit->text().trimmed();
     result.server_port = server_port_spin_box->value();
-    result.width = width_spin_box->value();
-    result.height = height_spin_box->value();
+    parse_stable_resolution(resolution_combo_box->currentText(), result.width,
+                            result.height);
     result.steps = steps_spin_box->value();
     result.strength = strength_spin_box->value();
     result.cfg_scale = cfg_scale_spin_box->value();
@@ -216,24 +221,6 @@ void StableDiffusionSettingsDialog::browse_server() {
     if (!filename.isEmpty()) {
         server_edit->setText(QFileInfo(filename).absoluteFilePath());
     }
-}
-
-void StableDiffusionSettingsDialog::update_height_from_width(int width) {
-    if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0) {
-        return;
-    }
-    const QSignalBlocker blocker(height_spin_box);
-    height_spin_box->setValue(
-        nearest_stable_dimension(static_cast<double>(width) / aspect_ratio));
-}
-
-void StableDiffusionSettingsDialog::update_width_from_height(int height) {
-    if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0) {
-        return;
-    }
-    const QSignalBlocker blocker(width_spin_box);
-    width_spin_box->setValue(
-        nearest_stable_dimension(static_cast<double>(height) * aspect_ratio));
 }
 
 void StableDiffusionSettingsDialog::apply_settings() {
@@ -272,13 +259,27 @@ bool StableDiffusionSettingsDialog::validate_settings() {
                              "Enter sd-server or select its executable.");
         return false;
     }
-    if ((width_spin_box->value() % 64) != 0 ||
-        (height_spin_box->value() % 64) != 0) {
+    int width = 0;
+    int height = 0;
+    if (!parse_stable_resolution(resolution_combo_box->currentText(), width,
+                                 height)) {
         QMessageBox::warning(
-            this, "Invalid Stable Diffusion Size",
-            "The Stable Diffusion width and height must be multiples of 64.");
+            this, "Invalid Stable Diffusion Resolution",
+            "Enter the resolution as WIDTHxHEIGHT, for example 640x384.");
         return false;
     }
+    if (width < STABLE_DIMENSION_MINIMUM ||
+        width > STABLE_DIMENSION_MAXIMUM ||
+        height < STABLE_DIMENSION_MINIMUM ||
+        height > STABLE_DIMENSION_MAXIMUM || (width % 64) != 0 ||
+        (height % 64) != 0) {
+        QMessageBox::warning(
+            this, "Invalid Stable Diffusion Resolution",
+            "Width and height must be multiples of 64 between 64 and 2048 "
+            "pixels.");
+        return false;
+    }
+    resolution_combo_box->setCurrentText(resolution_text(width, height));
     if (sampler_combo_box->currentText().trimmed().isEmpty() ||
         scheduler_combo_box->currentText().trimmed().isEmpty()) {
         QMessageBox::warning(this, "Generation Method Required",
@@ -301,10 +302,20 @@ void StableDiffusionSettingsDialog::load_ui_state() {
         settings.value("stable_diffusion/server", "sd-server").toString());
     server_port_spin_box->setValue(
         settings.value("stable_diffusion/port", 1234).toInt());
-    width_spin_box->setValue(
-        settings.value("stable_diffusion/width", 576).toInt());
-    height_spin_box->setValue(
-        settings.value("stable_diffusion/height", 320).toInt());
+    const int width = settings.value("stable_diffusion/width", 576).toInt();
+    const int height = settings.value("stable_diffusion/height", 320).toInt();
+    const QString saved_resolution = settings
+                                         .value("stable_diffusion/resolution",
+                                                resolution_text(width, height))
+                                         .toString();
+    int saved_width = 0;
+    int saved_height = 0;
+    if (parse_stable_resolution(saved_resolution, saved_width, saved_height)) {
+        resolution_combo_box->setCurrentText(
+            resolution_text(saved_width, saved_height));
+    } else {
+        resolution_combo_box->setCurrentText(resolution_text(width, height));
+    }
     steps_spin_box->setValue(
         settings.value("stable_diffusion/steps", 12).toInt());
     strength_spin_box->setValue(
@@ -333,6 +344,8 @@ void StableDiffusionSettingsDialog::save_ui_state() {
     settings.setValue("stable_diffusion/port", current.server_port);
     settings.setValue("stable_diffusion/width", current.width);
     settings.setValue("stable_diffusion/height", current.height);
+    settings.setValue("stable_diffusion/resolution",
+                      resolution_text(current.width, current.height));
     settings.setValue("stable_diffusion/steps", current.steps);
     settings.setValue("stable_diffusion/strength", current.strength);
     settings.setValue("stable_diffusion/cfg_scale", current.cfg_scale);
@@ -352,8 +365,7 @@ void StableDiffusionSettingsDialog::update_enabled_state() {
     server_edit->setEnabled(enabled);
     browse_server_button->setEnabled(enabled);
     server_port_spin_box->setEnabled(enabled);
-    width_spin_box->setEnabled(enabled);
-    height_spin_box->setEnabled(enabled);
+    resolution_combo_box->setEnabled(enabled);
     steps_spin_box->setEnabled(enabled);
     strength_spin_box->setEnabled(enabled);
     cfg_scale_spin_box->setEnabled(enabled);

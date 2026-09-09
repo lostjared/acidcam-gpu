@@ -42,8 +42,6 @@ class StableDiffusionSettingsDialog : public QDialog {
   private slots:
     void browse_model();
     void browse_server();
-    void update_height_from_width(int width);
-    void update_width_from_height(int height);
     void apply_settings();
     void accept_settings();
 
@@ -61,8 +59,7 @@ class StableDiffusionSettingsDialog : public QDialog {
     QLineEdit *server_edit = nullptr;
     QPushButton *browse_server_button = nullptr;
     QSpinBox *server_port_spin_box = nullptr;
-    QSpinBox *width_spin_box = nullptr;
-    QSpinBox *height_spin_box = nullptr;
+    QComboBox *resolution_combo_box = nullptr;
     QSpinBox *steps_spin_box = nullptr;
     QDoubleSpinBox *strength_spin_box = nullptr;
     QDoubleSpinBox *cfg_scale_spin_box = nullptr;
@@ -70,7 +67,6 @@ class StableDiffusionSettingsDialog : public QDialog {
     QComboBox *sampler_combo_box = nullptr;
     QComboBox *scheduler_combo_box = nullptr;
     QCheckBox *upscale_check_box = nullptr;
-    double aspect_ratio = 16.0 / 9.0;
 };
 
 #endif
