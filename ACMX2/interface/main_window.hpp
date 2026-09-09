@@ -268,10 +268,12 @@ class MainWindow : public QMainWindow {
     /// @brief Build acmx2 command-line arguments from current UI state.
     /// @param arguments Output list to populate with command-line tokens.
     /// @param resume_action Action to resume after an ACMXVK build, if needed.
+    /// @param include_extra_arguments Append the persisted user arguments when true.
     /// @return true if arguments were built, false on user-facing error.
     bool buildRunArguments(
         QStringList &arguments,
-        PendingAcmxvkAction resume_action = PendingAcmxvkAction::None);
+        PendingAcmxvkAction resume_action = PendingAcmxvkAction::None,
+        bool include_extra_arguments = true);
     /// @brief Run ffmpeg to convert the just-produced acmx2 output (assumed
     ///        HLG HDR) into HDR10 (HEVC NVENC, BT.2020 / SMPTE2084) and pipe
     ///        ffmpeg's stdout/stderr to the main log window.
@@ -398,6 +400,7 @@ class MainWindow : public QMainWindow {
     int watermark_g = 0;
     int watermark_b = 150;
     bool display_filter_enabled = false;
+    QString extra_arguments;
     QAction *watermarkAction = nullptr;
     QAction *displayFilterAction = nullptr;
     bool midi_enabled = false;

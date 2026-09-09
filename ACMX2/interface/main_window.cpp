@@ -1570,6 +1570,8 @@ void MainWindow::loadSessionSettings() {
     use_source_audio = use_source_fps &&
                        settings.value("interface/acmxvk_use_source_audio", false)
                            .toBool();
+    extra_arguments =
+        settings.value("interface/extra_arguments", QString()).toString();
 }
 
 void MainWindow::applyMainViewStyles(bool customStyleEnabled) {
@@ -5277,6 +5279,8 @@ void MainWindow::runSelected() {
         arguments << "--display-filter";
     }
 
+    arguments.append(QProcess::splitCommand(extra_arguments));
+
     // ACMX2 single-source mode bypasses its binary cache. ACMXVK uses the
     // selected runtime library and does not accept ACMX2 cache controls.
     Log("shell: " + executable_path + " " + concatList(arguments) + "<br>");
@@ -5290,7 +5294,8 @@ void MainWindow::runSelected() {
 }
 
 bool MainWindow::buildRunArguments(QStringList &arguments,
-                                   PendingAcmxvkAction resume_action) {
+                                   PendingAcmxvkAction resume_action,
+                                   bool include_extra_arguments) {
     QString deep_dream_error;
     if (!validateDeepDreamLaunch(deep_dream_error)) {
         QMessageBox::warning(this, tr("Deep Dream Settings"),
@@ -5661,6 +5666,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         arguments << "--display-filter";
     }
 
+    if (include_extra_arguments) {
+        arguments.append(QProcess::splitCommand(extra_arguments));
+    }
+
     return true;
 }
 
@@ -5813,7 +5822,7 @@ void MainWindow::runAll() {
 
 void MainWindow::copyCommand() {
     QStringList arguments;
-    if (!buildRunArguments(arguments, PendingAcmxvkAction::CopyCommand))
+    if (!buildRunArguments(arguments, PendingAcmxvkAction::CopyCommand, false))
         return;
 
     QString exe = executable_path;
@@ -5847,6 +5856,18 @@ void MainWindow::copyCommand() {
         textBox->setFont(commandFont);
     }
     layout->addWidget(textBox);
+
+    auto *extraArgumentsEdit = new QLineEdit(&dialog);
+    extraArgumentsEdit->setText(extra_arguments);
+    extraArgumentsEdit->setPlaceholderText(
+        tr("--option value --another-option \"value with spaces\""));
+    extraArgumentsEdit->setToolTip(
+        tr("These arguments are appended after the generated arguments for "
+           "Run Selected, Run All, and this dialog's command. Use double "
+           "quotes around values containing spaces."));
+    auto *extraArgumentsLayout = new QFormLayout();
+    extraArgumentsLayout->addRow(tr("Extra arguments:"), extraArgumentsEdit);
+    layout->addLayout(extraArgumentsLayout);
 
     if (active_backend == acmx2::Backend::Acmxvk) {
         QSettings settings("LostSideDead");
@@ -5892,57 +5913,80 @@ void MainWindow::copyCommand() {
     QPushButton *okButton = buttonBox->addButton(QDialogButtonBox::Ok);
     layout->addWidget(buttonBox);
 
-    connect(copyButton, &QPushButton::clicked, &dialog, [textBox, &dialog]() {
-        const QString copiedText = textBox->toPlainText();
-        QClipboard *clipboard = QGuiApplication::clipboard();
-        clipboard->setText(copiedText, QClipboard::Clipboard);
-#ifdef __linux__
-        if (clipboard->supportsSelection()) {
-            clipboard->setText(copiedText, QClipboard::Selection);
+    const auto saveExtraArguments = [this, extraArgumentsEdit]() {
+        extra_arguments = extraArgumentsEdit->text().trimmed();
+        QSettings settings("LostSideDead", "acmx2");
+        settings.setValue("interface/extra_arguments", extra_arguments);
+    };
+    const auto editedCommand = [textBox, extraArgumentsEdit]() {
+        QString command = textBox->toPlainText().trimmed();
+        const QString extras = extraArgumentsEdit->text().trimmed();
+        if (!extras.isEmpty()) {
+            command += QLatin1Char(' ');
+            command += extras;
         }
-#endif
-        QCoreApplication::processEvents();
-        QMessageBox::information(&dialog, tr("Copied"),
-                                 tr("Command copied to clipboard."));
-    });
-    connect(runButton, &QPushButton::clicked, &dialog, [this, textBox, &dialog]() {
-        if (process->state() != QProcess::NotRunning) {
-            QMessageBox::information(&dialog, tr("Process Running"),
-                                     tr("A process is already running. Please stop it first."));
-            return;
-        }
-        QString cmdText = textBox->toPlainText().trimmed();
-        if (cmdText.isEmpty()) {
-            QMessageBox::warning(&dialog, tr("Empty Command"), tr("The command is empty."));
-            return;
-        }
+        return command;
+    };
 
-        // Run the command verbatim through a shell so that env-var prefixes,
-        // quoting, and PATH lookup behave exactly like pasting it into a
-        // terminal. This avoids any ambiguity from re-parsing the line into
-        // tokens and re-applying environment via QProcessEnvironment.
-        process->setProcessEnvironment(QProcessEnvironment::systemEnvironment());
+    connect(copyButton, &QPushButton::clicked, &dialog,
+            [saveExtraArguments, editedCommand, &dialog]() {
+                saveExtraArguments();
+                const QString copiedText = editedCommand();
+                QClipboard *clipboard = QGuiApplication::clipboard();
+                clipboard->setText(copiedText, QClipboard::Clipboard);
+#ifdef __linux__
+                if (clipboard->supportsSelection()) {
+                    clipboard->setText(copiedText, QClipboard::Selection);
+                }
+#endif
+                QCoreApplication::processEvents();
+                QMessageBox::information(&dialog, tr("Copied"),
+                                         tr("Command copied to clipboard."));
+            });
+    connect(runButton, &QPushButton::clicked, &dialog,
+            [this, saveExtraArguments, editedCommand, &dialog]() {
+                if (process->state() != QProcess::NotRunning) {
+                    QMessageBox::information(&dialog, tr("Process Running"),
+                                             tr("A process is already running. Please stop it first."));
+                    return;
+                }
+                saveExtraArguments();
+                const QString cmdText = editedCommand();
+                if (cmdText.isEmpty()) {
+                    QMessageBox::warning(&dialog, tr("Empty Command"), tr("The command is empty."));
+                    return;
+                }
+
+                // Run the command verbatim through a shell so that env-var prefixes,
+                // quoting, and PATH lookup behave exactly like pasting it into a
+                // terminal. This avoids any ambiguity from re-parsing the line into
+                // tokens and re-applying environment via QProcessEnvironment.
+                process->setProcessEnvironment(QProcessEnvironment::systemEnvironment());
 #ifdef Q_OS_WIN
-        QString shell = qEnvironmentVariable("COMSPEC");
-        if (shell.isEmpty())
-            shell = "cmd.exe";
-        QStringList shellArgs{"/C", cmdText};
+                QString shell = qEnvironmentVariable("COMSPEC");
+                if (shell.isEmpty())
+                    shell = "cmd.exe";
+                QStringList shellArgs{"/C", cmdText};
 #else
         QString shell = "/bin/sh";
         QStringList shellArgs{"-c", cmdText};
 #endif
-        Log("shell: " + cmdText + "<br>");
-        initShaderSelectionSharedMemory();
-        process->start(shell, shellArgs);
-        if (!process->waitForStarted()) {
-            Log("<b style='color:red;'>Failed to start the program.</b>");
-            QMessageBox::critical(&dialog, tr("Error"), tr("Failed to start the program."));
-            return;
-        }
-        play_stop->setEnabled(true);
-        dialog.accept();
-    });
-    connect(okButton, &QPushButton::clicked, &dialog, &QDialog::accept);
+                Log("shell: " + cmdText + "<br>");
+                initShaderSelectionSharedMemory();
+                process->start(shell, shellArgs);
+                if (!process->waitForStarted()) {
+                    Log("<b style='color:red;'>Failed to start the program.</b>");
+                    QMessageBox::critical(&dialog, tr("Error"), tr("Failed to start the program."));
+                    return;
+                }
+                play_stop->setEnabled(true);
+                dialog.accept();
+            });
+    connect(okButton, &QPushButton::clicked, &dialog,
+            [saveExtraArguments, &dialog]() {
+                saveExtraArguments();
+                dialog.accept();
+            });
 
     dialog.exec();
 }
