@@ -1,8 +1,15 @@
-
 # ACMX2
+
+ACMX2 is ACMX's established OpenGL/libmx2 rendering backend. Its engine version
+is **2.101.1**; it is controlled either directly from the command line or by the
+shared ACMX Qt interface, currently version **2.137.0**. For the overall project,
+the Vulkan backend, and cross-backend build helpers, start with the
+[root ACMX README](../README.md). The Vulkan-specific documentation remains in
+[ACMXVK/README.md](../ACMXVK/README.md).
+
 <img width="2560" height="1440" alt="Screenshot From 2026-04-13 07-41-08" src="https://github.com/user-attachments/assets/0e0cd74f-ce6b-47e5-abfa-bc268cd74d4b" />
 
-#  Now Works on AMD, Intel, and Apple Hardware (NVIDIA / CUDA Optional)
+## Cross-vendor OpenGL support
 
 <img width="3360" height="2100" alt="acmx2 macos" src="https://github.com/user-attachments/assets/851527a0-978f-40ee-9edb-00b7d09b9b91" />
 
@@ -19,7 +26,12 @@ To regenerate local docs in a versioned folder and refresh `docs/latest`:
 
 This keeps `docs/index.html` as a stable redirect to the newest generated docs.
 
-The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera feeds, video files, or static images in real time, with optional CUDA-accelerated GPU filters when built on NVIDIA hardware. Supports 3D model rendering, audio reactivity, MIDI control, shader playlists, and multipass shader chains.
+The ACMX2 command-line engine applies GLSL shaders to live camera feeds, video
+files, or static images in real time, with optional acidcam-gpu CUDA filters on
+NVIDIA hardware. It supports 3D model rendering, audio reactivity, MIDI control,
+shader playlists, and multipass shader chains. ACMX2 remains the compatibility
+backend for existing OpenGL shader libraries while ACMXVK develops the Vulkan
+path.
 
 > **NVIDIA GPUs are not required.** ACMX2 is built around an OpenGL/SDL2 shader pipeline that runs on NVIDIA, AMD, Intel, and Apple GPUs. The CUDA GPU-filter stack is **opt-in at compile time** via `-DWITH_CUDA=ON` and only requires NVIDIA hardware + CUDA-enabled OpenCV when you choose to enable it.
 
@@ -61,6 +73,64 @@ The command-line engine for **acidcam-gpu**. Applies GLSL shaders to live camera
   stylesheet presets or edit and persist custom QSS
 - **Qt6 GUI** available via the `interface/` subdirectory (`acmx2_interface`)
 - **MIDI Map Tool** — standalone Qt6 app for creating MIDI controller mappings (`interface/midi-map/`)
+
+## First run with the Qt interface
+
+The interface stores these choices, so normal setup is required only once:
+
+1. Open **File > Properties**, select **ACMX2** from the **Backend** menu, and
+   confirm that the executable resolves to `acmx2`. Choose a shader directory
+   containing `library.json` or the legacy `index.txt`; `library.json` is
+   preferred. Select the directory used for snapshots as well.
+2. Open **Session > Session Properties** and choose the input mode, camera or
+   input file, capture resolution, FPS, and window/output resolution. A fresh
+   setup defaults to `1280x720` camera input and the default window resolution.
+3. For current texture-history shaders, enable **Texture Cache**, then enable
+   **Use sampler2DArray history**. The second option maps to
+   `--texture-cache-array` and is unavailable until the cache is enabled.
+4. Keep the cache size at `8` for the normal shader pack unless an effect
+   requires another history depth. Cache delay controls how many frames pass
+   between history updates; larger histories and output resolutions consume
+   more GPU memory.
+5. After installing or updating a library, use **Playback > Remove Broken** if
+   shaders fail on the active OpenGL driver. ACMX2 compile-checks the manifest,
+   backs it up, removes only failing entries from the active list, and leaves
+   the source files in place.
+
+Use **List > Shader Library Builder** to combine `.glsl` and `.comp` sources
+from multiple locations. It sorts entries, rejects duplicates and unreadable
+files, preserves fragment/compute types, and exports a self-contained library
+with an ordered `library.json`. Filename collisions are renamed instead of
+overwriting unrelated sources.
+
+The maintained shader collection uses the `sampler2DArray history` interface
+for current cache effects. Legacy shaders using `samp1` through `samp8` or
+`textures[SIZE]` require Texture Cache with array mode disabled. On supported
+non-macOS systems, **Playback > Rebuild Shader Cache** precompiles compatible
+variants after cache settings change, while **Clean Shader Cache** removes them.
+macOS compiles source at runtime because its OpenGL implementation does not
+support the persistent program-binary workflow.
+
+## ACMX2 backend release highlights
+
+The ACMX2 engine keeps its own version history independently of the shared ACMX
+interface and ACMXVK:
+
+- **2.101.1** fixed live-reload index drift for shader filenames containing
+  `material`, so the engine and interface retain the same manifest positions.
+- **2.101.0** added broader menu shortcuts and crash-safe recovery for stale
+  interface shared memory and synchronization objects.
+- **2.9.2** moved shader-library export work off the UI thread and enabled full
+  360-degree vertical look in 3D mode.
+- **2.9.1** made exact library-relative paths the primary identity for shader
+  selection, playlists, and multipass chains while retaining legacy numeric
+  compatibility.
+- **2.9.0** added direct library loading and a persistent recent-library menu.
+- **2.8.0** added the self-contained Shader Library Builder and corrected
+  default video-window sizing from probed source dimensions.
+
+These versions build on the compute-shader, cache, editor, audio, MIDI, DNN,
+recording, and portability work summarized below.
 
 ## August 2026 Updates (Month to Date)
 
@@ -472,9 +542,9 @@ adding their directory to `PATH`:
 
 ### Linux
 
-ACMX2 is part of the acidcam-gpu project. See the
-[main README](https://github.com/lostjared/acidcam-gpu/blob/main/README.md) for
-full build instructions.
+ACMX2 is part of the ACMX project. The commands below provide a basic native
+Linux build; the [root README](../README.md) describes the complete-project
+helpers and links to the other components.
 
 ```bash
 cd ACMX2
