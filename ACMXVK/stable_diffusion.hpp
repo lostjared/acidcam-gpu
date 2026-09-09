@@ -44,10 +44,13 @@ namespace acmxvk::stable_diffusion {
         Settings settings;
         std::int64_t process_id = -1;
         std::string endpoint;
+        std::filesystem::path diagnostic_log_path;
 
         void start();
         void stop() noexcept;
         void waitUntilReady();
+        void resetDiagnosticLog() const noexcept;
+        [[nodiscard]] std::string diagnosticLogDetails() const;
     };
 } // namespace acmxvk::stable_diffusion
 

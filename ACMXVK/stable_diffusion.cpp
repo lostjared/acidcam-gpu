@@ -5,12 +5,14 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
 #include <cstring>
 #include <fcntl.h>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <spawn.h>
@@ -184,6 +186,8 @@ namespace acmxvk::stable_diffusion {
             }
             const std::string request_url(url);
             curl_easy_setopt(handle, CURLOPT_URL, request_url.c_str());
+            curl_easy_setopt(handle, CURLOPT_NOPROXY,
+                             "127.0.0.1,localhost");
             curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, appendResponse);
             curl_easy_setopt(handle, CURLOPT_WRITEDATA, &response);
             curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT, 2L);
@@ -271,6 +275,22 @@ namespace acmxvk::stable_diffusion {
         posix_spawn_file_actions_t file_actions;
         posix_spawn_file_actions_t *actions = nullptr;
         if (settings.quiet) {
+            std::string log_template =
+                (std::filesystem::temp_directory_path() /
+                 "acmxvk-sd-server-XXXXXX")
+                    .string();
+            std::vector<char> mutable_template(log_template.begin(),
+                                               log_template.end());
+            mutable_template.push_back('\0');
+            const int log_fd = ::mkstemp(mutable_template.data());
+            if (log_fd < 0) {
+                throw std::runtime_error(
+                    "unable to create sd-server diagnostic log: " +
+                    std::string(std::strerror(errno)));
+            }
+            ::close(log_fd);
+            diagnostic_log_path = mutable_template.data();
+
             const int init_result =
                 posix_spawn_file_actions_init(&file_actions);
             if (init_result != 0) {
@@ -280,9 +300,10 @@ namespace acmxvk::stable_diffusion {
             }
             actions = &file_actions;
             const int stdout_result = posix_spawn_file_actions_addopen(
-                actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
-            const int stderr_result = posix_spawn_file_actions_addopen(
-                actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+                actions, STDOUT_FILENO, diagnostic_log_path.c_str(),
+                O_WRONLY | O_APPEND, 0600);
+            const int stderr_result = posix_spawn_file_actions_adddup2(
+                actions, STDOUT_FILENO, STDERR_FILENO);
             if (stdout_result != 0 || stderr_result != 0) {
                 posix_spawn_file_actions_destroy(actions);
                 const int error =
@@ -304,6 +325,42 @@ namespace acmxvk::stable_diffusion {
         process_id = child;
         std::cout << "acmxvk: launched sd-server process " << process_id
                   << " on 127.0.0.1:" << settings.port << '\n';
+        if (!diagnostic_log_path.empty()) {
+            std::cout << "acmxvk: sd-server diagnostic log: "
+                      << diagnostic_log_path << '\n';
+        }
+    }
+
+    void Server::resetDiagnosticLog() const noexcept {
+        if (diagnostic_log_path.empty()) {
+            return;
+        }
+        std::error_code error;
+        std::filesystem::resize_file(diagnostic_log_path, 0U, error);
+    }
+
+    std::string Server::diagnosticLogDetails() const {
+        if (diagnostic_log_path.empty()) {
+            return {};
+        }
+        constexpr std::streamoff MAX_LOG_TAIL = 16 * 1024;
+        std::ifstream input(diagnostic_log_path,
+                            std::ios::binary | std::ios::ate);
+        std::string details = "; sd-server diagnostic log: " +
+                              diagnostic_log_path.string();
+        if (!input) {
+            return details;
+        }
+        const std::streamoff size = input.tellg();
+        if (size <= 0) {
+            return details;
+        }
+        const std::streamoff start = std::max<std::streamoff>(
+            0, size - MAX_LOG_TAIL);
+        input.seekg(start);
+        std::string tail(static_cast<std::size_t>(size - start), '\0');
+        input.read(tail.data(), static_cast<std::streamsize>(tail.size()));
+        return details + "\n--- sd-server log tail ---\n" + tail;
     }
 
     void Server::stop() noexcept {
@@ -333,7 +390,7 @@ namespace acmxvk::stable_diffusion {
     }
 
     void Server::waitUntilReady() {
-        const std::string url = endpoint + "/sdcpp/v1/capabilities";
+        const std::string url = endpoint + "/sdapi/v1/options";
         const auto deadline = std::chrono::steady_clock::now() +
                               std::chrono::minutes(5);
         while (std::chrono::steady_clock::now() < deadline) {
@@ -347,19 +404,24 @@ namespace acmxvk::stable_diffusion {
             if (result == static_cast<pid_t>(process_id)) {
                 process_id = -1;
                 throw std::runtime_error(
-                    "sd-server exited before accepting requests");
+                    "sd-server exited before accepting requests" +
+                    diagnosticLogDetails());
             }
             try {
                 long status = 0;
                 const ResponseBuffer response = request(
                     url, nullptr, 3L, status, &settings.cancelled);
-                if (status == 200 && !response.value.empty()) {
-                    static_cast<void>(parseJson(response.value, "sd-server"));
+                if (status == 200) {
+                    if (!response.value.empty()) {
+                        static_cast<void>(
+                            parseJson(response.value, "sd-server"));
+                    }
                     std::cout << "acmxvk: sd-server model ready; processing "
                               << settings.width << 'x' << settings.height
                               << " frames at " << settings.steps
                               << " configured steps, strength "
                               << settings.strength << '\n';
+                    resetDiagnosticLog();
                     return;
                 }
             } catch (const std::exception &) {
@@ -370,7 +432,8 @@ namespace acmxvk::stable_diffusion {
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         throw std::runtime_error(
-            "sd-server did not become ready within five minutes");
+            "sd-server did not become ready within five minutes" +
+            diagnosticLogDetails());
     }
 
     cv::Mat Server::process(const cv::Mat &rgba) const {
@@ -385,6 +448,8 @@ namespace acmxvk::stable_diffusion {
             throw std::runtime_error(
                 "unable to encode Stable Diffusion input frame");
         }
+
+        resetDiagnosticLog();
 
         Json::Value root;
         root["prompt"] = settings.prompt;
