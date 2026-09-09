@@ -1,7 +1,8 @@
 # ACMX
 
-<img width="2560" height="1440" alt="ACMX shader library and live preview" src="https://github.com/user-attachments/assets/3af169df-abd3-49e8-84cc-70021a42e253" />
-<img width="2560" height="1440" alt="ACMX shader editor" src="https://github.com/user-attachments/assets/35fb877a-4b2c-4bda-af6e-6dd894ae1593" />
+<img width="2476" height="2051" alt="image" src="https://github.com/user-attachments/assets/23babd1d-777d-4fb5-8002-20bdc332aa26" />
+<img width="1341" height="801" alt="image" src="https://github.com/user-attachments/assets/0963ef32-966b-461c-9f2c-4b36c90900a1" />
+
 
 [![License: BSD 2-Clause](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](LICENSE)
 [![Language: C++20](https://img.shields.io/badge/Language-C%2B%2B20-blue.svg)](https://isocpp.org/)
