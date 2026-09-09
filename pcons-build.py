@@ -397,6 +397,8 @@ acmx2 = project.Program("acmx2", env, sources=sources)
 # same header as the libmxwrite.a it links below.
 acmx2.private.include_dirs.insert(0, mxwrite_source_dir)
 acmx2.private.defines.extend(defines)
+if platform.is_windows:
+    acmx2.private.link_flags.append("-mwindows")
 acmx2.link(*libs)
 
 audio_transfer = project.Program(
@@ -446,7 +448,8 @@ if acidcam_gpu is not None:
         "Name: acidcam-gpu\n"
         "Description: CUDA-accelerated Acid Cam GPU filter library\n"
         "Version: 1.1.0\n"
-        "Requires.private: opencv5 libavcodec libavformat libavutil libswscale\n"
+        f"Requires.private: {get_var('OPENCV_PACKAGE', 'opencv5')} "
+        "libavcodec libavformat libavutil libswscale\n"
         "Libs: -L${libdir} -lacidcam-gpu\n"
         "Libs.private: -lcudart\n"
         "Cflags: -I${includedir}\n"

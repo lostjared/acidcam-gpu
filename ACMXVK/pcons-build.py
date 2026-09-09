@@ -28,6 +28,7 @@ import os
 from pathlib import Path
 
 from pcons import Project, Target, find_c_toolchain, get_platform, get_var
+from pcons.core.subst import PathToken
 
 project_dir = Path(__file__).parent.resolve()
 platform = get_platform()
@@ -328,7 +329,18 @@ build_defines = {
     "ACMXVK_INSTALL_CROSSFADE_DIRECTORY": install_resource_dir / "shaders" / "xfade",
 }
 for name, path in build_defines.items():
-    acmxvk.private.defines.append(f'{name}="{path}"')
+    resolved_path = Path(path).resolve()
+    try:
+        relative_path = resolved_path.relative_to(project_dir)
+    except ValueError:
+        path_token = PathToken(
+            f'-D{name}="', str(resolved_path), "absolute", '"'
+        )
+    else:
+        path_token = PathToken(
+            f'-D{name}="', relative_path.as_posix(), "project", '"'
+        )
+    acmxvk.private.compile_flags.append(path_token)
 
 
 def install_tree(destination: str, source_dir: Path) -> list[Target]:

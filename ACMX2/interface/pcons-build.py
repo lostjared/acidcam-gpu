@@ -97,6 +97,8 @@ app = project.QtProgram(
     ],
     link=[qt.Widgets, qt.Gui, qt.Concurrent, qt.Network, qt.Core],
 )
+if platform.is_windows:
+    app.private.link_flags.append("-mwindows")
 
 # The ACMXVK source-library builder is installed beside the interface just as
 # it is in CMake.  Keep its manifest implementation shared with the GUI.
@@ -119,8 +121,6 @@ midi_env.cxx.set_standard(20)
 midi_env.cxx.flags.extend(["-O3", "-Wall", "-pedantic"])
 
 midi_sources = ["midi-map/main.cpp", "midi-map/midi_window.cpp"]
-if platform.is_windows:
-    midi_sources.append("midi-map/win-icon.rc")
 
 midi_map = project.QtProgram(
     "midi_map",
@@ -129,6 +129,8 @@ midi_map = project.QtProgram(
     link=[qt.Widgets, rtmidi],
 )
 midi_map.output_name = "midi-map"
+if platform.is_windows:
+    midi_map.private.link_flags.append("-mwindows")
 
 installed = [
     project.Install("bin", [app, acmxvk_source_manifest]),
