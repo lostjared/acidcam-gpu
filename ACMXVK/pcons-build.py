@@ -136,6 +136,9 @@ ffmpeg = require_package("libavcodec")
 for package_name in ("libavformat", "libavutil", "libswscale", "libswresample"):
     ffmpeg.link(require_package(package_name))
 opencv = require_package(get_var("OPENCV_PACKAGE", "opencv5"))
+if not platform.is_windows:
+    opencv.public.system_include_dirs.extend(opencv.public.include_dirs)
+    opencv.public.include_dirs.clear()
 
 # ACMXVK deliberately uses the repository MXWrite API. Building it locally
 # makes pcons match CMake's ACMXVK_USE_BUNDLED_MXWRITE=ON default.
@@ -298,7 +301,7 @@ resource_targets = [
 acmxvk = project.Program("acmxvk", env, sources=sources)
 acmxvk.private.include_dirs.extend([project_dir, project_dir / "app"])
 acmxvk.link(*libraries)
-acmxvk.add_dependency(*resource_targets, *shader_targets)
+acmxvk.depends(*resource_targets, *shader_targets)
 
 build_defines = {
     "ACMXVK_BUILD_RESOURCE_DIRECTORY": runtime_dir,
