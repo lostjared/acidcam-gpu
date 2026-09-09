@@ -1152,6 +1152,17 @@ namespace acmxvk {
         stable_diffusion::Settings settings;
         settings.server_executable = options.stable_diffusion_server;
         settings.model = model;
+        if (!options.stable_diffusion_upscale_model.empty()) {
+            const fs::path upscale_model =
+                fs::absolute(options.stable_diffusion_upscale_model)
+                    .lexically_normal();
+            if (!fs::is_regular_file(upscale_model)) {
+                throw std::runtime_error(
+                    "Stable Diffusion upscale model is not a regular file: " +
+                    upscale_model.string());
+            }
+            settings.upscale_model = upscale_model;
+        }
         settings.prompt = options.stable_diffusion_prompt;
         settings.negative_prompt =
             options.stable_diffusion_negative_prompt;
@@ -1159,12 +1170,16 @@ namespace acmxvk {
         settings.scheduler = options.stable_diffusion_scheduler;
         settings.width = options.stable_diffusion_width;
         settings.height = options.stable_diffusion_height;
+        settings.upscale_width = options.width;
+        settings.upscale_height = options.height;
         settings.steps = options.stable_diffusion_steps;
         settings.seed = options.stable_diffusion_seed;
         settings.port = options.stable_diffusion_server_port;
         settings.strength = options.stable_diffusion_strength;
         settings.cfg_scale = options.stable_diffusion_cfg_scale;
-        settings.resize_to_input = !options.stable_diffusion_upscale;
+        settings.resize_to_input =
+            !options.stable_diffusion_upscale &&
+            options.stable_diffusion_upscale_model.empty();
         settings.quiet = options.stable_diffusion_quiet;
         const std::shared_ptr<std::atomic_bool> cancelled =
             stable_diffusion_cancelled;
@@ -1213,6 +1228,8 @@ namespace acmxvk {
                    "the Vulkan shader chain"
                 << (options.stable_diffusion_upscale
                         ? "; high-quality compute upscale enabled"
+                    : !options.stable_diffusion_upscale_model.empty()
+                        ? "; sd-server ESRGAN upscale enabled"
                         : "")
                 << (options.output_file.empty()
                         ? "; windowed preview mode\n"
@@ -5031,9 +5048,14 @@ namespace acmxvk {
         if (historyCacheEnabled()) {
             int history_width = source_width;
             int history_height = source_height;
-            if (options.stable_diffusion_upscale) {
+            if (options.stable_diffusion_upscale ||
+                !options.stable_diffusion_upscale_model.empty()) {
                 history_width = options.stable_diffusion_width;
                 history_height = options.stable_diffusion_height;
+                if (!options.stable_diffusion_upscale_model.empty()) {
+                    history_width = options.width;
+                    history_height = options.height;
+                }
                 if (rotationSwapsDimensions(options.frame_rotation)) {
                     std::swap(history_width, history_height);
                 }

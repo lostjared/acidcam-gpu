@@ -569,6 +569,27 @@ shader chain. This avoids the normal CPU linear resize and gives every user
 shader a full-resolution input. The upscaler is optional and does not change
 existing renders when omitted.
 
+Alternatively, pass an ESRGAN or RealESRGAN model to `sd-server` and use its
+neural upscaler instead of the Vulkan compute stage:
+
+```bash
+./build/acmxvk-sd/acmxvk \
+    --input input.mp4 \
+    --fragment shaders/passthrough.frag.spv \
+    --sd-model /path/to/v1-5-pruned-emaonly.safetensors \
+    --sd-prompt "psychedelic oil painting" \
+    --upscale-model /path/to/RealESRGAN_x4plus.safetensors
+```
+
+ACMXVK launches a current stable-diffusion.cpp server with
+`--hires-upscalers-dir`, submits frames through `/sdcpp/v1/img_gen`, and selects
+the chosen model through the request's `hires.upscaler` field. The neural result
+is generated at the configured output resolution before entering the normal
+shader chain. `--upscale-model` and `--sd-upscale` are mutually exclusive. In
+the interface, select **Use an sd-server ESRGAN upscale model** and browse to
+the model file in Stable Diffusion Settings. Neural upscaling requires a recent
+`sd-server` that provides the `/sdcpp/v1/img_gen` job API.
+
 Use `--sd-after-shaders` with headless encoded output to preserve the original
 shader-chain-to-SD path instead. That ordering is intentionally unavailable in
 windowed mode because its CPU result is produced from final Vulkan readback;

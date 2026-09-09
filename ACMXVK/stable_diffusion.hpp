@@ -12,12 +12,15 @@ namespace acmxvk::stable_diffusion {
     struct Settings {
         std::filesystem::path server_executable;
         std::filesystem::path model;
+        std::filesystem::path upscale_model;
         std::string prompt;
         std::string negative_prompt;
         std::string sampler;
         std::string scheduler;
         int width = 576;
         int height = 320;
+        int upscale_width = 0;
+        int upscale_height = 0;
         int steps = 12;
         int seed = 1234;
         int port = 1234;

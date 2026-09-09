@@ -120,6 +120,9 @@ namespace acmxvk {
                                "--model", true);
         input::validate_string(options.stable_diffusion_model,
                                input::StringKind::Path, "--sd-model", true);
+        input::validate_string(options.stable_diffusion_upscale_model,
+                               input::StringKind::Path, "--upscale-model",
+                               true);
         input::validate_string(options.stable_diffusion_server,
                                input::StringKind::Path, "--sd-server");
         input::validate_string(options.stable_diffusion_prompt,
@@ -819,6 +822,10 @@ namespace acmxvk {
             } else if (option == "--sd-upscale") {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_upscale = true;
+            } else if (option == "--upscale-model") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_upscale_model =
+                    optionValue(index, argc, argv, option);
             } else if (option == "--sd-quiet") {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_quiet = true;
@@ -1303,6 +1310,11 @@ namespace acmxvk {
                 throw std::runtime_error(
                     "--sd-upscale cannot be combined with --sd-after-shaders");
             }
+            if (options.stable_diffusion_upscale &&
+                !options.stable_diffusion_upscale_model.empty()) {
+                throw std::runtime_error(
+                    "--sd-upscale and --upscale-model are mutually exclusive");
+            }
         } else if (options.stable_diffusion_option_specified) {
             throw std::runtime_error(
                 "Stable Diffusion options require --sd-model");
@@ -1639,6 +1651,7 @@ namespace acmxvk {
                << "      --sd-server-port <N>    Local server port (default 1234)\n"
                << "      --sd-after-shaders      Preserve shader-chain-then-SD ordering\n"
                << "      --sd-upscale            High-quality compute upscale before shaders\n"
+               << "      --upscale-model <file>  ESRGAN model loaded by sd-server\n"
                << "      --sd-quiet              Suppress verbose sd-server output\n"
                << "                              Encoded output implies CFR and no-drop\n"
                << "                              Output feeds the Vulkan shader chain\n\n"

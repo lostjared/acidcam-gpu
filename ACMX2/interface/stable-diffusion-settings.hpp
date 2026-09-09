@@ -14,6 +14,7 @@ class QSpinBox;
 struct StableDiffusionConfiguration {
     bool enabled = false;
     QString model_file;
+    QString upscale_model_file;
     QString prompt;
     QString negative_prompt;
     QString server_executable = "sd-server";
@@ -41,6 +42,7 @@ class StableDiffusionSettingsDialog : public QDialog {
 
   private slots:
     void browse_model();
+    void browse_upscale_model();
     void browse_server();
     void apply_settings();
     void accept_settings();
@@ -67,6 +69,9 @@ class StableDiffusionSettingsDialog : public QDialog {
     QComboBox *sampler_combo_box = nullptr;
     QComboBox *scheduler_combo_box = nullptr;
     QCheckBox *upscale_check_box = nullptr;
+    QCheckBox *server_upscale_check_box = nullptr;
+    QLineEdit *upscale_model_edit = nullptr;
+    QPushButton *browse_upscale_model_button = nullptr;
 };
 
 #endif

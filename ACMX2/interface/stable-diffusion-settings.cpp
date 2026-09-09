@@ -111,6 +111,16 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     upscale_check_box->setToolTip(
         "Keep the native Stable Diffusion image size and run ACMXVK's "
         "bicubic detail-preserving compute stage before user shaders.");
+    server_upscale_check_box =
+        new QCheckBox("Use an sd-server ESRGAN upscale model", this);
+    server_upscale_check_box->setToolTip(
+        "Load an ESRGAN or RealESRGAN model in sd-server and use its neural "
+        "upscaler instead of ACMXVK's Vulkan compute upscaler.");
+    upscale_model_edit = new QLineEdit(this);
+    upscale_model_edit->setReadOnly(true);
+    upscale_model_edit->setPlaceholderText(
+        "Select an ESRGAN/RealESRGAN model...");
+    browse_upscale_model_button = new QPushButton("Browse...", this);
 
     auto *model_group = new QGroupBox("Image-to-Image Model", this);
     auto *model_layout = new QFormLayout(model_group);
@@ -131,6 +141,11 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     generation_layout->addRow("Sampler:", sampler_combo_box);
     generation_layout->addRow("Scheduler:", scheduler_combo_box);
     generation_layout->addRow(upscale_check_box);
+    generation_layout->addRow(server_upscale_check_box);
+    auto *upscale_model_row = new QHBoxLayout;
+    upscale_model_row->addWidget(upscale_model_edit, 1);
+    upscale_model_row->addWidget(browse_upscale_model_button);
+    generation_layout->addRow("Upscale model:", upscale_model_row);
 
     auto *server_group = new QGroupBox("Local sd-server", this);
     auto *server_layout = new QFormLayout(server_group);
@@ -164,6 +179,21 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
             [this](bool) { update_enabled_state(); });
     connect(browse_model_button, &QPushButton::clicked, this,
             &StableDiffusionSettingsDialog::browse_model);
+    connect(browse_upscale_model_button, &QPushButton::clicked, this,
+            &StableDiffusionSettingsDialog::browse_upscale_model);
+    connect(upscale_check_box, &QCheckBox::toggled, this, [this](bool checked) {
+        if (checked) {
+            server_upscale_check_box->setChecked(false);
+        }
+        update_enabled_state();
+    });
+    connect(server_upscale_check_box, &QCheckBox::toggled, this,
+            [this](bool checked) {
+                if (checked) {
+                    upscale_check_box->setChecked(false);
+                }
+                update_enabled_state();
+            });
     connect(browse_server_button, &QPushButton::clicked, this,
             &StableDiffusionSettingsDialog::browse_server);
     connect(buttons, &QDialogButtonBox::accepted, this,
@@ -182,6 +212,9 @@ StableDiffusionSettingsDialog::configuration() const {
     StableDiffusionConfiguration result;
     result.enabled = enable_check_box->isChecked();
     result.model_file = model_file_edit->text().trimmed();
+    if (server_upscale_check_box->isChecked()) {
+        result.upscale_model_file = upscale_model_edit->text().trimmed();
+    }
     result.prompt = prompt_edit->text().trimmed();
     result.negative_prompt = negative_prompt_edit->text().trimmed();
     result.server_executable = server_edit->text().trimmed();
@@ -211,6 +244,23 @@ void StableDiffusionSettingsDialog::browse_model() {
     }
     model_file_edit->setText(QFileInfo(filename).absoluteFilePath());
     settings.setValue("stable_diffusion/last_model_directory",
+                      QFileInfo(filename).absolutePath());
+}
+
+void StableDiffusionSettingsDialog::browse_upscale_model() {
+    QSettings settings("LostSideDead", "acmx2");
+    const QString directory =
+        settings.value("stable_diffusion/last_upscale_model_directory")
+            .toString();
+    const QString filename = QFileDialog::getOpenFileName(
+        this, "Select ESRGAN Upscale Model", directory,
+        "Upscale Models (*.safetensors *.pth *.pt);;All Files (*)");
+    if (filename.isEmpty()) {
+        return;
+    }
+    upscale_model_edit->setText(QFileInfo(filename).absoluteFilePath());
+    server_upscale_check_box->setChecked(true);
+    settings.setValue("stable_diffusion/last_upscale_model_directory",
                       QFileInfo(filename).absolutePath());
 }
 
@@ -257,6 +307,12 @@ bool StableDiffusionSettingsDialog::validate_settings() {
     if (server_edit->text().trimmed().isEmpty()) {
         QMessageBox::warning(this, "sd-server Required",
                              "Enter sd-server or select its executable.");
+        return false;
+    }
+    if (server_upscale_check_box->isChecked() &&
+        !QFileInfo(upscale_model_edit->text().trimmed()).isFile()) {
+        QMessageBox::warning(this, "Upscale Model Required",
+                             "Select an existing ESRGAN or RealESRGAN model.");
         return false;
     }
     int width = 0;
@@ -330,6 +386,10 @@ void StableDiffusionSettingsDialog::load_ui_state() {
         settings.value("stable_diffusion/scheduler", "discrete").toString());
     upscale_check_box->setChecked(
         settings.value("stable_diffusion/upscale", false).toBool());
+    upscale_model_edit->setText(
+        settings.value("stable_diffusion/upscale_model_file").toString());
+    server_upscale_check_box->setChecked(
+        settings.value("stable_diffusion/server_upscale", false).toBool());
 }
 
 void StableDiffusionSettingsDialog::save_ui_state() {
@@ -353,6 +413,10 @@ void StableDiffusionSettingsDialog::save_ui_state() {
     settings.setValue("stable_diffusion/sampler", current.sampler);
     settings.setValue("stable_diffusion/scheduler", current.scheduler);
     settings.setValue("stable_diffusion/upscale", current.upscale);
+    settings.setValue("stable_diffusion/server_upscale",
+                      server_upscale_check_box->isChecked());
+    settings.setValue("stable_diffusion/upscale_model_file",
+                      upscale_model_edit->text().trimmed());
     settings.sync();
 }
 
@@ -373,4 +437,9 @@ void StableDiffusionSettingsDialog::update_enabled_state() {
     sampler_combo_box->setEnabled(enabled);
     scheduler_combo_box->setEnabled(enabled);
     upscale_check_box->setEnabled(enabled);
+    server_upscale_check_box->setEnabled(enabled);
+    const bool server_upscale_enabled =
+        enabled && server_upscale_check_box->isChecked();
+    upscale_model_edit->setEnabled(server_upscale_enabled);
+    browse_upscale_model_button->setEnabled(server_upscale_enabled);
 }

@@ -205,6 +205,7 @@ namespace acmxvk {
         std::string dream_model;
         std::string dream_layer;
         std::string stable_diffusion_model;
+        std::string stable_diffusion_upscale_model;
         std::string stable_diffusion_prompt;
         std::string stable_diffusion_negative_prompt;
         std::string stable_diffusion_server = "sd-server";

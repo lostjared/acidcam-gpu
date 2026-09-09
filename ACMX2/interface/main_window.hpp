@@ -342,6 +342,7 @@ class MainWindow : public QMainWindow {
     QPointer<DeepDreamSettingsDialog> deepDreamSettingsDialog;
     bool stable_diffusion_enabled = false;
     QString stable_diffusion_model;
+    QString stable_diffusion_upscale_model;
     QString stable_diffusion_prompt;
     QString stable_diffusion_negative_prompt;
     QString stable_diffusion_server = "sd-server";

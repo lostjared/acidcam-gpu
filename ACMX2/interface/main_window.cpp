@@ -1497,6 +1497,10 @@ void MainWindow::loadSessionSettings() {
         settings.value("stable_diffusion/enabled", false).toBool();
     stable_diffusion_model =
         settings.value("stable_diffusion/model_file").toString();
+    if (settings.value("stable_diffusion/server_upscale", false).toBool()) {
+        stable_diffusion_upscale_model =
+            settings.value("stable_diffusion/upscale_model_file").toString();
+    }
     stable_diffusion_prompt =
         settings.value("stable_diffusion/prompt").toString();
     stable_diffusion_negative_prompt =
@@ -4518,6 +4522,7 @@ void MainWindow::menuStableDiffusionSettings() {
                     dialog->configuration();
                 stable_diffusion_enabled = config.enabled;
                 stable_diffusion_model = config.model_file;
+                stable_diffusion_upscale_model = config.upscale_model_file;
                 stable_diffusion_prompt = config.prompt;
                 stable_diffusion_negative_prompt = config.negative_prompt;
                 stable_diffusion_server = config.server_executable;
@@ -4541,6 +4546,8 @@ void MainWindow::menuStableDiffusionSettings() {
                             .arg(stable_diffusion_steps)
                             .arg(stable_diffusion_upscale
                                      ? tr(", compute upscale")
+                                 : !stable_diffusion_upscale_model.isEmpty()
+                                     ? tr(", ESRGAN upscale")
                                      : QString()));
                 } else {
                     Log("Stable Diffusion Disabled");
@@ -4574,6 +4581,13 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
     if (!QFileInfo(stable_diffusion_model).isFile()) {
         error = tr("The configured Stable Diffusion model does not exist:\n%1")
                     .arg(stable_diffusion_model);
+        return false;
+    }
+    if (!stable_diffusion_upscale_model.isEmpty() &&
+        !QFileInfo(stable_diffusion_upscale_model).isFile()) {
+        error = tr("The configured Stable Diffusion upscale model does not "
+                   "exist:\n%1")
+                    .arg(stable_diffusion_upscale_model);
         return false;
     }
     if (stable_diffusion_prompt.trimmed().isEmpty()) {
@@ -4630,6 +4644,8 @@ void MainWindow::appendStableDiffusionArguments(
     arguments << "--sd-quiet";
     if (stable_diffusion_upscale) {
         arguments << "--sd-upscale";
+    } else if (!stable_diffusion_upscale_model.isEmpty()) {
+        arguments << "--upscale-model" << stable_diffusion_upscale_model;
     }
 }
 
