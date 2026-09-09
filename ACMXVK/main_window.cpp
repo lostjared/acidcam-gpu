@@ -3505,6 +3505,7 @@ namespace acmxvk {
                 : png_frame_count;
         const double elapsed_seconds =
             static_cast<double>(processed_frames) / recording_fps;
+        const double wall_elapsed_seconds = hudWallElapsedSeconds();
 
         std::cout << "acmxvk: [";
         if (percent >= 0) {
@@ -3519,7 +3520,8 @@ namespace acmxvk {
             std::cout << '?';
         }
         std::cout << " | Written: " << written_frames
-                  << " | Time: " << formatHudTime(elapsed_seconds);
+                  << " | Time: " << formatHudTime(elapsed_seconds)
+                  << " | Elapsed: " << formatHudTime(wall_elapsed_seconds);
         if (writer.is_open()) {
             constexpr double BYTES_PER_MEGABYTE = 1024.0 * 1024.0;
             const double file_size_mb =

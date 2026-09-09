@@ -1079,11 +1079,13 @@ it does not need X11, Wayland, Quartz, or another graphical session.
 
 Increment 9T adds ACMX2-style headless completion progress. Progress lines
 report the percentage, processed and expected frame counts, written frame
-count, media time, and current encoded size. They are emitted whenever the
-percentage advances or after 500 ms and finish at 100% after a normal source
-or duration boundary. Headless `--repeat` now requires a positive `--duration`
-so a looping batch job always has a defined completion point. Ctrl+C remains
-an early graceful stop and therefore does not misreport the interrupted job as
+count, media time, wall-clock elapsed render time, and current encoded size.
+Media time tracks the output timeline, while elapsed time shows how long the
+headless job has actually been running. Lines are emitted whenever the
+percentage advances or after 500 ms and finish at 100% after a normal source or
+duration boundary. Headless `--repeat` requires a positive `--duration` so a
+looping batch job always has a defined completion point. Ctrl+C remains an
+early graceful stop and therefore does not misreport the interrupted job as
 100% complete.
 
 Increment 9U prevents initial headless target creation from running ACMXVK's
