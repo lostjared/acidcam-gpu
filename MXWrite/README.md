@@ -25,6 +25,7 @@ the FFmpeg build installed on the system.
 - Runtime encoder and encoder-option enumeration
 - Encoded duration, frame-count, byte-count, and hardware-status queries
 - Audio-stream remuxing from an existing media file
+- Optional nanobind Python module
 
 ## Requirements
 
@@ -37,6 +38,7 @@ the FFmpeg build installed on the system.
   - `libswscale` 5 or newer
 - POSIX threads or the platform's equivalent C++ thread implementation
 - Optional: CUDA Toolkit for CUDA device-frame ingestion
+- Optional: Python 3.8 or newer and nanobind for the Python module
 
 Typical packages are:
 
@@ -79,6 +81,33 @@ Use `-DSHARED=OFF`, or omit the option, for the default static library. Shared
 builds install the `.so` or `.dylib` into the library directory. On Windows,
 the DLL is installed into the binary directory and its import library into the
 library directory.
+
+### Python module
+
+The nanobind extension is disabled by default. Enable it with
+`-DPYTHON_MODULE=ON`:
+
+```bash
+python3 -m pip install nanobind
+cmake -S MXWrite -B build/mxwrite-python \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DPYTHON_MODULE=ON
+cmake --build build/mxwrite-python --parallel
+cmake --install build/mxwrite-python
+```
+
+This builds the `mxwrite_ext` module and links it with MXWrite. CMake first
+looks for an installed nanobind package and then asks the selected Python
+interpreter for nanobind's CMake directory. By default, installation places
+the extension in
+`lib/python<major>.<minor>/site-packages` beneath `CMAKE_INSTALL_PREFIX`.
+Override that location with `-DMXWRITE_PYTHON_INSTALL_DIR=<directory>`.
+The default static MXWrite build is recommended for a self-contained Python
+extension. `-DPYTHON_MODULE=OFF`, or omitting the option, leaves Python and
+nanobind out of configuration entirely. When combined with `-DSHARED=ON`, the
+installed extension uses a relative loader path to the MXWrite shared library
+on Linux and macOS; Windows installations also place the MXWrite DLL beside
+the extension.
 
 CMake automatically enables `MXWRITE_HAS_CUDA_COPY` when it finds the CUDA
 Toolkit. This definition changes the layout of `Writer`, so every translation
