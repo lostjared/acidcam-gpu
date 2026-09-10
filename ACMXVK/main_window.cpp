@@ -2672,15 +2672,18 @@ namespace acmxvk {
         }
 
         std::uint64_t expected_frames = 0U;
-        if (options.duration > 0.0) {
+        if (options.repeat) {
+            const auto duration_frames = static_cast<std::uint64_t>(std::ceil(options.duration * recording_fps));
+            expected_frames = std::max<std::uint64_t>(1U, duration_frames);
+        } else if (options.duration > 0.0) {
             const auto duration_frames = static_cast<std::uint64_t>(std::ceil(options.duration * recording_fps));
             expected_frames = std::max<std::uint64_t>(1U, duration_frames);
         }
-        if (source_kind == SourceKind::Video && video_duration_seconds > 0.0) {
+        if (!options.repeat && source_kind == SourceKind::Video && video_duration_seconds > 0.0) {
             const auto source_frames = static_cast<std::uint64_t>(std::ceil(video_duration_seconds * recording_fps));
             if (expected_frames == 0U) {
                 expected_frames = source_frames;
-            } else if (!options.repeat) {
+            } else {
                 expected_frames = std::min(expected_frames, source_frames);
             }
         }

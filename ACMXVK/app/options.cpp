@@ -924,6 +924,10 @@ namespace acmxvk {
             options.no_drop = true;
         }
 
+        if (options.headless) {
+            options.interface_shm = false;
+        }
+
         if (options.headless && options.audio_pass_through) {
             throw std::runtime_error("--pass-through cannot be used with --headless or --silent");
         }
@@ -1362,7 +1366,8 @@ namespace acmxvk {
                << "      --silent                Alias for --headless\n"
                << "                              Requires video/image input and --output\n"
                << "                              Cannot be combined with --pass-through\n"
-               << "                              Image input and --repeat require --duration\n\n"
+               << "                              Image input and --repeat require --duration\n"
+               << "                              Interface shared memory is disabled\n\n"
                << "Output:\n"
                << "      --unbuffered           Flush stdout/stderr after each write for GUI capture\n"
                << "      --interface-shm        Accept live shader selection from the ACMX interface\n\n"
