@@ -23,8 +23,7 @@ namespace acmxvk::midi {
         unsigned char data2 = 0;
     };
 
-    [[nodiscard]] std::vector<MidiMapping>
-    load_mapping_file(const std::string &filename);
+    [[nodiscard]] std::vector<MidiMapping> load_mapping_file(const std::string &filename);
 
     class MidiInput {
       public:

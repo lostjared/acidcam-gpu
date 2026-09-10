@@ -45,14 +45,12 @@ static const GUID MEDIASUBTYPE_I420 = {0x30323449, 0x0000, 0x0010, {0x80, 0x00, 
 namespace {
 #ifdef __linux__
     bool is_primary_linux_video_node(int device_index) {
-        QFile index_file(
-            QString("/sys/class/video4linux/video%1/index").arg(device_index));
+        QFile index_file(QString("/sys/class/video4linux/video%1/index").arg(device_index));
         if (!index_file.open(QIODevice::ReadOnly | QIODevice::Text))
             return true;
 
         bool valid_index = false;
-        const int stream_index =
-            QString::fromUtf8(index_file.readAll()).trimmed().toInt(&valid_index);
+        const int stream_index = QString::fromUtf8(index_file.readAll()).trimmed().toInt(&valid_index);
         return !valid_index || stream_index == 0;
     }
 
@@ -60,24 +58,18 @@ namespace {
         if (is_primary_linux_video_node(device_index))
             return device_index;
 
-        const QString device_path = QFileInfo(
-                                        QString("/sys/class/video4linux/video%1/device")
-                                            .arg(device_index))
-                                        .canonicalFilePath();
+        const QString device_path = QFileInfo(QString("/sys/class/video4linux/video%1/device").arg(device_index)).canonicalFilePath();
         if (device_path.isEmpty())
             return device_index;
 
         const QDir video_class(QStringLiteral("/sys/class/video4linux"));
-        const QStringList nodes = video_class.entryList(
-            {QStringLiteral("video*")}, QDir::Dirs | QDir::NoDotAndDotDot);
+        const QStringList nodes = video_class.entryList({QStringLiteral("video*")}, QDir::Dirs | QDir::NoDotAndDotDot);
         for (const QString &node : nodes) {
             bool valid_node = false;
             const int candidate_index = node.mid(5).toInt(&valid_node);
             if (!valid_node || !is_primary_linux_video_node(candidate_index))
                 continue;
-            const QString candidate_path =
-                QFileInfo(video_class.filePath(node + QStringLiteral("/device")))
-                    .canonicalFilePath();
+            const QString candidate_path = QFileInfo(video_class.filePath(node + QStringLiteral("/device"))).canonicalFilePath();
             if (candidate_path == device_path)
                 return candidate_index;
         }
@@ -92,10 +84,8 @@ namespace {
             return true;
         }
 
-        static const QRegularExpression resolution_pattern(
-            R"(^(\d+)\s*[xX]\s*(\d+)$)");
-        const QRegularExpressionMatch match =
-            resolution_pattern.match(trimmed);
+        static const QRegularExpression resolution_pattern(R"(^(\d+)\s*[xX]\s*(\d+)$)");
+        const QRegularExpressionMatch match = resolution_pattern.match(trimmed);
         if (!match.hasMatch()) {
             return false;
         }
@@ -104,8 +94,7 @@ namespace {
         bool height_ok = false;
         const int width = match.captured(1).toInt(&width_ok);
         const int height = match.captured(2).toInt(&height_ok);
-        if (!width_ok || !height_ok || width <= 0 || height <= 0 ||
-            width % 2 != 0 || height % 2 != 0) {
+        if (!width_ok || !height_ok || width <= 0 || height <= 0 || width % 2 != 0 || height % 2 != 0) {
             return false;
         }
 
@@ -117,9 +106,7 @@ namespace {
         if (resolution.isEmpty()) {
             return "Default";
         }
-        return QString("%1x%2")
-            .arg(resolution.width())
-            .arg(resolution.height());
+        return QString("%1x%2").arg(resolution.width()).arg(resolution.height());
     }
 
     bool pathsReferToSameFile(const QString &firstPath, const QString &secondPath) {
@@ -156,41 +143,30 @@ namespace {
         fpsList.append(fps);
     }
 
-    void parseAcmxvkCameraCapabilities(
-        const QString &output,
-        QMap<QString, QList<double>> &deviceCapabilities,
-        QSet<QString> &yuvResolutions) {
-        const QRegularExpression resolutionExpression(
-            R"(^\s+(\d+x\d+)\s*@\s*(.+)$)");
-        const QRegularExpression frameRateExpression(
-            R"((\d+(?:\.\d+)?)\s*fps)");
-        const QRegularExpression formatExpression(
-            R"(^\s*Format:\s*(\S+))");
+    void parseAcmxvkCameraCapabilities(const QString &output, QMap<QString, QList<double>> &deviceCapabilities, QSet<QString> &yuvResolutions) {
+        const QRegularExpression resolutionExpression(R"(^\s+(\d+x\d+)\s*@\s*(.+)$)");
+        const QRegularExpression frameRateExpression(R"((\d+(?:\.\d+)?)\s*fps)");
+        const QRegularExpression formatExpression(R"(^\s*Format:\s*(\S+))");
 
         QString currentFormat;
         const QStringList lines = output.split('\n');
         for (const QString &line : lines) {
-            const QRegularExpressionMatch formatMatch =
-                formatExpression.match(line);
+            const QRegularExpressionMatch formatMatch = formatExpression.match(line);
             if (formatMatch.hasMatch()) {
                 currentFormat = formatMatch.captured(1).toUpper();
                 continue;
             }
 
-            const QRegularExpressionMatch resolutionMatch =
-                resolutionExpression.match(line);
+            const QRegularExpressionMatch resolutionMatch = resolutionExpression.match(line);
             if (!resolutionMatch.hasMatch()) {
                 continue;
             }
             const QString resolution = resolutionMatch.captured(1);
-            QRegularExpressionMatchIterator frameRates =
-                frameRateExpression.globalMatch(resolutionMatch.captured(2));
+            QRegularExpressionMatchIterator frameRates = frameRateExpression.globalMatch(resolutionMatch.captured(2));
             while (frameRates.hasNext()) {
-                appendUniqueFps(deviceCapabilities[resolution],
-                                frameRates.next().captured(1).toDouble());
+                appendUniqueFps(deviceCapabilities[resolution], frameRates.next().captured(1).toDouble());
             }
-            if (currentFormat == "YUYV" || currentFormat == "YUVS" ||
-                currentFormat == "2VUY") {
+            if (currentFormat == "YUYV" || currentFormat == "YUVS" || currentFormat == "2VUY") {
                 yuvResolutions.insert(resolution);
             }
         }
@@ -223,12 +199,7 @@ namespace {
     }
 
     void populateAppleDefaultCapabilities(QMap<QString, QList<double>> &deviceCapabilities) {
-        static const QStringList kDefaultResolutions = {
-            "640x360",
-            "640x480",
-            "1280x720",
-            "1920x1080",
-            "3840x2160"};
+        static const QStringList kDefaultResolutions = {"640x360", "640x480", "1280x720", "1920x1080", "3840x2160"};
         static const QList<double> kDefaultFps = {24.0, 30.0, 60.0};
 
         for (const QString &resolution : kDefaultResolutions) {
@@ -266,8 +237,7 @@ namespace {
         return comboBox->currentData().toInt();
     }
 
-    template <typename T>
-    struct ComReleaser {
+    template <typename T> struct ComReleaser {
         void operator()(T *value) const {
             if (value != nullptr) {
                 value->Release();
@@ -275,14 +245,11 @@ namespace {
         }
     };
 
-    template <typename T>
-    using ComPtr = std::unique_ptr<T, ComReleaser<T>>;
+    template <typename T> using ComPtr = std::unique_ptr<T, ComReleaser<T>>;
 
     class ComInitScope {
       public:
-        ComInitScope()
-            : result(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)), shouldUninitialize(SUCCEEDED(result)) {
-        }
+        ComInitScope() : result(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)), shouldUninitialize(SUCCEEDED(result)) {}
 
         ~ComInitScope() {
             if (shouldUninitialize) {
@@ -290,9 +257,7 @@ namespace {
             }
         }
 
-        bool ready() const {
-            return SUCCEEDED(result) || result == RPC_E_CHANGED_MODE;
-        }
+        bool ready() const { return SUCCEEDED(result) || result == RPC_E_CHANGED_MODE; }
 
       private:
         HRESULT result;
@@ -357,15 +322,13 @@ namespace {
         }
 
         ICreateDevEnum *deviceEnumeratorRaw = nullptr;
-        if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
-                                    IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
+        if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER, IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
             return {};
         }
         ComPtr<ICreateDevEnum> deviceEnumerator(deviceEnumeratorRaw);
 
         IEnumMoniker *enumMonikerRaw = nullptr;
-        const HRESULT createResult = deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory,
-                                                                             &enumMonikerRaw, 0);
+        const HRESULT createResult = deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enumMonikerRaw, 0);
         if (createResult != S_OK || enumMonikerRaw == nullptr) {
             return {};
         }
@@ -380,8 +343,7 @@ namespace {
             monikerRaw = nullptr;
 
             IPropertyBag *propertyBagRaw = nullptr;
-            if (SUCCEEDED(moniker->BindToStorage(nullptr, nullptr, IID_IPropertyBag,
-                                                 reinterpret_cast<void **>(&propertyBagRaw)))) {
+            if (SUCCEEDED(moniker->BindToStorage(nullptr, nullptr, IID_IPropertyBag, reinterpret_cast<void **>(&propertyBagRaw)))) {
                 ComPtr<IPropertyBag> propertyBag(propertyBagRaw);
                 const QString deviceName = cameraNameFromPropertyBag(propertyBag.get());
                 if (!deviceName.isEmpty()) {
@@ -400,15 +362,13 @@ namespace {
 
     ComPtr<IAMStreamConfig> openWindowsStreamConfig(int deviceIndex) {
         ICreateDevEnum *deviceEnumeratorRaw = nullptr;
-        if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
-                                    IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
+        if (FAILED(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER, IID_ICreateDevEnum, reinterpret_cast<void **>(&deviceEnumeratorRaw)))) {
             return {};
         }
         ComPtr<ICreateDevEnum> deviceEnumerator(deviceEnumeratorRaw);
 
         IEnumMoniker *enumMonikerRaw = nullptr;
-        if (deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enumMonikerRaw, 0) != S_OK ||
-            enumMonikerRaw == nullptr) {
+        if (deviceEnumerator->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enumMonikerRaw, 0) != S_OK || enumMonikerRaw == nullptr) {
             return {};
         }
         ComPtr<IEnumMoniker> enumMoniker(enumMonikerRaw);
@@ -426,8 +386,7 @@ namespace {
             }
 
             IBaseFilter *filterRaw = nullptr;
-            if (FAILED(moniker->BindToObject(nullptr, nullptr, IID_IBaseFilter,
-                                             reinterpret_cast<void **>(&filterRaw)))) {
+            if (FAILED(moniker->BindToObject(nullptr, nullptr, IID_IBaseFilter, reinterpret_cast<void **>(&filterRaw)))) {
                 return {};
             }
             ComPtr<IBaseFilter> filter(filterRaw);
@@ -450,8 +409,7 @@ namespace {
                 }
 
                 IAMStreamConfig *streamConfigRaw = nullptr;
-                if (SUCCEEDED(pin->QueryInterface(IID_IAMStreamConfig, reinterpret_cast<void **>(&streamConfigRaw))) &&
-                    streamConfigRaw != nullptr) {
+                if (SUCCEEDED(pin->QueryInterface(IID_IAMStreamConfig, reinterpret_cast<void **>(&streamConfigRaw))) && streamConfigRaw != nullptr) {
                     return ComPtr<IAMStreamConfig>(streamConfigRaw);
                 }
             }
@@ -482,10 +440,7 @@ namespace {
         return {};
     }
 
-    bool isYuvSubtype(const GUID &subtype) {
-        return subtype == MEDIASUBTYPE_YUY2 || subtype == MEDIASUBTYPE_UYVY || subtype == MEDIASUBTYPE_YV12 ||
-               subtype == MEDIASUBTYPE_NV12 || subtype == MEDIASUBTYPE_I420;
-    }
+    bool isYuvSubtype(const GUID &subtype) { return subtype == MEDIASUBTYPE_YUY2 || subtype == MEDIASUBTYPE_UYVY || subtype == MEDIASUBTYPE_YV12 || subtype == MEDIASUBTYPE_NV12 || subtype == MEDIASUBTYPE_I420; }
 
     bool extractDirectShowFormat(const AM_MEDIA_TYPE *mediaType, QSize &resolution, QString &formatName, double &fps) {
         if (mediaType == nullptr) {
@@ -518,52 +473,25 @@ namespace {
 #endif
 } // namespace
 
-SettingsWindow::SettingsWindow(const QString &execPath, acmx2::Backend backend,
-                               QWidget *parent)
-    : QDialog(parent),
-      executablePath(execPath),
-      activeBackend(backend),
-      selectedCameraIndex(0),
-      selectedCameraResolution(1280, 720),
-      selectedScreenResolution(0, 0),
-      cameraFPS(30),
-      inputVideoFile(""),
-      outputVideoFile(""),
-      useInputVideoFile(false),
-      useGraphicsFile(false),
-      saveOutputVideoFile(false),
-      graphicsFile(""),
-      graphicsDuration(10),
-      modelFile("data/cube.mxmod.z"),
-      selectedCudaDevice(0),
-      maxDuration(0.0),
-      maxSizeLimit(0.0) {
-    init();
-}
+SettingsWindow::SettingsWindow(const QString &execPath, acmx2::Backend backend, QWidget *parent) : QDialog(parent), executablePath(execPath), activeBackend(backend), selectedCameraIndex(0), selectedCameraResolution(1280, 720), selectedScreenResolution(0, 0), cameraFPS(30), inputVideoFile(""), outputVideoFile(""), useInputVideoFile(false), useGraphicsFile(false), saveOutputVideoFile(false), graphicsFile(""), graphicsDuration(10), modelFile("data/cube.mxmod.z"), selectedCudaDevice(0), maxDuration(0.0), maxSizeLimit(0.0) { init(); }
 
 void SettingsWindow::populateCameraDevices() {
     if (activeBackend == acmx2::Backend::Acmxvk) {
         QProcess process;
         process.start(executablePath, {"--list-camera-devices"});
         const bool finished = process.waitForFinished(8000);
-        if (finished && process.exitStatus() == QProcess::NormalExit &&
-            process.exitCode() == 0) {
-            const QStringList lines =
-                QString::fromUtf8(process.readAllStandardOutput())
-                    .split('\n', Qt::SkipEmptyParts);
+        if (finished && process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0) {
+            const QStringList lines = QString::fromUtf8(process.readAllStandardOutput()).split('\n', Qt::SkipEmptyParts);
             for (const QString &line : lines) {
                 const qsizetype separator = line.indexOf('\t');
                 if (separator <= 0) {
                     continue;
                 }
                 bool validIndex = false;
-                const int deviceIndex =
-                    line.left(separator).trimmed().toInt(&validIndex);
+                const int deviceIndex = line.left(separator).trimmed().toInt(&validIndex);
                 const QString cameraName = line.mid(separator + 1).trimmed();
                 if (validIndex && deviceIndex >= 0 && !cameraName.isEmpty()) {
-                    cameraIndexComboBox->addItem(
-                        QString("%1 [%2]").arg(cameraName).arg(deviceIndex),
-                        deviceIndex);
+                    cameraIndexComboBox->addItem(QString("%1 [%2]").arg(cameraName).arg(deviceIndex), deviceIndex);
                 }
             }
         }
@@ -617,9 +545,7 @@ void SettingsWindow::populateCudaDevices() {
     }
 
     QStringList lines = output.split('\n');
-    QRegularExpression deviceRegex(
-        "(?:device\\s+)?(\\d+):\\s*\"?([^\"\\n]+)\"?",
-        QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression deviceRegex("(?:device\\s+)?(\\d+):\\s*\"?([^\"\\n]+)\"?", QRegularExpression::CaseInsensitiveOption);
 
     bool foundDevice = false;
     for (const QString &line : lines) {
@@ -673,23 +599,14 @@ void SettingsWindow::populateVideoEncoders(const QString &savedEncoder) {
             encodeCodecComboBox->setItemData(index, backend, Qt::UserRole + 3);
             encodeCodecComboBox->setItemData(index, stability, Qt::UserRole + 4);
             encodeCodecComboBox->setItemData(index, pixelFormats, Qt::UserRole + 5);
-            encodeCodecComboBox->setItemData(
-                index,
-                QString("%1\nCodec: %2; backend: %3; status: %4\nPixel formats: %5")
-                    .arg(longName, codecName, backend, stability,
-                         pixelFormats.isEmpty() ? QString("encoder-defined") : pixelFormats),
-                Qt::ToolTipRole);
+            encodeCodecComboBox->setItemData(index, QString("%1\nCodec: %2; backend: %3; status: %4\nPixel formats: %5").arg(longName, codecName, backend, stability, pixelFormats.isEmpty() ? QString("encoder-defined") : pixelFormats), Qt::ToolTipRole);
         }
     }
 
     // Keep useful exact choices visible even when the configured executable
     // is temporarily unavailable. They will fail with a clear MXWrite error
     // if the linked FFmpeg build does not provide them.
-    const QList<QPair<QString, QString>> fallbackEncoders = {
-        {"libx264 — software H.264", "libx264"},
-        {"libx265 — software H.265/HEVC", "libx265"},
-        {"h264_nvenc — NVIDIA H.264", "h264_nvenc"},
-        {"hevc_nvenc — NVIDIA H.265/HEVC", "hevc_nvenc"}};
+    const QList<QPair<QString, QString>> fallbackEncoders = {{"libx264 — software H.264", "libx264"}, {"libx265 — software H.265/HEVC", "libx265"}, {"h264_nvenc — NVIDIA H.264", "h264_nvenc"}, {"hevc_nvenc — NVIDIA H.265/HEVC", "hevc_nvenc"}};
     for (const auto &encoder : fallbackEncoders) {
         if (encodeCodecComboBox->findData(encoder.second) < 0) {
             encodeCodecComboBox->addItem(encoder.first, encoder.second);
@@ -698,8 +615,7 @@ void SettingsWindow::populateVideoEncoders(const QString &savedEncoder) {
 
     int savedIndex = encodeCodecComboBox->findData(savedEncoder);
     if (savedIndex < 0 && !savedEncoder.isEmpty()) {
-        encodeCodecComboBox->addItem(savedEncoder + " — unavailable in current FFmpeg build",
-                                     savedEncoder);
+        encodeCodecComboBox->addItem(savedEncoder + " — unavailable in current FFmpeg build", savedEncoder);
         savedIndex = encodeCodecComboBox->count() - 1;
     }
     encodeCodecComboBox->setCurrentIndex(savedIndex >= 0 ? savedIndex : 0);
@@ -717,33 +633,25 @@ void SettingsWindow::updateEncoderDetails() {
     const bool exactEncoder = name != "auto" && name != "software" && name != "nvenc";
     encodeOptionsButton->setEnabled(exactEncoder);
     if (!description.isEmpty()) {
-        encodeCodecDetailsLabel->setText(
-            QString("%1 | codec: %2 | %3 | pixel formats: %4")
-                .arg(description, codecName, backend,
-                     pixelFormats.isEmpty() ? QString("encoder-defined") : pixelFormats));
+        encodeCodecDetailsLabel->setText(QString("%1 | codec: %2 | %3 | pixel formats: %4").arg(description, codecName, backend, pixelFormats.isEmpty() ? QString("encoder-defined") : pixelFormats));
     } else if (exactEncoder) {
         encodeCodecDetailsLabel->setText("Exact FFmpeg encoder: " + name);
     } else {
-        encodeCodecDetailsLabel->setText(
-            "Selection policy; MXWrite chooses the concrete H.264/H.265 encoder at startup.");
+        encodeCodecDetailsLabel->setText("Selection policy; MXWrite chooses the concrete H.264/H.265 encoder at startup.");
     }
 }
 
 void SettingsWindow::showEncoderOptions() {
     const QString encoderName = encodeCodecComboBox->currentData().toString();
-    if (encoderName.isEmpty() || encoderName == "auto" || encoderName == "software" ||
-        encoderName == "nvenc") {
+    if (encoderName.isEmpty() || encoderName == "auto" || encoderName == "software" || encoderName == "nvenc") {
         return;
     }
 
     QProcess process;
-    process.start(executablePath,
-                  QStringList() << "--list-encoder-options" << encoderName);
-    if (!process.waitForFinished(5000) || process.exitStatus() != QProcess::NormalExit ||
-        process.exitCode() != 0) {
+    process.start(executablePath, QStringList() << "--list-encoder-options" << encoderName);
+    if (!process.waitForFinished(5000) || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
         const QString error = QString::fromUtf8(process.readAllStandardError()).trimmed();
-        QMessageBox::warning(this, "Encoder Options",
-                             error.isEmpty() ? "Unable to query this encoder." : error);
+        QMessageBox::warning(this, "Encoder Options", error.isEmpty() ? "Unable to query this encoder." : error);
         return;
     }
 
@@ -752,10 +660,9 @@ void SettingsWindow::showEncoderOptions() {
     dialog.resize(1000, 560);
     dialog.setStyleSheet(styleSheet());
     auto *layout = new QVBoxLayout(&dialog);
-    auto *summary = new QLabel(
-        "Double-click an option to add it to Extra FFmpeg parameters, or use the shown "
-        "name manually as -option value.",
-        &dialog);
+    auto *summary = new QLabel("Double-click an option to add it to Extra FFmpeg parameters, or use the shown "
+                               "name manually as -option value.",
+                               &dialog);
     summary->setWordWrap(true);
     layout->addWidget(summary);
 
@@ -768,9 +675,8 @@ void SettingsWindow::showEncoderOptions() {
     tree->setWordWrap(true);
     tree->setTextElideMode(Qt::ElideNone);
     tree->setSelectionBehavior(QAbstractItemView::SelectRows);
-    tree->setStyleSheet(
-        "QTreeWidget::item { background-color: transparent; padding: 4px; }"
-        "QTreeWidget::item:selected { background-color: palette(highlight); }");
+    tree->setStyleSheet("QTreeWidget::item { background-color: transparent; padding: 4px; }"
+                        "QTreeWidget::item:selected { background-color: palette(highlight); }");
     const QString output = QString::fromUtf8(process.readAllStandardOutput());
     for (const QString &line : output.split('\n', Qt::SkipEmptyParts)) {
         const QStringList fields = line.split('\t', Qt::KeepEmptyParts);
@@ -781,8 +687,7 @@ void SettingsWindow::showEncoderOptions() {
         if (!fields.at(4).isEmpty() || !fields.at(5).isEmpty()) {
             range = fields.at(4) + " … " + fields.at(5);
         }
-        new QTreeWidgetItem(tree, {"-" + fields.at(1), fields.at(2), fields.at(3),
-                                   range, fields.at(6), fields.at(7)});
+        new QTreeWidgetItem(tree, {"-" + fields.at(1), fields.at(2), fields.at(3), range, fields.at(6), fields.at(7)});
     }
     if (tree->topLevelItemCount() == 0) {
         new QTreeWidgetItem(tree, {"(No private video AVOptions reported)"});
@@ -803,51 +708,44 @@ void SettingsWindow::showEncoderOptions() {
             int height = metrics.height() + 10;
             for (int column : {3, 4, 5}) {
                 const int textWidth = std::max(40, tree->columnWidth(column) - 12);
-                const QRect bounds = metrics.boundingRect(
-                    QRect(0, 0, textWidth, std::numeric_limits<int>::max()),
-                    Qt::TextWordWrap | Qt::AlignLeft, item->text(column));
+                const QRect bounds = metrics.boundingRect(QRect(0, 0, textWidth, std::numeric_limits<int>::max()), Qt::TextWordWrap | Qt::AlignLeft, item->text(column));
                 height = std::max(height, bounds.height() + 10);
             }
             item->setSizeHint(0, QSize(tree->columnWidth(0), height));
         }
     };
-    connect(tree->header(), &QHeaderView::sectionResized, &dialog,
-            [updateRowHeights](int logicalIndex, int, int) {
-                if (logicalIndex >= 3) {
-                    updateRowHeights();
-                }
-            });
+    connect(tree->header(), &QHeaderView::sectionResized, &dialog, [updateRowHeights](int logicalIndex, int, int) {
+        if (logicalIndex >= 3) {
+            updateRowHeights();
+        }
+    });
     QTimer::singleShot(0, &dialog, updateRowHeights);
-    connect(tree, &QTreeWidget::itemDoubleClicked, &dialog,
-            [this, &dialog](QTreeWidgetItem *item, int) {
-                QString optionName = item->text(0);
-                if (!optionName.startsWith('-')) {
-                    return;
-                }
-                bool accepted = false;
-                const QString value = QInputDialog::getText(
-                    &dialog, "Set Encoder Option", optionName + " value:",
-                    QLineEdit::Normal, item->text(2), &accepted);
-                if (!accepted) {
-                    return;
-                }
-                QString escapedValue = value;
-                if (escapedValue.contains(' ') || escapedValue.contains('\t') ||
-                    escapedValue.contains('"')) {
-                    escapedValue.replace('\\', "\\\\");
-                    escapedValue.replace('"', "\\\"");
-                    escapedValue = '"' + escapedValue + '"';
-                }
-                QString parameters = encodeParametersLineEdit->text().trimmed();
-                if (!parameters.isEmpty()) {
-                    parameters += ' ';
-                }
-                parameters += optionName;
-                if (!escapedValue.isEmpty()) {
-                    parameters += ' ' + escapedValue;
-                }
-                encodeParametersLineEdit->setText(parameters);
-            });
+    connect(tree, &QTreeWidget::itemDoubleClicked, &dialog, [this, &dialog](QTreeWidgetItem *item, int) {
+        QString optionName = item->text(0);
+        if (!optionName.startsWith('-')) {
+            return;
+        }
+        bool accepted = false;
+        const QString value = QInputDialog::getText(&dialog, "Set Encoder Option", optionName + " value:", QLineEdit::Normal, item->text(2), &accepted);
+        if (!accepted) {
+            return;
+        }
+        QString escapedValue = value;
+        if (escapedValue.contains(' ') || escapedValue.contains('\t') || escapedValue.contains('"')) {
+            escapedValue.replace('\\', "\\\\");
+            escapedValue.replace('"', "\\\"");
+            escapedValue = '"' + escapedValue + '"';
+        }
+        QString parameters = encodeParametersLineEdit->text().trimmed();
+        if (!parameters.isEmpty()) {
+            parameters += ' ';
+        }
+        parameters += optionName;
+        if (!escapedValue.isEmpty()) {
+            parameters += ' ' + escapedValue;
+        }
+        encodeParametersLineEdit->setText(parameters);
+    });
     layout->addWidget(tree);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
@@ -893,10 +791,9 @@ void SettingsWindow::init() {
     convertHdr10CheckBox = new QCheckBox("Convert HLG to HDR10 after processing", this);
     convertHdr10CheckBox->setChecked(false);
     convertHdr10CheckBox->setEnabled(false);
-    convertHdr10CheckBox->setToolTip(
-        "When the input is detected as HDR (HLG or PQ), enable this to run an "
-        "ffmpeg pass after acmx2 finishes that re-encodes the output to HDR10 "
-        "(HEVC NVENC, bt2020/PQ).");
+    convertHdr10CheckBox->setToolTip("When the input is detected as HDR (HLG or PQ), enable this to run an "
+                                     "ffmpeg pass after acmx2 finishes that re-encodes the output to HDR10 "
+                                     "(HEVC NVENC, bt2020/PQ).");
 
     graphicsFileLineEdit = new QLineEdit(this);
     graphicsFileLineEdit->setReadOnly(true);
@@ -906,17 +803,7 @@ void SettingsWindow::init() {
     screenResolutionComboBox->setEditable(true);
     screenResolutionComboBox->setInsertPolicy(QComboBox::NoInsert);
     screenResolutionComboBox->lineEdit()->setPlaceholderText("Default or WxH");
-    screenResolutionComboBox->addItems({"Default",
-                                        "320x240", "240x320", "400x300", "300x400", "512x384", "384x512",
-                                        "640x360", "360x640", "640x480", "480x640", "720x480", "480x720",
-                                        "800x600", "600x800", "960x720", "720x960", "1024x768", "768x1024",
-                                        "1152x864", "864x1152", "1280x720", "720x1280", "1280x960", "960x1280",
-                                        "1280x1024", "1024x1280", "1366x768", "768x1366", "1440x900", "900x1440",
-                                        "1600x900", "900x1600", "1600x1200", "1200x1600", "1440x1080", "1080x1440",
-                                        "1920x1080", "1080x1920", "1920x1200", "1200x1920", "2048x1536", "1536x2048",
-                                        "2560x1440", "1440x2560", "2560x1600", "1600x2560", "2560x1920", "1920x2560",
-                                        "3440x1440", "1440x3440", "3840x1600", "1600x3840", "3840x2160", "2160x3840",
-                                        "7680x4320", "4320x7680"});
+    screenResolutionComboBox->addItems({"Default", "320x240", "240x320", "400x300", "300x400", "512x384", "384x512", "640x360", "360x640", "640x480", "480x640", "720x480", "480x720", "800x600", "600x800", "960x720", "720x960", "1024x768", "768x1024", "1152x864", "864x1152", "1280x720", "720x1280", "1280x960", "960x1280", "1280x1024", "1024x1280", "1366x768", "768x1366", "1440x900", "900x1440", "1600x900", "900x1600", "1600x1200", "1200x1600", "1440x1080", "1080x1440", "1920x1080", "1080x1920", "1920x1200", "1200x1920", "2048x1536", "1536x2048", "2560x1440", "1440x2560", "2560x1600", "1600x2560", "2560x1920", "1920x2560", "3440x1440", "1440x3440", "3840x1600", "1600x3840", "3840x2160", "2160x3840", "7680x4320", "4320x7680"});
     screenResolutionComboBox->setCurrentIndex(0);
 
     saveOutputVideoCheckBox = new QCheckBox("Save Output to Video File", this);
@@ -980,17 +867,14 @@ void SettingsWindow::init() {
 
     if (activeBackend == acmx2::Backend::Acmxvk) {
         maximizeFpsCheckBox = new QCheckBox("Maximize FPS", this);
-        maximizeFpsCheckBox->setToolTip(
-            "Camera mode: render at the selected FPS while updating the image "
-            "at the camera's capture rate (--maximize-fps).");
+        maximizeFpsCheckBox->setToolTip("Camera mode: render at the selected FPS while updating the image "
+                                        "at the camera's capture rate (--maximize-fps).");
         useSourceFpsCheckBox = new QCheckBox("Use Source FPS", this);
-        useSourceFpsCheckBox->setToolTip(
-            "Video mode: pace playback using the video's reported frame rate "
-            "(--use-source-fps).");
+        useSourceFpsCheckBox->setToolTip("Video mode: pace playback using the video's reported frame rate "
+                                         "(--use-source-fps).");
         useSourceAudioCheckBox = new QCheckBox("Use Source Audio", this);
-        useSourceAudioCheckBox->setToolTip(
-            "Video mode: use the video's audio track for shader reactivity "
-            "(--use-source-audio). Requires Use Source FPS.");
+        useSourceAudioCheckBox->setToolTip("Video mode: use the video's audio track for shader reactivity "
+                                           "(--use-source-audio). Requires Use Source FPS.");
     }
 
     enable3dCheckBox = new QCheckBox("Enable 3D", this);
@@ -1014,13 +898,10 @@ void SettingsWindow::init() {
 
     textureCacheCheckBox = new QCheckBox("Texture Cache", this);
     textureCacheCheckBox->setEnabled(true);
-    auto *textureCacheArrayCheckBox =
-        new QCheckBox("Use sampler2DArray history", this);
+    auto *textureCacheArrayCheckBox = new QCheckBox("Use sampler2DArray history", this);
     textureCacheArrayCheckBox->setObjectName("textureCacheArrayCheckBox");
-    textureCacheArrayCheckBox->setToolTip(
-        "Pass --texture-cache-array and bind frame history as one array texture");
-    textureCacheArrayCheckBox->setEnabled(
-        textureCacheCheckBox->isChecked());
+    textureCacheArrayCheckBox->setToolTip("Pass --texture-cache-array and bind frame history as one array texture");
+    textureCacheArrayCheckBox->setEnabled(textureCacheCheckBox->isChecked());
     cacheDelaySpinBox = new QSpinBox(this);
     cacheDelaySpinBox->setRange(1, 8);
     cacheDelaySpinBox->setValue(1);
@@ -1035,15 +916,11 @@ void SettingsWindow::init() {
     // ── Encoding quality widgets ──────────────────────────────────────
     QSettings encSettings("LostSideDead", "acmx2");
     encodePresetComboBox = new QComboBox(this);
-    encodePresetComboBox->addItems({"ultrafast", "superfast", "veryfast", "faster", "fast",
-                                    "medium", "slow", "slower", "veryslow", "p1", "p2", "p3",
-                                    "p4", "p5", "p6", "p7"});
+    encodePresetComboBox->addItems({"ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "p1", "p2", "p3", "p4", "p5", "p6", "p7"});
     encodePresetComboBox->setCurrentText(encSettings.value("recording/preset", "medium").toString());
 
     encodeTuneComboBox = new QComboBox(this);
-    encodeTuneComboBox->addItems({"none", "film", "animation", "grain", "stillimage",
-                                  "psnr", "ssim", "fastdecode", "zerolatency", "hq", "uhq",
-                                  "ll", "ull", "lossless"});
+    encodeTuneComboBox->addItems({"none", "film", "animation", "grain", "stillimage", "psnr", "ssim", "fastdecode", "zerolatency", "hq", "uhq", "ll", "ull", "lossless"});
     encodeTuneComboBox->setCurrentText(encSettings.value("recording/tune", "none").toString());
 
     encodeCrfSpinBox = new QSpinBox(this);
@@ -1055,33 +932,22 @@ void SettingsWindow::init() {
         encodeRateControlComboBox = new QComboBox(this);
         encodeRateControlComboBox->addItem("Quality (CRF/CQ)", "quality");
         encodeRateControlComboBox->addItem("Target bitrate (VBR)", "bitrate");
-        const QString savedRateControl =
-            encSettings.value("recording/rate_control", "quality").toString();
-        const int rateControlIndex =
-            encodeRateControlComboBox->findData(savedRateControl);
-        encodeRateControlComboBox->setCurrentIndex(
-            rateControlIndex >= 0 ? rateControlIndex : 0);
+        const QString savedRateControl = encSettings.value("recording/rate_control", "quality").toString();
+        const int rateControlIndex = encodeRateControlComboBox->findData(savedRateControl);
+        encodeRateControlComboBox->setCurrentIndex(rateControlIndex >= 0 ? rateControlIndex : 0);
 
         encodeBitrateLineEdit = new QLineEdit(this);
-        encodeBitrateLineEdit->setText(
-            encSettings.value("recording/bitrate", "15M").toString());
+        encodeBitrateLineEdit->setText(encSettings.value("recording/bitrate", "15M").toString());
         encodeBitrateLineEdit->setPlaceholderText("15M");
         encodeBitrateLineEdit->setMaxLength(13);
-        encodeBitrateLineEdit->setToolTip(
-            "Target video bitrate in bits per second. K, M, and G suffixes "
-            "are accepted, for example 15M.");
+        encodeBitrateLineEdit->setToolTip("Target video bitrate in bits per second. K, M, and G suffixes "
+                                          "are accepted, for example 15M.");
         const auto updateRateControlWidgets = [this] {
-            const bool bitrateMode =
-                encodeRateControlComboBox->currentData().toString() ==
-                "bitrate";
+            const bool bitrateMode = encodeRateControlComboBox->currentData().toString() == "bitrate";
             encodeCrfSpinBox->setEnabled(!bitrateMode);
             encodeBitrateLineEdit->setEnabled(bitrateMode);
         };
-        connect(encodeRateControlComboBox,
-                QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                [updateRateControlWidgets](int) {
-                    updateRateControlWidgets();
-                });
+        connect(encodeRateControlComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [updateRateControlWidgets](int) { updateRateControlWidgets(); });
         updateRateControlWidgets();
     }
 
@@ -1093,19 +959,15 @@ void SettingsWindow::init() {
     encodeCodecDetailsLabel->setWordWrap(true);
     encodeCodecDetailsLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     encodeOptionsButton = new QPushButton("Show Encoder Options...", this);
-    connect(encodeCodecComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int) { updateEncoderDetails(); });
-    connect(encodeOptionsButton, &QPushButton::clicked,
-            this, &SettingsWindow::showEncoderOptions);
+    connect(encodeCodecComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { updateEncoderDetails(); });
+    connect(encodeOptionsButton, &QPushButton::clicked, this, &SettingsWindow::showEncoderOptions);
     updateEncoderDetails();
 
     encodeParametersLineEdit = new QLineEdit(this);
     encodeParametersLineEdit->setText(encSettings.value("recording/parameters", "").toString());
-    encodeParametersLineEdit->setPlaceholderText(
-        "-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p");
-    encodeParametersLineEdit->setToolTip(
-        "Additional FFmpeg-style video encoder options passed through MXWrite. "
-        "Do not include an input or output filename.");
+    encodeParametersLineEdit->setPlaceholderText("-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p");
+    encodeParametersLineEdit->setToolTip("Additional FFmpeg-style video encoder options passed through MXWrite. "
+                                         "Do not include an input or output filename.");
 
     encodeRealtimeCheckBox = new QCheckBox("Realtime (low-latency)", this);
     encodeRealtimeCheckBox->setChecked(encSettings.value("recording/realtime", false).toBool());
@@ -1113,29 +975,22 @@ void SettingsWindow::init() {
 
     encodeNoDropCheckBox = new QCheckBox("No Drop", this);
     encodeNoDropCheckBox->setChecked(encSettings.value("recording/no_drop", false).toBool());
-    encodeNoDropCheckBox->setToolTip(
-        "File and graphics modes only: keep one pending frame and process the next frame "
-        "as encoder capacity becomes available. Webcam recording always uses wall-clock "
-        "timestamps and drops late frames to remain synchronized.");
+    encodeNoDropCheckBox->setToolTip("File and graphics modes only: keep one pending frame and process the next frame "
+                                     "as encoder capacity becomes available. Webcam recording always uses wall-clock "
+                                     "timestamps and drops late frames to remain synchronized.");
     encodeNoDropCheckBox->setEnabled(false);
     if (activeBackend == acmx2::Backend::Acmxvk) {
-        encodeConstantFrameRateCheckBox =
-            new QCheckBox("Constant Frame Rate", this);
-        encodeConstantFrameRateCheckBox->setChecked(
-            encSettings.value("recording/constant_frame_rate", false).toBool());
-        encodeConstantFrameRateCheckBox->setToolTip(
-            "Video mode: encode rendered frames with consecutive output "
-            "timestamps instead of source-timeline PTS "
-            "(--constant-frame-rate).");
-        encodeFillPtsGapsCheckBox =
-            new QCheckBox("Fill PTS Gaps (Editing-compatible CFR)", this);
-        encodeFillPtsGapsCheckBox->setChecked(
-            encSettings.value("recording/fill_pts_gaps", false).toBool());
-        encodeFillPtsGapsCheckBox->setToolTip(
-            "Preserve the real recording timeline while duplicating the "
-            "previous rendered frame into missing timestamp slots. This "
-            "produces constant-rate output suitable for quick editing "
-            "without a later transcode (--fill-pts-gaps).");
+        encodeConstantFrameRateCheckBox = new QCheckBox("Constant Frame Rate", this);
+        encodeConstantFrameRateCheckBox->setChecked(encSettings.value("recording/constant_frame_rate", false).toBool());
+        encodeConstantFrameRateCheckBox->setToolTip("Video mode: encode rendered frames with consecutive output "
+                                                    "timestamps instead of source-timeline PTS "
+                                                    "(--constant-frame-rate).");
+        encodeFillPtsGapsCheckBox = new QCheckBox("Fill PTS Gaps (Editing-compatible CFR)", this);
+        encodeFillPtsGapsCheckBox->setChecked(encSettings.value("recording/fill_pts_gaps", false).toBool());
+        encodeFillPtsGapsCheckBox->setToolTip("Preserve the real recording timeline while duplicating the "
+                                              "previous rendered frame into missing timestamp slots. This "
+                                              "produces constant-rate output suitable for quick editing "
+                                              "without a later transcode (--fill-pts-gaps).");
     }
 
     // ── Input Source group ────────────────────────────────────────────
@@ -1218,8 +1073,7 @@ void SettingsWindow::init() {
     encodingGrid->addWidget(encodeRealtimeCheckBox, ++r, 0, 1, 2);
     encodingGrid->addWidget(encodeNoDropCheckBox, ++r, 0, 1, 2);
     if (encodeConstantFrameRateCheckBox) {
-        encodingGrid->addWidget(encodeConstantFrameRateCheckBox, ++r, 0, 1,
-                                2);
+        encodingGrid->addWidget(encodeConstantFrameRateCheckBox, ++r, 0, 1, 2);
     }
     if (encodeFillPtsGapsCheckBox) {
         encodingGrid->addWidget(encodeFillPtsGapsCheckBox, ++r, 0, 1, 2);
@@ -1339,10 +1193,8 @@ void SettingsWindow::init() {
     reflowGroupColumns(2);
 
     // ── Signals ───────────────────────────────────────────────────────
-    connect(cameraIndexComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &SettingsWindow::onCameraDeviceChanged);
-    connect(cameraResolutionComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &SettingsWindow::onCameraResolutionChanged);
+    connect(cameraIndexComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsWindow::onCameraDeviceChanged);
+    connect(cameraResolutionComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsWindow::onCameraResolutionChanged);
     connect(cameraFPSComboBox, &QComboBox::currentTextChanged, this, [this](const QString &fpsText) {
         if (fpsText.isEmpty()) {
             return;
@@ -1354,12 +1206,10 @@ void SettingsWindow::init() {
 
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheDelaySpinBox, &QSpinBox::setEnabled);
     connect(textureCacheCheckBox, &QCheckBox::toggled, cacheSizeSpinBox, &QSpinBox::setEnabled);
-    connect(textureCacheCheckBox, &QCheckBox::toggled,
-            textureCacheArrayCheckBox, &QCheckBox::setEnabled);
+    connect(textureCacheCheckBox, &QCheckBox::toggled, textureCacheArrayCheckBox, &QCheckBox::setEnabled);
     connect(durationLimitCheckBox, &QCheckBox::toggled, durationLimitSpinBox, &QDoubleSpinBox::setEnabled);
     connect(maxSizeLimitCheckBox, &QCheckBox::toggled, maxSizeLimitSpinBox, &QDoubleSpinBox::setEnabled);
-    connect(rotate_check_box, &QCheckBox::toggled, rotate_combo_box,
-            &QComboBox::setEnabled);
+    connect(rotate_check_box, &QCheckBox::toggled, rotate_combo_box, &QComboBox::setEnabled);
 
     const auto updateAcmxvkTimingControls = [this]() {
         if (!maximizeFpsCheckBox)
@@ -1368,28 +1218,17 @@ void SettingsWindow::init() {
         const bool videoMode = inputVideoOptionRadioButton->isChecked();
         maximizeFpsCheckBox->setEnabled(cameraMode);
         useSourceFpsCheckBox->setEnabled(videoMode);
-        useSourceAudioCheckBox->setEnabled(
-            videoMode && useSourceFpsCheckBox->isChecked());
+        useSourceAudioCheckBox->setEnabled(videoMode && useSourceFpsCheckBox->isChecked());
     };
     if (useSourceFpsCheckBox) {
-        connect(useSourceFpsCheckBox, &QCheckBox::toggled, this,
-                [this, updateAcmxvkTimingControls](bool checked) {
-                    if (!checked)
-                        useSourceAudioCheckBox->setChecked(false);
-                    updateAcmxvkTimingControls();
-                });
-        connect(cameraOptionRadioButton, &QRadioButton::toggled, this,
-                [updateAcmxvkTimingControls]() {
-                    updateAcmxvkTimingControls();
-                });
-        connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this,
-                [updateAcmxvkTimingControls]() {
-                    updateAcmxvkTimingControls();
-                });
-        connect(graphicsFileOptionRadioButton, &QRadioButton::toggled, this,
-                [updateAcmxvkTimingControls]() {
-                    updateAcmxvkTimingControls();
-                });
+        connect(useSourceFpsCheckBox, &QCheckBox::toggled, this, [this, updateAcmxvkTimingControls](bool checked) {
+            if (!checked)
+                useSourceAudioCheckBox->setChecked(false);
+            updateAcmxvkTimingControls();
+        });
+        connect(cameraOptionRadioButton, &QRadioButton::toggled, this, [updateAcmxvkTimingControls]() { updateAcmxvkTimingControls(); });
+        connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this, [updateAcmxvkTimingControls]() { updateAcmxvkTimingControls(); });
+        connect(graphicsFileOptionRadioButton, &QRadioButton::toggled, this, [updateAcmxvkTimingControls]() { updateAcmxvkTimingControls(); });
     }
 
     connect(enable3dCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
@@ -1491,37 +1330,23 @@ void SettingsWindow::init() {
         if (!encodeConstantFrameRateCheckBox || !encodeFillPtsGapsCheckBox) {
             return;
         }
-        const bool encodedOutput = saveOutputVideoCheckBox->isChecked() &&
-                                   !writePngCheckBox->isChecked();
-        const bool timelineInput = inputVideoOptionRadioButton->isChecked() ||
-                                   cameraOptionRadioButton->isChecked();
-        encodeConstantFrameRateCheckBox->setEnabled(
-            inputVideoOptionRadioButton->isChecked() && encodedOutput);
+        const bool encodedOutput = saveOutputVideoCheckBox->isChecked() && !writePngCheckBox->isChecked();
+        const bool timelineInput = inputVideoOptionRadioButton->isChecked() || cameraOptionRadioButton->isChecked();
+        encodeConstantFrameRateCheckBox->setEnabled(inputVideoOptionRadioButton->isChecked() && encodedOutput);
         encodeFillPtsGapsCheckBox->setEnabled(timelineInput && encodedOutput);
     };
     if (encodeConstantFrameRateCheckBox) {
-        connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this,
-                [updateConstantFrameRateControl](bool) {
-                    updateConstantFrameRateControl();
-                });
-        connect(saveOutputVideoCheckBox, &QCheckBox::toggled, this,
-                [updateConstantFrameRateControl](bool) {
-                    updateConstantFrameRateControl();
-                });
-        connect(writePngCheckBox, &QCheckBox::toggled, this,
-                [updateConstantFrameRateControl](bool) {
-                    updateConstantFrameRateControl();
-                });
-        connect(encodeConstantFrameRateCheckBox, &QCheckBox::toggled, this,
-                [this](bool checked) {
-                    if (checked && encodeFillPtsGapsCheckBox)
-                        encodeFillPtsGapsCheckBox->setChecked(false);
-                });
-        connect(encodeFillPtsGapsCheckBox, &QCheckBox::toggled, this,
-                [this](bool checked) {
-                    if (checked && encodeConstantFrameRateCheckBox)
-                        encodeConstantFrameRateCheckBox->setChecked(false);
-                });
+        connect(inputVideoOptionRadioButton, &QRadioButton::toggled, this, [updateConstantFrameRateControl](bool) { updateConstantFrameRateControl(); });
+        connect(saveOutputVideoCheckBox, &QCheckBox::toggled, this, [updateConstantFrameRateControl](bool) { updateConstantFrameRateControl(); });
+        connect(writePngCheckBox, &QCheckBox::toggled, this, [updateConstantFrameRateControl](bool) { updateConstantFrameRateControl(); });
+        connect(encodeConstantFrameRateCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+            if (checked && encodeFillPtsGapsCheckBox)
+                encodeFillPtsGapsCheckBox->setChecked(false);
+        });
+        connect(encodeFillPtsGapsCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+            if (checked && encodeConstantFrameRateCheckBox)
+                encodeConstantFrameRateCheckBox->setChecked(false);
+        });
     }
 
     connect(okButton, &QPushButton::clicked, this, &SettingsWindow::acceptSettings);
@@ -1614,10 +1439,7 @@ void SettingsWindow::resizeEvent(QResizeEvent *event) {
 void SettingsWindow::loadUiState() {
     QSettings appSettings("LostSideDead", "acmx2");
 
-    preferredFpsText = appSettings.value(
-                                      "interface/preferred_fps",
-                                      appSettings.value("interface/camera_fps", "30"))
-                           .toString();
+    preferredFpsText = appSettings.value("interface/preferred_fps", appSettings.value("interface/camera_fps", "30")).toString();
     if (preferredFpsText.isEmpty()) {
         preferredFpsText = "30";
     }
@@ -1659,15 +1481,12 @@ void SettingsWindow::loadUiState() {
     QString screenRes = appSettings.value("interface/screen_resolution", "Default").toString();
     QSize restored_screen_resolution;
     if (parse_even_resolution(screenRes, restored_screen_resolution)) {
-        const QString normalized_screen_resolution =
-            resolution_text(restored_screen_resolution);
-        const int screenResIdx =
-            screenResolutionComboBox->findText(normalized_screen_resolution);
+        const QString normalized_screen_resolution = resolution_text(restored_screen_resolution);
+        const int screenResIdx = screenResolutionComboBox->findText(normalized_screen_resolution);
         if (screenResIdx >= 0) {
             screenResolutionComboBox->setCurrentIndex(screenResIdx);
         } else {
-            screenResolutionComboBox->setCurrentText(
-                normalized_screen_resolution);
+            screenResolutionComboBox->setCurrentText(normalized_screen_resolution);
         }
     }
 
@@ -1686,8 +1505,7 @@ void SettingsWindow::loadUiState() {
     // reflects the actual capabilities of the cached path.
     detectInputHdr();
     if (convertHdr10CheckBox) {
-        const bool wantHdr10 =
-            appSettings.value("interface/convert_to_hdr10", false).toBool();
+        const bool wantHdr10 = appSettings.value("interface/convert_to_hdr10", false).toBool();
         if (wantHdr10 && convertHdr10CheckBox->isEnabled()) {
             convertHdr10CheckBox->setChecked(true);
         }
@@ -1695,14 +1513,9 @@ void SettingsWindow::loadUiState() {
 
     fullscreenCheckBox->setChecked(appSettings.value("interface/fullscreen", false).toBool());
     if (maximizeFpsCheckBox) {
-        maximizeFpsCheckBox->setChecked(
-            appSettings.value("interface/acmxvk_maximize_fps", false).toBool());
-        useSourceFpsCheckBox->setChecked(
-            appSettings.value("interface/acmxvk_use_source_fps", false).toBool());
-        useSourceAudioCheckBox->setChecked(
-            appSettings.value("interface/acmxvk_use_source_audio", false)
-                .toBool() &&
-            useSourceFpsCheckBox->isChecked());
+        maximizeFpsCheckBox->setChecked(appSettings.value("interface/acmxvk_maximize_fps", false).toBool());
+        useSourceFpsCheckBox->setChecked(appSettings.value("interface/acmxvk_use_source_fps", false).toBool());
+        useSourceAudioCheckBox->setChecked(appSettings.value("interface/acmxvk_use_source_audio", false).toBool() && useSourceFpsCheckBox->isChecked());
     }
     enable3dCheckBox->setChecked(appSettings.value("interface/enable_3d", false).toBool());
     modelFileLineEdit->setText(appSettings.value("interface/model_file", "cube.mxmod.z").toString());
@@ -1712,10 +1525,8 @@ void SettingsWindow::loadUiState() {
     browseOnnxModelButton->setEnabled(useOnnxModelCheckBox->isChecked());
 
     textureCacheCheckBox->setChecked(appSettings.value("interface/texture_cache", false).toBool());
-    if (auto *arrayCheck =
-            findChild<QCheckBox *>("textureCacheArrayCheckBox")) {
-        arrayCheck->setChecked(
-            appSettings.value("interface/texture_cache_array", false).toBool());
+    if (auto *arrayCheck = findChild<QCheckBox *>("textureCacheArrayCheckBox")) {
+        arrayCheck->setChecked(appSettings.value("interface/texture_cache_array", false).toBool());
         arrayCheck->setEnabled(textureCacheCheckBox->isChecked());
     }
     cacheDelaySpinBox->setValue(appSettings.value("interface/cache_delay", 1).toInt());
@@ -1735,14 +1546,12 @@ void SettingsWindow::loadUiState() {
     maxSizeLimitSpinBox->setValue(appSettings.value("interface/max_size_mb", 500.0).toDouble());
     crossFadeSpinBox->setValue(appSettings.value("interface/crossfade", 0.5).toDouble());
     flipCheckBox->setChecked(appSettings.value("interface/flip", false).toBool());
-    const QString saved_rotation =
-        appSettings.value("interface/rotation_mode", "clockwise").toString();
+    const QString saved_rotation = appSettings.value("interface/rotation_mode", "clockwise").toString();
     const int rotation_index = rotate_combo_box->findData(saved_rotation);
     if (rotation_index >= 0) {
         rotate_combo_box->setCurrentIndex(rotation_index);
     }
-    rotate_check_box->setChecked(
-        appSettings.value("interface/rotate", false).toBool());
+    rotate_check_box->setChecked(appSettings.value("interface/rotate", false).toBool());
     rotate_combo_box->setEnabled(rotate_check_box->isChecked());
 
     // Recompute YUV availability for the restored camera/resolution even when
@@ -1770,10 +1579,8 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/camera_fps", cameraFPSComboBox->currentText());
     appSettings.setValue("interface/preferred_fps", cameraFPSComboBox->currentText());
     QSize screen_resolution;
-    if (parse_even_resolution(screenResolutionComboBox->currentText(),
-                              screen_resolution)) {
-        appSettings.setValue("interface/screen_resolution",
-                             resolution_text(screen_resolution));
+    if (parse_even_resolution(screenResolutionComboBox->currentText(), screen_resolution)) {
+        appSettings.setValue("interface/screen_resolution", resolution_text(screen_resolution));
     }
 
     appSettings.setValue("interface/input_video", inputVideoFileLineEdit->text());
@@ -1786,19 +1593,14 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/generate_enabled", generateCheckBox->isChecked());
     appSettings.setValue("interface/generate_interval", generateIntervalSpinBox->value());
     if (convertHdr10CheckBox) {
-        appSettings.setValue("interface/convert_to_hdr10",
-                             convertHdr10CheckBox->isChecked());
+        appSettings.setValue("interface/convert_to_hdr10", convertHdr10CheckBox->isChecked());
     }
 
     appSettings.setValue("interface/fullscreen", fullscreenCheckBox->isChecked());
     if (maximizeFpsCheckBox) {
-        appSettings.setValue("interface/acmxvk_maximize_fps",
-                             maximizeFpsCheckBox->isChecked());
-        appSettings.setValue("interface/acmxvk_use_source_fps",
-                             useSourceFpsCheckBox->isChecked());
-        appSettings.setValue("interface/acmxvk_use_source_audio",
-                             useSourceAudioCheckBox->isChecked() &&
-                                 useSourceFpsCheckBox->isChecked());
+        appSettings.setValue("interface/acmxvk_maximize_fps", maximizeFpsCheckBox->isChecked());
+        appSettings.setValue("interface/acmxvk_use_source_fps", useSourceFpsCheckBox->isChecked());
+        appSettings.setValue("interface/acmxvk_use_source_audio", useSourceAudioCheckBox->isChecked() && useSourceFpsCheckBox->isChecked());
     }
     appSettings.setValue("interface/enable_3d", enable3dCheckBox->isChecked());
     appSettings.setValue("interface/model_file", modelFileLineEdit->text());
@@ -1806,10 +1608,8 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/onnx_model_file", onnxModelFileLineEdit->text());
 
     appSettings.setValue("interface/texture_cache", textureCacheCheckBox->isChecked());
-    if (auto *arrayCheck =
-            findChild<QCheckBox *>("textureCacheArrayCheckBox")) {
-        appSettings.setValue("interface/texture_cache_array",
-                             arrayCheck->isChecked());
+    if (auto *arrayCheck = findChild<QCheckBox *>("textureCacheArrayCheckBox")) {
+        appSettings.setValue("interface/texture_cache_array", arrayCheck->isChecked());
     }
     appSettings.setValue("interface/cache_delay", cacheDelaySpinBox->value());
     appSettings.setValue("interface/cache_size", cacheSizeSpinBox->value());
@@ -1824,128 +1624,66 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/crossfade", crossFadeSpinBox->value());
     appSettings.setValue("interface/flip", flipCheckBox->isChecked());
     appSettings.setValue("interface/rotate", rotate_check_box->isChecked());
-    appSettings.setValue("interface/rotation_mode",
-                         rotate_combo_box->currentData().toString());
+    appSettings.setValue("interface/rotation_mode", rotate_combo_box->currentData().toString());
 }
 
-bool SettingsWindow::is3dEnabled() const {
-    return enable3dCheckBox->isChecked();
-}
+bool SettingsWindow::is3dEnabled() const { return enable3dCheckBox->isChecked(); }
 
-int SettingsWindow::getSelectedCameraIndex() const {
-    return selectedCameraIndex;
-}
+int SettingsWindow::getSelectedCameraIndex() const { return selectedCameraIndex; }
 
-QSize SettingsWindow::getSelectedCameraResolution() const {
-    return selectedCameraResolution;
-}
+QSize SettingsWindow::getSelectedCameraResolution() const { return selectedCameraResolution; }
 
-QSize SettingsWindow::getSelectedScreenResolution() const {
-    return selectedScreenResolution;
-}
+QSize SettingsWindow::getSelectedScreenResolution() const { return selectedScreenResolution; }
 
-int SettingsWindow::getCameraFPS() const {
-    return cameraFPS;
-}
+int SettingsWindow::getCameraFPS() const { return cameraFPS; }
 
-QString SettingsWindow::getInputVideoFile() const {
-    return inputVideoFile;
-}
+QString SettingsWindow::getInputVideoFile() const { return inputVideoFile; }
 
-QString SettingsWindow::getOutputVideoFile() const {
-    return outputVideoFile;
-}
+QString SettingsWindow::getOutputVideoFile() const { return outputVideoFile; }
 
-QString SettingsWindow::getGraphicsFile() const {
-    return graphicsFile;
-}
+QString SettingsWindow::getGraphicsFile() const { return graphicsFile; }
 
-bool SettingsWindow::isUsingInputVideoFile() const {
-    return useInputVideoFile;
-}
+bool SettingsWindow::isUsingInputVideoFile() const { return useInputVideoFile; }
 
-bool SettingsWindow::isUsingGraphicsFile() const {
-    return useGraphicsFile;
-}
+bool SettingsWindow::isUsingGraphicsFile() const { return useGraphicsFile; }
 
-bool SettingsWindow::isSavingToOutputVideoFile() const {
-    return saveOutputVideoFile;
-}
+bool SettingsWindow::isSavingToOutputVideoFile() const { return saveOutputVideoFile; }
 
-bool SettingsWindow::isInputHdrDetected() const {
-    return inputHdrDetected;
-}
+bool SettingsWindow::isInputHdrDetected() const { return inputHdrDetected; }
 
-bool SettingsWindow::isConvertToHdr10Enabled() const {
-    return convertHdr10CheckBox && convertHdr10CheckBox->isChecked() &&
-           convertHdr10CheckBox->isEnabled();
-}
+bool SettingsWindow::isConvertToHdr10Enabled() const { return convertHdr10CheckBox && convertHdr10CheckBox->isChecked() && convertHdr10CheckBox->isEnabled(); }
 
-bool SettingsWindow::isTextureCacheEnabled() const {
-    return textureCacheCheckBox->isChecked();
-}
+bool SettingsWindow::isTextureCacheEnabled() const { return textureCacheCheckBox->isChecked(); }
 
-int SettingsWindow::getCacheDelay() const {
-    return cacheDelaySpinBox->value();
-}
+int SettingsWindow::getCacheDelay() const { return cacheDelaySpinBox->value(); }
 
-int SettingsWindow::getCacheSize() const {
-    return cacheSizeSpinBox->value();
-}
+int SettingsWindow::getCacheSize() const { return cacheSizeSpinBox->value(); }
 
-bool SettingsWindow::isFullscreen() const {
-    return fullscreenCheckBox->isChecked();
-}
+bool SettingsWindow::isFullscreen() const { return fullscreenCheckBox->isChecked(); }
 
-bool SettingsWindow::isMaximizeFpsEnabled() const {
-    return maximizeFpsCheckBox && maximizeFpsCheckBox->isChecked();
-}
+bool SettingsWindow::isMaximizeFpsEnabled() const { return maximizeFpsCheckBox && maximizeFpsCheckBox->isChecked(); }
 
-bool SettingsWindow::isUseSourceFpsEnabled() const {
-    return useSourceFpsCheckBox && useSourceFpsCheckBox->isChecked();
-}
+bool SettingsWindow::isUseSourceFpsEnabled() const { return useSourceFpsCheckBox && useSourceFpsCheckBox->isChecked(); }
 
-bool SettingsWindow::isUseSourceAudioEnabled() const {
-    return useSourceAudioCheckBox && useSourceFpsCheckBox &&
-           useSourceFpsCheckBox->isChecked() &&
-           useSourceAudioCheckBox->isChecked();
-}
+bool SettingsWindow::isUseSourceAudioEnabled() const { return useSourceAudioCheckBox && useSourceFpsCheckBox && useSourceFpsCheckBox->isChecked() && useSourceAudioCheckBox->isChecked(); }
 
-bool SettingsWindow::isCopyAudioEnabled() const {
-    return copyAudioCheckBox->isChecked();
-}
+bool SettingsWindow::isCopyAudioEnabled() const { return copyAudioCheckBox->isChecked(); }
 
-bool SettingsWindow::isPngOutputEnabled() const {
-    return writePngCheckBox->isChecked();
-}
+bool SettingsWindow::isPngOutputEnabled() const { return writePngCheckBox->isChecked(); }
 
-bool SettingsWindow::isGenerateEnabled() const {
-    return generateCheckBox && generateCheckBox->isChecked();
-}
+bool SettingsWindow::isGenerateEnabled() const { return generateCheckBox && generateCheckBox->isChecked(); }
 
-int SettingsWindow::getGenerateInterval() const {
-    return generateIntervalSpinBox ? generateIntervalSpinBox->value() : 0;
-}
+int SettingsWindow::getGenerateInterval() const { return generateIntervalSpinBox ? generateIntervalSpinBox->value() : 0; }
 
-bool SettingsWindow::isUseYuvEnabled() const {
-    return useYuvCheckBox->isChecked();
-}
+bool SettingsWindow::isUseYuvEnabled() const { return useYuvCheckBox->isChecked(); }
 
-QString SettingsWindow::getModelFile() const {
-    return modelFile;
-}
+QString SettingsWindow::getModelFile() const { return modelFile; }
 
-bool SettingsWindow::isOnnxModelEnabled() const {
-    return dnnAvailable && useOnnxModelCheckBox->isChecked();
-}
+bool SettingsWindow::isOnnxModelEnabled() const { return dnnAvailable && useOnnxModelCheckBox->isChecked(); }
 
-QString SettingsWindow::getOnnxModelFile() const {
-    return onnxModelFile;
-}
+QString SettingsWindow::getOnnxModelFile() const { return onnxModelFile; }
 
-int SettingsWindow::getSelectedCudaDevice() const {
-    return selectedCudaDevice;
-}
+int SettingsWindow::getSelectedCudaDevice() const { return selectedCudaDevice; }
 
 void SettingsWindow::setCudaAvailable(bool available) {
     if (cudaDeviceComboBox) {
@@ -1953,8 +1691,7 @@ void SettingsWindow::setCudaAvailable(bool available) {
         if (!available) {
             cudaDeviceComboBox->clear();
             cudaDeviceComboBox->addItem("CUDA device support disabled", 0);
-            cudaDeviceComboBox->setToolTip(
-                "CUDA device support is not compiled into the selected backend.");
+            cudaDeviceComboBox->setToolTip("CUDA device support is not compiled into the selected backend.");
         }
     }
     if (cudaDeviceLabel) {
@@ -1977,9 +1714,7 @@ void SettingsWindow::setDnnAvailable(bool available) {
     if (browseOnnxModelButton)
         browseOnnxModelButton->setEnabled(available && useOnnxModelCheckBox->isChecked());
 
-    const QString tooltip = available
-                                ? QString()
-                                : tr("Disabled: acmx2 was built without OpenCV DNN support.");
+    const QString tooltip = available ? QString() : tr("Disabled: acmx2 was built without OpenCV DNN support.");
     if (onnxModelLabel)
         onnxModelLabel->setToolTip(tooltip);
     if (useOnnxModelCheckBox)
@@ -1990,45 +1725,25 @@ void SettingsWindow::setDnnAvailable(bool available) {
         browseOnnxModelButton->setToolTip(tooltip);
 }
 
-float SettingsWindow::getTimeSpeed() const {
-    return static_cast<float>(timeSpeedSpinBox->value());
-}
+float SettingsWindow::getTimeSpeed() const { return static_cast<float>(timeSpeedSpinBox->value()); }
 
-bool SettingsWindow::isDurationLimitEnabled() const {
-    return durationLimitCheckBox->isChecked();
-}
+bool SettingsWindow::isDurationLimitEnabled() const { return durationLimitCheckBox->isChecked(); }
 
-double SettingsWindow::getDurationLimit() const {
-    return durationLimitSpinBox->value();
-}
+double SettingsWindow::getDurationLimit() const { return durationLimitSpinBox->value(); }
 
-bool SettingsWindow::isMaxSizeLimitEnabled() const {
-    return maxSizeLimitCheckBox->isChecked();
-}
+bool SettingsWindow::isMaxSizeLimitEnabled() const { return maxSizeLimitCheckBox->isChecked(); }
 
-double SettingsWindow::getMaxSizeLimit() const {
-    return maxSizeLimitSpinBox->value();
-}
+double SettingsWindow::getMaxSizeLimit() const { return maxSizeLimitSpinBox->value(); }
 
-float SettingsWindow::getCrossFadeDuration() const {
-    return static_cast<float>(crossFadeSpinBox->value());
-}
+float SettingsWindow::getCrossFadeDuration() const { return static_cast<float>(crossFadeSpinBox->value()); }
 
-bool SettingsWindow::isFlipEnabled() const {
-    return flipCheckBox->isChecked();
-}
+bool SettingsWindow::isFlipEnabled() const { return flipCheckBox->isChecked(); }
 
-bool SettingsWindow::is_rotate_enabled() const {
-    return rotate_check_box->isChecked();
-}
+bool SettingsWindow::is_rotate_enabled() const { return rotate_check_box->isChecked(); }
 
-QString SettingsWindow::get_rotation_mode() const {
-    return rotate_combo_box->currentData().toString();
-}
+QString SettingsWindow::get_rotation_mode() const { return rotate_combo_box->currentData().toString(); }
 
-QString SettingsWindow::getEncodePreset() const {
-    return encodePresetComboBox ? encodePresetComboBox->currentText() : QString("medium");
-}
+QString SettingsWindow::getEncodePreset() const { return encodePresetComboBox ? encodePresetComboBox->currentText() : QString("medium"); }
 
 QString SettingsWindow::getEncodeTune() const {
     if (!encodeTuneComboBox)
@@ -2037,21 +1752,11 @@ QString SettingsWindow::getEncodeTune() const {
     return (t == "none") ? QString() : t;
 }
 
-int SettingsWindow::getEncodeCrf() const {
-    return encodeCrfSpinBox ? encodeCrfSpinBox->value() : 18;
-}
+int SettingsWindow::getEncodeCrf() const { return encodeCrfSpinBox ? encodeCrfSpinBox->value() : 18; }
 
-QString SettingsWindow::getEncodeRateControl() const {
-    return encodeRateControlComboBox
-               ? encodeRateControlComboBox->currentData().toString()
-               : QString("quality");
-}
+QString SettingsWindow::getEncodeRateControl() const { return encodeRateControlComboBox ? encodeRateControlComboBox->currentData().toString() : QString("quality"); }
 
-QString SettingsWindow::getEncodeBitrate() const {
-    return encodeBitrateLineEdit
-               ? encodeBitrateLineEdit->text().trimmed()
-               : QString("15M");
-}
+QString SettingsWindow::getEncodeBitrate() const { return encodeBitrateLineEdit ? encodeBitrateLineEdit->text().trimmed() : QString("15M"); }
 
 QString SettingsWindow::getEncodeCodec() const {
     if (!encodeCodecComboBox) {
@@ -2061,29 +1766,15 @@ QString SettingsWindow::getEncodeCodec() const {
     return encoderName.isEmpty() ? encodeCodecComboBox->currentText() : encoderName;
 }
 
-QString SettingsWindow::getEncodeParameters() const {
-    return encodeParametersLineEdit ? encodeParametersLineEdit->text().trimmed() : QString();
-}
+QString SettingsWindow::getEncodeParameters() const { return encodeParametersLineEdit ? encodeParametersLineEdit->text().trimmed() : QString(); }
 
-bool SettingsWindow::isEncodeRealtime() const {
-    return encodeRealtimeCheckBox && encodeRealtimeCheckBox->isChecked();
-}
+bool SettingsWindow::isEncodeRealtime() const { return encodeRealtimeCheckBox && encodeRealtimeCheckBox->isChecked(); }
 
-bool SettingsWindow::isEncodeNoDrop() const {
-    return encodeNoDropCheckBox && encodeNoDropCheckBox->isEnabled() &&
-           encodeNoDropCheckBox->isChecked();
-}
+bool SettingsWindow::isEncodeNoDrop() const { return encodeNoDropCheckBox && encodeNoDropCheckBox->isEnabled() && encodeNoDropCheckBox->isChecked(); }
 
-bool SettingsWindow::isEncodeConstantFrameRate() const {
-    return encodeConstantFrameRateCheckBox &&
-           encodeConstantFrameRateCheckBox->isEnabled() &&
-           encodeConstantFrameRateCheckBox->isChecked();
-}
+bool SettingsWindow::isEncodeConstantFrameRate() const { return encodeConstantFrameRateCheckBox && encodeConstantFrameRateCheckBox->isEnabled() && encodeConstantFrameRateCheckBox->isChecked(); }
 
-bool SettingsWindow::isEncodeFillPtsGaps() const {
-    return encodeFillPtsGapsCheckBox && encodeFillPtsGapsCheckBox->isEnabled() &&
-           encodeFillPtsGapsCheckBox->isChecked();
-}
+bool SettingsWindow::isEncodeFillPtsGaps() const { return encodeFillPtsGapsCheckBox && encodeFillPtsGapsCheckBox->isEnabled() && encodeFillPtsGapsCheckBox->isChecked(); }
 
 QString SettingsWindow::getCameraName(int device_index) {
     if (activeBackend == acmx2::Backend::Acmxvk) {
@@ -2091,9 +1782,7 @@ QString SettingsWindow::getCameraName(int device_index) {
             if (cameraIndexComboBox->itemData(index).toInt() == device_index) {
                 const QString label = cameraIndexComboBox->itemText(index);
                 const int suffixPosition = label.lastIndexOf(" [");
-                return suffixPosition > 0
-                           ? label.left(suffixPosition).trimmed()
-                           : label;
+                return suffixPosition > 0 ? label.left(suffixPosition).trimmed() : label;
             }
         }
         return QString("Camera %1").arg(device_index);
@@ -2144,13 +1833,11 @@ QString SettingsWindow::getCameraName(int device_index) {
 
 void SettingsWindow::acceptSettings() {
     QSize screen_resolution;
-    if (!parse_even_resolution(screenResolutionComboBox->currentText(),
-                               screen_resolution)) {
-        QMessageBox::warning(
-            this,
-            "Invalid window resolution",
-            "Enter Default or a resolution in WxH format. Width and height "
-            "must be positive numbers divisible by 2 (for example, 1920x1080).");
+    if (!parse_even_resolution(screenResolutionComboBox->currentText(), screen_resolution)) {
+        QMessageBox::warning(this,
+                             "Invalid window resolution",
+                             "Enter Default or a resolution in WxH format. Width and height "
+                             "must be positive numbers divisible by 2 (for example, 1920x1080).");
         screenResolutionComboBox->setFocus();
         if (screenResolutionComboBox->lineEdit()) {
             screenResolutionComboBox->lineEdit()->selectAll();
@@ -2158,16 +1845,14 @@ void SettingsWindow::acceptSettings() {
         return;
     }
 
-    if (encodeRateControlComboBox &&
-        encodeRateControlComboBox->currentData().toString() == "bitrate") {
+    if (encodeRateControlComboBox && encodeRateControlComboBox->currentData().toString() == "bitrate") {
         const QString bitrate = encodeBitrateLineEdit->text().trimmed();
-        static const QRegularExpression bitratePattern(
-            QStringLiteral("^[1-9][0-9]{0,11}[KkMmGg]?$"));
+        static const QRegularExpression bitratePattern(QStringLiteral("^[1-9][0-9]{0,11}[KkMmGg]?$"));
         if (!bitratePattern.match(bitrate).hasMatch()) {
-            QMessageBox::warning(
-                this, "Invalid video bitrate",
-                "Enter a positive integer with an optional K, M, or G suffix "
-                "(for example, 15M).");
+            QMessageBox::warning(this,
+                                 "Invalid video bitrate",
+                                 "Enter a positive integer with an optional K, M, or G suffix "
+                                 "(for example, 15M).");
             encodeBitrateLineEdit->setFocus();
             encodeBitrateLineEdit->selectAll();
             return;
@@ -2177,16 +1862,13 @@ void SettingsWindow::acceptSettings() {
         const QChar suffix = numericBitrate.back().toUpper();
         if (suffix == 'K' || suffix == 'M' || suffix == 'G') {
             numericBitrate.chop(1);
-            multiplier = suffix == 'K'   ? 1000ULL
-                         : suffix == 'M' ? 1000000ULL
-                                         : 1000000000ULL;
+            multiplier = suffix == 'K' ? 1000ULL : suffix == 'M' ? 1000000ULL : 1000000000ULL;
         }
         bool numericOk = false;
         const quint64 amount = numericBitrate.toULongLong(&numericOk);
         constexpr quint64 MAX_VIDEO_BITRATE = 100000000000ULL;
         if (!numericOk || amount > MAX_VIDEO_BITRATE / multiplier) {
-            QMessageBox::warning(this, "Invalid video bitrate",
-                                 "The target video bitrate cannot exceed 100G.");
+            QMessageBox::warning(this, "Invalid video bitrate", "The target video bitrate cannot exceed 100G.");
             encodeBitrateLineEdit->setFocus();
             encodeBitrateLineEdit->selectAll();
             return;
@@ -2225,8 +1907,7 @@ void SettingsWindow::acceptSettings() {
     cameraFPS = cameraFPSComboBox->currentText().toInt();
 
     selectedScreenResolution = screen_resolution;
-    screenResolutionComboBox->setCurrentText(
-        resolution_text(screen_resolution));
+    screenResolutionComboBox->setCurrentText(resolution_text(screen_resolution));
 
     if (saveOutputVideoFile) {
         outputVideoFile = outputVideoFileLineEdit->text();
@@ -2236,12 +1917,8 @@ void SettingsWindow::acceptSettings() {
             return;
         }
 
-        if (useInputVideoFile &&
-            pathsReferToSameFile(inputVideoFile, outputVideoFile)) {
-            QMessageBox::critical(
-                this,
-                "Input and output files must be different",
-                "You cannot process and write to the same video file. Select a different output file.");
+        if (useInputVideoFile && pathsReferToSameFile(inputVideoFile, outputVideoFile)) {
+            QMessageBox::critical(this, "Input and output files must be different", "You cannot process and write to the same video file. Select a different output file.");
             return;
         }
     }
@@ -2281,11 +1958,9 @@ void SettingsWindow::acceptSettings() {
     if (encodeNoDropCheckBox)
         encSettings.setValue("recording/no_drop", encodeNoDropCheckBox->isChecked());
     if (encodeConstantFrameRateCheckBox)
-        encSettings.setValue("recording/constant_frame_rate",
-                             encodeConstantFrameRateCheckBox->isChecked());
+        encSettings.setValue("recording/constant_frame_rate", encodeConstantFrameRateCheckBox->isChecked());
     if (encodeFillPtsGapsCheckBox)
-        encSettings.setValue("recording/fill_pts_gaps",
-                             encodeFillPtsGapsCheckBox->isChecked());
+        encSettings.setValue("recording/fill_pts_gaps", encodeFillPtsGapsCheckBox->isChecked());
 
     accept();
 }
@@ -2325,8 +2000,7 @@ void SettingsWindow::detectInputHdr() {
     args << "-v" << "error"
          << "-select_streams" << "v:0"
          << "-show_entries" << "stream=color_transfer,color_primaries,color_space"
-         << "-of" << "default=noprint_wrappers=1:nokey=0"
-         << file;
+         << "-of" << "default=noprint_wrappers=1:nokey=0" << file;
     probe.start("ffprobe", args);
     if (!probe.waitForStarted(3000)) {
         hdrStatusLabel->setText("HDR: ffprobe not available");
@@ -2365,12 +2039,8 @@ void SettingsWindow::detectInputHdr() {
         }
     }
 
-    const bool isHlg = transfer.contains("arib-std-b67") ||
-                       transfer.contains("arib_std_b67") ||
-                       transfer.contains("hlg");
-    const bool isPq = transfer.contains("smpte2084") ||
-                      transfer.contains("smpte-2084") ||
-                      transfer.contains("pq");
+    const bool isHlg = transfer.contains("arib-std-b67") || transfer.contains("arib_std_b67") || transfer.contains("hlg");
+    const bool isPq = transfer.contains("smpte2084") || transfer.contains("smpte-2084") || transfer.contains("pq");
     const bool isBt2020 = primaries.contains("bt2020") || space.contains("bt2020");
     inputHdrDetected = isHlg || isPq || isBt2020;
 
@@ -2396,11 +2066,7 @@ void SettingsWindow::detectInputHdr() {
 void SettingsWindow::browseOutputVideoFile() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastOutputVideoDir", "").toString();
-    static const QStringList kVideoExts = {
-        "mp4", "mkv", "mov", "avi", "m4v",
-        "ts", "mts", "m2ts", "mpg", "mpeg",
-        "flv", "f4v", "3gp", "3g2", "wmv",
-        "asf", "vob"};
+    static const QStringList kVideoExts = {"mp4", "mkv", "mov", "avi", "m4v", "ts", "mts", "m2ts", "mpg", "mpeg", "flv", "f4v", "3gp", "3g2", "wmv", "asf", "vob"};
     QStringList allPattern;
     for (const QString &e : kVideoExts)
         allPattern << ("*." + e);
@@ -2465,14 +2131,10 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
             return;
         }
         QProcess process;
-        process.start(executablePath,
-                      {"--enumerate-device", QString::number(deviceIndex)});
+        process.start(executablePath, {"--enumerate-device", QString::number(deviceIndex)});
         const bool finished = process.waitForFinished(8000);
-        if (finished && process.exitStatus() == QProcess::NormalExit &&
-            process.exitCode() == 0) {
-            parseAcmxvkCameraCapabilities(
-                QString::fromUtf8(process.readAllStandardOutput()),
-                deviceCapabilities, yuvResolutions);
+        if (finished && process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0) {
+            parseAcmxvkCameraCapabilities(QString::fromUtf8(process.readAllStandardOutput()), deviceCapabilities, yuvResolutions);
         }
         populateResolutions();
         return;
@@ -2480,12 +2142,10 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
 
 #ifdef __APPLE__
     QProcess process;
-    process.start("ffmpeg", {"-hide_banner", "-f", "avfoundation", "-list_formats", "true", "-i",
-                             QString("%1:none").arg(deviceIndex)});
+    process.start("ffmpeg", {"-hide_banner", "-f", "avfoundation", "-list_formats", "true", "-i", QString("%1:none").arg(deviceIndex)});
     process.waitForFinished(5000);
 
-    const QString output = QString::fromUtf8(process.readAllStandardError()) +
-                           QString::fromUtf8(process.readAllStandardOutput());
+    const QString output = QString::fromUtf8(process.readAllStandardError()) + QString::fromUtf8(process.readAllStandardOutput());
 
     if (output.isEmpty() || process.error() == QProcess::FailedToStart) {
         populateAppleDefaultCapabilities(deviceCapabilities);
@@ -2535,8 +2195,7 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
 
     int capabilityCount = 0;
     int capabilitySize = 0;
-    if (FAILED(streamConfig->GetNumberOfCapabilities(&capabilityCount, &capabilitySize)) ||
-        capabilityCount <= 0 || capabilitySize <= 0) {
+    if (FAILED(streamConfig->GetNumberOfCapabilities(&capabilityCount, &capabilitySize)) || capabilityCount <= 0 || capabilitySize <= 0) {
         populateResolutions();
         return;
     }
@@ -2544,9 +2203,7 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
     QByteArray capabilityBuffer(capabilitySize, 0);
     for (int capabilityIndex = 0; capabilityIndex < capabilityCount; ++capabilityIndex) {
         AM_MEDIA_TYPE *mediaType = nullptr;
-        if (FAILED(streamConfig->GetStreamCaps(capabilityIndex, &mediaType,
-                                               reinterpret_cast<BYTE *>(capabilityBuffer.data()))) ||
-            mediaType == nullptr) {
+        if (FAILED(streamConfig->GetStreamCaps(capabilityIndex, &mediaType, reinterpret_cast<BYTE *>(capabilityBuffer.data()))) || mediaType == nullptr) {
             continue;
         }
 
@@ -2569,12 +2226,10 @@ void SettingsWindow::enumerateDevice(int deviceIndex) {
         if (capabilitySize >= static_cast<int>(sizeof(VIDEO_STREAM_CONFIG_CAPS))) {
             const auto *caps = reinterpret_cast<const VIDEO_STREAM_CONFIG_CAPS *>(capabilityBuffer.constData());
             if (caps->MinFrameInterval > 0) {
-                appendUniqueFps(deviceCapabilities[resolutionKey],
-                                10000000.0 / static_cast<double>(caps->MinFrameInterval));
+                appendUniqueFps(deviceCapabilities[resolutionKey], 10000000.0 / static_cast<double>(caps->MinFrameInterval));
             }
             if (caps->MaxFrameInterval > 0) {
-                appendUniqueFps(deviceCapabilities[resolutionKey],
-                                10000000.0 / static_cast<double>(caps->MaxFrameInterval));
+                appendUniqueFps(deviceCapabilities[resolutionKey], 10000000.0 / static_cast<double>(caps->MaxFrameInterval));
             }
         }
     }

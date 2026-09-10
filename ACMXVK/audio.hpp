@@ -35,16 +35,10 @@ namespace acmxvk::audio {
         unsigned int sample_rate = 0;
 
         [[nodiscard]] bool empty() const { return samples.empty(); }
-        [[nodiscard]] double duration_seconds() const {
-            return sample_rate == 0
-                       ? 0.0
-                       : static_cast<double>(samples.size()) /
-                             static_cast<double>(sample_rate);
-        }
+        [[nodiscard]] double duration_seconds() const { return sample_rate == 0 ? 0.0 : static_cast<double>(samples.size()) / static_cast<double>(sample_rate); }
     };
 
-    [[nodiscard]] bool write_wav_file(const AudioRecording &recording,
-                                      const std::string &filename);
+    [[nodiscard]] bool write_wav_file(const AudioRecording &recording, const std::string &filename);
 
     class AudioEngine {
       public:
@@ -65,16 +59,13 @@ namespace acmxvk::audio {
         void set_sensitivity(float sensitivity);
         [[nodiscard]] float sensitivity() const;
         [[nodiscard]] std::vector<float> spectrum() const;
-        void process_samples(const float *samples, unsigned int frame_count,
-                             unsigned int channels, unsigned int sample_rate);
+        void process_samples(const float *samples, unsigned int frame_count, unsigned int channels, unsigned int sample_rate);
         bool start_recording();
         [[nodiscard]] AudioRecording stop_recording();
         [[nodiscard]] bool is_recording() const;
         [[nodiscard]] double recording_time() const;
         void reset();
-        static constexpr std::uint32_t spectrum_bin_count() {
-            return static_cast<std::uint32_t>(FFT_SIZE / 2);
-        }
+        static constexpr std::uint32_t spectrum_bin_count() { return static_cast<std::uint32_t>(FFT_SIZE / 2); }
 
         static void list_devices();
 

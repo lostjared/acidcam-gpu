@@ -7,15 +7,12 @@
 #include <QRegularExpression>
 #include <QSettings>
 
-AudioSettings::AudioSettings(QWidget *parent)
-    : QDialog(parent) {
+AudioSettings::AudioSettings(QWidget *parent) : QDialog(parent) {
     setWindowTitle("Audio Settings");
 
     audioReactivityCheckBox = new QCheckBox("Enable Audio Reactivity", this);
-    audioPassThroughCheckBox =
-        new QCheckBox("Enable Audio Pass Through / File Playback", this);
-    audioPassThroughCheckBox->setToolTip(
-        "Play live microphone input or the selected audio source through the output device.");
+    audioPassThroughCheckBox = new QCheckBox("Enable Audio Pass Through / File Playback", this);
+    audioPassThroughCheckBox->setToolTip("Play live microphone input or the selected audio source through the output device.");
     recordAudioCheckBox = new QCheckBox("Record Audio to File", this);
 
     QLabel *recordVolumeLabel = new QLabel("Recording Volume:", this);
@@ -23,9 +20,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     recordVolumeSlider->setRange(0, 200);
     recordVolumeSlider->setValue(100);
     QLabel *recordVolumeValueLabel = new QLabel("100%", this);
-    connect(recordVolumeSlider, &QSlider::valueChanged, this, [recordVolumeValueLabel](int value) {
-        recordVolumeValueLabel->setText(QString::number(value) + "%");
-    });
+    connect(recordVolumeSlider, &QSlider::valueChanged, this, [recordVolumeValueLabel](int value) { recordVolumeValueLabel->setText(QString::number(value) + "%"); });
 
     QLabel *channelLabel = new QLabel("Number of Channels:", this);
     channelSpinBox = new QSpinBox(this);
@@ -54,10 +49,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     populateAudioDevices();
     outputDeviceComboBox->setEnabled(false);
 
-    connect(audioPassThroughCheckBox, &QCheckBox::toggled, this,
-            [this](bool checked) {
-                outputDeviceComboBox->setEnabled(checked);
-            });
+    connect(audioPassThroughCheckBox, &QCheckBox::toggled, this, [this](bool checked) { outputDeviceComboBox->setEnabled(checked); });
 
     okButton = new QPushButton("OK", this);
     cancelButton = new QPushButton("Cancel", this);
@@ -69,8 +61,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioFileBrowseButton = new QPushButton("Browse", this);
     audioFileBrowseButton->setEnabled(false);
     audioPlaylistCheckBox = new QCheckBox("Use M3U Audio Playlist", this);
-    audioPlaylistCheckBox->setToolTip(
-        "Use the tracks in an M3U playlist instead of the selected audio file.");
+    audioPlaylistCheckBox->setToolTip("Use the tracks in an M3U playlist instead of the selected audio file.");
     audioPlaylistLineEdit = new QLineEdit(this);
     audioPlaylistLineEdit->setReadOnly(true);
     audioPlaylistLineEdit->setEnabled(false);
@@ -80,8 +71,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioTruncCheckBox = new QCheckBox("Stop video when audio source completes", this);
     audioTruncCheckBox->setEnabled(false);
     audioRepeatCheckBox = new QCheckBox("Repeat", this);
-    audioRepeatCheckBox->setToolTip(
-        "Restart the audio file, or the full playlist, when it reaches the end.");
+    audioRepeatCheckBox->setToolTip("Restart the audio file, or the full playlist, when it reaches the end.");
     audioRepeatCheckBox->setEnabled(false);
     audioBuffersCheckBox = new QCheckBox("Enable Audio Spectrum History Buffers", this);
     audioBuffersSpinBox = new QSpinBox(this);
@@ -96,9 +86,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     audioWarmRateSpinBox->setValue(0.5);
     audioWarmRateSpinBox->setToolTip("Audio startup warmup rate (1/sec). 0.5 is about a 2 second fade-in; 0 disables warmup.");
 
-    connect(audioBuffersCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
-        audioBuffersSpinBox->setEnabled(checked);
-    });
+    connect(audioBuffersCheckBox, &QCheckBox::toggled, this, [this](bool checked) { audioBuffersSpinBox->setEnabled(checked); });
 
     connect(audioFileCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         if (checked)
@@ -111,12 +99,11 @@ AudioSettings::AudioSettings(QWidget *parent)
             audioRepeatCheckBox->setChecked(false);
     });
 
-    connect(audioPlaylistCheckBox, &QCheckBox::toggled, this,
-            [this](bool checked) {
-                if (checked)
-                    audioFileCheckBox->setChecked(false);
-                updateAudioSourceControls();
-            });
+    connect(audioPlaylistCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        if (checked)
+            audioFileCheckBox->setChecked(false);
+        updateAudioSourceControls();
+    });
     connect(audioRepeatCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         if (checked)
             audioTruncCheckBox->setChecked(false);
@@ -125,8 +112,7 @@ AudioSettings::AudioSettings(QWidget *parent)
     connect(audioFileBrowseButton, &QPushButton::clicked, this, [this]() {
         QSettings appSettings("LostSideDead");
         QString lastDir = appSettings.value("lastAudioFileDir", "").toString();
-        QString fileName = QFileDialog::getOpenFileName(this, "Select Audio File", lastDir,
-                                                        "Audio Files (*.wav *.mp3 *.flac *.aac *.ogg *.m4a *.wma *.mp4 *.mkv *.mov *.avi)");
+        QString fileName = QFileDialog::getOpenFileName(this, "Select Audio File", lastDir, "Audio Files (*.wav *.mp3 *.flac *.aac *.ogg *.m4a *.wma *.mp4 *.mkv *.mov *.avi)");
         if (!fileName.isEmpty()) {
             appSettings.setValue("lastAudioFileDir", QFileInfo(fileName).absolutePath());
             audioFileLineEdit->setText(fileName);
@@ -136,12 +122,9 @@ AudioSettings::AudioSettings(QWidget *parent)
     connect(audioPlaylistBrowseButton, &QPushButton::clicked, this, [this]() {
         QSettings appSettings("LostSideDead");
         QString lastDir = appSettings.value("lastAudioPlaylistDir", "").toString();
-        QString fileName = QFileDialog::getOpenFileName(
-            this, "Select M3U Audio Playlist", lastDir,
-            "M3U Playlists (*.m3u *.m3u8)");
+        QString fileName = QFileDialog::getOpenFileName(this, "Select M3U Audio Playlist", lastDir, "M3U Playlists (*.m3u *.m3u8)");
         if (!fileName.isEmpty()) {
-            appSettings.setValue("lastAudioPlaylistDir",
-                                 QFileInfo(fileName).absolutePath());
+            appSettings.setValue("lastAudioPlaylistDir", QFileInfo(fileName).absolutePath());
             audioPlaylistLineEdit->setText(fileName);
         }
     });
@@ -255,10 +238,8 @@ void AudioSettings::loadUiState() {
 
     audioFileCheckBox->setChecked(appSettings.value("audio/file_enabled", false).toBool());
     audioFileLineEdit->setText(appSettings.value("audio/file_path", "").toString());
-    audioPlaylistCheckBox->setChecked(
-        appSettings.value("audio/playlist_enabled", false).toBool());
-    audioPlaylistLineEdit->setText(
-        appSettings.value("audio/playlist_path", "").toString());
+    audioPlaylistCheckBox->setChecked(appSettings.value("audio/playlist_enabled", false).toBool());
+    audioPlaylistLineEdit->setText(appSettings.value("audio/playlist_path", "").toString());
     audioTruncCheckBox->setChecked(appSettings.value("audio/file_trunc", false).toBool());
     audioRepeatCheckBox->setChecked(appSettings.value("audio/file_repeat", false).toBool());
     audioBuffersCheckBox->setChecked(appSettings.value("audio/buffers_enabled", false).toBool());
@@ -279,8 +260,7 @@ void AudioSettings::saveUiState() {
     appSettings.setValue("audio/output_device", outputDeviceComboBox->currentData().toInt());
     appSettings.setValue("audio/file_enabled", audioFileCheckBox->isChecked());
     appSettings.setValue("audio/file_path", audioFileLineEdit->text());
-    appSettings.setValue("audio/playlist_enabled",
-                         audioPlaylistCheckBox->isChecked());
+    appSettings.setValue("audio/playlist_enabled", audioPlaylistCheckBox->isChecked());
     appSettings.setValue("audio/playlist_path", audioPlaylistLineEdit->text());
     appSettings.setValue("audio/file_trunc", audioTruncCheckBox->isChecked());
     appSettings.setValue("audio/file_repeat", audioRepeatCheckBox->isChecked());
@@ -325,12 +305,9 @@ void AudioSettings::populateAudioDevices() {
     //   Device 132: EMEET SmartCam C950 4K [DEFAULT INPUT]
     //     Input channels: 2
     //     Output channels: 0
-    QRegularExpression deviceRegex(
-        R"(^\s*Device\s+(\d+):\s*(.+?)\s*$)");
-    QRegularExpression inputChRegex(
-        R"(^\s*Input channels:\s*(\d+))");
-    QRegularExpression outputChRegex(
-        R"(^\s*Output channels:\s*(\d+))");
+    QRegularExpression deviceRegex(R"(^\s*Device\s+(\d+):\s*(.+?)\s*$)");
+    QRegularExpression inputChRegex(R"(^\s*Input channels:\s*(\d+))");
+    QRegularExpression outputChRegex(R"(^\s*Output channels:\s*(\d+))");
 
     QStringList lines = output.split('\n');
     int currentId = -1;
@@ -413,75 +390,36 @@ void AudioSettings::populateAudioDevices() {
     outputDeviceComboBox->setCurrentIndex(0);
 }
 
-bool AudioSettings::isAudioReactivityEnabled() const {
-    return audioReactivityCheckBox->isChecked();
-}
+bool AudioSettings::isAudioReactivityEnabled() const { return audioReactivityCheckBox->isChecked(); }
 
-bool AudioSettings::isAudioPassThroughEnabled() const {
-    return audioPassThroughCheckBox->isChecked();
-}
+bool AudioSettings::isAudioPassThroughEnabled() const { return audioPassThroughCheckBox->isChecked(); }
 
-bool AudioSettings::isRecordAudioEnabled() const {
-    return recordAudioCheckBox->isChecked();
-}
+bool AudioSettings::isRecordAudioEnabled() const { return recordAudioCheckBox->isChecked(); }
 
-double AudioSettings::getRecordVolume() const {
-    return recordVolumeSlider->value() / 100.0;
-}
+double AudioSettings::getRecordVolume() const { return recordVolumeSlider->value() / 100.0; }
 
-int AudioSettings::getNumberOfChannels() const {
-    return channelSpinBox->value();
-}
+int AudioSettings::getNumberOfChannels() const { return channelSpinBox->value(); }
 
-double AudioSettings::getSensitivity() const {
-    return sensitivitySlider->value() / 10.0;
-}
+double AudioSettings::getSensitivity() const { return sensitivitySlider->value() / 10.0; }
 
-int AudioSettings::getInputDeviceIndex() const {
-    return inputDeviceComboBox->currentData().toInt();
-}
+int AudioSettings::getInputDeviceIndex() const { return inputDeviceComboBox->currentData().toInt(); }
 
-int AudioSettings::getOutputDeviceIndex() const {
-    return outputDeviceComboBox->currentData().toInt();
-}
+int AudioSettings::getOutputDeviceIndex() const { return outputDeviceComboBox->currentData().toInt(); }
 
-bool AudioSettings::isAudioFileEnabled() const {
-    return (audioFileCheckBox->isChecked() &&
-            !audioFileLineEdit->text().isEmpty()) ||
-           (audioPlaylistCheckBox->isChecked() &&
-            !audioPlaylistLineEdit->text().isEmpty());
-}
+bool AudioSettings::isAudioFileEnabled() const { return (audioFileCheckBox->isChecked() && !audioFileLineEdit->text().isEmpty()) || (audioPlaylistCheckBox->isChecked() && !audioPlaylistLineEdit->text().isEmpty()); }
 
-QString AudioSettings::getAudioFilePath() const {
-    return isAudioPlaylistEnabled() ? audioPlaylistLineEdit->text()
-                                    : audioFileLineEdit->text();
-}
+QString AudioSettings::getAudioFilePath() const { return isAudioPlaylistEnabled() ? audioPlaylistLineEdit->text() : audioFileLineEdit->text(); }
 
-bool AudioSettings::isAudioPlaylistEnabled() const {
-    return audioPlaylistCheckBox->isChecked() &&
-           !audioPlaylistLineEdit->text().isEmpty();
-}
+bool AudioSettings::isAudioPlaylistEnabled() const { return audioPlaylistCheckBox->isChecked() && !audioPlaylistLineEdit->text().isEmpty(); }
 
-QString AudioSettings::getAudioPlaylistPath() const {
-    return audioPlaylistLineEdit->text();
-}
+QString AudioSettings::getAudioPlaylistPath() const { return audioPlaylistLineEdit->text(); }
 
-bool AudioSettings::isAudioTruncEnabled() const {
-    return audioTruncCheckBox->isChecked();
-}
+bool AudioSettings::isAudioTruncEnabled() const { return audioTruncCheckBox->isChecked(); }
 
-bool AudioSettings::isAudioRepeatEnabled() const {
-    return audioRepeatCheckBox->isChecked();
-}
+bool AudioSettings::isAudioRepeatEnabled() const { return audioRepeatCheckBox->isChecked(); }
 
-bool AudioSettings::isAudioBuffersEnabled() const {
-    return audioBuffersCheckBox->isChecked();
-}
+bool AudioSettings::isAudioBuffersEnabled() const { return audioBuffersCheckBox->isChecked(); }
 
-int AudioSettings::getAudioBufferFrames() const {
-    return audioBuffersSpinBox->value();
-}
+int AudioSettings::getAudioBufferFrames() const { return audioBuffersSpinBox->value(); }
 
-double AudioSettings::getAudioWarmRate() const {
-    return audioWarmRateSpinBox->value();
-}
+double AudioSettings::getAudioWarmRate() const { return audioWarmRateSpinBox->value(); }

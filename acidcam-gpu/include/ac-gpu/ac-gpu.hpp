@@ -10,14 +10,13 @@
 #include <string>
 #include <vector>
 
-#define CHECK_CUDA(call)                                                          \
-    do {                                                                          \
-        cudaError_t err = call;                                                   \
-        if (err != cudaSuccess) {                                                 \
-            std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ << " - " \
-                      << cudaGetErrorString(err) << std::endl;                    \
-            exit(EXIT_FAILURE);                                                   \
-        }                                                                         \
+#define CHECK_CUDA(call)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+        cudaError_t err = call;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+        if (err != cudaSuccess) {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+            std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ << " - " << cudaGetErrorString(err) << std::endl;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+            exit(EXIT_FAILURE);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+        }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              \
     } while (0)
 
 namespace ac_gpu {
@@ -95,13 +94,9 @@ namespace ac_gpu {
             }
         }
 
-        void update(const cv::cuda::GpuMat &inputFrame,
-                    cv::cuda::Stream &stream) {
-            if (inputFrame.empty() ||
-                (inputFrame.type() != CV_8UC3 &&
-                 inputFrame.type() != CV_8UC4)) {
-                throw std::invalid_argument(
-                    "DynamicFrameBuffer requires a CUDA BGR8 or RGBA8 frame");
+        void update(const cv::cuda::GpuMat &inputFrame, cv::cuda::Stream &stream) {
+            if (inputFrame.empty() || (inputFrame.type() != CV_8UC3 && inputFrame.type() != CV_8UC4)) {
+                throw std::invalid_argument("DynamicFrameBuffer requires a CUDA BGR8 or RGBA8 frame");
             }
 
             if (inputFrame.cols != w || inputFrame.rows != h) {
@@ -116,8 +111,7 @@ namespace ac_gpu {
 
             if (completedFrames == 0) {
                 if (inputFrame.channels() == 3) {
-                    cv::cuda::cvtColor(inputFrame, deviceFrames.front(),
-                                       cv::COLOR_BGR2RGBA, 0, stream);
+                    cv::cuda::cvtColor(inputFrame, deviceFrames.front(), cv::COLOR_BGR2RGBA, 0, stream);
                 } else {
                     inputFrame.copyTo(deviceFrames.front(), stream);
                 }
@@ -126,11 +120,9 @@ namespace ac_gpu {
                 }
                 completedFrames = arraySize;
             } else {
-                std::rotate(deviceFrames.begin(), deviceFrames.begin() + 1,
-                            deviceFrames.end());
+                std::rotate(deviceFrames.begin(), deviceFrames.begin() + 1, deviceFrames.end());
                 if (inputFrame.channels() == 3) {
-                    cv::cuda::cvtColor(inputFrame, deviceFrames.back(),
-                                       cv::COLOR_BGR2RGBA, 0, stream);
+                    cv::cuda::cvtColor(inputFrame, deviceFrames.back(), cv::COLOR_BGR2RGBA, 0, stream);
                 } else {
                     inputFrame.copyTo(deviceFrames.back(), stream);
                 }
@@ -141,19 +133,13 @@ namespace ac_gpu {
             }
         }
 
-        unsigned char **getDeviceFramePointers() {
-            return rawPointers.data();
-        }
+        unsigned char **getDeviceFramePointers() { return rawPointers.data(); }
     };
     extern Filter filters[];
 } // namespace ac_gpu
 
 extern "C" {
-void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char *data, unsigned char **allFrames,
-                   int numFrames, int width, int height, size_t step,
-                   float alpha, bool isNegative, int square_size,
-                   int start_index, int start_dir,
-                   ac_gpu::GPUFilter **d_list_ptr, bool &changed);
+void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char *data, unsigned char **allFrames, int numFrames, int width, int height, size_t step, float alpha, bool isNegative, int square_size, int start_index, int start_dir, ac_gpu::GPUFilter **d_list_ptr, bool &changed);
 }
 
 #endif

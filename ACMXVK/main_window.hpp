@@ -90,21 +90,14 @@ namespace acmxvk {
 
         void event(SDL_Event &event) override;
         void onSwapchainRecreated() override;
-        void onRecordCustomRendering(VkCommandBuffer command_buffer,
-                                     std::uint32_t image_index) override;
-        void onRecordPostProcessingTexture(
-            VkCommandBuffer command_buffer, std::uint32_t image_index,
-            VkImageView texture_view,
-            [[maybe_unused]] VkExtent2D texture_extent) override;
-        void recordModel(VkCommandBuffer command_buffer,
-                         std::uint32_t image_index, VkImageView texture_view);
+        void onRecordCustomRendering(VkCommandBuffer command_buffer, std::uint32_t image_index) override;
+        void onRecordPostProcessingTexture(VkCommandBuffer command_buffer, std::uint32_t image_index, VkImageView texture_view, [[maybe_unused]] VkExtent2D texture_extent) override;
+        void recordModel(VkCommandBuffer command_buffer, std::uint32_t image_index, VkImageView texture_view);
         void proc() override;
 
       private:
         // Runtime state shared by the focused MainWindow implementation sections.
-        enum class SourceKind { Camera,
-                                Video,
-                                Graphic };
+        enum class SourceKind { Camera, Video, Graphic };
 
         struct ReadbackRequest {
             bool snapshot = false;
@@ -159,8 +152,7 @@ namespace acmxvk {
         std::uint32_t interface_last_reload_sequence = 0;
         std::size_t shader_index = 0;
         std::size_t playlist_index = 0;
-        std::size_t crossfade_post_process_index =
-            std::numeric_limits<std::size_t>::max();
+        std::size_t crossfade_post_process_index = std::numeric_limits<std::size_t>::max();
         bool effects_enabled = true;
         bool multipass_enabled = false;
         bool playlist_enabled = false;
@@ -200,9 +192,7 @@ namespace acmxvk {
         bool audio_delta_time = false;
         bool spectrum_scale_by_sensitivity = false;
         bool watermark_enabled = !options.watermark_text.empty();
-        bool counter_disabled =
-            options.headless || options.disable_counter ||
-            !options.watermark_text.empty();
+        bool counter_disabled = options.headless || options.disable_counter || !options.watermark_text.empty();
         int overlay_font_size = 18;
         int preview_overlay_font_size = 18;
         bool snapshot_pending = false;
@@ -266,12 +256,9 @@ namespace acmxvk {
         bool legacy_alpha_increasing = true;
         int model_last_mouse_x = 0;
         int model_last_mouse_y = 0;
-        std::chrono::steady_clock::time_point compatibility_clock_start =
-            std::chrono::steady_clock::now();
-        std::chrono::steady_clock::time_point model_last_render_time =
-            std::chrono::steady_clock::now();
-        std::chrono::steady_clock::time_point crossfade_start_time =
-            std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point compatibility_clock_start = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point model_last_render_time = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point crossfade_start_time = std::chrono::steady_clock::now();
         double crossfade_start_video_timeline = 0.0;
         std::uint64_t output_frame_count = 0;
         std::uint64_t gap_fill_next_pts = 0;
@@ -292,10 +279,8 @@ namespace acmxvk {
         std::vector<std::uint8_t> gap_fill_previous_rgba;
         std::vector<std::uint16_t> gap_fill_previous_rgba16;
         bool gap_fill_previous_valid = false;
-        std::chrono::steady_clock::time_point hud_session_start{
-            std::chrono::steady_clock::now()};
-        std::chrono::steady_clock::time_point hud_fps_last_tick{
-            hud_session_start};
+        std::chrono::steady_clock::time_point hud_session_start{std::chrono::steady_clock::now()};
+        std::chrono::steady_clock::time_point hud_fps_last_tick{hud_session_start};
         std::chrono::steady_clock::time_point camera_fps_last_tick{};
         std::chrono::steady_clock::time_point camera_history_next_update{};
         std::chrono::steady_clock::time_point window_title_last_update{};
@@ -314,8 +299,7 @@ namespace acmxvk {
         bool autopilot_video_timeline_initialized = false;
         std::mt19937 autopilot_rng{std::random_device{}()};
         std::mt19937 random_dream_rng{std::random_device{}()};
-        std::uint64_t random_dream_period =
-            std::numeric_limits<std::uint64_t>::max();
+        std::uint64_t random_dream_period = std::numeric_limits<std::uint64_t>::max();
         double previous_random_dream_timeline = 0.0;
         bool random_dream_timeline_initialized = false;
 #ifdef ACMXVK_WITH_CUDA
@@ -331,10 +315,8 @@ namespace acmxvk {
 #endif
 #ifdef ACMXVK_WITH_STABLE_DIFFUSION
         std::unique_ptr<stable_diffusion::Server> stable_diffusion_server;
-        std::future<std::unique_ptr<stable_diffusion::Server>>
-            stable_diffusion_initialization;
-        std::shared_ptr<std::atomic_bool> stable_diffusion_cancelled =
-            std::make_shared<std::atomic_bool>(false);
+        std::future<std::unique_ptr<stable_diffusion::Server>> stable_diffusion_initialization;
+        std::shared_ptr<std::atomic_bool> stable_diffusion_cancelled = std::make_shared<std::atomic_bool>(false);
         bool stable_diffusion_initialization_pending = false;
         bool stable_diffusion_initial_frame_deferred = false;
 #endif
@@ -384,8 +366,7 @@ namespace acmxvk {
 
 #ifdef AUDIO_ENABLED
         void resetAudioWarmup();
-        [[nodiscard]] float updateAudioWarmup(
-            std::chrono::steady_clock::time_point now);
+        [[nodiscard]] float updateAudioWarmup(std::chrono::steady_clock::time_point now);
 #endif
         void initializeDnn();
         void initializeDeepDream();
@@ -400,18 +381,14 @@ namespace acmxvk {
 #ifdef MIDI_ENABLED
         [[nodiscard]] bool applyMidiCc(const midi::MidiMessage &message);
         [[nodiscard]] SDL_Keycode midiActionKey(int action) const;
-        [[nodiscard]] bool isMidiSliderMapping(
-            const midi::MidiMapping &mapping) const;
-        [[nodiscard]] static bool usesMidiDeltaDirection(
-            const midi::MidiMapping &mapping);
+        [[nodiscard]] bool isMidiSliderMapping(const midi::MidiMapping &mapping) const;
+        [[nodiscard]] static bool usesMidiDeltaDirection(const midi::MidiMapping &mapping);
         [[nodiscard]] bool isMidiModelAction(int action) const;
-        [[nodiscard]] bool isMidiMappingSupported(
-            const midi::MidiMapping &mapping) const;
+        [[nodiscard]] bool isMidiMappingSupported(const midi::MidiMapping &mapping) const;
         [[nodiscard]] std::string_view midiActionName(int action) const;
         void dispatchMidiModelAction(int action);
         void dispatchMidiAction(int action);
-        [[nodiscard]] bool setMidiUniform(std::size_t uniform_index, int value,
-                                          std::string_view label);
+        [[nodiscard]] bool setMidiUniform(std::size_t uniform_index, int value, std::string_view label);
         [[nodiscard]] bool applyMidiMap(const midi::MidiMessage &message);
         void dispatchMidiKnobs();
 #endif
@@ -433,31 +410,21 @@ namespace acmxvk {
         [[nodiscard]] std::string currentShader() const;
         [[nodiscard]] fs::path resolvedShaderPath(const fs::path &shader) const;
         [[nodiscard]] bool historyCacheEnabled() const;
-        void recordShaderResources(const mxvk::ShaderModuleInfo &module_info,
-                                   std::string_view source);
+        void recordShaderResources(const mxvk::ShaderModuleInfo &module_info, std::string_view source);
         [[nodiscard]] std::uint32_t spectrumBinCount() const;
         [[nodiscard]] bool spectrumTextureEnabledForShaders() const;
         [[nodiscard]] bool spectrumHistoryEnabledForShaders() const;
         void initialize_interface_control();
         void sync_interface_control();
-        void apply_interface_playback_state(
-            const InterfacePlaybackState &requested, bool announce);
-        void apply_interface_overlay_state(
-            const InterfaceOverlayState &requested, bool announce);
-        void apply_interface_gpu_filter_state(
-            const InterfaceGpuFilterState &requested, bool announce);
-        void apply_interface_deep_dream_state(
-            const InterfaceDeepDreamState &requested, bool announce);
-        void apply_interface_audio_file_state(
-            const InterfaceAudioFileState &requested);
-        void apply_interface_shader_reload(
-            const InterfaceReloadState &requested);
-        void apply_interface_multipass_state(
-            const InterfaceMultipassState &requested);
-        void apply_interface_shader_selection(
-            const std::string &requested_name);
-        void apply_interface_uniform_values(
-            const std::vector<InterfaceUniformValue> &uniform_values);
+        void apply_interface_playback_state(const InterfacePlaybackState &requested, bool announce);
+        void apply_interface_overlay_state(const InterfaceOverlayState &requested, bool announce);
+        void apply_interface_gpu_filter_state(const InterfaceGpuFilterState &requested, bool announce);
+        void apply_interface_deep_dream_state(const InterfaceDeepDreamState &requested, bool announce);
+        void apply_interface_audio_file_state(const InterfaceAudioFileState &requested);
+        void apply_interface_shader_reload(const InterfaceReloadState &requested);
+        void apply_interface_multipass_state(const InterfaceMultipassState &requested);
+        void apply_interface_shader_selection(const std::string &requested_name);
+        void apply_interface_uniform_values(const std::vector<InterfaceUniformValue> &uniform_values);
         void loadShaderPasses();
         void loadPlaylist();
 
@@ -472,9 +439,7 @@ namespace acmxvk {
         void updateWindowTitle(bool force = false);
         void emitHeadlessProgress(bool complete);
         [[nodiscard]] double hudWallElapsedSeconds() const;
-        [[nodiscard]] bool currentVideoTimeline(
-            double &timeline,
-            std::uint64_t *frame_index = nullptr) const;
+        [[nodiscard]] bool currentVideoTimeline(double &timeline, std::uint64_t *frame_index = nullptr) const;
         [[nodiscard]] double hudVideoPositionSeconds() const;
         [[nodiscard]] std::string hudVideoTimeString() const;
         [[nodiscard]] std::string hudElapsedTimeString() const;
@@ -499,15 +464,9 @@ namespace acmxvk {
         [[nodiscard]] bool continuousReadbackEnabled() const;
         void openOutput();
         void onFrameReadbackScheduled() override;
-        void onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width,
-                             uint32_t height) override;
-        void onFrameReadbackRgba16(std::vector<std::uint16_t> &rgba,
-                                   uint32_t width,
-                                   uint32_t height) override;
-        void handleFrameReadback(
-            std::vector<std::uint8_t> &rgba,
-            const std::vector<std::uint16_t> *rgba16, uint32_t width,
-            uint32_t height);
+        void onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width, uint32_t height) override;
+        void onFrameReadbackRgba16(std::vector<std::uint16_t> &rgba, uint32_t width, uint32_t height) override;
+        void handleFrameReadback(std::vector<std::uint8_t> &rgba, const std::vector<std::uint16_t> *rgba16, uint32_t width, uint32_t height);
 
         void initializeModel();
         void initializeSprite();
@@ -543,22 +502,15 @@ namespace acmxvk {
         void updateHistoryFrame(const cv::Mat &rgba);
         void updateCameraHistory();
 #ifdef ACMXVK_WITH_MXVK_CUDA
-        void updateModelTextureCuda(const cv::cuda::GpuMat &rgba,
-                                    cv::cuda::Stream &source_stream);
-        void updateCudaHistoryFrame(const cv::cuda::GpuMat &rgba,
-                                    cv::cuda::Stream &source_stream);
+        void updateModelTextureCuda(const cv::cuda::GpuMat &rgba, cv::cuda::Stream &source_stream);
+        void updateCudaHistoryFrame(const cv::cuda::GpuMat &rgba, cv::cuda::Stream &source_stream);
         void updateFilteredCudaHistoryFrame();
-        void initializeCudaHistory(const cv::cuda::GpuMat &rgba,
-                                   cv::cuda::Stream &source_stream,
-                                   bool filtered);
-        void uploadInputFrame(const cv::cuda::GpuMat &rgba,
-                              cv::cuda::Stream &source_stream);
+        void initializeCudaHistory(const cv::cuda::GpuMat &rgba, cv::cuda::Stream &source_stream, bool filtered);
+        void uploadInputFrame(const cv::cuda::GpuMat &rgba, cv::cuda::Stream &source_stream);
 #ifdef ACMXVK_WITH_DEEP_DREAM
         [[nodiscard]] bool readCudaDeepDreamFrame();
 #endif
-        [[nodiscard]] const cv::cuda::GpuMat &
-        rotateCudaFrame(const cv::cuda::GpuMat &rgba,
-                        cv::cuda::Stream &source_stream);
+        [[nodiscard]] const cv::cuda::GpuMat &rotateCudaFrame(const cv::cuda::GpuMat &rgba, cv::cuda::Stream &source_stream);
 #endif
         void uploadInputFrame(const cv::Mat &rgba);
         [[nodiscard]] bool readLatestCameraFrame();

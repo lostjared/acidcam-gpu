@@ -85,9 +85,7 @@ namespace {
 
         line = buffer.left(separator);
         qsizetype consumed = 1;
-        if (buffer.at(separator) == QLatin1Char('\r') &&
-            separator + 1 < buffer.size() &&
-            buffer.at(separator + 1) == QLatin1Char('\n')) {
+        if (buffer.at(separator) == QLatin1Char('\r') && separator + 1 < buffer.size() && buffer.at(separator + 1) == QLatin1Char('\n')) {
             consumed = 2;
         }
         buffer.remove(0, separator + consumed);
@@ -96,18 +94,13 @@ namespace {
 
     bool is_stable_diffusion_diagnostic(const QString &line) {
         QString normalized = line;
-        static const QRegularExpression ANSI_ESCAPE(
-            QStringLiteral("\\x1b\\[[0-9;?]*[ -/]*[@-~]"));
+        static const QRegularExpression ANSI_ESCAPE(QStringLiteral("\\x1b\\[[0-9;?]*[ -/]*[@-~]"));
         normalized.remove(ANSI_ESCAPE);
         normalized = normalized.trimmed();
-        if (normalized.startsWith("[INFO ]") ||
-            normalized.startsWith("[DEBUG]") ||
-            normalized.startsWith("[TRACE]")) {
+        if (normalized.startsWith("[INFO ]") || normalized.startsWith("[DEBUG]") || normalized.startsWith("[TRACE]")) {
             return true;
         }
-        if (normalized.startsWith(QLatin1Char('|')) &&
-            normalized.contains(QRegularExpression(
-                QStringLiteral("\\d+\\s*/\\s*\\d+")))) {
+        if (normalized.startsWith(QLatin1Char('|')) && normalized.contains(QRegularExpression(QStringLiteral("\\d+\\s*/\\s*\\d+")))) {
             return true;
         }
         return false;
@@ -149,8 +142,7 @@ namespace {
 #endif
     }
 
-    QString buildShellCommand(const QStringList &envAssignments, const QString &program,
-                              const QStringList &arguments) {
+    QString buildShellCommand(const QStringList &envAssignments, const QString &program, const QStringList &arguments) {
         QStringList parts;
         parts.reserve(envAssignments.size() + 1 + arguments.size());
         for (const QString &entry : envAssignments) {
@@ -161,8 +153,7 @@ namespace {
             QString key = entry.left(eq);
             QString value = entry.mid(eq + 1);
 #ifdef _WIN32
-            parts << (QStringLiteral("set \"") + key + QLatin1Char('=') +
-                      value + QStringLiteral("\" &&"));
+            parts << (QStringLiteral("set \"") + key + QLatin1Char('=') + value + QStringLiteral("\" &&"));
 #else
             parts << (key + "=" + shellQuote(value));
 #endif
@@ -174,18 +165,13 @@ namespace {
         return parts.join(' ');
     }
 
-    void replace_file(const std::filesystem::path &source,
-                      const std::filesystem::path &destination,
-                      std::error_code &error) {
+    void replace_file(const std::filesystem::path &source, const std::filesystem::path &destination, std::error_code &error) {
 #ifdef _WIN32
-        if (MoveFileExW(source.c_str(), destination.c_str(),
-                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) !=
-            FALSE) {
+        if (MoveFileExW(source.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE) {
             error.clear();
             return;
         }
-        error = std::error_code(static_cast<int>(GetLastError()),
-                                std::system_category());
+        error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
 #else
         std::filesystem::rename(source, destination, error);
 #endif
@@ -232,38 +218,23 @@ namespace {
     QString resolve_acmxvk_shader_compiler(QString &error) {
         error.clear();
         QSettings settings("LostSideDead");
-        const QString mode =
-            settings
-                .value(acmx2::backend_settings_key(
-                           acmx2::Backend::Acmxvk,
-                           "shader_compiler_mode"),
-                       "auto")
-                .toString();
+        const QString mode = settings.value(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_mode"), "auto").toString();
         if (mode == QStringLiteral("custom")) {
-            QString compiler =
-                settings
-                    .value(acmx2::backend_settings_key(
-                        acmx2::Backend::Acmxvk,
-                        "shader_compiler_path"))
-                    .toString()
-                    .trimmed();
+            QString compiler = settings.value(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_path")).toString().trimmed();
             if (compiler.isEmpty()) {
-                error = QStringLiteral(
-                    "The custom ACMXVK shader compiler path is empty. Select "
-                    "one in Properties (Ctrl+,).");
+                error = QStringLiteral("The custom ACMXVK shader compiler path is empty. Select "
+                                       "one in Properties (Ctrl+,).");
                 return {};
             }
             if (QFileInfo(compiler).isRelative()) {
-                const QString resolved =
-                    QStandardPaths::findExecutable(compiler);
+                const QString resolved = QStandardPaths::findExecutable(compiler);
                 if (!resolved.isEmpty())
                     compiler = resolved;
             }
             const QFileInfo compilerInfo(compiler);
             if (!compilerInfo.isFile() || !compilerInfo.isExecutable()) {
-                error = QStringLiteral(
-                            "The configured ACMXVK shader compiler is not an "
-                            "executable file: %1")
+                error = QStringLiteral("The configured ACMXVK shader compiler is not an "
+                                       "executable file: %1")
                             .arg(compiler);
                 return {};
             }
@@ -273,9 +244,7 @@ namespace {
         QString compiler;
 #ifdef _WIN32
         const QString compilerName = QStringLiteral("glslc.exe");
-        const QFileInfo bundledCompiler(
-            QDir(QCoreApplication::applicationDirPath())
-                .filePath(compilerName));
+        const QFileInfo bundledCompiler(QDir(QCoreApplication::applicationDirPath()).filePath(compilerName));
         if (bundledCompiler.isFile() && bundledCompiler.isExecutable())
             compiler = bundledCompiler.absoluteFilePath();
 #else
@@ -284,53 +253,42 @@ namespace {
         if (compiler.isEmpty())
             compiler = QStandardPaths::findExecutable(compilerName);
         if (compiler.isEmpty()) {
-            const QString sdk =
-                QString::fromLocal8Bit(qgetenv("VULKAN_SDK"));
-            const QString sdkCompiler =
-                QDir(sdk).filePath(QStringLiteral("bin/") + compilerName);
+            const QString sdk = QString::fromLocal8Bit(qgetenv("VULKAN_SDK"));
+            const QString sdkCompiler = QDir(sdk).filePath(QStringLiteral("bin/") + compilerName);
             if (!sdk.isEmpty() && QFileInfo(sdkCompiler).isExecutable())
                 compiler = sdkCompiler;
         }
         if (compiler.isEmpty()) {
-            error = QStringLiteral(
-                "glslc was not found in PATH or VULKAN_SDK. Select a custom "
-                "compiler in Properties (Ctrl+,).");
+            error = QStringLiteral("glslc was not found in PATH or VULKAN_SDK. Select a custom "
+                                   "compiler in Properties (Ctrl+,).");
         }
         return compiler;
     }
 
-    QString resolve_backend_assets_path(acmx2::Backend backend,
-                                        const QString &executable,
-                                        const QString &libraryPath) {
+    QString resolve_backend_assets_path(acmx2::Backend backend, const QString &executable, const QString &libraryPath) {
         if (backend == acmx2::Backend::Acmx2)
             return resolveAssetsPath();
 
         const QString applicationDir = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
-        const QString bundleResources =
-            QDir::cleanPath(applicationDir + "/../Resources/acmxvk");
+        const QString bundleResources = QDir::cleanPath(applicationDir + "/../Resources/acmxvk");
         if (QFileInfo(bundleResources).isDir())
             return bundleResources;
 #endif
         QStringList candidates;
         QString resolvedExecutable = executable;
         if (QFileInfo(resolvedExecutable).isRelative()) {
-            const QString pathExecutable =
-                QStandardPaths::findExecutable(resolvedExecutable);
+            const QString pathExecutable = QStandardPaths::findExecutable(resolvedExecutable);
             if (!pathExecutable.isEmpty())
                 resolvedExecutable = pathExecutable;
         }
         const QFileInfo executableInfo(resolvedExecutable);
         if (!executableInfo.absolutePath().isEmpty()) {
-            candidates << QDir::cleanPath(executableInfo.absolutePath() +
-                                          "/../share/acmxvk");
+            candidates << QDir::cleanPath(executableInfo.absolutePath() + "/../share/acmxvk");
         }
         if (!libraryPath.isEmpty())
             candidates << QDir::cleanPath(QFileInfo(libraryPath).absolutePath());
-        candidates << QDir::cleanPath(applicationDir + "/../share/acmxvk")
-                   << QStringLiteral("/usr/local/share/acmxvk")
-                   << QStringLiteral("/opt/homebrew/share/acmxvk")
-                   << QStringLiteral("/usr/share/acmxvk");
+        candidates << QDir::cleanPath(applicationDir + "/../share/acmxvk") << QStringLiteral("/usr/local/share/acmxvk") << QStringLiteral("/opt/homebrew/share/acmxvk") << QStringLiteral("/usr/share/acmxvk");
         for (const QString &candidate : candidates) {
             if (QFileInfo(candidate + "/data").isDir())
                 return candidate;
@@ -343,8 +301,7 @@ namespace {
 
     bool is_acmxvk_source_library(const QString &libraryPath, QString &error) {
         error.clear();
-        const std::optional<acmx2::ShaderLibraryType> type =
-            acmx2::shader_manifest_library_type(libraryPath, error);
+        const std::optional<acmx2::ShaderLibraryType> type = acmx2::shader_manifest_library_type(libraryPath, error);
         if (!error.isEmpty())
             return false;
         if (type)
@@ -355,56 +312,34 @@ namespace {
         QStringList entries;
         if (!acmx2::load_shader_manifest(libraryPath, entries, error))
             return false;
-        return std::any_of(entries.cbegin(), entries.cend(), [](const QString &entry) {
-            return entry.endsWith(".frag", Qt::CaseInsensitive) ||
-                   entry.endsWith(".comp", Qt::CaseInsensitive);
-        });
+        return std::any_of(entries.cbegin(), entries.cend(), [](const QString &entry) { return entry.endsWith(".frag", Qt::CaseInsensitive) || entry.endsWith(".comp", Qt::CaseInsensitive); });
     }
 
-    QString acmxvk_build_directory(const QString &sourceLibrary) {
-        return QDir(sourceLibrary).filePath(QStringLiteral(".acmxvk-build"));
-    }
+    QString acmxvk_build_directory(const QString &sourceLibrary) { return QDir(sourceLibrary).filePath(QStringLiteral(".acmxvk-build")); }
 
-    QString acmxvk_runtime_shader_name(const QString &sourceName) {
-        return sourceName.endsWith(".spv", Qt::CaseInsensitive)
-                   ? sourceName
-                   : sourceName + QStringLiteral(".spv");
-    }
+    QString acmxvk_runtime_shader_name(const QString &sourceName) { return sourceName.endsWith(".spv", Qt::CaseInsensitive) ? sourceName : sourceName + QStringLiteral(".spv"); }
 
-    enum class AcmxvkBuildState { UpToDate,
-                                  Stale,
-                                  NotBuilt };
+    enum class AcmxvkBuildState { UpToDate, Stale, NotBuilt };
 
-    AcmxvkBuildState acmxvk_shader_build_state(
-        const QString &source_library, const QString &source_name) {
-        const QString runtime_library =
-            acmxvk_build_directory(source_library);
+    AcmxvkBuildState acmxvk_shader_build_state(const QString &source_library, const QString &source_name) {
+        const QString runtime_library = acmxvk_build_directory(source_library);
         if (!acmx2::shader_manifest_exists(runtime_library))
             return AcmxvkBuildState::NotBuilt;
 
-        const QFileInfo source_file(
-            QDir(source_library).filePath(source_name));
-        const QFileInfo runtime_file(
-            QDir(runtime_library)
-                .filePath(acmxvk_runtime_shader_name(source_name)));
+        const QFileInfo source_file(QDir(source_library).filePath(source_name));
+        const QFileInfo runtime_file(QDir(runtime_library).filePath(acmxvk_runtime_shader_name(source_name)));
         if (!runtime_file.isFile())
             return AcmxvkBuildState::NotBuilt;
-        if (source_file.isFile() &&
-            runtime_file.lastModified() < source_file.lastModified()) {
+        if (source_file.isFile() && runtime_file.lastModified() < source_file.lastModified()) {
             return AcmxvkBuildState::Stale;
         }
         return AcmxvkBuildState::UpToDate;
     }
 
-    bool acmxvk_runtime_manifest_matches(const QString &source_library,
-                                         const QString &runtime_library,
-                                         QString &error) {
+    bool acmxvk_runtime_manifest_matches(const QString &source_library, const QString &runtime_library, QString &error) {
         QStringList source_entries;
         QStringList runtime_entries;
-        if (!acmx2::load_shader_manifest(source_library, source_entries,
-                                         error) ||
-            !acmx2::load_shader_manifest(runtime_library, runtime_entries,
-                                         error)) {
+        if (!acmx2::load_shader_manifest(source_library, source_entries, error) || !acmx2::load_shader_manifest(runtime_library, runtime_entries, error)) {
             return false;
         }
 
@@ -413,30 +348,24 @@ namespace {
         for (const QString &entry : source_entries)
             expected_entries.append(acmxvk_runtime_shader_name(entry));
         if (runtime_entries != expected_entries) {
-            error = QObject::tr(
-                "The ACMXVK runtime manifest does not match the source "
-                "shader list. Choose Playback > Build before running.");
+            error = QObject::tr("The ACMXVK runtime manifest does not match the source "
+                                "shader list. Choose Playback > Build before running.");
             return false;
         }
 
         bool uniformMetadataMatches = false;
-        if (!acmx2::custom_uniform_metadata_matches(
-                source_library, runtime_library, uniformMetadataMatches,
-                error)) {
+        if (!acmx2::custom_uniform_metadata_matches(source_library, runtime_library, uniformMetadataMatches, error)) {
             return false;
         }
         if (!uniformMetadataMatches) {
-            error = QObject::tr(
-                "The ACMXVK runtime custom-uniform metadata is out of date. "
-                "Choose Playback > Build before running.");
+            error = QObject::tr("The ACMXVK runtime custom-uniform metadata is out of date. "
+                                "Choose Playback > Build before running.");
             return false;
         }
         return true;
     }
 
-    bool resolve_acmxvk_runtime_library(const QString &selectedLibrary,
-                                        QString &runtimeLibrary,
-                                        QString &error) {
+    bool resolve_acmxvk_runtime_library(const QString &selectedLibrary, QString &runtimeLibrary, QString &error) {
         error.clear();
         runtimeLibrary = selectedLibrary;
         if (!is_acmxvk_source_library(selectedLibrary, error))
@@ -444,39 +373,30 @@ namespace {
 
         runtimeLibrary = acmxvk_build_directory(selectedLibrary);
         if (!acmx2::shader_manifest_exists(runtimeLibrary)) {
-            error = QObject::tr(
-                        "The ACMXVK source library has not been built yet. "
-                        "Choose Playback > Build first.\n\nExpected output: %1")
+            error = QObject::tr("The ACMXVK source library has not been built yet. "
+                                "Choose Playback > Build first.\n\nExpected output: %1")
                         .arg(runtimeLibrary);
             return false;
         }
-        const std::optional<acmx2::ShaderLibraryType> type =
-            acmx2::shader_manifest_library_type(runtimeLibrary, error);
+        const std::optional<acmx2::ShaderLibraryType> type = acmx2::shader_manifest_library_type(runtimeLibrary, error);
         if (!error.isEmpty())
             return false;
         if (type && *type != acmx2::ShaderLibraryType::Runtime) {
-            error = QObject::tr("Compiled output is not an ACMXVK runtime library: %1")
-                        .arg(runtimeLibrary);
+            error = QObject::tr("Compiled output is not an ACMXVK runtime library: %1").arg(runtimeLibrary);
             return false;
         }
         QStringList sourceEntries;
         if (!acmx2::load_shader_manifest(selectedLibrary, sourceEntries, error))
             return false;
-        if (!acmxvk_runtime_manifest_matches(selectedLibrary, runtimeLibrary,
-                                             error)) {
+        if (!acmxvk_runtime_manifest_matches(selectedLibrary, runtimeLibrary, error)) {
             return false;
         }
         for (const QString &sourceEntry : sourceEntries) {
-            const QFileInfo sourceFile(
-                QDir(selectedLibrary).filePath(sourceEntry));
-            const QFileInfo runtimeFile(QDir(runtimeLibrary)
-                                            .filePath(acmxvk_runtime_shader_name(
-                                                sourceEntry)));
-            if (!runtimeFile.isFile() ||
-                runtimeFile.lastModified() < sourceFile.lastModified()) {
-                error = QObject::tr(
-                            "The ACMXVK build is missing or older than %1. "
-                            "Choose Playback > Build before running.")
+            const QFileInfo sourceFile(QDir(selectedLibrary).filePath(sourceEntry));
+            const QFileInfo runtimeFile(QDir(runtimeLibrary).filePath(acmxvk_runtime_shader_name(sourceEntry)));
+            if (!runtimeFile.isFile() || runtimeFile.lastModified() < sourceFile.lastModified()) {
+                error = QObject::tr("The ACMXVK build is missing or older than %1. "
+                                    "Choose Playback > Build before running.")
                             .arg(sourceEntry);
                 return false;
             }
@@ -489,15 +409,13 @@ namespace {
         return settings.value("interface/texture_cache_array", false).toBool();
     }
 
-    QSize storedResolution(QSettings &settings, const QString &key,
-                           const QSize &fallback, bool defaultIsEmpty) {
+    QSize storedResolution(QSettings &settings, const QString &key, const QSize &fallback, bool defaultIsEmpty) {
         const QString text = settings.value(key).toString().trimmed();
         if (text.compare("Default", Qt::CaseInsensitive) == 0) {
             return defaultIsEmpty ? QSize(0, 0) : fallback;
         }
 
-        static const QRegularExpression resolutionPattern(
-            R"(^\s*(\d+)\s*[xX]\s*(\d+)\s*$)");
+        static const QRegularExpression resolutionPattern(R"(^\s*(\d+)\s*[xX]\s*(\d+)\s*$)");
         const QRegularExpressionMatch match = resolutionPattern.match(text);
         if (!match.hasMatch()) {
             return fallback;
@@ -508,31 +426,23 @@ namespace {
         return width > 0 && height > 0 ? QSize(width, height) : fallback;
     }
 
-    bool hasPositiveResolution(const QSize &resolution) {
-        return resolution.width() > 0 && resolution.height() > 0;
-    }
+    bool hasPositiveResolution(const QSize &resolution) { return resolution.width() > 0 && resolution.height() > 0; }
 
-    QString shaderCacheFilename(const QString &libraryPath, int cacheSize,
-                                bool useArray) {
+    QString shaderCacheFilename(const QString &libraryPath, int cacheSize, bool useArray) {
         std::error_code ec;
         const std::filesystem::path libraryFsPath(libraryPath.toStdString());
-        const std::filesystem::path absoluteLibrary =
-            std::filesystem::absolute(libraryFsPath, ec);
-        std::string key = ec ? libraryPath.toStdString()
-                             : absoluteLibrary.lexically_normal().string();
+        const std::filesystem::path absoluteLibrary = std::filesystem::absolute(libraryFsPath, ec);
+        std::string key = ec ? libraryPath.toStdString() : absoluteLibrary.lexically_normal().string();
         key += "|s=" + std::to_string(cacheSize);
         key += "|a=" + std::to_string(useArray ? 1 : 0);
         std::ostringstream nameStream;
-        nameStream << ".shader_cache_" << std::hex
-                   << std::hash<std::string>{}(key);
+        nameStream << ".shader_cache_" << std::hex << std::hash<std::string>{}(key);
         return QString::fromStdString(nameStream.str());
     }
 
-    QString resolveShaderCachePath(const QString &libraryPath, int cacheSize,
-                                   bool useArray) {
+    QString resolveShaderCachePath(const QString &libraryPath, int cacheSize, bool useArray) {
         const QString assets = resolveAssetsPath();
-        const QString filename =
-            shaderCacheFilename(libraryPath, cacheSize, useArray);
+        const QString filename = shaderCacheFilename(libraryPath, cacheSize, useArray);
 
         // Mirror ShaderLibrary::shaderCacheFilePath: prefer cache in assets dir,
         // then fall back to the library directory itself (acmx2 writes there when
@@ -554,15 +464,9 @@ namespace {
         if (!f.open(QIODevice::ReadOnly))
             return result;
 
-        auto readU32 = [&](quint32 &v) -> bool {
-            return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
-        };
-        auto readU64 = [&](quint64 &v) -> bool {
-            return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
-        };
-        auto readU8 = [&](quint8 &v) -> bool {
-            return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v));
-        };
+        auto readU32 = [&](quint32 &v) -> bool { return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v)); };
+        auto readU64 = [&](quint64 &v) -> bool { return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v)); };
+        auto readU8 = [&](quint8 &v) -> bool { return f.read(reinterpret_cast<char *>(&v), sizeof(v)) == qint64(sizeof(v)); };
         auto readStr = [&](QString &out) -> bool {
             quint32 len = 0;
             if (!readU32(len))
@@ -667,13 +571,10 @@ void MainWindow::initControls() {
     connect(process, &QProcess::stateChanged, this, updateShaderMenuState);
     updateShaderMenuState(process->state());
     connect(process, &QProcess::readyReadStandardOutput, this, [this]() {
-        stdoutBuffer +=
-            QString::fromLocal8Bit(process->readAllStandardOutput());
+        stdoutBuffer += QString::fromLocal8Bit(process->readAllStandardOutput());
         QString line;
         while (take_process_output_line(stdoutBuffer, line)) {
-            if (active_backend == acmx2::Backend::Acmxvk &&
-                stable_diffusion_enabled &&
-                is_stable_diffusion_diagnostic(line)) {
+            if (active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(line)) {
                 continue;
             }
             this->Write(line + "<br>");
@@ -684,9 +585,7 @@ void MainWindow::initControls() {
         auto writeStderrLine = [this](const QString &line) {
             if (line.contains("GStreamer"))
                 return;
-            if (active_backend == acmx2::Backend::Acmxvk &&
-                stable_diffusion_enabled &&
-                is_stable_diffusion_diagnostic(line)) {
+            if (active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(line)) {
                 return;
             }
             if (line.contains("[ WARN:") || line.contains("[WARN "))
@@ -695,8 +594,7 @@ void MainWindow::initControls() {
                 this->Write("<b style='color:red;'>Error:</b> " + line + "<br>");
         };
 
-        stderrBuffer +=
-            QString::fromLocal8Bit(process->readAllStandardError());
+        stderrBuffer += QString::fromLocal8Bit(process->readAllStandardError());
         QString line;
         while (take_process_output_line(stderrBuffer, line)) {
             writeStderrLine(line);
@@ -707,165 +605,127 @@ void MainWindow::initControls() {
         }
     });
 
-    connect(process,
-            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
-            this,
-            [this](int exitCode, QProcess::ExitStatus exitStatus) {
-                if (!stdoutBuffer.isEmpty() &&
-                    !(active_backend == acmx2::Backend::Acmxvk &&
-                      stable_diffusion_enabled &&
-                      is_stable_diffusion_diagnostic(stdoutBuffer))) {
-                    this->Write(stdoutBuffer + "<br>");
-                }
-                stdoutBuffer.clear();
-                if (!stderrBuffer.isEmpty() &&
-                    !stderrBuffer.contains("GStreamer") &&
-                    !(active_backend == acmx2::Backend::Acmxvk &&
-                      stable_diffusion_enabled &&
-                      is_stable_diffusion_diagnostic(stderrBuffer))) {
-                    if (stderrBuffer.contains("[ WARN:") ||
-                        stderrBuffer.contains("[WARN "))
-                        this->Write("<b style='color:#ccaa00;'>Warning:</b> " + stderrBuffer + "<br>");
-                    else
-                        this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
-                }
-                stderrBuffer.clear();
-                QString text;
-                QTextStream stream(&text);
-                stream << acmx2::backend_name(active_backend)
-                       << ": Exited with Code: " << exitCode;
-                Log(text + "<br>");
-                play_stop->setEnabled(false);
+    connect(process, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
+        if (!stdoutBuffer.isEmpty() && !(active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(stdoutBuffer))) {
+            this->Write(stdoutBuffer + "<br>");
+        }
+        stdoutBuffer.clear();
+        if (!stderrBuffer.isEmpty() && !stderrBuffer.contains("GStreamer") && !(active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(stderrBuffer))) {
+            if (stderrBuffer.contains("[ WARN:") || stderrBuffer.contains("[WARN "))
+                this->Write("<b style='color:#ccaa00;'>Warning:</b> " + stderrBuffer + "<br>");
+            else
+                this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
+        }
+        stderrBuffer.clear();
+        QString text;
+        QTextStream stream(&text);
+        stream << acmx2::backend_name(active_backend) << ": Exited with Code: " << exitCode;
+        Log(text + "<br>");
+        play_stop->setEnabled(false);
 
-                if (exitStatus == QProcess::CrashExit) {
-                    qDebug() << acmx2::backend_name(active_backend)
-                             << "engine crashed.";
-                    Log("<b style='color:red;'>" +
-                        acmx2::backend_name(active_backend) +
-                        " engine crashed.</b><br>");
+        if (exitStatus == QProcess::CrashExit) {
+            qDebug() << acmx2::backend_name(active_backend) << "engine crashed.";
+            Log("<b style='color:red;'>" + acmx2::backend_name(active_backend) + " engine crashed.</b><br>");
+        }
+
+        // Refresh the shader tree's compile-health column now that
+        // the child process has (re)written the binary shader cache.
+        populateShaderTree();
+
+        const bool finishedBuildProcess = cacheBuildInProgress;
+        if (cacheBuildInProgress) {
+            const PendingAcmxvkAction resume_action = pending_acmxvk_action;
+            const QString pruneLibraryPath = acmxvkPruneLibraryPath;
+            pending_acmxvk_action = PendingAcmxvkAction::None;
+            acmxvkPruneLibraryPath.clear();
+            if (active_backend == acmx2::Backend::Acmxvk) {
+                if (exitCode == 0) {
+                    Log(tr("ACMXVK build ready: %1").arg(acmxvk_build_directory(shader_path)));
+                } else {
+                    Log(tr("<b style='color:red;'>ACMXVK build failed "
+                           "with exit code %1.</b>")
+                            .arg(exitCode));
                 }
-
-                // Refresh the shader tree's compile-health column now that
-                // the child process has (re)written the binary shader cache.
-                populateShaderTree();
-
-                const bool finishedBuildProcess = cacheBuildInProgress;
-                if (cacheBuildInProgress) {
-                    const PendingAcmxvkAction resume_action =
-                        pending_acmxvk_action;
-                    const QString pruneLibraryPath =
-                        acmxvkPruneLibraryPath;
-                    pending_acmxvk_action = PendingAcmxvkAction::None;
-                    acmxvkPruneLibraryPath.clear();
-                    if (active_backend == acmx2::Backend::Acmxvk) {
-                        if (exitCode == 0) {
-                            Log(tr("ACMXVK build ready: %1")
-                                    .arg(acmxvk_build_directory(shader_path)));
+            }
+            cacheBuildInProgress = false;
+            update_backend_ui();
+            if (!pruneLibraryPath.isEmpty() && exitCode == 0 && exitStatus == QProcess::NormalExit) {
+                QStringList sourceShaders;
+                QString manifestError;
+                if (!acmx2::load_shader_manifest(pruneLibraryPath, sourceShaders, manifestError)) {
+                    Log(tr("<b style='color:red;'>Broken sources were "
+                           "pruned, but the source manifest could not "
+                           "be read: %1</b>")
+                            .arg(manifestError.toHtmlEscaped()));
+                    QMessageBox::warning(this,
+                                         tr("Remove Broken Shaders"),
+                                         tr("Broken source files were deleted, but the "
+                                            "source manifest could not be updated.\n\n%1")
+                                             .arg(manifestError));
+                } else {
+                    QStringList retainedShaders;
+                    int removedCount = 0;
+                    const QDir sourceDirectory(pruneLibraryPath);
+                    for (const QString &shader : sourceShaders) {
+                        const QString suffix = QFileInfo(shader).suffix().toLower();
+                        const bool sourceEntry = suffix == QStringLiteral("frag") || suffix == QStringLiteral("comp");
+                        if (sourceEntry && !QFileInfo(sourceDirectory.filePath(shader)).isFile()) {
+                            ++removedCount;
                         } else {
-                            Log(tr("<b style='color:red;'>ACMXVK build failed "
-                                   "with exit code %1.</b>")
-                                    .arg(exitCode));
+                            retainedShaders.append(shader);
                         }
                     }
-                    cacheBuildInProgress = false;
-                    update_backend_ui();
-                    if (!pruneLibraryPath.isEmpty() && exitCode == 0 &&
-                        exitStatus == QProcess::NormalExit) {
-                        QStringList sourceShaders;
-                        QString manifestError;
-                        if (!acmx2::load_shader_manifest(
-                                pruneLibraryPath, sourceShaders,
-                                manifestError)) {
-                            Log(tr("<b style='color:red;'>Broken sources were "
-                                   "pruned, but the source manifest could not "
-                                   "be read: %1</b>")
-                                    .arg(manifestError.toHtmlEscaped()));
-                            QMessageBox::warning(
-                                this, tr("Remove Broken Shaders"),
-                                tr("Broken source files were deleted, but the "
-                                   "source manifest could not be updated.\n\n%1")
-                                    .arg(manifestError));
-                        } else {
-                            QStringList retainedShaders;
-                            int removedCount = 0;
-                            const QDir sourceDirectory(pruneLibraryPath);
-                            for (const QString &shader : sourceShaders) {
-                                const QString suffix =
-                                    QFileInfo(shader).suffix().toLower();
-                                const bool sourceEntry =
-                                    suffix == QStringLiteral("frag") ||
-                                    suffix == QStringLiteral("comp");
-                                if (sourceEntry &&
-                                    !QFileInfo(sourceDirectory.filePath(shader))
-                                         .isFile()) {
-                                    ++removedCount;
-                                } else {
-                                    retainedShaders.append(shader);
-                                }
-                            }
 
-                            if (removedCount > 0 &&
-                                !acmx2::write_shader_manifest(
-                                    pruneLibraryPath, retainedShaders,
-                                    manifestError)) {
-                                Log(tr("<b style='color:red;'>Broken sources "
-                                       "were pruned, but the source manifest "
-                                       "could not be updated: %1</b>")
-                                        .arg(manifestError.toHtmlEscaped()));
-                                QMessageBox::warning(
-                                    this, tr("Remove Broken Shaders"),
-                                    tr("%1 source file(s) were permanently "
-                                       "deleted, but library.json could not be "
-                                       "updated.\n\n%2")
-                                        .arg(removedCount)
-                                        .arg(manifestError));
-                            } else {
-                                if (shader_path == pruneLibraryPath)
-                                    loadShaders(pruneLibraryPath, true);
-                                Log(tr("Remove Broken completed: %1 source "
-                                       "shader(s) permanently deleted.")
-                                        .arg(removedCount));
-                                QMessageBox::information(
-                                    this, tr("Remove Broken Shaders"),
-                                    removedCount > 0
-                                        ? tr("Removed %1 broken source shader(s) "
-                                             "and updated library.json.\n\n"
-                                             "This deletion cannot be undone.")
-                                              .arg(removedCount)
-                                        : tr("The build completed and no broken "
-                                             "source shaders were found."));
-                            }
-                        }
-                    }
-                    if (active_backend == acmx2::Backend::Acmxvk &&
-                        exitCode == 0 &&
-                        exitStatus == QProcess::NormalExit &&
-                        resume_action != PendingAcmxvkAction::None) {
-                        Log(tr("ACMXVK build succeeded; resuming the requested "
-                               "action."));
-                        QTimer::singleShot(0, this, [this, resume_action]() {
-                            if (resume_action ==
-                                PendingAcmxvkAction::RunSelected) {
-                                runSelected();
-                            } else if (resume_action ==
-                                       PendingAcmxvkAction::RunAll) {
-                                runAll();
-                            } else if (resume_action ==
-                                       PendingAcmxvkAction::CopyCommand) {
-                                copyCommand();
-                            }
-                        });
+                    if (removedCount > 0 && !acmx2::write_shader_manifest(pruneLibraryPath, retainedShaders, manifestError)) {
+                        Log(tr("<b style='color:red;'>Broken sources "
+                               "were pruned, but the source manifest "
+                               "could not be updated: %1</b>")
+                                .arg(manifestError.toHtmlEscaped()));
+                        QMessageBox::warning(this,
+                                             tr("Remove Broken Shaders"),
+                                             tr("%1 source file(s) were permanently "
+                                                "deleted, but library.json could not be "
+                                                "updated.\n\n%2")
+                                                 .arg(removedCount)
+                                                 .arg(manifestError));
+                    } else {
+                        if (shader_path == pruneLibraryPath)
+                            loadShaders(pruneLibraryPath, true);
+                        Log(tr("Remove Broken completed: %1 source "
+                               "shader(s) permanently deleted.")
+                                .arg(removedCount));
+                        QMessageBox::information(this,
+                                                 tr("Remove Broken Shaders"),
+                                                 removedCount > 0 ? tr("Removed %1 broken source shader(s) "
+                                                                       "and updated library.json.\n\n"
+                                                                       "This deletion cannot be undone.")
+                                                                        .arg(removedCount)
+                                                                  : tr("The build completed and no broken "
+                                                                       "source shaders were found."));
                     }
                 }
+            }
+            if (active_backend == acmx2::Backend::Acmxvk && exitCode == 0 && exitStatus == QProcess::NormalExit && resume_action != PendingAcmxvkAction::None) {
+                Log(tr("ACMXVK build succeeded; resuming the requested "
+                       "action."));
+                QTimer::singleShot(0, this, [this, resume_action]() {
+                    if (resume_action == PendingAcmxvkAction::RunSelected) {
+                        runSelected();
+                    } else if (resume_action == PendingAcmxvkAction::RunAll) {
+                        runAll();
+                    } else if (resume_action == PendingAcmxvkAction::CopyCommand) {
+                        copyCommand();
+                    }
+                });
+            }
+        }
 
-                // Optional post-process: convert the produced HLG HDR file
-                // to HDR10 via ffmpeg and stream its output to the log.
-                if (!finishedBuildProcess && convert_to_hdr10 && exitCode == 0 &&
-                    !output_file.isEmpty() &&
-                    QFileInfo::exists(output_file)) {
-                    runHdr10Conversion();
-                }
-            });
+        // Optional post-process: convert the produced HLG HDR file
+        // to HDR10 via ffmpeg and stream its output to the log.
+        if (!finishedBuildProcess && convert_to_hdr10 && exitCode == 0 && !output_file.isEmpty() && QFileInfo::exists(output_file)) {
+            runHdr10Conversion();
+        }
+    });
 
     hdr10Process = new QProcess(this);
     connect(hdr10Process, &QProcess::readyReadStandardOutput, this, [this]() {
@@ -880,16 +740,13 @@ void MainWindow::initControls() {
         // than the alarming red used for acmx2 errors.
         this->Write("<span style='color:#88aaff;'>" + output + "</span>");
     });
-    connect(hdr10Process,
-            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
-            this,
-            [this](int exitCode, QProcess::ExitStatus) {
-                QString text;
-                QTextStream stream(&text);
-                stream << "ffmpeg (HDR10): Exited with Code: " << exitCode;
-                Log(text + "<br>");
-                play_stop->setEnabled(false);
-            });
+    connect(hdr10Process, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus) {
+        QString text;
+        QTextStream stream(&text);
+        stream << "ffmpeg (HDR10): Exited with Code: " << exitCode;
+        Log(text + "<br>");
+        play_stop->setEnabled(false);
+    });
 
     setStyleSheet(" QMainWindow { background-color: rgb(0,0,0); }");
     camera_index = 0;
@@ -917,10 +774,8 @@ void MainWindow::initControls() {
     backendAcmxvkAction = backendMenu->addAction(tr("ACMXVK"));
     backendAcmxvkAction->setCheckable(true);
     backendActionGroup->addAction(backendAcmxvkAction);
-    connect(backendAcmx2Action, &QAction::triggered, this,
-            [this]() { set_backend(acmx2::Backend::Acmx2); });
-    connect(backendAcmxvkAction, &QAction::triggered, this,
-            [this]() { set_backend(acmx2::Backend::Acmxvk); });
+    connect(backendAcmx2Action, &QAction::triggered, this, [this]() { set_backend(acmx2::Backend::Acmx2); });
+    connect(backendAcmxvkAction, &QAction::triggered, this, [this]() { set_backend(acmx2::Backend::Acmxvk); });
     stayOnTopAction = new QAction(tr("Stay on Top"), this);
     stayOnTopAction->setShortcut(QKeySequence("Ctrl+Alt+T"));
     stayOnTopAction->setCheckable(true);
@@ -944,13 +799,11 @@ void MainWindow::initControls() {
     viewMenu->addAction(metadataAction);
     fileMenu_loadLibrary = new QAction(tr("Load Library..."), this);
     fileMenu_loadLibrary->setShortcut(QKeySequence::Open);
-    connect(fileMenu_loadLibrary, &QAction::triggered, this,
-            &MainWindow::menuLoadLibrary);
+    connect(fileMenu_loadLibrary, &QAction::triggered, this, &MainWindow::menuLoadLibrary);
     fileMenu->addAction(fileMenu_loadLibrary);
     loadRecentMenu = fileMenu->addMenu(tr("Load Recent"));
     loadRecentMenu->menuAction()->setShortcut(QKeySequence("Ctrl+Shift+O"));
-    connect(loadRecentMenu, &QMenu::aboutToShow, this,
-            &MainWindow::updateRecentLibrariesMenu);
+    connect(loadRecentMenu, &QMenu::aboutToShow, this, &MainWindow::updateRecentLibrariesMenu);
     updateRecentLibrariesMenu();
     fileMenu->addSeparator();
     fileMenu_prop = new QAction(tr("Properties"), this);
@@ -976,13 +829,10 @@ void MainWindow::initControls() {
     cameraMenu->addAction(gpuFilterAction);
     deepDreamAction = new QAction(tr("Deep Dream Settings..."), this);
     deepDreamAction->setShortcut(QKeySequence("Ctrl+Shift+D"));
-    connect(deepDreamAction, &QAction::triggered, this,
-            &MainWindow::menuDeepDreamSettings);
+    connect(deepDreamAction, &QAction::triggered, this, &MainWindow::menuDeepDreamSettings);
     cameraMenu->addAction(deepDreamAction);
-    stableDiffusionAction =
-        new QAction(tr("Stable Diffusion Settings..."), this);
-    connect(stableDiffusionAction, &QAction::triggered, this,
-            &MainWindow::menuStableDiffusionSettings);
+    stableDiffusionAction = new QAction(tr("Stable Diffusion Settings..."), this);
+    connect(stableDiffusionAction, &QAction::triggered, this, &MainWindow::menuStableDiffusionSettings);
     cameraMenu->addAction(stableDiffusionAction);
     cameraMenu->addSeparator();
     styleSheetAction = new QAction(tr("Use Custom Style"), this);
@@ -1008,24 +858,19 @@ void MainWindow::initControls() {
     runMenu->addSeparator();
     QAction *runMenu_clearLog = new QAction(tr("Clear Log"), this);
     runMenu_clearLog->setShortcut(QKeySequence("Ctrl+L"));
-    connect(runMenu_clearLog, &QAction::triggered, this, [this]() {
-        bottomTextBox->clear();
-    });
+    connect(runMenu_clearLog, &QAction::triggered, this, [this]() { bottomTextBox->clear(); });
     runMenu->addAction(runMenu_clearLog);
     play_repeat = new QAction(tr("Repeat"), this);
     play_repeat->setShortcut(QKeySequence("Ctrl+R"));
     play_repeat->setCheckable(true);
     play_repeat->setChecked(false);
-    connect(play_repeat, &QAction::toggled, this, [this](bool) {
-        publishRepeatStateToRunningProcess();
-    });
+    connect(play_repeat, &QAction::toggled, this, [this](bool) { publishRepeatStateToRunningProcess(); });
     playbackMenu->addAction(play_repeat);
     normalizedTimeAction = new QAction(tr("Normalized Time"), this);
     normalizedTimeAction->setShortcut(QKeySequence("Ctrl+Alt+N"));
     normalizedTimeAction->setCheckable(true);
     normalizedTimeAction->setChecked(false);
-    normalizedTimeAction->setToolTip(
-        tr("Advance shader time by a fixed amount per output frame."));
+    normalizedTimeAction->setToolTip(tr("Advance shader time by a fixed amount per output frame."));
     connect(normalizedTimeAction, &QAction::toggled, this, [this](bool checked) {
         normalized_time = checked;
         QSettings settings("LostSideDead", "acmx2");
@@ -1062,15 +907,12 @@ void MainWindow::initControls() {
     playbackMenu->addAction(buildCacheAction);
     fixBuildAction = new QAction(tr("Fix Build"), this);
     fixBuildAction->setShortcut(QKeySequence("Ctrl+Alt+F"));
-    fixBuildAction->setToolTip(
-        tr("Build ACMXVK while omitting shaders that fail to compile."));
-    connect(fixBuildAction, &QAction::triggered, this,
-            &MainWindow::menuFixBuild);
+    fixBuildAction->setToolTip(tr("Build ACMXVK while omitting shaders that fail to compile."));
+    connect(fixBuildAction, &QAction::triggered, this, &MainWindow::menuFixBuild);
     playbackMenu->addAction(fixBuildAction);
     cleanShaderCacheAction = new QAction(tr("Clean Shader Cache"), this);
     cleanShaderCacheAction->setShortcut(QKeySequence("Ctrl+Alt+C"));
-    connect(cleanShaderCacheAction, &QAction::triggered,
-            this, &MainWindow::menuCleanShaderCache);
+    connect(cleanShaderCacheAction, &QAction::triggered, this, &MainWindow::menuCleanShaderCache);
     playbackMenu->addAction(cleanShaderCacheAction);
 #ifdef Q_OS_MACOS
     // macOS does not support the persistent binary shader cache.
@@ -1094,8 +936,7 @@ void MainWindow::initControls() {
     use_shader_cache = false;
     runFromCacheAction->setChecked(false);
     runFromCacheAction->setEnabled(false);
-    runFromCacheAction->setToolTip(
-        tr("Shader binary caching is not supported on macOS."));
+    runFromCacheAction->setToolTip(tr("Shader binary caching is not supported on macOS."));
 #else
     runFromCacheAction->setChecked(true);
 #endif
@@ -1134,8 +975,7 @@ void MainWindow::initControls() {
     listMenu->addAction(listMenu_new);
     libraryBuilderAction = new QAction(tr("Shader Library Builder..."), this);
     libraryBuilderAction->setShortcut(QKeySequence("Ctrl+Shift+B"));
-    connect(libraryBuilderAction, &QAction::triggered, this,
-            &MainWindow::menuLibraryBuilder);
+    connect(libraryBuilderAction, &QAction::triggered, this, &MainWindow::menuLibraryBuilder);
     listMenu->addAction(libraryBuilderAction);
     listMenu_shader = new QAction(tr("New Shader File..."), this);
     listMenu_shader->setShortcut(QKeySequence::New);
@@ -1143,8 +983,7 @@ void MainWindow::initControls() {
     listMenu->addAction(listMenu_shader);
     customUniformsAction = new QAction(tr("Custom Uniforms..."), this);
     customUniformsAction->setShortcut(QKeySequence("Ctrl+U"));
-    connect(customUniformsAction, &QAction::triggered, this,
-            &MainWindow::menuCustomUniforms);
+    connect(customUniformsAction, &QAction::triggered, this, &MainWindow::menuCustomUniforms);
     listMenu->addAction(customUniformsAction);
     listMenu->addSeparator();
     listMenu_remove = new QAction(tr("Remove Shader"), this);
@@ -1187,18 +1026,12 @@ void MainWindow::initControls() {
     listMenu_findInFiles->setShortcut(QKeySequence("Ctrl+Shift+F"));
     connect(listMenu_findInFiles, &QAction::triggered, this, [this]() {
         if (shader_path.isEmpty() || !QDir(shader_path).exists()) {
-            QMessageBox::information(
-                this, tr("Find in Files"),
-                tr("Load a shader library before searching its files."));
+            QMessageBox::information(this, tr("Find in Files"), tr("Load a shader library before searching its files."));
             return;
         }
 
         auto *dialog = new FindShaderDialog(shader_path, this);
-        connect(dialog, &FindShaderDialog::resultActivated, this,
-                [this](const QString &filePath, int lineNumber,
-                       int columnNumber, int matchLength) {
-                    openShaderEditor(filePath, lineNumber, columnNumber, matchLength);
-                });
+        connect(dialog, &FindShaderDialog::resultActivated, this, [this](const QString &filePath, int lineNumber, int columnNumber, int matchLength) { openShaderEditor(filePath, lineNumber, columnNumber, matchLength); });
         dialog->show();
         dialog->raise();
         dialog->activateWindow();
@@ -1206,8 +1039,7 @@ void MainWindow::initControls() {
     listMenu->addAction(listMenu_findInFiles);
     helpMenu_uniformReference = new QAction(tr("Built-in Uniform Reference..."), this);
     helpMenu_uniformReference->setShortcut(QKeySequence::HelpContents);
-    connect(helpMenu_uniformReference, &QAction::triggered, this,
-            &MainWindow::menuUniformReference);
+    connect(helpMenu_uniformReference, &QAction::triggered, this, &MainWindow::menuUniformReference);
     helpMenu->addAction(helpMenu_uniformReference);
     helpMenu->addSeparator();
 
@@ -1218,15 +1050,13 @@ void MainWindow::initControls() {
         QMessageBox box(this);
         box.setWindowTitle("About ACMX2");
         box.setWindowIcon(QIcon(":/win-icon.png"));
-        const QString info =
-            QStringLiteral("<p><b>ACMX %1</b><br>"
-                           "(C) 2026 %2 Software<br>"
-                           "<a href=\"https://lostsidedead.biz\">"
-                           "http://lostsidedead.biz</a><br>"
-                           "This software is dedicated to all that have "
-                           "experienced mental health issues.</p>")
-                .arg(QStringLiteral(VERSION_INFO),
-                     QStringLiteral(VERSION_AUTHOR));
+        const QString info = QStringLiteral("<p><b>ACMX %1</b><br>"
+                                            "(C) 2026 %2 Software<br>"
+                                            "<a href=\"https://lostsidedead.biz\">"
+                                            "http://lostsidedead.biz</a><br>"
+                                            "This software is dedicated to all that have "
+                                            "experienced mental health issues.</p>")
+                                 .arg(QStringLiteral(VERSION_INFO), QStringLiteral(VERSION_AUTHOR));
         box.setTextFormat(Qt::RichText);
         box.setTextInteractionFlags(Qt::TextBrowserInteraction);
         box.setText(info);
@@ -1241,20 +1071,16 @@ void MainWindow::initControls() {
     });
     helpMenu->addAction(helpMenu_about);
     customUniformDialog = new CustomUniformDialog(this);
-    connect(customUniformDialog, &CustomUniformDialog::uniformsChanged, this,
-            &MainWindow::publishCustomUniformsToRunningProcess);
-    connect(customUniformDialog, &CustomUniformDialog::uniformDefinitionsChanged,
-            this, [this]() {
-                updateOpenEditorShaderContexts();
-                const QString shaderName = currentShaderName();
-                if (!shaderName.isEmpty())
-                    publishShaderReloadToRunningProcess(
-                        QDir(shader_path).filePath(shaderName));
-            });
+    connect(customUniformDialog, &CustomUniformDialog::uniformsChanged, this, &MainWindow::publishCustomUniformsToRunningProcess);
+    connect(customUniformDialog, &CustomUniformDialog::uniformDefinitionsChanged, this, [this]() {
+        updateOpenEditorShaderContexts();
+        const QString shaderName = currentShaderName();
+        if (!shaderName.isEmpty())
+            publishShaderReloadToRunningProcess(QDir(shader_path).filePath(shaderName));
+    });
     list_view = new QTreeWidget(this);
     list_view->setColumnCount(5);
-    list_view->setHeaderLabels(
-        {tr("#"), tr("Name"), tr("Last Modified"), tr("Compile Health"), tr("Type")});
+    list_view->setHeaderLabels({tr("#"), tr("Name"), tr("Last Modified"), tr("Compile Health"), tr("Type")});
     list_view->setRootIsDecorated(false);
     list_view->setUniformRowHeights(true);
     list_view->setAlternatingRowColors(false);
@@ -1274,26 +1100,23 @@ void MainWindow::initControls() {
 #endif
     list_view->setToolTip(tr("Right click while running to change the active shader."));
     bottomTextBox = new QTextEdit(this);
-    bottomTextBox->setHtml(
-        "<b style='color:red;'>ACMX</b> - Interface: Loaded.");
+    bottomTextBox->setHtml("<b style='color:red;'>ACMX</b> - Interface: Loaded.");
     bottomTextBox->setReadOnly(true);
-    connect(list_view, &QTreeWidget::doubleClicked,
-            this, &MainWindow::listClicked);
-    connect(list_view, &QTreeWidget::customContextMenuRequested,
-            this, [this](const QPoint &pos) {
-                if (!list_view)
-                    return;
-                if (QTreeWidgetItem *item = list_view->itemAt(pos)) {
-                    list_view->setCurrentItem(item);
-                    publishSelectedShaderIndexToRunningProcess();
-                    if (process && process->state() == QProcess::Running) {
-                        return;
-                    }
-                }
-                if (listMenu) {
-                    listMenu->exec(list_view->viewport()->mapToGlobal(pos));
-                }
-            });
+    connect(list_view, &QTreeWidget::doubleClicked, this, &MainWindow::listClicked);
+    connect(list_view, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+        if (!list_view)
+            return;
+        if (QTreeWidgetItem *item = list_view->itemAt(pos)) {
+            list_view->setCurrentItem(item);
+            publishSelectedShaderIndexToRunningProcess();
+            if (process && process->state() == QProcess::Running) {
+                return;
+            }
+        }
+        if (listMenu) {
+            listMenu->exec(list_view->viewport()->mapToGlobal(pos));
+        }
+    });
     QWidget *centralWidget = new QWidget(this);
     QVBoxLayout *layout = new QVBoxLayout(centralWidget);
     layout->addWidget(list_view, 3);
@@ -1301,38 +1124,19 @@ void MainWindow::initControls() {
     centralWidget->setLayout(layout);
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
-    active_backend = acmx2::backend_from_id(
-                         appSettings.value("interface/backend", "acmx2")
-                             .toString())
-                         .value_or(acmx2::Backend::Acmx2);
+    active_backend = acmx2::backend_from_id(appSettings.value("interface/backend", "acmx2").toString()).value_or(acmx2::Backend::Acmx2);
     backendAcmx2Action->setChecked(active_backend == acmx2::Backend::Acmx2);
     backendAcmxvkAction->setChecked(active_backend == acmx2::Backend::Acmxvk);
     loadSessionSettings();
     baseAppStyleSheet = qApp->styleSheet();
-    const QString legacyLibrary =
-        active_backend == acmx2::Backend::Acmx2
-            ? appSettings.value("shaders", "").toString()
-            : QString();
-    QString path = appSettings
-                       .value(acmx2::backend_settings_key(active_backend,
-                                                          "library"),
-                              legacyLibrary)
-                       .toString();
+    const QString legacyLibrary = active_backend == acmx2::Backend::Acmx2 ? appSettings.value("shaders", "").toString() : QString();
+    QString path = appSettings.value(acmx2::backend_settings_key(active_backend, "library"), legacyLibrary).toString();
     path = path.trimmed();
     while (path.endsWith("/") || path.endsWith("\\")) {
         path.chop(1);
     }
-    const QString legacyExecutable =
-        active_backend == acmx2::Backend::Acmx2
-            ? appSettings.value("exePath", acmx2::default_backend_executable(
-                                               acmx2::Backend::Acmx2))
-                  .toString()
-            : acmx2::default_backend_executable(active_backend);
-    executable_path =
-        appSettings
-            .value(acmx2::backend_settings_key(active_backend, "executable"),
-                   legacyExecutable)
-            .toString();
+    const QString legacyExecutable = active_backend == acmx2::Backend::Acmx2 ? appSettings.value("exePath", acmx2::default_backend_executable(acmx2::Backend::Acmx2)).toString() : acmx2::default_backend_executable(active_backend);
+    executable_path = appSettings.value(acmx2::backend_settings_key(active_backend, "executable"), legacyExecutable).toString();
     prefix_path = appSettings.value("prefix_path", ".").toString();
     initShaderSelectionSharedMemory();
     detectCudaSupport();
@@ -1359,19 +1163,15 @@ void MainWindow::initControls() {
     publishRuntimeSettingsToRunningProcess();
     if (!path.isEmpty()) {
         QFileInfo pathInfo(path);
-        if (pathInfo.exists() && pathInfo.isDir() &&
-            acmx2::shader_manifest_exists(path)) {
+        if (pathInfo.exists() && pathInfo.isDir() && acmx2::shader_manifest_exists(path)) {
             QString backendError;
-            const std::optional<acmx2::Backend> libraryBackend =
-                acmx2::shader_manifest_backend(path, backendError);
+            const std::optional<acmx2::Backend> libraryBackend = acmx2::shader_manifest_backend(path, backendError);
             if (!backendError.isEmpty()) {
-                Log("Warning: Saved shader library backend metadata is invalid: " +
-                    backendError);
+                Log("Warning: Saved shader library backend metadata is invalid: " + backendError);
             } else if (libraryBackend && *libraryBackend != active_backend) {
                 Log(tr("Warning: Saved shader library targets %1 while the "
                        "active backend is %2: %3")
-                        .arg(acmx2::backend_name(*libraryBackend),
-                             acmx2::backend_name(active_backend), path));
+                        .arg(acmx2::backend_name(*libraryBackend), acmx2::backend_name(active_backend), path));
             } else {
                 shader_path = path;
                 loadShaders(path);
@@ -1400,164 +1200,98 @@ void MainWindow::initControls() {
 void MainWindow::loadSessionSettings() {
     QSettings settings("LostSideDead", "acmx2");
 
-    const QString inputMode =
-        settings.value("interface/input_mode", "camera").toString();
+    const QString inputMode = settings.value("interface/input_mode", "camera").toString();
     const bool videoMode = inputMode == "video";
     const bool graphicsMode = inputMode == "graphic";
     const bool cameraMode = !videoMode && !graphicsMode;
 
-    camera_index = static_cast<unsigned int>(
-        std::max(0, settings.value("interface/camera_device", 0).toInt()));
-    camera_res = storedResolution(settings, "interface/camera_resolution",
-                                  QSize(1280, 720), false);
-    screen_res = storedResolution(settings, "interface/screen_resolution",
-                                  QSize(0, 0), true);
+    camera_index = static_cast<unsigned int>(std::max(0, settings.value("interface/camera_device", 0).toInt()));
+    camera_res = storedResolution(settings, "interface/camera_resolution", QSize(1280, 720), false);
+    screen_res = storedResolution(settings, "interface/screen_resolution", QSize(0, 0), true);
 
     output_fps = settings.value("interface/camera_fps", 30.0).toDouble();
     if (output_fps <= 0.0)
         output_fps = 30.0;
 
-    video_file = videoMode
-                     ? settings.value("interface/input_video", "").toString()
-                     : QString();
-    graphics_file = graphicsMode
-                        ? settings.value("interface/graphics_file", "").toString()
-                        : QString();
+    video_file = videoMode ? settings.value("interface/input_video", "").toString() : QString();
+    graphics_file = graphicsMode ? settings.value("interface/graphics_file", "").toString() : QString();
 
-    const bool saveOutput =
-        settings.value("interface/save_output", false).toBool();
-    output_file = saveOutput
-                      ? settings.value("interface/output_video", "").toString()
-                      : QString();
-    full_screen_value =
-        settings.value("interface/fullscreen", false).toBool();
-    copy_audio = videoMode && saveOutput &&
-                 settings.value("interface/copy_audio", false).toBool();
+    const bool saveOutput = settings.value("interface/save_output", false).toBool();
+    output_file = saveOutput ? settings.value("interface/output_video", "").toString() : QString();
+    full_screen_value = settings.value("interface/fullscreen", false).toBool();
+    copy_audio = videoMode && saveOutput && settings.value("interface/copy_audio", false).toBool();
 
-    cache_enabled = !graphicsMode &&
-                    settings.value("interface/texture_cache", false).toBool();
+    cache_enabled = !graphicsMode && settings.value("interface/texture_cache", false).toBool();
     cache_delay = settings.value("interface/cache_delay", 1).toInt();
-    cache_size = std::clamp(
-        settings.value("interface/cache_size", 8).toInt(), 1, 64);
-    use_yuv = cameraMode &&
-              settings.value("interface/use_yuv", false).toBool();
+    cache_size = std::clamp(settings.value("interface/cache_size", 8).toInt(), 1, 64);
+    use_yuv = cameraMode && settings.value("interface/use_yuv", false).toBool();
 
-    convert_to_hdr10 = videoMode && saveOutput &&
-                       settings.value("interface/convert_to_hdr10", false).toBool();
+    convert_to_hdr10 = videoMode && saveOutput && settings.value("interface/convert_to_hdr10", false).toBool();
     enable_3d = settings.value("interface/enable_3d", false).toBool();
     model_file = settings.value("interface/model_file", "cube.mxmod.z").toString();
     onnx_model_enabled = settings.value("interface/use_onnx_model", false).toBool();
     onnx_model = settings.value("interface/onnx_model_file", "").toString();
-    deep_dream_enabled =
-        settings.value("deep_dream/enabled", false).toBool();
-    deep_dream_model =
-        settings.value("deep_dream/model_file", QString()).toString();
-    deep_dream_layer =
-        settings.value("deep_dream/layer", "relu4_2").toString();
-    deep_dream_iterations = std::clamp(
-        settings.value("deep_dream/iterations", 1).toInt(), 1, 100);
-    deep_dream_strength = std::clamp(
-        settings.value("deep_dream/strength", 0.05).toDouble(), 0.0001,
-        10.0);
-    deep_dream_feedback = std::clamp(
-        settings.value("deep_dream/feedback", 0.9).toDouble(), 0.0, 0.99);
-    deep_dream_zoom = std::clamp(
-        settings.value("deep_dream/zoom", 1.01).toDouble(), 0.9, 1.1);
-    deep_dream_rotation = std::clamp(
-        settings.value("deep_dream/rotation", 0.1).toDouble(), -5.0, 5.0);
-    deep_dream_maximum_dimension =
-        settings.value("deep_dream/maximum_dimension", 512).toInt();
+    deep_dream_enabled = settings.value("deep_dream/enabled", false).toBool();
+    deep_dream_model = settings.value("deep_dream/model_file", QString()).toString();
+    deep_dream_layer = settings.value("deep_dream/layer", "relu4_2").toString();
+    deep_dream_iterations = std::clamp(settings.value("deep_dream/iterations", 1).toInt(), 1, 100);
+    deep_dream_strength = std::clamp(settings.value("deep_dream/strength", 0.05).toDouble(), 0.0001, 10.0);
+    deep_dream_feedback = std::clamp(settings.value("deep_dream/feedback", 0.9).toDouble(), 0.0, 0.99);
+    deep_dream_zoom = std::clamp(settings.value("deep_dream/zoom", 1.01).toDouble(), 0.9, 1.1);
+    deep_dream_rotation = std::clamp(settings.value("deep_dream/rotation", 0.1).toDouble(), -5.0, 5.0);
+    deep_dream_maximum_dimension = settings.value("deep_dream/maximum_dimension", 512).toInt();
     if (deep_dream_maximum_dimension != 0) {
-        deep_dream_maximum_dimension =
-            std::clamp(deep_dream_maximum_dimension, 64, 4096);
+        deep_dream_maximum_dimension = std::clamp(deep_dream_maximum_dimension, 64, 4096);
     }
-    deep_dream_fp16 =
-        settings.value("deep_dream/fp16", false).toBool();
-    deep_dream_channel = std::clamp(
-        settings.value("deep_dream/channel", -1).toInt(), -1, 65535);
-    deep_dream_octaves = std::clamp(
-        settings.value("deep_dream/octaves", 1).toInt(), 1, 8);
-    deep_dream_octave_scale = std::clamp(
-        settings.value("deep_dream/octave_scale", 1.4).toDouble(), 1.1,
-        3.0);
-    deep_dream_jitter = std::clamp(
-        settings.value("deep_dream/jitter", 0).toInt(), 0, 64);
-    deep_dream_smoothing = std::clamp(
-        settings.value("deep_dream/smoothing", 0).toInt(), 0, 16);
-    deep_dream_gpu_filter_first =
-        settings.value("deep_dream/gpu_filter_first", false).toBool();
-    deep_dream_original =
-        settings.value("deep_dream/deep_original", false).toBool();
+    deep_dream_fp16 = settings.value("deep_dream/fp16", false).toBool();
+    deep_dream_channel = std::clamp(settings.value("deep_dream/channel", -1).toInt(), -1, 65535);
+    deep_dream_octaves = std::clamp(settings.value("deep_dream/octaves", 1).toInt(), 1, 8);
+    deep_dream_octave_scale = std::clamp(settings.value("deep_dream/octave_scale", 1.4).toDouble(), 1.1, 3.0);
+    deep_dream_jitter = std::clamp(settings.value("deep_dream/jitter", 0).toInt(), 0, 64);
+    deep_dream_smoothing = std::clamp(settings.value("deep_dream/smoothing", 0).toInt(), 0, 16);
+    deep_dream_gpu_filter_first = settings.value("deep_dream/gpu_filter_first", false).toBool();
+    deep_dream_original = settings.value("deep_dream/deep_original", false).toBool();
     if (deep_dream_original) {
         deep_dream_feedback = 0.0;
         deep_dream_zoom = 1.0;
         deep_dream_rotation = 0.0;
     }
-    stable_diffusion_enabled =
-        settings.value("stable_diffusion/enabled", false).toBool();
-    stable_diffusion_model =
-        settings.value("stable_diffusion/model_file").toString();
-    stable_diffusion_lora_files =
-        settings.value("stable_diffusion/lora_files").toStringList();
-    const QStringList stable_diffusion_lora_multiplier_values =
-        settings.value("stable_diffusion/lora_multipliers").toStringList();
+    stable_diffusion_enabled = settings.value("stable_diffusion/enabled", false).toBool();
+    stable_diffusion_model = settings.value("stable_diffusion/model_file").toString();
+    stable_diffusion_lora_files = settings.value("stable_diffusion/lora_files").toStringList();
+    const QStringList stable_diffusion_lora_multiplier_values = settings.value("stable_diffusion/lora_multipliers").toStringList();
     for (int index = 0; index < stable_diffusion_lora_files.size(); ++index) {
         bool multiplier_ok = false;
-        const double multiplier =
-            index < stable_diffusion_lora_multiplier_values.size()
-                ? stable_diffusion_lora_multiplier_values.at(index).toDouble(
-                      &multiplier_ok)
-                : 1.0;
-        stable_diffusion_lora_multipliers.append(
-            multiplier_ok ? std::clamp(multiplier, -10.0, 10.0) : 1.0);
+        const double multiplier = index < stable_diffusion_lora_multiplier_values.size() ? stable_diffusion_lora_multiplier_values.at(index).toDouble(&multiplier_ok) : 1.0;
+        stable_diffusion_lora_multipliers.append(multiplier_ok ? std::clamp(multiplier, -10.0, 10.0) : 1.0);
     }
     if (settings.value("stable_diffusion/server_upscale", false).toBool()) {
-        stable_diffusion_upscale_model =
-            settings.value("stable_diffusion/upscale_model_file").toString();
+        stable_diffusion_upscale_model = settings.value("stable_diffusion/upscale_model_file").toString();
     }
-    stable_diffusion_prompt =
-        settings.value("stable_diffusion/prompt").toString();
-    stable_diffusion_negative_prompt =
-        settings.value("stable_diffusion/negative_prompt").toString();
-    stable_diffusion_server =
-        settings.value("stable_diffusion/server", "sd-server").toString();
-    stable_diffusion_server_arguments =
-        settings.value("stable_diffusion/server_arguments").toString();
-    stable_diffusion_server_port = std::clamp(
-        settings.value("stable_diffusion/port", 1234).toInt(), 1024, 65535);
-    stable_diffusion_width = std::clamp(
-        settings.value("stable_diffusion/width", 576).toInt(), 64, 2048);
-    stable_diffusion_height = std::clamp(
-        settings.value("stable_diffusion/height", 320).toInt(), 64, 2048);
-    stable_diffusion_steps = std::clamp(
-        settings.value("stable_diffusion/steps", 12).toInt(), 1, 150);
-    stable_diffusion_strength = std::clamp(
-        settings.value("stable_diffusion/strength", 0.35).toDouble(), 0.01,
-        1.0);
-    stable_diffusion_cfg_scale = std::clamp(
-        settings.value("stable_diffusion/cfg_scale", 5.0).toDouble(), 0.0,
-        50.0);
-    stable_diffusion_seed =
-        settings.value("stable_diffusion/seed", 1234).toInt();
-    stable_diffusion_sampler =
-        settings.value("stable_diffusion/sampler", "euler_a").toString();
-    stable_diffusion_scheduler =
-        settings.value("stable_diffusion/scheduler", "discrete").toString();
-    stable_diffusion_upscale =
-        settings.value("stable_diffusion/upscale", false).toBool();
+    stable_diffusion_prompt = settings.value("stable_diffusion/prompt").toString();
+    stable_diffusion_negative_prompt = settings.value("stable_diffusion/negative_prompt").toString();
+    stable_diffusion_server = settings.value("stable_diffusion/server", "sd-server").toString();
+    stable_diffusion_server_arguments = settings.value("stable_diffusion/server_arguments").toString();
+    stable_diffusion_server_port = std::clamp(settings.value("stable_diffusion/port", 1234).toInt(), 1024, 65535);
+    stable_diffusion_width = std::clamp(settings.value("stable_diffusion/width", 576).toInt(), 64, 2048);
+    stable_diffusion_height = std::clamp(settings.value("stable_diffusion/height", 320).toInt(), 64, 2048);
+    stable_diffusion_steps = std::clamp(settings.value("stable_diffusion/steps", 12).toInt(), 1, 150);
+    stable_diffusion_strength = std::clamp(settings.value("stable_diffusion/strength", 0.35).toDouble(), 0.01, 1.0);
+    stable_diffusion_cfg_scale = std::clamp(settings.value("stable_diffusion/cfg_scale", 5.0).toDouble(), 0.0, 50.0);
+    stable_diffusion_seed = settings.value("stable_diffusion/seed", 1234).toInt();
+    stable_diffusion_sampler = settings.value("stable_diffusion/sampler", "euler_a").toString();
+    stable_diffusion_scheduler = settings.value("stable_diffusion/scheduler", "discrete").toString();
+    stable_diffusion_upscale = settings.value("stable_diffusion/upscale", false).toBool();
     cuda_device = settings.value("interface/cuda_device", 0).toInt();
     time_speed = settings.value("interface/time_speed", 1.0).toFloat();
-    normalized_time =
-        settings.value("interface/normalized_time", false).toBool();
+    normalized_time = settings.value("interface/normalized_time", false).toBool();
     if (normalizedTimeAction) {
         QSignalBlocker blocker(normalizedTimeAction);
         normalizedTimeAction->setChecked(normalized_time);
     }
-    duration_limit_enabled =
-        settings.value("interface/duration_enabled", false).toBool();
+    duration_limit_enabled = settings.value("interface/duration_enabled", false).toBool();
     max_duration = settings.value("interface/duration_seconds", 60.0).toDouble();
-    max_size_limit_enabled =
-        settings.value("interface/max_size_enabled", false).toBool();
+    max_size_limit_enabled = settings.value("interface/max_size_enabled", false).toBool();
     max_size_mb = settings.value("interface/max_size_mb", 500.0).toDouble();
     cross_fade_duration = settings.value("interface/crossfade", 0.5).toFloat();
     flip_enabled = settings.value("interface/flip", false).toBool();
@@ -1570,28 +1304,18 @@ void MainWindow::loadSessionSettings() {
     encode_preset = settings.value("recording/preset", "medium").toString();
     encode_tune = settings.value("recording/tune", "").toString();
     encode_crf = settings.value("recording/crf", 18).toInt();
-    encode_rate_control =
-        settings.value("recording/rate_control", "quality").toString();
-    encode_bitrate =
-        settings.value("recording/bitrate", "10M").toString();
+    encode_rate_control = settings.value("recording/rate_control", "quality").toString();
+    encode_bitrate = settings.value("recording/bitrate", "10M").toString();
     encode_codec = settings.value("recording/codec", "auto").toString();
     encode_parameters = settings.value("recording/parameters", "").toString();
     encode_realtime = settings.value("recording/realtime", false).toBool();
-    encode_no_drop = !cameraMode &&
-                     settings.value("recording/no_drop", false).toBool();
-    encode_constant_frame_rate =
-        settings.value("recording/constant_frame_rate", false).toBool();
-    encode_fill_pts_gaps =
-        settings.value("recording/fill_pts_gaps", false).toBool();
-    maximize_fps =
-        settings.value("interface/acmxvk_maximize_fps", false).toBool();
-    use_source_fps =
-        settings.value("interface/acmxvk_use_source_fps", false).toBool();
-    use_source_audio = use_source_fps &&
-                       settings.value("interface/acmxvk_use_source_audio", false)
-                           .toBool();
-    extra_arguments =
-        settings.value("interface/extra_arguments", QString()).toString();
+    encode_no_drop = !cameraMode && settings.value("recording/no_drop", false).toBool();
+    encode_constant_frame_rate = settings.value("recording/constant_frame_rate", false).toBool();
+    encode_fill_pts_gaps = settings.value("recording/fill_pts_gaps", false).toBool();
+    maximize_fps = settings.value("interface/acmxvk_maximize_fps", false).toBool();
+    use_source_fps = settings.value("interface/acmxvk_use_source_fps", false).toBool();
+    use_source_audio = use_source_fps && settings.value("interface/acmxvk_use_source_audio", false).toBool();
+    extra_arguments = settings.value("interface/extra_arguments", QString()).toString();
 }
 
 void MainWindow::applyMainViewStyles(bool customStyleEnabled) {
@@ -1604,12 +1328,11 @@ void MainWindow::applyMainViewStyles(bool customStyleEnabled) {
         if (customStyleEnabled) {
             list_view->setStyleSheet("");
         } else {
-            list_view->setStyleSheet(
-                "QTreeWidget { background-color: black; color: white; font-size: 13px;"
-                " font-family: 'Courier New', Courier, monospace; }"
-                "QHeaderView::section { background-color: #110000; color: lime;"
-                " font-family: 'Courier New', Courier, monospace; padding: 4px;"
-                " border: 1px solid #330000; }");
+            list_view->setStyleSheet("QTreeWidget { background-color: black; color: white; font-size: 13px;"
+                                     " font-family: 'Courier New', Courier, monospace; }"
+                                     "QHeaderView::section { background-color: #110000; color: lime;"
+                                     " font-family: 'Courier New', Courier, monospace; padding: 4px;"
+                                     " border: 1px solid #330000; }");
         }
     }
 
@@ -1622,9 +1345,8 @@ void MainWindow::applyMainViewStyles(bool customStyleEnabled) {
         if (customStyleEnabled) {
             bottomTextBox->setStyleSheet("");
         } else {
-            bottomTextBox->setStyleSheet(
-                "QTextEdit { background-color: black; color: lime; font-size: 13px;"
-                " font-family: 'Courier New', Courier, monospace; }");
+            bottomTextBox->setStyleSheet("QTextEdit { background-color: black; color: lime; font-size: 13px;"
+                                         " font-family: 'Courier New', Courier, monospace; }");
         }
     }
 }
@@ -1653,12 +1375,7 @@ void MainWindow::openCustomStyleEditor() {
     const bool currentlyEnabled = appSettings.value("useCustomStyle", false).toBool();
     const QString lastPresetName = appSettings.value("customStylePreset", "Current Style").toString();
 
-    auto makePalette = [](const char *winBg, const char *winFg, const char *accent,
-                          const char *fieldBg, const char *fieldFg, const char *fieldBorder,
-                          const char *btnBg, const char *btnHover, const char *btnFg,
-                          const char *menuBg, const char *menuFg,
-                          const char *menuSelBg, const char *menuSelFg,
-                          const char *selBg, const char *border) {
+    auto makePalette = [](const char *winBg, const char *winFg, const char *accent, const char *fieldBg, const char *fieldFg, const char *fieldBorder, const char *btnBg, const char *btnHover, const char *btnFg, const char *menuBg, const char *menuFg, const char *menuSelBg, const char *menuSelFg, const char *selBg, const char *border) {
         acmx2::CustomStylePalette p;
         p.windowBg = winBg;
         p.windowFg = winFg;
@@ -1679,156 +1396,31 @@ void MainWindow::openCustomStyleEditor() {
     };
 
     const std::array<QPair<QString, QString>, 26> presetStyles = {{{"Current Style", customStyleSheet},
-                                                                   {"Light: Blue & White",
-                                                                    makePalette("#f6fbff", "#143a5c", "#2d7cc4",
-                                                                                "#ffffff", "#123b61", "#9cc6ea",
-                                                                                "#2d7cc4", "#2368a6", "#ffffff",
-                                                                                "#eaf5ff", "#143a5c", "#cfe6ff", "#0b2e4d",
-                                                                                "#bcdcff", "1px solid #9cc6ea")},
-                                                                   {"Light: Slate",
-                                                                    makePalette("#f5f7fa", "#1f2a37", "#4b5563",
-                                                                                "#ffffff", "#1f2937", "#b6c3d4",
-                                                                                "#4b5563", "#374151", "#ffffff",
-                                                                                "#e8edf4", "#1f2a37", "#d2dbe7", "#111827",
-                                                                                "#cdd5e0", "1px solid #b6c3d4")},
-                                                                   {"Light: White & Red",
-                                                                    makePalette("#fffdfd", "#5b1515", "#d63b3b",
-                                                                                "#ffffff", "#5a1a1a", "#e8bcbc",
-                                                                                "#d63b3b", "#bc2f2f", "#ffffff",
-                                                                                "#fff4f4", "#5b1515", "#ffdede", "#4b0f0f",
-                                                                                "#ffd1d1", "1px solid #e8bcbc")},
-                                                                   {"Light: White & Green",
-                                                                    makePalette("#fcfffc", "#164529", "#2e9d57",
-                                                                                "#ffffff", "#1a4f2f", "#b8dfc7",
-                                                                                "#2e9d57", "#25824a", "#ffffff",
-                                                                                "#f1fbf4", "#164529", "#d6f3df", "#11361f",
-                                                                                "#c9eecf", "1px solid #b8dfc7")},
-                                                                   {"Light: White & Blue",
-                                                                    makePalette("#fcfdff", "#16395f", "#2f6ed7",
-                                                                                "#ffffff", "#1b446f", "#b7d0f0",
-                                                                                "#2f6ed7", "#285db7", "#ffffff",
-                                                                                "#f1f6ff", "#16395f", "#d9e8ff", "#102b49",
-                                                                                "#cddfff", "1px solid #b7d0f0")},
-                                                                   {"Light: White & Cyan",
-                                                                    makePalette("#fbfeff", "#12404a", "#1ea9bf",
-                                                                                "#ffffff", "#14505d", "#b8e2ea",
-                                                                                "#1ea9bf", "#198da0", "#ffffff",
-                                                                                "#effbfe", "#12404a", "#d5f3f8", "#0e3138",
-                                                                                "#c7edf4", "1px solid #b8e2ea")},
-                                                                   {"Light: White & Amber",
-                                                                    makePalette("#fffefb", "#5a3a12", "#d18b1f",
-                                                                                "#ffffff", "#644317", "#ead7b6",
-                                                                                "#d18b1f", "#b37518", "#ffffff",
-                                                                                "#fff9ed", "#5a3a12", "#ffebcb", "#4a2f0f",
-                                                                                "#ffe2b5", "1px solid #ead7b6")},
-                                                                   {"Dark: Crimson",
-                                                                    makePalette("#0f0608", "#ff637d", "#a02949",
-                                                                                "#1b0b10", "#ff8fa3", "#7f2036",
-                                                                                "#6f1630", "#8a1f3d", "#ffdfe6",
-                                                                                "#16090d", "#ff637d", "#52111f", "#ffd5dc",
-                                                                                "#52111f", "2px solid #a02949")},
-                                                                   {"Dark: Emerald",
-                                                                    makePalette("#06110c", "#7af7c2", "#2c8e68",
-                                                                                "#0d1e16", "#95ffd0", "#2c8e68",
-                                                                                "#1c6a4d", "#258961", "#dcfff2",
-                                                                                "#08160f", "#7af7c2", "#12402d", "#d9fff0",
-                                                                                "#12402d", "2px solid #2c8e68")},
-                                                                   {"Dark: Indigo",
-                                                                    makePalette("#070713", "#c6c8ff", "#5362ba",
-                                                                                "#121634", "#d8daff", "#4956a5",
-                                                                                "#36439a", "#4453b4", "#eef0ff",
-                                                                                "#0d1022", "#c6c8ff", "#232a5a", "#eef0ff",
-                                                                                "#232a5a", "2px solid #5362ba")},
-                                                                   {"Dark: Black & Red",
-                                                                    makePalette("#050505", "#ff4d4d", "#d90000",
-                                                                                "#120808", "#ff7b7b", "#b50000",
-                                                                                "#2a0c0c", "#3a1010", "#ffd6d6",
-                                                                                "#0b0707", "#ff5a5a", "#6b1111", "#ffe9e9",
-                                                                                "#5a0c0c", "2px solid #d90000")},
-                                                                   {"Dark: Black & Green",
-                                                                    makePalette("#040704", "#6dfb88", "#22b44a",
-                                                                                "#0a140b", "#a8ffbe", "#1d9a3e",
-                                                                                "#12331b", "#164425", "#e1ffe8",
-                                                                                "#08100a", "#74ff95", "#12331b", "#e7ffed",
-                                                                                "#10381d", "2px solid #22b44a")},
-                                                                   {"Dark: Black & Blue",
-                                                                    makePalette("#04060a", "#81b9ff", "#2f6ed7",
-                                                                                "#0a1222", "#b4d4ff", "#2a5eb7",
-                                                                                "#132749", "#1a3260", "#e7f1ff",
-                                                                                "#070d1a", "#8cc0ff", "#1a3260", "#eef5ff",
-                                                                                "#17335f", "2px solid #2f6ed7")},
-                                                                   {"Dark: Black & Cyan",
-                                                                    makePalette("#030809", "#7defff", "#1ba8c3",
-                                                                                "#09161a", "#b8f7ff", "#1990a7",
-                                                                                "#10323a", "#14414b", "#e7fbff",
-                                                                                "#071015", "#89f3ff", "#0f3943", "#e8fcff",
-                                                                                "#0f3943", "2px solid #1ba8c3")},
-                                                                   {"Dark: Black & Amber",
-                                                                    makePalette("#090704", "#ffd77a", "#d88c1d",
-                                                                                "#1a1308", "#ffe7b4", "#bf7a19",
-                                                                                "#3d2810", "#523618", "#fff3db",
-                                                                                "#130e07", "#ffdf8a", "#5a3a16", "#fff4df",
-                                                                                "#5a3a16", "2px solid #d88c1d")},
-                                                                   {"Light: Lavender Mist",
-                                                                    makePalette("#f8f6ff", "#302653", "#7157c8",
-                                                                                "#ffffff", "#34295b", "#c9bdea",
-                                                                                "#7157c8", "#5d45ae", "#ffffff",
-                                                                                "#eee9ff", "#302653", "#ded5ff", "#241a48",
-                                                                                "#d9d0ff", "1px solid #c9bdea")},
-                                                                   {"Light: Rose Quartz",
-                                                                    makePalette("#fff8fa", "#532535", "#c25578",
-                                                                                "#ffffff", "#5b293c", "#e8c1cf",
-                                                                                "#c25578", "#a94465", "#ffffff",
-                                                                                "#fff0f4", "#532535", "#f6d7e1", "#411a28",
-                                                                                "#f1ccd8", "1px solid #e8c1cf")},
-                                                                   {"Light: Sandstone",
-                                                                    makePalette("#fbf7ef", "#493728", "#a66a3f",
-                                                                                "#fffdf8", "#4f3929", "#d9c3aa",
-                                                                                "#a66a3f", "#895431", "#ffffff",
-                                                                                "#f3eadc", "#493728", "#ead8c1", "#35251a",
-                                                                                "#e5d1b7", "1px solid #d9c3aa")},
-                                                                   {"Light: Mint & Navy",
-                                                                    makePalette("#f3fbf8", "#173a3c", "#2b8c7f",
-                                                                                "#ffffff", "#173a3c", "#addbd2",
-                                                                                "#1d5962", "#287681", "#ffffff",
-                                                                                "#e5f6f1", "#173a3c", "#c8eee5", "#102f34",
-                                                                                "#bde5dc", "1px solid #addbd2")},
-                                                                   {"Light: High Contrast",
-                                                                    makePalette("#ffffff", "#111111", "#005fcc",
-                                                                                "#ffffff", "#000000", "#4d4d4d",
-                                                                                "#111111", "#005fcc", "#ffffff",
-                                                                                "#f0f0f0", "#000000", "#005fcc", "#ffffff",
-                                                                                "#9dccff", "2px solid #111111")},
-                                                                   {"Dark: Cyberpunk Neon",
-                                                                    makePalette("#070513", "#f3e7ff", "#ff2bd6",
-                                                                                "#100c24", "#5ffbf1", "#6e4cff",
-                                                                                "#2a145c", "#ff2bd6", "#ffffff",
-                                                                                "#0c081c", "#5ffbf1", "#381b72", "#ffffff",
-                                                                                "#381b72", "2px solid #ff2bd6")},
-                                                                   {"Dark: Dracula",
-                                                                    makePalette("#282a36", "#f8f8f2", "#bd93f9",
-                                                                                "#21222c", "#f8f8f2", "#6272a4",
-                                                                                "#44475a", "#6272a4", "#f8f8f2",
-                                                                                "#21222c", "#f8f8f2", "#44475a", "#f8f8f2",
-                                                                                "#44475a", "1px solid #6272a4")},
-                                                                   {"Dark: Nord Frost",
-                                                                    makePalette("#2e3440", "#eceff4", "#88c0d0",
-                                                                                "#3b4252", "#eceff4", "#4c566a",
-                                                                                "#4c566a", "#5e81ac", "#eceff4",
-                                                                                "#242933", "#d8dee9", "#434c5e", "#eceff4",
-                                                                                "#434c5e", "1px solid #88c0d0")},
-                                                                   {"Dark: Solarized",
-                                                                    makePalette("#002b36", "#93a1a1", "#b58900",
-                                                                                "#073642", "#eee8d5", "#586e75",
-                                                                                "#07576b", "#268bd2", "#fdf6e3",
-                                                                                "#00242d", "#93a1a1", "#07576b", "#fdf6e3",
-                                                                                "#07576b", "1px solid #586e75")},
-                                                                   {"Dark: Graphite Orange",
-                                                                    makePalette("#171717", "#f2f2f2", "#ff8a3d",
-                                                                                "#242424", "#f7f7f7", "#5f5f5f",
-                                                                                "#3a3a3a", "#ff8a3d", "#ffffff",
-                                                                                "#202020", "#f2f2f2", "#59311c", "#ffffff",
-                                                                                "#59311c", "2px solid #ff8a3d")}}};
+                                                                   {"Light: Blue & White", makePalette("#f6fbff", "#143a5c", "#2d7cc4", "#ffffff", "#123b61", "#9cc6ea", "#2d7cc4", "#2368a6", "#ffffff", "#eaf5ff", "#143a5c", "#cfe6ff", "#0b2e4d", "#bcdcff", "1px solid #9cc6ea")},
+                                                                   {"Light: Slate", makePalette("#f5f7fa", "#1f2a37", "#4b5563", "#ffffff", "#1f2937", "#b6c3d4", "#4b5563", "#374151", "#ffffff", "#e8edf4", "#1f2a37", "#d2dbe7", "#111827", "#cdd5e0", "1px solid #b6c3d4")},
+                                                                   {"Light: White & Red", makePalette("#fffdfd", "#5b1515", "#d63b3b", "#ffffff", "#5a1a1a", "#e8bcbc", "#d63b3b", "#bc2f2f", "#ffffff", "#fff4f4", "#5b1515", "#ffdede", "#4b0f0f", "#ffd1d1", "1px solid #e8bcbc")},
+                                                                   {"Light: White & Green", makePalette("#fcfffc", "#164529", "#2e9d57", "#ffffff", "#1a4f2f", "#b8dfc7", "#2e9d57", "#25824a", "#ffffff", "#f1fbf4", "#164529", "#d6f3df", "#11361f", "#c9eecf", "1px solid #b8dfc7")},
+                                                                   {"Light: White & Blue", makePalette("#fcfdff", "#16395f", "#2f6ed7", "#ffffff", "#1b446f", "#b7d0f0", "#2f6ed7", "#285db7", "#ffffff", "#f1f6ff", "#16395f", "#d9e8ff", "#102b49", "#cddfff", "1px solid #b7d0f0")},
+                                                                   {"Light: White & Cyan", makePalette("#fbfeff", "#12404a", "#1ea9bf", "#ffffff", "#14505d", "#b8e2ea", "#1ea9bf", "#198da0", "#ffffff", "#effbfe", "#12404a", "#d5f3f8", "#0e3138", "#c7edf4", "1px solid #b8e2ea")},
+                                                                   {"Light: White & Amber", makePalette("#fffefb", "#5a3a12", "#d18b1f", "#ffffff", "#644317", "#ead7b6", "#d18b1f", "#b37518", "#ffffff", "#fff9ed", "#5a3a12", "#ffebcb", "#4a2f0f", "#ffe2b5", "1px solid #ead7b6")},
+                                                                   {"Dark: Crimson", makePalette("#0f0608", "#ff637d", "#a02949", "#1b0b10", "#ff8fa3", "#7f2036", "#6f1630", "#8a1f3d", "#ffdfe6", "#16090d", "#ff637d", "#52111f", "#ffd5dc", "#52111f", "2px solid #a02949")},
+                                                                   {"Dark: Emerald", makePalette("#06110c", "#7af7c2", "#2c8e68", "#0d1e16", "#95ffd0", "#2c8e68", "#1c6a4d", "#258961", "#dcfff2", "#08160f", "#7af7c2", "#12402d", "#d9fff0", "#12402d", "2px solid #2c8e68")},
+                                                                   {"Dark: Indigo", makePalette("#070713", "#c6c8ff", "#5362ba", "#121634", "#d8daff", "#4956a5", "#36439a", "#4453b4", "#eef0ff", "#0d1022", "#c6c8ff", "#232a5a", "#eef0ff", "#232a5a", "2px solid #5362ba")},
+                                                                   {"Dark: Black & Red", makePalette("#050505", "#ff4d4d", "#d90000", "#120808", "#ff7b7b", "#b50000", "#2a0c0c", "#3a1010", "#ffd6d6", "#0b0707", "#ff5a5a", "#6b1111", "#ffe9e9", "#5a0c0c", "2px solid #d90000")},
+                                                                   {"Dark: Black & Green", makePalette("#040704", "#6dfb88", "#22b44a", "#0a140b", "#a8ffbe", "#1d9a3e", "#12331b", "#164425", "#e1ffe8", "#08100a", "#74ff95", "#12331b", "#e7ffed", "#10381d", "2px solid #22b44a")},
+                                                                   {"Dark: Black & Blue", makePalette("#04060a", "#81b9ff", "#2f6ed7", "#0a1222", "#b4d4ff", "#2a5eb7", "#132749", "#1a3260", "#e7f1ff", "#070d1a", "#8cc0ff", "#1a3260", "#eef5ff", "#17335f", "2px solid #2f6ed7")},
+                                                                   {"Dark: Black & Cyan", makePalette("#030809", "#7defff", "#1ba8c3", "#09161a", "#b8f7ff", "#1990a7", "#10323a", "#14414b", "#e7fbff", "#071015", "#89f3ff", "#0f3943", "#e8fcff", "#0f3943", "2px solid #1ba8c3")},
+                                                                   {"Dark: Black & Amber", makePalette("#090704", "#ffd77a", "#d88c1d", "#1a1308", "#ffe7b4", "#bf7a19", "#3d2810", "#523618", "#fff3db", "#130e07", "#ffdf8a", "#5a3a16", "#fff4df", "#5a3a16", "2px solid #d88c1d")},
+                                                                   {"Light: Lavender Mist", makePalette("#f8f6ff", "#302653", "#7157c8", "#ffffff", "#34295b", "#c9bdea", "#7157c8", "#5d45ae", "#ffffff", "#eee9ff", "#302653", "#ded5ff", "#241a48", "#d9d0ff", "1px solid #c9bdea")},
+                                                                   {"Light: Rose Quartz", makePalette("#fff8fa", "#532535", "#c25578", "#ffffff", "#5b293c", "#e8c1cf", "#c25578", "#a94465", "#ffffff", "#fff0f4", "#532535", "#f6d7e1", "#411a28", "#f1ccd8", "1px solid #e8c1cf")},
+                                                                   {"Light: Sandstone", makePalette("#fbf7ef", "#493728", "#a66a3f", "#fffdf8", "#4f3929", "#d9c3aa", "#a66a3f", "#895431", "#ffffff", "#f3eadc", "#493728", "#ead8c1", "#35251a", "#e5d1b7", "1px solid #d9c3aa")},
+                                                                   {"Light: Mint & Navy", makePalette("#f3fbf8", "#173a3c", "#2b8c7f", "#ffffff", "#173a3c", "#addbd2", "#1d5962", "#287681", "#ffffff", "#e5f6f1", "#173a3c", "#c8eee5", "#102f34", "#bde5dc", "1px solid #addbd2")},
+                                                                   {"Light: High Contrast", makePalette("#ffffff", "#111111", "#005fcc", "#ffffff", "#000000", "#4d4d4d", "#111111", "#005fcc", "#ffffff", "#f0f0f0", "#000000", "#005fcc", "#ffffff", "#9dccff", "2px solid #111111")},
+                                                                   {"Dark: Cyberpunk Neon", makePalette("#070513", "#f3e7ff", "#ff2bd6", "#100c24", "#5ffbf1", "#6e4cff", "#2a145c", "#ff2bd6", "#ffffff", "#0c081c", "#5ffbf1", "#381b72", "#ffffff", "#381b72", "2px solid #ff2bd6")},
+                                                                   {"Dark: Dracula", makePalette("#282a36", "#f8f8f2", "#bd93f9", "#21222c", "#f8f8f2", "#6272a4", "#44475a", "#6272a4", "#f8f8f2", "#21222c", "#f8f8f2", "#44475a", "#f8f8f2", "#44475a", "1px solid #6272a4")},
+                                                                   {"Dark: Nord Frost", makePalette("#2e3440", "#eceff4", "#88c0d0", "#3b4252", "#eceff4", "#4c566a", "#4c566a", "#5e81ac", "#eceff4", "#242933", "#d8dee9", "#434c5e", "#eceff4", "#434c5e", "1px solid #88c0d0")},
+                                                                   {"Dark: Solarized", makePalette("#002b36", "#93a1a1", "#b58900", "#073642", "#eee8d5", "#586e75", "#07576b", "#268bd2", "#fdf6e3", "#00242d", "#93a1a1", "#07576b", "#fdf6e3", "#07576b", "1px solid #586e75")},
+                                                                   {"Dark: Graphite Orange", makePalette("#171717", "#f2f2f2", "#ff8a3d", "#242424", "#f7f7f7", "#5f5f5f", "#3a3a3a", "#ff8a3d", "#ffffff", "#202020", "#f2f2f2", "#59311c", "#ffffff", "#59311c", "2px solid #ff8a3d")}}};
 
     if (styleSheetAction) {
         QSignalBlocker blocker(styleSheetAction);
@@ -1883,16 +1475,15 @@ void MainWindow::openCustomStyleEditor() {
     layout->addWidget(editor, 1);
     layout->addWidget(buttonBox);
 
-    connect(presetCombo, &QComboBox::currentTextChanged, &dialog,
-            [editor, &presetStyles, &appSettings](const QString &name) {
-                for (const auto &preset : presetStyles) {
-                    if (preset.first == name) {
-                        editor->setPlainText(preset.second);
-                        appSettings.setValue("customStylePreset", name);
-                        break;
-                    }
-                }
-            });
+    connect(presetCombo, &QComboBox::currentTextChanged, &dialog, [editor, &presetStyles, &appSettings](const QString &name) {
+        for (const auto &preset : presetStyles) {
+            if (preset.first == name) {
+                editor->setPlainText(preset.second);
+                appSettings.setValue("customStylePreset", name);
+                break;
+            }
+        }
+    });
 
     auto applyEditorStyle = [this, &dialog, enableCheck, editor, presetCombo]() {
         customStyleSheet = editor->toPlainText();
@@ -1925,8 +1516,7 @@ void MainWindow::newList() {
 }
 
 void MainWindow::menuLibraryBuilder() {
-    if (libraryBuilderDialog &&
-        libraryBuilderDialog->selectedBackend() != active_backend) {
+    if (libraryBuilderDialog && libraryBuilderDialog->selectedBackend() != active_backend) {
         libraryBuilderDialog->close();
         libraryBuilderDialog = nullptr;
     }
@@ -1939,11 +1529,10 @@ void MainWindow::menuLibraryBuilder() {
 
     libraryBuilderDialog = new LibraryBuilderDialog(active_backend, this);
     libraryBuilderDialog->setAttribute(Qt::WA_DeleteOnClose);
-    connect(libraryBuilderDialog, &LibraryBuilderDialog::libraryExported, this,
-            [this](const QString &directory) {
-                if (loadLibraryPath(directory))
-                    Log(tr("Loaded exported shader library: %1").arg(shader_path));
-            });
+    connect(libraryBuilderDialog, &LibraryBuilderDialog::libraryExported, this, [this](const QString &directory) {
+        if (loadLibraryPath(directory))
+            Log(tr("Loaded exported shader library: %1").arg(shader_path));
+    });
     libraryBuilderDialog->show();
     libraryBuilderDialog->raise();
     libraryBuilderDialog->activateWindow();
@@ -1951,12 +1540,7 @@ void MainWindow::menuLibraryBuilder() {
 
 void MainWindow::menuSearch() {
     bool ok;
-    QString searchText = QInputDialog::getText(this,
-                                               tr("Search Shaders"),
-                                               tr("Enter shader name to search:"),
-                                               QLineEdit::Normal,
-                                               lastSearchText,
-                                               &ok);
+    QString searchText = QInputDialog::getText(this, tr("Search Shaders"), tr("Enter shader name to search:"), QLineEdit::Normal, lastSearchText, &ok);
 
     if (!ok || searchText.isEmpty()) {
         return;
@@ -1965,8 +1549,7 @@ void MainWindow::menuSearch() {
     lastSearchText = searchText;
     lastFoundIndex = -1;
     if (items.isEmpty()) {
-        QMessageBox::information(this, tr("Search Shaders"),
-                                 tr("No shaders are loaded."));
+        QMessageBox::information(this, tr("Search Shaders"), tr("No shaders are loaded."));
         return;
     }
     int foundIndex = -1;
@@ -1992,18 +1575,14 @@ void MainWindow::menuSearch() {
         selectShaderRow(foundIndex);
         Log("Found shader: " + items[foundIndex] + " at index " + QString::number(foundIndex));
     } else {
-        QMessageBox::information(this,
-                                 tr("Not Found"),
-                                 tr("Shader \"") + searchText + tr("\" not found in the list."));
+        QMessageBox::information(this, tr("Not Found"), tr("Shader \"") + searchText + tr("\" not found in the list."));
         Log("Shader not found: " + searchText);
     }
 }
 
 void MainWindow::menuFindNext() {
     if (lastSearchText.isEmpty()) {
-        QMessageBox::information(this,
-                                 tr("No Search"),
-                                 tr("Please perform a search first (Ctrl+F)."));
+        QMessageBox::information(this, tr("No Search"), tr("Please perform a search first (Ctrl+F)."));
         return;
     }
 
@@ -2035,33 +1614,28 @@ void MainWindow::menuFindNext() {
         selectShaderRow(foundIndex);
         Log("Found next: " + items[foundIndex] + " at index " + QString::number(foundIndex));
     } else {
-        QMessageBox::information(this,
-                                 tr("No More Results"),
-                                 tr("No more matches for \"") + lastSearchText + tr("\"."));
+        QMessageBox::information(this, tr("No More Results"), tr("No more matches for \"") + lastSearchText + tr("\"."));
         Log("No more matches for: " + lastSearchText);
     }
 }
 
 void MainWindow::newShader() {
     if (shader_path.isEmpty() || !acmx2::shader_manifest_exists(shader_path)) {
-        QMessageBox::information(this, tr("New Shader File"),
-                                 tr("Create or load a shader library first."));
+        QMessageBox::information(this, tr("New Shader File"), tr("Create or load a shader library first."));
         return;
     }
     if (active_backend == acmx2::Backend::Acmxvk) {
         QString typeError;
-        const auto libraryType =
-            acmx2::shader_manifest_library_type(shader_path, typeError);
+        const auto libraryType = acmx2::shader_manifest_library_type(shader_path, typeError);
         if (!typeError.isEmpty()) {
             QMessageBox::warning(this, tr("New Shader File"), typeError);
             return;
         }
-        if (libraryType &&
-            *libraryType == acmx2::ShaderLibraryType::Runtime) {
-            QMessageBox::information(
-                this, tr("New Shader File"),
-                tr("New ACMXVK shaders must be added to a source library, not "
-                   "a compiled SPIR-V runtime library."));
+        if (libraryType && *libraryType == acmx2::ShaderLibraryType::Runtime) {
+            QMessageBox::information(this,
+                                     tr("New Shader File"),
+                                     tr("New ACMXVK shaders must be added to a source library, not "
+                                        "a compiled SPIR-V runtime library."));
             return;
         }
     }
@@ -2069,8 +1643,7 @@ void MainWindow::newShader() {
     new_shader.setShaderPath(shader_path);
     if (new_shader.exec() == QDialog::Accepted) {
         QSettings appSettings("LostSideDead");
-        appSettings.setValue(
-            acmx2::backend_settings_key(active_backend, "library"), shader_path);
+        appSettings.setValue(acmx2::backend_settings_key(active_backend, "library"), shader_path);
         if (active_backend == acmx2::Backend::Acmx2)
             appSettings.setValue("shaders", shader_path);
         appSettings.sync();
@@ -2084,12 +1657,9 @@ void MainWindow::menuRemove() {
         return;
     const QString shaderName = items.at(row);
     QString manifestError;
-    if (!acmx2::remove_shader_manifest_entry(shader_path, shaderName,
-                                             manifestError)) {
-        QMessageBox::warning(this, tr("Could Not Remove Shader"),
-                             manifestError);
-        Log(tr("Could not remove %1 from the library manifest: %2")
-                .arg(shaderName, manifestError));
+    if (!acmx2::remove_shader_manifest_entry(shader_path, shaderName, manifestError)) {
+        QMessageBox::warning(this, tr("Could Not Remove Shader"), manifestError);
+        Log(tr("Could not remove %1 from the library manifest: %2").arg(shaderName, manifestError));
         return;
     }
     items.removeAt(row);
@@ -2131,12 +1701,9 @@ void MainWindow::updateIndex() {
     }
     QString manifestError;
     QStringList existingItems;
-    if (acmx2::load_shader_manifest(shader_path, existingItems,
-                                    manifestError) &&
-        existingItems == writtenItems) {
+    if (acmx2::load_shader_manifest(shader_path, existingItems, manifestError) && existingItems == writtenItems) {
         indexTimestamp = acmx2::shader_manifest_last_modified(shader_path);
-        activeShaderManifestPath =
-            acmx2::shader_manifest_path(shader_path);
+        activeShaderManifestPath = acmx2::shader_manifest_path(shader_path);
         return;
     }
     manifestError.clear();
@@ -2150,8 +1717,7 @@ void MainWindow::updateIndex() {
     if (writtenItems.size() != rowCount) {
         items = writtenItems;
         populateShaderTree();
-        Log("Updated shader list, removed " + QString::number(rowCount - writtenItems.size()) +
-            " non-existent files");
+        Log("Updated shader list, removed " + QString::number(rowCount - writtenItems.size()) + " non-existent files");
     }
 }
 
@@ -2203,12 +1769,10 @@ void MainWindow::listClicked(const QModelIndex &i) {
     openShaderEditor(filePath);
 }
 
-void MainWindow::openShaderEditor(const QString &filePath, int lineNumber,
-                                  int columnNumber, int matchLength) {
+void MainWindow::openShaderEditor(const QString &filePath, int lineNumber, int columnNumber, int matchLength) {
     const QFileInfo requestedFile(filePath);
     if (!requestedFile.exists() || !requestedFile.isFile()) {
-        QMessageBox::warning(this, tr("Open Shader"),
-                             tr("Shader file no longer exists:\n%1").arg(filePath));
+        QMessageBox::warning(this, tr("Open Shader"), tr("Shader file no longer exists:\n%1").arg(filePath));
         return;
     }
 
@@ -2234,42 +1798,32 @@ void MainWindow::openShaderEditor(const QString &filePath, int lineNumber,
     editor->setWindowFlags(Qt::Widget);
     editor->setText(readFileContents(filePath));
     editor->setFileName(filePath);
-    connect(editor, &TextEditor::fileSaved, this, [this](const QString &filePath) {
-        handleSavedShader(filePath);
+    connect(editor, &TextEditor::fileSaved, this, [this](const QString &filePath) { handleSavedShader(filePath); });
+    connect(editor, &TextEditor::openFileRequested, this, [this](const QString &includePath, int lineNumber) { openShaderEditor(includePath, lineNumber); });
+    connect(editor, &TextEditor::previewRequested, this, &MainWindow::queueAcmxvkEditorPreview);
+    connect(editor, &TextEditor::uniformValueChanged, this, [this](const QString &name, double value) {
+        if (!customUniformDialog || !customUniformDialog->setUniformValue(name, value)) {
+            return;
+        }
+        for (const QPointer<TextEditor> &openEditor : open_files) {
+            if (openEditor)
+                openEditor->setUniformValue(name, value);
+        }
     });
-    connect(editor, &TextEditor::openFileRequested, this,
-            [this](const QString &includePath, int lineNumber) {
-                openShaderEditor(includePath, lineNumber);
-            });
-    connect(editor, &TextEditor::previewRequested, this,
-            &MainWindow::queueAcmxvkEditorPreview);
-    connect(editor, &TextEditor::uniformValueChanged, this,
-            [this](const QString &name, double value) {
-                if (!customUniformDialog ||
-                    !customUniformDialog->setUniformValue(name, value)) {
-                    return;
-                }
-                for (const QPointer<TextEditor> &openEditor : open_files) {
-                    if (openEditor)
-                        openEditor->setUniformValue(name, value);
-                }
-            });
     open_files.append(editor);
-    const int tabIndex = shaderEditorTabs->addTab(
-        editor, requestedFile.fileName());
-    connect(editor, &QWidget::windowTitleChanged, this,
-            [this, editor](const QString &title) {
-                if (!shaderEditorTabs)
-                    return;
-                const int index = shaderEditorTabs->indexOf(editor);
-                if (index < 0)
-                    return;
-                QString tabTitle = title;
-                const int separator = tabTitle.indexOf(QStringLiteral(" - "));
-                if (separator >= 0)
-                    tabTitle = tabTitle.mid(separator + 3);
-                shaderEditorTabs->setTabText(index, tabTitle);
-            });
+    const int tabIndex = shaderEditorTabs->addTab(editor, requestedFile.fileName());
+    connect(editor, &QWidget::windowTitleChanged, this, [this, editor](const QString &title) {
+        if (!shaderEditorTabs)
+            return;
+        const int index = shaderEditorTabs->indexOf(editor);
+        if (index < 0)
+            return;
+        QString tabTitle = title;
+        const int separator = tabTitle.indexOf(QStringLiteral(" - "));
+        if (separator >= 0)
+            tabTitle = tabTitle.mid(separator + 3);
+        shaderEditorTabs->setTabText(index, tabTitle);
+    });
     updateOpenEditorShaderContexts();
     shaderEditorTabs->setCurrentIndex(tabIndex);
     shaderEditorWorkspace->show();
@@ -2292,31 +1846,23 @@ void MainWindow::ensureShaderEditorWorkspace() {
     shaderEditorTabs->setMovable(true);
     shaderEditorTabs->setDocumentMode(true);
     layout->addWidget(shaderEditorTabs);
-    connect(shaderEditorTabs, &QTabWidget::tabCloseRequested, this,
-            [this](int index) {
-                auto *editor = qobject_cast<TextEditor *>(
-                    shaderEditorTabs->widget(index));
-                if (editor && editor->close())
-                    shaderEditorTabs->removeTab(index);
-            });
+    connect(shaderEditorTabs, &QTabWidget::tabCloseRequested, this, [this](int index) {
+        auto *editor = qobject_cast<TextEditor *>(shaderEditorTabs->widget(index));
+        if (editor && editor->close())
+            shaderEditorTabs->removeTab(index);
+    });
     QSettings settings("LostSideDead");
-    if (!shaderEditorWorkspace->restoreGeometry(
-            settings.value("editor/workspaceGeometry").toByteArray())) {
+    if (!shaderEditorWorkspace->restoreGeometry(settings.value("editor/workspaceGeometry").toByteArray())) {
         shaderEditorWorkspace->resize(1180, 820);
     }
-    connect(shaderEditorWorkspace, &QDialog::finished, this,
-            [this](int) {
-                if (shaderEditorWorkspace) {
-                    QSettings("LostSideDead")
-                        .setValue("editor/workspaceGeometry",
-                                  shaderEditorWorkspace->saveGeometry());
-                }
-            });
+    connect(shaderEditorWorkspace, &QDialog::finished, this, [this](int) {
+        if (shaderEditorWorkspace) {
+            QSettings("LostSideDead").setValue("editor/workspaceGeometry", shaderEditorWorkspace->saveGeometry());
+        }
+    });
 }
 
-void MainWindow::updateOpenEditorCompileStatus(
-    const QString &sourcePath, bool pending, bool success,
-    const QString &diagnostics) {
+void MainWindow::updateOpenEditorCompileStatus(const QString &sourcePath, bool pending, bool success, const QString &diagnostics) {
     const QFileInfo sourceInfo(sourcePath);
     const QString sourceCanonical = sourceInfo.canonicalFilePath();
     for (const QPointer<TextEditor> &editor : open_files) {
@@ -2324,10 +1870,7 @@ void MainWindow::updateOpenEditorCompileStatus(
             continue;
         const QFileInfo editorInfo(editor->fileName());
         const QString editorCanonical = editorInfo.canonicalFilePath();
-        const bool sameFile =
-            (!sourceCanonical.isEmpty() && !editorCanonical.isEmpty() &&
-             sourceCanonical == editorCanonical) ||
-            sourceInfo.absoluteFilePath() == editorInfo.absoluteFilePath();
+        const bool sameFile = (!sourceCanonical.isEmpty() && !editorCanonical.isEmpty() && sourceCanonical == editorCanonical) || sourceInfo.absoluteFilePath() == editorInfo.absoluteFilePath();
         if (!sameFile)
             continue;
         if (pending)
@@ -2341,29 +1884,22 @@ void MainWindow::updateOpenEditorShaderContexts() {
     const bool acmxvk = active_backend == acmx2::Backend::Acmxvk;
     QList<acmx2::CustomUniformDefinition> definitions;
     QString error;
-    if (acmxvk && !shader_path.isEmpty() &&
-        !acmx2::load_custom_uniforms(shader_path, definitions, error)) {
+    if (acmxvk && !shader_path.isEmpty() && !acmx2::load_custom_uniforms(shader_path, definitions, error)) {
         definitions.clear();
     }
 
     QVector<ShaderEditorUniform> uniforms;
     uniforms.reserve(definitions.size());
     for (const acmx2::CustomUniformDefinition &definition : definitions)
-        uniforms.append({definition.name, definition.slot, definition.minimum,
-                         definition.maximum, definition.step, definition.value});
+        uniforms.append({definition.name, definition.slot, definition.minimum, definition.maximum, definition.step, definition.value});
 
     const QString libraryRoot = QFileInfo(shader_path).canonicalFilePath();
     for (const QPointer<TextEditor> &editor : open_files) {
         if (!editor)
             continue;
         const QString editorPath = QFileInfo(editor->fileName()).canonicalFilePath();
-        const QString relative =
-            libraryRoot.isEmpty() || editorPath.isEmpty()
-                ? QStringLiteral("..")
-                : QDir(libraryRoot).relativeFilePath(editorPath);
-        const bool inActiveLibrary =
-            relative != QStringLiteral("..") &&
-            !relative.startsWith(QStringLiteral("../"));
+        const QString relative = libraryRoot.isEmpty() || editorPath.isEmpty() ? QStringLiteral("..") : QDir(libraryRoot).relativeFilePath(editorPath);
+        const bool inActiveLibrary = relative != QStringLiteral("..") && !relative.startsWith(QStringLiteral("../"));
         if (inActiveLibrary)
             editor->setShaderContext(acmxvk, uniforms, libraryRoot);
     }
@@ -2395,8 +1931,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
     // a usable handle. Verify that new child processes can still discover the
     // name before every launch and recreate it when necessary.
     if (shaderSelectionSemaphore != SEM_FAILED) {
-        sem_t *publishedSemaphore = ::sem_open(
-            acmx2::ipc::kShaderSelectionSemaphoreName, 0);
+        sem_t *publishedSemaphore = ::sem_open(acmx2::ipc::kShaderSelectionSemaphoreName, 0);
         if (publishedSemaphore != SEM_FAILED) {
             ::sem_close(publishedSemaphore);
         } else {
@@ -2405,54 +1940,43 @@ void MainWindow::initShaderSelectionSharedMemory() {
         }
     }
     if (shaderSelectionSemaphore == SEM_FAILED) {
-        shaderSelectionSemaphore = ::sem_open(
-            acmx2::ipc::kShaderSelectionSemaphoreName, O_CREAT, 0666, 1);
+        shaderSelectionSemaphore = ::sem_open(acmx2::ipc::kShaderSelectionSemaphoreName, O_CREAT, 0666, 1);
     }
     if (shaderSelectionSemaphore == SEM_FAILED) {
-        Log(tr("Shared interface control unavailable: sem_open(%1) failed: %2")
-                .arg(acmx2::ipc::kShaderSelectionSemaphoreName,
-                     QString::fromLocal8Bit(std::strerror(errno))));
+        Log(tr("Shared interface control unavailable: sem_open(%1) failed: %2").arg(acmx2::ipc::kShaderSelectionSemaphoreName, QString::fromLocal8Bit(std::strerror(errno))));
         return;
     }
 
     if (shaderSelectionShm)
         return;
 
-    shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName,
-                                      O_CREAT | O_RDWR,
-                                      0666);
+    shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName, O_CREAT | O_RDWR, 0666);
     if (shaderSelectionShmFd < 0) {
         const int openError = errno;
         Log(tr("Shared interface control unavailable: shm_open(%1) failed: "
                "%2")
-                .arg(acmx2::ipc::kShaderSelectionShmName,
-                     QString::fromLocal8Bit(std::strerror(openError))));
+                .arg(acmx2::ipc::kShaderSelectionShmName, QString::fromLocal8Bit(std::strerror(openError))));
         cleanupShaderSelectionSharedMemory();
         return;
     }
 
-    constexpr std::size_t SHARED_MEMORY_SIZE =
-        sizeof(acmx2::ipc::ShaderSelectionShmData);
+    constexpr std::size_t SHARED_MEMORY_SIZE = sizeof(acmx2::ipc::ShaderSelectionShmData);
     struct stat shmStat{};
     if (::fstat(shaderSelectionShmFd, &shmStat) != 0) {
         const int statError = errno;
-        Log(tr("Shared interface control unavailable: fstat(%1) failed: %2")
-                .arg(acmx2::ipc::kShaderSelectionShmName,
-                     QString::fromLocal8Bit(std::strerror(statError))));
+        Log(tr("Shared interface control unavailable: fstat(%1) failed: %2").arg(acmx2::ipc::kShaderSelectionShmName, QString::fromLocal8Bit(std::strerror(statError))));
         cleanupShaderSelectionSharedMemory();
         return;
     }
 
     if (shmStat.st_size == 0) {
-        if (::ftruncate(shaderSelectionShmFd,
-                        static_cast<off_t>(SHARED_MEMORY_SIZE)) != 0) {
+        if (::ftruncate(shaderSelectionShmFd, static_cast<off_t>(SHARED_MEMORY_SIZE)) != 0) {
             const int truncateError = errno;
             Log(tr("Shared interface control unavailable: ftruncate(%1, %2) "
                    "failed: %3")
                     .arg(acmx2::ipc::kShaderSelectionShmName)
                     .arg(static_cast<qulonglong>(SHARED_MEMORY_SIZE))
-                    .arg(QString::fromLocal8Bit(
-                        std::strerror(truncateError))));
+                    .arg(QString::fromLocal8Bit(std::strerror(truncateError))));
             cleanupShaderSelectionSharedMemory();
             return;
         }
@@ -2467,12 +1991,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
         return;
     }
 
-    void *mapped = ::mmap(nullptr,
-                          SHARED_MEMORY_SIZE,
-                          PROT_READ | PROT_WRITE,
-                          MAP_SHARED,
-                          shaderSelectionShmFd,
-                          0);
+    void *mapped = ::mmap(nullptr, SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shaderSelectionShmFd, 0);
     if (mapped == MAP_FAILED) {
         const int mapError = errno;
         Log(tr("Shared interface control unavailable: mmap(%1, %2) failed: "
@@ -2487,8 +2006,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
     shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
 #else
     if (shaderSelectionSemaphore == nullptr) {
-        shaderSelectionSemaphore = ::CreateMutexW(
-            nullptr, FALSE, acmx2::ipc::kShaderSelectionMutexNameWindows);
+        shaderSelectionSemaphore = ::CreateMutexW(nullptr, FALSE, acmx2::ipc::kShaderSelectionMutexNameWindows);
     }
     if (shaderSelectionSemaphore == nullptr) {
         Log(tr("Shared interface control unavailable: CreateMutexW failed "
@@ -2500,12 +2018,8 @@ void MainWindow::initShaderSelectionSharedMemory() {
     if (shaderSelectionShm)
         return;
 
-    constexpr std::size_t SHARED_MEMORY_SIZE =
-        sizeof(acmx2::ipc::ShaderSelectionShmData);
-    shaderSelectionMapping = ::CreateFileMappingW(
-        INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
-        static_cast<DWORD>(SHARED_MEMORY_SIZE),
-        acmx2::ipc::kShaderSelectionMappingNameWindows);
+    constexpr std::size_t SHARED_MEMORY_SIZE = sizeof(acmx2::ipc::ShaderSelectionShmData);
+    shaderSelectionMapping = ::CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, static_cast<DWORD>(SHARED_MEMORY_SIZE), acmx2::ipc::kShaderSelectionMappingNameWindows);
     if (shaderSelectionMapping == nullptr) {
         Log(tr("Shared interface control unavailable: CreateFileMappingW "
                "failed with Windows error %1")
@@ -2514,8 +2028,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
         return;
     }
 
-    void *mapped = ::MapViewOfFile(shaderSelectionMapping, FILE_MAP_ALL_ACCESS,
-                                   0, 0, SHARED_MEMORY_SIZE);
+    void *mapped = ::MapViewOfFile(shaderSelectionMapping, FILE_MAP_ALL_ACCESS, 0, 0, SHARED_MEMORY_SIZE);
     if (mapped == nullptr) {
         Log(tr("Shared interface control unavailable: MapViewOfFile failed "
                "with Windows error %1")
@@ -2523,16 +2036,13 @@ void MainWindow::initShaderSelectionSharedMemory() {
         cleanupShaderSelectionSharedMemory();
         return;
     }
-    shaderSelectionShm =
-        static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+    shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
 #endif
 
     acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
 #if defined(__linux__) || defined(__APPLE__)
-        Log(tr("Shared interface control unavailable: could not lock %1: %2")
-                .arg(acmx2::ipc::kShaderSelectionSemaphoreName,
-                     QString::fromLocal8Bit(std::strerror(errno))));
+        Log(tr("Shared interface control unavailable: could not lock %1: %2").arg(acmx2::ipc::kShaderSelectionSemaphoreName, QString::fromLocal8Bit(std::strerror(errno))));
 #else
         Log(tr("Shared interface control unavailable: could not lock the "
                "Windows control mutex (error %1)")
@@ -2542,8 +2052,7 @@ void MainWindow::initShaderSelectionSharedMemory() {
         return;
     }
 
-    if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
-        shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
+    if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic || shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
         shaderSelectionShm->magic = acmx2::ipc::kShaderSelectionMagic;
         shaderSelectionShm->version = acmx2::ipc::kShaderSelectionVersion;
         shaderSelectionShm->selected_index = -1;
@@ -2553,14 +2062,9 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->display_filter_enabled = 0;
         shaderSelectionShm->watermark_enabled = 0;
         shaderSelectionShm->normalized_time_enabled = 0;
-        std::fill(std::begin(shaderSelectionShm->reserved_flags),
-                  std::end(shaderSelectionShm->reserved_flags), 0);
+        std::fill(std::begin(shaderSelectionShm->reserved_flags), std::end(shaderSelectionShm->reserved_flags), 0);
         std::fill(std::begin(shaderSelectionShm->shader_pass_indices), std::end(shaderSelectionShm->shader_pass_indices), -1);
-        std::fill(&shaderSelectionShm->shader_pass_names[0][0],
-                  &shaderSelectionShm->shader_pass_names[0][0] +
-                      acmx2::ipc::kShaderSelectionMaxPassCount *
-                          acmx2::ipc::kShaderSelectionMaxShaderName,
-                  '\0');
+        std::fill(&shaderSelectionShm->shader_pass_names[0][0], &shaderSelectionShm->shader_pass_names[0][0] + acmx2::ipc::kShaderSelectionMaxPassCount * acmx2::ipc::kShaderSelectionMaxShaderName, '\0');
         shaderSelectionShm->gpu_filter_count = 0;
         shaderSelectionShm->gpu_filter_enabled = 0;
         shaderSelectionShm->gpu_buffer_size = 8;
@@ -2574,15 +2078,9 @@ void MainWindow::initShaderSelectionSharedMemory() {
         std::fill(std::begin(shaderSelectionShm->reload_shader_path), std::end(shaderSelectionShm->reload_shader_path), '\0');
         shaderSelectionShm->reload_sequence = 0;
         shaderSelectionShm->custom_uniform_count = 0;
-        std::fill(&shaderSelectionShm->custom_uniform_names[0][0],
-                  &shaderSelectionShm->custom_uniform_names[0][0] +
-                      acmx2::ipc::kShaderSelectionMaxCustomUniforms *
-                          acmx2::ipc::kShaderSelectionMaxUniformName,
-                  '\0');
-        std::fill(std::begin(shaderSelectionShm->custom_uniform_values),
-                  std::end(shaderSelectionShm->custom_uniform_values), 0.0f);
-        std::fill(std::begin(shaderSelectionShm->audio_file_path),
-                  std::end(shaderSelectionShm->audio_file_path), '\0');
+        std::fill(&shaderSelectionShm->custom_uniform_names[0][0], &shaderSelectionShm->custom_uniform_names[0][0] + acmx2::ipc::kShaderSelectionMaxCustomUniforms * acmx2::ipc::kShaderSelectionMaxUniformName, '\0');
+        std::fill(std::begin(shaderSelectionShm->custom_uniform_values), std::end(shaderSelectionShm->custom_uniform_values), 0.0f);
+        std::fill(std::begin(shaderSelectionShm->audio_file_path), std::end(shaderSelectionShm->audio_file_path), '\0');
         shaderSelectionShm->audio_output_device = -1;
         shaderSelectionShm->audio_pass_through = 0;
         shaderSelectionShm->audio_trunc = 0;
@@ -2604,12 +2102,9 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->dream_zoom = 1.01F;
         shaderSelectionShm->dream_rotation = 0.1F;
         shaderSelectionShm->dream_octave_scale = 1.4F;
-        std::fill(std::begin(shaderSelectionShm->dream_model_path),
-                  std::end(shaderSelectionShm->dream_model_path), '\0');
-        std::fill(std::begin(shaderSelectionShm->dream_layer),
-                  std::end(shaderSelectionShm->dream_layer), '\0');
-        std::fill(std::begin(shaderSelectionShm->selected_shader_name),
-                  std::end(shaderSelectionShm->selected_shader_name), '\0');
+        std::fill(std::begin(shaderSelectionShm->dream_model_path), std::end(shaderSelectionShm->dream_model_path), '\0');
+        std::fill(std::begin(shaderSelectionShm->dream_layer), std::end(shaderSelectionShm->dream_layer), '\0');
+        std::fill(std::begin(shaderSelectionShm->selected_shader_name), std::end(shaderSelectionShm->selected_shader_name), '\0');
         shaderSelectionShm->sequence = 0;
     }
 #endif
@@ -2629,21 +2124,16 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
     }
     shaderSelectionShm->selected_index = row;
     const QByteArray shaderName = items.at(row).toUtf8();
-    const qsizetype copyLength = std::min<qsizetype>(
-        shaderName.size(),
-        static_cast<qsizetype>(acmx2::ipc::kShaderSelectionMaxShaderName - 1));
-    std::fill(std::begin(shaderSelectionShm->selected_shader_name),
-              std::end(shaderSelectionShm->selected_shader_name), '\0');
-    std::copy_n(shaderName.constData(), copyLength,
-                shaderSelectionShm->selected_shader_name);
+    const qsizetype copyLength = std::min<qsizetype>(shaderName.size(), static_cast<qsizetype>(acmx2::ipc::kShaderSelectionMaxShaderName - 1));
+    std::fill(std::begin(shaderSelectionShm->selected_shader_name), std::end(shaderSelectionShm->selected_shader_name), '\0');
+    std::copy_n(shaderName.constData(), copyLength, shaderSelectionShm->selected_shader_name);
     ++shaderSelectionShm->sequence;
 #endif
 }
 
 void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-    if (active_backend != acmx2::Backend::Acmx2 || !shaderSelectionShm || !process ||
-        process->state() != QProcess::Running || cacheBuildInProgress) {
+    if (active_backend != acmx2::Backend::Acmx2 || !shaderSelectionShm || !process || process->state() != QProcess::Running || cacheBuildInProgress) {
         return;
     }
 
@@ -2656,8 +2146,7 @@ void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
     }
 
     const QByteArray reloadPath = savedFile.canonicalFilePath().toUtf8();
-    if (reloadPath.isEmpty() ||
-        reloadPath.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
+    if (reloadPath.isEmpty() || reloadPath.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
         Log("Shader path is too long for live reload: " + filePath);
         return;
     }
@@ -2691,10 +2180,7 @@ void MainWindow::queueAcmxvkLiveCompile(const QString &filePath) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     QString typeError;
     if (!is_acmxvk_source_library(shader_path, typeError)) {
-        const QString diagnostic =
-            typeError.isEmpty()
-                ? tr("ACMXVK live compile requires a source library.")
-                : typeError;
+        const QString diagnostic = typeError.isEmpty() ? tr("ACMXVK live compile requires a source library.") : typeError;
         Log(diagnostic);
         updateOpenEditorCompileStatus(filePath, false, false, diagnostic);
         return;
@@ -2704,22 +2190,16 @@ void MainWindow::queueAcmxvkLiveCompile(const QString &filePath) {
     const QString sourcePath = sourceInfo.canonicalFilePath();
     const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
     if (sourcePath.isEmpty() || sourceRoot.isEmpty()) {
-        const QString diagnostic =
-            tr("Could not resolve saved ACMXVK shader: %1").arg(filePath);
+        const QString diagnostic = tr("Could not resolve saved ACMXVK shader: %1").arg(filePath);
         Log(diagnostic);
         updateOpenEditorCompileStatus(filePath, false, false, diagnostic);
         return;
     }
-    const QString sourceName =
-        sanitizeShaderName(QDir(sourceRoot).relativeFilePath(sourcePath));
-    if (sourceName.isEmpty() ||
-        (!sourceName.endsWith(QStringLiteral(".frag"), Qt::CaseInsensitive) &&
-         !sourceName.endsWith(QStringLiteral(".comp"), Qt::CaseInsensitive)) ||
-        !items.contains(sourceName, Qt::CaseInsensitive)) {
-        const QString diagnostic =
-            tr("Saved file is not a fragment or compute source in the active "
-               "ACMXVK library: %1")
-                .arg(filePath);
+    const QString sourceName = sanitizeShaderName(QDir(sourceRoot).relativeFilePath(sourcePath));
+    if (sourceName.isEmpty() || (!sourceName.endsWith(QStringLiteral(".frag"), Qt::CaseInsensitive) && !sourceName.endsWith(QStringLiteral(".comp"), Qt::CaseInsensitive)) || !items.contains(sourceName, Qt::CaseInsensitive)) {
+        const QString diagnostic = tr("Saved file is not a fragment or compute source in the active "
+                                      "ACMXVK library: %1")
+                                       .arg(filePath);
         Log(diagnostic);
         updateOpenEditorCompileStatus(filePath, false, false, diagnostic);
         return;
@@ -2736,8 +2216,7 @@ void MainWindow::queueAcmxvkLiveCompile(const QString &filePath) {
 
 void MainWindow::startNextAcmxvkLiveCompile() {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-    if (liveShaderCompileProcess &&
-        liveShaderCompileProcess->state() != QProcess::NotRunning) {
+    if (liveShaderCompileProcess && liveShaderCompileProcess->state() != QProcess::NotRunning) {
         return;
     }
     if (liveShaderCompileQueue.isEmpty()) {
@@ -2746,131 +2225,96 @@ void MainWindow::startNextAcmxvkLiveCompile() {
 
     if (!liveShaderCompileProcess) {
         liveShaderCompileProcess = new QProcess(this);
-        liveShaderCompileProcess->setProcessChannelMode(
-            QProcess::SeparateChannels);
-        connect(liveShaderCompileProcess, &QProcess::readyReadStandardOutput,
-                this, [this]() {
-                    QString output = QString::fromUtf8(
-                        liveShaderCompileProcess->readAllStandardOutput());
-                    liveShaderCompileStdout += output;
-                    if (liveShaderCompileStdout.size() > 262144)
-                        liveShaderCompileStdout =
-                            liveShaderCompileStdout.right(262144);
-                    Write(output.toHtmlEscaped().replace(
-                        '\n', QStringLiteral("<br>")));
-                });
-        connect(liveShaderCompileProcess, &QProcess::readyReadStandardError,
-                this, [this]() {
-                    QString output = QString::fromUtf8(
-                        liveShaderCompileProcess->readAllStandardError());
-                    liveShaderCompileStderr += output;
-                    if (liveShaderCompileStderr.size() > 262144)
-                        liveShaderCompileStderr =
-                            liveShaderCompileStderr.right(262144);
-                    Write(QStringLiteral("<b style='color:red;'>") +
-                          output.toHtmlEscaped().replace(
-                              '\n', QStringLiteral("<br>")) +
-                          QStringLiteral("</b>"));
-                });
-        connect(
-            liveShaderCompileProcess,
-            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(
-                &QProcess::finished),
-            this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
-                liveShaderCompileStdout += QString::fromUtf8(
-                    liveShaderCompileProcess->readAllStandardOutput());
-                liveShaderCompileStderr += QString::fromUtf8(
-                    liveShaderCompileProcess->readAllStandardError());
-                bool installed = false;
-                QString editorDiagnostics;
-                QString compilerOutput = liveShaderCompileStderr.trimmed();
-                if (!liveShaderCompileStdout.trimmed().isEmpty()) {
-                    if (!compilerOutput.isEmpty())
-                        compilerOutput += QLatin1Char('\n');
-                    compilerOutput += liveShaderCompileStdout.trimmed();
+        liveShaderCompileProcess->setProcessChannelMode(QProcess::SeparateChannels);
+        connect(liveShaderCompileProcess, &QProcess::readyReadStandardOutput, this, [this]() {
+            QString output = QString::fromUtf8(liveShaderCompileProcess->readAllStandardOutput());
+            liveShaderCompileStdout += output;
+            if (liveShaderCompileStdout.size() > 262144)
+                liveShaderCompileStdout = liveShaderCompileStdout.right(262144);
+            Write(output.toHtmlEscaped().replace('\n', QStringLiteral("<br>")));
+        });
+        connect(liveShaderCompileProcess, &QProcess::readyReadStandardError, this, [this]() {
+            QString output = QString::fromUtf8(liveShaderCompileProcess->readAllStandardError());
+            liveShaderCompileStderr += output;
+            if (liveShaderCompileStderr.size() > 262144)
+                liveShaderCompileStderr = liveShaderCompileStderr.right(262144);
+            Write(QStringLiteral("<b style='color:red;'>") + output.toHtmlEscaped().replace('\n', QStringLiteral("<br>")) + QStringLiteral("</b>"));
+        });
+        connect(liveShaderCompileProcess, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
+            liveShaderCompileStdout += QString::fromUtf8(liveShaderCompileProcess->readAllStandardOutput());
+            liveShaderCompileStderr += QString::fromUtf8(liveShaderCompileProcess->readAllStandardError());
+            bool installed = false;
+            QString editorDiagnostics;
+            QString compilerOutput = liveShaderCompileStderr.trimmed();
+            if (!liveShaderCompileStdout.trimmed().isEmpty()) {
+                if (!compilerOutput.isEmpty())
+                    compilerOutput += QLatin1Char('\n');
+                compilerOutput += liveShaderCompileStdout.trimmed();
+            }
+            if (exitStatus == QProcess::NormalExit && exitCode == 0) {
+                QFile compiled(liveShaderCompileTemporary);
+                quint32 magic = 0;
+                if (compiled.open(QIODevice::ReadOnly)) {
+                    QDataStream stream(&compiled);
+                    stream.setByteOrder(QDataStream::LittleEndian);
+                    stream >> magic;
                 }
-                if (exitStatus == QProcess::NormalExit && exitCode == 0) {
-                    QFile compiled(liveShaderCompileTemporary);
-                    quint32 magic = 0;
-                    if (compiled.open(QIODevice::ReadOnly)) {
-                        QDataStream stream(&compiled);
-                        stream.setByteOrder(QDataStream::LittleEndian);
-                        stream >> magic;
-                    }
-                    compiled.close();
-                    constexpr quint32 SPIRV_MAGIC = 0x07230203U;
-                    if (magic != SPIRV_MAGIC) {
-                        editorDiagnostics =
-                            tr("Compiler did not produce valid SPIR-V.");
-                        Log(tr("<b style='color:red;'>Live ACMXVK compile did "
-                               "not produce valid SPIR-V for %1.</b>")
-                                .arg(liveShaderCompileSource));
-                    } else if (QFileInfo(liveShaderCompileOutput).isSymLink()) {
-                        editorDiagnostics = tr(
-                            "The compiled output is a symbolic link and cannot "
-                            "be replaced safely.");
-                        Log(tr("<b style='color:red;'>Refusing to replace "
-                               "symbolic-link shader output: %1</b>")
-                                .arg(liveShaderCompileOutput));
-                    } else {
-                        std::error_code error;
-                        replace_file(
-                            std::filesystem::u8path(
-                                liveShaderCompileTemporary.toUtf8().constData()),
-                            std::filesystem::u8path(
-                                liveShaderCompileOutput.toUtf8().constData()),
-                            error);
-                        if (error) {
-                            editorDiagnostics =
-                                tr("Could not install compiled shader: %1")
-                                    .arg(QString::fromStdString(
-                                        error.message()));
-                            Log(tr("<b style='color:red;'>Could not install "
-                                   "live ACMXVK shader: %1</b>")
-                                    .arg(QString::fromStdString(
-                                        error.message())));
-                        } else {
-                            installed = true;
-                        }
-                    }
-                } else {
-                    Log(tr("<b style='color:red;'>Live ACMXVK compile failed "
-                           "for %1 (%2, exit code %3).</b>")
-                            .arg(liveShaderCompileSource)
-                            .arg(exitStatus == QProcess::CrashExit
-                                     ? tr("compiler crashed")
-                                     : tr("compiler error"))
-                            .arg(exitCode));
-                    if (compilerOutput.isEmpty())
-                        compilerOutput = liveShaderCompileProcess->errorString();
-                    editorDiagnostics = compilerOutput;
-                    Log(tr("<b style='color:red;'>Compiler message:</b>"
-                           "<pre style='white-space:pre-wrap;'>%1</pre>")
-                            .arg(compilerOutput.toHtmlEscaped()));
-                }
-
-                updateOpenEditorCompileStatus(
-                    liveShaderCompileSource, false, installed,
-                    installed ? compilerOutput : editorDiagnostics);
-
-                if (!installed) {
-                    QFile::remove(liveShaderCompileTemporary);
-                } else {
-                    Log(tr("Compiled and installed ACMXVK shader: %1")
+                compiled.close();
+                constexpr quint32 SPIRV_MAGIC = 0x07230203U;
+                if (magic != SPIRV_MAGIC) {
+                    editorDiagnostics = tr("Compiler did not produce valid SPIR-V.");
+                    Log(tr("<b style='color:red;'>Live ACMXVK compile did "
+                           "not produce valid SPIR-V for %1.</b>")
+                            .arg(liveShaderCompileSource));
+                } else if (QFileInfo(liveShaderCompileOutput).isSymLink()) {
+                    editorDiagnostics = tr("The compiled output is a symbolic link and cannot "
+                                           "be replaced safely.");
+                    Log(tr("<b style='color:red;'>Refusing to replace "
+                           "symbolic-link shader output: %1</b>")
                             .arg(liveShaderCompileOutput));
-                    populateShaderTree();
-                    publishAcmxvkCompiledShaderReload(
-                        liveShaderCompileSource, liveShaderCompileOutput);
+                } else {
+                    std::error_code error;
+                    replace_file(std::filesystem::u8path(liveShaderCompileTemporary.toUtf8().constData()), std::filesystem::u8path(liveShaderCompileOutput.toUtf8().constData()), error);
+                    if (error) {
+                        editorDiagnostics = tr("Could not install compiled shader: %1").arg(QString::fromStdString(error.message()));
+                        Log(tr("<b style='color:red;'>Could not install "
+                               "live ACMXVK shader: %1</b>")
+                                .arg(QString::fromStdString(error.message())));
+                    } else {
+                        installed = true;
+                    }
                 }
+            } else {
+                Log(tr("<b style='color:red;'>Live ACMXVK compile failed "
+                       "for %1 (%2, exit code %3).</b>")
+                        .arg(liveShaderCompileSource)
+                        .arg(exitStatus == QProcess::CrashExit ? tr("compiler crashed") : tr("compiler error"))
+                        .arg(exitCode));
+                if (compilerOutput.isEmpty())
+                    compilerOutput = liveShaderCompileProcess->errorString();
+                editorDiagnostics = compilerOutput;
+                Log(tr("<b style='color:red;'>Compiler message:</b>"
+                       "<pre style='white-space:pre-wrap;'>%1</pre>")
+                        .arg(compilerOutput.toHtmlEscaped()));
+            }
 
-                liveShaderCompileSource.clear();
-                liveShaderCompileOutput.clear();
-                liveShaderCompileTemporary.clear();
-                liveShaderCompileStdout.clear();
-                liveShaderCompileStderr.clear();
-                QTimer::singleShot(
-                    0, this, &MainWindow::startNextAcmxvkLiveCompile);
-            });
+            updateOpenEditorCompileStatus(liveShaderCompileSource, false, installed, installed ? compilerOutput : editorDiagnostics);
+
+            if (!installed) {
+                QFile::remove(liveShaderCompileTemporary);
+            } else {
+                Log(tr("Compiled and installed ACMXVK shader: %1").arg(liveShaderCompileOutput));
+                populateShaderTree();
+                publishAcmxvkCompiledShaderReload(liveShaderCompileSource, liveShaderCompileOutput);
+            }
+
+            liveShaderCompileSource.clear();
+            liveShaderCompileOutput.clear();
+            liveShaderCompileTemporary.clear();
+            liveShaderCompileStdout.clear();
+            liveShaderCompileStderr.clear();
+            QTimer::singleShot(0, this, &MainWindow::startNextAcmxvkLiveCompile);
+        });
     }
 
     QString compilerError;
@@ -2880,8 +2324,7 @@ void MainWindow::startNextAcmxvkLiveCompile() {
                "%1</b>")
                 .arg(compilerError.toHtmlEscaped()));
         for (const QString &sourcePath : liveShaderCompileQueue) {
-            updateOpenEditorCompileStatus(sourcePath, false, false,
-                                          compilerError);
+            updateOpenEditorCompileStatus(sourcePath, false, false, compilerError);
         }
         liveShaderCompileQueue.clear();
         return;
@@ -2890,61 +2333,41 @@ void MainWindow::startNextAcmxvkLiveCompile() {
     liveShaderCompileSource = liveShaderCompileQueue.takeFirst();
     updateOpenEditorCompileStatus(liveShaderCompileSource, true);
     const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
-    const QString sourceName =
-        QDir(sourceRoot).relativeFilePath(liveShaderCompileSource);
-    liveShaderCompileOutput =
-        QDir(acmxvk_build_directory(sourceRoot))
-            .filePath(acmxvk_runtime_shader_name(sourceName));
+    const QString sourceName = QDir(sourceRoot).relativeFilePath(liveShaderCompileSource);
+    liveShaderCompileOutput = QDir(acmxvk_build_directory(sourceRoot)).filePath(acmxvk_runtime_shader_name(sourceName));
     if (!QDir().mkpath(QFileInfo(liveShaderCompileOutput).absolutePath())) {
-        const QString diagnostic =
-            tr("Could not create live shader output directory for %1.")
-                .arg(liveShaderCompileOutput);
-        Log(QStringLiteral("<b style='color:red;'>%1</b>")
-                .arg(diagnostic.toHtmlEscaped()));
-        updateOpenEditorCompileStatus(liveShaderCompileSource, false, false,
-                                      diagnostic);
+        const QString diagnostic = tr("Could not create live shader output directory for %1.").arg(liveShaderCompileOutput);
+        Log(QStringLiteral("<b style='color:red;'>%1</b>").arg(diagnostic.toHtmlEscaped()));
+        updateOpenEditorCompileStatus(liveShaderCompileSource, false, false, diagnostic);
         liveShaderCompileSource.clear();
         liveShaderCompileOutput.clear();
-        QTimer::singleShot(0, this,
-                           &MainWindow::startNextAcmxvkLiveCompile);
+        QTimer::singleShot(0, this, &MainWindow::startNextAcmxvkLiveCompile);
         return;
     }
 
-    liveShaderCompileTemporary =
-        liveShaderCompileOutput + QStringLiteral(".live-tmp-%1-%2")
-                                      .arg(QCoreApplication::applicationPid())
-                                      .arg(++liveShaderCompileSequence);
-    const QStringList arguments{
-        QStringLiteral("-I"), sourceRoot, liveShaderCompileSource,
-        QStringLiteral("-o"), liveShaderCompileTemporary};
+    liveShaderCompileTemporary = liveShaderCompileOutput + QStringLiteral(".live-tmp-%1-%2").arg(QCoreApplication::applicationPid()).arg(++liveShaderCompileSequence);
+    const QStringList arguments{QStringLiteral("-I"), sourceRoot, liveShaderCompileSource, QStringLiteral("-o"), liveShaderCompileTemporary};
     Log(tr("Live compiling ACMXVK shader: %1").arg(sourceName));
-    Log(tr("Command: %1 %2<br>")
-            .arg(glslc, concatList(arguments)));
+    Log(tr("Command: %1 %2<br>").arg(glslc, concatList(arguments)));
     liveShaderCompileStdout.clear();
     liveShaderCompileStderr.clear();
     liveShaderCompileProcess->start(glslc, arguments);
     if (!liveShaderCompileProcess->waitForStarted()) {
-        const QString diagnostic =
-            tr("Failed to start the ACMXVK shader compiler: %1")
-                .arg(liveShaderCompileProcess->errorString());
-        Log(QStringLiteral("<b style='color:red;'>%1</b>")
-                .arg(diagnostic.toHtmlEscaped()));
-        updateOpenEditorCompileStatus(liveShaderCompileSource, false, false,
-                                      diagnostic);
+        const QString diagnostic = tr("Failed to start the ACMXVK shader compiler: %1").arg(liveShaderCompileProcess->errorString());
+        Log(QStringLiteral("<b style='color:red;'>%1</b>").arg(diagnostic.toHtmlEscaped()));
+        updateOpenEditorCompileStatus(liveShaderCompileSource, false, false, diagnostic);
         QFile::remove(liveShaderCompileTemporary);
         liveShaderCompileSource.clear();
         liveShaderCompileOutput.clear();
         liveShaderCompileTemporary.clear();
         liveShaderCompileStdout.clear();
         liveShaderCompileStderr.clear();
-        QTimer::singleShot(0, this,
-                           &MainWindow::startNextAcmxvkLiveCompile);
+        QTimer::singleShot(0, this, &MainWindow::startNextAcmxvkLiveCompile);
     }
 #endif
 }
 
-void MainWindow::queueAcmxvkEditorPreview(const QString &filePath,
-                                          const QString &source) {
+void MainWindow::queueAcmxvkEditorPreview(const QString &filePath, const QString &source) {
     if (active_backend == acmx2::Backend::Acmx2) {
         publishAcmx2EditorPreview(filePath, source);
         return;
@@ -2956,13 +2379,10 @@ void MainWindow::queueAcmxvkEditorPreview(const QString &filePath,
     startNextAcmxvkEditorPreview();
 }
 
-bool MainWindow::publishAcmx2EditorPreview(const QString &filePath,
-                                           const QString &source) {
+bool MainWindow::publishAcmx2EditorPreview(const QString &filePath, const QString &source) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-    if (!shaderSelectionShm || !process ||
-        process->state() != QProcess::Running) {
-        const QString error =
-            tr("Start ACMX2 before using shader live preview.");
+    if (!shaderSelectionShm || !process || process->state() != QProcess::Running) {
+        const QString error = tr("Start ACMX2 before using shader live preview.");
         updateOpenEditorCompileStatus(filePath, false, false, error);
         Log(error);
         return false;
@@ -2972,62 +2392,44 @@ bool MainWindow::publishAcmx2EditorPreview(const QString &filePath,
     const QString sourcePath = sourceInfo.canonicalFilePath();
     const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
     if (sourcePath.isEmpty() || sourceRoot.isEmpty()) {
-        const QString error =
-            tr("Could not resolve the ACMX2 shader preview path: %1")
-                .arg(filePath);
+        const QString error = tr("Could not resolve the ACMX2 shader preview path: %1").arg(filePath);
         updateOpenEditorCompileStatus(filePath, false, false, error);
         Log(error);
         return false;
     }
 
-    const QString shaderName =
-        sanitizeShaderName(QDir(sourceRoot).relativeFilePath(sourcePath));
+    const QString shaderName = sanitizeShaderName(QDir(sourceRoot).relativeFilePath(sourcePath));
     const int shaderIndex = items.indexOf(shaderName, 0, Qt::CaseInsensitive);
     const QString suffix = sourceInfo.suffix().toLower();
-    if (shaderIndex < 0 ||
-        (suffix != QStringLiteral("glsl") &&
-         suffix != QStringLiteral("frag") &&
-         suffix != QStringLiteral("comp"))) {
-        const QString error =
-            tr("The editor file is not an active ACMX2 fragment or compute "
-               "shader: %1")
-                .arg(filePath);
+    if (shaderIndex < 0 || (suffix != QStringLiteral("glsl") && suffix != QStringLiteral("frag") && suffix != QStringLiteral("comp"))) {
+        const QString error = tr("The editor file is not an active ACMX2 fragment or compute "
+                                 "shader: %1")
+                                  .arg(filePath);
         updateOpenEditorCompileStatus(filePath, false, false, error);
         Log(error);
         return false;
     }
 
-    const QString previewDirectory =
-        QDir(sourceRoot).filePath(QStringLiteral(".acmx2-editor-preview"));
+    const QString previewDirectory = QDir(sourceRoot).filePath(QStringLiteral(".acmx2-editor-preview"));
     if (!QDir().mkpath(previewDirectory)) {
-        const QString error =
-            tr("Could not create the ACMX2 editor preview directory.");
+        const QString error = tr("Could not create the ACMX2 editor preview directory.");
         updateOpenEditorCompileStatus(filePath, false, false, error);
         Log(error);
         return false;
     }
 
-    const QString previewPath = QDir(previewDirectory)
-                                    .filePath(QStringLiteral("preview-%1-%2.%3")
-                                                  .arg(QCoreApplication::applicationPid())
-                                                  .arg(++editorPreviewSequence)
-                                                  .arg(suffix));
+    const QString previewPath = QDir(previewDirectory).filePath(QStringLiteral("preview-%1-%2.%3").arg(QCoreApplication::applicationPid()).arg(++editorPreviewSequence).arg(suffix));
     QSaveFile previewFile(previewPath);
     const QByteArray sourceBytes = source.toUtf8();
-    if (!previewFile.open(QIODevice::WriteOnly | QIODevice::Text) ||
-        previewFile.write(sourceBytes) != sourceBytes.size() ||
-        !previewFile.commit()) {
-        const QString error =
-            tr("Could not write the temporary ACMX2 shader preview.");
+    if (!previewFile.open(QIODevice::WriteOnly | QIODevice::Text) || previewFile.write(sourceBytes) != sourceBytes.size() || !previewFile.commit()) {
+        const QString error = tr("Could not write the temporary ACMX2 shader preview.");
         updateOpenEditorCompileStatus(filePath, false, false, error);
         Log(error);
         return false;
     }
 
     const QByteArray reloadPath = QFileInfo(previewPath).canonicalFilePath().toUtf8();
-    if (reloadPath.isEmpty() ||
-        reloadPath.size() >=
-            static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
+    if (reloadPath.isEmpty() || reloadPath.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
         QFile::remove(previewPath);
         const QString error = tr("The ACMX2 shader preview path is too long.");
         updateOpenEditorCompileStatus(filePath, false, false, error);
@@ -3044,19 +2446,15 @@ bool MainWindow::publishAcmx2EditorPreview(const QString &filePath,
         return false;
     }
     shaderSelectionShm->reload_shader_index = shaderIndex;
-    std::fill(std::begin(shaderSelectionShm->reload_shader_path),
-              std::end(shaderSelectionShm->reload_shader_path), '\0');
-    std::copy(reloadPath.cbegin(), reloadPath.cend(),
-              shaderSelectionShm->reload_shader_path);
+    std::fill(std::begin(shaderSelectionShm->reload_shader_path), std::end(shaderSelectionShm->reload_shader_path), '\0');
+    std::copy(reloadPath.cbegin(), reloadPath.cend(), shaderSelectionShm->reload_shader_path);
     ++shaderSelectionShm->reload_sequence;
     ++shaderSelectionShm->sequence;
 
     editorPreviewTemporaryFiles.append(previewPath);
     while (editorPreviewTemporaryFiles.size() > 16)
         QFile::remove(editorPreviewTemporaryFiles.takeFirst());
-    updateOpenEditorCompileStatus(
-        filePath, false, true,
-        tr("Preview source sent to the running ACMX2 backend."));
+    updateOpenEditorCompileStatus(filePath, false, true, tr("Preview source sent to the running ACMX2 backend."));
     Log(tr("Requested ACMX2 editor preview: %1").arg(shaderName));
     return true;
 #else
@@ -3067,8 +2465,7 @@ bool MainWindow::publishAcmx2EditorPreview(const QString &filePath,
 }
 
 void MainWindow::startNextAcmxvkEditorPreview() {
-    if (editorPreviewProcess &&
-        editorPreviewProcess->state() != QProcess::NotRunning) {
+    if (editorPreviewProcess && editorPreviewProcess->state() != QProcess::NotRunning) {
         return;
     }
     if (pendingEditorPreviewPath.isEmpty())
@@ -3077,61 +2474,40 @@ void MainWindow::startNextAcmxvkEditorPreview() {
     if (!editorPreviewProcess) {
         editorPreviewProcess = new QProcess(this);
         editorPreviewProcess->setProcessChannelMode(QProcess::SeparateChannels);
-        connect(editorPreviewProcess, &QProcess::readyReadStandardOutput, this,
-                [this]() {
-                    editorPreviewStdout += QString::fromUtf8(
-                        editorPreviewProcess->readAllStandardOutput());
-                });
-        connect(editorPreviewProcess, &QProcess::readyReadStandardError, this,
-                [this]() {
-                    editorPreviewStderr += QString::fromUtf8(
-                        editorPreviewProcess->readAllStandardError());
-                });
-        connect(
-            editorPreviewProcess,
-            qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this](int exitCode, QProcess::ExitStatus exitStatus) {
-                editorPreviewStdout += QString::fromUtf8(
-                    editorPreviewProcess->readAllStandardOutput());
-                editorPreviewStderr += QString::fromUtf8(
-                    editorPreviewProcess->readAllStandardError());
-                QString diagnostics = editorPreviewStderr.trimmed();
-                if (!editorPreviewStdout.trimmed().isEmpty()) {
-                    if (!diagnostics.isEmpty())
-                        diagnostics += QLatin1Char('\n');
-                    diagnostics += editorPreviewStdout.trimmed();
-                }
-                diagnostics.replace(editorPreviewInput, editorPreviewPath);
-                const bool success =
-                    exitStatus == QProcess::NormalExit && exitCode == 0 &&
-                    QFileInfo(editorPreviewOutput).isFile() &&
-                    QFileInfo(editorPreviewOutput).size() >= 20;
-                updateOpenEditorCompileStatus(editorPreviewPath, false, success,
-                                              diagnostics);
-                if (success) {
-                    editorPreviewTemporaryFiles.append(editorPreviewOutput);
-                    while (editorPreviewTemporaryFiles.size() > 16)
-                        QFile::remove(editorPreviewTemporaryFiles.takeFirst());
-                    publishAcmxvkCompiledShaderReload(editorPreviewPath,
-                                                      editorPreviewOutput);
-                    Log(tr("Compiled ACMXVK editor preview: %1")
-                            .arg(QFileInfo(editorPreviewPath).fileName()));
-                } else {
-                    QFile::remove(editorPreviewOutput);
-                    Log(tr("<b style='color:red;'>ACMXVK editor preview failed: "
-                           "%1</b><pre style='white-space:pre-wrap;'>%2</pre>")
-                            .arg(QFileInfo(editorPreviewPath).fileName(),
-                                 diagnostics.toHtmlEscaped()));
-                }
-                QFile::remove(editorPreviewInput);
-                editorPreviewPath.clear();
-                editorPreviewInput.clear();
-                editorPreviewOutput.clear();
-                editorPreviewStdout.clear();
-                editorPreviewStderr.clear();
-                QTimer::singleShot(
-                    0, this, &MainWindow::startNextAcmxvkEditorPreview);
-            });
+        connect(editorPreviewProcess, &QProcess::readyReadStandardOutput, this, [this]() { editorPreviewStdout += QString::fromUtf8(editorPreviewProcess->readAllStandardOutput()); });
+        connect(editorPreviewProcess, &QProcess::readyReadStandardError, this, [this]() { editorPreviewStderr += QString::fromUtf8(editorPreviewProcess->readAllStandardError()); });
+        connect(editorPreviewProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
+            editorPreviewStdout += QString::fromUtf8(editorPreviewProcess->readAllStandardOutput());
+            editorPreviewStderr += QString::fromUtf8(editorPreviewProcess->readAllStandardError());
+            QString diagnostics = editorPreviewStderr.trimmed();
+            if (!editorPreviewStdout.trimmed().isEmpty()) {
+                if (!diagnostics.isEmpty())
+                    diagnostics += QLatin1Char('\n');
+                diagnostics += editorPreviewStdout.trimmed();
+            }
+            diagnostics.replace(editorPreviewInput, editorPreviewPath);
+            const bool success = exitStatus == QProcess::NormalExit && exitCode == 0 && QFileInfo(editorPreviewOutput).isFile() && QFileInfo(editorPreviewOutput).size() >= 20;
+            updateOpenEditorCompileStatus(editorPreviewPath, false, success, diagnostics);
+            if (success) {
+                editorPreviewTemporaryFiles.append(editorPreviewOutput);
+                while (editorPreviewTemporaryFiles.size() > 16)
+                    QFile::remove(editorPreviewTemporaryFiles.takeFirst());
+                publishAcmxvkCompiledShaderReload(editorPreviewPath, editorPreviewOutput);
+                Log(tr("Compiled ACMXVK editor preview: %1").arg(QFileInfo(editorPreviewPath).fileName()));
+            } else {
+                QFile::remove(editorPreviewOutput);
+                Log(tr("<b style='color:red;'>ACMXVK editor preview failed: "
+                       "%1</b><pre style='white-space:pre-wrap;'>%2</pre>")
+                        .arg(QFileInfo(editorPreviewPath).fileName(), diagnostics.toHtmlEscaped()));
+            }
+            QFile::remove(editorPreviewInput);
+            editorPreviewPath.clear();
+            editorPreviewInput.clear();
+            editorPreviewOutput.clear();
+            editorPreviewStdout.clear();
+            editorPreviewStderr.clear();
+            QTimer::singleShot(0, this, &MainWindow::startNextAcmxvkEditorPreview);
+        });
     }
 
     QString compilerError;
@@ -3141,17 +2517,14 @@ void MainWindow::startNextAcmxvkEditorPreview() {
     pendingEditorPreviewPath.clear();
     pendingEditorPreviewSource.clear();
     if (glslc.isEmpty()) {
-        updateOpenEditorCompileStatus(editorPreviewPath, false, false,
-                                      compilerError);
+        updateOpenEditorCompileStatus(editorPreviewPath, false, false, compilerError);
         editorPreviewPath.clear();
         return;
     }
 
     const QFileInfo sourceInfo(editorPreviewPath);
     const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
-    const QString previewDirectory =
-        QDir(acmxvk_build_directory(sourceRoot))
-            .filePath(QStringLiteral(".editor-preview"));
+    const QString previewDirectory = QDir(acmxvk_build_directory(sourceRoot)).filePath(QStringLiteral(".editor-preview"));
     if (!QDir().mkpath(previewDirectory)) {
         const QString error = tr("Could not create the editor preview directory.");
         updateOpenEditorCompileStatus(editorPreviewPath, false, false, error);
@@ -3159,19 +2532,12 @@ void MainWindow::startNextAcmxvkEditorPreview() {
         return;
     }
     const QString suffix = sourceInfo.suffix().toLower();
-    const QString baseName =
-        QStringLiteral("preview-%1-%2.%3")
-            .arg(QCoreApplication::applicationPid())
-            .arg(++editorPreviewSequence)
-            .arg(suffix == QStringLiteral("comp") ? QStringLiteral("comp")
-                                                  : QStringLiteral("frag"));
+    const QString baseName = QStringLiteral("preview-%1-%2.%3").arg(QCoreApplication::applicationPid()).arg(++editorPreviewSequence).arg(suffix == QStringLiteral("comp") ? QStringLiteral("comp") : QStringLiteral("frag"));
     editorPreviewInput = QDir(previewDirectory).filePath(baseName);
     editorPreviewOutput = editorPreviewInput + QStringLiteral(".spv");
     QSaveFile inputFile(editorPreviewInput);
     const QByteArray sourceBytes = source.toUtf8();
-    if (!inputFile.open(QIODevice::WriteOnly | QIODevice::Text) ||
-        inputFile.write(sourceBytes) != sourceBytes.size() ||
-        !inputFile.commit()) {
+    if (!inputFile.open(QIODevice::WriteOnly | QIODevice::Text) || inputFile.write(sourceBytes) != sourceBytes.size() || !inputFile.commit()) {
         const QString error = tr("Could not write the temporary preview source.");
         updateOpenEditorCompileStatus(editorPreviewPath, false, false, error);
         editorPreviewPath.clear();
@@ -3184,14 +2550,12 @@ void MainWindow::startNextAcmxvkEditorPreview() {
     QStringList arguments{QStringLiteral("-I"), sourceInfo.absolutePath()};
     if (!sourceRoot.isEmpty() && sourceRoot != sourceInfo.absolutePath())
         arguments << QStringLiteral("-I") << sourceRoot;
-    arguments << editorPreviewInput << QStringLiteral("-o")
-              << editorPreviewOutput;
+    arguments << editorPreviewInput << QStringLiteral("-o") << editorPreviewOutput;
     editorPreviewStdout.clear();
     editorPreviewStderr.clear();
     editorPreviewProcess->start(glslc, arguments);
     if (!editorPreviewProcess->waitForStarted()) {
-        const QString error = tr("Failed to start the shader compiler: %1")
-                                  .arg(editorPreviewProcess->errorString());
+        const QString error = tr("Failed to start the shader compiler: %1").arg(editorPreviewProcess->errorString());
         updateOpenEditorCompileStatus(editorPreviewPath, false, false, error);
         QFile::remove(editorPreviewInput);
         editorPreviewPath.clear();
@@ -3200,21 +2564,15 @@ void MainWindow::startNextAcmxvkEditorPreview() {
     }
 }
 
-void MainWindow::publishAcmxvkCompiledShaderReload(
-    const QString &sourcePath, const QString &runtimePath) {
+void MainWindow::publishAcmxvkCompiledShaderReload(const QString &sourcePath, const QString &runtimePath) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-    if (active_backend != acmx2::Backend::Acmxvk || !shaderSelectionShm ||
-        !process || process->state() != QProcess::Running) {
+    if (active_backend != acmx2::Backend::Acmxvk || !shaderSelectionShm || !process || process->state() != QProcess::Running) {
         return;
     }
 
     const QString sourceRoot = QFileInfo(shader_path).canonicalFilePath();
     const QString resolvedSourcePath = QFileInfo(sourcePath).canonicalFilePath();
-    const QString sourceName =
-        sourceRoot.isEmpty() || resolvedSourcePath.isEmpty()
-            ? QString()
-            : sanitizeShaderName(
-                  QDir(sourceRoot).relativeFilePath(resolvedSourcePath));
+    const QString sourceName = sourceRoot.isEmpty() || resolvedSourcePath.isEmpty() ? QString() : sanitizeShaderName(QDir(sourceRoot).relativeFilePath(resolvedSourcePath));
     if (sourceName.isEmpty()) {
         Log(tr("Compiled shader source cannot be resolved inside the active "
                "library: %1")
@@ -3230,17 +2588,13 @@ void MainWindow::publishAcmxvkCompiledShaderReload(
         return;
     }
 
-    const QByteArray reloadPath =
-        QFileInfo(runtimePath).canonicalFilePath().toUtf8();
+    const QByteArray reloadPath = QFileInfo(runtimePath).canonicalFilePath().toUtf8();
     if (reloadPath.isEmpty()) {
-        Log(tr("Compiled shader output cannot be resolved for live reload: %1")
-                .arg(runtimePath));
+        Log(tr("Compiled shader output cannot be resolved for live reload: %1").arg(runtimePath));
         return;
     }
-    if (reloadPath.size() >=
-        static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
-        Log(tr("Compiled shader path is too long for live reload: %1")
-                .arg(runtimePath));
+    if (reloadPath.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxReloadPath)) {
+        Log(tr("Compiled shader path is too long for live reload: %1").arg(runtimePath));
         return;
     }
 
@@ -3250,14 +2604,11 @@ void MainWindow::publishAcmxvkCompiledShaderReload(
         return;
     }
     shaderSelectionShm->reload_shader_index = shaderIndex;
-    std::fill(std::begin(shaderSelectionShm->reload_shader_path),
-              std::end(shaderSelectionShm->reload_shader_path), '\0');
-    std::copy(reloadPath.cbegin(), reloadPath.cend(),
-              shaderSelectionShm->reload_shader_path);
+    std::fill(std::begin(shaderSelectionShm->reload_shader_path), std::end(shaderSelectionShm->reload_shader_path), '\0');
+    std::copy(reloadPath.cbegin(), reloadPath.cend(), shaderSelectionShm->reload_shader_path);
     ++shaderSelectionShm->reload_sequence;
     ++shaderSelectionShm->sequence;
-    Log(tr("Requested live ACMXVK pipeline reload: %1<br>")
-            .arg(sourceName));
+    Log(tr("Requested live ACMXVK pipeline reload: %1<br>").arg(sourceName));
 #else
     Q_UNUSED(sourcePath);
     Q_UNUSED(runtimePath);
@@ -3271,9 +2622,7 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
 
     std::array<qint32, acmx2::ipc::kShaderSelectionMaxPassCount> passIndices;
     passIndices.fill(-1);
-    std::array<std::array<char, acmx2::ipc::kShaderSelectionMaxShaderName>,
-               acmx2::ipc::kShaderSelectionMaxPassCount>
-        passNames{};
+    std::array<std::array<char, acmx2::ipc::kShaderSelectionMaxShaderName>, acmx2::ipc::kShaderSelectionMaxPassCount> passNames{};
 
     quint32 passCount = 0;
     if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
@@ -3286,11 +2635,8 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
                 continue;
             passIndices[passCount] = idx;
             const QByteArray shaderName = name.toUtf8();
-            const qsizetype copyLength = std::min<qsizetype>(
-                shaderName.size(),
-                static_cast<qsizetype>(acmx2::ipc::kShaderSelectionMaxShaderName - 1));
-            std::copy_n(shaderName.constData(), copyLength,
-                        passNames[passCount].begin());
+            const qsizetype copyLength = std::min<qsizetype>(shaderName.size(), static_cast<qsizetype>(acmx2::ipc::kShaderSelectionMaxShaderName - 1));
+            std::copy_n(shaderName.constData(), copyLength, passNames[passCount].begin());
             ++passCount;
         }
     }
@@ -3304,8 +2650,7 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
     shaderSelectionShm->shader_pass_count = passCount;
     std::copy(passIndices.begin(), passIndices.end(), std::begin(shaderSelectionShm->shader_pass_indices));
     for (std::size_t i = 0; i < passNames.size(); ++i) {
-        std::copy(passNames[i].begin(), passNames[i].end(),
-                  shaderSelectionShm->shader_pass_names[i]);
+        std::copy(passNames[i].begin(), passNames[i].end(), shaderSelectionShm->shader_pass_names[i]);
     }
     ++shaderSelectionShm->sequence;
 #endif
@@ -3372,43 +2717,27 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
 
     const QByteArray dreamModel = deep_dream_model.toUtf8();
     const QByteArray dreamLayer = deep_dream_layer.toUtf8();
-    const bool dreamStringsFit =
-        dreamModel.size() < static_cast<int>(
-                                acmx2::ipc::kShaderSelectionMaxDreamModelPath) &&
-        dreamLayer.size() <
-            static_cast<int>(acmx2::ipc::kShaderSelectionMaxDreamLayer);
-    const bool dreamActive =
-        active_backend == acmx2::Backend::Acmxvk && deep_dream_available &&
-        deep_dream_enabled && !dreamModel.isEmpty() && dreamStringsFit;
+    const bool dreamStringsFit = dreamModel.size() < static_cast<int>(acmx2::ipc::kShaderSelectionMaxDreamModelPath) && dreamLayer.size() < static_cast<int>(acmx2::ipc::kShaderSelectionMaxDreamLayer);
+    const bool dreamActive = active_backend == acmx2::Backend::Acmxvk && deep_dream_available && deep_dream_enabled && !dreamModel.isEmpty() && dreamStringsFit;
     shaderSelectionShm->dream_enabled = dreamActive ? 1 : 0;
     shaderSelectionShm->dream_fp16 = deep_dream_fp16 ? 1 : 0;
-    shaderSelectionShm->dream_gpu_filter_first =
-        deep_dream_gpu_filter_first ? 1 : 0;
+    shaderSelectionShm->dream_gpu_filter_first = deep_dream_gpu_filter_first ? 1 : 0;
     shaderSelectionShm->dream_iterations = deep_dream_iterations;
-    shaderSelectionShm->dream_maximum_dimension =
-        deep_dream_maximum_dimension;
+    shaderSelectionShm->dream_maximum_dimension = deep_dream_maximum_dimension;
     shaderSelectionShm->dream_channel = deep_dream_channel;
     shaderSelectionShm->dream_octaves = deep_dream_octaves;
     shaderSelectionShm->dream_jitter = deep_dream_jitter;
     shaderSelectionShm->dream_smoothing = deep_dream_smoothing;
-    shaderSelectionShm->dream_strength =
-        static_cast<float>(deep_dream_strength);
-    shaderSelectionShm->dream_feedback =
-        static_cast<float>(deep_dream_feedback);
+    shaderSelectionShm->dream_strength = static_cast<float>(deep_dream_strength);
+    shaderSelectionShm->dream_feedback = static_cast<float>(deep_dream_feedback);
     shaderSelectionShm->dream_zoom = static_cast<float>(deep_dream_zoom);
-    shaderSelectionShm->dream_rotation =
-        static_cast<float>(deep_dream_rotation);
-    shaderSelectionShm->dream_octave_scale =
-        static_cast<float>(deep_dream_octave_scale);
-    std::fill(std::begin(shaderSelectionShm->dream_model_path),
-              std::end(shaderSelectionShm->dream_model_path), '\0');
-    std::fill(std::begin(shaderSelectionShm->dream_layer),
-              std::end(shaderSelectionShm->dream_layer), '\0');
+    shaderSelectionShm->dream_rotation = static_cast<float>(deep_dream_rotation);
+    shaderSelectionShm->dream_octave_scale = static_cast<float>(deep_dream_octave_scale);
+    std::fill(std::begin(shaderSelectionShm->dream_model_path), std::end(shaderSelectionShm->dream_model_path), '\0');
+    std::fill(std::begin(shaderSelectionShm->dream_layer), std::end(shaderSelectionShm->dream_layer), '\0');
     if (dreamStringsFit) {
-        std::copy(dreamModel.cbegin(), dreamModel.cend(),
-                  shaderSelectionShm->dream_model_path);
-        std::copy(dreamLayer.cbegin(), dreamLayer.cend(),
-                  shaderSelectionShm->dream_layer);
+        std::copy(dreamModel.cbegin(), dreamModel.cend(), shaderSelectionShm->dream_model_path);
+        std::copy(dreamLayer.cbegin(), dreamLayer.cend(), shaderSelectionShm->dream_layer);
     } else if (deep_dream_enabled) {
         Log("Deep Dream settings were not published because the model path "
             "or layer name is too long");
@@ -3428,29 +2757,19 @@ void MainWindow::publishCustomUniformsToRunningProcess() {
         Log("<br><style color=\"red\">Error lock failed</style><br>");
         return;
     }
-    std::fill(&shaderSelectionShm->custom_uniform_names[0][0],
-              &shaderSelectionShm->custom_uniform_names[0][0] +
-                  acmx2::ipc::kShaderSelectionMaxCustomUniforms *
-                      acmx2::ipc::kShaderSelectionMaxUniformName,
-              '\0');
-    std::fill(std::begin(shaderSelectionShm->custom_uniform_values),
-              std::end(shaderSelectionShm->custom_uniform_values), 0.0f);
+    std::fill(&shaderSelectionShm->custom_uniform_names[0][0], &shaderSelectionShm->custom_uniform_names[0][0] + acmx2::ipc::kShaderSelectionMaxCustomUniforms * acmx2::ipc::kShaderSelectionMaxUniformName, '\0');
+    std::fill(std::begin(shaderSelectionShm->custom_uniform_values), std::end(shaderSelectionShm->custom_uniform_values), 0.0f);
 
     quint32 count = 0;
-    for (const acmx2::CustomUniformDefinition &uniform :
-         customUniformDialog->uniforms()) {
+    for (const acmx2::CustomUniformDefinition &uniform : customUniformDialog->uniforms()) {
         if (count >= acmx2::ipc::kShaderSelectionMaxCustomUniforms)
             break;
         const QByteArray name = uniform.name.toUtf8();
-        if (name.isEmpty() ||
-            name.size() >=
-                static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName)) {
+        if (name.isEmpty() || name.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName)) {
             continue;
         }
-        std::copy(name.cbegin(), name.cend(),
-                  shaderSelectionShm->custom_uniform_names[count]);
-        shaderSelectionShm->custom_uniform_values[count] =
-            static_cast<float>(uniform.value);
+        std::copy(name.cbegin(), name.cend(), shaderSelectionShm->custom_uniform_names[count]);
+        shaderSelectionShm->custom_uniform_values[count] = static_cast<float>(uniform.value);
         ++count;
     }
     shaderSelectionShm->custom_uniform_count = count;
@@ -3522,9 +2841,7 @@ void MainWindow::refreshShaderCacheStatus() {
 #else
     if (shader_path.isEmpty())
         return;
-    const QString cachePath = resolveShaderCachePath(
-        shader_path, cache_size,
-        cache_enabled && textureCacheArraySettingEnabled());
+    const QString cachePath = resolveShaderCachePath(shader_path, cache_size, cache_enabled && textureCacheArraySettingEnabled());
     QFileInfo cacheInfo(cachePath);
     if (!cacheInfo.exists() || !cacheInfo.isFile()) {
         Log("Shader cache not found at: " + cachePath);
@@ -3549,27 +2866,19 @@ void MainWindow::populateShaderTree() {
     list_view->clear();
 
     QString acmxvk_type_error;
-    const bool acmxvk_source =
-        active_backend == acmx2::Backend::Acmxvk &&
-        is_acmxvk_source_library(shader_path, acmxvk_type_error) &&
-        acmxvk_type_error.isEmpty();
+    const bool acmxvk_source = active_backend == acmx2::Backend::Acmxvk && is_acmxvk_source_library(shader_path, acmxvk_type_error) && acmxvk_type_error.isEmpty();
     const int width = QString::number(items.size()).size();
     for (int i = 0; i < items.size(); ++i) {
         const QString &name = items.at(i);
         QFileInfo fi(shader_path + "/" + name);
         const QString stem = QFileInfo(name).completeBaseName();
-        const bool isCompute =
-            name.endsWith(QStringLiteral(".comp"), Qt::CaseInsensitive) ||
-            name.endsWith(QStringLiteral(".comp.spv"), Qt::CaseInsensitive);
+        const bool isCompute = name.endsWith(QStringLiteral(".comp"), Qt::CaseInsensitive) || name.endsWith(QStringLiteral(".comp.spv"), Qt::CaseInsensitive);
         const QString shaderType = isCompute ? tr("Compute") : tr("Fragment");
 
         QString health;
         QColor healthColor;
         if (active_backend == acmx2::Backend::Acmxvk) {
-            const AcmxvkBuildState state =
-                acmxvk_source
-                    ? acmxvk_shader_build_state(shader_path, name)
-                    : AcmxvkBuildState::UpToDate;
+            const AcmxvkBuildState state = acmxvk_source ? acmxvk_shader_build_state(shader_path, name) : AcmxvkBuildState::UpToDate;
             if (state == AcmxvkBuildState::NotBuilt) {
                 health = tr("Not Built");
                 healthColor = QColor("#888888");
@@ -3589,8 +2898,7 @@ void MainWindow::populateShaderTree() {
         } else if (shaderCacheStatus.value(stem)) {
             health = tr("Failed");
             healthColor = QColor("#ff5555");
-        } else if (fi.exists() && shaderCacheMTime.isValid() &&
-                   fi.lastModified() > shaderCacheMTime) {
+        } else if (fi.exists() && shaderCacheMTime.isValid() && fi.lastModified() > shaderCacheMTime) {
             health = tr("Stale");
             healthColor = QColor("#ffaa00");
         } else {
@@ -3599,11 +2907,7 @@ void MainWindow::populateShaderTree() {
         }
 
         QStringList cols;
-        cols << QString("%1").arg(i, width, 10, QLatin1Char(' '))
-             << name
-             << (fi.exists() ? formatLastModified(fi.lastModified()) : tr("missing"))
-             << health
-             << shaderType;
+        cols << QString("%1").arg(i, width, 10, QLatin1Char(' ')) << name << (fi.exists() ? formatLastModified(fi.lastModified()) : tr("missing")) << health << shaderType;
         auto *item = new QTreeWidgetItem(list_view, cols);
         item->setTextAlignment(0, Qt::AlignRight | Qt::AlignVCenter);
         item->setForeground(3, QBrush(healthColor));
@@ -3660,9 +2964,7 @@ void MainWindow::menuLoadLibrary() {
     if (startDirectory.isEmpty())
         startDirectory = QDir::homePath();
 
-    const QString directory = QFileDialog::getExistingDirectory(
-        this, tr("Load Shader Library"), startDirectory,
-        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    const QString directory = QFileDialog::getExistingDirectory(this, tr("Load Shader Library"), startDirectory, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (directory.isEmpty())
         return;
 
@@ -3670,25 +2972,22 @@ void MainWindow::menuLoadLibrary() {
     loadLibraryPath(directory);
 }
 
-bool MainWindow::backend_launch_available() const {
-    return true;
-}
+bool MainWindow::backend_launch_available() const { return true; }
 
-void MainWindow::prompt_acmxvk_rebuild(
-    const QString &reason, PendingAcmxvkAction resume_action) {
+void MainWindow::prompt_acmxvk_rebuild(const QString &reason, PendingAcmxvkAction resume_action) {
     QString type_error;
-    if (!is_acmxvk_source_library(shader_path, type_error) ||
-        !type_error.isEmpty()) {
+    if (!is_acmxvk_source_library(shader_path, type_error) || !type_error.isEmpty()) {
         QMessageBox::warning(this, tr("Build ACMXVK Library"), reason);
         return;
     }
 
-    const QMessageBox::StandardButton answer = QMessageBox::question(
-        this, tr("Build ACMXVK Library"),
-        tr("The ACMXVK build is out of date or incomplete.\n\n%1\n\n"
-           "Do you wish to rebuild it now?")
-            .arg(reason),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    const QMessageBox::StandardButton answer = QMessageBox::question(this,
+                                                                     tr("Build ACMXVK Library"),
+                                                                     tr("The ACMXVK build is out of date or incomplete.\n\n%1\n\n"
+                                                                        "Do you wish to rebuild it now?")
+                                                                         .arg(reason),
+                                                                     QMessageBox::Yes | QMessageBox::No,
+                                                                     QMessageBox::Yes);
     if (answer != QMessageBox::Yes)
         return;
 
@@ -3711,10 +3010,7 @@ void MainWindow::update_backend_ui() {
         deepDreamAction->setVisible(!acmx2Tools);
     }
     QString sourceTypeError;
-    const bool acmxvkSource =
-        active_backend == acmx2::Backend::Acmxvk && !shader_path.isEmpty() &&
-        is_acmxvk_source_library(shader_path, sourceTypeError) &&
-        sourceTypeError.isEmpty();
+    const bool acmxvkSource = active_backend == acmx2::Backend::Acmxvk && !shader_path.isEmpty() && is_acmxvk_source_library(shader_path, sourceTypeError) && sourceTypeError.isEmpty();
     if (runMenu_select)
         runMenu_select->setEnabled(launchAvailable);
     if (runMenu_all)
@@ -3722,24 +3018,15 @@ void MainWindow::update_backend_ui() {
     if (runMenu_copyCommand)
         runMenu_copyCommand->setEnabled(launchAvailable);
     if (buildCacheAction) {
-        buildCacheAction->setText(acmxvkSource ? tr("Build")
-                                               : tr("Rebuild Shader Cache"));
+        buildCacheAction->setText(acmxvkSource ? tr("Build") : tr("Rebuild Shader Cache"));
         buildCacheAction->setVisible(acmx2Tools || acmxvkSource);
         buildCacheAction->setEnabled(acmx2Tools || acmxvkSource);
-        buildCacheAction->setToolTip(
-            acmxvkSource
-                ? tr("Compile changed GLSL sources into %1")
-                      .arg(acmxvk_build_directory(shader_path))
-                : QString());
+        buildCacheAction->setToolTip(acmxvkSource ? tr("Compile changed GLSL sources into %1").arg(acmxvk_build_directory(shader_path)) : QString());
     }
     if (fixBuildAction) {
         fixBuildAction->setVisible(acmxvkSource);
         fixBuildAction->setEnabled(acmxvkSource);
-        fixBuildAction->setToolTip(
-            acmxvkSource
-                ? tr("Build into %1 and omit shaders that fail to compile")
-                      .arg(acmxvk_build_directory(shader_path))
-                : QString());
+        fixBuildAction->setToolTip(acmxvkSource ? tr("Build into %1 and omit shaders that fail to compile").arg(acmxvk_build_directory(shader_path)) : QString());
     }
     if (cleanShaderCacheAction) {
         cleanShaderCacheAction->setVisible(acmx2Tools);
@@ -3748,11 +3035,9 @@ void MainWindow::update_backend_ui() {
     if (removeBrokenAction) {
         removeBrokenAction->setVisible(acmx2Tools || acmxvkSource);
         removeBrokenAction->setEnabled(acmx2Tools || acmxvkSource);
-        removeBrokenAction->setToolTip(
-            acmxvkSource
-                ? tr("Permanently delete .frag and .comp sources that fail "
-                     "the ACMXVK Fix Build")
-                : QString());
+        removeBrokenAction->setToolTip(acmxvkSource ? tr("Permanently delete .frag and .comp sources that fail "
+                                                         "the ACMXVK Fix Build")
+                                                    : QString());
     }
     if (runFromCacheAction) {
         runFromCacheAction->setVisible(acmx2Tools);
@@ -3768,8 +3053,7 @@ void MainWindow::update_backend_ui() {
     if (runFromCacheAction)
         runFromCacheAction->setEnabled(false);
 #endif
-    const bool processIdle =
-        !process || process->state() == QProcess::NotRunning;
+    const bool processIdle = !process || process->state() == QProcess::NotRunning;
     if (libraryBuilderAction)
         libraryBuilderAction->setEnabled(processIdle);
     if (listMenu_new)
@@ -3782,8 +3066,7 @@ void MainWindow::update_backend_ui() {
 #else
         list_view->setColumnHidden(3, false);
 #endif
-        list_view->headerItem()->setText(
-            3, acmx2Tools ? tr("Compile Health") : tr("Build Status"));
+        list_view->headerItem()->setText(3, acmx2Tools ? tr("Compile Health") : tr("Build Status"));
     }
 
     if (runMenu) {
@@ -3792,16 +3075,13 @@ void MainWindow::update_backend_ui() {
         runMenu_copyCommand->setToolTip({});
     }
     if (list_view) {
-        list_view->setToolTip(
-            tr("Right click while running to change the active shader."));
+        list_view->setToolTip(tr("Right click while running to change the active shader."));
     }
 }
 
 void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
     if (process && process->state() == QProcess::Running) {
-        QMessageBox::information(
-            this, tr("Process Running"),
-            tr("Stop the running process before changing backends."));
+        QMessageBox::information(this, tr("Process Running"), tr("Stop the running process before changing backends."));
         update_backend_ui();
         return;
     }
@@ -3820,25 +3100,14 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
     }
 
     QSettings settings("LostSideDead");
-    settings.setValue(
-        acmx2::backend_settings_key(active_backend, "executable"),
-        executable_path);
-    settings.setValue(acmx2::backend_settings_key(active_backend, "library"),
-                      shader_path);
+    settings.setValue(acmx2::backend_settings_key(active_backend, "executable"), executable_path);
+    settings.setValue(acmx2::backend_settings_key(active_backend, "library"), shader_path);
 
     active_backend = backend;
     if (persist)
         settings.setValue("interface/backend", acmx2::backend_id(active_backend));
-    executable_path =
-        settings
-            .value(acmx2::backend_settings_key(active_backend, "executable"),
-                   acmx2::default_backend_executable(active_backend))
-            .toString();
-    const QString nextLibrary =
-        settings
-            .value(acmx2::backend_settings_key(active_backend, "library"), "")
-            .toString()
-            .trimmed();
+    executable_path = settings.value(acmx2::backend_settings_key(active_backend, "executable"), acmx2::default_backend_executable(active_backend)).toString();
+    const QString nextLibrary = settings.value(acmx2::backend_settings_key(active_backend, "library"), "").toString().trimmed();
 
     shader_path.clear();
     items.clear();
@@ -3847,18 +3116,13 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
     if (list_view)
         list_view->clear();
 
-    if (!nextLibrary.isEmpty() && QFileInfo(nextLibrary).isDir() &&
-        acmx2::shader_manifest_exists(nextLibrary)) {
+    if (!nextLibrary.isEmpty() && QFileInfo(nextLibrary).isDir() && acmx2::shader_manifest_exists(nextLibrary)) {
         QString backendError;
-        const std::optional<acmx2::Backend> libraryBackend =
-            acmx2::shader_manifest_backend(nextLibrary, backendError);
+        const std::optional<acmx2::Backend> libraryBackend = acmx2::shader_manifest_backend(nextLibrary, backendError);
         if (!backendError.isEmpty()) {
-            Log(tr("Warning: Could not read backend metadata for %1: %2")
-                    .arg(nextLibrary, backendError));
+            Log(tr("Warning: Could not read backend metadata for %1: %2").arg(nextLibrary, backendError));
         } else if (libraryBackend && *libraryBackend != active_backend) {
-            Log(tr("Warning: Saved %1 library belongs to %2: %3")
-                    .arg(acmx2::backend_name(active_backend),
-                         acmx2::backend_name(*libraryBackend), nextLibrary));
+            Log(tr("Warning: Saved %1 library belongs to %2: %3").arg(acmx2::backend_name(active_backend), acmx2::backend_name(*libraryBackend), nextLibrary));
         } else {
             shader_path = nextLibrary;
             loadShaders(shader_path, true);
@@ -3889,39 +3153,31 @@ bool MainWindow::loadLibraryPath(const QString &path) {
     const QString libraryPath = QDir::cleanPath(trimmedPath);
     const QFileInfo libraryInfo(libraryPath);
     if (!libraryInfo.exists()) {
-        QMessageBox::warning(this, tr("Invalid Shader Path"),
-                             tr("Shader directory does not exist:\n%1")
-                                 .arg(libraryPath));
+        QMessageBox::warning(this, tr("Invalid Shader Path"), tr("Shader directory does not exist:\n%1").arg(libraryPath));
         return false;
     }
     if (!libraryInfo.isDir()) {
-        QMessageBox::warning(this, tr("Invalid Shader Path"),
-                             tr("Shader path is not a directory:\n%1")
-                                 .arg(libraryPath));
+        QMessageBox::warning(this, tr("Invalid Shader Path"), tr("Shader path is not a directory:\n%1").arg(libraryPath));
         return false;
     }
     if (!acmx2::shader_manifest_exists(libraryPath)) {
-        QMessageBox::warning(
-            this, tr("Missing Shader Manifest"),
-            tr("Shader directory does not contain library.json or index.txt:\n%1")
-                .arg(libraryPath));
+        QMessageBox::warning(this, tr("Missing Shader Manifest"), tr("Shader directory does not contain library.json or index.txt:\n%1").arg(libraryPath));
         return false;
     }
     QString backendError;
-    const std::optional<acmx2::Backend> libraryBackend =
-        acmx2::shader_manifest_backend(libraryPath, backendError);
+    const std::optional<acmx2::Backend> libraryBackend = acmx2::shader_manifest_backend(libraryPath, backendError);
     if (!backendError.isEmpty()) {
         QMessageBox::warning(this, tr("Invalid Backend Metadata"), backendError);
         return false;
     }
     if (libraryBackend && *libraryBackend != active_backend) {
-        const QMessageBox::StandardButton reply = QMessageBox::question(
-            this, tr("Switch Backend"),
-            tr("This library targets %1, but the active backend is %2.\n\n"
-               "Switch to %1 and load it?")
-                .arg(acmx2::backend_name(*libraryBackend),
-                     acmx2::backend_name(active_backend)),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        const QMessageBox::StandardButton reply = QMessageBox::question(this,
+                                                                        tr("Switch Backend"),
+                                                                        tr("This library targets %1, but the active backend is %2.\n\n"
+                                                                           "Switch to %1 and load it?")
+                                                                            .arg(acmx2::backend_name(*libraryBackend), acmx2::backend_name(active_backend)),
+                                                                        QMessageBox::Yes | QMessageBox::No,
+                                                                        QMessageBox::Yes);
         if (reply != QMessageBox::Yes)
             return false;
         set_backend(*libraryBackend);
@@ -3930,20 +3186,17 @@ bool MainWindow::loadLibraryPath(const QString &path) {
         QString libraryTypeError;
         acmx2::shader_manifest_library_type(libraryPath, libraryTypeError);
         if (!libraryTypeError.isEmpty()) {
-            QMessageBox::warning(this, tr("Invalid Library Type"),
-                                 libraryTypeError);
+            QMessageBox::warning(this, tr("Invalid Library Type"), libraryTypeError);
             return false;
         }
     }
     if (!loadShaders(libraryPath, true)) {
-        Log(tr("Warning: Could not load shaders from directory: %1")
-                .arg(libraryPath));
+        Log(tr("Warning: Could not load shaders from directory: %1").arg(libraryPath));
         return false;
     }
 
     QSettings settings("LostSideDead");
-    settings.setValue(acmx2::backend_settings_key(active_backend, "library"),
-                      libraryPath);
+    settings.setValue(acmx2::backend_settings_key(active_backend, "library"), libraryPath);
     if (active_backend == acmx2::Backend::Acmx2)
         settings.setValue("shaders", libraryPath);
     settings.sync();
@@ -3960,14 +3213,9 @@ void MainWindow::addRecentLibrary(const QString &path) {
     const QString libraryPath = QDir::cleanPath(trimmedPath);
 
     QSettings settings("LostSideDead");
-    const QString recentKey =
-        acmx2::backend_settings_key(active_backend, "recentLibraries");
-    const QStringList legacyRecent = active_backend == acmx2::Backend::Acmx2
-                                         ? settings.value("recentLibraries")
-                                               .toStringList()
-                                         : QStringList();
-    QStringList recentLibraries =
-        settings.value(recentKey, legacyRecent).toStringList();
+    const QString recentKey = acmx2::backend_settings_key(active_backend, "recentLibraries");
+    const QStringList legacyRecent = active_backend == acmx2::Backend::Acmx2 ? settings.value("recentLibraries").toStringList() : QStringList();
+    QStringList recentLibraries = settings.value(recentKey, legacyRecent).toStringList();
     for (auto it = recentLibraries.begin(); it != recentLibraries.end();) {
         if (QDir::cleanPath(*it).compare(libraryPath, Qt::CaseInsensitive) == 0)
             it = recentLibraries.erase(it);
@@ -3990,14 +3238,9 @@ void MainWindow::updateRecentLibrariesMenu() {
 
     loadRecentMenu->clear();
     QSettings settings("LostSideDead");
-    const QString recentKey =
-        acmx2::backend_settings_key(active_backend, "recentLibraries");
-    const QStringList legacyRecent = active_backend == acmx2::Backend::Acmx2
-                                         ? settings.value("recentLibraries")
-                                               .toStringList()
-                                         : QStringList();
-    const QStringList recentLibraries =
-        settings.value(recentKey, legacyRecent).toStringList();
+    const QString recentKey = acmx2::backend_settings_key(active_backend, "recentLibraries");
+    const QStringList legacyRecent = active_backend == acmx2::Backend::Acmx2 ? settings.value("recentLibraries").toStringList() : QStringList();
+    const QStringList recentLibraries = settings.value(recentKey, legacyRecent).toStringList();
     if (recentLibraries.isEmpty()) {
         QAction *emptyAction = loadRecentMenu->addAction(tr("No Recent Libraries"));
         emptyAction->setEnabled(false);
@@ -4006,8 +3249,7 @@ void MainWindow::updateRecentLibrariesMenu() {
 
     for (const QString &path : recentLibraries) {
         QAction *action = loadRecentMenu->addAction(path);
-        connect(action, &QAction::triggered, this,
-                [this, path]() { loadLibraryPath(path); });
+        connect(action, &QAction::triggered, this, [this, path]() { loadLibraryPath(path); });
     }
 }
 
@@ -4020,17 +3262,11 @@ void MainWindow::fileOpenProp() {
         QString prefix = propWindow.screenshotDirLineEdit->text();
         QString compilerMode;
         QString compilerPath;
-        if (propertiesBackend == acmx2::Backend::Acmxvk &&
-            propWindow.shaderCompilerComboBox) {
-            compilerMode =
-                propWindow.shaderCompilerComboBox->currentData().toString();
-            compilerPath =
-                propWindow.shaderCompilerPathLineEdit->text().trimmed();
-            if (compilerMode == QStringLiteral("custom") &&
-                compilerPath.isEmpty()) {
-                QMessageBox::information(
-                    this, tr("Shader Compiler"),
-                    tr("Select a custom glslc-compatible compiler path."));
+        if (propertiesBackend == acmx2::Backend::Acmxvk && propWindow.shaderCompilerComboBox) {
+            compilerMode = propWindow.shaderCompilerComboBox->currentData().toString();
+            compilerPath = propWindow.shaderCompilerPathLineEdit->text().trimmed();
+            if (compilerMode == QStringLiteral("custom") && compilerPath.isEmpty()) {
+                QMessageBox::information(this, tr("Shader Compiler"), tr("Select a custom glslc-compatible compiler path."));
                 return;
             }
         }
@@ -4048,24 +3284,13 @@ void MainWindow::fileOpenProp() {
 
         QSettings appSettings("LostSideDead");
         if (active_backend == propertiesBackend) {
-            appSettings.setValue(
-                acmx2::backend_settings_key(active_backend, "executable"),
-                exePath);
+            appSettings.setValue(acmx2::backend_settings_key(active_backend, "executable"), exePath);
             if (active_backend == acmx2::Backend::Acmx2)
                 appSettings.setValue("exePath", exePath);
             executable_path = exePath;
             if (propertiesBackend == acmx2::Backend::Acmxvk) {
-                appSettings.setValue(
-                    acmx2::backend_settings_key(
-                        acmx2::Backend::Acmxvk,
-                        "shader_compiler_mode"),
-                    compilerMode.isEmpty() ? QStringLiteral("auto")
-                                           : compilerMode);
-                appSettings.setValue(
-                    acmx2::backend_settings_key(
-                        acmx2::Backend::Acmxvk,
-                        "shader_compiler_path"),
-                    compilerPath);
+                appSettings.setValue(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_mode"), compilerMode.isEmpty() ? QStringLiteral("auto") : compilerMode);
+                appSettings.setValue(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_path"), compilerPath);
             }
         } else {
             Log(tr("Backend changed while loading the library; retained the "
@@ -4088,15 +3313,12 @@ void MainWindow::fileOpenProp() {
 
 void MainWindow::menuCustomUniforms() {
     if (!customUniformDialog || shader_path.isEmpty()) {
-        QMessageBox::information(this, tr("Custom Uniforms"),
-                                 tr("Load a shader library first."));
+        QMessageBox::information(this, tr("Custom Uniforms"), tr("Load a shader library first."));
         return;
     }
     const QString jsonPath = QDir(shader_path).filePath("library.json");
     if (!QFileInfo(jsonPath).isFile()) {
-        QMessageBox::warning(
-            this, tr("Custom Uniforms"),
-            tr("Custom uniforms require a library.json manifest."));
+        QMessageBox::warning(this, tr("Custom Uniforms"), tr("Custom uniforms require a library.json manifest."));
         return;
     }
 
@@ -4112,8 +3334,7 @@ void MainWindow::menuCustomUniforms() {
 
 void MainWindow::menuUniformReference() {
     if (!uniformReferenceDialog) {
-        uniformReferenceDialog =
-            new UniformReferenceDialog(active_backend, this);
+        uniformReferenceDialog = new UniformReferenceDialog(active_backend, this);
         uniformReferenceDialog->setAttribute(Qt::WA_DeleteOnClose);
     } else
         uniformReferenceDialog->setBackend(active_backend);
@@ -4125,17 +3346,14 @@ void MainWindow::menuUniformReference() {
 bool MainWindow::loadShaders(const QString &path, bool force) {
     QString manifestPath = acmx2::shader_manifest_path(path);
     if (manifestPath.isEmpty()) {
-        QMessageBox::warning(this, "Could not open shader manifest",
-                             "No library.json or index.txt found in: " + path);
+        QMessageBox::warning(this, "Could not open shader manifest", "No library.json or index.txt found in: " + path);
         return false;
     }
 
-    if (active_backend == acmx2::Backend::Acmx2 &&
-        QFileInfo(manifestPath).fileName().compare("index.txt", Qt::CaseInsensitive) == 0) {
+    if (active_backend == acmx2::Backend::Acmx2 && QFileInfo(manifestPath).fileName().compare("index.txt", Qt::CaseInsensitive) == 0) {
         bool generated = false;
         QString migrationError;
-        if (!acmx2::migrate_index_manifest_to_json(path, generated,
-                                                   migrationError)) {
+        if (!acmx2::migrate_index_manifest_to_json(path, generated, migrationError)) {
             Log("Could not generate library.json from index.txt: " + migrationError);
         } else if (generated) {
             manifestPath = acmx2::shader_manifest_path(path);
@@ -4144,8 +3362,7 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     }
 
     QDateTime modified = QFileInfo(manifestPath).lastModified();
-    if (!force && path == shader_path && manifestPath == activeShaderManifestPath &&
-        !indexTimestamp.isNull() && modified <= indexTimestamp) {
+    if (!force && path == shader_path && manifestPath == activeShaderManifestPath && !indexTimestamp.isNull() && modified <= indexTimestamp) {
         return true;
     }
     QStringList manifestEntries;
@@ -4158,8 +3375,7 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     shader_path = path;
     activeShaderManifestPath = manifestPath;
     indexTimestamp = modified;
-    if (customUniformDialog &&
-        QFileInfo(manifestPath).fileName().compare("library.json", Qt::CaseInsensitive) == 0) {
+    if (customUniformDialog && QFileInfo(manifestPath).fileName().compare("library.json", Qt::CaseInsensitive) == 0) {
         QString uniformError;
         if (!customUniformDialog->loadLibrary(path, active_backend, &uniformError))
             Log("Could not load custom uniforms: " + uniformError);
@@ -4213,14 +3429,11 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     return true;
 }
 
-void MainWindow::fileExit() {
-    QApplication::quit();
-}
+void MainWindow::fileExit() { QApplication::quit(); }
 
 void MainWindow::menuAudioSettings() {
     if (!audio_available) {
-        QMessageBox::information(this, tr("Audio Settings"),
-                                 tr("Audio support is unavailable: acmx2 was built without audio support."));
+        QMessageBox::information(this, tr("Audio Settings"), tr("Audio support is unavailable: acmx2 was built without audio support."));
         return;
     }
     const QString previousAudioFile = audio_file;
@@ -4250,43 +3463,26 @@ void MainWindow::menuAudioSettings() {
         audio_warm_rate = audio_set.getAudioWarmRate();
         Log("Audio Settings Saved");
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-        const bool liveAudioSettingsChanged =
-            QFileInfo(audio_file).absoluteFilePath() !=
-                QFileInfo(previousAudioFile).absoluteFilePath() ||
-            audio_output != previousAudioOutput ||
-            audio_passthrough != previousAudioPassThrough ||
-            audio_trunc != previousAudioTrunc ||
-            audio_repeat != previousAudioRepeat;
-        if (shaderSelectionShm && process &&
-            process->state() == QProcess::Running && !audio_file.isEmpty() &&
-            liveAudioSettingsChanged) {
-            const QByteArray path =
-                QFileInfo(audio_file).absoluteFilePath().toUtf8();
-            if (path.size() >=
-                static_cast<int>(
-                    acmx2::ipc::kShaderSelectionMaxAudioFilePath)) {
-                Log("Audio file path is too long for live playback: " +
-                    audio_file);
+        const bool liveAudioSettingsChanged = QFileInfo(audio_file).absoluteFilePath() != QFileInfo(previousAudioFile).absoluteFilePath() || audio_output != previousAudioOutput || audio_passthrough != previousAudioPassThrough || audio_trunc != previousAudioTrunc || audio_repeat != previousAudioRepeat;
+        if (shaderSelectionShm && process && process->state() == QProcess::Running && !audio_file.isEmpty() && liveAudioSettingsChanged) {
+            const QByteArray path = QFileInfo(audio_file).absoluteFilePath().toUtf8();
+            if (path.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxAudioFilePath)) {
+                Log("Audio file path is too long for live playback: " + audio_file);
             } else {
-                acmx2::ipc::ShaderSelectionLock lock(
-                    shaderSelectionSemaphore);
+                acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
                 if (!lock) {
                     Log("Could not lock the live playback control channel");
                     return;
                 }
-                std::fill(std::begin(shaderSelectionShm->audio_file_path),
-                          std::end(shaderSelectionShm->audio_file_path), '\0');
-                std::copy(path.cbegin(), path.cend(),
-                          shaderSelectionShm->audio_file_path);
+                std::fill(std::begin(shaderSelectionShm->audio_file_path), std::end(shaderSelectionShm->audio_file_path), '\0');
+                std::copy(path.cbegin(), path.cend(), shaderSelectionShm->audio_file_path);
                 shaderSelectionShm->audio_output_device = audio_output;
-                shaderSelectionShm->audio_pass_through =
-                    audio_passthrough ? 1 : 0;
+                shaderSelectionShm->audio_pass_through = audio_passthrough ? 1 : 0;
                 shaderSelectionShm->audio_trunc = audio_trunc ? 1 : 0;
                 shaderSelectionShm->audio_repeat = audio_repeat ? 1 : 0;
                 ++shaderSelectionShm->audio_file_sequence;
                 ++shaderSelectionShm->sequence;
-                Log("Requested live audio-file change: " + audio_file +
-                    "<br>");
+                Log("Requested live audio-file change: " + audio_file + "<br>");
             }
         }
 #endif
@@ -4295,8 +3491,7 @@ void MainWindow::menuAudioSettings() {
 
 void MainWindow::menuGPUFilterSettings() {
     if (!cuda_available) {
-        QMessageBox::information(this, tr("GPU Filter Settings"),
-                                 tr("GPU filters are unavailable: acmx2 was built without CUDA support."));
+        QMessageBox::information(this, tr("GPU Filter Settings"), tr("GPU filters are unavailable: acmx2 was built without CUDA support."));
         return;
     }
 
@@ -4315,11 +3510,9 @@ void MainWindow::menuGPUFilterSettings() {
         gpu_filter_enabled = enabled;
         gpu_filter_indices = filters;
         gpu_buffer_size = bufferSize;
-        if ((!gpu_filter_enabled || gpu_filter_indices.isEmpty()) &&
-            deep_dream_gpu_filter_first) {
+        if ((!gpu_filter_enabled || gpu_filter_indices.isEmpty()) && deep_dream_gpu_filter_first) {
             deep_dream_gpu_filter_first = false;
-            QSettings("LostSideDead", "acmx2")
-                .setValue("deep_dream/gpu_filter_first", false);
+            QSettings("LostSideDead", "acmx2").setValue("deep_dream/gpu_filter_first", false);
             Log("Deep Dream pipeline order reset because GPU filtering was disabled");
         }
         if (gpu_filter_enabled) {
@@ -4330,16 +3523,8 @@ void MainWindow::menuGPUFilterSettings() {
         publishRuntimeSettingsToRunningProcess();
     };
 
-    connect(dialog, &GPUFilterDialog::settingsApplied, this,
-            [applyGpuDialogSettings](bool enabled, const QString &filterArgument, int bufferSize) {
-                applyGpuDialogSettings(enabled, filterArgument, bufferSize);
-            });
-    connect(dialog, &QDialog::accepted, this,
-            [dialog, applyGpuDialogSettings]() {
-                applyGpuDialogSettings(dialog->isGPUFilterEnabled(),
-                                       dialog->getFilterArgument(),
-                                       dialog->getBufferSize());
-            });
+    connect(dialog, &GPUFilterDialog::settingsApplied, this, [applyGpuDialogSettings](bool enabled, const QString &filterArgument, int bufferSize) { applyGpuDialogSettings(enabled, filterArgument, bufferSize); });
+    connect(dialog, &QDialog::accepted, this, [dialog, applyGpuDialogSettings]() { applyGpuDialogSettings(dialog->isGPUFilterEnabled(), dialog->getFilterArgument(), dialog->getBufferSize()); });
 
     dialog->show();
     dialog->raise();
@@ -4347,12 +3532,11 @@ void MainWindow::menuGPUFilterSettings() {
 }
 
 void MainWindow::menuDeepDreamSettings() {
-    if (active_backend != acmx2::Backend::Acmxvk ||
-        !deep_dream_available) {
-        QMessageBox::information(
-            this, tr("Deep Dream Settings"),
-            tr("Deep Dream is unavailable: ACMXVK must be built with "
-               "-DWITH_DEEP_DREAM=ON and CUDA-enabled LibTorch."));
+    if (active_backend != acmx2::Backend::Acmxvk || !deep_dream_available) {
+        QMessageBox::information(this,
+                                 tr("Deep Dream Settings"),
+                                 tr("Deep Dream is unavailable: ACMXVK must be built with "
+                                    "-DWITH_DEEP_DREAM=ON and CUDA-enabled LibTorch."));
         return;
     }
 
@@ -4363,54 +3547,43 @@ void MainWindow::menuDeepDreamSettings() {
         return;
     }
 
-    const bool gpu_filter_configured =
-        cuda_available && gpu_filter_enabled &&
-        !gpu_filter_indices.trimmed().isEmpty();
-    deepDreamSettingsDialog =
-        new DeepDreamSettingsDialog(gpu_filter_configured, this);
+    const bool gpu_filter_configured = cuda_available && gpu_filter_enabled && !gpu_filter_indices.trimmed().isEmpty();
+    deepDreamSettingsDialog = new DeepDreamSettingsDialog(gpu_filter_configured, this);
     deepDreamSettingsDialog->setAttribute(Qt::WA_DeleteOnClose);
     DeepDreamSettingsDialog *dialog = deepDreamSettingsDialog;
-    connect(dialog, &DeepDreamSettingsDialog::settingsApplied, this,
-            [this, dialog]() {
-                const DeepDreamConfiguration config =
-                    dialog->configuration();
-                deep_dream_enabled = config.enabled;
-                deep_dream_model = config.model_file;
-                deep_dream_layer = config.layer;
-                deep_dream_iterations = config.iterations;
-                deep_dream_strength = config.strength;
-                deep_dream_feedback = config.feedback;
-                deep_dream_zoom = config.zoom;
-                deep_dream_rotation = config.rotation;
-                deep_dream_maximum_dimension =
-                    config.maximum_dimension;
-                deep_dream_fp16 = config.fp16;
-                deep_dream_channel = config.channel;
-                deep_dream_octaves = config.octaves;
-                deep_dream_octave_scale = config.octave_scale;
-                deep_dream_jitter = config.jitter;
-                deep_dream_smoothing = config.smoothing;
-                deep_dream_gpu_filter_first = config.gpu_filter_first;
-                deep_dream_original = config.deep_original;
-                publishRuntimeSettingsToRunningProcess();
+    connect(dialog, &DeepDreamSettingsDialog::settingsApplied, this, [this, dialog]() {
+        const DeepDreamConfiguration config = dialog->configuration();
+        deep_dream_enabled = config.enabled;
+        deep_dream_model = config.model_file;
+        deep_dream_layer = config.layer;
+        deep_dream_iterations = config.iterations;
+        deep_dream_strength = config.strength;
+        deep_dream_feedback = config.feedback;
+        deep_dream_zoom = config.zoom;
+        deep_dream_rotation = config.rotation;
+        deep_dream_maximum_dimension = config.maximum_dimension;
+        deep_dream_fp16 = config.fp16;
+        deep_dream_channel = config.channel;
+        deep_dream_octaves = config.octaves;
+        deep_dream_octave_scale = config.octave_scale;
+        deep_dream_jitter = config.jitter;
+        deep_dream_smoothing = config.smoothing;
+        deep_dream_gpu_filter_first = config.gpu_filter_first;
+        deep_dream_original = config.deep_original;
+        publishRuntimeSettingsToRunningProcess();
 
-                if (deep_dream_enabled) {
-                    Log(tr("Deep Dream Settings Applied: %1/%2, %3 "
-                           "iteration(s), rotation %4 degrees, %5, %6")
-                            .arg(QFileInfo(deep_dream_model).fileName(),
-                                 deep_dream_layer)
-                            .arg(deep_dream_iterations)
-                            .arg(deep_dream_rotation, 0, 'f', 3)
-                            .arg(deep_dream_gpu_filter_first
-                                     ? tr("acidcam-gpu first")
-                                     : tr("Deep Dream first"))
-                            .arg(deep_dream_original
-                                     ? tr("independent-frame preview")
-                                     : tr("temporal feedback")));
-                } else {
-                    Log("Deep Dream Disabled");
-                }
-            });
+        if (deep_dream_enabled) {
+            Log(tr("Deep Dream Settings Applied: %1/%2, %3 "
+                   "iteration(s), rotation %4 degrees, %5, %6")
+                    .arg(QFileInfo(deep_dream_model).fileName(), deep_dream_layer)
+                    .arg(deep_dream_iterations)
+                    .arg(deep_dream_rotation, 0, 'f', 3)
+                    .arg(deep_dream_gpu_filter_first ? tr("acidcam-gpu first") : tr("Deep Dream first"))
+                    .arg(deep_dream_original ? tr("independent-frame preview") : tr("temporal feedback")));
+        } else {
+            Log("Deep Dream Disabled");
+        }
+    });
     dialog->show();
     dialog->raise();
     dialog->activateWindow();
@@ -4418,8 +3591,7 @@ void MainWindow::menuDeepDreamSettings() {
 
 bool MainWindow::validateDeepDreamLaunch(QString &error) const {
     error.clear();
-    if (!deep_dream_enabled ||
-        active_backend != acmx2::Backend::Acmxvk) {
+    if (!deep_dream_enabled || active_backend != acmx2::Backend::Acmxvk) {
         return true;
     }
     if (!deep_dream_available) {
@@ -4428,16 +3600,14 @@ bool MainWindow::validateDeepDreamLaunch(QString &error) const {
         return false;
     }
     if (!QFileInfo(deep_dream_model).isFile()) {
-        error = tr("The configured Deep Dream model does not exist:\n%1")
-                    .arg(deep_dream_model);
+        error = tr("The configured Deep Dream model does not exist:\n%1").arg(deep_dream_model);
         return false;
     }
     if (deep_dream_layer.trimmed().isEmpty()) {
         error = tr("Select a Deep Dream feature layer.");
         return false;
     }
-    if (deep_dream_original &&
-        (video_file.isEmpty() || output_file.isEmpty())) {
+    if (deep_dream_original && (video_file.isEmpty() || output_file.isEmpty())) {
         error = tr("Independent-frame preview requires video input and an "
                    "enabled video output file.");
         return false;
@@ -4445,8 +3615,7 @@ bool MainWindow::validateDeepDreamLaunch(QString &error) const {
     if (!deep_dream_gpu_filter_first) {
         return true;
     }
-    if (!cuda_available || !gpu_filter_enabled ||
-        gpu_filter_indices.trimmed().isEmpty()) {
+    if (!cuda_available || !gpu_filter_enabled || gpu_filter_indices.trimmed().isEmpty()) {
         error = tr("Running acidcam-gpu before Deep Dream requires an enabled "
                    "GPU filter chain.");
         return false;
@@ -4470,38 +3639,26 @@ bool MainWindow::validateDeepDreamLaunch(QString &error) const {
 }
 
 void MainWindow::appendDeepDreamArguments(QStringList &arguments) const {
-    if (!deep_dream_enabled ||
-        active_backend != acmx2::Backend::Acmxvk) {
+    if (!deep_dream_enabled || active_backend != acmx2::Backend::Acmxvk) {
         return;
     }
 
     arguments << "--dream-model" << deep_dream_model;
     arguments << "--dream-layer" << deep_dream_layer;
-    arguments << "--dream-iterations"
-              << QString::number(deep_dream_iterations);
-    arguments << "--dream-strength"
-              << QString::number(deep_dream_strength, 'g', 12);
-    arguments << "--dream-feedback"
-              << QString::number(deep_dream_feedback, 'g', 12);
-    arguments << "--dream-zoom"
-              << QString::number(deep_dream_zoom, 'g', 12);
-    arguments << "--dream-rotation"
-              << QString::number(deep_dream_rotation, 'g', 12);
-    arguments << "--dream-size"
-              << QString::number(deep_dream_maximum_dimension);
+    arguments << "--dream-iterations" << QString::number(deep_dream_iterations);
+    arguments << "--dream-strength" << QString::number(deep_dream_strength, 'g', 12);
+    arguments << "--dream-feedback" << QString::number(deep_dream_feedback, 'g', 12);
+    arguments << "--dream-zoom" << QString::number(deep_dream_zoom, 'g', 12);
+    arguments << "--dream-rotation" << QString::number(deep_dream_rotation, 'g', 12);
+    arguments << "--dream-size" << QString::number(deep_dream_maximum_dimension);
     if (deep_dream_fp16) {
         arguments << "--dream-fp16";
     }
-    arguments << "--dream-channel"
-              << (deep_dream_channel < 0
-                      ? QString("all")
-                      : QString::number(deep_dream_channel));
+    arguments << "--dream-channel" << (deep_dream_channel < 0 ? QString("all") : QString::number(deep_dream_channel));
     arguments << "--dream-octaves" << QString::number(deep_dream_octaves);
-    arguments << "--dream-octave-scale"
-              << QString::number(deep_dream_octave_scale, 'g', 12);
+    arguments << "--dream-octave-scale" << QString::number(deep_dream_octave_scale, 'g', 12);
     arguments << "--dream-jitter" << QString::number(deep_dream_jitter);
-    arguments << "--dream-smoothing"
-              << QString::number(deep_dream_smoothing);
+    arguments << "--dream-smoothing" << QString::number(deep_dream_smoothing);
     if (deep_dream_gpu_filter_first) {
         arguments << "--gpu-filter-before-dream";
     }
@@ -4511,12 +3668,11 @@ void MainWindow::appendDeepDreamArguments(QStringList &arguments) const {
 }
 
 void MainWindow::menuStableDiffusionSettings() {
-    if (active_backend != acmx2::Backend::Acmxvk ||
-        !stable_diffusion_available) {
-        QMessageBox::information(
-            this, tr("Stable Diffusion Settings"),
-            tr("Stable Diffusion is unavailable: ACMXVK must be built with "
-               "-DWITH_STABLE_DIFFUSION=ON."));
+    if (active_backend != acmx2::Backend::Acmxvk || !stable_diffusion_available) {
+        QMessageBox::information(this,
+                                 tr("Stable Diffusion Settings"),
+                                 tr("Stable Diffusion is unavailable: ACMXVK must be built with "
+                                    "-DWITH_STABLE_DIFFUSION=ON."));
         return;
     }
 
@@ -4527,56 +3683,46 @@ void MainWindow::menuStableDiffusionSettings() {
         return;
     }
 
-    stableDiffusionSettingsDialog =
-        new StableDiffusionSettingsDialog(this);
+    stableDiffusionSettingsDialog = new StableDiffusionSettingsDialog(this);
     stableDiffusionSettingsDialog->setAttribute(Qt::WA_DeleteOnClose);
-    StableDiffusionSettingsDialog *dialog =
-        stableDiffusionSettingsDialog;
-    connect(dialog, &StableDiffusionSettingsDialog::settingsApplied, this,
-            [this, dialog]() {
-                const StableDiffusionConfiguration config =
-                    dialog->configuration();
-                stable_diffusion_enabled = config.enabled;
-                stable_diffusion_model = config.model_file;
-                stable_diffusion_upscale_model = config.upscale_model_file;
-                stable_diffusion_lora_files = config.lora_files;
-                stable_diffusion_lora_multipliers = config.lora_multipliers;
-                stable_diffusion_prompt = config.prompt;
-                stable_diffusion_negative_prompt = config.negative_prompt;
-                stable_diffusion_server = config.server_executable;
-                stable_diffusion_server_arguments = config.server_arguments;
-                stable_diffusion_server_port = config.server_port;
-                stable_diffusion_width = config.width;
-                stable_diffusion_height = config.height;
-                stable_diffusion_steps = config.steps;
-                stable_diffusion_strength = config.strength;
-                stable_diffusion_cfg_scale = config.cfg_scale;
-                stable_diffusion_seed = config.seed;
-                stable_diffusion_sampler = config.sampler;
-                stable_diffusion_scheduler = config.scheduler;
-                stable_diffusion_upscale = config.upscale;
+    StableDiffusionSettingsDialog *dialog = stableDiffusionSettingsDialog;
+    connect(dialog, &StableDiffusionSettingsDialog::settingsApplied, this, [this, dialog]() {
+        const StableDiffusionConfiguration config = dialog->configuration();
+        stable_diffusion_enabled = config.enabled;
+        stable_diffusion_model = config.model_file;
+        stable_diffusion_upscale_model = config.upscale_model_file;
+        stable_diffusion_lora_files = config.lora_files;
+        stable_diffusion_lora_multipliers = config.lora_multipliers;
+        stable_diffusion_prompt = config.prompt;
+        stable_diffusion_negative_prompt = config.negative_prompt;
+        stable_diffusion_server = config.server_executable;
+        stable_diffusion_server_arguments = config.server_arguments;
+        stable_diffusion_server_port = config.server_port;
+        stable_diffusion_width = config.width;
+        stable_diffusion_height = config.height;
+        stable_diffusion_steps = config.steps;
+        stable_diffusion_strength = config.strength;
+        stable_diffusion_cfg_scale = config.cfg_scale;
+        stable_diffusion_seed = config.seed;
+        stable_diffusion_sampler = config.sampler;
+        stable_diffusion_scheduler = config.scheduler;
+        stable_diffusion_upscale = config.upscale;
 
-                if (stable_diffusion_enabled) {
-                    Log(tr("Stable Diffusion Settings Applied: %1, %2x%3, "
-                           "%4 step(s)%5%6; changes apply on the next launch")
-                            .arg(QFileInfo(stable_diffusion_model).fileName())
-                            .arg(stable_diffusion_width)
-                            .arg(stable_diffusion_height)
-                            .arg(stable_diffusion_steps)
-                            .arg(stable_diffusion_upscale
-                                     ? tr(", compute upscale")
-                                 : !stable_diffusion_upscale_model.isEmpty()
-                                     ? tr(", ESRGAN upscale")
-                                     : QString())
-                            .arg(stable_diffusion_lora_files.isEmpty()
-                                     ? QString()
-                                     : tr(", %1 LoRA(s)")
-                                           .arg(stable_diffusion_lora_files
-                                                    .size())));
-                } else {
-                    Log("Stable Diffusion Disabled");
-                }
-            });
+        if (stable_diffusion_enabled) {
+            Log(tr("Stable Diffusion Settings Applied: %1, %2x%3, "
+                   "%4 step(s)%5%6; changes apply on the next launch")
+                    .arg(QFileInfo(stable_diffusion_model).fileName())
+                    .arg(stable_diffusion_width)
+                    .arg(stable_diffusion_height)
+                    .arg(stable_diffusion_steps)
+                    .arg(stable_diffusion_upscale                    ? tr(", compute upscale")
+                         : !stable_diffusion_upscale_model.isEmpty() ? tr(", ESRGAN upscale")
+                                                                     : QString())
+                    .arg(stable_diffusion_lora_files.isEmpty() ? QString() : tr(", %1 LoRA(s)").arg(stable_diffusion_lora_files.size())));
+        } else {
+            Log("Stable Diffusion Disabled");
+        }
+    });
     dialog->show();
     dialog->raise();
     dialog->activateWindow();
@@ -4584,8 +3730,7 @@ void MainWindow::menuStableDiffusionSettings() {
 
 bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
     error.clear();
-    if (!stable_diffusion_enabled ||
-        active_backend != acmx2::Backend::Acmxvk) {
+    if (!stable_diffusion_enabled || active_backend != acmx2::Backend::Acmxvk) {
         return true;
     }
     if (!stable_diffusion_available) {
@@ -4593,8 +3738,7 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
                    "Diffusion support.");
         return false;
     }
-    if (video_file.trimmed().isEmpty() ||
-        !QFileInfo(video_file).isFile()) {
+    if (video_file.trimmed().isEmpty() || !QFileInfo(video_file).isFile()) {
         error = tr("Stable Diffusion requires an existing video input file.");
         return false;
     }
@@ -4603,12 +3747,10 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
         return false;
     }
     if (!QFileInfo(stable_diffusion_model).isFile()) {
-        error = tr("The configured Stable Diffusion model does not exist:\n%1")
-                    .arg(stable_diffusion_model);
+        error = tr("The configured Stable Diffusion model does not exist:\n%1").arg(stable_diffusion_model);
         return false;
     }
-    if (stable_diffusion_lora_files.size() !=
-        stable_diffusion_lora_multipliers.size()) {
+    if (stable_diffusion_lora_files.size() != stable_diffusion_lora_multipliers.size()) {
         error = tr("The saved Stable Diffusion LoRA settings are incomplete. "
                    "Open Stable Diffusion Settings and apply them again.");
         return false;
@@ -4618,8 +3760,7 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
         const QString filename = stable_diffusion_lora_files.at(index);
         const QFileInfo file_info(filename);
         if (!file_info.isFile()) {
-            error = tr("The configured LoRA model does not exist:\n%1")
-                        .arg(filename);
+            error = tr("The configured LoRA model does not exist:\n%1").arg(filename);
             return false;
         }
         if (lora_directory.isEmpty()) {
@@ -4629,15 +3770,13 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
                        "sd-server scans one LoRA model directory per launch.");
             return false;
         }
-        const double multiplier =
-            stable_diffusion_lora_multipliers.at(index);
+        const double multiplier = stable_diffusion_lora_multipliers.at(index);
         if (multiplier < -10.0 || multiplier > 10.0) {
             error = tr("LoRA multipliers must be between -10 and 10.");
             return false;
         }
     }
-    if (!stable_diffusion_upscale_model.isEmpty() &&
-        !QFileInfo(stable_diffusion_upscale_model).isFile()) {
+    if (!stable_diffusion_upscale_model.isEmpty() && !QFileInfo(stable_diffusion_upscale_model).isFile()) {
         error = tr("The configured Stable Diffusion upscale model does not "
                    "exist:\n%1")
                     .arg(stable_diffusion_upscale_model);
@@ -4651,8 +3790,7 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
         error = tr("Enter the sd-server executable name or path.");
         return false;
     }
-    if ((stable_diffusion_width % 64) != 0 ||
-        (stable_diffusion_height % 64) != 0) {
+    if ((stable_diffusion_width % 64) != 0 || (stable_diffusion_height % 64) != 0) {
         error = tr("Stable Diffusion dimensions must be multiples of 64.");
         return false;
     }
@@ -4667,41 +3805,29 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
     return true;
 }
 
-void MainWindow::appendStableDiffusionArguments(
-    QStringList &arguments) const {
-    if (!stable_diffusion_enabled ||
-        active_backend != acmx2::Backend::Acmxvk) {
+void MainWindow::appendStableDiffusionArguments(QStringList &arguments) const {
+    if (!stable_diffusion_enabled || active_backend != acmx2::Backend::Acmxvk) {
         return;
     }
     arguments << "--sd-model" << stable_diffusion_model;
     arguments << "--sd-prompt" << stable_diffusion_prompt;
     if (!stable_diffusion_negative_prompt.trimmed().isEmpty()) {
-        arguments << "--sd-negative-prompt"
-                  << stable_diffusion_negative_prompt;
+        arguments << "--sd-negative-prompt" << stable_diffusion_negative_prompt;
     }
     for (int index = 0; index < stable_diffusion_lora_files.size(); ++index) {
         arguments << "--sd-lora" << stable_diffusion_lora_files.at(index);
-        arguments << "--sd-lora-strength"
-                  << QString::number(
-                         stable_diffusion_lora_multipliers.at(index), 'g', 12);
+        arguments << "--sd-lora-strength" << QString::number(stable_diffusion_lora_multipliers.at(index), 'g', 12);
     }
     arguments << "--sd-server" << stable_diffusion_server;
-    const QStringList server_arguments =
-        QProcess::splitCommand(stable_diffusion_server_arguments);
+    const QStringList server_arguments = QProcess::splitCommand(stable_diffusion_server_arguments);
     for (const QString &argument : server_arguments) {
         arguments << "--sd-server-arg" << argument;
     }
-    arguments << "--sd-server-port"
-              << QString::number(stable_diffusion_server_port);
-    arguments << "--sd-size"
-              << QString("%1x%2")
-                     .arg(stable_diffusion_width)
-                     .arg(stable_diffusion_height);
+    arguments << "--sd-server-port" << QString::number(stable_diffusion_server_port);
+    arguments << "--sd-size" << QString("%1x%2").arg(stable_diffusion_width).arg(stable_diffusion_height);
     arguments << "--sd-steps" << QString::number(stable_diffusion_steps);
-    arguments << "--sd-strength"
-              << QString::number(stable_diffusion_strength, 'g', 12);
-    arguments << "--sd-cfg-scale"
-              << QString::number(stable_diffusion_cfg_scale, 'g', 12);
+    arguments << "--sd-strength" << QString::number(stable_diffusion_strength, 'g', 12);
+    arguments << "--sd-cfg-scale" << QString::number(stable_diffusion_cfg_scale, 'g', 12);
     arguments << "--sd-seed" << QString::number(stable_diffusion_seed);
     arguments << "--sd-sampler" << stable_diffusion_sampler;
     arguments << "--sd-scheduler" << stable_diffusion_scheduler;
@@ -4715,8 +3841,7 @@ void MainWindow::appendStableDiffusionArguments(
 
 void MainWindow::menuMidiSettings() {
     if (!midi_available) {
-        QMessageBox::information(this, tr("MIDI Settings"),
-                                 tr("MIDI support is unavailable: acmx2 was built without MIDI support."));
+        QMessageBox::information(this, tr("MIDI Settings"), tr("MIDI support is unavailable: acmx2 was built without MIDI support."));
         return;
     }
     MidiSettings midiDialog(executable_path, this);
@@ -4816,27 +3941,20 @@ void MainWindow::menuWatermarkSettings() {
     appSettings.setValue("watermarkG", watermark_g);
     appSettings.setValue("watermarkB", watermark_b);
 
-    Log(QString("Watermark %1: \"%2\" color=%3,%4,%5")
-            .arg(watermark_enabled ? "Enabled" : "Disabled")
-            .arg(watermark_text)
-            .arg(watermark_r)
-            .arg(watermark_g)
-            .arg(watermark_b));
+    Log(QString("Watermark %1: \"%2\" color=%3,%4,%5").arg(watermark_enabled ? "Enabled" : "Disabled").arg(watermark_text).arg(watermark_r).arg(watermark_g).arg(watermark_b));
     publishRuntimeSettingsToRunningProcess();
 }
 
 void MainWindow::menuShaderPassSettings() {
     if (shader_path.isEmpty()) {
-        QMessageBox::information(this, "Load Shaders First",
-                                 "Please load a shader library before configuring multi-pass shaders.");
+        QMessageBox::information(this, "Load Shaders First", "Please load a shader library before configuring multi-pass shaders.");
         return;
     }
 
     loadShaders(shader_path, true);
 
     if (items.isEmpty()) {
-        QMessageBox::information(this, "Load Shaders First",
-                                 "Please load a shader library before configuring multi-pass shaders.");
+        QMessageBox::information(this, "Load Shaders First", "Please load a shader library before configuring multi-pass shaders.");
         return;
     }
 
@@ -4867,23 +3985,21 @@ void MainWindow::menuShaderPassSettings() {
         }
     };
 
-    connect(dialog, &ShaderPassDialog::settingsApplied, this,
-            [this](bool enabled, const QStringList &selectedShaderNames) {
-                shader_pass_enabled = enabled;
-                shader_pass_names = selectedShaderNames;
-                publishMultipassShadersToRunningProcess();
-                if (shader_pass_enabled) {
-                    Log("Multi-Pass Shader Settings Saved: " + QString::number(shader_pass_names.size()) + " passes");
-                } else {
-                    Log("Multi-Pass Shader Disabled");
-                }
-            });
-    connect(dialog, &ShaderPassDialog::shaderEditRequested, this,
-            [this](const QString &shaderName) {
-                const QString safeName = sanitizeShaderName(shaderName);
-                if (!safeName.isEmpty())
-                    openShaderEditor(QDir(shader_path).filePath(safeName));
-            });
+    connect(dialog, &ShaderPassDialog::settingsApplied, this, [this](bool enabled, const QStringList &selectedShaderNames) {
+        shader_pass_enabled = enabled;
+        shader_pass_names = selectedShaderNames;
+        publishMultipassShadersToRunningProcess();
+        if (shader_pass_enabled) {
+            Log("Multi-Pass Shader Settings Saved: " + QString::number(shader_pass_names.size()) + " passes");
+        } else {
+            Log("Multi-Pass Shader Disabled");
+        }
+    });
+    connect(dialog, &ShaderPassDialog::shaderEditRequested, this, [this](const QString &shaderName) {
+        const QString safeName = sanitizeShaderName(shaderName);
+        if (!safeName.isEmpty())
+            openShaderEditor(QDir(shader_path).filePath(safeName));
+    });
     connect(dialog, &QDialog::accepted, this, applyMultipassSettings);
 
     dialog->show();
@@ -4893,16 +4009,14 @@ void MainWindow::menuShaderPassSettings() {
 
 void MainWindow::menuPlaylistSettings() {
     if (shader_path.isEmpty()) {
-        QMessageBox::information(this, "Load Shaders First",
-                                 "Please load a shader library before configuring playlist.");
+        QMessageBox::information(this, "Load Shaders First", "Please load a shader library before configuring playlist.");
         return;
     }
 
     loadShaders(shader_path, true);
 
     if (items.isEmpty()) {
-        QMessageBox::information(this, "Load Shaders First",
-                                 "Please load a shader library before configuring playlist.");
+        QMessageBox::information(this, "Load Shaders First", "Please load a shader library before configuring playlist.");
         return;
     }
 
@@ -4945,9 +4059,7 @@ void MainWindow::menuPlaylistSettings() {
                 Log("Playlist file: " + playlist_file_path);
             }
             if (autopilot_frames > 0) {
-                Log(QString("Autopilot timeout mode: %1 (%2 frames)")
-                        .arg(autopilot_random ? "random" : "fixed")
-                        .arg(autopilot_frames));
+                Log(QString("Autopilot timeout mode: %1 (%2 frames)").arg(autopilot_random ? "random" : "fixed").arg(autopilot_frames));
             }
         } else {
             Log("Playlist Disabled");
@@ -5009,9 +4121,7 @@ void MainWindow::cameraSettings() {
         // Only meaningful in input-video mode + with an output file. The
         // settings dialog already gates this on HDR detection, but we re-check
         // here so it stays consistent if other modes are selected.
-        convert_to_hdr10 = settingsWindow.isConvertToHdr10Enabled() &&
-                           settingsWindow.isUsingInputVideoFile() &&
-                           settingsWindow.isSavingToOutputVideoFile();
+        convert_to_hdr10 = settingsWindow.isConvertToHdr10Enabled() && settingsWindow.isUsingInputVideoFile() && settingsWindow.isSavingToOutputVideoFile();
         maximize_fps = settingsWindow.isMaximizeFpsEnabled();
         use_source_fps = settingsWindow.isUseSourceFpsEnabled();
         use_source_audio = settingsWindow.isUseSourceAudioEnabled();
@@ -5042,8 +4152,7 @@ void MainWindow::cameraSettings() {
     encode_parameters = settingsWindow.getEncodeParameters();
     encode_realtime = settingsWindow.isEncodeRealtime();
     encode_no_drop = settingsWindow.isEncodeNoDrop();
-    encode_constant_frame_rate =
-        settingsWindow.isEncodeConstantFrameRate();
+    encode_constant_frame_rate = settingsWindow.isEncodeConstantFrameRate();
     encode_fill_pts_gaps = settingsWindow.isEncodeFillPtsGaps();
 }
 
@@ -5055,14 +4164,12 @@ void MainWindow::runSelected() {
 
     QString deep_dream_error;
     if (!validateDeepDreamLaunch(deep_dream_error)) {
-        QMessageBox::warning(this, tr("Deep Dream Settings"),
-                             deep_dream_error);
+        QMessageBox::warning(this, tr("Deep Dream Settings"), deep_dream_error);
         return;
     }
     QString stable_diffusion_error;
     if (!validateStableDiffusionLaunch(stable_diffusion_error)) {
-        QMessageBox::warning(this, tr("Stable Diffusion Settings"),
-                             stable_diffusion_error);
+        QMessageBox::warning(this, tr("Stable Diffusion Settings"), stable_diffusion_error);
         return;
     }
 
@@ -5094,31 +4201,27 @@ void MainWindow::runSelected() {
     QString launchShaderName = data;
     if (active_backend == acmx2::Backend::Acmxvk) {
         QString runtimeError;
-        if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
-                                            runtimeError)) {
-            prompt_acmxvk_rebuild(runtimeError,
-                                  PendingAcmxvkAction::RunSelected);
+        if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath, runtimeError)) {
+            prompt_acmxvk_rebuild(runtimeError, PendingAcmxvkAction::RunSelected);
             return;
         }
         if (launchShaderPath != shader_path)
             launchShaderName = acmxvk_runtime_shader_name(data);
         if (!QFileInfo(QDir(launchShaderPath).filePath(launchShaderName)).isFile()) {
-            QMessageBox::warning(
-                this, tr("Build ACMXVK Library"),
-                tr("The compiled shader is missing. Choose Playback > Build "
-                   "and try again.\n\n%1")
-                    .arg(QDir(launchShaderPath).filePath(launchShaderName)));
+            QMessageBox::warning(this,
+                                 tr("Build ACMXVK Library"),
+                                 tr("The compiled shader is missing. Choose Playback > Build "
+                                    "and try again.\n\n%1")
+                                     .arg(QDir(launchShaderPath).filePath(launchShaderName)));
             return;
         }
     }
     QStringList arguments;
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
-    executable_path = dirPath + "/../Helpers/" +
-                      acmx2::default_backend_executable(active_backend);
+    executable_path = dirPath + "/../Helpers/" + acmx2::default_backend_executable(active_backend);
 #endif
-    dirPath = resolve_backend_assets_path(active_backend, executable_path,
-                                          shader_path);
+    dirPath = resolve_backend_assets_path(active_backend, executable_path, shader_path);
     const int selectedIndex = currentShaderRow();
     if (selectedIndex < 0 || selectedIndex >= items.size()) {
         Log("<b>No valid shader selection.</b>");
@@ -5130,25 +4233,21 @@ void MainWindow::runSelected() {
     if (active_backend == acmx2::Backend::Acmxvk) {
         // ACMXVK needs its manifest to resolve fragment/compute types and
         // custom-uniform metadata for the selected SPIR-V shader.
-        arguments << "--shaders" << launchShaderPath << "--shader-file"
-                  << launchShaderName << "--interface-shm";
+        arguments << "--shaders" << launchShaderPath << "--shader-file" << launchShaderName << "--interface-shm";
     } else {
         // ACMX2 can compile a selected source directly without loading the
         // complete shader library and its binary cache.
-        arguments << "--fragment" << (shader_path + "/" + data)
-                  << "--interface-shm";
+        arguments << "--fragment" << (shader_path + "/" + data) << "--interface-shm";
     }
     // Pass texture cache size so the SIZE macro injected into the fragment
     // matches whatever the user has configured for cache shaders.
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     if (cache_enabled && textureCacheArraySettingEnabled())
         arguments << "--texture-cache-array";
-    const QSize effectiveCameraResolution =
-        hasPositiveResolution(camera_res) ? camera_res : QSize(1280, 720);
+    const QSize effectiveCameraResolution = hasPositiveResolution(camera_res) ? camera_res : QSize(1280, 720);
     QString res;
     QTextStream stream(&res);
-    stream << effectiveCameraResolution.width() << "x"
-           << effectiveCameraResolution.height();
+    stream << effectiveCameraResolution.width() << "x" << effectiveCameraResolution.height();
 
     QString scr_res;
     QTextStream stream_r(&scr_res);
@@ -5198,8 +4297,7 @@ void MainWindow::runSelected() {
 
     if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
-        if (active_backend == acmx2::Backend::Acmxvk &&
-            encode_rate_control == "bitrate")
+        if (active_backend == acmx2::Backend::Acmxvk && encode_rate_control == "bitrate")
             arguments << "--video-bitrate" << encode_bitrate;
         else
             arguments << "--encode-crf" << QString::number(encode_crf);
@@ -5213,19 +4311,14 @@ void MainWindow::runSelected() {
             arguments << "--encode-params" << encode_parameters;
         if (encode_realtime)
             arguments << "--encode-realtime";
-        if (encode_no_drop &&
-            (!video_file.isEmpty() || !graphics_file.isEmpty()))
+        if (encode_no_drop && (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
-        if (active_backend == acmx2::Backend::Acmxvk &&
-            encode_constant_frame_rate && !video_file.isEmpty() && !png_output)
+        if (active_backend == acmx2::Backend::Acmxvk && encode_constant_frame_rate && !video_file.isEmpty() && !png_output)
             arguments << "--constant-frame-rate";
-        if (active_backend == acmx2::Backend::Acmxvk &&
-            encode_fill_pts_gaps && !png_output)
+        if (active_backend == acmx2::Backend::Acmxvk && encode_fill_pts_gaps && !png_output)
             arguments << "--fill-pts-gaps";
     }
-    const bool sourceAudioActive =
-        active_backend == acmx2::Backend::Acmxvk && !video_file.isEmpty() &&
-        use_source_fps && use_source_audio;
+    const bool sourceAudioActive = active_backend == acmx2::Backend::Acmxvk && !video_file.isEmpty() && use_source_fps && use_source_audio;
     if (audio_available && audio_enabled && !sourceAudioActive) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
@@ -5248,13 +4341,11 @@ void MainWindow::runSelected() {
         }
     }
 
-    if (active_backend == acmx2::Backend::Acmxvk && !record_audio &&
-        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
+    if (active_backend == acmx2::Backend::Acmxvk && !record_audio && (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--mute-output";
     }
 
-    if (audio_available &&
-        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
+    if (audio_available && (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--sense" << QString::number(audio_sense);
         if (audio_passthrough) {
             arguments << "--pass-through";
@@ -5279,8 +4370,7 @@ void MainWindow::runSelected() {
         arguments << "--enable-audio-buffers" << QString::number(audio_buffer_frames);
     }
 
-    if (audio_available &&
-        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
+    if (audio_available && (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--audio-warm-rate" << QString::number(audio_warm_rate, 'f', 2);
     }
 
@@ -5305,8 +4395,7 @@ void MainWindow::runSelected() {
         arguments << "--cuda-device" << QString::number(cuda_device);
     }
 
-    arguments << "--time-speed"
-              << QString::number(static_cast<double>(time_speed), 'f', 2);
+    arguments << "--time-speed" << QString::number(static_cast<double>(time_speed), 'f', 2);
     if (normalized_time) {
         arguments << "--normalized";
     }
@@ -5351,8 +4440,7 @@ void MainWindow::runSelected() {
 
     if (watermark_enabled && !watermark_text.isEmpty()) {
         arguments << "--use-watermark" << watermark_text;
-        arguments << "--use-watermark-color"
-                  << QString("%1,%2,%3").arg(watermark_r).arg(watermark_g).arg(watermark_b);
+        arguments << "--use-watermark-color" << QString("%1,%2,%3").arg(watermark_r).arg(watermark_g).arg(watermark_b);
     }
 
     if (display_filter_enabled) {
@@ -5373,19 +4461,15 @@ void MainWindow::runSelected() {
     }
 }
 
-bool MainWindow::buildRunArguments(QStringList &arguments,
-                                   PendingAcmxvkAction resume_action,
-                                   bool include_extra_arguments) {
+bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction resume_action, bool include_extra_arguments) {
     QString deep_dream_error;
     if (!validateDeepDreamLaunch(deep_dream_error)) {
-        QMessageBox::warning(this, tr("Deep Dream Settings"),
-                             deep_dream_error);
+        QMessageBox::warning(this, tr("Deep Dream Settings"), deep_dream_error);
         return false;
     }
     QString stable_diffusion_error;
     if (!validateStableDiffusionLaunch(stable_diffusion_error)) {
-        QMessageBox::warning(this, tr("Stable Diffusion Settings"),
-                             stable_diffusion_error);
+        QMessageBox::warning(this, tr("Stable Diffusion Settings"), stable_diffusion_error);
         return false;
     }
     if (shader_path.length() == 0) {
@@ -5403,13 +4487,11 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         Log("Selected shader: " + selectedData + " at index: " + QString::number(index));
     }
     if (items.isEmpty()) {
-        QMessageBox::warning(this, tr("Empty Shader Library"),
-                             tr("The selected shader library contains no shaders."));
+        QMessageBox::warning(this, tr("Empty Shader Library"), tr("The selected shader library contains no shaders."));
         return false;
     }
     if (index < 0 || index >= items.size()) {
-        QMessageBox::warning(this, tr("Invalid Shader Selection"),
-                             tr("Select a shader from the active library."));
+        QMessageBox::warning(this, tr("Invalid Shader Selection"), tr("Select a shader from the active library."));
         return false;
     }
     QString launchShaderPath = shader_path;
@@ -5419,42 +4501,33 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         if (resume_action == PendingAcmxvkAction::CopyCommand) {
             if (is_acmxvk_source_library(shader_path, runtimeError)) {
                 launchShaderPath = acmxvk_build_directory(shader_path);
-                launchShaderName =
-                    acmxvk_runtime_shader_name(launchShaderName);
+                launchShaderName = acmxvk_runtime_shader_name(launchShaderName);
             } else if (!runtimeError.isEmpty()) {
-                QMessageBox::warning(this, tr("ACMXVK Library"),
-                                     runtimeError);
+                QMessageBox::warning(this, tr("ACMXVK Library"), runtimeError);
                 return false;
             }
         } else {
-            if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath,
-                                                runtimeError)) {
+            if (!resolve_acmxvk_runtime_library(shader_path, launchShaderPath, runtimeError)) {
                 prompt_acmxvk_rebuild(runtimeError, resume_action);
                 return false;
             }
             if (launchShaderPath != shader_path)
-                launchShaderName =
-                    acmxvk_runtime_shader_name(launchShaderName);
-            if (!QFileInfo(QDir(launchShaderPath)
-                               .filePath(launchShaderName))
-                     .isFile()) {
-                QMessageBox::warning(
-                    this, tr("Build ACMXVK Library"),
-                    tr("The compiled shader is missing. Choose Playback > "
-                       "Build and try again.\n\n%1")
-                        .arg(QDir(launchShaderPath)
-                                 .filePath(launchShaderName)));
+                launchShaderName = acmxvk_runtime_shader_name(launchShaderName);
+            if (!QFileInfo(QDir(launchShaderPath).filePath(launchShaderName)).isFile()) {
+                QMessageBox::warning(this,
+                                     tr("Build ACMXVK Library"),
+                                     tr("The compiled shader is missing. Choose Playback > "
+                                        "Build and try again.\n\n%1")
+                                         .arg(QDir(launchShaderPath).filePath(launchShaderName)));
                 return false;
             }
         }
     }
     QString dirPath = QCoreApplication::applicationDirPath();
 #ifdef BUILD_BUNDLE
-    executable_path = dirPath + "/../Helpers/" +
-                      acmx2::default_backend_executable(active_backend);
+    executable_path = dirPath + "/../Helpers/" + acmx2::default_backend_executable(active_backend);
 #endif
-    dirPath = resolve_backend_assets_path(active_backend, executable_path,
-                                          shader_path);
+    dirPath = resolve_backend_assets_path(active_backend, executable_path, shader_path);
 
     QString shader_file = launchShaderPath;
     if (active_backend == acmx2::Backend::Acmxvk)
@@ -5465,12 +4538,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
     arguments << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     if (cache_enabled && textureCacheArraySettingEnabled())
         arguments << "--texture-cache-array";
-    const QSize effectiveCameraResolution =
-        hasPositiveResolution(camera_res) ? camera_res : QSize(1280, 720);
+    const QSize effectiveCameraResolution = hasPositiveResolution(camera_res) ? camera_res : QSize(1280, 720);
     QString res;
     QTextStream stream(&res);
-    stream << effectiveCameraResolution.width() << "x"
-           << effectiveCameraResolution.height();
+    stream << effectiveCameraResolution.width() << "x" << effectiveCameraResolution.height();
     QString scr_res;
     QTextStream stream_r(&scr_res);
     stream_r << screen_res.width() << "x" << screen_res.height();
@@ -5518,8 +4589,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
     arguments << "--prefix" << prefix_path;
     if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
-        if (active_backend == acmx2::Backend::Acmxvk &&
-            encode_rate_control == "bitrate")
+        if (active_backend == acmx2::Backend::Acmxvk && encode_rate_control == "bitrate")
             arguments << "--video-bitrate" << encode_bitrate;
         else
             arguments << "--encode-crf" << QString::number(encode_crf);
@@ -5533,21 +4603,16 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
             arguments << "--encode-params" << encode_parameters;
         if (encode_realtime)
             arguments << "--encode-realtime";
-        if (encode_no_drop &&
-            (!video_file.isEmpty() || !graphics_file.isEmpty()))
+        if (encode_no_drop && (!video_file.isEmpty() || !graphics_file.isEmpty()))
             arguments << "--no-drop";
-        if (active_backend == acmx2::Backend::Acmxvk &&
-            encode_constant_frame_rate && !video_file.isEmpty() && !png_output)
+        if (active_backend == acmx2::Backend::Acmxvk && encode_constant_frame_rate && !video_file.isEmpty() && !png_output)
             arguments << "--constant-frame-rate";
-        if (active_backend == acmx2::Backend::Acmxvk &&
-            encode_fill_pts_gaps && !png_output)
+        if (active_backend == acmx2::Backend::Acmxvk && encode_fill_pts_gaps && !png_output)
             arguments << "--fill-pts-gaps";
     }
     arguments << "--shader-file" << launchShaderName;
 
-    const bool sourceAudioActive =
-        active_backend == acmx2::Backend::Acmxvk && !video_file.isEmpty() &&
-        use_source_fps && use_source_audio;
+    const bool sourceAudioActive = active_backend == acmx2::Backend::Acmxvk && !video_file.isEmpty() && use_source_fps && use_source_audio;
     if (audio_available && audio_enabled && !sourceAudioActive) {
         arguments << "--enable-audio";
         arguments << "--channels" << QString::number(audio_channels);
@@ -5570,13 +4635,11 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         }
     }
 
-    if (active_backend == acmx2::Backend::Acmxvk && !record_audio &&
-        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
+    if (active_backend == acmx2::Backend::Acmxvk && !record_audio && (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--mute-output";
     }
 
-    if (audio_available &&
-        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
+    if (audio_available && (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--sense" << QString::number(audio_sense);
         if (audio_passthrough) {
             arguments << "--pass-through";
@@ -5601,8 +4664,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         arguments << "--enable-audio-buffers" << QString::number(audio_buffer_frames);
     }
 
-    if (audio_available &&
-        (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
+    if (audio_available && (audio_enabled || !audio_file.isEmpty() || sourceAudioActive)) {
         arguments << "--audio-warm-rate" << QString::number(audio_warm_rate, 'f', 2);
     }
 
@@ -5633,9 +4695,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
                 const int passIndex = indexValue.toInt(&ok);
                 if (ok && passIndex >= 0 && passIndex < items.size()) {
                     const QString passFile = items.at(passIndex);
-                    passFiles.append(launchShaderPath == shader_path
-                                         ? passFile
-                                         : acmxvk_runtime_shader_name(passFile));
+                    passFiles.append(launchShaderPath == shader_path ? passFile : acmxvk_runtime_shader_name(passFile));
                 }
             }
             QByteArray passFilePayload;
@@ -5645,8 +4705,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
                 passFilePayload.append(':');
                 passFilePayload.append(encodedName);
             }
-            arguments << "--shader-pass-files"
-                      << QString::fromUtf8(passFilePayload);
+            arguments << "--shader-pass-files" << QString::fromUtf8(passFilePayload);
         }
     }
 
@@ -5654,8 +4713,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
         arguments << "--cuda-device" << QString::number(cuda_device);
     }
 
-    arguments << "--time-speed"
-              << QString::number(static_cast<double>(time_speed), 'f', 2);
+    arguments << "--time-speed" << QString::number(static_cast<double>(time_speed), 'f', 2);
     if (normalized_time) {
         arguments << "--normalized";
     }
@@ -5683,18 +4741,12 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
                 for (const auto &[nodeName, shaders] : playlist_tree_data) {
                     out << "[" << nodeName << "]\n";
                     for (const QString &name : shaders) {
-                        out << (launchShaderPath == shader_path
-                                    ? name
-                                    : acmxvk_runtime_shader_name(name))
-                            << "\n";
+                        out << (launchShaderPath == shader_path ? name : acmxvk_runtime_shader_name(name)) << "\n";
                     }
                 }
             } else {
                 for (const QString &name : playlist_names) {
-                    out << (launchShaderPath == shader_path
-                                ? name
-                                : acmxvk_runtime_shader_name(name))
-                        << "\n";
+                    out << (launchShaderPath == shader_path ? name : acmxvk_runtime_shader_name(name)) << "\n";
                 }
             }
             f.close();
@@ -5704,8 +4756,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
     }
 
     if (playlistActive && autopilot_frames > 0) {
-        arguments << (autopilot_random ? "--autopilot-random" : "--autopilot-frames")
-                  << QString::number(autopilot_frames);
+        arguments << (autopilot_random ? "--autopilot-random" : "--autopilot-frames") << QString::number(autopilot_frames);
     }
 
     if (!output_file.isEmpty() && duration_limit_enabled && max_duration > 0.0) {
@@ -5738,8 +4789,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments,
 
     if (watermark_enabled && !watermark_text.isEmpty()) {
         arguments << "--use-watermark" << watermark_text;
-        arguments << "--use-watermark-color"
-                  << QString("%1,%2,%3").arg(watermark_r).arg(watermark_g).arg(watermark_b);
+        arguments << "--use-watermark-color" << QString("%1,%2,%3").arg(watermark_r).arg(watermark_g).arg(watermark_b);
     }
 
     if (display_filter_enabled) {
@@ -5768,8 +4818,7 @@ void MainWindow::runHdr10Conversion() {
 
     QFileInfo fi(output_file);
     const QString suffix = fi.suffix();
-    const QString hdr10Path = fi.absolutePath() + "/" + fi.completeBaseName() +
-                              ".HDR10" + (suffix.isEmpty() ? QString() : "." + suffix);
+    const QString hdr10Path = fi.absolutePath() + "/" + fi.completeBaseName() + ".HDR10" + (suffix.isEmpty() ? QString() : "." + suffix);
 
     QStringList args;
     args << "-y"
@@ -5819,8 +4868,7 @@ void MainWindow::runHdr10Conversion() {
 
         args << "-vf" << "zscale=p=bt2020:t=smpte2084:m=bt2020nc,format=p010le"
              << "-c:v" << "hevc_nvenc"
-             << "-preset" << nvencPreset
-             << "-tune" << "hq"
+             << "-preset" << nvencPreset << "-tune" << "hq"
              << "-b:v" << "56M"
              << "-maxrate" << "60M"
              << "-bufsize" << "60M"
@@ -5831,8 +4879,7 @@ void MainWindow::runHdr10Conversion() {
     } else {
         args << "-vf" << "zscale=p=bt2020:t=smpte2084:m=bt2020nc,format=yuv420p10le"
              << "-c:v" << "libx265"
-             << "-preset" << (encode_preset.isEmpty() ? QStringLiteral("medium") : encode_preset)
-             << "-b:v" << "56M"
+             << "-preset" << (encode_preset.isEmpty() ? QStringLiteral("medium") : encode_preset) << "-b:v" << "56M"
              << "-maxrate" << "60M"
              << "-bufsize" << "60M"
              << "-pix_fmt" << "yuv420p10le"
@@ -5847,8 +4894,7 @@ void MainWindow::runHdr10Conversion() {
         Log("HDR10 codec: libx265 (codec=" + (codecChoice.isEmpty() ? QStringLiteral("auto") : codecChoice) + ")<br>");
     }
 
-    args << "-c:a" << "copy"
-         << hdr10Path;
+    args << "-c:a" << "copy" << hdr10Path;
 
     Log("shell: ffmpeg " + concatList(args) + "<br>");
     Log("HDR10 output: " + hdr10Path + "<br>");
@@ -5916,8 +4962,7 @@ void MainWindow::copyCommand() {
 
     QDialog dialog(this);
     dialog.setWindowTitle(tr("Edit Command"));
-    dialog.resize(720,
-                  active_backend == acmx2::Backend::Acmxvk ? 360 : 320);
+    dialog.resize(720, active_backend == acmx2::Backend::Acmxvk ? 360 : 320);
     acmx2::applyCustomStyleIfEnabled(&dialog);
 
     QVBoxLayout *layout = new QVBoxLayout(&dialog);
@@ -5939,52 +4984,40 @@ void MainWindow::copyCommand() {
 
     auto *extraArgumentsEdit = new QLineEdit(&dialog);
     extraArgumentsEdit->setText(extra_arguments);
-    extraArgumentsEdit->setPlaceholderText(
-        tr("--option value --another-option \"value with spaces\""));
-    extraArgumentsEdit->setToolTip(
-        tr("These arguments are appended after the generated arguments for "
-           "Run Selected, Run All, and this dialog's command. Use double "
-           "quotes around values containing spaces."));
+    extraArgumentsEdit->setPlaceholderText(tr("--option value --another-option \"value with spaces\""));
+    extraArgumentsEdit->setToolTip(tr("These arguments are appended after the generated arguments for "
+                                      "Run Selected, Run All, and this dialog's command. Use double "
+                                      "quotes around values containing spaces."));
     auto *extraArgumentsLayout = new QFormLayout();
     extraArgumentsLayout->addRow(tr("Extra arguments:"), extraArgumentsEdit);
     layout->addLayout(extraArgumentsLayout);
 
     if (active_backend == acmx2::Backend::Acmxvk) {
         QSettings settings("LostSideDead");
-        const QString enabledKey = acmx2::backend_settings_key(
-            acmx2::Backend::Acmxvk, "parallel_build_enabled");
-        const QString jobsKey = acmx2::backend_settings_key(
-            acmx2::Backend::Acmxvk, "parallel_build_jobs");
-        auto *parallelBuildCheckBox =
-            new QCheckBox(tr("Enable parallel build"), &dialog);
+        const QString enabledKey = acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "parallel_build_enabled");
+        const QString jobsKey = acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "parallel_build_jobs");
+        auto *parallelBuildCheckBox = new QCheckBox(tr("Enable parallel build"), &dialog);
         auto *parallelBuildJobsSpinBox = new QSpinBox(&dialog);
         parallelBuildJobsSpinBox->setRange(1, 256);
-        parallelBuildJobsSpinBox->setValue(
-            qBound(1, settings.value(jobsKey, 2).toInt(), 256));
-        parallelBuildCheckBox->setChecked(
-            settings.value(enabledKey, false).toBool());
-        parallelBuildJobsSpinBox->setEnabled(
-            parallelBuildCheckBox->isChecked());
-        parallelBuildJobsSpinBox->setToolTip(
-            tr("Number of concurrent ACMXVK shader compiler jobs (1-256)."));
+        parallelBuildJobsSpinBox->setValue(qBound(1, settings.value(jobsKey, 2).toInt(), 256));
+        parallelBuildCheckBox->setChecked(settings.value(enabledKey, false).toBool());
+        parallelBuildJobsSpinBox->setEnabled(parallelBuildCheckBox->isChecked());
+        parallelBuildJobsSpinBox->setToolTip(tr("Number of concurrent ACMXVK shader compiler jobs (1-256)."));
         auto *parallelBuildLayout = new QHBoxLayout();
         parallelBuildLayout->addWidget(parallelBuildCheckBox);
         parallelBuildLayout->addWidget(new QLabel(tr("Jobs:"), &dialog));
         parallelBuildLayout->addWidget(parallelBuildJobsSpinBox);
         parallelBuildLayout->addStretch(1);
         layout->addLayout(parallelBuildLayout);
-        connect(parallelBuildCheckBox, &QCheckBox::toggled, &dialog,
-                [parallelBuildJobsSpinBox, enabledKey](bool enabled) {
-                    parallelBuildJobsSpinBox->setEnabled(enabled);
-                    QSettings settings("LostSideDead");
-                    settings.setValue(enabledKey, enabled);
-                });
-        connect(parallelBuildJobsSpinBox,
-                QOverload<int>::of(&QSpinBox::valueChanged), &dialog,
-                [jobsKey](int jobs) {
-                    QSettings settings("LostSideDead");
-                    settings.setValue(jobsKey, jobs);
-                });
+        connect(parallelBuildCheckBox, &QCheckBox::toggled, &dialog, [parallelBuildJobsSpinBox, enabledKey](bool enabled) {
+            parallelBuildJobsSpinBox->setEnabled(enabled);
+            QSettings settings("LostSideDead");
+            settings.setValue(enabledKey, enabled);
+        });
+        connect(parallelBuildJobsSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), &dialog, [jobsKey](int jobs) {
+            QSettings settings("LostSideDead");
+            settings.setValue(jobsKey, jobs);
+        });
     }
 
     QDialogButtonBox *buttonBox = new QDialogButtonBox(&dialog);
@@ -6008,65 +5041,60 @@ void MainWindow::copyCommand() {
         return command;
     };
 
-    connect(copyButton, &QPushButton::clicked, &dialog,
-            [saveExtraArguments, editedCommand, &dialog]() {
-                saveExtraArguments();
-                const QString copiedText = editedCommand();
-                QClipboard *clipboard = QGuiApplication::clipboard();
-                clipboard->setText(copiedText, QClipboard::Clipboard);
+    connect(copyButton, &QPushButton::clicked, &dialog, [saveExtraArguments, editedCommand, &dialog]() {
+        saveExtraArguments();
+        const QString copiedText = editedCommand();
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        clipboard->setText(copiedText, QClipboard::Clipboard);
 #ifdef __linux__
-                if (clipboard->supportsSelection()) {
-                    clipboard->setText(copiedText, QClipboard::Selection);
-                }
+        if (clipboard->supportsSelection()) {
+            clipboard->setText(copiedText, QClipboard::Selection);
+        }
 #endif
-                QCoreApplication::processEvents();
-                QMessageBox::information(&dialog, tr("Copied"),
-                                         tr("Command copied to clipboard."));
-            });
-    connect(runButton, &QPushButton::clicked, &dialog,
-            [this, saveExtraArguments, editedCommand, &dialog]() {
-                if (process->state() != QProcess::NotRunning) {
-                    QMessageBox::information(&dialog, tr("Process Running"),
-                                             tr("A process is already running. Please stop it first."));
-                    return;
-                }
-                saveExtraArguments();
-                const QString cmdText = editedCommand();
-                if (cmdText.isEmpty()) {
-                    QMessageBox::warning(&dialog, tr("Empty Command"), tr("The command is empty."));
-                    return;
-                }
+        QCoreApplication::processEvents();
+        QMessageBox::information(&dialog, tr("Copied"), tr("Command copied to clipboard."));
+    });
+    connect(runButton, &QPushButton::clicked, &dialog, [this, saveExtraArguments, editedCommand, &dialog]() {
+        if (process->state() != QProcess::NotRunning) {
+            QMessageBox::information(&dialog, tr("Process Running"), tr("A process is already running. Please stop it first."));
+            return;
+        }
+        saveExtraArguments();
+        const QString cmdText = editedCommand();
+        if (cmdText.isEmpty()) {
+            QMessageBox::warning(&dialog, tr("Empty Command"), tr("The command is empty."));
+            return;
+        }
 
-                // Run the command verbatim through a shell so that env-var prefixes,
-                // quoting, and PATH lookup behave exactly like pasting it into a
-                // terminal. This avoids any ambiguity from re-parsing the line into
-                // tokens and re-applying environment via QProcessEnvironment.
-                process->setProcessEnvironment(QProcessEnvironment::systemEnvironment());
+        // Run the command verbatim through a shell so that env-var prefixes,
+        // quoting, and PATH lookup behave exactly like pasting it into a
+        // terminal. This avoids any ambiguity from re-parsing the line into
+        // tokens and re-applying environment via QProcessEnvironment.
+        process->setProcessEnvironment(QProcessEnvironment::systemEnvironment());
 #ifdef Q_OS_WIN
-                QString shell = qEnvironmentVariable("COMSPEC");
-                if (shell.isEmpty())
-                    shell = "cmd.exe";
-                QStringList shellArgs{"/C", cmdText};
+        QString shell = qEnvironmentVariable("COMSPEC");
+        if (shell.isEmpty())
+            shell = "cmd.exe";
+        QStringList shellArgs{"/C", cmdText};
 #else
         QString shell = "/bin/sh";
         QStringList shellArgs{"-c", cmdText};
 #endif
-                Log("shell: " + cmdText + "<br>");
-                initShaderSelectionSharedMemory();
-                process->start(shell, shellArgs);
-                if (!process->waitForStarted()) {
-                    Log("<b style='color:red;'>Failed to start the program.</b>");
-                    QMessageBox::critical(&dialog, tr("Error"), tr("Failed to start the program."));
-                    return;
-                }
-                play_stop->setEnabled(true);
-                dialog.accept();
-            });
-    connect(okButton, &QPushButton::clicked, &dialog,
-            [saveExtraArguments, &dialog]() {
-                saveExtraArguments();
-                dialog.accept();
-            });
+        Log("shell: " + cmdText + "<br>");
+        initShaderSelectionSharedMemory();
+        process->start(shell, shellArgs);
+        if (!process->waitForStarted()) {
+            Log("<b style='color:red;'>Failed to start the program.</b>");
+            QMessageBox::critical(&dialog, tr("Error"), tr("Failed to start the program."));
+            return;
+        }
+        play_stop->setEnabled(true);
+        dialog.accept();
+    });
+    connect(okButton, &QPushButton::clicked, &dialog, [saveExtraArguments, &dialog]() {
+        saveExtraArguments();
+        dialog.accept();
+    });
 
     dialog.exec();
 }
@@ -6106,10 +5134,7 @@ QString MainWindow::sanitizeShaderName(const QString &name) {
         return QString();
     }
 
-    if (QDir::isAbsolutePath(sanitized) ||
-        sanitized.startsWith("../") ||
-        sanitized.contains("/../") ||
-        sanitized.endsWith("/..")) {
+    if (QDir::isAbsolutePath(sanitized) || sanitized.startsWith("../") || sanitized.contains("/../") || sanitized.endsWith("/..")) {
         Log("Warning: Invalid shader name detected (path traversal attempt): " + name);
         return QString();
     }
@@ -6118,10 +5143,7 @@ QString MainWindow::sanitizeShaderName(const QString &name) {
 }
 
 void MainWindow::cleanupClosedEditors() {
-    open_files.erase(
-        std::remove_if(open_files.begin(), open_files.end(),
-                       [](const QPointer<TextEditor> &ptr) { return ptr.isNull(); }),
-        open_files.end());
+    open_files.erase(std::remove_if(open_files.begin(), open_files.end(), [](const QPointer<TextEditor> &ptr) { return ptr.isNull(); }), open_files.end());
 }
 
 void MainWindow::menuShuffle() {
@@ -6150,13 +5172,7 @@ void MainWindow::menuBuildShaderCache() {
     QString build_path = shader_path;
     if (build_path.isEmpty()) {
         QSettings appSettings("LostSideDead");
-        build_path =
-            appSettings
-                .value(acmx2::backend_settings_key(active_backend, "library"),
-                       active_backend == acmx2::Backend::Acmx2
-                           ? appSettings.value("shaders", "").toString()
-                           : QString())
-                .toString();
+        build_path = appSettings.value(acmx2::backend_settings_key(active_backend, "library"), active_backend == acmx2::Backend::Acmx2 ? appSettings.value("shaders", "").toString() : QString()).toString();
     }
 
     if (build_path.isEmpty()) {
@@ -6216,94 +5232,59 @@ void MainWindow::menuFixBuild() {
     if (active_backend != acmx2::Backend::Acmxvk)
         return;
     if (process->state() == QProcess::Running) {
-        QMessageBox::warning(
-            this, tr("Fix Build"),
-            tr("A process is already running. Please wait for it to finish."));
+        QMessageBox::warning(this, tr("Fix Build"), tr("A process is already running. Please wait for it to finish."));
         return;
     }
     if (shader_path.isEmpty()) {
-        QMessageBox::warning(
-            this, tr("Fix Build"),
-            tr("No shader library is loaded."));
+        QMessageBox::warning(this, tr("Fix Build"), tr("No shader library is loaded."));
         return;
     }
     start_acmxvk_build(shader_path, AcmxvkBuildMode::Fix);
 }
 
-void MainWindow::start_acmxvk_build(const QString &build_path,
-                                    AcmxvkBuildMode mode) {
+void MainWindow::start_acmxvk_build(const QString &build_path, AcmxvkBuildMode mode) {
     const bool fix = mode != AcmxvkBuildMode::Strict;
     const bool prune = mode == AcmxvkBuildMode::Prune;
-    const QString dialogTitle =
-        prune ? tr("Remove Broken Shaders")
-              : (fix ? tr("Fix Build") : tr("Build ACMXVK Library"));
+    const QString dialogTitle = prune ? tr("Remove Broken Shaders") : (fix ? tr("Fix Build") : tr("Build ACMXVK Library"));
     QString type_error;
     if (!is_acmxvk_source_library(build_path, type_error)) {
         pending_acmxvk_action = PendingAcmxvkAction::None;
-        QMessageBox::warning(
-            this, dialogTitle,
-            type_error.isEmpty()
-                ? tr("The selected ACMXVK library is already a compiled "
-                     "runtime library.")
-                : type_error);
+        QMessageBox::warning(this,
+                             dialogTitle,
+                             type_error.isEmpty() ? tr("The selected ACMXVK library is already a compiled "
+                                                       "runtime library.")
+                                                  : type_error);
         return;
     }
 
-    const QString manifest_path =
-        QDir(build_path).filePath(QStringLiteral("library.json"));
+    const QString manifest_path = QDir(build_path).filePath(QStringLiteral("library.json"));
     if (!QFileInfo(manifest_path).isFile()) {
         pending_acmxvk_action = PendingAcmxvkAction::None;
-        QMessageBox::warning(
-            this, dialogTitle,
-            tr("ACMXVK source builds require library.json:\n%1")
-                .arg(manifest_path));
+        QMessageBox::warning(this, dialogTitle, tr("ACMXVK source builds require library.json:\n%1").arg(manifest_path));
         return;
     }
 
     const QString output_path = acmxvk_build_directory(build_path);
     QString compilerError;
-    const QString compiler =
-        resolve_acmxvk_shader_compiler(compilerError);
+    const QString compiler = resolve_acmxvk_shader_compiler(compilerError);
     if (compiler.isEmpty()) {
         pending_acmxvk_action = PendingAcmxvkAction::None;
-        Log(tr("<b style='color:red;'>Cannot build ACMXVK library: %1</b>")
-                .arg(compilerError.toHtmlEscaped()));
-        QMessageBox::warning(this, tr("ACMXVK Shader Compiler"),
-                             compilerError);
+        Log(tr("<b style='color:red;'>Cannot build ACMXVK library: %1</b>").arg(compilerError.toHtmlEscaped()));
+        QMessageBox::warning(this, tr("ACMXVK Shader Compiler"), compilerError);
         return;
     }
     QStringList arguments{"--unbuffered", "--build", manifest_path};
-    arguments << (fix ? QStringLiteral("--fix")
-                      : QStringLiteral("--builddir"))
-              << output_path;
+    arguments << (fix ? QStringLiteral("--fix") : QStringLiteral("--builddir")) << output_path;
     arguments << QStringLiteral("--glslc") << compiler;
     QSettings settings("LostSideDead");
-    const bool parallelBuildEnabled =
-        settings
-            .value(acmx2::backend_settings_key(
-                       acmx2::Backend::Acmxvk, "parallel_build_enabled"),
-                   false)
-            .toBool();
+    const bool parallelBuildEnabled = settings.value(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "parallel_build_enabled"), false).toBool();
     if (parallelBuildEnabled) {
-        const int parallelBuildJobs = qBound(
-            1,
-            settings
-                .value(acmx2::backend_settings_key(
-                           acmx2::Backend::Acmxvk, "parallel_build_jobs"),
-                       2)
-                .toInt(),
-            256);
-        arguments << QStringLiteral("--parallel")
-                  << QString::number(parallelBuildJobs);
+        const int parallelBuildJobs = qBound(1, settings.value(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "parallel_build_jobs"), 2).toInt(), 256);
+        arguments << QStringLiteral("--parallel") << QString::number(parallelBuildJobs);
     }
     if (prune)
         arguments << QStringLiteral("--prune") << QStringLiteral("--force");
-    Log(prune ? tr("Removing broken ACMXVK shader sources from: %1")
-                    .arg(build_path)
-              : (fix ? tr("Fix building ACMXVK SPIR-V library: %1")
-                           .arg(build_path)
-                     : tr("Building ACMXVK SPIR-V library: %1")
-                           .arg(build_path)));
+    Log(prune ? tr("Removing broken ACMXVK shader sources from: %1").arg(build_path) : (fix ? tr("Fix building ACMXVK SPIR-V library: %1").arg(build_path) : tr("Building ACMXVK SPIR-V library: %1").arg(build_path)));
     Log("Command: " + executable_path + " " + concatList(arguments) + "<br>");
     play_stop->setEnabled(true);
     cacheBuildInProgress = true;
@@ -6318,8 +5299,7 @@ void MainWindow::start_acmxvk_build(const QString &build_path,
     }
 }
 
-void MainWindow::menuRunFromCache() {
-}
+void MainWindow::menuRunFromCache() {}
 
 void MainWindow::menuMetadataViewer() {
     MetadataViewer dlg(this);
@@ -6330,29 +5310,20 @@ void MainWindow::menuRemoveBroken() {
     QString scan_path = shader_path;
     if (scan_path.isEmpty()) {
         QSettings appSettings("LostSideDead");
-        scan_path =
-            appSettings
-                .value(acmx2::backend_settings_key(active_backend, "library"),
-                       active_backend == acmx2::Backend::Acmx2
-                           ? appSettings.value("shaders", "").toString()
-                           : QString())
-                .toString();
+        scan_path = appSettings.value(acmx2::backend_settings_key(active_backend, "library"), active_backend == acmx2::Backend::Acmx2 ? appSettings.value("shaders", "").toString() : QString()).toString();
     }
     if (scan_path.isEmpty()) {
-        QMessageBox::warning(this, "Error",
-                             "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
+        QMessageBox::warning(this, "Error", "No shader library loaded. Please set a shader directory in Properties or load a shader library first.");
         return;
     }
     if (process->state() == QProcess::Running) {
-        QMessageBox::warning(this, "Error",
-                             "A process is already running. Please wait for it to finish.");
+        QMessageBox::warning(this, "Error", "A process is already running. Please wait for it to finish.");
         return;
     }
 
     const QString manifestPath = acmx2::shader_manifest_path(scan_path);
     if (manifestPath.isEmpty()) {
-        QMessageBox::warning(this, "Missing Shader Manifest",
-                             "No library.json or index.txt found in: " + scan_path);
+        QMessageBox::warning(this, "Missing Shader Manifest", "No library.json or index.txt found in: " + scan_path);
         return;
     }
     const QString manifestName = QFileInfo(manifestPath).fileName();
@@ -6360,29 +5331,26 @@ void MainWindow::menuRemoveBroken() {
     if (active_backend == acmx2::Backend::Acmxvk) {
         QString typeError;
         if (!is_acmxvk_source_library(scan_path, typeError)) {
-            QMessageBox::warning(
-                this, tr("Remove Broken Shaders"),
-                typeError.isEmpty()
-                    ? tr("Remove Broken requires an ACMXVK source library, "
-                         "not a compiled runtime library.")
-                    : typeError);
+            QMessageBox::warning(this,
+                                 tr("Remove Broken Shaders"),
+                                 typeError.isEmpty() ? tr("Remove Broken requires an ACMXVK source library, "
+                                                          "not a compiled runtime library.")
+                                                     : typeError);
             return;
         }
 
         QMessageBox confirmation(this);
         confirmation.setIcon(QMessageBox::Warning);
         confirmation.setWindowTitle(tr("Permanently Remove Broken Shaders"));
-        confirmation.setText(
-            tr("This operation permanently deletes source shader files."));
-        confirmation.setInformativeText(
-            tr("ACMXVK will compile every shader listed in:\n\n%1\n\n"
-               "Any .frag or .comp source for which glslc reports a compilation "
-               "failure will be deleted. The generated runtime library and the "
-               "source library manifest will then omit those shaders.\n\n"
-               "No backup is created and this operation cannot be undone. "
-               "Commit or archive the library before continuing.\n\n"
-               "Do you want to permanently remove the broken sources?")
-                .arg(scan_path));
+        confirmation.setText(tr("This operation permanently deletes source shader files."));
+        confirmation.setInformativeText(tr("ACMXVK will compile every shader listed in:\n\n%1\n\n"
+                                           "Any .frag or .comp source for which glslc reports a compilation "
+                                           "failure will be deleted. The generated runtime library and the "
+                                           "source library manifest will then omit those shaders.\n\n"
+                                           "No backup is created and this operation cannot be undone. "
+                                           "Commit or archive the library before continuing.\n\n"
+                                           "Do you want to permanently remove the broken sources?")
+                                            .arg(scan_path));
         confirmation.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
         confirmation.setDefaultButton(QMessageBox::No);
         confirmation.setEscapeButton(QMessageBox::No);
@@ -6408,8 +5376,7 @@ void MainWindow::menuRemoveBroken() {
     QStringList args;
     args << "--remove-broken" << scan_path;
     args << "-p" << assets_path;
-    args << "--texture-cache-size"
-         << QString::number(cache_size > 0 ? cache_size : 8);
+    args << "--texture-cache-size" << QString::number(cache_size > 0 ? cache_size : 8);
     if (cache_enabled && textureCacheArraySettingEnabled())
         args << "--texture-cache-array";
     if (enable_3d)
@@ -6432,30 +5399,27 @@ void MainWindow::menuRemoveBroken() {
         output.replace("\n", "<br>");
         this->Write("<b style='color:red;'>" + output + "</b>");
     });
-    connect(scan,
-            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
-            this,
-            [this, scan, scan_path, manifestName](int exitCode, QProcess::ExitStatus) {
-                Log(QString("Remove-broken finished with exit code: %1<br>").arg(exitCode));
-                if (exitCode == 0) {
-                    // Reload the list view from the updated manifest.
-                    loadShaders(scan_path, true);
-                    QMessageBox::information(this,
-                                             tr("Remove Broken"),
-                                             tr("Finished scanning shader library.\n\n"
-                                                "%1 has been updated and the shader list reloaded.\n"
-                                                "A backup of the original is at:\n%2/%1.bak")
-                                                 .arg(manifestName, scan_path));
-                } else {
-                    QMessageBox::warning(this,
-                                         tr("Remove Broken"),
-                                         tr("Remove-broken failed with exit code %1. "
-                                            "%2 was not changed.")
-                                             .arg(exitCode)
-                                             .arg(manifestName));
-                }
-                scan->deleteLater();
-            });
+    connect(scan, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), this, [this, scan, scan_path, manifestName](int exitCode, QProcess::ExitStatus) {
+        Log(QString("Remove-broken finished with exit code: %1<br>").arg(exitCode));
+        if (exitCode == 0) {
+            // Reload the list view from the updated manifest.
+            loadShaders(scan_path, true);
+            QMessageBox::information(this,
+                                     tr("Remove Broken"),
+                                     tr("Finished scanning shader library.\n\n"
+                                        "%1 has been updated and the shader list reloaded.\n"
+                                        "A backup of the original is at:\n%2/%1.bak")
+                                         .arg(manifestName, scan_path));
+        } else {
+            QMessageBox::warning(this,
+                                 tr("Remove Broken"),
+                                 tr("Remove-broken failed with exit code %1. "
+                                    "%2 was not changed.")
+                                     .arg(exitCode)
+                                     .arg(manifestName));
+        }
+        scan->deleteLater();
+    });
 
     scan->start(executable_path, args);
     if (!scan->waitForStarted()) {
@@ -6484,12 +5448,12 @@ void MainWindow::menuCleanShaderCache() {
         return;
     }
 
-    const QMessageBox::StandardButton reply = QMessageBox::question(
-        this, tr("Clean Shader Cache"),
-        tr("Delete all cached shader binaries for:\n\n%1\n\n"
-           "This will not rebuild the cache. Continue?")
-            .arg(libraryPath),
-        QMessageBox::Yes | QMessageBox::No);
+    const QMessageBox::StandardButton reply = QMessageBox::question(this,
+                                                                    tr("Clean Shader Cache"),
+                                                                    tr("Delete all cached shader binaries for:\n\n%1\n\n"
+                                                                       "This will not rebuild the cache. Continue?")
+                                                                        .arg(libraryPath),
+                                                                    QMessageBox::Yes | QMessageBox::No);
     if (reply != QMessageBox::Yes)
         return;
 
@@ -6505,8 +5469,7 @@ void MainWindow::menuCleanShaderCache() {
     // currently selected Session Settings.
     for (int size = 1; size <= 64; ++size) {
         for (const bool useArray : {false, true}) {
-            const QString filename =
-                shaderCacheFilename(libraryPath, size, useArray);
+            const QString filename = shaderCacheFilename(libraryPath, size, useArray);
             addCacheFile(assetsPath + "/" + filename);
             addCacheFile(libraryPath + "/" + filename);
         }
@@ -6515,16 +5478,11 @@ void MainWindow::menuCleanShaderCache() {
     // Remove the pre-size-key hashed cache and the original fixed-name cache.
     std::error_code ec;
     const std::filesystem::path libraryFsPath(libraryPath.toStdString());
-    const std::filesystem::path absoluteLibrary =
-        std::filesystem::absolute(libraryFsPath, ec);
-    const std::string legacyKey =
-        ec ? libraryPath.toStdString()
-           : absoluteLibrary.lexically_normal().string();
+    const std::filesystem::path absoluteLibrary = std::filesystem::absolute(libraryFsPath, ec);
+    const std::string legacyKey = ec ? libraryPath.toStdString() : absoluteLibrary.lexically_normal().string();
     std::ostringstream legacyName;
-    legacyName << ".shader_cache_" << std::hex
-               << std::hash<std::string>{}(legacyKey);
-    const QString legacyHashedName =
-        QString::fromStdString(legacyName.str());
+    legacyName << ".shader_cache_" << std::hex << std::hash<std::string>{}(legacyKey);
+    const QString legacyHashedName = QString::fromStdString(legacyName.str());
     addCacheFile(assetsPath + "/" + legacyHashedName);
     addCacheFile(libraryPath + "/" + legacyHashedName);
     addCacheFile(libraryPath + "/.shader_cache");
@@ -6546,17 +5504,13 @@ void MainWindow::menuCleanShaderCache() {
     if (removedCount == 0 && failedCount == 0) {
         Log("No existing shader cache found");
     } else {
-        Log(QString("Shader cache clean complete: removed %1 file(s), %2 failed")
-                .arg(removedCount)
-                .arg(failedCount));
+        Log(QString("Shader cache clean complete: removed %1 file(s), %2 failed").arg(removedCount).arg(failedCount));
     }
     populateShaderTree();
 #endif
 }
 
-void MainWindow::detectCudaSupport() {
-    detectFeatureSupport();
-}
+void MainWindow::detectCudaSupport() { detectFeatureSupport(); }
 
 static QString probe_feature_output(const QString &exe, const QString &flag) {
     QProcess probe;
@@ -6568,57 +5522,30 @@ static QString probe_feature_output(const QString &exe, const QString &flag) {
     return QString::fromLocal8Bit(probe.readAllStandardOutput()).trimmed();
 }
 
-static bool probeFeature(const QString &exe, const QString &flag,
-                         const QString &token) {
-    return probe_feature_output(exe, flag).contains(token, Qt::CaseInsensitive);
-}
+static bool probeFeature(const QString &exe, const QString &flag, const QString &token) { return probe_feature_output(exe, flag).contains(token, Qt::CaseInsensitive); }
 
 void MainWindow::detectFeatureSupport() {
     const bool isAcmxvk = active_backend == acmx2::Backend::Acmxvk;
     const QString backendName = acmx2::backend_name(active_backend);
-    const QString cudaOutput =
-        probe_feature_output(executable_path, "--check-cuda");
-    cuda_available = cudaOutput.contains(
-        isAcmxvk ? "acidcam-gpu filters: enabled" : "CUDA: enabled",
-        Qt::CaseInsensitive);
-    cuda_device_available =
-        isAcmxvk
-            ? cudaOutput.contains("MXVK CUDA interop: enabled",
-                                  Qt::CaseInsensitive)
-            : cuda_available;
+    const QString cudaOutput = probe_feature_output(executable_path, "--check-cuda");
+    cuda_available = cudaOutput.contains(isAcmxvk ? "acidcam-gpu filters: enabled" : "CUDA: enabled", Qt::CaseInsensitive);
+    cuda_device_available = isAcmxvk ? cudaOutput.contains("MXVK CUDA interop: enabled", Qt::CaseInsensitive) : cuda_available;
     audio_available = probeFeature(executable_path, "--check-audio", "AUDIO: enabled");
     midi_available = probeFeature(executable_path, "--check-midi", "MIDI: enabled");
-    dnn_available = probeFeature(
-        executable_path, "--check-dnn",
-        isAcmxvk ? "OpenCV DNN effects: enabled" : "OpenCV DNN: enabled");
-    deep_dream_available =
-        isAcmxvk && probeFeature(executable_path, "--check-deep-dream",
-                                 "Deep Dream: enabled");
-    stable_diffusion_available =
-        isAcmxvk &&
-        probeFeature(executable_path, "--check-stable-diffusion",
-                     "Stable Diffusion: enabled");
+    dnn_available = probeFeature(executable_path, "--check-dnn", isAcmxvk ? "OpenCV DNN effects: enabled" : "OpenCV DNN: enabled");
+    deep_dream_available = isAcmxvk && probeFeature(executable_path, "--check-deep-dream", "Deep Dream: enabled");
+    stable_diffusion_available = isAcmxvk && probeFeature(executable_path, "--check-stable-diffusion", "Stable Diffusion: enabled");
 
-    Log(QString("CUDA filters: %1 (%2)")
-            .arg(cuda_available ? "enabled" : "disabled", backendName));
+    Log(QString("CUDA filters: %1 (%2)").arg(cuda_available ? "enabled" : "disabled", backendName));
     if (isAcmxvk) {
-        Log(QString("CUDA device interop: %1 (%2)")
-                .arg(cuda_device_available ? "enabled" : "disabled",
-                     backendName));
+        Log(QString("CUDA device interop: %1 (%2)").arg(cuda_device_available ? "enabled" : "disabled", backendName));
     }
-    Log(QString("AUDIO: %1 (%2)")
-            .arg(audio_available ? "enabled" : "disabled", backendName));
-    Log(QString("MIDI: %1 (%2)")
-            .arg(midi_available ? "enabled" : "disabled", backendName));
-    Log(QString("OpenCV DNN: %1 (%2)")
-            .arg(dnn_available ? "enabled" : "disabled", backendName));
+    Log(QString("AUDIO: %1 (%2)").arg(audio_available ? "enabled" : "disabled", backendName));
+    Log(QString("MIDI: %1 (%2)").arg(midi_available ? "enabled" : "disabled", backendName));
+    Log(QString("OpenCV DNN: %1 (%2)").arg(dnn_available ? "enabled" : "disabled", backendName));
     if (isAcmxvk) {
-        Log(QString("Deep Dream: %1 (%2)")
-                .arg(deep_dream_available ? "enabled" : "disabled",
-                     backendName));
-        Log(QString("Stable Diffusion: %1 (%2)")
-                .arg(stable_diffusion_available ? "enabled" : "disabled",
-                     backendName));
+        Log(QString("Deep Dream: %1 (%2)").arg(deep_dream_available ? "enabled" : "disabled", backendName));
+        Log(QString("Stable Diffusion: %1 (%2)").arg(stable_diffusion_available ? "enabled" : "disabled", backendName));
     }
 
     if (!dnn_available) {
@@ -6629,10 +5556,7 @@ void MainWindow::detectFeatureSupport() {
     if (deepDreamAction) {
         deepDreamAction->setVisible(isAcmxvk);
         deepDreamAction->setEnabled(deep_dream_available);
-        deepDreamAction->setToolTip(
-            deep_dream_available
-                ? QString()
-                : tr("Disabled: ACMXVK was built without Deep Dream support."));
+        deepDreamAction->setToolTip(deep_dream_available ? QString() : tr("Disabled: ACMXVK was built without Deep Dream support."));
     }
     if (isAcmxvk && !deep_dream_available) {
         deep_dream_enabled = false;
@@ -6641,22 +5565,16 @@ void MainWindow::detectFeatureSupport() {
     if (stableDiffusionAction) {
         stableDiffusionAction->setVisible(isAcmxvk);
         stableDiffusionAction->setEnabled(stable_diffusion_available);
-        stableDiffusionAction->setToolTip(
-            stable_diffusion_available
-                ? QString()
-                : tr("Disabled: ACMXVK was built without Stable Diffusion "
-                     "support."));
+        stableDiffusionAction->setToolTip(stable_diffusion_available ? QString()
+                                                                     : tr("Disabled: ACMXVK was built without Stable Diffusion "
+                                                                          "support."));
     }
     if (isAcmxvk && !stable_diffusion_available) {
         stable_diffusion_enabled = false;
     }
     if (gpuFilterAction) {
         gpuFilterAction->setEnabled(cuda_available);
-        gpuFilterAction->setToolTip(
-            cuda_available
-                ? QString()
-                : tr("Disabled: %1 was built without acidcam-gpu filter support.")
-                      .arg(backendName));
+        gpuFilterAction->setToolTip(cuda_available ? QString() : tr("Disabled: %1 was built without acidcam-gpu filter support.").arg(backendName));
     }
     if (!cuda_available) {
         gpu_filter_enabled = false;
@@ -6667,11 +5585,7 @@ void MainWindow::detectFeatureSupport() {
 
     if (audioSet) {
         audioSet->setEnabled(audio_available);
-        audioSet->setToolTip(
-            audio_available
-                ? QString()
-                : tr("Disabled: %1 was built without audio support.")
-                      .arg(backendName));
+        audioSet->setToolTip(audio_available ? QString() : tr("Disabled: %1 was built without audio support.").arg(backendName));
     }
     if (!audio_available) {
         audio_enabled = false;
@@ -6684,11 +5598,7 @@ void MainWindow::detectFeatureSupport() {
 
     if (midiSettingsAction) {
         midiSettingsAction->setEnabled(midi_available);
-        midiSettingsAction->setToolTip(
-            midi_available
-                ? QString()
-                : tr("Disabled: %1 was built without MIDI support.")
-                      .arg(backendName));
+        midiSettingsAction->setToolTip(midi_available ? QString() : tr("Disabled: %1 was built without MIDI support.").arg(backendName));
     }
     if (!midi_available) {
         midi_enabled = false;

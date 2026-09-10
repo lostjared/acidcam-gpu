@@ -26,8 +26,7 @@
 class PropWindow : public QDialog {
     Q_OBJECT
   public:
-    explicit PropWindow(acmx2::Backend backend,
-                        QWidget *parent = nullptr);
+    explicit PropWindow(acmx2::Backend backend, QWidget *parent = nullptr);
 
   private:
     void init();

@@ -12,10 +12,7 @@
 #include <vector>
 
 namespace acmxvk {
-    enum class SnapshotFormat { Png,
-                                WebP,
-                                Tiff,
-                                Raw };
+    enum class SnapshotFormat { Png, WebP, Tiff, Raw };
 
     struct SnapshotJob {
         fs::path path;
@@ -40,30 +37,20 @@ namespace acmxvk {
         [[nodiscard]] bool queueFull();
         void enqueue(SnapshotJob job);
 
-        static void savePng(const fs::path &path, std::uint8_t *rgba,
-                            int width, int height);
-        [[nodiscard]] static std::string_view
-        formatName(SnapshotFormat format) noexcept;
+        static void savePng(const fs::path &path, std::uint8_t *rgba, int width, int height);
+        [[nodiscard]] static std::string_view formatName(SnapshotFormat format) noexcept;
 
       private:
         static constexpr std::size_t QUEUE_CAPACITY = 4;
 
-        static void saveRaw(const fs::path &path,
-                            const std::vector<std::uint8_t> &rgba,
-                            std::uint32_t width, std::uint32_t height);
-        static void saveRaw16(const fs::path &path,
-                              const std::vector<std::uint16_t> &rgba,
-                              std::uint32_t width, std::uint32_t height);
+        static void saveRaw(const fs::path &path, const std::vector<std::uint8_t> &rgba, std::uint32_t width, std::uint32_t height);
+        static void saveRaw16(const fs::path &path, const std::vector<std::uint16_t> &rgba, std::uint32_t width, std::uint32_t height);
 #ifdef ACMXVK_WITH_WEBP
-        static void saveWebP(const fs::path &path, const std::uint8_t *rgba,
-                             int width, int height);
+        static void saveWebP(const fs::path &path, const std::uint8_t *rgba, int width, int height);
 #endif
 #ifdef ACMXVK_WITH_TIFF
-        static void saveTiff(const fs::path &path, const std::uint8_t *rgba,
-                             int width, int height);
-        static void saveTiff16(const fs::path &path,
-                               const std::uint16_t *rgba, int width,
-                               int height);
+        static void saveTiff(const fs::path &path, const std::uint8_t *rgba, int width, int height);
+        static void saveTiff16(const fs::path &path, const std::uint16_t *rgba, int width, int height);
 #endif
         void workerLoop() noexcept;
 

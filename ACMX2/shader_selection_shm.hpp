@@ -16,15 +16,11 @@
 
 namespace acmx2::ipc {
 
-    inline constexpr const char *kShaderSelectionShmName =
-        "/acmx2_shader_selection_v11";
-    inline constexpr const char *kShaderSelectionSemaphoreName =
-        "/acmx2_shm_v11";
+    inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection_v11";
+    inline constexpr const char *kShaderSelectionSemaphoreName = "/acmx2_shm_v11";
 #ifdef _WIN32
-    inline constexpr const wchar_t *kShaderSelectionMappingNameWindows =
-        L"Local\\ACMX2ShaderSelectionV11";
-    inline constexpr const wchar_t *kShaderSelectionMutexNameWindows =
-        L"Local\\ACMX2ShaderSelectionMutexV11";
+    inline constexpr const wchar_t *kShaderSelectionMappingNameWindows = L"Local\\ACMX2ShaderSelectionV11";
+    inline constexpr const wchar_t *kShaderSelectionMutexNameWindows = L"Local\\ACMX2ShaderSelectionMutexV11";
 #endif
     inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
     inline constexpr std::uint32_t kShaderSelectionVersion = 11;
@@ -55,8 +51,7 @@ namespace acmx2::ipc {
         std::uint8_t normalized_time_enabled = 0;
         std::uint8_t reserved_flags[3] = {0, 0, 0};
         std::int32_t shader_pass_indices[kShaderSelectionMaxPassCount] = {};
-        char shader_pass_names[kShaderSelectionMaxPassCount]
-                              [kShaderSelectionMaxShaderName] = {};
+        char shader_pass_names[kShaderSelectionMaxPassCount][kShaderSelectionMaxShaderName] = {};
         std::uint32_t gpu_filter_count = 0;
         std::uint8_t gpu_filter_enabled = 0;
         std::uint8_t gpu_buffer_size = 8;
@@ -70,8 +65,7 @@ namespace acmx2::ipc {
         char reload_shader_path[kShaderSelectionMaxReloadPath] = {};
         std::uint32_t reload_sequence = 0;
         std::uint32_t custom_uniform_count = 0;
-        char custom_uniform_names[kShaderSelectionMaxCustomUniforms]
-                                 [kShaderSelectionMaxUniformName] = {};
+        char custom_uniform_names[kShaderSelectionMaxCustomUniforms][kShaderSelectionMaxUniformName] = {};
         float custom_uniform_values[kShaderSelectionMaxCustomUniforms] = {};
         char audio_file_path[kShaderSelectionMaxAudioFilePath] = {};
         std::int32_t audio_output_device = -1;
@@ -109,8 +103,7 @@ namespace acmx2::ipc {
     class ShaderSelectionLock {
       public:
 #if defined(__linux__) || defined(__APPLE__)
-        explicit ShaderSelectionLock(sem_t *semaphoreValue)
-            : semaphore(semaphoreValue) {
+        explicit ShaderSelectionLock(sem_t *semaphoreValue) : semaphore(semaphoreValue) {
             if (semaphore == nullptr || semaphore == SEM_FAILED)
                 return;
             while (::sem_wait(semaphore) != 0) {
@@ -123,8 +116,7 @@ namespace acmx2::ipc {
         explicit ShaderSelectionLock(HANDLE mutexValue) : mutex(mutexValue) {
             if (mutex == nullptr)
                 return;
-            const DWORD result = ::WaitForSingleObject(
-                mutex, kShaderSelectionLockTimeoutMs);
+            const DWORD result = ::WaitForSingleObject(mutex, kShaderSelectionLockTimeoutMs);
             locked = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
         }
 #endif
@@ -142,9 +134,7 @@ namespace acmx2::ipc {
         ShaderSelectionLock(const ShaderSelectionLock &) = delete;
         ShaderSelectionLock &operator=(const ShaderSelectionLock &) = delete;
 
-        explicit operator bool() const {
-            return locked;
-        }
+        explicit operator bool() const { return locked; }
 
       private:
 #if defined(__linux__) || defined(__APPLE__)

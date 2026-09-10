@@ -25,8 +25,7 @@ class ShaderDialog : public QDialog {
     Q_OBJECT
 
   public:
-    explicit ShaderDialog(acmx2::Backend backend,
-                          QWidget *parent = nullptr);
+    explicit ShaderDialog(acmx2::Backend backend, QWidget *parent = nullptr);
     /// @brief Set output directory used for generated shader files.
     void setShaderPath(const QString &path);
 
@@ -41,8 +40,7 @@ class ShaderDialog : public QDialog {
     acmx2::Backend backend;
 
     void init();
-    bool createShaderFile(const QString &shaderName, bool includeDefaultCode,
-                          bool createCacheShader, bool createComputeShader);
+    bool createShaderFile(const QString &shaderName, bool includeDefaultCode, bool createCacheShader, bool createComputeShader);
   private slots:
     void onOkButtonClicked();
     void onCancelButtonClicked();

@@ -5,10 +5,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 
-PropWindow::PropWindow(acmx2::Backend backend, QWidget *parent)
-    : QDialog(parent), active_backend(backend) {
-    init();
-}
+PropWindow::PropWindow(acmx2::Backend backend, QWidget *parent) : QDialog(parent), active_backend(backend) { init(); }
 
 void PropWindow::init() {
     setWindowTitle(tr("%1 Properties").arg(acmx2::backend_name(active_backend)));
@@ -53,18 +50,15 @@ void PropWindow::init() {
         auto *shaderCompilerLayout = new QVBoxLayout(shaderCompilerGroup);
         shaderCompilerComboBox = new QComboBox(this);
         shaderCompilerComboBox->addItem("Automatic glslc", "auto");
-        shaderCompilerComboBox->addItem(
-            "Custom glslc-compatible executable", "custom");
+        shaderCompilerComboBox->addItem("Custom glslc-compatible executable", "custom");
         shaderCompilerPathLineEdit = new QLineEdit(this);
-        shaderCompilerPathLineEdit->setPlaceholderText(
-            "/path/to/VulkanSDK/bin/glslc");
+        shaderCompilerPathLineEdit->setPlaceholderText("/path/to/VulkanSDK/bin/glslc");
         shaderCompilerBrowseButton = new QPushButton("Browse");
         auto *shaderCompilerPathLayout = new QHBoxLayout();
         shaderCompilerPathLayout->addWidget(shaderCompilerPathLineEdit, 1);
         shaderCompilerPathLayout->addWidget(shaderCompilerBrowseButton);
-        auto *compilerHelp = new QLabel(
-            "The custom executable must accept glslc command-line options. "
-            "It is used by Build, Fix Build, and live shader reload.");
+        auto *compilerHelp = new QLabel("The custom executable must accept glslc command-line options. "
+                                        "It is used by Build, Fix Build, and live shader reload.");
         compilerHelp->setWordWrap(true);
         shaderCompilerLayout->addWidget(shaderCompilerComboBox);
         shaderCompilerLayout->addLayout(shaderCompilerPathLayout);
@@ -95,63 +89,31 @@ void PropWindow::init() {
     connect(shaderDirBrowseButton, &QPushButton::clicked, this, &PropWindow::selectShaderDirectory);
     connect(screenshotDirBrowseButton, &QPushButton::clicked, this, &PropWindow::selectScreenshotDirectory);
     if (shaderCompilerBrowseButton) {
-        connect(shaderCompilerBrowseButton, &QPushButton::clicked, this,
-                &PropWindow::selectShaderCompiler);
-        connect(shaderCompilerComboBox,
-                QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                [this, shaderCompilerBrowseButton](int) {
-                    const bool custom =
-                        shaderCompilerComboBox->currentData().toString() ==
-                        QStringLiteral("custom");
-                    shaderCompilerPathLineEdit->setEnabled(custom);
-                    shaderCompilerBrowseButton->setEnabled(custom);
-                });
+        connect(shaderCompilerBrowseButton, &QPushButton::clicked, this, &PropWindow::selectShaderCompiler);
+        connect(shaderCompilerComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, shaderCompilerBrowseButton](int) {
+            const bool custom = shaderCompilerComboBox->currentData().toString() == QStringLiteral("custom");
+            shaderCompilerPathLineEdit->setEnabled(custom);
+            shaderCompilerBrowseButton->setEnabled(custom);
+        });
     }
     connect(restoreDefaultsButton, &QPushButton::clicked, this, &PropWindow::restoreDefaults);
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     QString defaultPicturesDir = getDefaultPicturesDirectory();
     QSettings appSettings("LostSideDead");
-    const QString legacyExecutable =
-        active_backend == acmx2::Backend::Acmx2
-            ? appSettings.value("exePath", acmx2::default_backend_executable(
-                                               acmx2::Backend::Acmx2))
-                  .toString()
-            : acmx2::default_backend_executable(active_backend);
-    QString filePath =
-        appSettings
-            .value(acmx2::backend_settings_key(active_backend, "executable"),
-                   legacyExecutable)
-            .toString();
-    const QString legacyLibrary =
-        active_backend == acmx2::Backend::Acmx2
-            ? appSettings.value("shaders", "").toString()
-            : QString();
-    QString shader =
-        appSettings
-            .value(acmx2::backend_settings_key(active_backend, "library"),
-                   legacyLibrary)
-            .toString();
+    const QString legacyExecutable = active_backend == acmx2::Backend::Acmx2 ? appSettings.value("exePath", acmx2::default_backend_executable(acmx2::Backend::Acmx2)).toString() : acmx2::default_backend_executable(active_backend);
+    QString filePath = appSettings.value(acmx2::backend_settings_key(active_backend, "executable"), legacyExecutable).toString();
+    const QString legacyLibrary = active_backend == acmx2::Backend::Acmx2 ? appSettings.value("shaders", "").toString() : QString();
+    QString shader = appSettings.value(acmx2::backend_settings_key(active_backend, "library"), legacyLibrary).toString();
     QString screenshotDir = appSettings.value("prefix_path", defaultPicturesDir).toString();
     exePathLineEdit->setText(filePath);
     shaderDirLineEdit->setText(shader);
     screenshotDirLineEdit->setText(screenshotDir);
     if (shaderCompilerComboBox) {
-        const QString compilerMode =
-            appSettings
-                .value(acmx2::backend_settings_key(
-                           acmx2::Backend::Acmxvk, "shader_compiler_mode"),
-                       "auto")
-                .toString();
-        const int compilerIndex =
-            shaderCompilerComboBox->findData(compilerMode);
-        shaderCompilerComboBox->setCurrentIndex(
-            compilerIndex >= 0 ? compilerIndex : 0);
-        shaderCompilerPathLineEdit->setText(
-            appSettings
-                .value(acmx2::backend_settings_key(
-                    acmx2::Backend::Acmxvk, "shader_compiler_path"))
-                .toString());
+        const QString compilerMode = appSettings.value(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_mode"), "auto").toString();
+        const int compilerIndex = shaderCompilerComboBox->findData(compilerMode);
+        shaderCompilerComboBox->setCurrentIndex(compilerIndex >= 0 ? compilerIndex : 0);
+        shaderCompilerPathLineEdit->setText(appSettings.value(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_path")).toString());
         const bool custom = compilerMode == QStringLiteral("custom");
         shaderCompilerPathLineEdit->setEnabled(custom);
         shaderCompilerBrowseButton->setEnabled(custom);
@@ -183,8 +145,7 @@ QString PropWindow::getDefaultPicturesDirectory() {
 void PropWindow::selectExecutable() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastExeDir", "").toString();
-    QString filePath = QFileDialog::getOpenFileName(
-        this, "Select Program Executable", lastDir, "Executable Files (*.exe);;All Files (*)");
+    QString filePath = QFileDialog::getOpenFileName(this, "Select Program Executable", lastDir, "Executable Files (*.exe);;All Files (*)");
     if (!filePath.isEmpty()) {
         appSettings.setValue("lastExeDir", QFileInfo(filePath).absolutePath());
         exePathLineEdit->setText(filePath);
@@ -194,8 +155,7 @@ void PropWindow::selectExecutable() {
 void PropWindow::selectShaderDirectory() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastShaderDir", "").toString();
-    QString dirPath = QFileDialog::getExistingDirectory(
-        this, "Select Shader Directory", lastDir, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    QString dirPath = QFileDialog::getExistingDirectory(this, "Select Shader Directory", lastDir, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (!dirPath.isEmpty()) {
         appSettings.setValue("lastShaderDir", dirPath);
         shaderDirLineEdit->setText(dirPath);
@@ -205,8 +165,7 @@ void PropWindow::selectShaderDirectory() {
 void PropWindow::selectScreenshotDirectory() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastScreenshotDir", "").toString();
-    QString dirPath = QFileDialog::getExistingDirectory(
-        this, "Select Screenshot Directory", lastDir, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    QString dirPath = QFileDialog::getExistingDirectory(this, "Select Screenshot Directory", lastDir, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (!dirPath.isEmpty()) {
         appSettings.setValue("lastScreenshotDir", dirPath);
         screenshotDirLineEdit->setText(dirPath);
@@ -215,28 +174,21 @@ void PropWindow::selectScreenshotDirectory() {
 
 void PropWindow::selectShaderCompiler() {
     QSettings appSettings("LostSideDead");
-    const QString lastDir =
-        appSettings.value("lastShaderCompilerDir", "").toString();
-    const QString filePath = QFileDialog::getOpenFileName(
-        this, "Select glslc-compatible Shader Compiler", lastDir,
-        "Executable Files (*.exe);;All Files (*)");
+    const QString lastDir = appSettings.value("lastShaderCompilerDir", "").toString();
+    const QString filePath = QFileDialog::getOpenFileName(this, "Select glslc-compatible Shader Compiler", lastDir, "Executable Files (*.exe);;All Files (*)");
     if (!filePath.isEmpty()) {
-        appSettings.setValue("lastShaderCompilerDir",
-                             QFileInfo(filePath).absolutePath());
+        appSettings.setValue("lastShaderCompilerDir", QFileInfo(filePath).absolutePath());
         shaderCompilerPathLineEdit->setText(filePath);
     }
 }
 
 void PropWindow::restoreDefaults() {
     QMessageBox::StandardButton reply;
-    reply = QMessageBox::question(this, "Restore Defaults",
-                                  "Are you sure you want to restore default settings?",
-                                  QMessageBox::Yes | QMessageBox::No);
+    reply = QMessageBox::question(this, "Restore Defaults", "Are you sure you want to restore default settings?", QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
         QString defaultPicturesDir = getDefaultPicturesDirectory();
 
-        exePathLineEdit->setText(
-            acmx2::default_backend_executable(active_backend));
+        exePathLineEdit->setText(acmx2::default_backend_executable(active_backend));
         shaderDirLineEdit->setText("");
         screenshotDirLineEdit->setText(defaultPicturesDir);
         if (shaderCompilerComboBox) {
@@ -245,24 +197,16 @@ void PropWindow::restoreDefaults() {
         }
 
         QSettings appSettings("LostSideDead");
-        appSettings.setValue(
-            acmx2::backend_settings_key(active_backend, "executable"),
-            exePathLineEdit->text());
-        appSettings.setValue(
-            acmx2::backend_settings_key(active_backend, "library"),
-            shaderDirLineEdit->text());
+        appSettings.setValue(acmx2::backend_settings_key(active_backend, "executable"), exePathLineEdit->text());
+        appSettings.setValue(acmx2::backend_settings_key(active_backend, "library"), shaderDirLineEdit->text());
         if (active_backend == acmx2::Backend::Acmx2) {
             appSettings.setValue("exePath", exePathLineEdit->text());
             appSettings.setValue("shaders", shaderDirLineEdit->text());
         }
         appSettings.setValue("prefix_path", screenshotDirLineEdit->text());
         if (shaderCompilerComboBox) {
-            appSettings.setValue(
-                acmx2::backend_settings_key(
-                    acmx2::Backend::Acmxvk, "shader_compiler_mode"),
-                "auto");
-            appSettings.remove(acmx2::backend_settings_key(
-                acmx2::Backend::Acmxvk, "shader_compiler_path"));
+            appSettings.setValue(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_mode"), "auto");
+            appSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_path"));
         }
 
         QMessageBox::information(this, "Defaults Restored", "Default settings have been restored.");

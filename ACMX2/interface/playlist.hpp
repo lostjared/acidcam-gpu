@@ -29,9 +29,7 @@
 class PlaylistDialog : public QDialog {
     Q_OBJECT
   public:
-    explicit PlaylistDialog(const QStringList &shaderNames,
-                            acmx2::Backend backend,
-                            QWidget *parent = nullptr);
+    explicit PlaylistDialog(const QStringList &shaderNames, acmx2::Backend backend, QWidget *parent = nullptr);
 
     /// @brief Return whether playlist mode is enabled.
     bool isPlaylistEnabled() const;

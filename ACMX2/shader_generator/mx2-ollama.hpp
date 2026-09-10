@@ -20,9 +20,7 @@ namespace mx {
     class ObjectRequestException : public std::exception {
       public:
         explicit ObjectRequestException(const std::string &message) : msg(message) {}
-        virtual const char *what() const noexcept override {
-            return msg.c_str();
-        }
+        virtual const char *what() const noexcept override { return msg.c_str(); }
 
       private:
         std::string msg;
@@ -30,24 +28,13 @@ namespace mx {
 
     class ObjectRequest {
       public:
-        explicit ObjectRequest(const std::string &host = "localhost", const std::string &model = "codellama:7b", const std::string &filename = "shader.glsl")
-            : host(host), model(model), filename(filename) {}
-        void setHost(const std::string &host) {
-            this->host = host;
-        }
-        void setModel(const std::string &model) {
-            this->model = model;
-        }
-        void setFilename(const std::string &filename) {
-            this->filename = filename;
-        }
-        void setShader(const std::string &shader) {
-            this->shader = shader;
-        }
+        explicit ObjectRequest(const std::string &host = "localhost", const std::string &model = "codellama:7b", const std::string &filename = "shader.glsl") : host(host), model(model), filename(filename) {}
+        void setHost(const std::string &host) { this->host = host; }
+        void setModel(const std::string &model) { this->model = model; }
+        void setFilename(const std::string &filename) { this->filename = filename; }
+        void setShader(const std::string &shader) { this->shader = shader; }
 
-        void setPrompt(const std::string &prompt) {
-            this->prompt = prompt;
-        }
+        void setPrompt(const std::string &prompt) { this->prompt = prompt; }
 
         static std::string unescape(const std::string &input);
         std::string generateCode();

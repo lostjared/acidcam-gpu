@@ -80,9 +80,9 @@ using acmx2::audio::FFT_SIZE;
 #else
 // Stubs so code compiled without CUDA still has the symbols it references.
 #ifndef CHECK_CUDA
-#define CHECK_CUDA(call)         \
-    do {                         \
-        static_cast<void>(call); \
+#define CHECK_CUDA(call)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+        static_cast<void>(call);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       \
     } while (0)
 #endif
 namespace ac_gpu {
@@ -154,8 +154,7 @@ static std::filesystem::path executable_directory() {
 #if defined(__linux__)
     std::vector<char> executable_path(1024, '\0');
     while (true) {
-        const ssize_t length = readlink("/proc/self/exe", executable_path.data(),
-                                        executable_path.size() - 1);
+        const ssize_t length = readlink("/proc/self/exe", executable_path.data(), executable_path.size() - 1);
         if (length < 0) {
             return {};
         }
@@ -177,23 +176,17 @@ static std::filesystem::path executable_directory() {
     }
 
     std::error_code error;
-    const std::filesystem::path resolved_path =
-        std::filesystem::weakly_canonical(executable_path.data(), error);
-    return error ? std::filesystem::path(executable_path.data()).parent_path()
-                 : resolved_path.parent_path();
+    const std::filesystem::path resolved_path = std::filesystem::weakly_canonical(executable_path.data(), error);
+    return error ? std::filesystem::path(executable_path.data()).parent_path() : resolved_path.parent_path();
 #elif defined(_WIN32)
     std::vector<wchar_t> executable_path(MAX_PATH);
     while (true) {
-        const DWORD length = GetModuleFileNameW(
-            nullptr, executable_path.data(),
-            static_cast<DWORD>(executable_path.size()));
+        const DWORD length = GetModuleFileNameW(nullptr, executable_path.data(), static_cast<DWORD>(executable_path.size()));
         if (length == 0U) {
             return {};
         }
         if (length < executable_path.size() - 1U) {
-            return std::filesystem::path(
-                       std::wstring(executable_path.data(), length))
-                .parent_path();
+            return std::filesystem::path(std::wstring(executable_path.data(), length)).parent_path();
         }
         if (executable_path.size() >= 32768U) {
             return {};
@@ -232,8 +225,7 @@ static std::filesystem::path installed_assets_directory() {
     };
     for (const std::filesystem::path &candidate : candidates) {
         std::error_code error;
-        if (std::filesystem::is_regular_file(candidate / "data" / "win-icon.png",
-                                             error)) {
+        if (std::filesystem::is_regular_file(candidate / "data" / "win-icon.png", error)) {
             return candidate;
         }
     }
@@ -282,9 +274,7 @@ static bool probe_open_gl_context(int major, int minor, std::string &error_messa
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-    SDL_Window *probe_window = SDL_CreateWindow(
-        "ACMX2 OpenGL Probe", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        32, 32, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+    SDL_Window *probe_window = SDL_CreateWindow("ACMX2 OpenGL Probe", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 32, 32, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
     if (!probe_window) {
         error_message = SDL_GetError();
         if (!video_was_initialized) {
@@ -300,11 +290,9 @@ static bool probe_open_gl_context(int major, int minor, std::string &error_messa
         int actual_minor = 0;
         SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &actual_major);
         SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &actual_minor);
-        version_supported = actual_major > major ||
-                            (actual_major == major && actual_minor >= minor);
+        version_supported = actual_major > major || (actual_major == major && actual_minor >= minor);
         if (!version_supported) {
-            error_message = "driver returned OpenGL " + std::to_string(actual_major) +
-                            "." + std::to_string(actual_minor);
+            error_message = "driver returned OpenGL " + std::to_string(actual_major) + "." + std::to_string(actual_minor);
         }
         SDL_GL_DeleteContext(probe_context);
     } else {
@@ -326,8 +314,7 @@ static OpenGLContextConfig select_open_gl_context() {
         return {4, 3};
     }
 
-    mx::system_out << "acmx2: OpenGL 4.3 unavailable (" << error_message
-                   << "); falling back to OpenGL 4.1 with compute shaders disabled\n";
+    mx::system_out << "acmx2: OpenGL 4.3 unavailable (" << error_message << "); falling back to OpenGL 4.1 with compute shaders disabled\n";
     error_message.clear();
     if (!probe_open_gl_context(4, 1, error_message)) {
         throw std::runtime_error("OpenGL 4.1 or newer is required: " + error_message);
@@ -335,9 +322,7 @@ static OpenGLContextConfig select_open_gl_context() {
     return {4, 1};
 }
 #else
-static OpenGLContextConfig select_open_gl_context() {
-    return {4, 1};
-}
+static OpenGLContextConfig select_open_gl_context() { return {4, 1}; }
 #endif
 
 /** Update the feature flag from the real context rather than only the probe. */
@@ -351,8 +336,7 @@ static void update_compute_shader_support() {
 #else
     compute_shader_supported = false;
 #endif
-    mx::system_out << "acmx2: Compute shader support: "
-                   << (compute_shader_supported ? "enabled" : "disabled") << "\n";
+    mx::system_out << "acmx2: Compute shader support: " << (compute_shader_supported ? "enabled" : "disabled") << "\n";
 }
 
 /**
@@ -374,12 +358,9 @@ static void print_open_gl_uniform_limits() {
     GLint minor_version = 0;
     glGetIntegerv(GL_MAJOR_VERSION, &major_version);
     glGetIntegerv(GL_MINOR_VERSION, &minor_version);
-    bool uniform_locations_supported =
-        major_version > 4 || (major_version == 4 && minor_version >= 3);
+    bool uniform_locations_supported = major_version > 4 || (major_version == 4 && minor_version >= 3);
 #ifdef GL_ARB_explicit_uniform_location
-    uniform_locations_supported =
-        uniform_locations_supported ||
-        SDL_GL_ExtensionSupported("GL_ARB_explicit_uniform_location") == SDL_TRUE;
+    uniform_locations_supported = uniform_locations_supported || SDL_GL_ExtensionSupported("GL_ARB_explicit_uniform_location") == SDL_TRUE;
 #endif
 
 #ifdef GL_MAX_UNIFORM_LOCATIONS
@@ -390,11 +371,8 @@ static void print_open_gl_uniform_limits() {
     uniform_locations_supported = false;
 #endif
 
-    mx::system_out
-        << "acmx2: OpenGL uniform limits: vertex components="
-        << max_vertex_components << " (GL_MAX_VERTEX_UNIFORM_COMPONENTS), "
-        << "fragment components=" << max_fragment_components
-        << " (GL_MAX_FRAGMENT_UNIFORM_COMPONENTS), uniform locations=";
+    mx::system_out << "acmx2: OpenGL uniform limits: vertex components=" << max_vertex_components << " (GL_MAX_VERTEX_UNIFORM_COMPONENTS), "
+                   << "fragment components=" << max_fragment_components << " (GL_MAX_FRAGMENT_UNIFORM_COMPONENTS), uniform locations=";
     if (uniform_locations_supported) {
         mx::system_out << max_uniform_locations;
     } else {
@@ -427,8 +405,7 @@ static bool isV4l2LoopbackDevice(int device_index) {
     }
 
     const std::string driver(reinterpret_cast<const char *>(capability.driver));
-    return driver.find("v4l2loopback") != std::string::npos ||
-           driver.find("v4l2 loopback") != std::string::npos;
+    return driver.find("v4l2loopback") != std::string::npos || driver.find("v4l2 loopback") != std::string::npos;
 }
 #endif
 
@@ -459,18 +436,14 @@ static std::optional<std::string> normalizeShaderIndexEntry(const std::string &r
     if (normalized_str.empty() || normalized_str == "." || normalized_str == "..") {
         return std::nullopt;
     }
-    if (normalized_str.rfind("../", 0) == 0 ||
-        normalized_str.find("/../") != std::string::npos ||
-        (normalized_str.size() >= 3 && normalized_str.compare(normalized_str.size() - 3, 3, "/..") == 0)) {
+    if (normalized_str.rfind("../", 0) == 0 || normalized_str.find("/../") != std::string::npos || (normalized_str.size() >= 3 && normalized_str.compare(normalized_str.size() - 3, 3, "/..") == 0)) {
         return std::nullopt;
     }
 
     return normalized_str;
 }
 
-static bool resolveShaderPathInLibrary(const std::string &library_path,
-                                       const std::string &relative_path,
-                                       std::string &resolved_full_path) {
+static bool resolveShaderPathInLibrary(const std::string &library_path, const std::string &relative_path, std::string &resolved_full_path) {
     std::error_code ec;
     std::filesystem::path base = std::filesystem::weakly_canonical(std::filesystem::path(library_path), ec);
     if (ec) {
@@ -488,9 +461,7 @@ static bool resolveShaderPathInLibrary(const std::string &library_path,
 
     const std::filesystem::path relative = target.lexically_relative(base);
     const std::string relative_str = relative.generic_string();
-    if (relative.empty() ||
-        relative_str == ".." ||
-        relative_str.rfind("../", 0) == 0) {
+    if (relative.empty() || relative_str == ".." || relative_str.rfind("../", 0) == 0) {
         return false;
     }
 
@@ -502,48 +473,32 @@ static bool resolveShaderPathInLibrary(const std::string &library_path,
     return true;
 }
 
-static bool isEditorPreviewPath(const std::filesystem::path &library_path,
-                                const std::filesystem::path &requested_path) {
+static bool isEditorPreviewPath(const std::filesystem::path &library_path, const std::filesystem::path &requested_path) {
     std::error_code error;
-    const std::filesystem::path preview_root =
-        std::filesystem::weakly_canonical(
-            library_path / ".acmx2-editor-preview", error);
+    const std::filesystem::path preview_root = std::filesystem::weakly_canonical(library_path / ".acmx2-editor-preview", error);
     if (error)
         return false;
-    const std::filesystem::path relative =
-        requested_path.lexically_relative(preview_root);
+    const std::filesystem::path relative = requested_path.lexically_relative(preview_root);
     const std::string relative_text = relative.generic_string();
-    return !relative.empty() && relative_text != ".." &&
-           relative_text.rfind("../", 0) != 0;
+    return !relative.empty() && relative_text != ".." && relative_text.rfind("../", 0) != 0;
 }
 
-static bool isEditorPreviewForShader(
-    const std::filesystem::path &loaded_shader,
-    const std::filesystem::path &requested_path) {
+static bool isEditorPreviewForShader(const std::filesystem::path &loaded_shader, const std::filesystem::path &requested_path) {
     if (requested_path.parent_path().filename() != ".acmx2-editor-preview")
         return false;
-    const std::filesystem::path source_root =
-        requested_path.parent_path().parent_path();
-    const std::filesystem::path relative =
-        loaded_shader.lexically_relative(source_root);
+    const std::filesystem::path source_root = requested_path.parent_path().parent_path();
+    const std::filesystem::path relative = loaded_shader.lexically_relative(source_root);
     const std::string relative_text = relative.generic_string();
-    return !relative.empty() && relative_text != ".." &&
-           relative_text.rfind("../", 0) != 0;
+    return !relative.empty() && relative_text != ".." && relative_text.rfind("../", 0) != 0;
 }
 
-enum class ShaderManifestFormat { Json,
-                                  Text };
+enum class ShaderManifestFormat { Json, Text };
 
-enum class ShaderProgramKind { Fragment,
-                               Compute,
-                               ComputeUnavailable };
+enum class ShaderProgramKind { Fragment, Compute, ComputeUnavailable };
 
 static bool isComputeShaderFile(const std::string &path) {
     std::string extension = std::filesystem::path(path).extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(),
-                   [](unsigned char ch) {
-                       return static_cast<char>(std::tolower(ch));
-                   });
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
     return extension == ".comp";
 }
 
@@ -562,16 +517,10 @@ struct ShaderManifestData {
 };
 
 static bool isValidCustomUniformName(const std::string &name) {
-    if (name.empty() ||
-        name.size() >= acmx2::ipc::kShaderSelectionMaxUniformName ||
-        name.rfind("gl_", 0) == 0 ||
-        !(std::isalpha(static_cast<unsigned char>(name.front())) ||
-          name.front() == '_')) {
+    if (name.empty() || name.size() >= acmx2::ipc::kShaderSelectionMaxUniformName || name.rfind("gl_", 0) == 0 || !(std::isalpha(static_cast<unsigned char>(name.front())) || name.front() == '_')) {
         return false;
     }
-    return std::all_of(name.begin() + 1, name.end(), [](unsigned char ch) {
-        return std::isalnum(ch) || ch == '_';
-    });
+    return std::all_of(name.begin() + 1, name.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '_'; });
 }
 
 static std::string shaderManifestPath(const std::string &library_path) {
@@ -585,9 +534,7 @@ static std::string shaderManifestPath(const std::string &library_path) {
     return {};
 }
 
-static bool loadShaderManifest(const std::string &library_path,
-                               ShaderManifestData &manifest,
-                               std::string &error) {
+static bool loadShaderManifest(const std::string &library_path, ShaderManifestData &manifest, std::string &error) {
     manifest = {};
     error.clear();
     manifest.path = shaderManifestPath(library_path);
@@ -599,8 +546,7 @@ static bool loadShaderManifest(const std::string &library_path,
     if (std::filesystem::path(manifest.path).extension() == ".json") {
         manifest.format = ShaderManifestFormat::Json;
         try {
-            cv::FileStorage storage(manifest.path,
-                                    cv::FileStorage::READ | cv::FileStorage::FORMAT_JSON);
+            cv::FileStorage storage(manifest.path, cv::FileStorage::READ | cv::FileStorage::FORMAT_JSON);
             if (!storage.isOpened()) {
                 error = "Could not open shader manifest: " + manifest.path;
                 return false;
@@ -629,8 +575,7 @@ static bool loadShaderManifest(const std::string &library_path,
                     return false;
                 }
                 for (auto it = uniforms.begin(); it != uniforms.end(); ++it) {
-                    if (manifest.custom_uniforms.size() >=
-                        acmx2::ipc::kShaderSelectionMaxCustomUniforms) {
+                    if (manifest.custom_uniforms.size() >= acmx2::ipc::kShaderSelectionMaxCustomUniforms) {
                         error = manifest.path + " contains too many custom uniforms";
                         return false;
                     }
@@ -638,8 +583,7 @@ static bool loadShaderManifest(const std::string &library_path,
                     ShaderManifestData::CustomUniform uniform;
                     uniform.name = entry.name();
                     if (!entry.isMap() || !isValidCustomUniformName(uniform.name)) {
-                        error = manifest.path + " contains an invalid custom uniform: " +
-                                uniform.name;
+                        error = manifest.path + " contains an invalid custom uniform: " + uniform.name;
                         return false;
                     }
                     if (!entry["minimum"].empty())
@@ -651,17 +595,11 @@ static bool loadShaderManifest(const std::string &library_path,
                     uniform.value = uniform.minimum;
                     if (!entry["value"].empty())
                         entry["value"] >> uniform.value;
-                    if (!std::isfinite(uniform.minimum) ||
-                        !std::isfinite(uniform.maximum) ||
-                        !std::isfinite(uniform.step) ||
-                        !std::isfinite(uniform.value) ||
-                        uniform.maximum <= uniform.minimum || uniform.step <= 0.0) {
-                        error = manifest.path + " contains an invalid range for custom uniform: " +
-                                uniform.name;
+                    if (!std::isfinite(uniform.minimum) || !std::isfinite(uniform.maximum) || !std::isfinite(uniform.step) || !std::isfinite(uniform.value) || uniform.maximum <= uniform.minimum || uniform.step <= 0.0) {
+                        error = manifest.path + " contains an invalid range for custom uniform: " + uniform.name;
                         return false;
                     }
-                    uniform.value = std::clamp(uniform.value, uniform.minimum,
-                                               uniform.maximum);
+                    uniform.value = std::clamp(uniform.value, uniform.minimum, uniform.maximum);
                     manifest.custom_uniforms.push_back(std::move(uniform));
                 }
             }
@@ -684,13 +622,9 @@ static bool loadShaderManifest(const std::string &library_path,
     return true;
 }
 
-static bool writeJsonShaderManifest(const std::string &path,
-                                    const std::vector<std::string> &entries,
-                                    const std::vector<ShaderManifestData::CustomUniform> &custom_uniforms,
-                                    std::string &error) {
+static bool writeJsonShaderManifest(const std::string &path, const std::vector<std::string> &entries, const std::vector<ShaderManifestData::CustomUniform> &custom_uniforms, std::string &error) {
     try {
-        cv::FileStorage storage(path,
-                                cv::FileStorage::WRITE | cv::FileStorage::FORMAT_JSON);
+        cv::FileStorage storage(path, cv::FileStorage::WRITE | cv::FileStorage::FORMAT_JSON);
         if (!storage.isOpened()) {
             error = "Could not write shader manifest: " + path;
             return false;
@@ -705,13 +639,8 @@ static bool writeJsonShaderManifest(const std::string &path,
             storage << "custom_uniforms"
                     << "{";
             for (const auto &uniform : custom_uniforms) {
-                storage << uniform.name
-                        << "{"
-                        << "minimum" << uniform.minimum
-                        << "maximum" << uniform.maximum
-                        << "step" << uniform.step
-                        << "value" << uniform.value
-                        << "}";
+                storage << uniform.name << "{"
+                        << "minimum" << uniform.minimum << "maximum" << uniform.maximum << "step" << uniform.step << "value" << uniform.value << "}";
             }
             storage << "}";
         }
@@ -723,9 +652,7 @@ static bool writeJsonShaderManifest(const std::string &path,
     }
 }
 
-static bool collectShaderLibraryEntries(const std::string &library_path,
-                                        std::vector<std::string> &shader_files,
-                                        std::string &error) {
+static bool collectShaderLibraryEntries(const std::string &library_path, std::vector<std::string> &shader_files, std::string &error) {
     ShaderManifestData manifest;
     if (!loadShaderManifest(library_path, manifest, error))
         return false;
@@ -738,14 +665,7 @@ static bool collectShaderLibraryEntries(const std::string &library_path,
         if (resolveShaderPathInLibrary(library_path, *shader_entry, full_path))
             shader_files.push_back(*shader_entry);
     }
-    std::sort(shader_files.begin(), shader_files.end(),
-              [](const std::string &a, const std::string &b) {
-                  return std::lexicographical_compare(
-                      a.begin(), a.end(), b.begin(), b.end(),
-                      [](unsigned char ca, unsigned char cb) {
-                          return std::tolower(ca) < std::tolower(cb);
-                      });
-              });
+    std::sort(shader_files.begin(), shader_files.end(), [](const std::string &a, const std::string &b) { return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](unsigned char ca, unsigned char cb) { return std::tolower(ca) < std::tolower(cb); }); });
     return true;
 }
 
@@ -757,10 +677,8 @@ static std::vector<std::string> sortedShaderLibraryEntries(const std::string &li
     return shader_files;
 }
 
-static int shaderIndexForFile(const std::vector<std::string> &shader_files,
-                              const std::string &shader_file) {
-    const auto selected = std::find(shader_files.begin(), shader_files.end(),
-                                    shader_file);
+static int shaderIndexForFile(const std::vector<std::string> &shader_files, const std::string &shader_file) {
+    const auto selected = std::find(shader_files.begin(), shader_files.end(), shader_file);
     if (selected == shader_files.end())
         return -1;
     return static_cast<int>(std::distance(shader_files.begin(), selected));
@@ -797,9 +715,7 @@ namespace {
         sigaction(SIGHUP, &sa, nullptr);
     }
 #elif defined(_WIN32)
-    extern "C" void acmx2_signal_handler(int) {
-        g_shutdown_requested.store(true, std::memory_order_relaxed);
-    }
+    extern "C" void acmx2_signal_handler(int) { g_shutdown_requested.store(true, std::memory_order_relaxed); }
 
     void installHeadlessSignalHandlers() {
         std::signal(SIGINT, &acmx2_signal_handler);
@@ -910,8 +826,7 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
     out.create(h, w, CV_16UC4);
 
     auto sample10 = [&](const uint8_t *plane, int stride_b, int x, int y) -> int {
-        const uint16_t raw = *reinterpret_cast<const uint16_t *>(
-            plane + y * stride_b + x * 2);
+        const uint16_t raw = *reinterpret_cast<const uint16_t *>(plane + y * stride_b + x * 2);
         return static_cast<int>(raw >> sample_shift);
     };
 
@@ -937,8 +852,7 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
             if (is_p010) {
                 // Interleaved Cb,Cr: each chroma pixel is 2 uint16 samples
                 // (Cb then Cr). Row stride is still linesize[1] bytes.
-                const uint16_t *row = reinterpret_cast<const uint16_t *>(
-                    up + cy * uv_stride_b);
+                const uint16_t *row = reinterpret_cast<const uint16_t *>(up + cy * uv_stride_b);
                 Cbs = static_cast<int>(row[cx * 2 + 0]) >> sample_shift;
                 Crs = static_cast<int>(row[cx * 2 + 1]) >> sample_shift;
             } else {
@@ -969,9 +883,7 @@ inline bool convertBt2020Yuv10LimitedToRgba16(const AVFrame *src, cv::Mat &out) 
     return true;
 }
 
-inline float clamp01f(float v) {
-    return (v < 0.0f) ? 0.0f : (v > 1.0f ? 1.0f : v);
-}
+inline float clamp01f(float v) { return (v < 0.0f) ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
 inline float pqToLinearScalar(float e) {
     // SMPTE ST.2084 inverse EOTF, output normalized so 1.0 == 10000 nits.
@@ -1026,10 +938,7 @@ inline uint16_t linearToSrgb16(float v) {
     return static_cast<uint16_t>(std::clamp(iv, 0, 65535));
 }
 
-inline std::vector<unsigned char> toneMapHdrRgba16ToSdrRgba8(const std::vector<unsigned char> &hdr_pixels,
-                                                             int w,
-                                                             int h,
-                                                             int hdr_trc) {
+inline std::vector<unsigned char> toneMapHdrRgba16ToSdrRgba8(const std::vector<unsigned char> &hdr_pixels, int w, int h, int hdr_trc) {
     std::vector<unsigned char> sdr_pixels(static_cast<size_t>(w) * static_cast<size_t>(h) * 4, 0);
     const bool is_hlg = (hdr_trc == AVCOL_TRC_ARIB_STD_B67);
 
@@ -1038,10 +947,7 @@ inline std::vector<unsigned char> toneMapHdrRgba16ToSdrRgba8(const std::vector<u
     constexpr float m10 = -0.1246f, m11 = 1.1329f, m12 = -0.0083f;
     constexpr float m20 = -0.0182f, m21 = -0.1006f, m22 = 1.1187f;
 
-    auto read_u16_le = [&](size_t byte_index) -> uint16_t {
-        return static_cast<uint16_t>(static_cast<uint16_t>(hdr_pixels[byte_index]) |
-                                     (static_cast<uint16_t>(hdr_pixels[byte_index + 1]) << 8));
-    };
+    auto read_u16_le = [&](size_t byte_index) -> uint16_t { return static_cast<uint16_t>(static_cast<uint16_t>(hdr_pixels[byte_index]) | (static_cast<uint16_t>(hdr_pixels[byte_index + 1]) << 8)); };
 
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
@@ -1093,10 +999,7 @@ inline std::vector<unsigned char> toneMapHdrRgba16ToSdrRgba8(const std::vector<u
 // 16-bit-per-channel variant: tone-maps PQ/HLG BT.2020 RGBA16 -> sRGB RGBA16
 // (gamma-encoded sRGB, contiguous LE uint16 samples). Used by the HDR TIFF
 // snapshot path so the resulting file is correctly viewable on any display.
-inline std::vector<uint16_t> toneMapHdrRgba16ToSrgbRgba16(const unsigned char *hdr_pixels,
-                                                          int w,
-                                                          int h,
-                                                          int hdr_trc) {
+inline std::vector<uint16_t> toneMapHdrRgba16ToSrgbRgba16(const unsigned char *hdr_pixels, int w, int h, int hdr_trc) {
     std::vector<uint16_t> sdr_pixels(static_cast<size_t>(w) * static_cast<size_t>(h) * 4, 0);
     const bool is_hlg = (hdr_trc == AVCOL_TRC_ARIB_STD_B67);
 
@@ -1104,10 +1007,7 @@ inline std::vector<uint16_t> toneMapHdrRgba16ToSrgbRgba16(const unsigned char *h
     constexpr float m10 = -0.1246f, m11 = 1.1329f, m12 = -0.0083f;
     constexpr float m20 = -0.0182f, m21 = -0.1006f, m22 = 1.1187f;
 
-    auto read_u16_le = [&](size_t byte_index) -> uint16_t {
-        return static_cast<uint16_t>(static_cast<uint16_t>(hdr_pixels[byte_index]) |
-                                     (static_cast<uint16_t>(hdr_pixels[byte_index + 1]) << 8));
-    };
+    auto read_u16_le = [&](size_t byte_index) -> uint16_t { return static_cast<uint16_t>(static_cast<uint16_t>(hdr_pixels[byte_index]) | (static_cast<uint16_t>(hdr_pixels[byte_index + 1]) << 8)); };
 
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
@@ -1153,10 +1053,7 @@ inline std::vector<uint16_t> toneMapHdrRgba16ToSrgbRgba16(const unsigned char *h
 }
 
 #ifdef ACMX2_WITH_WEBP
-inline bool saveSdrWebPFromRgba8(const char *filename,
-                                 const unsigned char *rgba8,
-                                 int width,
-                                 int height) {
+inline bool saveSdrWebPFromRgba8(const char *filename, const unsigned char *rgba8, int width, int height) {
     if (filename == nullptr || rgba8 == nullptr || width <= 0 || height <= 0) {
         return false;
     }
@@ -1190,19 +1087,14 @@ inline bool saveSdrWebPFromRgba8(const char *filename,
 // The resulting lossless RGBA WebP displays correctly on both SDR and HDR
 // viewers (including phone HDR displays which would otherwise interpret
 // PQ-encoded bytes as sRGB and produce washed-out colours).
-inline bool saveHdrWebPFromRgba16(const char *filename,
-                                  const unsigned char *rgba16,
-                                  int width,
-                                  int height,
-                                  int hdr_trc) {
+inline bool saveHdrWebPFromRgba16(const char *filename, const unsigned char *rgba16, int width, int height, int hdr_trc) {
     if (filename == nullptr || rgba16 == nullptr || width <= 0 || height <= 0) {
         return false;
     }
     const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
     // Reuse the existing tone-mapper. It expects a vector view of the input.
     const std::vector<unsigned char> hdr_view(rgba16, rgba16 + pixel_count * 8);
-    const std::vector<unsigned char> rgba8 =
-        toneMapHdrRgba16ToSdrRgba8(hdr_view, width, height, hdr_trc);
+    const std::vector<unsigned char> rgba8 = toneMapHdrRgba16ToSdrRgba8(hdr_view, width, height, hdr_trc);
 
     uint8_t *output = nullptr;
     const int stride = width * 4;
@@ -1228,10 +1120,7 @@ inline bool saveHdrWebPFromRgba16(const char *filename,
 #endif // ACMX2_WITH_WEBP
 
 #ifdef ACMX2_WITH_TIFF
-inline bool saveSdrTiffFromRgba8(const char *filename,
-                                 const unsigned char *rgba8,
-                                 int width,
-                                 int height) {
+inline bool saveSdrTiffFromRgba8(const char *filename, const unsigned char *rgba8, int width, int height) {
     if (filename == nullptr || rgba8 == nullptr || width <= 0 || height <= 0) {
         return false;
     }
@@ -1254,8 +1143,7 @@ inline bool saveSdrTiffFromRgba8(const char *filename,
 
     const uint16_t extra[1] = {EXTRASAMPLE_UNASSALPHA};
     TIFFSetField(tif, TIFFTAG_EXTRASAMPLES, 1, extra);
-    TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION,
-                 "ACMX2 SDR snapshot: 8-bit RGBA TIFF");
+    TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION, "ACMX2 SDR snapshot: 8-bit RGBA TIFF");
 
     const tmsize_t row_bytes = static_cast<tmsize_t>(width) * 4;
     bool ok = true;
@@ -1277,17 +1165,12 @@ inline bool saveSdrTiffFromRgba8(const char *filename,
 // before writing. This keeps highlight detail (no 8-bit quantisation) while
 // producing a file that displays correctly on every viewer — without the
 // PQ-as-sRGB washed-out appearance that bare PQ data would have.
-inline bool saveHdrTiffFromRgba16(const char *filename,
-                                  const unsigned char *rgba16,
-                                  int width,
-                                  int height,
-                                  int hdr_trc) {
+inline bool saveHdrTiffFromRgba16(const char *filename, const unsigned char *rgba16, int width, int height, int hdr_trc) {
     if (filename == nullptr || rgba16 == nullptr || width <= 0 || height <= 0) {
         return false;
     }
 
-    const std::vector<uint16_t> srgb16 =
-        toneMapHdrRgba16ToSrgbRgba16(rgba16, width, height, hdr_trc);
+    const std::vector<uint16_t> srgb16 = toneMapHdrRgba16ToSrgbRgba16(rgba16, width, height, hdr_trc);
 
     TIFF *tif = TIFFOpen(filename, "w");
     if (tif == nullptr) {
@@ -1307,8 +1190,7 @@ inline bool saveHdrTiffFromRgba16(const char *filename,
 
     const uint16_t extra[1] = {EXTRASAMPLE_UNASSALPHA};
     TIFFSetField(tif, TIFFTAG_EXTRASAMPLES, 1, extra);
-    TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION,
-                 "ACMX2 HDR snapshot: 16-bit RGBA, sRGB tone-mapped from BT.2020 PQ/HLG");
+    TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION, "ACMX2 HDR snapshot: 16-bit RGBA, sRGB tone-mapped from BT.2020 PQ/HLG");
 
     const tmsize_t row_samples = static_cast<tmsize_t>(width) * 4;
     bool ok = true;
@@ -1348,185 +1230,177 @@ inline bool saveHdrTiffFromRgba16(const char *filename,
 // the same two shaders handle both SMPTE ST.2084 (PQ) and ARIB STD-B67
 // (HLG) inputs. transfer: 1 = PQ, 2 = HLG.
 // ---------------------------------------------------------------------------
-constexpr const char *kHdrVertPassthrough =
-    "#version 330 core\n"
-    "layout(location = 0) in vec3 aPos;\n"
-    "layout(location = 1) in vec2 aTex;\n"
-    "out vec2 tc;\n"
-    "uniform mat4 mv_matrix;\n"
-    "uniform mat4 proj_matrix;\n"
-    "void main() {\n"
-    "    gl_Position = proj_matrix * mv_matrix * vec4(aPos, 1.0);\n"
-    "    tc = aTex;\n"
-    "}\n";
+constexpr const char *kHdrVertPassthrough = "#version 330 core\n"
+                                            "layout(location = 0) in vec3 aPos;\n"
+                                            "layout(location = 1) in vec2 aTex;\n"
+                                            "out vec2 tc;\n"
+                                            "uniform mat4 mv_matrix;\n"
+                                            "uniform mat4 proj_matrix;\n"
+                                            "void main() {\n"
+                                            "    gl_Position = proj_matrix * mv_matrix * vec4(aPos, 1.0);\n"
+                                            "    tc = aTex;\n"
+                                            "}\n";
 
-constexpr const char *kHdrDecodeFrag =
-    "#version 330 core\n"
-    "in vec2 tc;\n"
-    "out vec4 color;\n"
-    "uniform sampler2D samp;\n"
-    "uniform int transfer;  // 1 = PQ (SMPTE2084), 2 = HLG (ARIB STD-B67)\n"
-    "// SMPTE ST.2084 inverse EOTF. Input: PQ code in [0,1]. Output: linear\n"
-    "// fractional luminance where 1.0 = PQ peak (10000 nits).\n"
-    "vec3 pqToLinear(vec3 e) {\n"
-    "    const float m1 = 2610.0 / 16384.0;\n"
-    "    const float m2 = (2523.0 / 4096.0) * 128.0;\n"
-    "    const float c1 = 3424.0 / 4096.0;\n"
-    "    const float c2 = (2413.0 / 4096.0) * 32.0;\n"
-    "    const float c3 = (2392.0 / 4096.0) * 32.0;\n"
-    "    vec3 ec = clamp(e, vec3(0.0), vec3(1.0));\n"
-    "    vec3 em2 = pow(ec, vec3(1.0 / m2));\n"
-    "    vec3 num = max(em2 - c1, vec3(0.0));\n"
-    "    // Clamp denominator floor to avoid div-by-zero / sign-flip near\n"
-    "    // peak code values which would otherwise propagate NaN through\n"
-    "    // pow() and read back as zero on some drivers.\n"
-    "    vec3 den = max(c2 - c3 * em2, vec3(1e-6));\n"
-    "    return pow(num / den, vec3(1.0 / m1));\n"
-    "}\n"
-    "// ARIB STD-B67 (HLG) inverse OETF. Input HLG code [0,1]. Output scene\n"
-    "// linear [0,1] normalised so 0.5 HLG -> ~0.083 linear (reference white).\n"
-    "vec3 hlgToLinear(vec3 e) {\n"
-    "    const float a = 0.17883277;\n"
-    "    const float b = 0.28466892;\n"
-    "    const float c = 0.55991073;\n"
-    "    vec3 ec = clamp(e, vec3(0.0), vec3(1.0));\n"
-    "    vec3 lo = (ec * ec) / 3.0;\n"
-    "    vec3 hi = (exp((ec - c) / a) + b) / 12.0;\n"
-    "    return mix(lo, hi, step(vec3(0.5), ec));\n"
-    "}\n"
-    "void main() {\n"
-    "    vec4 raw = texture(samp, tc);\n"
-    "    vec3 lin;\n"
-    "    if (transfer == 2) {\n"
-    "        // HLG: inverse-OETF then scale so reference white == 1.0.\n"
-    "        // Reference white sits at ~0.26 scene-linear; scale by 1/0.26\n"
-    "        // ~= 3.77 so shader colours match SDR at nominal exposure.\n"
-    "        lin = hlgToLinear(raw.rgb) * 3.77358491;\n"
-    "    } else {\n"
-    "        // PQ: inverse-EOTF, then rescale so 100 nits == 1.0 (reference\n"
-    "        // white). 100 / 10000 = 0.01, so we multiply by 100. Highlights\n"
-    "        // above reference end up as values > 1.0 (legal in RGBA16F).\n"
-    "        lin = pqToLinear(raw.rgb) * 100.0;\n"
-    "    }\n"
-    "    color = vec4(lin, raw.a);\n"
-    "}\n";
+constexpr const char *kHdrDecodeFrag = "#version 330 core\n"
+                                       "in vec2 tc;\n"
+                                       "out vec4 color;\n"
+                                       "uniform sampler2D samp;\n"
+                                       "uniform int transfer;  // 1 = PQ (SMPTE2084), 2 = HLG (ARIB STD-B67)\n"
+                                       "// SMPTE ST.2084 inverse EOTF. Input: PQ code in [0,1]. Output: linear\n"
+                                       "// fractional luminance where 1.0 = PQ peak (10000 nits).\n"
+                                       "vec3 pqToLinear(vec3 e) {\n"
+                                       "    const float m1 = 2610.0 / 16384.0;\n"
+                                       "    const float m2 = (2523.0 / 4096.0) * 128.0;\n"
+                                       "    const float c1 = 3424.0 / 4096.0;\n"
+                                       "    const float c2 = (2413.0 / 4096.0) * 32.0;\n"
+                                       "    const float c3 = (2392.0 / 4096.0) * 32.0;\n"
+                                       "    vec3 ec = clamp(e, vec3(0.0), vec3(1.0));\n"
+                                       "    vec3 em2 = pow(ec, vec3(1.0 / m2));\n"
+                                       "    vec3 num = max(em2 - c1, vec3(0.0));\n"
+                                       "    // Clamp denominator floor to avoid div-by-zero / sign-flip near\n"
+                                       "    // peak code values which would otherwise propagate NaN through\n"
+                                       "    // pow() and read back as zero on some drivers.\n"
+                                       "    vec3 den = max(c2 - c3 * em2, vec3(1e-6));\n"
+                                       "    return pow(num / den, vec3(1.0 / m1));\n"
+                                       "}\n"
+                                       "// ARIB STD-B67 (HLG) inverse OETF. Input HLG code [0,1]. Output scene\n"
+                                       "// linear [0,1] normalised so 0.5 HLG -> ~0.083 linear (reference white).\n"
+                                       "vec3 hlgToLinear(vec3 e) {\n"
+                                       "    const float a = 0.17883277;\n"
+                                       "    const float b = 0.28466892;\n"
+                                       "    const float c = 0.55991073;\n"
+                                       "    vec3 ec = clamp(e, vec3(0.0), vec3(1.0));\n"
+                                       "    vec3 lo = (ec * ec) / 3.0;\n"
+                                       "    vec3 hi = (exp((ec - c) / a) + b) / 12.0;\n"
+                                       "    return mix(lo, hi, step(vec3(0.5), ec));\n"
+                                       "}\n"
+                                       "void main() {\n"
+                                       "    vec4 raw = texture(samp, tc);\n"
+                                       "    vec3 lin;\n"
+                                       "    if (transfer == 2) {\n"
+                                       "        // HLG: inverse-OETF then scale so reference white == 1.0.\n"
+                                       "        // Reference white sits at ~0.26 scene-linear; scale by 1/0.26\n"
+                                       "        // ~= 3.77 so shader colours match SDR at nominal exposure.\n"
+                                       "        lin = hlgToLinear(raw.rgb) * 3.77358491;\n"
+                                       "    } else {\n"
+                                       "        // PQ: inverse-EOTF, then rescale so 100 nits == 1.0 (reference\n"
+                                       "        // white). 100 / 10000 = 0.01, so we multiply by 100. Highlights\n"
+                                       "        // above reference end up as values > 1.0 (legal in RGBA16F).\n"
+                                       "        lin = pqToLinear(raw.rgb) * 100.0;\n"
+                                       "    }\n"
+                                       "    color = vec4(lin, raw.a);\n"
+                                       "}\n";
 
-constexpr const char *kHdrEncodeFrag =
-    "#version 330 core\n"
-    "in vec2 tc;\n"
-    "out vec4 color;\n"
-    "uniform sampler2D samp;\n"
-    "uniform int transfer;\n"
-    "vec3 linearToPq(vec3 L) {\n"
-    "    const float m1 = 2610.0 / 16384.0;\n"
-    "    const float m2 = (2523.0 / 4096.0) * 128.0;\n"
-    "    const float c1 = 3424.0 / 4096.0;\n"
-    "    const float c2 = (2413.0 / 4096.0) * 32.0;\n"
-    "    const float c3 = (2392.0 / 4096.0) * 32.0;\n"
-    "    vec3 Lm = pow(max(L, vec3(0.0)), vec3(m1));\n"
-    "    vec3 num = c1 + c2 * Lm;\n"
-    "    vec3 den = 1.0 + c3 * Lm;\n"
-    "    return pow(num / den, vec3(m2));\n"
-    "}\n"
-    "vec3 linearToHlg(vec3 L) {\n"
-    "    const float a = 0.17883277;\n"
-    "    const float b = 0.28466892;\n"
-    "    const float c = 0.55991073;\n"
-    "    vec3 Lc = max(L, vec3(0.0));\n"
-    "    vec3 lo = sqrt(3.0 * Lc);\n"
-    "    // Floor the log argument so the unused 'hi' branch never produces\n"
-    "    // NaN. mix() with NaN is mix(lo, NaN, 0) = lo + NaN*0 = NaN, which\n"
-    "    // would surface as black pixels after the final clamp/UNORM cast.\n"
-    "    vec3 hi = a * log(max(12.0 * Lc - b, vec3(1e-6))) + c;\n"
-    "    return mix(lo, hi, step(vec3(1.0 / 12.0), Lc));\n"
-    "}\n"
-    "void main() {\n"
-    "    vec3 lin = texture(samp, tc).rgb;\n"
-    "    // Sanitise potentially-NaN/Inf values from prior user shader\n"
-    "    // computations so they do not survive the OETF and read back as\n"
-    "    // zero (=> black holes in dark/edge regions).\n"
-    "    bvec3 nans = isnan(lin);\n"
-    "    bvec3 infs = isinf(lin);\n"
-    "    lin = mix(lin, vec3(0.0), vec3(nans));\n"
-    "    lin = mix(lin, vec3(0.0), vec3(infs));\n"
-    "    lin = max(lin, vec3(0.0));\n"
-    "    vec3 enc;\n"
-    "    if (transfer == 2) {\n"
-    "        enc = linearToHlg(lin / 3.77358491);\n"
-    "    } else {\n"
-    "        enc = linearToPq(lin / 100.0);\n"
-    "    }\n"
-    "    color = vec4(clamp(enc, 0.0, 1.0), 1.0);\n"
-    "}\n";
+constexpr const char *kHdrEncodeFrag = "#version 330 core\n"
+                                       "in vec2 tc;\n"
+                                       "out vec4 color;\n"
+                                       "uniform sampler2D samp;\n"
+                                       "uniform int transfer;\n"
+                                       "vec3 linearToPq(vec3 L) {\n"
+                                       "    const float m1 = 2610.0 / 16384.0;\n"
+                                       "    const float m2 = (2523.0 / 4096.0) * 128.0;\n"
+                                       "    const float c1 = 3424.0 / 4096.0;\n"
+                                       "    const float c2 = (2413.0 / 4096.0) * 32.0;\n"
+                                       "    const float c3 = (2392.0 / 4096.0) * 32.0;\n"
+                                       "    vec3 Lm = pow(max(L, vec3(0.0)), vec3(m1));\n"
+                                       "    vec3 num = c1 + c2 * Lm;\n"
+                                       "    vec3 den = 1.0 + c3 * Lm;\n"
+                                       "    return pow(num / den, vec3(m2));\n"
+                                       "}\n"
+                                       "vec3 linearToHlg(vec3 L) {\n"
+                                       "    const float a = 0.17883277;\n"
+                                       "    const float b = 0.28466892;\n"
+                                       "    const float c = 0.55991073;\n"
+                                       "    vec3 Lc = max(L, vec3(0.0));\n"
+                                       "    vec3 lo = sqrt(3.0 * Lc);\n"
+                                       "    // Floor the log argument so the unused 'hi' branch never produces\n"
+                                       "    // NaN. mix() with NaN is mix(lo, NaN, 0) = lo + NaN*0 = NaN, which\n"
+                                       "    // would surface as black pixels after the final clamp/UNORM cast.\n"
+                                       "    vec3 hi = a * log(max(12.0 * Lc - b, vec3(1e-6))) + c;\n"
+                                       "    return mix(lo, hi, step(vec3(1.0 / 12.0), Lc));\n"
+                                       "}\n"
+                                       "void main() {\n"
+                                       "    vec3 lin = texture(samp, tc).rgb;\n"
+                                       "    // Sanitise potentially-NaN/Inf values from prior user shader\n"
+                                       "    // computations so they do not survive the OETF and read back as\n"
+                                       "    // zero (=> black holes in dark/edge regions).\n"
+                                       "    bvec3 nans = isnan(lin);\n"
+                                       "    bvec3 infs = isinf(lin);\n"
+                                       "    lin = mix(lin, vec3(0.0), vec3(nans));\n"
+                                       "    lin = mix(lin, vec3(0.0), vec3(infs));\n"
+                                       "    lin = max(lin, vec3(0.0));\n"
+                                       "    vec3 enc;\n"
+                                       "    if (transfer == 2) {\n"
+                                       "        enc = linearToHlg(lin / 3.77358491);\n"
+                                       "    } else {\n"
+                                       "        enc = linearToPq(lin / 100.0);\n"
+                                       "    }\n"
+                                       "    color = vec4(clamp(enc, 0.0, 1.0), 1.0);\n"
+                                       "}\n";
 
 // Display shader that can optionally flip the Y coordinate of texture sampling.
 // Used when --flip is set for windowed display.
-constexpr const char *kDisplayVertFlip =
-    "#version 330 core\n"
-    "layout(location = 0) in vec3 aPos;\n"
-    "layout(location = 1) in vec2 aTex;\n"
-    "out vec2 tc;\n"
-    "uniform mat4 mv_matrix;\n"
-    "uniform mat4 proj_matrix;\n"
-    "uniform int flip_y;  // 1 to flip Y coordinate\n"
-    "void main() {\n"
-    "    gl_Position = proj_matrix * mv_matrix * vec4(aPos, 1.0);\n"
-    "    vec2 tex = aTex;\n"
-    "    if (flip_y == 1) {\n"
-    "        tex.y = 1.0 - tex.y;\n"
-    "    }\n"
-    "    tc = tex;\n"
-    "}\n";
+constexpr const char *kDisplayVertFlip = "#version 330 core\n"
+                                         "layout(location = 0) in vec3 aPos;\n"
+                                         "layout(location = 1) in vec2 aTex;\n"
+                                         "out vec2 tc;\n"
+                                         "uniform mat4 mv_matrix;\n"
+                                         "uniform mat4 proj_matrix;\n"
+                                         "uniform int flip_y;  // 1 to flip Y coordinate\n"
+                                         "void main() {\n"
+                                         "    gl_Position = proj_matrix * mv_matrix * vec4(aPos, 1.0);\n"
+                                         "    vec2 tex = aTex;\n"
+                                         "    if (flip_y == 1) {\n"
+                                         "        tex.y = 1.0 - tex.y;\n"
+                                         "    }\n"
+                                         "    tc = tex;\n"
+                                         "}\n";
 
-constexpr const char *kDisplayFragPassthrough =
-    "#version 330 core\n"
-    "in vec2 tc;\n"
-    "out vec4 color;\n"
-    "uniform sampler2D samp;\n"
-    "void main() {\n"
-    "    color = texture(samp, tc);\n"
-    "}\n";
+constexpr const char *kDisplayFragPassthrough = "#version 330 core\n"
+                                                "in vec2 tc;\n"
+                                                "out vec4 color;\n"
+                                                "uniform sampler2D samp;\n"
+                                                "void main() {\n"
+                                                "    color = texture(samp, tc);\n"
+                                                "}\n";
 
-constexpr const char *kMuxOverlayFrag =
-    "#version 330 core\n"
-    "out vec4 color;\n"
-    "in vec2 tc;\n"
-    "uniform sampler2D samp;\n"
-    "uniform float time_f;\n"
-    "uniform vec2 iResolution;\n"
-    "uniform float alpha;\n"
-    "void main(void) {\n"
-    "    vec2 uv = (tc * 2.0 - 1.0);\n"
-    "    float aspect = iResolution.x / iResolution.y;\n"
-    "    uv.x *= aspect;\n"
-    "    float d = length(uv);\n"
-    "    float lensStrength = 1.5;\n"
-    "    vec3 normal = normalize(vec3(uv, 1.0 / lensStrength));\n"
-    "    float fisheyeRadius = atan(d, 1.0);\n"
-    "    vec2 distortedUV = normalize(uv + 1e-6) * fisheyeRadius;\n"
-    "    float t = time_f * 0.8;\n"
-    "    float r_dist = length(distortedUV);\n"
-    "    float angle = atan(distortedUV.y, distortedUV.x);\n"
-    "    float spiral = angle + (log(r_dist + 0.1) * 3.0) - t * 1.5;\n"
-    "    float r = sin(spiral * 3.0 + t);\n"
-    "    float g = sin(spiral * 3.0 + t + 2.094);\n"
-    "    float b = sin(spiral * 3.0 + t + 4.188);\n"
-    "    vec3 spiralCol = vec3(r, g, b) * 0.5 + 0.5;\n"
-    "    vec3 lightDir = normalize(vec3(sin(time_f), cos(time_f), 1.0));\n"
-    "    float diff = max(dot(normal, lightDir), 0.0);\n"
-    "    float spec = pow(max(dot(reflect(-lightDir, normal), vec3(0,0,1)), 0.0), 16.0);\n"
-    "    vec4 texColor = texture(samp, tc);\n"
-    "    vec3 finalCol = mix(texColor.rgb, spiralCol * (diff + 0.5) + spec, 0.7);\n"
-    "    finalCol *= smoothstep(2.0, 0.5, d);\n"
-    "    float finalAlpha = texColor.a * alpha;\n"
-    "    color = vec4(finalCol, finalAlpha);\n"
-    "}\n";
+constexpr const char *kMuxOverlayFrag = "#version 330 core\n"
+                                        "out vec4 color;\n"
+                                        "in vec2 tc;\n"
+                                        "uniform sampler2D samp;\n"
+                                        "uniform float time_f;\n"
+                                        "uniform vec2 iResolution;\n"
+                                        "uniform float alpha;\n"
+                                        "void main(void) {\n"
+                                        "    vec2 uv = (tc * 2.0 - 1.0);\n"
+                                        "    float aspect = iResolution.x / iResolution.y;\n"
+                                        "    uv.x *= aspect;\n"
+                                        "    float d = length(uv);\n"
+                                        "    float lensStrength = 1.5;\n"
+                                        "    vec3 normal = normalize(vec3(uv, 1.0 / lensStrength));\n"
+                                        "    float fisheyeRadius = atan(d, 1.0);\n"
+                                        "    vec2 distortedUV = normalize(uv + 1e-6) * fisheyeRadius;\n"
+                                        "    float t = time_f * 0.8;\n"
+                                        "    float r_dist = length(distortedUV);\n"
+                                        "    float angle = atan(distortedUV.y, distortedUV.x);\n"
+                                        "    float spiral = angle + (log(r_dist + 0.1) * 3.0) - t * 1.5;\n"
+                                        "    float r = sin(spiral * 3.0 + t);\n"
+                                        "    float g = sin(spiral * 3.0 + t + 2.094);\n"
+                                        "    float b = sin(spiral * 3.0 + t + 4.188);\n"
+                                        "    vec3 spiralCol = vec3(r, g, b) * 0.5 + 0.5;\n"
+                                        "    vec3 lightDir = normalize(vec3(sin(time_f), cos(time_f), 1.0));\n"
+                                        "    float diff = max(dot(normal, lightDir), 0.0);\n"
+                                        "    float spec = pow(max(dot(reflect(-lightDir, normal), vec3(0,0,1)), 0.0), 16.0);\n"
+                                        "    vec4 texColor = texture(samp, tc);\n"
+                                        "    vec3 finalCol = mix(texColor.rgb, spiralCol * (diff + 0.5) + spec, 0.7);\n"
+                                        "    finalCol *= smoothstep(2.0, 0.5, d);\n"
+                                        "    float finalAlpha = texColor.a * alpha;\n"
+                                        "    color = vec4(finalCol, finalAlpha);\n"
+                                        "}\n";
 
 class FFMpegVideoReader {
   public:
-    ~FFMpegVideoReader() {
-        close();
-    }
+    ~FFMpegVideoReader() { close(); }
 
     bool open(const std::string &filename, bool prefer_cuda) {
         close();
@@ -1593,12 +1467,8 @@ class FFMpegVideoReader {
         {
             const AVCodecParameters *par = stream->codecpar;
             const bool primaries_hdr = (par->color_primaries == AVCOL_PRI_BT2020);
-            const bool trc_hdr = (par->color_trc == AVCOL_TRC_SMPTE2084) ||
-                                 (par->color_trc == AVCOL_TRC_ARIB_STD_B67) ||
-                                 (par->color_trc == AVCOL_TRC_BT2020_10) ||
-                                 (par->color_trc == AVCOL_TRC_BT2020_12);
-            const bool space_hdr = (par->color_space == AVCOL_SPC_BT2020_NCL) ||
-                                   (par->color_space == AVCOL_SPC_BT2020_CL);
+            const bool trc_hdr = (par->color_trc == AVCOL_TRC_SMPTE2084) || (par->color_trc == AVCOL_TRC_ARIB_STD_B67) || (par->color_trc == AVCOL_TRC_BT2020_10) || (par->color_trc == AVCOL_TRC_BT2020_12);
+            const bool space_hdr = (par->color_space == AVCOL_SPC_BT2020_NCL) || (par->color_space == AVCOL_SPC_BT2020_CL);
             int bpp = par->bits_per_raw_sample;
             if (bpp <= 0) {
                 // Fall back to codec context pixel format depth. Many HDR
@@ -1671,8 +1541,7 @@ class FFMpegVideoReader {
                 }
             }
 
-            const int receive_ret =
-                avcodec_receive_frame(codec_ctx, decoded_frame);
+            const int receive_ret = avcodec_receive_frame(codec_ctx, decoded_frame);
             if (receive_ret == AVERROR(EAGAIN)) {
                 if (draining) {
                     return false;
@@ -1750,17 +1619,7 @@ class FFMpegVideoReader {
                 sws_src_format = static_cast<AVPixelFormat>(src->format);
                 sws_w = src->width;
                 sws_h = src->height;
-                sws_ctx = sws_getContext(
-                    sws_w,
-                    sws_h,
-                    sws_src_format,
-                    sws_w,
-                    sws_h,
-                    AV_PIX_FMT_BGR24,
-                    SWS_BILINEAR,
-                    nullptr,
-                    nullptr,
-                    nullptr);
+                sws_ctx = sws_getContext(sws_w, sws_h, sws_src_format, sws_w, sws_h, AV_PIX_FMT_BGR24, SWS_BILINEAR, nullptr, nullptr, nullptr);
                 if (!sws_ctx) {
                     av_frame_unref(decoded_frame);
                     av_frame_unref(sw_frame);
@@ -1772,14 +1631,7 @@ class FFMpegVideoReader {
             uint8_t *dst_data[4] = {out_bgr.data, nullptr, nullptr, nullptr};
             int dst_linesize[4] = {static_cast<int>(out_bgr.step), 0, 0, 0};
 
-            sws_scale(
-                sws_ctx,
-                src->data,
-                src->linesize,
-                0,
-                src->height,
-                dst_data,
-                dst_linesize);
+            sws_scale(sws_ctx, src->data, src->linesize, 0, src->height, dst_data, dst_linesize);
 
             av_frame_unref(decoded_frame);
             av_frame_unref(sw_frame);
@@ -1852,8 +1704,7 @@ class FFMpegVideoReader {
             // uses BT.601 on several internal paths even after
             // @c sws_setColorspaceDetails), which manifested as a pink tint
             // on HLG output.
-            if (src->format == AV_PIX_FMT_YUV420P10LE ||
-                src->format == AV_PIX_FMT_P010LE) {
+            if (src->format == AV_PIX_FMT_YUV420P10LE || src->format == AV_PIX_FMT_P010LE) {
                 if (convertBt2020Yuv10LimitedToRgba16(src, out_rgba16)) {
                     av_frame_unref(decoded_frame);
                     av_frame_unref(sw_frame);
@@ -1875,17 +1726,7 @@ class FFMpegVideoReader {
                 // scaled to occupy the full 16-bit range from the source's
                 // 10/12-bit depth (shifted up). That is exactly what we want
                 // for the GPU decode pass.
-                sws_ctx_hdr = sws_getContext(
-                    sws_w_hdr,
-                    sws_h_hdr,
-                    sws_src_format_hdr,
-                    sws_w_hdr,
-                    sws_h_hdr,
-                    AV_PIX_FMT_RGBA64LE,
-                    SWS_BILINEAR,
-                    nullptr,
-                    nullptr,
-                    nullptr);
+                sws_ctx_hdr = sws_getContext(sws_w_hdr, sws_h_hdr, sws_src_format_hdr, sws_w_hdr, sws_h_hdr, AV_PIX_FMT_RGBA64LE, SWS_BILINEAR, nullptr, nullptr, nullptr);
                 if (!sws_ctx_hdr) {
                     av_frame_unref(decoded_frame);
                     av_frame_unref(sw_frame);
@@ -1919,25 +1760,14 @@ class FFMpegVideoReader {
                 const int src_range = (src->color_range == AVCOL_RANGE_JPEG) ? 1 : 0;
                 const int *src_coefs = sws_getCoefficients(src_space);
                 const int *dst_coefs = sws_getCoefficients(SWS_CS_BT2020);
-                sws_setColorspaceDetails(
-                    sws_ctx_hdr,
-                    src_coefs, src_range,
-                    dst_coefs, 1 /* full-range RGB output */,
-                    0 /* brightness */, 1 << 16 /* contrast 1.0 */, 1 << 16 /* saturation 1.0 */);
+                sws_setColorspaceDetails(sws_ctx_hdr, src_coefs, src_range, dst_coefs, 1 /* full-range RGB output */, 0 /* brightness */, 1 << 16 /* contrast 1.0 */, 1 << 16 /* saturation 1.0 */);
             }
 
             out_rgba16.create(src->height, src->width, CV_16UC4);
             uint8_t *dst_data[4] = {out_rgba16.data, nullptr, nullptr, nullptr};
             int dst_linesize[4] = {static_cast<int>(out_rgba16.step), 0, 0, 0};
 
-            sws_scale(
-                sws_ctx_hdr,
-                src->data,
-                src->linesize,
-                0,
-                src->height,
-                dst_data,
-                dst_linesize);
+            sws_scale(sws_ctx_hdr, src->data, src->linesize, 0, src->height, dst_data, dst_linesize);
 
             av_frame_unref(decoded_frame);
             av_frame_unref(sw_frame);
@@ -2170,8 +2000,7 @@ class SnapshotThreadPool {
      *           that captures a FrameData by value for PNG writing).
      * @param f  The task to execute on a worker thread.
      */
-    template <class F>
-    void enqueue(F &&f) {
+    template <class F> void enqueue(F &&f) {
         {
             std::unique_lock<std::mutex> lock(queue_mutex);
             if (stop)
@@ -2227,10 +2056,7 @@ class FrameCache {
      * @param use_array Store the ring in one `GL_TEXTURE_2D_ARRAY` instead of
      *                  separate `GL_TEXTURE_2D` objects.
      */
-    explicit FrameCache(std::size_t num, bool use_array = false)
-        : num_frames(num),
-          use_history_array(use_array) {
-    }
+    explicit FrameCache(std::size_t num, bool use_array = false) : num_frames(num), use_history_array(use_array) {}
     ~FrameCache() { cleanup(); }
 
     FrameCache(const FrameCache &) = delete;
@@ -2267,12 +2093,10 @@ class FrameCache {
         const GLint internal = hdr ? GL_RGBA16F : GL_RGBA;
         const GLenum type = hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
         const std::size_t bytes_per_pixel = hdr ? 8u : 4u;
-        std::vector<unsigned char> zeros(
-            static_cast<size_t>(w) * static_cast<size_t>(h) * bytes_per_pixel, 0);
+        std::vector<unsigned char> zeros(static_cast<size_t>(w) * static_cast<size_t>(h) * bytes_per_pixel, 0);
         for (std::size_t i = 0; i < num_frames; ++i) {
             glBindTexture(GL_TEXTURE_2D, textures[i]);
-            glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
-                         GL_RGBA, type, zeros.data());
+            glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0, GL_RGBA, type, zeros.data());
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -2334,12 +2158,10 @@ class FrameCache {
             glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
             if (count == 0) {
                 for (std::size_t i = 0; i < num_frames; ++i) {
-                    glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-                                        static_cast<GLint>(i), 0, 0, w, h);
+                    glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, static_cast<GLint>(i), 0, 0, w, h);
                 }
             } else {
-                glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-                                    static_cast<GLint>(head), 0, 0, w, h);
+                glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, static_cast<GLint>(head), 0, 0, w, h);
             }
             glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
@@ -2352,8 +2174,7 @@ class FrameCache {
             const GLenum type = is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
             for (GLuint texture : textures) {
                 glBindTexture(GL_TEXTURE_2D, texture);
-                glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
-                             GL_RGBA, type, nullptr);
+                glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0, GL_RGBA, type, nullptr);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -2396,17 +2217,14 @@ class FrameCache {
         cv::cvtColor(frame, tmp, cv::COLOR_BGR2RGBA);
         if (use_history_array) {
             glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
-            glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-                            static_cast<GLint>(head), tmp.cols, tmp.rows, 1,
-                            GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+            glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, static_cast<GLint>(head), tmp.cols, tmp.rows, 1, GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
             glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
             advance();
             return;
         }
 
         glBindTexture(GL_TEXTURE_2D, textures[head]);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tmp.cols, tmp.rows,
-                        GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tmp.cols, tmp.rows, GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
         glBindTexture(GL_TEXTURE_2D, 0);
         advance();
     }
@@ -2433,8 +2251,7 @@ class FrameCache {
         GLint prev_read = 0;
         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, scratch_fbo);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                               GL_TEXTURE_2D, src_tex, 0);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src_tex, 0);
         glReadBuffer(GL_COLOR_ATTACHMENT0);
         if (use_history_array) {
             if (w != width || h != height) {
@@ -2447,16 +2264,13 @@ class FrameCache {
             glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
             if (count == 0) {
                 for (std::size_t i = 0; i < num_frames; ++i) {
-                    glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-                                        static_cast<GLint>(i), 0, 0, w, h);
+                    glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, static_cast<GLint>(i), 0, 0, w, h);
                 }
             } else {
-                glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-                                    static_cast<GLint>(head), 0, 0, w, h);
+                glCopyTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, static_cast<GLint>(head), 0, 0, w, h);
             }
             glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D, 0, 0);
+            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
             finishPush();
             return;
@@ -2467,8 +2281,7 @@ class FrameCache {
             const GLenum type = is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
             for (GLuint texture : textures) {
                 glBindTexture(GL_TEXTURE_2D, texture);
-                glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0,
-                             GL_RGBA, type, nullptr);
+                glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0, GL_RGBA, type, nullptr);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -2490,8 +2303,7 @@ class FrameCache {
         }
         glBindTexture(GL_TEXTURE_2D, 0);
         // Detach to avoid keeping a stale reference to the source texture.
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                               GL_TEXTURE_2D, 0, 0);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read);
         finishPush();
     }
@@ -2518,9 +2330,7 @@ class FrameCache {
     GLuint historyTexture() const { return history_texture; }
 
     /// Physical array layer corresponding to logical history index zero.
-    int oldestLayer() const {
-        return isFull() ? static_cast<int>(head) : 0;
-    }
+    int oldestLayer() const { return isFull() ? static_cast<int>(head) : 0; }
 
     /**
      * @brief Pre-fill every slot with copies of a single frame.
@@ -2541,9 +2351,7 @@ class FrameCache {
             }
             glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
             for (std::size_t i = 0; i < num_frames; ++i) {
-                glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-                                static_cast<GLint>(i), tmp.cols, tmp.rows, 1,
-                                GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+                glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, static_cast<GLint>(i), tmp.cols, tmp.rows, 1, GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
             }
             glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
             head = 0;
@@ -2554,11 +2362,9 @@ class FrameCache {
         for (std::size_t i = 0; i < num_frames; ++i) {
             glBindTexture(GL_TEXTURE_2D, textures[i]);
             if (!size_matches) {
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tmp.cols, tmp.rows, 0,
-                             GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tmp.cols, tmp.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
             } else {
-                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tmp.cols, tmp.rows,
-                                GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tmp.cols, tmp.rows, GL_RGBA, GL_UNSIGNED_BYTE, tmp.ptr());
             }
         }
         glBindTexture(GL_TEXTURE_2D, 0);
@@ -2571,9 +2377,7 @@ class FrameCache {
     }
 
   private:
-    bool hasStorage() const {
-        return use_history_array ? history_texture != 0 : !textures.empty();
-    }
+    bool hasStorage() const { return use_history_array ? history_texture != 0 : !textures.empty(); }
 
     void advance() {
         head = (head + 1) % num_frames;
@@ -2603,8 +2407,7 @@ class FrameCache {
         glBindTexture(GL_TEXTURE_2D_ARRAY, history_texture);
         const GLint internal = is_hdr ? GL_RGBA16F : GL_RGBA;
         const GLenum type = is_hdr ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
-        glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, internal, width, height,
-                     static_cast<GLsizei>(num_frames), 0, GL_RGBA, type, nullptr);
+        glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, internal, width, height, static_cast<GLsizei>(num_frames), 0, GL_RGBA, type, nullptr);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -2684,14 +2487,12 @@ class TextureUploader {
         // WriteDiscard: tell the driver we don't need the previous texture
         // contents preserved on map — that is true for streaming frames and
         // lets the driver skip a possible read-back.
-        CHECK_CUDA(cudaGraphicsGLRegisterImage(&cudaTexResource, textureID, GL_TEXTURE_2D,
-                                               cudaGraphicsRegisterFlagsWriteDiscard));
+        CHECK_CUDA(cudaGraphicsGLRegisterImage(&cudaTexResource, textureID, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsWriteDiscard));
         if (!uploadStream) {
             CHECK_CUDA(cudaStreamCreateWithFlags(&uploadStream, cudaStreamNonBlocking));
         }
         if (!inputReadyEvent) {
-            CHECK_CUDA(cudaEventCreateWithFlags(&inputReadyEvent,
-                                                cudaEventDisableTiming));
+            CHECK_CUDA(cudaEventCreateWithFlags(&inputReadyEvent, cudaEventDisableTiming));
         }
 #endif
     }
@@ -2725,11 +2526,7 @@ class TextureUploader {
         CHECK_CUDA(cudaStreamWaitEvent(uploadStream, inputReadyEvent, 0));
         CHECK_CUDA(cudaGraphicsMapResources(1, &cudaTexResource, uploadStream));
         CHECK_CUDA(cudaGraphicsSubResourceGetMappedArray(&texArray, cudaTexResource, 0, 0));
-        CHECK_CUDA(cudaMemcpy2DToArrayAsync(texArray, 0, 0,
-                                            gpuFrame.data, gpuFrame.step,
-                                            static_cast<size_t>(width) * 4,
-                                            static_cast<size_t>(height),
-                                            cudaMemcpyDeviceToDevice, uploadStream));
+        CHECK_CUDA(cudaMemcpy2DToArrayAsync(texArray, 0, 0, gpuFrame.data, gpuFrame.step, static_cast<size_t>(width) * 4, static_cast<size_t>(height), cudaMemcpyDeviceToDevice, uploadStream));
         CHECK_CUDA(cudaGraphicsUnmapResources(1, &cudaTexResource, uploadStream));
     }
 #endif
@@ -2832,16 +2629,13 @@ struct ShaderCache {
         if (!parent.empty() && !std::filesystem::exists(parent, ec)) {
             std::filesystem::create_directories(parent, ec);
             if (ec) {
-                mx::system_err << "acmx2: Could not create cache directory '"
-                               << parent.string() << "': " << ec.message() << "\n";
+                mx::system_err << "acmx2: Could not create cache directory '" << parent.string() << "': " << ec.message() << "\n";
                 return false;
             }
         }
         std::ofstream file(path, std::ios::binary);
         if (!file.is_open()) {
-            mx::system_err << "acmx2: Could not open cache file for writing: '"
-                           << path << "' (errno=" << errno << " - "
-                           << std::strerror(errno) << ")\n";
+            mx::system_err << "acmx2: Could not open cache file for writing: '" << path << "' (errno=" << errno << " - " << std::strerror(errno) << ")\n";
             return false;
         }
 
@@ -3017,8 +2811,7 @@ bool loadProgramBinaryFunctions() {
  */
 class SpectrumTexture {
   public:
-    explicit SpectrumTexture(acmx2::audio::AudioAnalyzer &analyzer)
-        : analyzer(analyzer) {}
+    explicit SpectrumTexture(acmx2::audio::AudioAnalyzer &analyzer) : analyzer(analyzer) {}
 
     /**
      * @brief Create the 1D texture and set its sampling parameters.
@@ -3153,8 +2946,7 @@ class SpectrumTexture {
  */
 class SpectrumHistory {
   public:
-    explicit SpectrumHistory(const acmx2::audio::AudioAnalyzer &analyzer)
-        : analyzer(analyzer) {}
+    explicit SpectrumHistory(const acmx2::audio::AudioAnalyzer &analyzer) : analyzer(analyzer) {}
 
     /// Texture unit assigned to the complete spectrum history array.
     static constexpr int TEXTURE_UNIT = 10;
@@ -3173,8 +2965,7 @@ class SpectrumHistory {
         GLint max_layers = 0;
         glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &max_layers);
         if (max_layers <= 0) {
-            mx::system_err
-                << "acmx2: GL_TEXTURE_1D_ARRAY is unavailable on this context\n";
+            mx::system_err << "acmx2: GL_TEXTURE_1D_ARRAY is unavailable on this context\n";
             return 0;
         }
         layer_count = std::min(requested_count, static_cast<int>(max_layers));
@@ -3185,17 +2976,13 @@ class SpectrumHistory {
         }
 
         bins = FFT_SIZE / 2;
-        std::vector<float> zeros(
-            static_cast<size_t>(bins) * static_cast<size_t>(layer_count),
-            0.0f);
+        std::vector<float> zeros(static_cast<size_t>(bins) * static_cast<size_t>(layer_count), 0.0f);
         glGenTextures(1, &texture_id);
         glBindTexture(GL_TEXTURE_1D_ARRAY, texture_id);
-        glTexImage2D(GL_TEXTURE_1D_ARRAY, 0, GL_R32F, bins, layer_count, 0,
-                     GL_RED, GL_FLOAT, zeros.data());
+        glTexImage2D(GL_TEXTURE_1D_ARRAY, 0, GL_R32F, bins, layer_count, 0, GL_RED, GL_FLOAT, zeros.data());
         glTexParameteri(GL_TEXTURE_1D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_1D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_1D_ARRAY, GL_TEXTURE_WRAP_S,
-                        GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_1D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_1D_ARRAY, 0);
         write_idx = 0;
         return layer_count;
@@ -3221,8 +3008,7 @@ class SpectrumHistory {
             src = scaled_buf.data();
         }
         glBindTexture(GL_TEXTURE_1D_ARRAY, texture_id);
-        glTexSubImage2D(GL_TEXTURE_1D_ARRAY, 0, 0, write_idx, bins, 1, GL_RED,
-                        GL_FLOAT, src);
+        glTexSubImage2D(GL_TEXTURE_1D_ARRAY, 0, 0, write_idx, bins, 1, GL_RED, GL_FLOAT, src);
         glBindTexture(GL_TEXTURE_1D_ARRAY, 0);
         write_idx = (write_idx + 1) % layer_count;
     }
@@ -3237,10 +3023,7 @@ class SpectrumHistory {
     }
 
     /// Physical layer containing the newest spectrum frame.
-    int newestLayer() const {
-        return layer_count > 0 ? (write_idx - 1 + layer_count) % layer_count
-                               : 0;
-    }
+    int newestLayer() const { return layer_count > 0 ? (write_idx - 1 + layer_count) % layer_count : 0; }
 
     /// Number of history layers currently allocated.
     int count() const { return layer_count; }
@@ -3391,10 +3174,7 @@ class ShaderLibrary {
      * @param use_array    Whether texture history uses a sampler array; included in the cache key.
      * @return Absolute or relative path to the shader cache file.
      */
-    static std::string shaderCacheFilePath(const std::string &assets_path,
-                                           const std::string &library_path,
-                                           int cache_size = 8,
-                                           bool use_array = false) {
+    static std::string shaderCacheFilePath(const std::string &assets_path, const std::string &library_path, int cache_size = 8, bool use_array = false) {
         std::error_code ec;
         std::filesystem::path lib(library_path);
         std::filesystem::path abs_lib = std::filesystem::absolute(lib, ec);
@@ -3487,8 +3267,7 @@ class ShaderLibrary {
      * @param use_array  Whether to inject the texture-array compatibility define.
      * @return Modified fragment source, or empty string on read failure.
      */
-    std::string injectShaderSize(const std::string &frag_path, int size,
-                                 bool use_array) const {
+    std::string injectShaderSize(const std::string &frag_path, int size, bool use_array) const {
         std::ifstream in(frag_path);
         if (!in.is_open())
             return {};
@@ -3502,10 +3281,7 @@ class ShaderLibrary {
             std::size_t nl = src.find('\n', v_pos);
             insert_pos = (nl == std::string::npos) ? src.size() : nl + 1;
         }
-        std::string define =
-            "#define SIZE " + std::to_string(size) + "\n" +
-            "#define USE_HISTORY_TEXTURE_ARRAY " +
-            std::to_string(use_array ? 1 : 0) + "\n";
+        std::string define = "#define SIZE " + std::to_string(size) + "\n" + "#define USE_HISTORY_TEXTURE_ARRAY " + std::to_string(use_array ? 1 : 0) + "\n";
         std::string sourceWithoutComments;
         sourceWithoutComments.reserve(src.size());
         bool lineComment = false;
@@ -3543,14 +3319,8 @@ class ShaderLibrary {
             }
         }
         for (std::size_t i = 0; i < custom_uniforms.size(); ++i) {
-            const bool referenced =
-                i < custom_uniform_references.size() &&
-                std::regex_search(sourceWithoutComments,
-                                  custom_uniform_references[i]);
-            const bool declared =
-                i < custom_uniform_declarations.size() &&
-                std::regex_search(sourceWithoutComments,
-                                  custom_uniform_declarations[i]);
+            const bool referenced = i < custom_uniform_references.size() && std::regex_search(sourceWithoutComments, custom_uniform_references[i]);
+            const bool declared = i < custom_uniform_declarations.size() && std::regex_search(sourceWithoutComments, custom_uniform_declarations[i]);
             if (referenced && !declared) {
                 define += "uniform float " + custom_uniforms[i].name + ";\n";
             }
@@ -3560,8 +3330,7 @@ class ShaderLibrary {
     }
 
     uint64_t preparedFragmentHash(const std::string &frag_path) const {
-        const std::string source =
-            injectShaderSize(frag_path, cache_size, use_history_array);
+        const std::string source = injectShaderSize(frag_path, cache_size, use_history_array);
         if (source.empty())
             return 0;
         uint64_t hash = 1469598103934665603ull;
@@ -3582,11 +3351,8 @@ class ShaderLibrary {
      *
      * @return true if the program compiled and linked successfully.
      */
-    bool loadProgramWithSize(gl::ShaderProgram *prog,
-                             const std::string &vert_path,
-                             const std::string &frag_path) const {
-        std::string frag_src =
-            injectShaderSize(frag_path, cache_size, use_history_array);
+    bool loadProgramWithSize(gl::ShaderProgram *prog, const std::string &vert_path, const std::string &frag_path) const {
+        std::string frag_src = injectShaderSize(frag_path, cache_size, use_history_array);
         if (frag_src.empty()) {
             // Could not read the fragment file; fall back so the loader can
             // produce its own diagnostic.
@@ -3624,15 +3390,13 @@ class ShaderLibrary {
     }
 
     /** Compile and link a standalone OpenGL compute program. */
-    std::unique_ptr<gl::ShaderProgram> makeComputeProgram(
-        const std::string &compute_path, std::string &error) const {
+    std::unique_ptr<gl::ShaderProgram> makeComputeProgram(const std::string &compute_path, std::string &error) const {
         if (!compute_shader_supported) {
             error = "OpenGL 4.3 compute shaders are unavailable";
             return {};
         }
 
-        const std::string source =
-            injectShaderSize(compute_path, cache_size, use_history_array);
+        const std::string source = injectShaderSize(compute_path, cache_size, use_history_array);
         if (source.empty()) {
             error = "Could not read compute shader: " + compute_path;
             return {};
@@ -3641,8 +3405,7 @@ class ShaderLibrary {
         if (use_cache) {
             GLuint cached_program = 0;
             if (ac::loadComputeProgramBinaryFromCache(source, cached_program)) {
-                mx::system_out << "acmx2: Loaded cached compute shader: "
-                               << compute_path << "\n";
+                mx::system_out << "acmx2: Loaded cached compute shader: " << compute_path << "\n";
                 return std::make_unique<gl::ShaderProgram>(cached_program);
             }
         }
@@ -3675,8 +3438,7 @@ class ShaderLibrary {
         glAttachShader(program, shader);
 #if !defined(__APPLE__)
         if (glProgramParameteri != nullptr) {
-            glProgramParameteri(program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT,
-                                GL_TRUE);
+            glProgramParameteri(program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
         }
 #endif
         glLinkProgram(program);
@@ -3729,10 +3491,7 @@ class ShaderLibrary {
     }
 
     /** Compile a replacement program while retaining complete driver diagnostics. */
-    std::unique_ptr<gl::ShaderProgram> compileProgramForReload(
-        const std::string &vert_path,
-        const std::string &frag_path,
-        std::string &error) const {
+    std::unique_ptr<gl::ShaderProgram> compileProgramForReload(const std::string &vert_path, const std::string &frag_path, std::string &error) const {
         if (isComputeShaderFile(frag_path))
             return makeComputeProgram(frag_path, error);
         std::ifstream vertex_file(vert_path);
@@ -3743,16 +3502,13 @@ class ShaderLibrary {
         std::ostringstream vertex_stream;
         vertex_stream << vertex_file.rdbuf();
         const std::string vertex_source = vertex_stream.str();
-        const std::string fragment_source =
-            injectShaderSize(frag_path, cache_size, use_history_array);
+        const std::string fragment_source = injectShaderSize(frag_path, cache_size, use_history_array);
         if (fragment_source.empty()) {
             error = "Could not read fragment shader: " + frag_path;
             return {};
         }
 
-        const auto compile_stage = [&error](GLenum type,
-                                            const std::string &source,
-                                            const std::string &label) -> GLuint {
+        const auto compile_stage = [&error](GLenum type, const std::string &source, const std::string &label) -> GLuint {
             const GLuint shader = glCreateShader(type);
             if (shader == 0) {
                 error = "Could not create " + label + " shader object";
@@ -3774,12 +3530,10 @@ class ShaderLibrary {
             return shader;
         };
 
-        const GLuint vertex_shader =
-            compile_stage(GL_VERTEX_SHADER, vertex_source, vert_path);
+        const GLuint vertex_shader = compile_stage(GL_VERTEX_SHADER, vertex_source, vert_path);
         if (vertex_shader == 0)
             return {};
-        const GLuint fragment_shader =
-            compile_stage(GL_FRAGMENT_SHADER, fragment_source, frag_path);
+        const GLuint fragment_shader = compile_stage(GL_FRAGMENT_SHADER, fragment_source, frag_path);
         if (fragment_shader == 0) {
             glDeleteShader(vertex_shader);
             return {};
@@ -3835,14 +3589,13 @@ class ShaderLibrary {
      * @return A compiled ShaderProgram, or an empty unique_ptr on failure.
      */
     std::unique_ptr<gl::ShaderProgram> makePassthroughProgram(const std::string &vert_path) {
-        static constexpr const char *kPassthroughFrag =
-            "#version 330 core\n"
-            "in vec2 tc;\n"
-            "out vec4 color;\n"
-            "uniform sampler2D samp;\n"
-            "void main() {\n"
-            "    color = texture(samp, tc);\n"
-            "}\n";
+        static constexpr const char *kPassthroughFrag = "#version 330 core\n"
+                                                        "in vec2 tc;\n"
+                                                        "out vec4 color;\n"
+                                                        "uniform sampler2D samp;\n"
+                                                        "void main() {\n"
+                                                        "    color = texture(samp, tc);\n"
+                                                        "}\n";
 
         std::ifstream vf(vert_path);
         if (!vf.is_open())
@@ -3861,21 +3614,13 @@ class ShaderLibrary {
 
   public:
 #ifdef AUDIO_ENABLED
-    explicit ShaderLibrary(const acmx2::audio::AudioAnalyzer *analyzer = nullptr)
-        : audio_analyzer(analyzer) {}
+    explicit ShaderLibrary(const acmx2::audio::AudioAnalyzer *analyzer = nullptr) : audio_analyzer(analyzer) {}
 #else
     ShaderLibrary() = default;
 #endif
 
-    void setCustomUniformValues(
-        const std::vector<ShaderManifestData::CustomUniform> &uniforms) {
-        const bool namesChanged = custom_uniforms.size() != uniforms.size() ||
-                                  !std::equal(
-                                      custom_uniforms.begin(), custom_uniforms.end(),
-                                      uniforms.begin(),
-                                      [](const auto &left, const auto &right) {
-                                          return left.name == right.name;
-                                      });
+    void setCustomUniformValues(const std::vector<ShaderManifestData::CustomUniform> &uniforms) {
+        const bool namesChanged = custom_uniforms.size() != uniforms.size() || !std::equal(custom_uniforms.begin(), custom_uniforms.end(), uniforms.begin(), [](const auto &left, const auto &right) { return left.name == right.name; });
         custom_uniforms = uniforms;
         if (!namesChanged)
             return;
@@ -3884,22 +3629,16 @@ class ShaderLibrary {
         custom_uniform_declarations.reserve(custom_uniforms.size());
         custom_uniform_references.reserve(custom_uniforms.size());
         for (const auto &uniform : custom_uniforms) {
-            custom_uniform_declarations.emplace_back(
-                "\\buniform\\s+(?:(?:lowp|mediump|highp)\\s+)?float\\s+" +
-                uniform.name + "\\b");
+            custom_uniform_declarations.emplace_back("\\buniform\\s+(?:(?:lowp|mediump|highp)\\s+)?float\\s+" + uniform.name + "\\b");
             custom_uniform_references.emplace_back("\\b" + uniform.name + "\\b");
         }
-        const auto refreshLocations = [this](
-                                          auto &names,
-                                          const auto &programs) {
+        const auto refreshLocations = [this](auto &names, const auto &programs) {
             for (auto &[index, data] : names) {
                 data.custom_uniform_locs.assign(custom_uniforms.size(), -1);
                 if (index < 0 || static_cast<std::size_t>(index) >= programs.size())
                     continue;
                 for (std::size_t i = 0; i < custom_uniforms.size(); ++i) {
-                    data.custom_uniform_locs[i] = glGetUniformLocation(
-                        programs[static_cast<std::size_t>(index)]->id(),
-                        custom_uniforms[i].name.c_str());
+                    data.custom_uniform_locs[i] = glGetUniformLocation(programs[static_cast<std::size_t>(index)]->id(), custom_uniforms[i].name.c_str());
                 }
             }
         };
@@ -3958,9 +3697,7 @@ class ShaderLibrary {
      * Array mode binds a single `sampler2DArray history` at texture unit 1.
      * Legacy mode binds `samp1..samp8` and `textures[SIZE]` to units 1..SIZE.
      */
-    void setHistoryTextureArray(bool enabled) {
-        use_history_array = enabled;
-    }
+    void setHistoryTextureArray(bool enabled) { use_history_array = enabled; }
 
     /**
      * @brief Remove all compiled shader programs and reset the library index.
@@ -4001,21 +3738,17 @@ class ShaderLibrary {
             program_kinds.push_back(ShaderProgramKind::Compute);
         } else {
             programs_2d.push_back(makeProgram());
-            if (!is_compute &&
-                !loadProgramWithSize(programs_2d.back().get(),
-                                     win->util.getFilePath("data/vert.glsl"), text)) {
+            if (!is_compute && !loadProgramWithSize(programs_2d.back().get(), win->util.getFilePath("data/vert.glsl"), text)) {
                 throw mx::Exception("Error loading 2D shader program: " + text);
             }
             if (is_compute) {
                 programs_2d.pop_back();
-                auto passthrough = makePassthroughProgram(
-                    win->util.getFilePath("data/vert.glsl"));
+                auto passthrough = makePassthroughProgram(win->util.getFilePath("data/vert.glsl"));
                 if (!passthrough)
                     throw mx::Exception("Could not create compute fallback: " + text);
                 programs_2d.push_back(std::move(passthrough));
                 program_kinds.push_back(ShaderProgramKind::ComputeUnavailable);
-                mx::system_out << "acmx2: Skipping compute shader on this context: "
-                               << text << "\n";
+                mx::system_out << "acmx2: Skipping compute shader on this context: " << text << "\n";
             } else {
                 program_kinds.push_back(ShaderProgramKind::Fragment);
             }
@@ -4023,16 +3756,13 @@ class ShaderLibrary {
         setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, text);
         if (dual_mode) {
             if (is_compute) {
-                auto passthrough = makePassthroughProgram(
-                    win->util.getFilePath("data/vertex.glsl"));
+                auto passthrough = makePassthroughProgram(win->util.getFilePath("data/vertex.glsl"));
                 if (!passthrough)
                     throw mx::Exception("Could not create 3D compute passthrough: " + text);
                 programs_3d.push_back(std::move(passthrough));
             } else {
                 programs_3d.push_back(makeProgram());
-                if (!loadProgramWithSize(programs_3d.back().get(),
-                                         win->util.getFilePath("data/vertex.glsl"),
-                                         text)) {
+                if (!loadProgramWithSize(programs_3d.back().get(), win->util.getFilePath("data/vertex.glsl"), text)) {
                     throw mx::Exception("Error loading 3D shader program: " + text);
                 }
             }
@@ -4050,35 +3780,29 @@ class ShaderLibrary {
      * The currently running programs remain installed if compilation, linking,
      * or uniform setup fails.
      */
-    bool reloadProgram(gl::GLWindow *win, size_t shader_index,
-                       const std::string &fragment_path, std::string &error) {
+    bool reloadProgram(gl::GLWindow *win, size_t shader_index, const std::string &fragment_path, std::string &error) {
         if (shader_index >= programs_2d.size()) {
-            error = "Shader reload index is outside the loaded library: " +
-                    std::to_string(shader_index);
+            error = "Shader reload index is outside the loaded library: " + std::to_string(shader_index);
             return false;
         }
         if (dual_mode && shader_index >= programs_3d.size()) {
-            error = "Shader reload index is outside the loaded 3D library: " +
-                    std::to_string(shader_index);
+            error = "Shader reload index is outside the loaded 3D library: " + std::to_string(shader_index);
             return false;
         }
 
         const bool is_compute = isComputeShaderFile(fragment_path);
-        auto replacement_2d = compileProgramForReload(
-            win->util.getFilePath("data/vert.glsl"), fragment_path, error);
+        auto replacement_2d = compileProgramForReload(win->util.getFilePath("data/vert.glsl"), fragment_path, error);
         if (!replacement_2d)
             return false;
 
         std::unique_ptr<gl::ShaderProgram> replacement_3d;
         if (dual_mode) {
             if (is_compute) {
-                replacement_3d = makePassthroughProgram(
-                    win->util.getFilePath("data/vertex.glsl"));
+                replacement_3d = makePassthroughProgram(win->util.getFilePath("data/vertex.glsl"));
                 if (!replacement_3d)
                     error = "Could not create 3D passthrough for compute shader";
             } else {
-                replacement_3d = compileProgramForReload(
-                    win->util.getFilePath("data/vertex.glsl"), fragment_path, error);
+                replacement_3d = compileProgramForReload(win->util.getFilePath("data/vertex.glsl"), fragment_path, error);
             }
             if (!replacement_3d)
                 return false;
@@ -4087,11 +3811,9 @@ class ShaderLibrary {
         std::unordered_map<int, ProgramData> replacement_names_2d;
         std::unordered_map<int, ProgramData> replacement_names_3d;
         try {
-            setupProgramUniforms(win, replacement_2d.get(), replacement_names_2d,
-                                 shader_index, fragment_path);
+            setupProgramUniforms(win, replacement_2d.get(), replacement_names_2d, shader_index, fragment_path);
             if (dual_mode) {
-                setupProgramUniforms(win, replacement_3d.get(), replacement_names_3d,
-                                     shader_index, fragment_path);
+                setupProgramUniforms(win, replacement_3d.get(), replacement_names_3d, shader_index, fragment_path);
             }
         } catch (const std::exception &e) {
             error = std::string("Shader uniform setup failed: ") + e.what();
@@ -4122,8 +3844,7 @@ class ShaderLibrary {
         if (dual_mode) {
             names_3d_it = replacement_names_3d.find(index_key);
             current_names_3d_it = program_names_3d.find(index_key);
-            if (names_3d_it == replacement_names_3d.end() ||
-                current_names_3d_it == program_names_3d.end()) {
+            if (names_3d_it == replacement_names_3d.end() || current_names_3d_it == program_names_3d.end()) {
                 error = "Shader reload is missing 3D uniform metadata";
                 shader()->useProgram();
                 return false;
@@ -4132,9 +3853,7 @@ class ShaderLibrary {
 
         programs_2d[shader_index].swap(replacement_2d);
         if (shader_index < program_kinds.size()) {
-            program_kinds[shader_index] =
-                is_compute ? ShaderProgramKind::Compute
-                           : ShaderProgramKind::Fragment;
+            program_kinds[shader_index] = is_compute ? ShaderProgramKind::Compute : ShaderProgramKind::Fragment;
         }
         std::swap(current_names_2d_it->second, names_2d_it->second);
         if (dual_mode) {
@@ -4169,9 +3888,7 @@ class ShaderLibrary {
      * @param text  Fragment shader file path (stem becomes the display name).
      * @throws mx::Exception on any GL error after useProgram or setUniform.
      */
-    void setupProgramUniforms(gl::GLWindow *win, gl::ShaderProgram *prog,
-                              std::unordered_map<int, ProgramData> &names, size_t pos,
-                              const std::string &text) {
+    void setupProgramUniforms(gl::GLWindow *win, gl::ShaderProgram *prog, std::unordered_map<int, ProgramData> &names, size_t pos, const std::string &text) {
         GLenum error = glGetError();
         if (error != GL_NO_ERROR) {
             throw mx::Exception("OpenGL Error: on ShaderLibary::loadProgram: " + std::to_string(error));
@@ -4188,10 +3905,8 @@ class ShaderLibrary {
         std::string name = file_path.stem().string();
         if (!name.empty()) {
             names[pos].name = name;
-            if (&names == &program_names_2d && pos < program_kinds.size() &&
-                program_kinds[pos] == ShaderProgramKind::Compute) {
-                glGetProgramiv(prog->id(), GL_COMPUTE_WORK_GROUP_SIZE,
-                               names[pos].compute_work_group_size);
+            if (&names == &program_names_2d && pos < program_kinds.size() && program_kinds[pos] == ShaderProgramKind::Compute) {
+                glGetProgramiv(prog->id(), GL_COMPUTE_WORK_GROUP_SIZE, names[pos].compute_work_group_size);
             }
             names[pos].loc = glGetUniformLocation(prog->id(), "alpha");
             names[pos].iTime = glGetUniformLocation(prog->id(), "iTime");
@@ -4212,10 +3927,8 @@ class ShaderLibrary {
             }
 
             if (name.find("cache") != std::string::npos) {
-                names[pos].history_loc =
-                    glGetUniformLocation(prog->id(), "history");
-                names[pos].history_head_loc =
-                    glGetUniformLocation(prog->id(), "history_head");
+                names[pos].history_loc = glGetUniformLocation(prog->id(), "history");
+                names[pos].history_head_loc = glGetUniformLocation(prog->id(), "history_head");
                 if (use_history_array && names[pos].history_loc != -1) {
                     glUniform1i(names[pos].history_loc, 1);
                 }
@@ -4231,8 +3944,7 @@ class ShaderLibrary {
                 // location; some drivers do not reliably expose locations for
                 // every `textures[i]` element queried individually.
                 names[pos].texture_array_base_loc = glGetUniformLocation(prog->id(), "textures[0]");
-                if (!use_history_array &&
-                    names[pos].texture_array_base_loc != -1) {
+                if (!use_history_array && names[pos].texture_array_base_loc != -1) {
                     std::vector<GLint> units(static_cast<std::size_t>(cache_size), 0);
                     for (int i = 0; i < cache_size; ++i) {
                         units[static_cast<std::size_t>(i)] = i + 1;
@@ -4245,9 +3957,7 @@ class ShaderLibrary {
                 // declare/reference; glUniform1i on -1 is a silent no-op.
                 names[pos].texture_array_loc.assign(static_cast<std::size_t>(cache_size), -1);
                 for (int i = 0; i < cache_size; ++i) {
-                    names[pos].texture_array_loc[i] = glGetUniformLocation(
-                        prog->id(),
-                        std::string("textures[" + std::to_string(i) + "]").c_str());
+                    names[pos].texture_array_loc[i] = glGetUniformLocation(prog->id(), std::string("textures[" + std::to_string(i) + "]").c_str());
                 }
             }
 
@@ -4263,14 +3973,10 @@ class ShaderLibrary {
             names[pos].amp_high = glGetUniformLocation(prog->id(), "amp_high");
             names[pos].iSampleRate = glGetUniformLocation(prog->id(), "iSampleRate");
             names[pos].spectrum_loc = glGetUniformLocation(prog->id(), "spectrum");
-            names[pos].spectrum_zero_loc =
-                glGetUniformLocation(prog->id(), "spectrum0");
-            names[pos].spectrum_history_loc =
-                glGetUniformLocation(prog->id(), "spectrum_history");
-            names[pos].spectrum_history_head_loc =
-                glGetUniformLocation(prog->id(), "spectrum_history_head");
-            names[pos].spectrum_history_size_loc =
-                glGetUniformLocation(prog->id(), "spectrum_history_size");
+            names[pos].spectrum_zero_loc = glGetUniformLocation(prog->id(), "spectrum0");
+            names[pos].spectrum_history_loc = glGetUniformLocation(prog->id(), "spectrum_history");
+            names[pos].spectrum_history_head_loc = glGetUniformLocation(prog->id(), "spectrum_history_head");
+            names[pos].spectrum_history_size_loc = glGetUniformLocation(prog->id(), "spectrum_history_size");
 #endif
             // acidcamGL-compatible uniform locations
             names[pos].value_alpha_r = glGetUniformLocation(prog->id(), "value_alpha_r");
@@ -4289,8 +3995,7 @@ class ShaderLibrary {
             names[pos].time_speed_loc = glGetUniformLocation(prog->id(), "time_speed");
             names[pos].custom_uniform_locs.assign(custom_uniforms.size(), -1);
             for (std::size_t i = 0; i < custom_uniforms.size(); ++i) {
-                names[pos].custom_uniform_locs[i] = glGetUniformLocation(
-                    prog->id(), custom_uniforms[i].name.c_str());
+                names[pos].custom_uniform_locs[i] = glGetUniformLocation(prog->id(), custom_uniforms[i].name.c_str());
             }
 #ifdef MIDI_ENABLED
             names[pos].slider_loc[0] = glGetUniformLocation(prog->id(), "slider1");
@@ -4364,27 +4069,19 @@ class ShaderLibrary {
      * the oldest frame is overwritten. Shaders map a logical index with
      * `(history_head + index) % SIZE`.
      */
-    void setHistoryHead(int layer) {
-        history_head = layer;
-    }
+    void setHistoryHead(int layer) { history_head = layer; }
 
     /**
      * @brief Switch between the 2D and 3D program vectors.
      * @param is3d True selects the 3D shader set; false selects 2D.
      */
-    void is3D(bool is3d) {
-        this->is3d = is3d;
-    }
+    void is3D(bool is3d) { this->is3d = is3d; }
 
     /// @brief Set the absolute time_f advancement speed multiplier.
-    void setTimeSpeed(float speed) {
-        time_speed = speed;
-    }
+    void setTimeSpeed(float speed) { time_speed = speed; }
 
     /// @brief Select fixed-per-frame or elapsed real-time advancement.
-    void setNormalizedTime(bool enabled) {
-        normalized_time = enabled;
-    }
+    void setNormalizedTime(bool enabled) { normalized_time = enabled; }
 
 #ifdef AUDIO_ENABLED
     /**
@@ -4400,15 +4097,10 @@ class ShaderLibrary {
     int audioBufferCount() const { return audio_buffer_count; }
 
     /// @brief Set the physical array layer containing the newest FFT frame.
-    void setSpectrumHistoryHead(int layer) {
-        spectrum_history_head =
-            audio_buffer_count > 0 ? layer % audio_buffer_count : 0;
-    }
+    void setSpectrumHistoryHead(int layer) { spectrum_history_head = audio_buffer_count > 0 ? layer % audio_buffer_count : 0; }
 
     /// @brief Set startup audio warmup envelope in [0,1] for uniform scaling.
-    void setAudioWarmupEnvelope(float env) {
-        audio_warmup_envelope = std::clamp(env, 0.0f, 1.0f);
-    }
+    void setAudioWarmupEnvelope(float env) { audio_warmup_envelope = std::clamp(env, 0.0f, 1.0f); }
 #endif
 
     /// @brief Set the frame rate used by normalized time advancement.
@@ -4457,14 +4149,10 @@ class ShaderLibrary {
      *
      * @param enable True to compile both shader variants.
      */
-    void enableDualMode(bool enable) {
-        dual_mode = enable;
-    }
+    void enableDualMode(bool enable) { dual_mode = enable; }
 
     /// @brief Return whether dual mode (2D + 3D) is active.
-    bool isDualMode() const {
-        return dual_mode;
-    }
+    bool isDualMode() const { return dual_mode; }
 
     /**
      * @brief Toggle between 2D and 3D rendering modes.
@@ -4503,9 +4191,7 @@ class ShaderLibrary {
     }
 
     /// @brief Return true if shader processing is currently bypassed.
-    bool isBypassed() const {
-        return shader_bypass;
-    }
+    bool isBypassed() const { return shader_bypass; }
 
     /// @brief Compile every shader listed in the preferred manifest.
     void loadPrograms(gl::GLWindow *win, const std::string &text, mx::Font &loadingFont) {
@@ -4527,36 +4213,24 @@ class ShaderLibrary {
         }
 
         // Case-insensitive sort to match Qt interface behavior
-        std::sort(shader_files.begin(), shader_files.end(),
-                  [](const std::string &a, const std::string &b) {
-                      return std::lexicographical_compare(
-                          a.begin(), a.end(),
-                          b.begin(), b.end(),
-                          [](unsigned char ca, unsigned char cb) {
-                              return std::tolower(ca) < std::tolower(cb);
-                          });
-                  });
+        std::sort(shader_files.begin(), shader_files.end(), [](const std::string &a, const std::string &b) { return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](unsigned char ca, unsigned char cb) { return std::tolower(ca) < std::tolower(cb); }); });
 
         size_t total_shaders = shader_files.size();
 
         const char *load_action = use_cache ? "Loading" : "Compiling";
-        mx::system_out << "acmx2: " << load_action << " " << total_shaders
-                       << " shaders (" << (dual_mode ? "2D+3D" : "2D")
-                       << ")...\n";
+        mx::system_out << "acmx2: " << load_action << " " << total_shaders << " shaders (" << (dual_mode ? "2D+3D" : "2D") << ")...\n";
         fflush(stdout);
 
-        static constexpr const char *kLogoVert =
-            "#version 330 core\n"
-            "layout(location = 0) in vec3 aPos;\n"
-            "layout(location = 1) in vec2 aTex;\n"
-            "out vec2 tc;\n"
-            "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
-        static constexpr const char *kLogoFrag =
-            "#version 330 core\n"
-            "in vec2 tc;\n"
-            "out vec4 color;\n"
-            "uniform sampler2D samp;\n"
-            "void main() { color = texture(samp, tc); }\n";
+        static constexpr const char *kLogoVert = "#version 330 core\n"
+                                                 "layout(location = 0) in vec3 aPos;\n"
+                                                 "layout(location = 1) in vec2 aTex;\n"
+                                                 "out vec2 tc;\n"
+                                                 "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
+        static constexpr const char *kLogoFrag = "#version 330 core\n"
+                                                 "in vec2 tc;\n"
+                                                 "out vec4 color;\n"
+                                                 "uniform sampler2D samp;\n"
+                                                 "void main() { color = texture(samp, tc); }\n";
 
         gl::ShaderProgram logo_shader;
         auto logo_sprite = std::make_unique<gl::GLSprite>();
@@ -4605,20 +4279,16 @@ class ShaderLibrary {
                     programs_2d.push_back(std::move(compute_program));
                     ok_2d = true;
                 } else {
-                    mx::system_out << "acmx2: ⚠ " << compute_error
-                                   << " — substituting passthrough placeholder\n";
+                    mx::system_out << "acmx2: ⚠ " << compute_error << " — substituting passthrough placeholder\n";
                 }
             } else if (!is_compute) {
                 programs_2d.push_back(makeProgram());
                 try {
-                    ok_2d = loadProgramWithSize(programs_2d.back().get(),
-                                                vert_2d, full_path);
+                    ok_2d = loadProgramWithSize(programs_2d.back().get(), vert_2d, full_path);
                 } catch (const std::exception &e) {
-                    mx::system_out << "acmx2: ⚠ Exception compiling 2D shader: "
-                                   << line_data << " (" << e.what() << ")\n";
+                    mx::system_out << "acmx2: ⚠ Exception compiling 2D shader: " << line_data << " (" << e.what() << ")\n";
                 } catch (...) {
-                    mx::system_out << "acmx2: ⚠ Unknown exception compiling 2D shader: "
-                                   << line_data << "\n";
+                    mx::system_out << "acmx2: ⚠ Unknown exception compiling 2D shader: " << line_data << "\n";
                 }
             }
             if (!ok_2d) {
@@ -4629,14 +4299,10 @@ class ShaderLibrary {
                     throw mx::Exception("acmx2: Error could not build 2D passthrough placeholder for: " + line_data);
                 programs_2d.push_back(std::move(ph));
                 if (is_compute && !compute_shader_supported) {
-                    mx::system_out << "acmx2: Skipping unsupported compute shader: "
-                                   << line_data << "\n";
+                    mx::system_out << "acmx2: Skipping unsupported compute shader: " << line_data << "\n";
                 }
             }
-            program_kinds.push_back(
-                is_compute ? (ok_2d ? ShaderProgramKind::Compute
-                                    : ShaderProgramKind::ComputeUnavailable)
-                           : ShaderProgramKind::Fragment);
+            program_kinds.push_back(is_compute ? (ok_2d ? ShaderProgramKind::Compute : ShaderProgramKind::ComputeUnavailable) : ShaderProgramKind::Fragment);
             setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, full_path);
             if (dual_mode) {
                 if (is_compute) {
@@ -4648,8 +4314,7 @@ class ShaderLibrary {
                     bool ok_3d = false;
                     programs_3d.push_back(makeProgram());
                     try {
-                        ok_3d = loadProgramWithSize(programs_3d.back().get(),
-                                                    vert_3d, full_path);
+                        ok_3d = loadProgramWithSize(programs_3d.back().get(), vert_3d, full_path);
                     } catch (...) {
                     }
                     if (!ok_3d) {
@@ -4667,9 +4332,7 @@ class ShaderLibrary {
             int percent_bucket = (percent / 10) * 10;
             if (percent_bucket > last_percent_reported) {
                 last_percent_reported = percent_bucket;
-                mx::system_out << "acmx2: " << load_action << "... "
-                               << percent_bucket << "% (" << (shader_index + 1)
-                               << "/" << total_shaders << " shaders)\n";
+                mx::system_out << "acmx2: " << load_action << "... " << percent_bucket << "% (" << (shader_index + 1) << "/" << total_shaders << " shaders)\n";
                 fflush(stdout);
 
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -4678,18 +4341,14 @@ class ShaderLibrary {
                     logo_sprite->draw();
                 }
                 if (loadingFont.handle().has_value()) {
-                    std::string loadingText = std::string(load_action) + " Shader " +
-                                              std::to_string(shader_index + 1) + "/" +
-                                              std::to_string(total_shaders) + "...";
+                    std::string loadingText = std::string(load_action) + " Shader " + std::to_string(shader_index + 1) + "/" + std::to_string(total_shaders) + "...";
                     win->text.printText_Blended(loadingFont, 10, 10, loadingText);
                 }
                 SDL_GL_SwapWindow(win->getWindow());
                 SDL_PumpEvents();
             }
         }
-        mx::system_out << "acmx2: " << (use_cache ? "Loaded " : "Compiled ")
-                       << shader_files.size() << " shaders ("
-                       << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+        mx::system_out << "acmx2: " << (use_cache ? "Loaded " : "Compiled ") << shader_files.size() << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
     }
 
@@ -4715,10 +4374,7 @@ class ShaderLibrary {
      * @param vert_3d       Path to the 3D vertex shader (only used when @ref dual_mode is set).
      * @return true if the manifest was rewritten successfully.
      */
-    bool removeBrokenShaders(gl::GLWindow *win,
-                             const std::string &library_path,
-                             const std::string &vert_2d,
-                             const std::string &vert_3d) {
+    bool removeBrokenShaders(gl::GLWindow *win, const std::string &library_path, const std::string &vert_2d, const std::string &vert_3d) {
         static_cast<void>(win);
         if (glGetString(GL_VERSION) == nullptr) {
             mx::system_err << "acmx2: remove-broken requires a valid OpenGL context\n";
@@ -4768,16 +4424,12 @@ class ShaderLibrary {
             entry.raw = manifest_entry;
             auto shader_entry = normalizeShaderIndexEntry(manifest_entry);
             std::string full_path;
-            bool is_shader_line =
-                shader_entry.has_value() &&
-                resolveShaderPathInLibrary(library_path, *shader_entry, full_path);
+            bool is_shader_line = shader_entry.has_value() && resolveShaderPathInLibrary(library_path, *shader_entry, full_path);
             if (shader_entry)
                 entry.raw = *shader_entry;
             entry.is_shader = is_shader_line;
-            if (!is_shader_line && !manifest_entry.empty() &&
-                manifest_entry.find("material") == std::string::npos) {
-                mx::system_out << "acmx2: ⚠ Removing missing file from manifest: "
-                               << manifest_entry << "\n";
+            if (!is_shader_line && !manifest_entry.empty() && manifest_entry.find("material") == std::string::npos) {
+                mx::system_out << "acmx2: ⚠ Removing missing file from manifest: " << manifest_entry << "\n";
                 entry.is_shader = false;
                 entry.keep = false;
             }
@@ -4793,9 +4445,7 @@ class ShaderLibrary {
                 if (entry.raw == last_crashed_shader) {
                     entry.keep = false;
                     ++pre_removed_from_crash;
-                    mx::system_out << "acmx2: ⚠ Previous scan crashed while compiling '"
-                                   << last_crashed_shader
-                                   << "' — removing it and resuming scan\n";
+                    mx::system_out << "acmx2: ⚠ Previous scan crashed while compiling '" << last_crashed_shader << "' — removing it and resuming scan\n";
                     break;
                 }
             }
@@ -4807,10 +4457,7 @@ class ShaderLibrary {
                 ++total_shaders;
         }
 
-        mx::system_out << "acmx2: Scanning " << total_shaders
-                       << " shaders in " << library_path
-                       << " for compile errors ("
-                       << (dual_mode ? "2D+3D" : "2D only") << ")\n";
+        mx::system_out << "acmx2: Scanning " << total_shaders << " shaders in " << library_path << " for compile errors (" << (dual_mode ? "2D+3D" : "2D only") << ")\n";
         fflush(stdout);
 
         size_t removed = pre_removed_from_crash;
@@ -4830,9 +4477,7 @@ class ShaderLibrary {
             // truncated mid-line (e.g. "[790/") and the user can't tell
             // which shader killed the scan.
             {
-                std::string scan_line = "acmx2: [" + std::to_string(scanned) + "/" +
-                                        std::to_string(total_shaders) + "] " +
-                                        entry.raw + " ...\n";
+                std::string scan_line = "acmx2: [" + std::to_string(scanned) + "/" + std::to_string(total_shaders) + "] " + entry.raw + " ...\n";
                 mx::system_out << scan_line;
                 mx::system_out.flush();
                 fflush(stdout);
@@ -4849,8 +4494,7 @@ class ShaderLibrary {
                 if (isComputeShaderFile(entry.raw)) {
                     if (compute_shader_supported) {
                         std::string compute_error;
-                        compiled = static_cast<bool>(
-                            makeComputeProgram(full_path, compute_error));
+                        compiled = static_cast<bool>(makeComputeProgram(full_path, compute_error));
                         if (!compiled && !compute_error.empty())
                             mx::system_out << compute_error << " ";
                     } else {
@@ -4904,14 +4548,9 @@ class ShaderLibrary {
 
         // Back up the selected manifest before rewriting.
         std::error_code ec;
-        std::filesystem::copy_file(
-            manifest_path,
-            manifest_path + ".bak",
-            std::filesystem::copy_options::overwrite_existing,
-            ec);
+        std::filesystem::copy_file(manifest_path, manifest_path + ".bak", std::filesystem::copy_options::overwrite_existing, ec);
         if (ec) {
-            mx::system_out << "acmx2: Warning: could not create manifest backup ("
-                           << ec.message() << ")\n";
+            mx::system_out << "acmx2: Warning: could not create manifest backup (" << ec.message() << ")\n";
         }
 
         std::vector<std::string> kept_entries;
@@ -4920,17 +4559,14 @@ class ShaderLibrary {
                 kept_entries.push_back(entry.raw);
         }
         if (manifest.format == ShaderManifestFormat::Json) {
-            if (!writeJsonShaderManifest(manifest_path, kept_entries,
-                                         manifest.custom_uniforms,
-                                         manifest_error)) {
+            if (!writeJsonShaderManifest(manifest_path, kept_entries, manifest.custom_uniforms, manifest_error)) {
                 mx::system_err << "acmx2: " << manifest_error << "\n";
                 return false;
             }
         } else {
             std::ofstream out(manifest_path, std::ios::trunc);
             if (!out.is_open()) {
-                mx::system_err << "acmx2: Could not rewrite manifest at: "
-                               << manifest_path << "\n";
+                mx::system_err << "acmx2: Could not rewrite manifest at: " << manifest_path << "\n";
                 return false;
             }
             for (const std::string &entry : kept_entries)
@@ -4939,9 +4575,7 @@ class ShaderLibrary {
         }
 
         // Invalidate the on-disk cache since the library composition changed.
-        std::string cache_file =
-            shaderCacheFilePath(win ? win->util.path : std::string(),
-                                library_path, cache_size, use_history_array);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size, use_history_array);
         if (std::filesystem::exists(cache_file)) {
             std::filesystem::remove(cache_file, ec);
             if (!ec) {
@@ -4949,8 +4583,7 @@ class ShaderLibrary {
             }
         }
 
-        mx::system_out << "acmx2: Remove-broken complete: kept " << kept
-                       << ", removed " << removed << " shader(s). "
+        mx::system_out << "acmx2: Remove-broken complete: kept " << kept << ", removed " << removed << " shader(s). "
                        << "Backup written to " << manifest_path << ".bak\n";
         fflush(stdout);
         return true;
@@ -4962,18 +4595,11 @@ class ShaderLibrary {
      * A failed compile is recorded in the entry so its manifest slot remains
      * stable and can use the normal passthrough fallback.
      */
-    bool compileShaderCacheEntry(const std::string &shader_file,
-                                 const std::string &full_path,
-                                 const std::string &vert_2d,
-                                 const std::string &vert_3d,
-                                 bool include_3d,
-                                 ShaderCacheEntry &entry) {
+    bool compileShaderCacheEntry(const std::string &shader_file, const std::string &full_path, const std::string &vert_2d, const std::string &vert_3d, bool include_3d, ShaderCacheEntry &entry) {
         entry = {};
         entry.shader_name = std::filesystem::path(shader_file).stem().string();
         entry.source_hash = preparedFragmentHash(full_path);
-        entry.kind = isComputeShaderFile(shader_file)
-                         ? ShaderProgramKind::Compute
-                         : ShaderProgramKind::Fragment;
+        entry.kind = isComputeShaderFile(shader_file) ? ShaderProgramKind::Compute : ShaderProgramKind::Fragment;
 
         const auto markFailed = [&](const std::string &reason) {
             entry.failed = true;
@@ -4981,12 +4607,10 @@ class ShaderLibrary {
             entry.binary_3d.clear();
             entry.format_2d = 0;
             entry.format_3d = 0;
-            mx::system_err << "acmx2: Incremental cache compile failed for "
-                           << shader_file << ": " << reason << "\n";
+            mx::system_err << "acmx2: Incremental cache compile failed for " << shader_file << ": " << reason << "\n";
             mx::system_err.flush();
         };
-        const auto extractBinary = [](GLuint program, std::vector<char> &binary,
-                                      GLenum &format) {
+        const auto extractBinary = [](GLuint program, std::vector<char> &binary, GLenum &format) {
             GLint binaryLength = 0;
             glGetProgramiv(program, GL_PROGRAM_BINARY_LENGTH, &binaryLength);
             if (binaryLength <= 0)
@@ -4996,8 +4620,7 @@ class ShaderLibrary {
             format = 0;
             while (glGetError() != GL_NO_ERROR) {
             }
-            glGetProgramBinaryFunc(program, binaryLength, &actualLength,
-                                   &format, binary.data());
+            glGetProgramBinaryFunc(program, binaryLength, &actualLength, &format, binary.data());
             if (glGetError() != GL_NO_ERROR || actualLength <= 0) {
                 binary.clear();
                 format = 0;
@@ -5021,8 +4644,7 @@ class ShaderLibrary {
                     markFailed(compute_error);
                     return false;
                 }
-                if (!extractBinary(compute_program->id(), entry.binary_2d,
-                                   entry.format_2d)) {
+                if (!extractBinary(compute_program->id(), entry.binary_2d, entry.format_2d)) {
                     markFailed("could not extract compute program binary");
                     return false;
                 }
@@ -5036,8 +4658,7 @@ class ShaderLibrary {
                 markFailed("2D compile failed");
                 return false;
             }
-            if (!extractBinary(program2d.id(), entry.binary_2d,
-                               entry.format_2d)) {
+            if (!extractBinary(program2d.id(), entry.binary_2d, entry.format_2d)) {
                 markFailed("could not extract 2D program binary");
                 return false;
             }
@@ -5049,8 +4670,7 @@ class ShaderLibrary {
                     markFailed("3D compile failed");
                     return false;
                 }
-                if (!extractBinary(program3d.id(), entry.binary_3d,
-                                   entry.format_3d)) {
+                if (!extractBinary(program3d.id(), entry.binary_3d, entry.format_3d)) {
                     markFailed("could not extract 3D program binary");
                     return false;
                 }
@@ -5076,10 +4696,7 @@ class ShaderLibrary {
      * @param loadingFont Optional font used to render rebuild progress.
      * @return true on success.
      */
-    bool buildShaderCache(gl::GLWindow *win, const std::string &library_path,
-                          const std::string &vert_2d,
-                          const std::string &vert_3d,
-                          mx::Font *loadingFont = nullptr) {
+    bool buildShaderCache(gl::GLWindow *win, const std::string &library_path, const std::string &vert_2d, const std::string &vert_3d, mx::Font *loadingFont = nullptr) {
         if (glGetString(GL_VERSION) == nullptr) {
             mx::system_err << "acmx2: build-cache requires a valid OpenGL context\n";
             return false;
@@ -5101,9 +4718,7 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Program binary functions loaded successfully\n";
         fflush(stdout);
 
-        std::string cache_file =
-            shaderCacheFilePath(win ? win->util.path : std::string(),
-                                library_path, cache_size, use_history_array);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size, use_history_array);
         ShaderManifestData manifest;
         std::string manifest_error;
         if (!loadShaderManifest(library_path, manifest, manifest_error)) {
@@ -5125,18 +4740,16 @@ class ShaderLibrary {
         mx::system_out << "acmx2: Building shader cache for " << shader_files.size() << " shaders...\n";
         fflush(stdout);
 
-        static constexpr const char *kCacheLogoVert =
-            "#version 330 core\n"
-            "layout(location = 0) in vec3 aPos;\n"
-            "layout(location = 1) in vec2 aTex;\n"
-            "out vec2 tc;\n"
-            "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
-        static constexpr const char *kCacheLogoFrag =
-            "#version 330 core\n"
-            "in vec2 tc;\n"
-            "out vec4 color;\n"
-            "uniform sampler2D samp;\n"
-            "void main() { color = texture(samp, tc); }\n";
+        static constexpr const char *kCacheLogoVert = "#version 330 core\n"
+                                                      "layout(location = 0) in vec3 aPos;\n"
+                                                      "layout(location = 1) in vec2 aTex;\n"
+                                                      "out vec2 tc;\n"
+                                                      "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
+        static constexpr const char *kCacheLogoFrag = "#version 330 core\n"
+                                                      "in vec2 tc;\n"
+                                                      "out vec4 color;\n"
+                                                      "uniform sampler2D samp;\n"
+                                                      "void main() { color = texture(samp, tc); }\n";
 
         gl::ShaderProgram cache_logo_shader;
         auto cache_logo_sprite = std::make_unique<gl::GLSprite>();
@@ -5148,26 +4761,17 @@ class ShaderLibrary {
                 try {
                     int logo_width = 0;
                     int logo_height = 0;
-                    logo_texture = gl::loadTexture(
-                        logo_path, logo_width, logo_height);
-                    if (logo_texture &&
-                        cache_logo_shader.loadProgramFromText(
-                            kCacheLogoVert, kCacheLogoFrag)) {
+                    logo_texture = gl::loadTexture(logo_path, logo_width, logo_height);
+                    if (logo_texture && cache_logo_shader.loadProgramFromText(kCacheLogoVert, kCacheLogoFrag)) {
                         cache_logo_sprite->initSize(win->w, win->h);
                         cache_logo_sprite->setName("samp");
                         cache_logo_sprite->setShader(&cache_logo_shader);
-                        const float scale = std::min(
-                            static_cast<float>(win->w) / logo_width,
-                            static_cast<float>(win->h) / logo_height);
-                        const int draw_width =
-                            static_cast<int>(logo_width * scale);
-                        const int draw_height =
-                            static_cast<int>(logo_height * scale);
+                        const float scale = std::min(static_cast<float>(win->w) / logo_width, static_cast<float>(win->h) / logo_height);
+                        const int draw_width = static_cast<int>(logo_width * scale);
+                        const int draw_height = static_cast<int>(logo_height * scale);
                         const int draw_x = (win->w - draw_width) / 2;
                         const int draw_y = (win->h - draw_height) / 2;
-                        cache_logo_sprite->initWithTexture(
-                            &cache_logo_shader, logo_texture,
-                            draw_x, draw_y, draw_width, draw_height);
+                        cache_logo_sprite->initWithTexture(&cache_logo_shader, logo_texture, draw_x, draw_y, draw_width, draw_height);
                         logo_texture = 0;
                         cache_logo_loaded = true;
                     }
@@ -5186,11 +4790,7 @@ class ShaderLibrary {
             if (win == nullptr)
                 return;
 
-            const int percent = shader_files.empty()
-                                    ? 100
-                                    : static_cast<int>(
-                                          completed * 100 /
-                                          shader_files.size());
+            const int percent = shader_files.empty() ? 100 : static_cast<int>(completed * 100 / shader_files.size());
             if (percent == last_progress_percent)
                 return;
             last_progress_percent = percent;
@@ -5200,14 +4800,9 @@ class ShaderLibrary {
             glClear(GL_COLOR_BUFFER_BIT);
             if (cache_logo_loaded)
                 cache_logo_sprite->draw();
-            if (loadingFont != nullptr &&
-                loadingFont->handle().has_value()) {
-                const std::string progress_text =
-                    "Building Shader Cache " +
-                    std::to_string(completed) + "/" +
-                    std::to_string(shader_files.size()) + "...";
-                win->text.printText_Blended(
-                    *loadingFont, 10, 10, progress_text);
+            if (loadingFont != nullptr && loadingFont->handle().has_value()) {
+                const std::string progress_text = "Building Shader Cache " + std::to_string(completed) + "/" + std::to_string(shader_files.size()) + "...";
+                win->text.printText_Blended(*loadingFont, 10, 10, progress_text);
             }
             SDL_GL_SwapWindow(win->getWindow());
             SDL_PumpEvents();
@@ -5234,12 +4829,9 @@ class ShaderLibrary {
             fflush(stdout);
 
             if (isComputeShaderFile(shader_file)) {
-                const bool compiled = compileShaderCacheEntry(
-                    shader_file, full_path, vert_2d, vert_3d, false, entry);
+                const bool compiled = compileShaderCacheEntry(shader_file, full_path, vert_2d, vert_3d, false, entry);
                 cache.entries.push_back(std::move(entry));
-                mx::system_out
-                    << (compiled ? "  ✔ COMPUTE SUCCESS\n"
-                                 : "  ⚠ COMPUTE SKIPPED (passthrough placeholder)\n");
+                mx::system_out << (compiled ? "  ✔ COMPUTE SUCCESS\n" : "  ⚠ COMPUTE SKIPPED (passthrough placeholder)\n");
                 fflush(stdout);
                 continue;
             }
@@ -5250,8 +4842,7 @@ class ShaderLibrary {
                 entry.binary_3d.clear();
                 entry.format_2d = 0;
                 entry.format_3d = 0;
-                mx::system_out << "  ⚠ SKIPPED: " << reason
-                               << " (slot preserved; will run as passthrough)\n";
+                mx::system_out << "  ⚠ SKIPPED: " << reason << " (slot preserved; will run as passthrough)\n";
                 fflush(stdout);
                 cache.entries.push_back(std::move(entry));
             };
@@ -5408,9 +4999,7 @@ class ShaderLibrary {
                     ++ok_count;
             }
             mx::system_out << "acmx2: Shader cache saved to: " << cache_file << "\n";
-            mx::system_out << "acmx2: Cached " << ok_count << " shaders ("
-                           << (dual_mode ? "2D+3D" : "2D only")
-                           << "), " << failed_count << " failed (passthrough placeholders)\n";
+            mx::system_out << "acmx2: Cached " << ok_count << " shaders (" << (dual_mode ? "2D+3D" : "2D only") << "), " << failed_count << " failed (passthrough placeholders)\n";
             fflush(stdout);
             return true;
         } else {
@@ -5482,8 +5071,7 @@ class ShaderLibrary {
     }
 
     /// @brief Attempt to load all shader programs from the binary cache file.
-    bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont,
-                       const std::string &vert_2d = "", const std::string &vert_3d = "") {
+    bool loadFromCache(gl::GLWindow *win, const std::string &library_path, mx::Font &loadingFont, const std::string &vert_2d = "", const std::string &vert_3d = "") {
         ShaderManifestData manifest;
         std::string manifest_error;
         if (!loadShaderManifest(library_path, manifest, manifest_error)) {
@@ -5491,9 +5079,7 @@ class ShaderLibrary {
             return false;
         }
         setCustomUniformValues(manifest.custom_uniforms);
-        std::string cache_file =
-            shaderCacheFilePath(win ? win->util.path : std::string(),
-                                library_path, cache_size, use_history_array);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), library_path, cache_size, use_history_array);
 
         mx::system_out << "acmx2: Checking for shader cache at: " << cache_file << "\n";
         fflush(stdout);
@@ -5543,9 +5129,7 @@ class ShaderLibrary {
         }
 
         if (shader_files.size() != cache.entries.size()) {
-            mx::system_out << "acmx2: Shader count mismatch: manifest has " << shader_files.size()
-                           << " shaders but cache has " << cache.entries.size()
-                           << " entries. Rebuilding cache...\n";
+            mx::system_out << "acmx2: Shader count mismatch: manifest has " << shader_files.size() << " shaders but cache has " << cache.entries.size() << " entries. Rebuilding cache...\n";
             fflush(stdout);
             return false;
         }
@@ -5554,33 +5138,20 @@ class ShaderLibrary {
         for (std::size_t i = 0; i < shader_files.size(); ++i) {
             const std::string fullPath = library_path + "/" + shader_files[i];
             const uint64_t currentHash = preparedFragmentHash(fullPath);
-            const ShaderProgramKind expectedKind = isComputeShaderFile(shader_files[i])
-                                                       ? (compute_shader_supported
-                                                              ? ShaderProgramKind::Compute
-                                                              : ShaderProgramKind::ComputeUnavailable)
-                                                       : ShaderProgramKind::Fragment;
-            if (currentHash != cache.entries[i].source_hash ||
-                cache.entries[i].shader_name !=
-                    std::filesystem::path(shader_files[i]).stem().string() ||
-                cache.entries[i].kind != expectedKind) {
+            const ShaderProgramKind expectedKind = isComputeShaderFile(shader_files[i]) ? (compute_shader_supported ? ShaderProgramKind::Compute : ShaderProgramKind::ComputeUnavailable) : ShaderProgramKind::Fragment;
+            if (currentHash != cache.entries[i].source_hash || cache.entries[i].shader_name != std::filesystem::path(shader_files[i]).stem().string() || cache.entries[i].kind != expectedKind) {
                 staleIndices.push_back(i);
             }
         }
 
         if (!staleIndices.empty()) {
-            mx::system_out << "acmx2: Updating " << staleIndices.size()
-                           << " changed shader cache entr"
-                           << (staleIndices.size() == 1 ? "y" : "ies") << "...\n";
+            mx::system_out << "acmx2: Updating " << staleIndices.size() << " changed shader cache entr" << (staleIndices.size() == 1 ? "y" : "ies") << "...\n";
             mx::system_out.flush();
             for (const std::size_t index : staleIndices) {
-                const std::string fullPath =
-                    library_path + "/" + shader_files[index];
-                mx::system_out << "acmx2: Incremental cache update: "
-                               << shader_files[index] << "\n";
+                const std::string fullPath = library_path + "/" + shader_files[index];
+                mx::system_out << "acmx2: Incremental cache update: " << shader_files[index] << "\n";
                 mx::system_out.flush();
-                compileShaderCacheEntry(shader_files[index], fullPath,
-                                        vert_2d, vert_3d, cache.dual_mode,
-                                        cache.entries[index]);
+                compileShaderCacheEntry(shader_files[index], fullPath, vert_2d, vert_3d, cache.dual_mode, cache.entries[index]);
             }
             if (!cache.save(cache_file)) {
                 mx::system_err << "acmx2: Could not save incrementally updated shader cache\n";
@@ -5592,18 +5163,16 @@ class ShaderLibrary {
         fflush(stdout);
         program_kinds.resize(cache.entries.size(), ShaderProgramKind::Fragment);
 
-        static constexpr const char *kLogoVertC =
-            "#version 330 core\n"
-            "layout(location = 0) in vec3 aPos;\n"
-            "layout(location = 1) in vec2 aTex;\n"
-            "out vec2 tc;\n"
-            "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
-        static constexpr const char *kLogoFragC =
-            "#version 330 core\n"
-            "in vec2 tc;\n"
-            "out vec4 color;\n"
-            "uniform sampler2D samp;\n"
-            "void main() { color = texture(samp, tc); }\n";
+        static constexpr const char *kLogoVertC = "#version 330 core\n"
+                                                  "layout(location = 0) in vec3 aPos;\n"
+                                                  "layout(location = 1) in vec2 aTex;\n"
+                                                  "out vec2 tc;\n"
+                                                  "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
+        static constexpr const char *kLogoFragC = "#version 330 core\n"
+                                                  "in vec2 tc;\n"
+                                                  "out vec4 color;\n"
+                                                  "uniform sampler2D samp;\n"
+                                                  "void main() { color = texture(samp, tc); }\n";
 
         gl::ShaderProgram logo_shader_c;
         auto logo_sprite_c = std::make_unique<gl::GLSprite>();
@@ -5642,49 +5211,33 @@ class ShaderLibrary {
         // Helper: insert a passthrough program at the current slot to preserve
         // index alignment with the manifest when a cache entry cannot be used.
         auto push_passthrough_2d = [&](size_t i, const char *reason) {
-            auto ph = makePassthroughProgram(vert_2d.empty()
-                                                 ? win->util.getFilePath("data/vert.glsl")
-                                                 : vert_2d);
+            auto ph = makePassthroughProgram(vert_2d.empty() ? win->util.getFilePath("data/vert.glsl") : vert_2d);
             if (!ph) {
-                mx::system_err << "acmx2: ❌ Failed to build 2D passthrough for slot "
-                               << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?"))
-                               << "]\n";
+                mx::system_err << "acmx2: ❌ Failed to build 2D passthrough for slot " << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?")) << "]\n";
                 return false;
             }
-            mx::system_out << "acmx2: ⚠ Slot " << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?"))
-                           << "] using passthrough (" << reason << ")\n";
+            mx::system_out << "acmx2: ⚠ Slot " << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?")) << "] using passthrough (" << reason << ")\n";
             fflush(stdout);
             programs_2d.push_back(std::move(ph));
-            setupProgramUniforms(win, programs_2d.back().get(), program_names_2d,
-                                 programs_2d.size() - 1,
-                                 library_path + "/" + shader_files[i]);
+            setupProgramUniforms(win, programs_2d.back().get(), program_names_2d, programs_2d.size() - 1, library_path + "/" + shader_files[i]);
             return true;
         };
         auto push_passthrough_3d = [&](size_t i, const char *reason) {
-            auto ph = makePassthroughProgram(vert_3d.empty()
-                                                 ? win->util.getFilePath("data/vertex.glsl")
-                                                 : vert_3d);
+            auto ph = makePassthroughProgram(vert_3d.empty() ? win->util.getFilePath("data/vertex.glsl") : vert_3d);
             if (!ph) {
-                mx::system_err << "acmx2: ❌ Failed to build 3D passthrough for slot "
-                               << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?"))
-                               << "]\n";
+                mx::system_err << "acmx2: ❌ Failed to build 3D passthrough for slot " << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?")) << "]\n";
                 return false;
             }
-            mx::system_out << "acmx2: ⚠ Slot " << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?"))
-                           << "] using 3D passthrough (" << reason << ")\n";
+            mx::system_out << "acmx2: ⚠ Slot " << i << " [" << (i < shader_files.size() ? shader_files[i] : std::string("?")) << "] using 3D passthrough (" << reason << ")\n";
             fflush(stdout);
             programs_3d.push_back(std::move(ph));
-            setupProgramUniforms(win, programs_3d.back().get(), program_names_3d,
-                                 programs_3d.size() - 1,
-                                 library_path + "/" + shader_files[i]);
+            setupProgramUniforms(win, programs_3d.back().get(), program_names_3d, programs_3d.size() - 1, library_path + "/" + shader_files[i]);
             return true;
         };
 
         for (size_t i = 0; i < cache.entries.size(); ++i) {
             const auto &entry = cache.entries[i];
-            program_kinds[i] = entry.failed && entry.kind == ShaderProgramKind::Compute
-                                   ? ShaderProgramKind::ComputeUnavailable
-                                   : entry.kind;
+            program_kinds[i] = entry.failed && entry.kind == ShaderProgramKind::Compute ? ShaderProgramKind::ComputeUnavailable : entry.kind;
 
             // If this entry was marked as failed when the cache was built,
             // substitute a passthrough program so the slot index stays
@@ -5713,10 +5266,7 @@ class ShaderLibrary {
             if (link_status != GL_TRUE) {
                 GLchar info_log[512];
                 glGetProgramInfoLog(prog_id_2d, 512, nullptr, info_log);
-                mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 2D binary load failed, gl_err=" << gl_err
-                               << ", format=" << entry.format_2d
-                               << ", size=" << entry.binary_2d.size()
-                               << ", log=" << info_log << "\n";
+                mx::system_out << "acmx2: ❌ Shader " << i << " [" << entry.shader_name << "] 2D binary load failed, gl_err=" << gl_err << ", format=" << entry.format_2d << ", size=" << entry.binary_2d.size() << ", log=" << info_log << "\n";
                 fflush(stdout);
                 glDeleteProgram(prog_id_2d);
                 programs_2d.pop_back();
@@ -5793,8 +5343,7 @@ class ShaderLibrary {
         if (binary_fail_count > 0 && cache.entries.size() > 0) {
             size_t fail_pct = (binary_fail_count * 100) / cache.entries.size();
             if (fail_pct >= 10) {
-                mx::system_out << "acmx2: ⚠ " << binary_fail_count << "/" << cache.entries.size()
-                               << " cached shaders failed to load (" << fail_pct << "%) — cache is stale.\n";
+                mx::system_out << "acmx2: ⚠ " << binary_fail_count << "/" << cache.entries.size() << " cached shaders failed to load (" << fail_pct << "%) — cache is stale.\n";
                 fflush(stdout);
                 std::error_code rm_ec;
                 std::filesystem::remove(cache_file, rm_ec);
@@ -5835,9 +5384,7 @@ class ShaderLibrary {
         // cache now and reload from it so subsequent runs hit the binary cache
         // instead of recompiling 1700+ shaders every launch. If building or
         // reloading fails for any reason, fall back to a plain source compile.
-        std::string cache_file =
-            shaderCacheFilePath(win ? win->util.path : std::string(), text,
-                                cache_size, use_history_array);
+        std::string cache_file = shaderCacheFilePath(win ? win->util.path : std::string(), text, cache_size, use_history_array);
         mx::system_out << "acmx2: Building shader cache at: " << cache_file << "\n";
         fflush(stdout);
         programs_2d.clear();
@@ -5845,8 +5392,7 @@ class ShaderLibrary {
         program_kinds.clear();
         program_names_2d.clear();
         program_names_3d.clear();
-        if (buildShaderCache(win, text, vert_2d, vert_3d, &loadingFont) &&
-            loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
+        if (buildShaderCache(win, text, vert_2d, vert_3d, &loadingFont) && loadFromCache(win, text, loadingFont, vert_2d, vert_3d)) {
             return;
         }
         mx::system_out << "acmx2: Cache build/reload failed; compiling from source.\n";
@@ -5884,10 +5430,7 @@ class ShaderLibrary {
     }
 
     /// Return whether a library slot contains an executable compute program.
-    bool isCompute(size_t idx) const {
-        return idx < program_kinds.size() &&
-               program_kinds[idx] == ShaderProgramKind::Compute;
-    }
+    bool isCompute(size_t idx) const { return idx < program_kinds.size() && program_kinds[idx] == ShaderProgramKind::Compute; }
 
     /**
      * Run a compute library slot as a full-frame image pass.
@@ -5897,11 +5440,8 @@ class ShaderLibrary {
      * be declared with explicit `binding = 0`, or use one of the conventional
      * names outputImage, output_image, destTex, or img_output.
      */
-    bool dispatchCompute2D(gl::GLWindow *win, size_t idx, GLuint input_texture,
-                           GLuint output_texture) {
-        if (!compute_shader_supported || !isCompute(idx) ||
-            idx >= programs_2d.size() || input_texture == 0 ||
-            output_texture == 0 || input_texture == output_texture) {
+    bool dispatchCompute2D(gl::GLWindow *win, size_t idx, GLuint input_texture, GLuint output_texture) {
+        if (!compute_shader_supported || !isCompute(idx) || idx >= programs_2d.size() || input_texture == 0 || output_texture == 0 || input_texture == output_texture) {
             return false;
         }
 
@@ -5916,29 +5456,21 @@ class ShaderLibrary {
         if (input_location != -1)
             glUniform1i(input_location, 0);
 
-        static constexpr const char *OUTPUT_IMAGE_NAMES[] = {
-            "outputImage", "output_image", "destTex", "img_output"};
+        static constexpr const char *OUTPUT_IMAGE_NAMES[] = {"outputImage", "output_image", "destTex", "img_output"};
         for (const char *name : OUTPUT_IMAGE_NAMES) {
             const GLint location = glGetUniformLocation(program->id(), name);
             if (location != -1)
                 glUniform1i(location, 0);
         }
-        glBindImageTexture(0, output_texture, 0, GL_FALSE, 0, GL_WRITE_ONLY,
-                           GL_RGBA16F);
+        glBindImageTexture(0, output_texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
 
         const ProgramData &data = program_names_2d.at(static_cast<int>(idx));
-        const GLuint local_x = static_cast<GLuint>(
-            std::max(data.compute_work_group_size[0], 1));
-        const GLuint local_y = static_cast<GLuint>(
-            std::max(data.compute_work_group_size[1], 1));
-        const GLuint groups_x =
-            (static_cast<GLuint>(win->w) + local_x - 1) / local_x;
-        const GLuint groups_y =
-            (static_cast<GLuint>(win->h) + local_y - 1) / local_y;
+        const GLuint local_x = static_cast<GLuint>(std::max(data.compute_work_group_size[0], 1));
+        const GLuint local_y = static_cast<GLuint>(std::max(data.compute_work_group_size[1], 1));
+        const GLuint groups_x = (static_cast<GLuint>(win->w) + local_x - 1) / local_x;
+        const GLuint groups_y = (static_cast<GLuint>(win->h) + local_y - 1) / local_y;
         glDispatchCompute(groups_x, groups_y, 1);
-        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
-                        GL_TEXTURE_FETCH_BARRIER_BIT |
-                        GL_FRAMEBUFFER_BARRIER_BIT);
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
         glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
         return glGetError() == GL_NO_ERROR;
     }
@@ -6085,9 +5617,7 @@ class ShaderLibrary {
         float year = static_cast<float>(localTime_buf.tm_year + 1900);
         float month = static_cast<float>(localTime_buf.tm_mon + 1);
         float day = static_cast<float>(localTime_buf.tm_mday);
-        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 +
-                                           localTime_buf.tm_min * 60 +
-                                           localTime_buf.tm_sec);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + localTime_buf.tm_min * 60 + localTime_buf.tm_sec);
         glUniform4f(n.iDate, year, month, day, seconds);
         if (n.iFrameRate != -1) {
             glUniform1f(n.iFrameRate, 24.0f);
@@ -6128,19 +5658,14 @@ class ShaderLibrary {
         }
         uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
-        const auto audio_metrics = audio_analyzer != nullptr
-                                       ? audio_analyzer->metrics()
-                                       : acmx2::audio::AudioMetrics{};
-        const float audio_sensitivity =
-            audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
+        const auto audio_metrics = audio_analyzer != nullptr ? audio_analyzer->metrics() : acmx2::audio::AudioMetrics{};
+        const float audio_sensitivity = audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
         if (time_audio) {
             glUniform1f(n.amp, audio_metrics.amplitude * audio_warmup_envelope);
             glUniform1f(n.amp_untouched, audio_sensitivity);
         }
         if (n.iSampleRate != -1) {
-            const float sample_rate = audio_analyzer != nullptr
-                                          ? static_cast<float>(audio_analyzer->sample_rate())
-                                          : 44100.0f;
+            const float sample_rate = audio_analyzer != nullptr ? static_cast<float>(audio_analyzer->sample_rate()) : 44100.0f;
             glUniform1f(n.iSampleRate, sample_rate);
         }
         if (n.iamp != -1) {
@@ -6172,8 +5697,7 @@ class ShaderLibrary {
             glUniform1i(n.spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         }
         if (n.spectrum_zero_loc != -1)
-            glUniform1i(n.spectrum_zero_loc,
-                        SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+            glUniform1i(n.spectrum_zero_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         if (n.spectrum_history_loc != -1)
             glUniform1i(n.spectrum_history_loc, SpectrumHistory::TEXTURE_UNIT);
         if (n.spectrum_history_head_loc != -1)
@@ -6195,8 +5719,7 @@ class ShaderLibrary {
                 }
                 glUniform1iv(n.texture_array_base_loc, cache_size, units.data());
             } else {
-                for (int i = 0;
-                     i < static_cast<int>(n.texture_array_loc.size()); ++i) {
+                for (int i = 0; i < static_cast<int>(n.texture_array_loc.size()); ++i) {
                     if (n.texture_array_loc[i] != -1)
                         glUniform1i(n.texture_array_loc[i], i + 1);
                 }
@@ -6259,9 +5782,7 @@ class ShaderLibrary {
         float year = static_cast<float>(localTime_buf.tm_year + 1900);
         float month = static_cast<float>(localTime_buf.tm_mon + 1);
         float day = static_cast<float>(localTime_buf.tm_mday);
-        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 +
-                                           localTime_buf.tm_min * 60 +
-                                           localTime_buf.tm_sec);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + localTime_buf.tm_min * 60 + localTime_buf.tm_sec);
         glUniform4f(n.iDate, year, month, day, seconds);
         if (n.iFrameRate != -1) {
             glUniform1f(n.iFrameRate, 24.0f);
@@ -6301,19 +5822,14 @@ class ShaderLibrary {
         }
         uploadAcidCamUniforms(n, idx);
 #ifdef AUDIO_ENABLED
-        const auto audio_metrics = audio_analyzer != nullptr
-                                       ? audio_analyzer->metrics()
-                                       : acmx2::audio::AudioMetrics{};
-        const float audio_sensitivity =
-            audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
+        const auto audio_metrics = audio_analyzer != nullptr ? audio_analyzer->metrics() : acmx2::audio::AudioMetrics{};
+        const float audio_sensitivity = audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
         if (time_audio) {
             glUniform1f(n.amp, audio_metrics.amplitude * audio_warmup_envelope);
             glUniform1f(n.amp_untouched, audio_sensitivity);
         }
         if (n.iSampleRate != -1) {
-            const float sample_rate = audio_analyzer != nullptr
-                                          ? static_cast<float>(audio_analyzer->sample_rate())
-                                          : 44100.0f;
+            const float sample_rate = audio_analyzer != nullptr ? static_cast<float>(audio_analyzer->sample_rate()) : 44100.0f;
             glUniform1f(n.iSampleRate, sample_rate);
         }
         if (n.iamp != -1) {
@@ -6344,8 +5860,7 @@ class ShaderLibrary {
             glUniform1i(n.spectrum_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         }
         if (n.spectrum_zero_loc != -1)
-            glUniform1i(n.spectrum_zero_loc,
-                        SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+            glUniform1i(n.spectrum_zero_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         if (n.spectrum_history_loc != -1)
             glUniform1i(n.spectrum_history_loc, SpectrumHistory::TEXTURE_UNIT);
         if (n.spectrum_history_head_loc != -1)
@@ -6367,8 +5882,7 @@ class ShaderLibrary {
                 }
                 glUniform1iv(n.texture_array_base_loc, cache_size, units.data());
             } else {
-                for (int i = 0;
-                     i < static_cast<int>(n.texture_array_loc.size()); ++i) {
+                for (int i = 0; i < static_cast<int>(n.texture_array_loc.size()); ++i) {
                     if (n.texture_array_loc[i] != -1)
                         glUniform1i(n.texture_array_loc[i], i + 1);
                 }
@@ -6424,26 +5938,17 @@ class ShaderLibrary {
         frame_counter++;
 
         if (time_audio == false && time_active) {
-            const double time_delta =
-                normalized_time && video_fps > 0.0 ? 1.0 / video_fps
-                                                   : delta_time;
+            const double time_delta = normalized_time && video_fps > 0.0 ? 1.0 / video_fps : delta_time;
             const float step = static_cast<float>(time_delta) * time_speed;
             time_f += step;
         } else {
 #ifdef AUDIO_ENABLED
             if (time_audio) {
-                const double time_delta =
-                    normalized_time && video_fps > 0.0 ? 1.0 / video_fps
-                                                       : delta_time;
-                float dt_scalex =
-                    audio_delta ? static_cast<float>(time_delta) : 1.0f;
-                const auto audio_metrics = audio_analyzer != nullptr
-                                               ? audio_analyzer->metrics()
-                                               : acmx2::audio::AudioMetrics{};
-                const float audio_sensitivity =
-                    audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
-                float new_ampx =
-                    audio_metrics.amplitude * audio_sensitivity * time_speed * dt_scalex;
+                const double time_delta = normalized_time && video_fps > 0.0 ? 1.0 / video_fps : delta_time;
+                float dt_scalex = audio_delta ? static_cast<float>(time_delta) : 1.0f;
+                const auto audio_metrics = audio_analyzer != nullptr ? audio_analyzer->metrics() : acmx2::audio::AudioMetrics{};
+                const float audio_sensitivity = audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
+                float new_ampx = audio_metrics.amplitude * audio_sensitivity * time_speed * dt_scalex;
                 time_f += new_ampx;
             }
 #endif
@@ -6485,9 +5990,7 @@ class ShaderLibrary {
         float year = static_cast<float>(localTime_buf.tm_year + 1900);
         float month = static_cast<float>(localTime_buf.tm_mon + 1);
         float day = static_cast<float>(localTime_buf.tm_mday);
-        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 +
-                                           localTime_buf.tm_min * 60 +
-                                           localTime_buf.tm_sec);
+        float seconds = static_cast<float>(localTime_buf.tm_hour * 3600 + localTime_buf.tm_min * 60 + localTime_buf.tm_sec);
         glUniform4f(iDateLoc, year, month, day, seconds);
 
         GLint iFrameRateLoc = names[index()].iFrameRate;
@@ -6539,16 +6042,12 @@ class ShaderLibrary {
         uploadAcidCamUniforms(names[index()], index());
 
 #ifdef AUDIO_ENABLED
-        const auto audio_metrics = audio_analyzer != nullptr
-                                       ? audio_analyzer->metrics()
-                                       : acmx2::audio::AudioMetrics{};
-        const float audio_sensitivity =
-            audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
+        const auto audio_metrics = audio_analyzer != nullptr ? audio_analyzer->metrics() : acmx2::audio::AudioMetrics{};
+        const float audio_sensitivity = audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
         GLuint amp_i = names[index()].amp;
         float amplitude = 1.0f;
         float dt_scale = audio_delta ? static_cast<float>(delta_time) : 1.0f;
-        float new_amp =
-            audio_metrics.amplitude * audio_sensitivity * time_speed * dt_scale;
+        float new_amp = audio_metrics.amplitude * audio_sensitivity * time_speed * dt_scale;
         if (std::isnan(new_amp) || std::isinf(new_amp) || new_amp > 1e6f) {
             amplitude = 1.0f;
         } else {
@@ -6559,9 +6058,7 @@ class ShaderLibrary {
         glUniform1f(amp_u, audio_metrics.amplitude);
         GLint iSampleRateLoc = names[index()].iSampleRate;
         if (iSampleRateLoc != -1) {
-            const float sample_rate = audio_analyzer != nullptr
-                                          ? static_cast<float>(audio_analyzer->sample_rate())
-                                          : 44100.0f;
+            const float sample_rate = audio_analyzer != nullptr ? static_cast<float>(audio_analyzer->sample_rate()) : 44100.0f;
             glUniform1f(iSampleRateLoc, sample_rate);
         }
         if (names[index()].iamp != -1) {
@@ -6594,17 +6091,13 @@ class ShaderLibrary {
         }
         auto &spectrum_names = names[index()];
         if (spectrum_names.spectrum_zero_loc != -1)
-            glUniform1i(spectrum_names.spectrum_zero_loc,
-                        SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
+            glUniform1i(spectrum_names.spectrum_zero_loc, SpectrumTexture::SPECTRUM_TEXTURE_UNIT);
         if (spectrum_names.spectrum_history_loc != -1)
-            glUniform1i(spectrum_names.spectrum_history_loc,
-                        SpectrumHistory::TEXTURE_UNIT);
+            glUniform1i(spectrum_names.spectrum_history_loc, SpectrumHistory::TEXTURE_UNIT);
         if (spectrum_names.spectrum_history_head_loc != -1)
-            glUniform1i(spectrum_names.spectrum_history_head_loc,
-                        spectrum_history_head);
+            glUniform1i(spectrum_names.spectrum_history_head_loc, spectrum_history_head);
         if (spectrum_names.spectrum_history_size_loc != -1)
-            glUniform1i(spectrum_names.spectrum_history_size_loc,
-                        audio_buffer_count);
+            glUniform1i(spectrum_names.spectrum_history_size_loc, audio_buffer_count);
 #endif
         if (use_history_array) {
             auto &n = names[index()];
@@ -6665,12 +6158,10 @@ class ShaderLibrary {
      * @param data ProgramData containing cached custom-uniform locations.
      */
     void uploadCustomUniforms(const ProgramData &data) const {
-        const std::size_t count = std::min(custom_uniforms.size(),
-                                           data.custom_uniform_locs.size());
+        const std::size_t count = std::min(custom_uniforms.size(), data.custom_uniform_locs.size());
         for (std::size_t i = 0; i < count; ++i) {
             if (data.custom_uniform_locs[i] != -1) {
-                glUniform1f(data.custom_uniform_locs[i],
-                            static_cast<float>(custom_uniforms[i].value));
+                glUniform1f(data.custom_uniform_locs[i], static_cast<float>(custom_uniforms[i].value));
             }
         }
     }
@@ -6794,23 +6285,14 @@ class ShaderLibrary {
 #ifdef AUDIO_ENABLED
     bool timeActive() const { return time_active; }
     bool timeAudio() const { return time_audio; }
-    float getAmp() const {
-        return audio_analyzer != nullptr ? audio_analyzer->metrics().amplitude : 0.0f;
-    }
-    float getAmpUntouched() const {
-        return audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f;
-    }
+    float getAmp() const { return audio_analyzer != nullptr ? audio_analyzer->metrics().amplitude : 0.0f; }
+    float getAmpUntouched() const { return audio_analyzer != nullptr ? audio_analyzer->sensitivity() : 1.0f; }
 #endif
     /// @brief Reserved for future SDL event handling inside the library.
     void event(SDL_Event &e) {}
 };
 
-enum class FrameRotation {
-    None,
-    Clockwise90,
-    Rotate180,
-    Counterclockwise90
-};
+enum class FrameRotation { None, Clockwise90, Rotate180, Counterclockwise90 };
 
 /**
  * @brief Read a video's coded dimensions without opening a decoder.
@@ -6826,18 +6308,15 @@ enum class FrameRotation {
  */
 static std::optional<cv::Size> probe_video_size(const std::string &filename) {
     AVFormatContext *format_context = nullptr;
-    if (avformat_open_input(&format_context, filename.c_str(), nullptr,
-                            nullptr) < 0) {
+    if (avformat_open_input(&format_context, filename.c_str(), nullptr, nullptr) < 0) {
         return std::nullopt;
     }
 
     std::optional<cv::Size> dimensions;
     if (avformat_find_stream_info(format_context, nullptr) >= 0) {
-        const int stream_index = av_find_best_stream(
-            format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        const int stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
         if (stream_index >= 0) {
-            const AVCodecParameters *parameters =
-                format_context->streams[stream_index]->codecpar;
+            const AVCodecParameters *parameters = format_context->streams[stream_index]->codecpar;
             if (parameters->width > 0 && parameters->height > 0) {
                 dimensions = cv::Size(parameters->width, parameters->height);
             }
@@ -7321,9 +6800,7 @@ class ACView : public gl::GLObject {
                 midiIn = nullptr;
                 return;
             }
-            unsigned int port = (deviceIndex >= 0 && deviceIndex < static_cast<int>(ports))
-                                    ? static_cast<unsigned int>(deviceIndex)
-                                    : 0;
+            unsigned int port = (deviceIndex >= 0 && deviceIndex < static_cast<int>(ports)) ? static_cast<unsigned int>(deviceIndex) : 0;
             mx::system_out << "acmx2: Opening MIDI port " << port << ": " << midiIn->getPortName(port) << "\n";
             midiIn->openPort(port);
             midiOpen = true;
@@ -7350,10 +6827,7 @@ class ACView : public gl::GLObject {
                 int b0, b1, b2;
                 if (!(iss >> b0 >> b1 >> b2))
                     continue;
-                midiCodes.push_back({k1, k2,
-                                     static_cast<unsigned char>(b0),
-                                     static_cast<unsigned char>(b1),
-                                     static_cast<unsigned char>(b2)});
+                midiCodes.push_back({k1, k2, static_cast<unsigned char>(b0), static_cast<unsigned char>(b1), static_cast<unsigned char>(b2)});
             }
             mx::system_out << "acmx2: Loaded " << midiCodes.size() << " MIDI mapping(s)\n";
             fflush(stdout);
@@ -7646,9 +7120,7 @@ class ACView : public gl::GLObject {
                     mx::system_out << "acmx2: Model scale decreased to " << modelRenderScale << "\n";
                     fflush(stdout);
                 } else {
-                    SDL_Keycode k = (val > 64)
-                                        ? midiKeyToSDL(mc.key1)
-                                        : midiKeyToSDL(mc.key2);
+                    SDL_Keycode k = (val > 64) ? midiKeyToSDL(mc.key1) : midiKeyToSDL(mc.key2);
                     if (k != SDLK_UNKNOWN)
                         injectKey(k, win);
                 }
@@ -7701,8 +7173,7 @@ class ACView : public gl::GLObject {
                 continue;
             auto it = knobState.find({mc.b0, mc.b1});
             unsigned char val = (it != knobState.end()) ? it->second : 64;
-            const char *dir = (val == 64) ? "--" : (val > 64) ? midiKeyName(mc.key1)
-                                                              : midiKeyName(mc.key2);
+            const char *dir = (val == 64) ? "--" : (val > 64) ? midiKeyName(mc.key1) : midiKeyName(mc.key2);
             int barLen = 20;
             int pos = (val * barLen) / 127;
             std::string bar(barLen, '-');
@@ -7719,9 +7190,7 @@ class ACView : public gl::GLObject {
             y += 22;
         }
         // Show last button press (fade after 2 seconds)
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::steady_clock::now() - lastMidiButtonTime)
-                           .count();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - lastMidiButtonTime).count();
         if (!lastMidiButton.empty() && elapsed < 2000) {
             int alpha = (elapsed < 1500) ? 255 : 255 - static_cast<int>((elapsed - 1500) * 255 / 500);
             win->text.setColor({0, 255, 0, static_cast<unsigned char>(std::max(0, alpha))});
@@ -7750,9 +7219,7 @@ class ACView : public gl::GLObject {
         skip_audio_mux_on_exit = true;
         running = false;
     }
-    bool needsAsyncShutdown() {
-        return !skip_audio_mux_on_exit.load() && (needsMux() || needsTransferAudio() || needsFileAudioMux());
-    }
+    bool needsAsyncShutdown() { return !skip_audio_mux_on_exit.load() && (needsMux() || needsTransferAudio() || needsFileAudioMux()); }
 
     // --- HDR pipeline helpers ------------------------------------------------
     //
@@ -7776,16 +7243,14 @@ class ACView : public gl::GLObject {
         if (hdr_linear_video_texture == 0) {
             glGenTextures(1, &hdr_linear_video_texture);
             glBindTexture(GL_TEXTURE_2D, hdr_linear_video_texture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
-                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         } else if (resize_needed) {
             glBindTexture(GL_TEXTURE_2D, hdr_linear_video_texture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
-                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -7794,8 +7259,7 @@ class ACView : public gl::GLObject {
         if (hdr_linear_video_fbo == 0) {
             glGenFramebuffers(1, &hdr_linear_video_fbo);
             glBindFramebuffer(GL_FRAMEBUFFER, hdr_linear_video_fbo);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D, hdr_linear_video_texture, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, hdr_linear_video_texture, 0);
             if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
                 mx::system_err << "acmx2: HDR linear-video FBO incomplete\n";
             }
@@ -7807,16 +7271,14 @@ class ACView : public gl::GLObject {
             // GL_RGBA16 = 16-bit unsigned normalised per channel. Readback
             // as GL_UNSIGNED_SHORT gives us 16-bit PQ code values that the
             // writer quantises to 10-bit for P010.
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0,
-                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         } else if (resize_needed) {
             glBindTexture(GL_TEXTURE_2D, hdr_encoded_texture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0,
-                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -7825,8 +7287,7 @@ class ACView : public gl::GLObject {
         if (hdr_encoded_fbo == 0) {
             glGenFramebuffers(1, &hdr_encoded_fbo);
             glBindFramebuffer(GL_FRAMEBUFFER, hdr_encoded_fbo);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D, hdr_encoded_texture, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, hdr_encoded_texture, 0);
             if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
                 mx::system_err << "acmx2: HDR encoded FBO incomplete\n";
             }
@@ -7863,8 +7324,7 @@ class ACView : public gl::GLObject {
         if (!input_is_hdr || hdr_decode_shader.id() == 0) {
             return;
         }
-        const int transfer_mode =
-            (input_hdr_trc == AVCOL_TRC_ARIB_STD_B67) ? 2 : 1;
+        const int transfer_mode = (input_hdr_trc == AVCOL_TRC_ARIB_STD_B67) ? 2 : 1;
 
         GLint prev_fbo = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
@@ -7898,8 +7358,7 @@ class ACView : public gl::GLObject {
         if (!input_is_hdr || hdr_encode_shader.id() == 0) {
             return;
         }
-        const int transfer_mode =
-            (input_hdr_trc == AVCOL_TRC_ARIB_STD_B67) ? 2 : 1;
+        const int transfer_mode = (input_hdr_trc == AVCOL_TRC_ARIB_STD_B67) ? 2 : 1;
 
         GLint prev_fbo = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
@@ -7940,9 +7399,7 @@ class ACView : public gl::GLObject {
             // source frame dimensions and 16-bit normalized format before
             // sub-image upload; otherwise drivers may crash on invalid
             // glTexSubImage2D parameters.
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16,
-                         rgba16.cols, rgba16.rows, 0,
-                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, rgba16.cols, rgba16.rows, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -7951,11 +7408,8 @@ class ACView : public gl::GLObject {
             hdr_upload_tex_h = rgba16.rows;
         }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH,
-                      static_cast<GLint>(rgba16.step / (4 * sizeof(uint16_t))));
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                        rgba16.cols, rgba16.rows,
-                        GL_RGBA, GL_UNSIGNED_SHORT, rgba16.ptr());
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(rgba16.step / (4 * sizeof(uint16_t))));
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, rgba16.cols, rgba16.rows, GL_RGBA, GL_UNSIGNED_SHORT, rgba16.ptr());
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
         glBindTexture(GL_TEXTURE_2D, 0);
@@ -7963,8 +7417,7 @@ class ACView : public gl::GLObject {
 
     /** Allocate the shared fragment/compute ping-pong targets on demand. */
     void ensurePassTargets(gl::GLWindow *win) {
-        if (passFBO[0] != 0 && pass_target_width == win->w &&
-            pass_target_height == win->h) {
+        if (passFBO[0] != 0 && pass_target_width == win->w && pass_target_height == win->h) {
             return;
         }
         for (int pass = 0; pass < 2; ++pass) {
@@ -7979,17 +7432,14 @@ class ACView : public gl::GLObject {
             glGenFramebuffers(1, &passFBO[pass]);
             glGenTextures(1, &passTexture[pass]);
             glBindTexture(GL_TEXTURE_2D, passTexture[pass]);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, win->w, win->h, 0,
-                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, win->w, win->h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pass]);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D, passTexture[pass], 0);
-            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
-                GL_FRAMEBUFFER_COMPLETE) {
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, passTexture[pass], 0);
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
                 throw mx::Exception("acmx2: shader pass framebuffer is not complete");
             }
         }
@@ -7999,29 +7449,24 @@ class ACView : public gl::GLObject {
 
     /** Bind history textures required by a cache-aware pass. */
     void bindPassHistoryTextures(size_t shader_index) {
-        if (!texture_cache || !frame_cache.isFull() ||
-            !library.isCache2D(shader_index)) {
+        if (!texture_cache || !frame_cache.isFull() || !library.isCache2D(shader_index)) {
             return;
         }
         if (texture_cache_array) {
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D_ARRAY, frame_cache.historyTexture());
         } else {
-            for (int cache_index = 0; cache_index < library.cacheSize();
-                 ++cache_index) {
+            for (int cache_index = 0; cache_index < library.cacheSize(); ++cache_index) {
                 glActiveTexture(GL_TEXTURE1 + cache_index);
-                glBindTexture(GL_TEXTURE_2D,
-                              frame_cache.textureAt(cache_index));
+                glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(cache_index));
             }
         }
         glActiveTexture(GL_TEXTURE0);
     }
 
-    bool runComputePass(gl::GLWindow *win, size_t shader_index,
-                        GLuint input_texture, GLuint output_texture) {
+    bool runComputePass(gl::GLWindow *win, size_t shader_index, GLuint input_texture, GLuint output_texture) {
         bindPassHistoryTextures(shader_index);
-        return library.dispatchCompute2D(win, shader_index, input_texture,
-                                         output_texture);
+        return library.dispatchCompute2D(win, shader_index, input_texture, output_texture);
     }
 
     /**
@@ -8050,8 +7495,7 @@ class ACView : public gl::GLObject {
         // name so callers/sprites that already cached the ID stay valid.
         if (camera_texture != 0) {
             glBindTexture(GL_TEXTURE_2D, camera_texture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0,
-                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, w, h, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -8064,8 +7508,7 @@ class ACView : public gl::GLObject {
         // Re-spec fboTexture (colour attachment of captureFBO) as 16F.
         if (fboTexture != 0) {
             glBindTexture(GL_TEXTURE_2D, fboTexture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
-                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glBindTexture(GL_TEXTURE_2D, 0);
@@ -8076,8 +7519,7 @@ class ACView : public gl::GLObject {
             if (tex == 0)
                 return;
             glBindTexture(GL_TEXTURE_2D, tex);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
-                         GL_RGBA, GL_HALF_FLOAT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glBindTexture(GL_TEXTURE_2D, 0);
@@ -8105,8 +7547,7 @@ class ACView : public gl::GLObject {
      * @param w,h             Frame dimensions.
      * @param out             Output byte vector, resized to 8*w*h.
      */
-    void hdrReadback(GLuint src_linear_tex, int w, int h,
-                     std::vector<unsigned char> &out) {
+    void hdrReadback(GLuint src_linear_tex, int w, int h, std::vector<unsigned char> &out) {
         runHdrEncodePass(src_linear_tex, w, h);
         const size_t bytes = static_cast<size_t>(w) * h * 8;
         out.resize(bytes);
@@ -8128,37 +7569,7 @@ class ACView : public gl::GLObject {
      *
      * @param args Parsed command-line arguments.
      */
-    ACView(const MXArguments &args)
-        : crf{args.crf},
-          encode_opts{args.encode_opts},
-          prefix_path{args.prefix_path},
-          filename{args.filename},
-          ofilename{args.ofilename},
-          graphic{args.graphic_file},
-          camera_index{args.camera_device},
-          flib{args.slib},
-          sizev{args.sizev},
-          sizec{args.csize},
-          fps{args.fps_value},
-          repeat{args.repeat},
-          full{args.full},
-          frame_cache{
-              static_cast<std::size_t>(args.cache_size > 0 ? args.cache_size : 8),
-              args.cache_array},
-          texture_cache{args.cache},
-          texture_cache_array{args.cache_array},
-          cache_delay{args.cache_delay},
-          copy_audio{args.copy_audio},
-          gpu_cuda_device{args.cuda_device},
-          silent_mode{args.silent},
-          no_drop_mode{args.no_drop},
-          use_shader_cache_flag{args.use_shader_cache},
-          flip_output{args.flip_output},
-          frame_rotation{args.frame_rotation},
-          png_video_mode{args.png_output && !args.filename.empty()},
-          generate_mode{args.generate_interval > 0},
-          generate_interval{args.generate_interval},
-          display_filter{args.display_filter} {
+    ACView(const MXArguments &args) : crf{args.crf}, encode_opts{args.encode_opts}, prefix_path{args.prefix_path}, filename{args.filename}, ofilename{args.ofilename}, graphic{args.graphic_file}, camera_index{args.camera_device}, flib{args.slib}, sizev{args.sizev}, sizec{args.csize}, fps{args.fps_value}, repeat{args.repeat}, full{args.full}, frame_cache{static_cast<std::size_t>(args.cache_size > 0 ? args.cache_size : 8), args.cache_array}, texture_cache{args.cache}, texture_cache_array{args.cache_array}, cache_delay{args.cache_delay}, copy_audio{args.copy_audio}, gpu_cuda_device{args.cuda_device}, silent_mode{args.silent}, no_drop_mode{args.no_drop}, use_shader_cache_flag{args.use_shader_cache}, flip_output{args.flip_output}, frame_rotation{args.frame_rotation}, png_video_mode{args.png_output && !args.filename.empty()}, generate_mode{args.generate_interval > 0}, generate_interval{args.generate_interval}, display_filter{args.display_filter} {
         if (!args.watermark_text.empty()) {
             enableWatermark = true;
             watermark_text = args.watermark_text;
@@ -8184,33 +7595,23 @@ class ACView : public gl::GLObject {
                 audio_engine.analyzer().set_sensitivity(args.audio_sensitivty);
                 if (args.audio_pass_through) {
                     if (!file_audio_enable_output(audio_output_device)) {
-                        mx::system_err
-                            << "acmx2: File audio playback could not be opened; "
-                               "continuing with visual reactivity only\n";
+                        mx::system_err << "acmx2: File audio playback could not be opened; "
+                                          "continuing with visual reactivity only\n";
                     } else {
-                        mx::system_out
-                            << "acmx2: File audio output is the master clock; "
-                               "late video frames will be dropped\n";
+                        mx::system_out << "acmx2: File audio output is the master clock; "
+                                          "late video frames will be dropped\n";
                     }
                 }
                 resetAudioWarmupEnvelope();
                 spectrumTex.init();
-                audio_buffer_count =
-                    spectrumHistory.init(std::max(args.audio_buffers, 0));
+                audio_buffer_count = spectrumHistory.init(std::max(args.audio_buffers, 0));
                 if (audio_buffer_count > 0) {
                     library.setAudioBufferCount(audio_buffer_count);
                 }
                 mx::system_out << "acmx2: File audio enabled from: " << args.audio_file << "\n";
-                mx::system_out << "acmx2: FFT spectrum texture initialised ("
-                               << acmx2::audio::AudioAnalyzer::spectrum_bin_count()
-                               << " bins on GL_TEXTURE"
-                               << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
+                mx::system_out << "acmx2: FFT spectrum texture initialised (" << acmx2::audio::AudioAnalyzer::spectrum_bin_count() << " bins on GL_TEXTURE" << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
                 if (audio_buffer_count > 0) {
-                    mx::system_out
-                        << "acmx2: Audio spectrum history array enabled ("
-                        << audio_buffer_count
-                        << " layers in one GL_TEXTURE_1D_ARRAY on GL_TEXTURE"
-                        << SpectrumHistory::TEXTURE_UNIT << ")\n";
+                    mx::system_out << "acmx2: Audio spectrum history array enabled (" << audio_buffer_count << " layers in one GL_TEXTURE_1D_ARRAY on GL_TEXTURE" << SpectrumHistory::TEXTURE_UNIT << ")\n";
                 }
             } else {
                 mx::system_err << "acmx2: Error could not open audio file: " << args.audio_file << "\n";
@@ -8230,21 +7631,13 @@ class ACView : public gl::GLObject {
                 audio_engine.recorder().set_gain(args.record_gain);
                 resetAudioWarmupEnvelope();
                 spectrumTex.init();
-                audio_buffer_count =
-                    spectrumHistory.init(std::max(args.audio_buffers, 0));
+                audio_buffer_count = spectrumHistory.init(std::max(args.audio_buffers, 0));
                 if (audio_buffer_count > 0) {
                     library.setAudioBufferCount(audio_buffer_count);
                 }
-                mx::system_out << "acmx2: FFT spectrum texture initialised ("
-                               << acmx2::audio::AudioAnalyzer::spectrum_bin_count()
-                               << " bins on GL_TEXTURE"
-                               << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
+                mx::system_out << "acmx2: FFT spectrum texture initialised (" << acmx2::audio::AudioAnalyzer::spectrum_bin_count() << " bins on GL_TEXTURE" << SpectrumTexture::SPECTRUM_TEXTURE_UNIT << ")\n";
                 if (audio_buffer_count > 0) {
-                    mx::system_out
-                        << "acmx2: Audio spectrum history array enabled ("
-                        << audio_buffer_count
-                        << " layers in one GL_TEXTURE_1D_ARRAY on GL_TEXTURE"
-                        << SpectrumHistory::TEXTURE_UNIT << ")\n";
+                    mx::system_out << "acmx2: Audio spectrum history array enabled (" << audio_buffer_count << " layers in one GL_TEXTURE_1D_ARRAY on GL_TEXTURE" << SpectrumHistory::TEXTURE_UNIT << ")\n";
                 }
             }
         }
@@ -8265,14 +7658,9 @@ class ACView : public gl::GLObject {
                 human_black_point = args.human_black;
                 human_white_point = args.human_white;
                 human_seg_model = std::make_unique<ac_dnn::PPHS>(human_model_path);
-                mx::system_out << "acmx2: Human segmentation (PPHS) enabled with model: "
-                               << human_model_path
-                               << " [automatic CPU/CUDA selection]"
-                               << (human_background_only ? " [background-only shader mode]" : "")
-                               << "\n";
+                mx::system_out << "acmx2: Human segmentation (PPHS) enabled with model: " << human_model_path << " [automatic CPU/CUDA selection]" << (human_background_only ? " [background-only shader mode]" : "") << "\n";
             } catch (const std::exception &e) {
-                mx::system_err << "acmx2: Failed to load human segmentation model '"
-                               << args.human_model << "': " << e.what() << "\n";
+                mx::system_err << "acmx2: Failed to load human segmentation model '" << args.human_model << "': " << e.what() << "\n";
                 human_seg_model.reset();
             }
         } else if (args.human_background_only) {
@@ -8281,12 +7669,9 @@ class ACView : public gl::GLObject {
         if (!args.edge_model.empty()) {
             try {
                 edge_det_model = std::make_unique<ac_dnn::Dexined>(args.edge_model);
-                mx::system_out << "acmx2: Edge detection (Dexined) enabled with model: "
-                               << args.edge_model
-                               << " [automatic CPU/CUDA selection]\n";
+                mx::system_out << "acmx2: Edge detection (Dexined) enabled with model: " << args.edge_model << " [automatic CPU/CUDA selection]\n";
             } catch (const std::exception &e) {
-                mx::system_err << "acmx2: Failed to load edge detection model '"
-                               << args.edge_model << "': " << e.what() << "\n";
+                mx::system_err << "acmx2: Failed to load edge detection model '" << args.edge_model << "': " << e.what() << "\n";
                 edge_det_model.reset();
             }
         }
@@ -8486,19 +7871,14 @@ class ACView : public gl::GLObject {
     uint32_t shaderReloadLastSequence = 0;
     uint32_t audioFileLastSequence = 0;
 
-    std::vector<ShaderManifestData::CustomUniform>
-    customUniformsFromSharedMemory(
-        const acmx2::ipc::ShaderSelectionShmData &selection) const {
+    std::vector<ShaderManifestData::CustomUniform> customUniformsFromSharedMemory(const acmx2::ipc::ShaderSelectionShmData &selection) const {
         std::vector<ShaderManifestData::CustomUniform> uniforms;
-        const uint32_t count = std::min<uint32_t>(
-            selection.custom_uniform_count,
-            acmx2::ipc::kShaderSelectionMaxCustomUniforms);
+        const uint32_t count = std::min<uint32_t>(selection.custom_uniform_count, acmx2::ipc::kShaderSelectionMaxCustomUniforms);
         uniforms.reserve(count);
         for (uint32_t i = 0; i < count; ++i) {
             const char *nameData = selection.custom_uniform_names[i];
             std::size_t length = 0;
-            while (length < acmx2::ipc::kShaderSelectionMaxUniformName &&
-                   nameData[length] != '\0') {
+            while (length < acmx2::ipc::kShaderSelectionMaxUniformName && nameData[length] != '\0') {
                 ++length;
             }
             ShaderManifestData::CustomUniform uniform;
@@ -8516,8 +7896,7 @@ class ACView : public gl::GLObject {
         return uniforms;
     }
 
-    bool copyShaderSelectionSnapshot(
-        acmx2::ipc::ShaderSelectionShmData &snapshot) const {
+    bool copyShaderSelectionSnapshot(acmx2::ipc::ShaderSelectionShmData &snapshot) const {
 #if defined(__linux__) || defined(__APPLE__)
         if (!shaderSelectionShm || shaderSelectionSemaphore == SEM_FAILED)
             return false;
@@ -8528,8 +7907,7 @@ class ACView : public gl::GLObject {
         acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
         if (!lock)
             return false;
-        if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic ||
-            shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
+        if (shaderSelectionShm->magic != acmx2::ipc::kShaderSelectionMagic || shaderSelectionShm->version != acmx2::ipc::kShaderSelectionVersion) {
             return false;
         }
         snapshot = *shaderSelectionShm;
@@ -8540,12 +7918,9 @@ class ACView : public gl::GLObject {
         if (shaderSelectionShm)
             return;
 #if defined(__linux__) || defined(__APPLE__)
-        shaderSelectionSemaphore =
-            ::sem_open(acmx2::ipc::kShaderSelectionSemaphoreName, 0);
+        shaderSelectionSemaphore = ::sem_open(acmx2::ipc::kShaderSelectionSemaphoreName, 0);
         if (shaderSelectionSemaphore == SEM_FAILED) {
-            std::cerr << "acmx2: interface control unavailable: sem_open("
-                      << acmx2::ipc::kShaderSelectionSemaphoreName
-                      << ") failed: " << std::strerror(errno) << '\n';
+            std::cerr << "acmx2: interface control unavailable: sem_open(" << acmx2::ipc::kShaderSelectionSemaphoreName << ") failed: " << std::strerror(errno) << '\n';
             return;
         }
         shaderSelectionShmFd = ::shm_open(acmx2::ipc::kShaderSelectionShmName, O_RDWR, 0666);
@@ -8555,12 +7930,7 @@ class ACView : public gl::GLObject {
             return;
         }
 
-        void *mapped = ::mmap(nullptr,
-                              sizeof(acmx2::ipc::ShaderSelectionShmData),
-                              PROT_READ | PROT_WRITE,
-                              MAP_SHARED,
-                              shaderSelectionShmFd,
-                              0);
+        void *mapped = ::mmap(nullptr, sizeof(acmx2::ipc::ShaderSelectionShmData), PROT_READ | PROT_WRITE, MAP_SHARED, shaderSelectionShmFd, 0);
         if (mapped == MAP_FAILED) {
             ::close(shaderSelectionShmFd);
             shaderSelectionShmFd = -1;
@@ -8571,20 +7941,15 @@ class ACView : public gl::GLObject {
 
         shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
 #else
-        shaderSelectionSemaphore = ::OpenMutexW(
-            SYNCHRONIZE | MUTEX_MODIFY_STATE, FALSE,
-            acmx2::ipc::kShaderSelectionMutexNameWindows);
+        shaderSelectionSemaphore = ::OpenMutexW(SYNCHRONIZE | MUTEX_MODIFY_STATE, FALSE, acmx2::ipc::kShaderSelectionMutexNameWindows);
         if (shaderSelectionSemaphore == nullptr) {
-            std::cerr
-                << "acmx2: interface control unavailable: OpenMutexW failed "
-                   "with Windows error "
-                << ::GetLastError() << '\n';
+            std::cerr << "acmx2: interface control unavailable: OpenMutexW failed "
+                         "with Windows error "
+                      << ::GetLastError() << '\n';
             return;
         }
 
-        shaderSelectionMapping = ::OpenFileMappingW(
-            FILE_MAP_READ, FALSE,
-            acmx2::ipc::kShaderSelectionMappingNameWindows);
+        shaderSelectionMapping = ::OpenFileMappingW(FILE_MAP_READ, FALSE, acmx2::ipc::kShaderSelectionMappingNameWindows);
         if (shaderSelectionMapping == nullptr) {
             std::cerr << "acmx2: interface control unavailable: "
                          "OpenFileMappingW failed with Windows error "
@@ -8593,9 +7958,7 @@ class ACView : public gl::GLObject {
             return;
         }
 
-        void *mapped = ::MapViewOfFile(
-            shaderSelectionMapping, FILE_MAP_READ, 0, 0,
-            sizeof(acmx2::ipc::ShaderSelectionShmData));
+        void *mapped = ::MapViewOfFile(shaderSelectionMapping, FILE_MAP_READ, 0, 0, sizeof(acmx2::ipc::ShaderSelectionShmData));
         if (mapped == nullptr) {
             std::cerr << "acmx2: interface control unavailable: MapViewOfFile "
                          "failed with Windows error "
@@ -8603,8 +7966,7 @@ class ACView : public gl::GLObject {
             cleanupShaderSelectionSharedMemory();
             return;
         }
-        shaderSelectionShm =
-            static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
+        shaderSelectionShm = static_cast<acmx2::ipc::ShaderSelectionShmData *>(mapped);
 #endif
         acmx2::ipc::ShaderSelectionShmData snapshot;
         if (!copyShaderSelectionSnapshot(snapshot)) {
@@ -8664,23 +8026,17 @@ class ACView : public gl::GLObject {
             }
             return std::string(buf, len);
         };
-        const std::vector<std::string> interfaceShaderFiles =
-            std::get<0>(flib) == 1
-                ? sortedShaderLibraryEntries(std::get<1>(flib))
-                : std::vector<std::string>{};
+        const std::vector<std::string> interfaceShaderFiles = std::get<0>(flib) == 1 ? sortedShaderLibraryEntries(std::get<1>(flib)) : std::vector<std::string>{};
 
         library.setCustomUniformValues(customUniformsFromSharedMemory(snapshot));
 
         if (selection->audio_file_sequence != audioFileLastSequence) {
             audioFileLastSequence = selection->audio_file_sequence;
 #ifdef AUDIO_ENABLED
-            const std::string requestedAudioPath = readBoundedText(
-                selection->audio_file_path,
-                acmx2::ipc::kShaderSelectionMaxAudioFilePath);
+            const std::string requestedAudioPath = readBoundedText(selection->audio_file_path, acmx2::ipc::kShaderSelectionMaxAudioFilePath);
             if (!file_audio_mode) {
-                mx::system_err
-                    << "acmx2: Ignoring live audio-file change because this process "
-                       "was not started in audio-file mode\n";
+                mx::system_err << "acmx2: Ignoring live audio-file change because this process "
+                                  "was not started in audio-file mode\n";
             } else if (requestedAudioPath.empty()) {
                 mx::system_err << "acmx2: Ignoring empty live audio-file request\n";
             } else if (file_audio_open(requestedAudioPath)) {
@@ -8692,17 +8048,13 @@ class ACView : public gl::GLObject {
                 audio_engine.analyzer().reset();
                 audio_engine.analyzer().set_sample_rate(44100);
                 resetAudioWarmupEnvelope();
-                if (selection->audio_pass_through != 0 &&
-                    !file_audio_enable_output(audio_output_device)) {
-                    mx::system_err
-                        << "acmx2: Live audio-file output could not be opened; "
-                           "continuing with visual reactivity only\n";
+                if (selection->audio_pass_through != 0 && !file_audio_enable_output(audio_output_device)) {
+                    mx::system_err << "acmx2: Live audio-file output could not be opened; "
+                                      "continuing with visual reactivity only\n";
                 }
-                mx::system_out << "acmx2: Switched file audio to: "
-                               << requestedAudioPath << "\n";
+                mx::system_out << "acmx2: Switched file audio to: " << requestedAudioPath << "\n";
             } else {
-                mx::system_err << "acmx2: Could not switch file audio to: "
-                               << requestedAudioPath << "\n";
+                mx::system_err << "acmx2: Could not switch file audio to: " << requestedAudioPath << "\n";
             }
             mx::system_out.flush();
             mx::system_err.flush();
@@ -8712,9 +8064,7 @@ class ACView : public gl::GLObject {
         if (selection->reload_sequence != shaderReloadLastSequence) {
             shaderReloadLastSequence = selection->reload_sequence;
             const int requestedReloadIndex = selection->reload_shader_index;
-            const std::string requestedPath = readBoundedText(
-                selection->reload_shader_path,
-                acmx2::ipc::kShaderSelectionMaxReloadPath);
+            const std::string requestedPath = readBoundedText(selection->reload_shader_path, acmx2::ipc::kShaderSelectionMaxReloadPath);
             std::string reloadPath;
             size_t reloadIndex = 0;
             std::string reloadError;
@@ -8724,35 +8074,17 @@ class ACView : public gl::GLObject {
             } else if (std::get<0>(flib) == 1) {
                 const auto shaderFiles = sortedShaderLibraryEntries(std::get<1>(flib));
                 if (static_cast<size_t>(requestedReloadIndex) >= shaderFiles.size()) {
-                    reloadError = "Shader reload index is outside the shader manifest: " +
-                                  std::to_string(requestedReloadIndex);
-                } else if (!resolveShaderPathInLibrary(
-                               std::get<1>(flib),
-                               shaderFiles[static_cast<size_t>(requestedReloadIndex)],
-                               reloadPath)) {
+                    reloadError = "Shader reload index is outside the shader manifest: " + std::to_string(requestedReloadIndex);
+                } else if (!resolveShaderPathInLibrary(std::get<1>(flib), shaderFiles[static_cast<size_t>(requestedReloadIndex)], reloadPath)) {
                     reloadError = "Could not resolve shader reload path from the manifest";
                 } else {
                     std::error_code requestedError;
-                    const auto canonicalRequested = std::filesystem::weakly_canonical(
-                        std::filesystem::path(requestedPath), requestedError);
+                    const auto canonicalRequested = std::filesystem::weakly_canonical(std::filesystem::path(requestedPath), requestedError);
                     std::error_code expectedError;
-                    const auto canonicalExpected = std::filesystem::weakly_canonical(
-                        std::filesystem::path(reloadPath), expectedError);
+                    const auto canonicalExpected = std::filesystem::weakly_canonical(std::filesystem::path(reloadPath), expectedError);
                     std::error_code equivalentError;
-                    const bool isExpected =
-                        !requestedError && !expectedError &&
-                        std::filesystem::equivalent(
-                            canonicalRequested, canonicalExpected,
-                            equivalentError) &&
-                        !equivalentError;
-                    const bool isPreview =
-                        !requestedError && !expectedError &&
-                        std::filesystem::is_regular_file(canonicalRequested) &&
-                        isComputeShaderFile(canonicalRequested.string()) ==
-                            isComputeShaderFile(canonicalExpected.string()) &&
-                        isEditorPreviewPath(
-                            std::filesystem::path(std::get<1>(flib)),
-                            canonicalRequested);
+                    const bool isExpected = !requestedError && !expectedError && std::filesystem::equivalent(canonicalRequested, canonicalExpected, equivalentError) && !equivalentError;
+                    const bool isPreview = !requestedError && !expectedError && std::filesystem::is_regular_file(canonicalRequested) && isComputeShaderFile(canonicalRequested.string()) == isComputeShaderFile(canonicalExpected.string()) && isEditorPreviewPath(std::filesystem::path(std::get<1>(flib)), canonicalRequested);
                     if (!isExpected && !isPreview) {
                         reloadError = "Shader reload path does not match the requested library index";
                     } else {
@@ -8762,25 +8094,12 @@ class ACView : public gl::GLObject {
                 }
             } else {
                 std::error_code requestedError;
-                const auto canonicalRequested = std::filesystem::weakly_canonical(
-                    std::filesystem::path(requestedPath), requestedError);
+                const auto canonicalRequested = std::filesystem::weakly_canonical(std::filesystem::path(requestedPath), requestedError);
                 std::error_code loadedError;
-                const auto canonicalLoaded = std::filesystem::weakly_canonical(
-                    std::filesystem::path(std::get<1>(flib)), loadedError);
+                const auto canonicalLoaded = std::filesystem::weakly_canonical(std::filesystem::path(std::get<1>(flib)), loadedError);
                 std::error_code equivalentError;
-                const bool isExpected =
-                    !requestedError && !loadedError &&
-                    std::filesystem::equivalent(
-                        canonicalRequested, canonicalLoaded,
-                        equivalentError) &&
-                    !equivalentError;
-                const bool isPreview =
-                    !requestedError && !loadedError &&
-                    std::filesystem::is_regular_file(canonicalRequested) &&
-                    isComputeShaderFile(canonicalRequested.string()) ==
-                        isComputeShaderFile(canonicalLoaded.string()) &&
-                    isEditorPreviewForShader(canonicalLoaded,
-                                             canonicalRequested);
+                const bool isExpected = !requestedError && !loadedError && std::filesystem::equivalent(canonicalRequested, canonicalLoaded, equivalentError) && !equivalentError;
+                const bool isPreview = !requestedError && !loadedError && std::filesystem::is_regular_file(canonicalRequested) && isComputeShaderFile(canonicalRequested.string()) == isComputeShaderFile(canonicalLoaded.string()) && isEditorPreviewForShader(canonicalLoaded, canonicalRequested);
                 if (!isExpected && !isPreview) {
                     reloadError = "Saved shader is not the shader loaded by this process";
                 } else {
@@ -8788,8 +8107,7 @@ class ACView : public gl::GLObject {
                 }
             }
 
-            if (reloadError.empty() &&
-                library.reloadProgram(win, reloadIndex, reloadPath, reloadError)) {
+            if (reloadError.empty() && library.reloadProgram(win, reloadIndex, reloadPath, reloadError)) {
                 if (is3d_enabled)
                     cube.setShaderProgram(library.shader());
                 sprite.setShader(library.shader());
@@ -8798,9 +8116,7 @@ class ACView : public gl::GLObject {
                 mx::system_out.flush();
                 fflush(stdout);
             } else {
-                mx::system_err << "acmx2: Live shader reload failed for "
-                               << requestedPath << ":\n"
-                               << reloadError << "\n";
+                mx::system_err << "acmx2: Live shader reload failed for " << requestedPath << ":\n" << reloadError << "\n";
                 mx::system_err.flush();
                 fflush(stderr);
             }
@@ -8808,18 +8124,13 @@ class ACView : public gl::GLObject {
 
         std::vector<int> requestedPassList;
         requestedPassList.reserve(selection->shader_pass_count);
-        const uint32_t clampedPassCount = std::min<uint32_t>(
-            selection->shader_pass_count,
-            acmx2::ipc::kShaderSelectionMaxPassCount);
+        const uint32_t clampedPassCount = std::min<uint32_t>(selection->shader_pass_count, acmx2::ipc::kShaderSelectionMaxPassCount);
         for (uint32_t i = 0; i < clampedPassCount; ++i) {
             int passIndex = selection->shader_pass_indices[i];
             if (std::get<0>(flib) == 1) {
-                const std::string passName = readBoundedText(
-                    selection->shader_pass_names[i],
-                    acmx2::ipc::kShaderSelectionMaxShaderName);
+                const std::string passName = readBoundedText(selection->shader_pass_names[i], acmx2::ipc::kShaderSelectionMaxShaderName);
                 if (!passName.empty())
-                    passIndex = shaderIndexForFile(interfaceShaderFiles,
-                                                   passName);
+                    passIndex = shaderIndexForFile(interfaceShaderFiles, passName);
             }
             if (passIndex < 0)
                 continue;
@@ -8828,8 +8139,7 @@ class ACView : public gl::GLObject {
             requestedPassList.push_back(passIndex);
         }
         const bool requestedPassEnabled = selection->shader_pass_enabled != 0 && !requestedPassList.empty();
-        const bool multipassChanged = (shader_pass_enabled != requestedPassEnabled) ||
-                                      (shader_pass_list != requestedPassList);
+        const bool multipassChanged = (shader_pass_enabled != requestedPassEnabled) || (shader_pass_list != requestedPassList);
         // Playlist mode owns the active pass list. A right-click shader
         // selection from the interface should change only the post/main
         // shader, just like Shift+Up/Down, without replacing the playlist
@@ -8844,14 +8154,10 @@ class ACView : public gl::GLObject {
 
         repeat = (selection->repeat_enabled != 0);
         display_filter = (selection->display_filter_enabled != 0);
-        library.setNormalizedTime(
-            selection->normalized_time_enabled != 0);
+        library.setNormalizedTime(selection->normalized_time_enabled != 0);
 
-        const std::string requestedWatermark = readBoundedText(
-            selection->watermark_text,
-            acmx2::ipc::kShaderSelectionMaxWatermarkText);
-        const bool requestedWatermarkEnabled =
-            (selection->watermark_enabled != 0) && !requestedWatermark.empty();
+        const std::string requestedWatermark = readBoundedText(selection->watermark_text, acmx2::ipc::kShaderSelectionMaxWatermarkText);
+        const bool requestedWatermarkEnabled = (selection->watermark_enabled != 0) && !requestedWatermark.empty();
         enableWatermark = requestedWatermarkEnabled;
         watermark_text = requestedWatermark;
         watermark_r = std::clamp<int>(selection->watermark_r, 0, 255);
@@ -8860,9 +8166,7 @@ class ACView : public gl::GLObject {
 
 #ifdef ACMX2_WITH_CUDA
         std::vector<int> requestedGpuFilters;
-        const uint32_t clampedGpuCount = std::min<uint32_t>(
-            selection->gpu_filter_count,
-            acmx2::ipc::kShaderSelectionMaxGpuFilterCount);
+        const uint32_t clampedGpuCount = std::min<uint32_t>(selection->gpu_filter_count, acmx2::ipc::kShaderSelectionMaxGpuFilterCount);
         requestedGpuFilters.reserve(clampedGpuCount);
         for (uint32_t i = 0; i < clampedGpuCount; ++i) {
             const int idx = selection->gpu_filter_indices[i];
@@ -8871,10 +8175,8 @@ class ACView : public gl::GLObject {
             requestedGpuFilters.push_back(idx);
         }
 
-        const bool requestedGpuEnabled =
-            (selection->gpu_filter_enabled != 0) && !requestedGpuFilters.empty();
-        const int requestedGpuBufferSize =
-            std::clamp<int>(static_cast<int>(selection->gpu_buffer_size), 4, 32);
+        const bool requestedGpuEnabled = (selection->gpu_filter_enabled != 0) && !requestedGpuFilters.empty();
+        const int requestedGpuBufferSize = std::clamp<int>(static_cast<int>(selection->gpu_buffer_size), 4, 32);
 
         std::vector<int> currentGpuFilters;
         currentGpuFilters.reserve(gpu_filters.size());
@@ -8882,13 +8184,8 @@ class ACView : public gl::GLObject {
             currentGpuFilters.push_back(f.index);
         }
 
-        const bool gpuBufferChanged =
-            requestedGpuEnabled &&
-            (!gpu_frame_buffer || gpu_frame_buffer->arraySize != requestedGpuBufferSize);
-        const bool gpuConfigChanged =
-            (gpu_filter_enabled != requestedGpuEnabled) ||
-            (currentGpuFilters != requestedGpuFilters) ||
-            gpuBufferChanged;
+        const bool gpuBufferChanged = requestedGpuEnabled && (!gpu_frame_buffer || gpu_frame_buffer->arraySize != requestedGpuBufferSize);
+        const bool gpuConfigChanged = (gpu_filter_enabled != requestedGpuEnabled) || (currentGpuFilters != requestedGpuFilters) || gpuBufferChanged;
 
         if (gpuConfigChanged) {
             if (requestedGpuEnabled) {
@@ -8924,12 +8221,9 @@ class ACView : public gl::GLObject {
 
         int requestedIndex = selection->selected_index;
         if (std::get<0>(flib) == 1) {
-            const std::string requestedName = readBoundedText(
-                selection->selected_shader_name,
-                acmx2::ipc::kShaderSelectionMaxShaderName);
+            const std::string requestedName = readBoundedText(selection->selected_shader_name, acmx2::ipc::kShaderSelectionMaxShaderName);
             if (!requestedName.empty())
-                requestedIndex = shaderIndexForFile(interfaceShaderFiles,
-                                                    requestedName);
+                requestedIndex = shaderIndexForFile(interfaceShaderFiles, requestedName);
         }
         if (requestedIndex < 0)
             return;
@@ -9037,11 +8331,7 @@ class ACView : public gl::GLObject {
      * Called whenever the active shader or pass list changes so that
      * the overlay does not need to rebuild the string every frame.
      */
-    void updateShaderNameCache() {
-        cached_shader_name = shader_pass_enabled
-                                 ? library.getFullShaderName(shader_pass_list)
-                                 : library.getFullShaderName();
-    }
+    void updateShaderNameCache() { cached_shader_name = shader_pass_enabled ? library.getFullShaderName(shader_pass_list) : library.getFullShaderName(); }
 
     /**
      * @brief Pick a random entry from the active playlist and apply it.
@@ -9075,9 +8365,7 @@ class ACView : public gl::GLObject {
                 cube.setShaderProgram(library.shader());
             sprite.setShader(library.shader());
             updateShaderNameCache();
-            mx::system_out << "acmx2: Autopilot -> Node: " << node.name
-                           << " [" << node.shader_indices.size() << " shaders] ("
-                           << (playlist_index + 1) << "/" << n << ")\n";
+            mx::system_out << "acmx2: Autopilot -> Node: " << node.name << " [" << node.shader_indices.size() << " shaders] (" << (playlist_index + 1) << "/" << n << ")\n";
             fflush(stdout);
         } else if (!playlist_indices.empty()) {
             const int n = static_cast<int>(playlist_indices.size());
@@ -9126,9 +8414,7 @@ class ACView : public gl::GLObject {
                 cube.setShaderProgram(library.shader());
             sprite.setShader(library.shader());
             updateShaderNameCache();
-            mx::system_out << "acmx2: Autopilot (sequential) -> Node: " << node.name
-                           << " [" << node.shader_indices.size() << " shaders] ("
-                           << (playlist_index + 1) << "/" << n << ")\n";
+            mx::system_out << "acmx2: Autopilot (sequential) -> Node: " << node.name << " [" << node.shader_indices.size() << " shaders] (" << (playlist_index + 1) << "/" << n << ")\n";
             fflush(stdout);
         } else if (!playlist_indices.empty()) {
             const int n = static_cast<int>(playlist_indices.size());
@@ -9140,8 +8426,7 @@ class ACView : public gl::GLObject {
                 cube.setShaderProgram(library.shader());
             sprite.setShader(library.shader());
             updateShaderNameCache();
-            mx::system_out << "acmx2: Autopilot (sequential) -> Playlist ["
-                           << (playlist_index + 1) << "/" << n << "]\n";
+            mx::system_out << "acmx2: Autopilot (sequential) -> Playlist [" << (playlist_index + 1) << "/" << n << "]\n";
             fflush(stdout);
         }
     }
@@ -9313,9 +8598,7 @@ class ACView : public gl::GLObject {
 
         stopCaptureThread();
 
-        if (pboIds[0] && (writer.is_open() || png_video_mode) &&
-            recording_pbo_primed &&
-            win_w > 0 && win_h > 0) {
+        if (pboIds[0] && (writer.is_open() || png_video_mode) && recording_pbo_primed && win_w > 0 && win_h > 0) {
             // Double-buffered readback always leaves exactly one completed
             // recording frame pending. Flushing both PBOs duplicated the
             // preceding frame and could make a duration-limited silent render
@@ -9333,9 +8616,7 @@ class ACView : public gl::GLObject {
                 for (int y = 0; y < win_h; ++y) {
                     int src_row_start = y * win_w * 4;
                     int dest_row_start = (win_h - 1 - y) * win_w * 4;
-                    std::copy(pixels.begin() + src_row_start,
-                              pixels.begin() + src_row_start + (win_w * 4),
-                              flipped_pixels.begin() + dest_row_start);
+                    std::copy(pixels.begin() + src_row_start, pixels.begin() + src_row_start + (win_w * 4), flipped_pixels.begin() + dest_row_start);
                 }
 
                 FrameData fd;
@@ -9343,10 +8624,8 @@ class ACView : public gl::GLObject {
                 fd.width = win_w;
                 fd.height = win_h;
                 fd.isSnapshot = false;
-                fd.usesTimelineClock =
-                    recording_pbo_uses_timeline_clock[pending_pbo_index];
-                fd.timelineFrame =
-                    recording_pbo_timeline_frame[pending_pbo_index];
+                fd.usesTimelineClock = recording_pbo_uses_timeline_clock[pending_pbo_index];
+                fd.timelineFrame = recording_pbo_timeline_frame[pending_pbo_index];
 
                 {
                     std::lock_guard<std::mutex> lock(queueMutex);
@@ -9552,15 +8831,8 @@ class ACView : public gl::GLObject {
                         // frames are dropped and no large queue burst forms.
                         writer.set_block_when_full(true);
                     }
-                    mx::system_out << "acmx2: Opened: " << ofilename
-                                   << " for writing at: CRF: " << encode_opts.crf
-                                   << " preset: " << encode_opts.preset
-                                   << " tune: " << (encode_opts.tune.empty() ? "none" : encode_opts.tune)
-                                   << " codec: " << encode_opts.codec
-                                   << (encode_opts.realtime ? " [realtime]" : "")
-                                   << " FPS: " << fps << "\n";
-                    mx::system_out << "acmx2: Pipeline mode => decode: graphic/image, encode: "
-                                   << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
+                    mx::system_out << "acmx2: Opened: " << ofilename << " for writing at: CRF: " << encode_opts.crf << " preset: " << encode_opts.preset << " tune: " << (encode_opts.tune.empty() ? "none" : encode_opts.tune) << " codec: " << encode_opts.codec << (encode_opts.realtime ? " [realtime]" : "") << " FPS: " << fps << "\n";
+                    mx::system_out << "acmx2: Pipeline mode => decode: graphic/image, encode: " << (writer.is_hardware_encode() ? "h264_nvenc (hardware)" : "h264 (software)") << "\n";
 
                     fflush(stdout);
                     fflush(stderr);
@@ -9570,9 +8842,8 @@ class ACView : public gl::GLObject {
             }
         } else if (filename.empty()) {
             if (no_drop_mode) {
-                mx::system_out
-                    << "acmx2: --no-drop is ignored in webcam mode; "
-                       "wall-clock timestamps and late-frame dropping remain active\n";
+                mx::system_out << "acmx2: --no-drop is ignored in webcam mode; "
+                                  "wall-clock timestamps and late-frame dropping remain active\n";
                 no_drop_mode = false;
             }
 #ifdef __linux__
@@ -9620,12 +8891,9 @@ class ACView : public gl::GLObject {
             }
             frame_w = w;
             frame_h = h;
-            mx::system_out << "acmx2: Camera opened: " << w << "x" << h
-                           << " at FPS: " << fps;
-            if (loopback_device && reported_fps > 0.0 &&
-                std::abs(reported_fps - requested_fps) > 0.05) {
-                mx::system_out << " (loopback reports " << reported_fps
-                               << ", requested " << requested_fps << ")";
+            mx::system_out << "acmx2: Camera opened: " << w << "x" << h << " at FPS: " << fps;
+            if (loopback_device && reported_fps > 0.0 && std::abs(reported_fps - requested_fps) > 0.05) {
+                mx::system_out << " (loopback reports " << reported_fps << ", requested " << requested_fps << ")";
             } else if (!fps_configured && requested_fps > 0.0) {
                 mx::system_out << " (driver rejected requested " << requested_fps << ")";
             }
@@ -9659,18 +8927,12 @@ class ACView : public gl::GLObject {
                 EncodeOptions cam_opts = encode_opts;
                 cam_opts.realtime = true;
                 if (writer.open_ts(ofilename, w, h, fps, cam_opts)) {
-                    mx::system_out << "acmx2: Opened: " << ofilename
-                                   << " for writing at: CRF: " << cam_opts.crf
-                                   << " preset: " << cam_opts.preset
-                                   << " codec: " << cam_opts.codec
-                                   << " [realtime]"
+                    mx::system_out << "acmx2: Opened: " << ofilename << " for writing at: CRF: " << cam_opts.crf << " preset: " << cam_opts.preset << " codec: " << cam_opts.codec << " [realtime]"
                                    << " FPS: " << fps << "\n";
-                    mx::system_out << "acmx2: Pipeline mode => decode: camera, encode: "
-                                   << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
+                    mx::system_out << "acmx2: Pipeline mode => decode: camera, encode: " << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
                     if (!no_drop_mode && fps > 0.0) {
-                        mx::system_out
-                            << "acmx2: Webcam recording follows wall-clock timestamps; "
-                               "late frames will be dropped\n";
+                        mx::system_out << "acmx2: Webcam recording follows wall-clock timestamps; "
+                                          "late frames will be dropped\n";
                     }
                 } else {
                     throw mx::Exception("Could not open output video file: " + ofilename);
@@ -9690,9 +8952,7 @@ class ACView : public gl::GLObject {
                 frame_w = w;
                 frame_h = h;
 
-                mx::system_out << "acmx2: Video opened (FFmpeg decode): " << w << "x" << h
-                               << " at FPS: " << fps
-                               << " Total Frames: " << totalFrames << "\n";
+                mx::system_out << "acmx2: Video opened (FFmpeg decode): " << w << "x" << h << " at FPS: " << fps << " Total Frames: " << totalFrames << "\n";
                 mx::system_out << "acmx2: FFmpeg CUDA decode: " << (ffmpeg_reader.isHwDecodeEnabled() ? "enabled" : "unavailable/fallback") << "\n";
 
                 // If the input video carries HDR metadata (BT.2020 primaries /
@@ -9705,20 +8965,13 @@ class ACView : public gl::GLObject {
                     input_is_hdr = true;
                     input_hdr_trc = ffmpeg_reader.getHdrTransfer();
                     const int trc = input_hdr_trc;
-                    const char *trc_label =
-                        (trc == AVCOL_TRC_SMPTE2084) ? "PQ (SMPTE2084)" : (trc == AVCOL_TRC_ARIB_STD_B67) ? "HLG (ARIB STD-B67)"
-                                                                      : (trc == AVCOL_TRC_BT2020_10)      ? "BT.2020 10-bit"
-                                                                      : (trc == AVCOL_TRC_BT2020_12)      ? "BT.2020 12-bit"
-                                                                                                          : "unknown";
+                    const char *trc_label = (trc == AVCOL_TRC_SMPTE2084) ? "PQ (SMPTE2084)" : (trc == AVCOL_TRC_ARIB_STD_B67) ? "HLG (ARIB STD-B67)" : (trc == AVCOL_TRC_BT2020_10) ? "BT.2020 10-bit" : (trc == AVCOL_TRC_BT2020_12) ? "BT.2020 12-bit" : "unknown";
                     mx::system_out << "acmx2: ============================================================\n"
                                    << "acmx2: *** PROCESSING IN HDR MODE ***\n"
-                                   << "acmx2:   Source is HDR: " << trc_label
-                                   << ", " << ffmpeg_reader.getHdrBitDepth() << "-bit,"
+                                   << "acmx2:   Source is HDR: " << trc_label << ", " << ffmpeg_reader.getHdrBitDepth() << "-bit,"
                                    << " BT.2020 primaries\n"
                                    << "acmx2: ============================================================\n";
-                    mx::system_out << "acmx2: HDR input detected (primaries=" << ffmpeg_reader.getHdrPrimaries()
-                                   << ", transfer=" << trc
-                                   << ", bit_depth=" << ffmpeg_reader.getHdrBitDepth() << ")\n";
+                    mx::system_out << "acmx2: HDR input detected (primaries=" << ffmpeg_reader.getHdrPrimaries() << ", transfer=" << trc << ", bit_depth=" << ffmpeg_reader.getHdrBitDepth() << ")\n";
                     if (gpu_filter_enabled) {
                         mx::system_out << "acmx2: *** CUDA GPU filters DISABLED for HDR input "
                                           "(colour math assumes 8-bit sRGB). Shader processing only. ***\n";
@@ -9739,12 +8992,7 @@ class ACView : public gl::GLObject {
                     encode_opts.hdr.color_range = ffmpeg_reader.getHdrColorRange();
                     encode_opts.hdr.mastering_display = ffmpeg_reader.getHdrMasteringDisplay();
                     encode_opts.hdr.content_light = ffmpeg_reader.getHdrContentLight();
-                    mx::system_out << "acmx2: HDR output mode enabled: HEVC Main10 + BT.2020 + "
-                                   << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
-                                   << " (mastering side-data bytes="
-                                   << encode_opts.hdr.mastering_display.size()
-                                   << ", content-light bytes="
-                                   << encode_opts.hdr.content_light.size() << ")\n";
+                    mx::system_out << "acmx2: HDR output mode enabled: HEVC Main10 + BT.2020 + " << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ") << " (mastering side-data bytes=" << encode_opts.hdr.mastering_display.size() << ", content-light bytes=" << encode_opts.hdr.content_light.size() << ")\n";
 
                     // Upgrade existing SDR GL resources (camera_texture,
                     // fboTexture, crossfade textures) to 16-bit formats
@@ -9756,10 +9004,8 @@ class ACView : public gl::GLObject {
                 }
             } else {
                 decode_mode = "opencv-ffmpeg";
-#if CV_VERSION_MAJOR > 4 || \
-    (CV_VERSION_MAJOR == 4 && CV_VERSION_MINOR >= 5)
-                std::vector<int> file_params = {
-                    cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY};
+#if CV_VERSION_MAJOR > 4 || (CV_VERSION_MAJOR == 4 && CV_VERSION_MINOR >= 5)
+                std::vector<int> file_params = {cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY};
                 cap.open(filename, cv::CAP_FFMPEG, file_params);
 #else
                 cap.open(filename, cv::CAP_FFMPEG);
@@ -9776,37 +9022,23 @@ class ACView : public gl::GLObject {
                 frame_w = w;
                 frame_h = h;
 
-                mx::system_out << "acmx2: Video opened (OpenCV/FFmpeg fallback): " << w << "x" << h
-                               << " at FPS: " << fps
-                               << " Total Frames: " << totalFrames << "\n";
+                mx::system_out << "acmx2: Video opened (OpenCV/FFmpeg fallback): " << w << "x" << h << " at FPS: " << fps << " Total Frames: " << totalFrames << "\n";
 
-#if CV_VERSION_MAJOR > 4 || \
-    (CV_VERSION_MAJOR == 4 && CV_VERSION_MINOR >= 5)
-                int hw_accel =
-                    static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
-                mx::system_out << "acmx2: HW Acceleration result: " << hw_accel
-                               << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (auto preference)"
-                                                                                                  : hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)"
-                                                                                                  : hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)"
-                                                                                                  : hw_accel == cv::VIDEO_ACCELERATION_MFX   ? " (MFX)"
-                                                                                                  : hw_accel == cv::VIDEO_ACCELERATION_DRM   ? " (DRM)"
-                                                                                                                                             : " (other)")
-                               << "\n";
+#if CV_VERSION_MAJOR > 4 || (CV_VERSION_MAJOR == 4 && CV_VERSION_MINOR >= 5)
+                int hw_accel = static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
+                mx::system_out << "acmx2: HW Acceleration result: " << hw_accel << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (auto preference)" : hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)" : hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)" : hw_accel == cv::VIDEO_ACCELERATION_MFX ? " (MFX)" : hw_accel == cv::VIDEO_ACCELERATION_DRM ? " (DRM)" : " (other)") << "\n";
 #else
-                mx::system_out
-                    << "acmx2: OpenCV hardware-decoder reporting unavailable "
-                       "with OpenCV "
-                    << CV_VERSION << "\n";
+                mx::system_out << "acmx2: OpenCV hardware-decoder reporting unavailable "
+                                  "with OpenCV "
+                               << CV_VERSION << "\n";
 #endif
             }
 
             if (fps > 60.0) {
                 if (SDL_GL_SetSwapInterval(0) == 0) {
-                    mx::system_out << "acmx2: VSync disabled for high-frame-rate video input ("
-                                   << fps << " FPS)\n";
+                    mx::system_out << "acmx2: VSync disabled for high-frame-rate video input (" << fps << " FPS)\n";
                 } else {
-                    mx::system_err << "acmx2: Could not disable VSync for " << fps
-                                   << " FPS video input: " << SDL_GetError() << "\n";
+                    mx::system_err << "acmx2: Could not disable VSync for " << fps << " FPS video input: " << SDL_GetError() << "\n";
                 }
             }
 
@@ -9821,8 +9053,7 @@ class ACView : public gl::GLObject {
             if (sizev.has_value()) {
                 w = sizev.value().width;
                 h = sizev.value().height;
-                mx::system_out << "acmx2: Resolution stretched to: "
-                               << w << "x" << h << "\n";
+                mx::system_out << "acmx2: Resolution stretched to: " << w << "x" << h << "\n";
                 fflush(stdout);
                 fflush(stderr);
             }
@@ -9856,32 +9087,21 @@ class ACView : public gl::GLObject {
                     mx::system_out << "acmx2: --png enabled: writing video frames to " << png_video_dir << "\n";
                 } else {
                     if (writer.open(ofilename, w, h, fps, encode_opts)) {
-                        bool block_encoder_queue =
-                            silent_mode || no_drop_mode;
+                        bool block_encoder_queue = silent_mode || no_drop_mode;
                         if (block_encoder_queue) {
                             // Batch transcoding or --no-drop: pace the producer
                             // to encoder capacity instead of filling a large
                             // queue or dropping frames.
                             writer.set_block_when_full(true);
                         }
-                        mx::system_out << "acmx2: Opened: " << ofilename
-                                       << " for writing at: CRF: " << encode_opts.crf
-                                       << " preset: " << encode_opts.preset
-                                       << " tune: " << (encode_opts.tune.empty() ? "none" : encode_opts.tune)
-                                       << " codec: " << encode_opts.codec
-                                       << (encode_opts.realtime ? " [realtime]" : "")
-                                       << "\n";
+                        mx::system_out << "acmx2: Opened: " << ofilename << " for writing at: CRF: " << encode_opts.crf << " preset: " << encode_opts.preset << " tune: " << (encode_opts.tune.empty() ? "none" : encode_opts.tune) << " codec: " << encode_opts.codec << (encode_opts.realtime ? " [realtime]" : "") << "\n";
                         if (no_drop_mode) {
                             mx::system_out << "acmx2: --no-drop active (video mode): frame processing paced to encoder throughput\n";
                         }
                         if (encode_opts.hdr.enabled) {
-                            mx::system_out << "acmx2: *** HDR OUTPUT ENABLED: writing HEVC Main10 + BT.2020 "
-                                           << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
-                                           << " ***\n";
+                            mx::system_out << "acmx2: *** HDR OUTPUT ENABLED: writing HEVC Main10 + BT.2020 " << (encode_opts.hdr.color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ") << " ***\n";
                         }
-                        mx::system_out << "acmx2: Pipeline mode => decode: " << decode_mode
-                                       << ", encode: "
-                                       << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
+                        mx::system_out << "acmx2: Pipeline mode => decode: " << decode_mode << ", encode: " << (writer.is_hardware_encode() ? "(hardware)" : "(software)") << "\n";
                         fflush(stdout);
                         fflush(stderr);
                     } else {
@@ -9921,9 +9141,7 @@ class ACView : public gl::GLObject {
                 throw mx::Exception("Could not create generate output directory: " + gen_dir.string());
             }
             generate_dir = gen_dir.string();
-            mx::system_out << "acmx2: --generate " << generate_interval
-                           << ": saving PNG frames every " << generate_interval
-                           << " frames to " << generate_dir << "\n";
+            mx::system_out << "acmx2: --generate " << generate_interval << ": saving PNG frames every " << generate_interval << " frames to " << generate_dir << "\n";
             fflush(stdout);
         }
 
@@ -9971,8 +9189,7 @@ class ACView : public gl::GLObject {
         if (shaderSelectionShm) {
             acmx2::ipc::ShaderSelectionShmData snapshot;
             if (copyShaderSelectionSnapshot(snapshot))
-                library.setCustomUniformValues(
-                    customUniformsFromSharedMemory(snapshot));
+                library.setCustomUniformValues(customUniformsFromSharedMemory(snapshot));
         }
 #endif
         library.setIndex(std::get<2>(flib));
@@ -9983,8 +9200,7 @@ class ACView : public gl::GLObject {
             } else {
                 std::string line;
                 PlaylistNode *currentNode = nullptr;
-                const auto shaderFiles =
-                    sortedShaderLibraryEntries(std::get<1>(flib));
+                const auto shaderFiles = sortedShaderLibraryEntries(std::get<1>(flib));
                 while (std::getline(pfile, line)) {
                     if (line.empty())
                         continue;
@@ -9995,8 +9211,7 @@ class ACView : public gl::GLObject {
                     }
                     int idx = shaderIndexForFile(shaderFiles, line);
                     if (idx < 0) {
-                        const std::string name =
-                            std::filesystem::path(line).stem().string();
+                        const std::string name = std::filesystem::path(line).stem().string();
                         idx = library.findShaderByName(name);
                     }
                     if (idx >= 0) {
@@ -10011,8 +9226,7 @@ class ACView : public gl::GLObject {
                 if (playlist_tree.empty() && !playlist_indices.empty()) {
                     playlist_tree.push_back({"Default", playlist_indices});
                 }
-                mx::system_out << "acmx2: Playlist loaded [" << playlist_indices.size() << "] shaders in ["
-                               << playlist_tree.size() << "] nodes from: " << playlist_file << "\n";
+                mx::system_out << "acmx2: Playlist loaded [" << playlist_indices.size() << "] shaders in [" << playlist_tree.size() << "] nodes from: " << playlist_file << "\n";
                 for (const auto &node : playlist_tree) {
                     mx::system_out << "  Node: " << node.name << " [" << node.shader_indices.size() << " shaders]\n";
                 }
@@ -10081,41 +9295,8 @@ class ACView : public gl::GLObject {
         }
         {
             static const char *kCrossfadeFiles[] = {
-                "data/xfade_01_linear.glsl",
-                "data/xfade_02_block.glsl",
-                "data/xfade_03_wipe.glsl",
-                "data/xfade_04_radial.glsl",
-                "data/xfade_05_pixelate.glsl",
-                "data/xfade_06_dissolve.glsl",
-                "data/xfade_07_swirl.glsl",
-                "data/xfade_08_glitch.glsl",
-                "data/xfade_09_diamond.glsl",
-                "data/xfade_10_burn.glsl",
-                "data/xfade_11_fade_black.glsl",
-                "data/xfade_12_fade_white.glsl",
-                "data/xfade_13_slide_left.glsl",
-                "data/xfade_14_slide_right.glsl",
-                "data/xfade_15_slide_up.glsl",
-                "data/xfade_16_slide_down.glsl",
-                "data/xfade_17_diagonal_wipe.glsl",
-                "data/xfade_18_iris_open.glsl",
-                "data/xfade_19_iris_close.glsl",
-                "data/xfade_20_checker.glsl",
-                "data/xfade_21_blinds_h.glsl",
-                "data/xfade_22_blinds_v.glsl",
-                "data/xfade_23_zoom_in.glsl",
-                "data/xfade_24_zoom_out.glsl",
-                "data/xfade_25_rotate.glsl",
-                "data/xfade_26_ripple.glsl",
-                "data/xfade_27_wave.glsl",
-                "data/xfade_28_chroma.glsl",
-                "data/xfade_29_invert.glsl",
-                "data/xfade_30_flash.glsl",
-                "data/xfade_31_explode.glsl",
-                "data/xfade_32_mosaic.glsl",
-                "data/xfade_33_shutter.glsl",
-                "data/xfade_34_luma.glsl",
-                "data/xfade_35_noise.glsl",
+                "data/xfade_01_linear.glsl",     "data/xfade_02_block.glsl",   "data/xfade_03_wipe.glsl",     "data/xfade_04_radial.glsl",   "data/xfade_05_pixelate.glsl", "data/xfade_06_dissolve.glsl", "data/xfade_07_swirl.glsl",  "data/xfade_08_glitch.glsl", "data/xfade_09_diamond.glsl", "data/xfade_10_burn.glsl",   "data/xfade_11_fade_black.glsl", "data/xfade_12_fade_white.glsl", "data/xfade_13_slide_left.glsl", "data/xfade_14_slide_right.glsl", "data/xfade_15_slide_up.glsl", "data/xfade_16_slide_down.glsl", "data/xfade_17_diagonal_wipe.glsl", "data/xfade_18_iris_open.glsl",
+                "data/xfade_19_iris_close.glsl", "data/xfade_20_checker.glsl", "data/xfade_21_blinds_h.glsl", "data/xfade_22_blinds_v.glsl", "data/xfade_23_zoom_in.glsl",  "data/xfade_24_zoom_out.glsl", "data/xfade_25_rotate.glsl", "data/xfade_26_ripple.glsl", "data/xfade_27_wave.glsl",    "data/xfade_28_chroma.glsl", "data/xfade_29_invert.glsl",     "data/xfade_30_flash.glsl",      "data/xfade_31_explode.glsl",    "data/xfade_32_mosaic.glsl",      "data/xfade_33_shutter.glsl",  "data/xfade_34_luma.glsl",       "data/xfade_35_noise.glsl",
             };
             crossfadeShaders.clear();
             crossfadeShaderNames.clear();
@@ -10183,9 +9364,7 @@ class ACView : public gl::GLObject {
             glBindTexture(GL_TEXTURE_2D, camera_texture);
             const int upload_w = (frame_w > 0) ? frame_w : win->w;
             const int upload_h = (frame_h > 0) ? frame_h : win->h;
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16,
-                         upload_w, upload_h, 0,
-                         GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, upload_w, upload_h, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -10240,10 +9419,7 @@ class ACView : public gl::GLObject {
 
     cv::Mat newFrame;
 
-    bool rotation_swaps_dimensions() const {
-        return frame_rotation == FrameRotation::Clockwise90 ||
-               frame_rotation == FrameRotation::Counterclockwise90;
-    }
+    bool rotation_swaps_dimensions() const { return frame_rotation == FrameRotation::Clockwise90 || frame_rotation == FrameRotation::Counterclockwise90; }
 
     void rotate_frame(cv::Mat &frame) {
         if (frame.empty() || frame_rotation == FrameRotation::None) {
@@ -10258,8 +9434,7 @@ class ACView : public gl::GLObject {
         if (!input_is_hdr) {
             if (source_rotation == FrameRotation::Clockwise90) {
                 source_rotation = FrameRotation::Counterclockwise90;
-            } else if (source_rotation ==
-                       FrameRotation::Counterclockwise90) {
+            } else if (source_rotation == FrameRotation::Counterclockwise90) {
                 source_rotation = FrameRotation::Clockwise90;
             }
         }
@@ -10283,9 +9458,7 @@ class ACView : public gl::GLObject {
             shift_y = static_cast<double>(frame.cols - 1);
         }
 
-        cv::cuda::rotate(gpu_rotation_input, gpu_rotation_output,
-                         destination_size, angle, shift_x, shift_y,
-                         cv::INTER_NEAREST);
+        cv::cuda::rotate(gpu_rotation_input, gpu_rotation_output, destination_size, angle, shift_x, shift_y, cv::INTER_NEAREST);
         gpu_rotation_output.download(frame);
 #else
         int rotation_code = cv::ROTATE_180;
@@ -10328,9 +9501,7 @@ class ACView : public gl::GLObject {
         // hardware clock must pace video even when the window is hidden.
         bool use_realtime_pacing = !silent_mode;
 #ifdef AUDIO_ENABLED
-        use_realtime_pacing =
-            use_realtime_pacing ||
-            (file_audio_mode && file_audio_has_output_clock());
+        use_realtime_pacing = use_realtime_pacing || (file_audio_mode && file_audio_has_output_clock());
 #endif
         if (fps > 0.0 && use_realtime_pacing) {
             auto now = std::chrono::steady_clock::now();
@@ -10369,8 +9540,7 @@ class ACView : public gl::GLObject {
                 muxOverlayShader.setUniform("mv_matrix", glm::mat4(1.0f));
                 muxOverlayShader.setUniform("proj_matrix", glm::mat4(1.0f));
                 glUniform1f(glGetUniformLocation(muxOverlayShader.id(), "time_f"), mux_time_f);
-                glUniform2f(glGetUniformLocation(muxOverlayShader.id(), "iResolution"),
-                            static_cast<float>(win->w), static_cast<float>(win->h));
+                glUniform2f(glGetUniformLocation(muxOverlayShader.id(), "iResolution"), static_cast<float>(win->w), static_cast<float>(win->h));
                 glUniform1f(glGetUniformLocation(muxOverlayShader.id(), "alpha"), 1.0f);
                 muxOverlaySprite.draw(muxDummyTex, 0, 0, win->w, win->h);
                 mux_time_f += 0.016f;
@@ -10385,16 +9555,11 @@ class ACView : public gl::GLObject {
             return;
         }
 
-        if (duration_limit > 0.0 && media_timeline_started &&
-            (writer.is_open() || png_video_mode) && writerRunning) {
+        if (duration_limit > 0.0 && media_timeline_started && (writer.is_open() || png_video_mode) && writerRunning) {
             double time_passed = 0.0;
             bool has_media_clock = false;
-            if (filename.empty() && graphic.empty() && !no_drop_mode &&
-                fps > 0.0) {
-                time_passed = std::chrono::duration<double>(
-                                  std::chrono::steady_clock::now() -
-                                  media_timeline_start_time)
-                                  .count();
+            if (filename.empty() && graphic.empty() && !no_drop_mode && fps > 0.0) {
+                time_passed = std::chrono::duration<double>(std::chrono::steady_clock::now() - media_timeline_start_time).count();
                 has_media_clock = true;
             }
 #ifdef AUDIO_ENABLED
@@ -10421,14 +9586,11 @@ class ACView : public gl::GLObject {
 
         if (max_size_limit_bytes > 0.0 && writer.is_open() && writerRunning && !ofilename.empty()) {
             std::error_code size_error;
-            const std::uintmax_t output_size =
-                std::filesystem::file_size(ofilename, size_error);
+            const std::uintmax_t output_size = std::filesystem::file_size(ofilename, size_error);
             if (!size_error) {
                 const double current_size = static_cast<double>(output_size);
                 if (current_size > max_size_limit_bytes) {
-                    mx::system_out << "acmx2: Max size reached ("
-                                   << std::fixed << std::setprecision(2) << max_size_limit_mb
-                                   << " MB), stopping recording...\n";
+                    mx::system_out << "acmx2: Max size reached (" << std::fixed << std::setprecision(2) << max_size_limit_mb << " MB), stopping recording...\n";
                     fflush(stdout);
                     running = false;
                 }
@@ -10460,22 +9622,15 @@ class ACView : public gl::GLObject {
                     newFrame = std::move(captureQueue.front());
                     captureQueue.pop();
                     received_source_frame = !newFrame.empty();
-                    if (received_source_frame && writer.is_open() &&
-                        !no_drop_mode && fps > 0.0) {
+                    if (received_source_frame && writer.is_open() && !no_drop_mode && fps > 0.0) {
                         // Live webcam recording follows wall-clock time. If
                         // rendering or encoding falls behind, explicit PTS
                         // gaps keep the video duration aligned with live
                         // audio instead of slowing playback down.
                         source_frame_uses_timeline_clock = true;
                         if (media_timeline_started) {
-                            const double elapsed_seconds =
-                                std::chrono::duration<double>(
-                                    std::chrono::steady_clock::now() -
-                                    media_timeline_start_time)
-                                    .count();
-                            source_timeline_frame = static_cast<uint64_t>(
-                                std::floor(std::max(0.0, elapsed_seconds) *
-                                           fps));
+                            const double elapsed_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - media_timeline_start_time).count();
+                            source_timeline_frame = static_cast<uint64_t>(std::floor(std::max(0.0, elapsed_seconds) * fps));
                         }
                     }
                 }
@@ -10492,37 +9647,23 @@ class ACView : public gl::GLObject {
 
                 uint64_t target_frame = decoded_video_frame_count;
                 if (audio_clock_available && media_timeline_started && fps > 0.0) {
-                    target_frame = static_cast<uint64_t>(
-                        std::floor(std::max(0.0, audio_clock_time) * fps));
+                    target_frame = static_cast<uint64_t>(std::floor(std::max(0.0, audio_clock_time) * fps));
                 }
 
-                const bool frame_due =
-                    !audio_clock_available || !media_timeline_started ||
-                    target_frame >= decoded_video_frame_count;
+                const bool frame_due = !audio_clock_available || !media_timeline_started || target_frame >= decoded_video_frame_count;
                 if (frame_due) {
-                    const uint64_t frames_to_decode =
-                        audio_clock_available && media_timeline_started
-                            ? target_frame - decoded_video_frame_count + 1
-                            : 1;
+                    const uint64_t frames_to_decode = audio_clock_available && media_timeline_started ? target_frame - decoded_video_frame_count + 1 : 1;
                     bool read_ok = false;
                     bool decoded_any_frame = false;
 
                     auto read_next_frame = [&](bool discard) {
                         bool ok = false;
                         if (use_ffmpeg_reader) {
-                            ok = discard
-                                     ? ffmpeg_reader.skip()
-                                 : input_is_hdr
-                                     ? ffmpeg_reader.readHdr(hdr_frame_mat)
-                                     : ffmpeg_reader.read(newFrame);
+                            ok = discard ? ffmpeg_reader.skip() : input_is_hdr ? ffmpeg_reader.readHdr(hdr_frame_mat) : ffmpeg_reader.read(newFrame);
                             if (!ok && repeat) {
                                 mx::system_out << "acmx2: video loop...\n";
                                 if (ffmpeg_reader.seekStart()) {
-                                    ok = discard
-                                             ? ffmpeg_reader.skip()
-                                         : input_is_hdr
-                                             ? ffmpeg_reader.readHdr(hdr_frame_mat)
-                                             : ffmpeg_reader.read(newFrame);
+                                    ok = discard ? ffmpeg_reader.skip() : input_is_hdr ? ffmpeg_reader.readHdr(hdr_frame_mat) : ffmpeg_reader.read(newFrame);
                                 }
                             }
                         } else {
@@ -10530,8 +9671,7 @@ class ACView : public gl::GLObject {
                             if (!ok && repeat) {
                                 mx::system_out << "acmx2: video loop...\n";
                                 cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-                                ok = discard ? cap.grab()
-                                             : cap.read(newFrame);
+                                ok = discard ? cap.grab() : cap.read(newFrame);
                             }
                         }
                         if (ok) {
@@ -10541,8 +9681,7 @@ class ACView : public gl::GLObject {
                     };
 
                     for (uint64_t frame = 0; frame < frames_to_decode; ++frame) {
-                        const bool discard =
-                            frame + 1 < frames_to_decode;
+                        const bool discard = frame + 1 < frames_to_decode;
                         read_ok = read_next_frame(discard);
                         if (!read_ok) {
                             break;
@@ -10561,10 +9700,7 @@ class ACView : public gl::GLObject {
                             mx::system_out << "acmx2: cannot read after looping.\n";
                         }
                         if (!read_ok) {
-                            const bool can_drain_recording =
-                                !input_is_hdr && recording_pbo_primed &&
-                                (writer.is_open() || png_video_mode ||
-                                 generate_mode);
+                            const bool can_drain_recording = !input_is_hdr && recording_pbo_primed && (writer.is_open() || png_video_mode || generate_mode);
                             if (can_drain_recording) {
                                 stop_after_recording_drain = true;
                             } else {
@@ -10579,14 +9715,9 @@ class ACView : public gl::GLObject {
                     }
 
                     if (read_ok) {
-                        received_source_frame =
-                            input_is_hdr ? !hdr_frame_mat.empty() : !newFrame.empty();
+                        received_source_frame = input_is_hdr ? !hdr_frame_mat.empty() : !newFrame.empty();
                         source_frame_uses_timeline_clock = audio_clock_available;
-                        source_timeline_frame =
-                            audio_clock_available
-                                ? std::min(target_frame,
-                                           decoded_video_frame_count - 1)
-                                : decoded_video_frame_count - 1;
+                        source_timeline_frame = audio_clock_available ? std::min(target_frame, decoded_video_frame_count - 1) : decoded_video_frame_count - 1;
                         if (!newFrame.empty())
                             cv::flip(newFrame, newFrame, 0);
                     }
@@ -10643,14 +9774,11 @@ class ACView : public gl::GLObject {
                         }
                         glBindTexture(GL_TEXTURE_2D, human_overlay_tex);
                         if (human_overlay_w != rgba.cols || human_overlay_h != rgba.rows) {
-                            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba.cols, rgba.rows,
-                                         0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.ptr());
+                            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba.cols, rgba.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.ptr());
                             human_overlay_w = rgba.cols;
                             human_overlay_h = rgba.rows;
                         } else {
-                            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                                            rgba.cols, rgba.rows,
-                                            GL_RGBA, GL_UNSIGNED_BYTE, rgba.ptr());
+                            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, rgba.cols, rgba.rows, GL_RGBA, GL_UNSIGNED_BYTE, rgba.ptr());
                         }
                         glBindTexture(GL_TEXTURE_2D, 0);
                         human_overlay_ready = true;
@@ -10663,8 +9791,7 @@ class ACView : public gl::GLObject {
                         cv::subtract(cv::Scalar::all(255), alpha8, inverseAlpha);
                         cv::Mat inverseBgr;
                         cv::cvtColor(inverseAlpha, inverseBgr, cv::COLOR_GRAY2BGR);
-                        cv::multiply(newFrame, inverseBgr, newFrame,
-                                     1.0 / 255.0, CV_8UC3);
+                        cv::multiply(newFrame, inverseBgr, newFrame, 1.0 / 255.0, CV_8UC3);
                     }
                 } else {
                     cv::Mat isolated = ac_dnn::isolateBody(newFrame, mask, human_black_point, human_white_point);
@@ -10699,11 +9826,9 @@ class ACView : public gl::GLObject {
         if (onnx_proc_model && !isFrozen && !input_is_hdr && !newFrame.empty()) {
             try {
 #ifdef ACMX2_WITH_CUDA
-                const bool gpuFiltersNeedHostFrame =
-                    gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer;
+                const bool gpuFiltersNeedHostFrame = gpu_filter_enabled && !gpu_filters.empty() && gpu_frame_buffer;
                 if (!gpuFiltersNeedHostFrame)
-                    onnxGpuFrameReady =
-                        onnx_proc_model->procGpu(newFrame, onnxGpuOutput);
+                    onnxGpuFrameReady = onnx_proc_model->procGpu(newFrame, onnxGpuOutput);
                 if (!onnxGpuFrameReady)
 #endif
                 {
@@ -10746,16 +9871,14 @@ class ACView : public gl::GLObject {
                 static int hdr_counter = 0;
                 if (frame_cache.size() == 0) {
                     if (received_source_frame) {
-                        frame_cache.pushFromFBO(hdr_linear_video_fbo,
-                                                win->w, win->h);
+                        frame_cache.pushFromFBO(hdr_linear_video_fbo, win->w, win->h);
                         hdr_counter = 0;
                     }
                 } else if (++hdr_counter > cache_delay) {
                     if (cache_warmup_frames <= 0) {
                         // GPU->GPU copy of the freshly decoded linear-light
                         // frame into the next ring slot. No CPU readback.
-                        frame_cache.pushFromFBO(hdr_linear_video_fbo,
-                                                win->w, win->h);
+                        frame_cache.pushFromFBO(hdr_linear_video_fbo, win->w, win->h);
                     }
                     hdr_counter = 0;
                 }
@@ -10764,19 +9887,16 @@ class ACView : public gl::GLObject {
                         library.setHistoryHead(frame_cache.oldestLayer());
                         library.setUniform("history", 0);
                         glActiveTexture(GL_TEXTURE1);
-                        glBindTexture(GL_TEXTURE_2D_ARRAY,
-                                      frame_cache.historyTexture());
+                        glBindTexture(GL_TEXTURE_2D_ARRAY, frame_cache.historyTexture());
                     } else {
                         const int n_bind = library.cacheSize();
                         for (int i = 0; i < n_bind; ++i) {
                             // setUniform(name, slot) routes through ProgramData
                             // and assigns BOTH `samp(i+1)` (for i<8) and
                             // `textures[i]` to texture unit i+1.
-                            library.setUniform(
-                                "samp" + std::to_string(i + 1), i);
+                            library.setUniform("samp" + std::to_string(i + 1), i);
                             glActiveTexture(GL_TEXTURE1 + i);
-                            glBindTexture(GL_TEXTURE_2D,
-                                          frame_cache.textureAt(i));
+                            glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(i));
                         }
                     }
                 }
@@ -10818,32 +9938,11 @@ class ACView : public gl::GLObject {
                     }
                 }
 
-                CHECK_CUDA(cudaMemcpy(d_ptrList, gpu_frame_buffer->rawPointers.data(),
-                                      gpu_frame_buffer->arraySize * sizeof(unsigned char *),
-                                      cudaMemcpyHostToDevice));
+                CHECK_CUDA(cudaMemcpy(d_ptrList, gpu_frame_buffer->rawPointers.data(), gpu_frame_buffer->arraySize * sizeof(unsigned char *), cudaMemcpyHostToDevice));
 
-                CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.ptr<unsigned char>(), gpuWorkingBuffer.step,
-                                        gpu_frame_buffer->deviceFrames[gpu_frame_buffer->arraySize - 1].data,
-                                        gpu_frame_buffer->framePitch,
-                                        gpu_frame_buffer->w * 4, gpu_frame_buffer->h,
-                                        cudaMemcpyDeviceToDevice));
+                CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.ptr<unsigned char>(), gpuWorkingBuffer.step, gpu_frame_buffer->deviceFrames[gpu_frame_buffer->arraySize - 1].data, gpu_frame_buffer->framePitch, gpu_frame_buffer->w * 4, gpu_frame_buffer->h, cudaMemcpyDeviceToDevice));
 
-                launch_filter(
-                    gpu_filters.data(),
-                    gpu_filters.size(),
-                    gpuWorkingBuffer.ptr<unsigned char>(),
-                    d_ptrList,
-                    gpu_frame_buffer->arraySize,
-                    gpuWorkingBuffer.cols,
-                    gpuWorkingBuffer.rows,
-                    gpuWorkingBuffer.step,
-                    gpu_alpha,
-                    false,
-                    gpu_square_size,
-                    gpu_frame_index,
-                    gpu_frame_dir,
-                    &d_filterList,
-                    gpu_filtersChanged);
+                launch_filter(gpu_filters.data(), gpu_filters.size(), gpuWorkingBuffer.ptr<unsigned char>(), d_ptrList, gpu_frame_buffer->arraySize, gpuWorkingBuffer.cols, gpuWorkingBuffer.rows, gpuWorkingBuffer.step, gpu_alpha, false, gpu_square_size, gpu_frame_index, gpu_frame_dir, &d_filterList, gpu_filtersChanged);
                 gpu_filtersChanged = false;
                 tex_uploader.update(gpuWorkingBuffer);
                 // If the incoming GpuMat size ever differs from the
@@ -10875,8 +9974,7 @@ class ACView : public gl::GLObject {
                                   }()))) {
                 static int counter = 0;
                 if (frame_cache.size() == 0) {
-                    frame_cache.pushFromTexture(camera_texture,
-                                                newFrame.cols, newFrame.rows);
+                    frame_cache.pushFromTexture(camera_texture, newFrame.cols, newFrame.rows);
                     counter = 0;
                 } else if (++counter > cache_delay) {
                     // Only push frames into cache after the post-load warmup period
@@ -10885,8 +9983,7 @@ class ACView : public gl::GLObject {
                         // updated above. Avoids a second BGR->RGBA conversion
                         // and host upload per frame, which became a major
                         // bottleneck once CPU ONNX passes were added.
-                        frame_cache.pushFromTexture(camera_texture,
-                                                    newFrame.cols, newFrame.rows);
+                        frame_cache.pushFromTexture(camera_texture, newFrame.cols, newFrame.rows);
                     }
                     counter = 0;
                 }
@@ -10895,16 +9992,13 @@ class ACView : public gl::GLObject {
                         library.setHistoryHead(frame_cache.oldestLayer());
                         library.setUniform("history", 0);
                         glActiveTexture(GL_TEXTURE1);
-                        glBindTexture(GL_TEXTURE_2D_ARRAY,
-                                      frame_cache.historyTexture());
+                        glBindTexture(GL_TEXTURE_2D_ARRAY, frame_cache.historyTexture());
                     } else {
                         const int n_bind = library.cacheSize();
                         for (int i = 0; i < n_bind; ++i) {
-                            library.setUniform(
-                                "samp" + std::to_string(i + 1), i);
+                            library.setUniform("samp" + std::to_string(i + 1), i);
                             glActiveTexture(GL_TEXTURE1 + i);
-                            glBindTexture(GL_TEXTURE_2D,
-                                          frame_cache.textureAt(i));
+                            glBindTexture(GL_TEXTURE_2D, frame_cache.textureAt(i));
                         }
                     }
                 }
@@ -10928,8 +10022,7 @@ class ACView : public gl::GLObject {
             float audio_warmup = updateAudioWarmupEnvelope();
             library.setAudioWarmupEnvelope(audio_warmup);
             if (file_audio_mode) {
-                const bool process_file_audio =
-                    file_audio_has_output_clock() || received_source_frame;
+                const bool process_file_audio = file_audio_has_output_clock() || received_source_frame;
                 if (process_file_audio) {
                     file_audio_process_frame(fps, audio_engine.analyzer());
                 }
@@ -10939,9 +10032,7 @@ class ACView : public gl::GLObject {
                     running = false;
                 }
             }
-            float spectrum_scale = spectrum_scale_by_sense
-                                       ? (audio_engine.analyzer().sensitivity() * audio_warmup)
-                                       : audio_warmup;
+            float spectrum_scale = spectrum_scale_by_sense ? (audio_engine.analyzer().sensitivity() * audio_warmup) : audio_warmup;
             spectrumTex.update(spectrum_scale);
             spectrumTex.bind();
             if (audio_buffer_count > 0) {
@@ -11088,16 +10179,10 @@ class ACView : public gl::GLObject {
             if (!viewRotationActive) {
                 const float pitch = glm::radians(cameraPitch);
                 const float yaw = glm::radians(cameraYaw);
-                cameraUp = glm::vec3(-sin(pitch) * cos(yaw),
-                                     cos(pitch),
-                                     -sin(pitch) * sin(yaw));
+                cameraUp = glm::vec3(-sin(pitch) * cos(yaw), cos(pitch), -sin(pitch) * sin(yaw));
             }
             glm::mat4 viewMatrix = glm::lookAt(cameraPos, cameraTarget, cameraUp);
-            glm::mat4 projectionMatrix = glm::perspective(
-                glm::radians(120.0f),
-                static_cast<float>(win->w) / static_cast<float>(win->h),
-                0.01f,
-                1000.0f);
+            glm::mat4 projectionMatrix = glm::perspective(glm::radians(120.0f), static_cast<float>(win->w) / static_cast<float>(win->h), 0.01f, 1000.0f);
 
             glm::mat4 modelMatrix = glm::mat4(1.0f);
             modelMatrix = glm::scale(modelMatrix, glm::vec3(modelRenderScale));
@@ -11133,9 +10218,7 @@ class ACView : public gl::GLObject {
                             bool applied = false;
                             if (library.isCompute(static_cast<size_t>(shader_idx))) {
                                 glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
-                                applied = runComputePass(
-                                    win, static_cast<size_t>(shader_idx), inputTex,
-                                    passTexture[pingpong]);
+                                applied = runComputePass(win, static_cast<size_t>(shader_idx), inputTex, passTexture[pingpong]);
                             } else {
                                 glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
                                 glViewport(0, 0, win->w, win->h);
@@ -11147,8 +10230,7 @@ class ACView : public gl::GLObject {
                                 glActiveTexture(GL_TEXTURE0);
                                 glBindTexture(GL_TEXTURE_2D, inputTex);
                                 glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
-                                bindPassHistoryTextures(
-                                    static_cast<size_t>(shader_idx));
+                                bindPassHistoryTextures(static_cast<size_t>(shader_idx));
                                 sprite.setShader(pass_shader);
                                 sprite.setName("samp");
                                 sprite.draw(inputTex, 0, 0, win->w, win->h);
@@ -11179,14 +10261,11 @@ class ACView : public gl::GLObject {
                 glDepthMask(GL_TRUE);
             }
 
-            const bool active_compute = !library.isBypassed() &&
-                                        library.isCompute(library.index());
+            const bool active_compute = !library.isBypassed() && library.isCompute(library.index());
             if (active_compute) {
                 ensurePassTargets(win);
-                const int output_index =
-                    textureForMesh == passTexture[0] ? 1 : 0;
-                if (runComputePass(win, library.index(), textureForMesh,
-                                   passTexture[output_index])) {
+                const int output_index = textureForMesh == passTexture[0] ? 1 : 0;
+                if (runComputePass(win, library.index(), textureForMesh, passTexture[output_index])) {
                     textureForMesh = passTexture[output_index];
                 }
                 glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
@@ -11302,9 +10381,7 @@ class ACView : public gl::GLObject {
                             bool applied = false;
                             if (library.isCompute(static_cast<size_t>(shader_idx))) {
                                 glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
-                                applied = runComputePass(
-                                    win, static_cast<size_t>(shader_idx), inputTex,
-                                    passTexture[pingpong]);
+                                applied = runComputePass(win, static_cast<size_t>(shader_idx), inputTex, passTexture[pingpong]);
                             } else {
                                 glBindFramebuffer(GL_FRAMEBUFFER, passFBO[pingpong]);
                                 glViewport(0, 0, win->w, win->h);
@@ -11316,8 +10393,7 @@ class ACView : public gl::GLObject {
                                 glActiveTexture(GL_TEXTURE0);
                                 glBindTexture(GL_TEXTURE_2D, inputTex);
                                 glUniform1i(glGetUniformLocation(pass_shader->id(), "samp"), 0);
-                                bindPassHistoryTextures(
-                                    static_cast<size_t>(shader_idx));
+                                bindPassHistoryTextures(static_cast<size_t>(shader_idx));
                                 sprite.setShader(pass_shader);
                                 sprite.setName("samp");
                                 sprite.draw(inputTex, 0, 0, win->w, win->h);
@@ -11345,14 +10421,11 @@ class ACView : public gl::GLObject {
                 glClear(GL_COLOR_BUFFER_BIT);
             }
 
-            const bool active_compute = !library.isBypassed() &&
-                                        library.isCompute(library.index());
+            const bool active_compute = !library.isBypassed() && library.isCompute(library.index());
             if (active_compute) {
                 ensurePassTargets(win);
-                const int output_index =
-                    textureForSprite == passTexture[0] ? 1 : 0;
-                if (runComputePass(win, library.index(), textureForSprite,
-                                   passTexture[output_index])) {
+                const int output_index = textureForSprite == passTexture[0] ? 1 : 0;
+                if (runComputePass(win, library.index(), textureForSprite, passTexture[output_index])) {
                     textureForSprite = passTexture[output_index];
                 }
                 glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
@@ -11395,14 +10468,12 @@ class ACView : public gl::GLObject {
         // texture stores the original frame in RGB and the cleaned mask in
         // its alpha channel, so a single straight-alpha blend reproduces the
         // person over whatever the shader chain just rendered to captureFBO.
-        if (human_seg_model && human_background_only && human_overlay_ready &&
-            human_overlay_tex != 0 && !input_is_hdr) {
+        if (human_seg_model && human_background_only && human_overlay_ready && human_overlay_tex != 0 && !input_is_hdr) {
             glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
             glViewport(0, 0, win->w, win->h);
             glDisable(GL_DEPTH_TEST);
             glEnable(GL_BLEND);
-            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
-                                GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
             fshader.useProgram();
             fshader.setUniform("mv_matrix", glm::mat4(1.0f));
             fshader.setUniform("proj_matrix", glm::mat4(1.0f));
@@ -11445,14 +10516,11 @@ class ACView : public gl::GLObject {
         // image now and restore it after the writer/snapshot readback so
         // recordings include the overlay but the on-screen / crossfade source
         // does not.
-        const bool overlay_will_draw =
-            writer.is_open() && waterFont.handle().has_value() &&
-            (display_filter || enableWatermark);
+        const bool overlay_will_draw = writer.is_open() && waterFont.handle().has_value() && (display_filter || enableWatermark);
         if (overlay_will_draw && preOverlayFBO != 0) {
             glBindFramebuffer(GL_READ_FRAMEBUFFER, captureFBO);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, preOverlayFBO);
-            glBlitFramebuffer(0, 0, win->w, win->h, 0, 0, win->w, win->h,
-                              GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            glBlitFramebuffer(0, 0, win->w, win->h, 0, 0, win->w, win->h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         }
@@ -11500,22 +10568,13 @@ class ACView : public gl::GLObject {
             glViewport(0, 0, win->w, win->h);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            win->text.setColor({static_cast<Uint8>(watermark_r),
-                                static_cast<Uint8>(watermark_g),
-                                static_cast<Uint8>(watermark_b), 255});
+            win->text.setColor({static_cast<Uint8>(watermark_r), static_cast<Uint8>(watermark_g), static_cast<Uint8>(watermark_b), 255});
             win->text.printText_Blended(waterFont, 10, watermarkY, watermark_text);
             glDisable(GL_BLEND);
         }
 
-        const bool normal_output_frame_due =
-            media_timeline_started &&
-            (!file_audio_clock_controls_video || received_source_frame ||
-             stop_after_recording_drain);
-        bool needWriter = (((writer.is_open() || png_video_mode || generate_mode) &&
-                            normal_output_frame_due) ||
-                           snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 ||
-                           tiff_snapshot_state > 0) &&
-                          !isFrozen;
+        const bool normal_output_frame_due = media_timeline_started && (!file_audio_clock_controls_video || received_source_frame || stop_after_recording_drain);
+        bool needWriter = (((writer.is_open() || png_video_mode || generate_mode) && normal_output_frame_due) || snapshot_state > 0 || hdr_snapshot_state > 0 || raw_snapshot_state > 0 || tiff_snapshot_state > 0) && !isFrozen;
 
         bool has_snapshot_request = (snapshot_state > 0);
         bool has_hdr_snapshot_request = (hdr_snapshot_state > 0);
@@ -11542,9 +10601,7 @@ class ACView : public gl::GLObject {
                 const int row_bytes = win->w * 8; // 4 channels * 2 bytes
                 std::vector<unsigned char> flipped_pixels(pixels.size());
                 for (int y = 0; y < win->h; ++y) {
-                    std::copy(pixels.begin() + y * row_bytes,
-                              pixels.begin() + (y + 1) * row_bytes,
-                              flipped_pixels.begin() + (win->h - 1 - y) * row_bytes);
+                    std::copy(pixels.begin() + y * row_bytes, pixels.begin() + (y + 1) * row_bytes, flipped_pixels.begin() + (win->h - 1 - y) * row_bytes);
                 }
                 pixels = std::move(flipped_pixels);
             }
@@ -11559,9 +10616,7 @@ class ACView : public gl::GLObject {
                 fd.isSnapshot = has_hdr_snapshot_request;
                 fd.isWebPSnapshot = has_hdr_snapshot_request;
                 fd.isRawSnapshot = has_raw_snapshot_request;
-                fd.usesTimelineClock =
-                    source_frame_uses_timeline_clock && !has_hdr_snapshot_request &&
-                    !has_raw_snapshot_request;
+                fd.usesTimelineClock = source_frame_uses_timeline_clock && !has_hdr_snapshot_request && !has_raw_snapshot_request;
                 fd.timelineFrame = source_timeline_frame;
 
                 {
@@ -11605,9 +10660,7 @@ class ACView : public gl::GLObject {
                 for (int y = 0; y < win->h; ++y) {
                     const int src_row_start = y * win->w * 4;
                     const int dest_row_start = (win->h - 1 - y) * win->w * 4;
-                    std::copy(sdr_pixels.begin() + src_row_start,
-                              sdr_pixels.begin() + src_row_start + (win->w * 4),
-                              flipped_pixels.begin() + dest_row_start);
+                    std::copy(sdr_pixels.begin() + src_row_start, sdr_pixels.begin() + src_row_start + (win->w * 4), flipped_pixels.begin() + dest_row_start);
                 }
 
                 FrameData sdr_fd;
@@ -11666,8 +10719,7 @@ class ACView : public gl::GLObject {
                 bool is_webp_snapshot_frame = (hdr_snapshot_state == 2);
                 bool is_raw_snapshot_frame = (raw_snapshot_state == 2);
                 bool is_tiff_snapshot_frame = (tiff_snapshot_state == 2);
-                const bool has_normal_output =
-                    normal_output_frame_due && (writer.is_open() || png_video_mode || generate_mode);
+                const bool has_normal_output = normal_output_frame_due && (writer.is_open() || png_video_mode || generate_mode);
                 const bool previous_recording_frame_ready = recording_pbo_primed;
 
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
@@ -11675,22 +10727,16 @@ class ACView : public gl::GLObject {
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
                 if (has_normal_output) {
-                    recording_pbo_uses_timeline_clock[pboIndex] =
-                        source_frame_uses_timeline_clock;
-                    recording_pbo_timeline_frame[pboIndex] =
-                        source_timeline_frame;
+                    recording_pbo_uses_timeline_clock[pboIndex] = source_frame_uses_timeline_clock;
+                    recording_pbo_timeline_frame[pboIndex] = source_timeline_frame;
                     recording_pbo_primed = true;
                 }
 
-                if ((has_normal_output && previous_recording_frame_ready) || is_snapshot_frame ||
-                    is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
+                if ((has_normal_output && previous_recording_frame_ready) || is_snapshot_frame || is_webp_snapshot_frame || is_raw_snapshot_frame || is_tiff_snapshot_frame) {
                     bool used_zero_copy = false;
 
 #ifdef ACMX2_WITH_CUDA
-                    if (writer.is_open() && !generate_mode &&
-                        !is_snapshot_frame && !is_webp_snapshot_frame &&
-                        !is_raw_snapshot_frame && !is_tiff_snapshot_frame &&
-                        recordCudaPboResources[pboNextIndex]) {
+                    if (writer.is_open() && !generate_mode && !is_snapshot_frame && !is_webp_snapshot_frame && !is_raw_snapshot_frame && !is_tiff_snapshot_frame && recordCudaPboResources[pboNextIndex]) {
                         cudaGraphicsResource *resource = recordCudaPboResources[pboNextIndex];
                         void *devPtr = nullptr;
                         size_t mappedBytes = 0;
@@ -11701,18 +10747,9 @@ class ACView : public gl::GLObject {
                         const size_t requiredBytes = static_cast<size_t>(win->w) * static_cast<size_t>(win->h) * 4;
                         if (devPtr && mappedBytes >= requiredBytes) {
                             if (recording_pbo_uses_timeline_clock[pboNextIndex]) {
-                                used_zero_copy =
-                                    writer.write_cuda_rgba_at_pts(
-                                        devPtr, static_cast<int>(win->w) * 4,
-                                        static_cast<int64_t>(
-                                            recording_pbo_timeline_frame
-                                                [pboNextIndex]),
-                                        true);
+                                used_zero_copy = writer.write_cuda_rgba_at_pts(devPtr, static_cast<int>(win->w) * 4, static_cast<int64_t>(recording_pbo_timeline_frame[pboNextIndex]), true);
                             } else {
-                                used_zero_copy =
-                                    writer.write_cuda_rgba(
-                                        devPtr, static_cast<int>(win->w) * 4,
-                                        true);
+                                used_zero_copy = writer.write_cuda_rgba(devPtr, static_cast<int>(win->w) * 4, true);
                             }
                         }
 
@@ -11733,9 +10770,7 @@ class ACView : public gl::GLObject {
                             for (int y = 0; y < win->h; ++y) {
                                 int src_row_start = y * win->w * 4;
                                 int dest_row_start = (win->h - 1 - y) * win->w * 4;
-                                std::copy(pixels.begin() + src_row_start,
-                                          pixels.begin() + src_row_start + (win->w * 4),
-                                          flipped_pixels.begin() + dest_row_start);
+                                std::copy(pixels.begin() + src_row_start, pixels.begin() + src_row_start + (win->w * 4), flipped_pixels.begin() + dest_row_start);
                             }
 
                             FrameData fd;
@@ -11746,12 +10781,8 @@ class ACView : public gl::GLObject {
                             fd.isWebPSnapshot = is_webp_snapshot_frame;
                             fd.isRawSnapshot = is_raw_snapshot_frame;
                             fd.isTiffSnapshot = is_tiff_snapshot_frame;
-                            fd.usesTimelineClock =
-                                recording_pbo_uses_timeline_clock[pboNextIndex] &&
-                                !fd.isSnapshot && !fd.isRawSnapshot &&
-                                !fd.isTiffSnapshot;
-                            fd.timelineFrame =
-                                recording_pbo_timeline_frame[pboNextIndex];
+                            fd.usesTimelineClock = recording_pbo_uses_timeline_clock[pboNextIndex] && !fd.isSnapshot && !fd.isRawSnapshot && !fd.isTiffSnapshot;
+                            fd.timelineFrame = recording_pbo_timeline_frame[pboNextIndex];
 
                             if (is_snapshot_frame) {
                                 snapshot_state = 0;
@@ -11817,8 +10848,7 @@ class ACView : public gl::GLObject {
         if (overlay_will_draw && preOverlayFBO != 0) {
             glBindFramebuffer(GL_READ_FRAMEBUFFER, preOverlayFBO);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, captureFBO);
-            glBlitFramebuffer(0, 0, win->w, win->h, 0, 0, win->w, win->h,
-                              GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            glBlitFramebuffer(0, 0, win->w, win->h, 0, 0, win->w, win->h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         }
@@ -11847,12 +10877,10 @@ class ACView : public gl::GLObject {
 #ifdef AUDIO_ENABLED
             if (file_audio_mode && file_audio_has_output_clock()) {
                 const std::string trackPath = file_audio_current_source_path();
-                const std::string trackName =
-                    std::filesystem::path(trackPath).filename().string();
+                const std::string trackName = std::filesystem::path(trackPath).filename().string();
                 if (!trackName.empty()) {
                     win->text.setColor({255, 0, 255, 255});
-                    win->text.printText_Blended(
-                        overlayFont, 10, overlayY, "Track: " + trackName);
+                    win->text.printText_Blended(overlayFont, 10, overlayY, "Track: " + trackName);
                     overlayY += 30;
                 }
             }
@@ -11874,16 +10902,9 @@ class ACView : public gl::GLObject {
                 const int playlistCount = activePlaylistSize();
                 std::ostringstream autopilotLine;
                 if (autopilot_random_interval) {
-                    autopilotLine << "Autopilot "
-                                  << (autopilot_sequential ? "seq" : "rnd")
-                                  << " [4-" << std::max(4, autopilot_random_timeout)
-                                  << "] cur=" << activeInterval
-                                  << " next=" << remainingFrames << "f";
+                    autopilotLine << "Autopilot " << (autopilot_sequential ? "seq" : "rnd") << " [4-" << std::max(4, autopilot_random_timeout) << "] cur=" << activeInterval << " next=" << remainingFrames << "f";
                 } else {
-                    autopilotLine << "Autopilot "
-                                  << (autopilot_sequential ? "seq" : "rnd")
-                                  << " every " << activeInterval
-                                  << "f next=" << remainingFrames << "f";
+                    autopilotLine << "Autopilot " << (autopilot_sequential ? "seq" : "rnd") << " every " << activeInterval << "f next=" << remainingFrames << "f";
                 }
                 if (playlistCount > 0) {
                     autopilotLine << " idx=" << (playlist_index + 1) << "/" << playlistCount;
@@ -11894,9 +10915,7 @@ class ACView : public gl::GLObject {
             }
             if (!crossfadeShaderNames.empty()) {
                 int n = static_cast<int>(crossfadeShaderNames.size());
-                std::string xfadeLine = "XFade [" + std::to_string(crossfadeShaderIndex + 1) + "/" +
-                                        std::to_string(n) + "]: " +
-                                        crossfadeShaderNames[crossfadeShaderIndex];
+                std::string xfadeLine = "XFade [" + std::to_string(crossfadeShaderIndex + 1) + "/" + std::to_string(n) + "]: " + crossfadeShaderNames[crossfadeShaderIndex];
                 win->text.setColor({255, 200, 0, 255});
                 win->text.printText_Blended(overlayFont, 10, overlayY, xfadeLine);
                 overlayY += 30;
@@ -11923,9 +10942,7 @@ class ACView : public gl::GLObject {
                 int64_t currentFrames = getFrameCount();
 
                 std::ostringstream stream;
-                stream << "ACMX2 - Graphics Mode - "
-                       << timeStr
-                       << " [" << currentFrames << " frames]";
+                stream << "ACMX2 - Graphics Mode - " << timeStr << " [" << currentFrames << " frames]";
                 appendRecordingTitleSuffix(stream);
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
@@ -11938,9 +10955,7 @@ class ACView : public gl::GLObject {
                 frame_counter = static_cast<unsigned int>(cap.get(cv::CAP_PROP_POS_FRAMES));
             }
 
-            if (silent_mode &&
-                (totalFrames > 0.0 ||
-                 (duration_limit > 0.0 && fps > 0.0))) {
+            if (silent_mode && (totalFrames > 0.0 || (duration_limit > 0.0 && fps > 0.0))) {
                 emitSilentVideoProgress(false);
             } else if (silent_mode) {
                 // Fallback: input reports unknown frame count (e.g. some MKV
@@ -11959,14 +10974,9 @@ class ACView : public gl::GLObject {
 
                     std::cout << "acmx2: [  ?%] "
                               << "Frame " << frame_counter << "/?"
-                              << " | Written: " << frames_written
-                              << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
-                              << std::setfill('0') << std::setw(2) << minutes << ":"
-                              << std::setfill('0') << std::setw(2) << seconds
-                              << std::setfill(' ');
+                              << " | Written: " << frames_written << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":" << std::setfill('0') << std::setw(2) << minutes << ":" << std::setfill('0') << std::setw(2) << seconds << std::setfill(' ');
                     appendSilentProgressFileSize(std::cout);
-                    std::cout << "\n"
-                              << std::flush;
+                    std::cout << "\n" << std::flush;
                 }
             }
 
@@ -11976,10 +10986,7 @@ class ACView : public gl::GLObject {
                 }
                 std::string timeStr = getTimeString();
                 std::ostringstream stream;
-                stream << "ACMX2 - ["
-                       << frame_counter << "/"
-                       << static_cast<int>(totalFrames) << "] - "
-                       << timeStr << " - Video Mode";
+                stream << "ACMX2 - [" << frame_counter << "/" << static_cast<int>(totalFrames) << "] - " << timeStr << " - Video Mode";
                 appendRecordingTitleSuffix(stream);
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
@@ -11990,9 +10997,7 @@ class ACView : public gl::GLObject {
                 std::string timeStr = getTimeString();
                 int64_t currentFrames = getFrameCount();
                 std::ostringstream stream;
-                stream << "ACMX2 - Capture Mode - "
-                       << timeStr
-                       << " [" << currentFrames << " frames]";
+                stream << "ACMX2 - Capture Mode - " << timeStr << " [" << currentFrames << " frames]";
                 appendRecordingTitleSuffix(stream);
                 win->setWindowTitle(stream.str());
                 lastUpdate = now;
@@ -12031,12 +11036,9 @@ class ACView : public gl::GLObject {
             return;
         }
 
-        uint64_t expected_frames = totalFrames > 0.0
-                                       ? static_cast<uint64_t>(std::ceil(totalFrames))
-                                       : 0;
+        uint64_t expected_frames = totalFrames > 0.0 ? static_cast<uint64_t>(std::ceil(totalFrames)) : 0;
         if (duration_limit > 0.0) {
-            const uint64_t duration_frames = std::max<uint64_t>(
-                1, static_cast<uint64_t>(std::ceil(duration_limit * fps)));
+            const uint64_t duration_frames = std::max<uint64_t>(1, static_cast<uint64_t>(std::ceil(duration_limit * fps)));
             if (repeat || expected_frames == 0) {
                 expected_frames = duration_frames;
             } else {
@@ -12047,51 +11049,32 @@ class ACView : public gl::GLObject {
             return;
         }
 
-        const uint64_t current_frame =
-            duration_limit > 0.0 && repeat
-                ? static_cast<uint64_t>(frames_proc) + 1
-                : static_cast<uint64_t>(frame_counter);
-        const uint64_t processed_frames = complete
-                                              ? expected_frames
-                                              : std::min(current_frame,
-                                                         expected_frames);
-        int current_percent = static_cast<int>(
-            (static_cast<double>(processed_frames) / expected_frames) * 100.0);
+        const uint64_t current_frame = duration_limit > 0.0 && repeat ? static_cast<uint64_t>(frames_proc) + 1 : static_cast<uint64_t>(frame_counter);
+        const uint64_t processed_frames = complete ? expected_frames : std::min(current_frame, expected_frames);
+        int current_percent = static_cast<int>((static_cast<double>(processed_frames) / expected_frames) * 100.0);
         if (!complete) {
             current_percent = std::min(current_percent, 99);
         }
 
         const auto now = std::chrono::steady_clock::now();
         const bool percent_changed = current_percent > last_progress_percent;
-        const bool time_elapsed =
-            last_video_progress_emit.time_since_epoch().count() == 0 ||
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                now - last_video_progress_emit)
-                    .count() >= 500;
+        const bool time_elapsed = last_video_progress_emit.time_since_epoch().count() == 0 || std::chrono::duration_cast<std::chrono::milliseconds>(now - last_video_progress_emit).count() >= 500;
         if (!complete && !percent_changed && !time_elapsed) {
             return;
         }
 
         last_progress_percent = current_percent;
         last_video_progress_emit = now;
-        const int64_t frames_written =
-            png_video_mode
-                ? static_cast<int64_t>(png_video_frame_counter.load())
-                : (writer.is_open() ? writer.get_frame_count() : 0);
+        const int64_t frames_written = png_video_mode ? static_cast<int64_t>(png_video_frame_counter.load()) : (writer.is_open() ? writer.get_frame_count() : 0);
         const double elapsed_secs = static_cast<double>(processed_frames) / fps;
         const uint64_t hours = static_cast<uint64_t>(elapsed_secs / 3600.0);
         const uint64_t minutes = static_cast<uint64_t>(elapsed_secs / 60.0) % 60;
         const uint64_t seconds = static_cast<uint64_t>(elapsed_secs) % 60;
 
         std::cout << "acmx2: [" << std::setw(3) << current_percent << "%] "
-                  << "Frame " << processed_frames << "/" << expected_frames
-                  << " | Written: " << frames_written
-                  << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
-                  << std::setw(2) << minutes << ":" << std::setw(2) << seconds
-                  << std::setfill(' ');
+                  << "Frame " << processed_frames << "/" << expected_frames << " | Written: " << frames_written << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":" << std::setw(2) << minutes << ":" << std::setw(2) << seconds << std::setfill(' ');
         appendSilentProgressFileSize(std::cout);
-        std::cout << "\n"
-                  << std::flush;
+        std::cout << "\n" << std::flush;
     }
 
     /**
@@ -12108,30 +11091,18 @@ class ACView : public gl::GLObject {
             return;
         }
 
-        const uint64_t expected_frames = std::max<uint64_t>(
-            1, static_cast<uint64_t>(std::ceil(duration_limit * fps)));
-        const uint64_t processed_frames = complete
-                                              ? expected_frames
-                                              : std::min<uint64_t>(
-                                                    static_cast<uint64_t>(frame_counter) + 1,
-                                                    expected_frames);
-        const uint64_t frame_interval = std::max<uint64_t>(
-            1, static_cast<uint64_t>(std::ceil(fps)));
+        const uint64_t expected_frames = std::max<uint64_t>(1, static_cast<uint64_t>(std::ceil(duration_limit * fps)));
+        const uint64_t processed_frames = complete ? expected_frames : std::min<uint64_t>(static_cast<uint64_t>(frame_counter) + 1, expected_frames);
+        const uint64_t frame_interval = std::max<uint64_t>(1, static_cast<uint64_t>(std::ceil(fps)));
         const auto now = std::chrono::steady_clock::now();
-        const bool frame_interval_elapsed =
-            processed_frames >= last_graphics_progress_frame + frame_interval;
-        const bool time_interval_elapsed =
-            last_graphics_progress_emit.time_since_epoch().count() == 0 ||
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                now - last_graphics_progress_emit)
-                    .count() >= 500;
+        const bool frame_interval_elapsed = processed_frames >= last_graphics_progress_frame + frame_interval;
+        const bool time_interval_elapsed = last_graphics_progress_emit.time_since_epoch().count() == 0 || std::chrono::duration_cast<std::chrono::milliseconds>(now - last_graphics_progress_emit).count() >= 500;
 
         if (!complete && !frame_interval_elapsed && !time_interval_elapsed) {
             return;
         }
 
-        int percent = static_cast<int>(
-            (static_cast<double>(processed_frames) / expected_frames) * 100.0);
+        int percent = static_cast<int>((static_cast<double>(processed_frames) / expected_frames) * 100.0);
         if (!complete) {
             percent = std::min(percent, 99);
         }
@@ -12143,14 +11114,9 @@ class ACView : public gl::GLObject {
         const int64_t frames_written = writer.is_open() ? writer.get_frame_count() : 0;
 
         std::cout << "acmx2: [" << std::setw(3) << percent << "%] "
-                  << "Frame " << processed_frames << "/" << expected_frames
-                  << " | Written: " << frames_written
-                  << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":"
-                  << std::setw(2) << minutes << ":" << std::setw(2) << seconds
-                  << std::setfill(' ');
+                  << "Frame " << processed_frames << "/" << expected_frames << " | Written: " << frames_written << " | Time: " << std::setfill('0') << std::setw(2) << hours << ":" << std::setw(2) << minutes << ":" << std::setw(2) << seconds << std::setfill(' ');
         appendSilentProgressFileSize(std::cout);
-        std::cout << "\n"
-                  << std::flush;
+        std::cout << "\n" << std::flush;
 
         last_graphics_progress_frame = processed_frames;
         last_graphics_progress_emit = now;
@@ -12188,9 +11154,7 @@ class ACView : public gl::GLObject {
             timerStr << std::fixed << std::setprecision(1) << percentage << "% - ";
         }
 
-        timerStr << std::setfill('0') << std::setw(2) << hours << ":"
-                 << std::setfill('0') << std::setw(2) << minutes << ":"
-                 << std::setfill('0') << std::setw(2) << seconds;
+        timerStr << std::setfill('0') << std::setw(2) << hours << ":" << std::setfill('0') << std::setw(2) << minutes << ":" << std::setfill('0') << std::setw(2) << seconds;
         return timerStr.str();
     }
 
@@ -12203,8 +11167,7 @@ class ACView : public gl::GLObject {
         if (const auto file_size_bytes = getOutputFileSizeBytes(); file_size_bytes.has_value()) {
             constexpr double kBytesPerMB = 1024.0 * 1024.0;
             const double file_size_mb = static_cast<double>(*file_size_bytes) / kBytesPerMB;
-            stream << " [File: " << std::fixed << std::setprecision(2)
-                   << file_size_mb << " MB]";
+            stream << " [File: " << std::fixed << std::setprecision(2) << file_size_mb << " MB]";
         }
     }
 
@@ -12214,12 +11177,10 @@ class ACView : public gl::GLObject {
         }
 
         std::error_code file_error;
-        if (!std::filesystem::is_regular_file(ofilename, file_error) ||
-            file_error) {
+        if (!std::filesystem::is_regular_file(ofilename, file_error) || file_error) {
             return std::nullopt;
         }
-        const std::uintmax_t file_size =
-            std::filesystem::file_size(ofilename, file_error);
+        const std::uintmax_t file_size = std::filesystem::file_size(ofilename, file_error);
         if (file_error) {
             return std::nullopt;
         }
@@ -12296,8 +11257,7 @@ class ACView : public gl::GLObject {
             case SDLK_UP:
                 if (shaderLocked)
                     break;
-                if ((e.key.keysym.mod & KMOD_SHIFT) &&
-                    (playlist_enabled || autopilot_frames > 0)) {
+                if ((e.key.keysym.mod & KMOD_SHIFT) && (playlist_enabled || autopilot_frames > 0)) {
                     beginCrossfade(win);
                     library.dec();
                     mx::system_out << "acmx2: Post-shader (Shift+Up): " << library.getFullShaderName() << "\n";
@@ -12320,9 +11280,7 @@ class ACView : public gl::GLObject {
                         const auto &node = playlist_tree[playlist_index];
                         shader_pass_list = node.shader_indices;
                         shader_pass_enabled = !shader_pass_list.empty();
-                        mx::system_out << "acmx2: Playlist Node: " << node.name
-                                       << " [" << node.shader_indices.size() << " shaders] ("
-                                       << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
+                        mx::system_out << "acmx2: Playlist Node: " << node.name << " [" << node.shader_indices.size() << " shaders] (" << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
                         fflush(stdout);
                     }
                 } else if (playlist_enabled && !playlist_indices.empty()) {
@@ -12347,8 +11305,7 @@ class ACView : public gl::GLObject {
             case SDLK_DOWN:
                 if (shaderLocked)
                     break;
-                if ((e.key.keysym.mod & KMOD_SHIFT) &&
-                    (playlist_enabled || autopilot_frames > 0)) {
+                if ((e.key.keysym.mod & KMOD_SHIFT) && (playlist_enabled || autopilot_frames > 0)) {
                     beginCrossfade(win);
                     library.inc();
                     mx::system_out << "acmx2: Post-shader (Shift+Down): " << library.getFullShaderName() << "\n";
@@ -12371,9 +11328,7 @@ class ACView : public gl::GLObject {
                         const auto &node = playlist_tree[playlist_index];
                         shader_pass_list = node.shader_indices;
                         shader_pass_enabled = !shader_pass_list.empty();
-                        mx::system_out << "acmx2: Playlist Node: " << node.name
-                                       << " [" << node.shader_indices.size() << " shaders] ("
-                                       << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
+                        mx::system_out << "acmx2: Playlist Node: " << node.name << " [" << node.shader_indices.size() << " shaders] (" << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
                         fflush(stdout);
                     }
                 } else if (playlist_enabled && !playlist_indices.empty()) {
@@ -12439,9 +11394,7 @@ class ACView : public gl::GLObject {
                             cube.setShaderProgram(library.shader());
                         sprite.setShader(library.shader());
                         updateShaderNameCache();
-                        mx::system_out << "acmx2: Playlist mode enabled - Node: " << node.name
-                                       << " [" << node.shader_indices.size() << " shaders] ("
-                                       << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
+                        mx::system_out << "acmx2: Playlist mode enabled - Node: " << node.name << " [" << node.shader_indices.size() << " shaders] (" << (playlist_index + 1) << "/" << playlist_tree.size() << ")\n";
                     } else {
                         beginCrossfade(win);
                         shader_pass_list = saved_pass_list;
@@ -12450,8 +11403,7 @@ class ACView : public gl::GLObject {
                             cube.setShaderProgram(library.shader());
                         sprite.setShader(library.shader());
                         updateShaderNameCache();
-                        mx::system_out << "acmx2: Playlist mode disabled - restored original"
-                                       << (shader_pass_enabled ? " multi-pass" : " single shader") << "\n";
+                        mx::system_out << "acmx2: Playlist mode disabled - restored original" << (shader_pass_enabled ? " multi-pass" : " single shader") << "\n";
                     }
                     fflush(stdout);
                 } else if (!playlist_indices.empty()) {
@@ -12513,12 +11465,9 @@ class ACView : public gl::GLObject {
                 }
                 if (autopilot_enabled) {
                     if (autopilot_random_interval) {
-                        mx::system_out << "acmx2: Autopilot enabled (random) (interval 4-"
-                                       << std::max(4, autopilot_random_timeout)
-                                       << " frames, current " << autopilot_interval_frames << ")\n";
+                        mx::system_out << "acmx2: Autopilot enabled (random) (interval 4-" << std::max(4, autopilot_random_timeout) << " frames, current " << autopilot_interval_frames << ")\n";
                     } else {
-                        mx::system_out << "acmx2: Autopilot enabled (random) (every "
-                                       << autopilot_frames << " frames)\n";
+                        mx::system_out << "acmx2: Autopilot enabled (random) (every " << autopilot_frames << " frames)\n";
                     }
                 } else {
                     mx::system_out << "acmx2: Autopilot disabled\n";
@@ -12549,20 +11498,16 @@ class ACView : public gl::GLObject {
                     }
                     resetAutopilotInterval();
                     if (autopilot_random_interval) {
-                        mx::system_out << "acmx2: Autopilot enabled (sequential timing + random index) (interval 4-"
-                                       << std::max(4, autopilot_random_timeout)
-                                       << " frames, current " << autopilot_interval_frames << ")\n";
+                        mx::system_out << "acmx2: Autopilot enabled (sequential timing + random index) (interval 4-" << std::max(4, autopilot_random_timeout) << " frames, current " << autopilot_interval_frames << ")\n";
                     } else {
-                        mx::system_out << "acmx2: Autopilot enabled (sequential) (every "
-                                       << autopilot_frames << " frames)\n";
+                        mx::system_out << "acmx2: Autopilot enabled (sequential) (every " << autopilot_frames << " frames)\n";
                     }
                 }
                 fflush(stdout);
                 break;
             case SDLK_n:
                 autopilot_random_crossfade = !autopilot_random_crossfade;
-                mx::system_out << "acmx2: Random autopilot crossfade "
-                               << (autopilot_random_crossfade ? "enabled" : "disabled") << "\n";
+                mx::system_out << "acmx2: Random autopilot crossfade " << (autopilot_random_crossfade ? "enabled" : "disabled") << "\n";
                 fflush(stdout);
                 break;
             case SDLK_z:
@@ -12617,28 +11562,24 @@ class ACView : public gl::GLObject {
                 break;
             case SDLK_o:
                 oscillateScale = !oscillateScale;
-                mx::system_out << "acmx2: Scale oscillation "
-                               << (oscillateScale ? "enabled" : "disabled") << "\n";
+                mx::system_out << "acmx2: Scale oscillation " << (oscillateScale ? "enabled" : "disabled") << "\n";
                 fflush(stdout);
                 break;
             case SDLK_c:
                 waveActive = !waveActive;
-                mx::system_out << "acmx2: Wave effect "
-                               << (waveActive ? "enabled" : "disabled") << "\n";
+                mx::system_out << "acmx2: Wave effect " << (waveActive ? "enabled" : "disabled") << "\n";
                 fflush(stdout);
                 break;
             case SDLK_e:
                 enableWatermark = !enableWatermark;
-                mx::system_out << "acmx2: Watermark "
-                               << (enableWatermark ? "enabled" : "disabled") << "\n";
+                mx::system_out << "acmx2: Watermark " << (enableWatermark ? "enabled" : "disabled") << "\n";
                 fflush(stdout);
                 break;
             case SDLK_m:
                 if (!shader_pass_list.empty()) {
                     shader_pass_enabled = !shader_pass_enabled;
                     updateShaderNameCache();
-                    mx::system_out << "acmx2: Multi-shader pass "
-                                   << (shader_pass_enabled ? "enabled" : "disabled") << "\n";
+                    mx::system_out << "acmx2: Multi-shader pass " << (shader_pass_enabled ? "enabled" : "disabled") << "\n";
                     fflush(stdout);
                 } else {
                     mx::system_out << "acmx2: No shader pass list defined (use --shader-pass)\n";
@@ -12656,8 +11597,7 @@ class ACView : public gl::GLObject {
                     is3d_enabled = !is3d_enabled;
                     library.is3D(is3d_enabled);
                     updateShaderNameCache();
-                    mx::system_out << "acmx2: " << (is3d_enabled ? "3D" : "2D") << " mode "
-                                   << (is3d_enabled ? "enabled" : "disabled") << "\n";
+                    mx::system_out << "acmx2: " << (is3d_enabled ? "3D" : "2D") << " mode " << (is3d_enabled ? "enabled" : "disabled") << "\n";
                     fflush(stdout);
                 }
                 break;
@@ -12742,8 +11682,7 @@ class ACView : public gl::GLObject {
             }
             case SDLK_END:
                 spectrum_scale_by_sense = !spectrum_scale_by_sense;
-                mx::system_out << "acmx2: Spectrum sensitivity scaling "
-                               << (spectrum_scale_by_sense ? "enabled" : "disabled") << "\n";
+                mx::system_out << "acmx2: Spectrum sensitivity scaling " << (spectrum_scale_by_sense ? "enabled" : "disabled") << "\n";
                 fflush(stdout);
                 break;
 #endif
@@ -12756,8 +11695,7 @@ class ACView : public gl::GLObject {
                 if (!crossfadeShaders.empty()) {
                     int n = static_cast<int>(crossfadeShaders.size());
                     crossfadeShaderIndex = (crossfadeShaderIndex - 1 + n) % n;
-                    mx::system_out << "acmx2: Crossfade shader: " << crossfadeShaderNames[crossfadeShaderIndex]
-                                   << " (" << (crossfadeShaderIndex + 1) << "/" << n << ")\n";
+                    mx::system_out << "acmx2: Crossfade shader: " << crossfadeShaderNames[crossfadeShaderIndex] << " (" << (crossfadeShaderIndex + 1) << "/" << n << ")\n";
                     fflush(stdout);
                 }
                 break;
@@ -12765,8 +11703,7 @@ class ACView : public gl::GLObject {
                 if (!crossfadeShaders.empty()) {
                     int n = static_cast<int>(crossfadeShaders.size());
                     crossfadeShaderIndex = (crossfadeShaderIndex + 1) % n;
-                    mx::system_out << "acmx2: Crossfade shader: " << crossfadeShaderNames[crossfadeShaderIndex]
-                                   << " (" << (crossfadeShaderIndex + 1) << "/" << n << ")\n";
+                    mx::system_out << "acmx2: Crossfade shader: " << crossfadeShaderNames[crossfadeShaderIndex] << " (" << (crossfadeShaderIndex + 1) << "/" << n << ")\n";
                     fflush(stdout);
                 }
                 break;
@@ -12948,9 +11885,7 @@ class ACView : public gl::GLObject {
                 for (int y = 0; y < win->h; ++y) {
                     int src_row_start = y * win->w * 4;
                     int dest_row_start = (win->h - 1 - y) * win->w * 4;
-                    std::copy(pixels.begin() + src_row_start,
-                              pixels.begin() + src_row_start + (win->w * 4),
-                              flipped_pixels.begin() + dest_row_start);
+                    std::copy(pixels.begin() + src_row_start, pixels.begin() + src_row_start + (win->w * 4), flipped_pixels.begin() + dest_row_start);
                 }
 
                 FrameData fd;
@@ -12990,24 +11925,12 @@ class ACView : public gl::GLObject {
 
         glGenTextures(1, &fboTexture);
         glBindTexture(GL_TEXTURE_2D, fboTexture);
-        glTexImage2D(GL_TEXTURE_2D,
-                     0,
-                     GL_RGBA,
-                     width,
-                     height,
-                     0,
-                     GL_RGBA,
-                     GL_UNSIGNED_BYTE,
-                     nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        glFramebufferTexture2D(GL_FRAMEBUFFER,
-                               GL_COLOR_ATTACHMENT0,
-                               GL_TEXTURE_2D,
-                               fboTexture,
-                               0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fboTexture, 0);
 
         glGenRenderbuffers(1, &depthBuffer);
         glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
@@ -13067,8 +11990,7 @@ class ACView : public gl::GLObject {
 
         cv::Mat temp;
         cv::cvtColor(frame, temp, cv::COLOR_BGR2RGBA);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, temp.cols, temp.rows,
-                     0, GL_RGBA, GL_UNSIGNED_BYTE, temp.ptr());
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, temp.cols, temp.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, temp.ptr());
 
         error = glGetError();
         if (error != GL_NO_ERROR) {
@@ -13096,15 +12018,9 @@ class ACView : public gl::GLObject {
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
         if (texWidth != temp.cols || texHeight != temp.rows) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, temp.cols, temp.rows,
-                         0, GL_RGBA, GL_UNSIGNED_BYTE, temp.ptr());
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, temp.cols, temp.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, temp.ptr());
         } else {
-            glTexSubImage2D(GL_TEXTURE_2D,
-                            0, 0, 0,
-                            temp.cols, temp.rows,
-                            GL_RGBA,
-                            GL_UNSIGNED_BYTE,
-                            temp.ptr());
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, temp.cols, temp.rows, GL_RGBA, GL_UNSIGNED_BYTE, temp.ptr());
         }
         glBindTexture(GL_TEXTURE_2D, 0);
     }
@@ -13120,12 +12036,7 @@ class ACView : public gl::GLObject {
      */
     void updateTextureRGBA(GLuint texture, cv::Mat &frame) {
         glBindTexture(GL_TEXTURE_2D, texture);
-        glTexSubImage2D(GL_TEXTURE_2D,
-                        0, 0, 0,
-                        frame.cols, frame.rows,
-                        GL_RGBA,
-                        GL_UNSIGNED_BYTE,
-                        frame.ptr());
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frame.cols, frame.rows, GL_RGBA, GL_UNSIGNED_BYTE, frame.ptr());
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
@@ -13230,73 +12141,45 @@ class ACView : public gl::GLObject {
                 auto write_video_frame = [this](const FrameData &fd) {
                     if (writer.is_open() || png_video_mode) {
                         if (png_video_mode) {
-                            uint64_t frame_index =
-                                png_video_frame_counter.fetch_add(1);
+                            uint64_t frame_index = png_video_frame_counter.fetch_add(1);
                             std::ostringstream frame_name;
-                            frame_name << png_video_dir << "/frame-"
-                                       << std::setfill('0') << std::setw(8)
-                                       << frame_index << ".png";
+                            frame_name << png_video_dir << "/frame-" << std::setfill('0') << std::setw(8) << frame_index << ".png";
                             std::string frame_path = frame_name.str();
                             if (fd.isHdr) {
-                                png::SavePNG_RGBA16(frame_path.c_str(),
-                                                    fd.pixels.data(), fd.width,
-                                                    fd.height);
+                                png::SavePNG_RGBA16(frame_path.c_str(), fd.pixels.data(), fd.width, fd.height);
                             } else {
-                                png::SavePNG_RGBA(
-                                    frame_path.c_str(),
-                                    const_cast<unsigned char *>(fd.pixels.data()),
-                                    fd.width, fd.height);
+                                png::SavePNG_RGBA(frame_path.c_str(), const_cast<unsigned char *>(fd.pixels.data()), fd.width, fd.height);
                             }
                         } else if (fd.isHdr) {
                             if (fd.usesTimelineClock) {
-                                writer.write_hdr_rgba16_at_pts(
-                                    const_cast<unsigned char *>(fd.pixels.data()),
-                                    static_cast<int64_t>(fd.timelineFrame));
+                                writer.write_hdr_rgba16_at_pts(const_cast<unsigned char *>(fd.pixels.data()), static_cast<int64_t>(fd.timelineFrame));
                             } else {
-                                writer.write_hdr_rgba16(
-                                    const_cast<unsigned char *>(fd.pixels.data()));
+                                writer.write_hdr_rgba16(const_cast<unsigned char *>(fd.pixels.data()));
                             }
                         } else if (!filename.empty() || !graphic.empty()) {
                             if (fd.usesTimelineClock) {
-                                writer.write_at_pts(
-                                    const_cast<unsigned char *>(fd.pixels.data()),
-                                    static_cast<int64_t>(fd.timelineFrame));
+                                writer.write_at_pts(const_cast<unsigned char *>(fd.pixels.data()), static_cast<int64_t>(fd.timelineFrame));
                             } else {
-                                writer.write(
-                                    const_cast<unsigned char *>(fd.pixels.data()));
+                                writer.write(const_cast<unsigned char *>(fd.pixels.data()));
                             }
                         } else if (fd.usesTimelineClock) {
-                            writer.write_at_pts(
-                                const_cast<unsigned char *>(fd.pixels.data()),
-                                static_cast<int64_t>(fd.timelineFrame));
+                            writer.write_at_pts(const_cast<unsigned char *>(fd.pixels.data()), static_cast<int64_t>(fd.timelineFrame));
                         } else {
-                            writer.write(
-                                const_cast<unsigned char *>(fd.pixels.data()));
+                            writer.write(const_cast<unsigned char *>(fd.pixels.data()));
                         }
                     }
 
                     if (generate_mode) {
                         uint64_t all_idx = generate_all_frames.fetch_add(1);
-                        if (generate_interval > 0 &&
-                            all_idx %
-                                    static_cast<uint64_t>(generate_interval) ==
-                                0) {
-                            uint64_t saved_idx =
-                                generate_saved_counter.fetch_add(1);
+                        if (generate_interval > 0 && all_idx % static_cast<uint64_t>(generate_interval) == 0) {
+                            uint64_t saved_idx = generate_saved_counter.fetch_add(1);
                             std::ostringstream frame_name;
-                            frame_name << generate_dir << "/frame-"
-                                       << std::setfill('0') << std::setw(8)
-                                       << saved_idx << ".png";
+                            frame_name << generate_dir << "/frame-" << std::setfill('0') << std::setw(8) << saved_idx << ".png";
                             std::string frame_path = frame_name.str();
                             if (fd.isHdr) {
-                                png::SavePNG_RGBA16(frame_path.c_str(),
-                                                    fd.pixels.data(), fd.width,
-                                                    fd.height);
+                                png::SavePNG_RGBA16(frame_path.c_str(), fd.pixels.data(), fd.width, fd.height);
                             } else {
-                                png::SavePNG_RGBA(
-                                    frame_path.c_str(),
-                                    const_cast<unsigned char *>(fd.pixels.data()),
-                                    fd.width, fd.height);
+                                png::SavePNG_RGBA(frame_path.c_str(), const_cast<unsigned char *>(fd.pixels.data()), fd.width, fd.height);
                             }
                         }
                     }
@@ -13309,9 +12192,7 @@ class ACView : public gl::GLObject {
                     FrameData fd;
                     {
                         std::unique_lock<std::mutex> lock(queueMutex);
-                        queueCondVar.wait(lock, [this]() {
-                            return !frameQueue.empty() || !writerRunning;
-                        });
+                        queueCondVar.wait(lock, [this]() { return !frameQueue.empty() || !writerRunning; });
 
                         if (!writerRunning && frameQueue.empty()) {
                             break;
@@ -13362,14 +12243,10 @@ class ACView : public gl::GLObject {
                                         mx::system_err << "acmx2: ERROR: failed to write SDR WebP snapshot: " << name << "\n";
                                     }
 #else
-                                    png::SavePNG_RGBA(name.c_str(),
-                                                      const_cast<unsigned char *>(fd.pixels.data()),
-                                                      fd.width, fd.height);
+                                    png::SavePNG_RGBA(name.c_str(), const_cast<unsigned char *>(fd.pixels.data()), fd.width, fd.height);
 #endif
                                 } else {
-                                    png::SavePNG_RGBA(name.c_str(),
-                                                      const_cast<unsigned char *>(fd.pixels.data()),
-                                                      fd.width, fd.height);
+                                    png::SavePNG_RGBA(name.c_str(), const_cast<unsigned char *>(fd.pixels.data()), fd.width, fd.height);
                                 }
                             }
 
@@ -13395,9 +12272,7 @@ class ACView : public gl::GLObject {
                             std::string name = snap_prefix + "/" + snapshot_type + "-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".raw";
 
                             size_t bpp = fd.isHdr ? 8 : 4;
-                            png::SaveRawBytes(name.c_str(), fd.pixels.data(),
-                                              static_cast<size_t>(fd.width),
-                                              static_cast<size_t>(fd.height), bpp);
+                            png::SaveRawBytes(name.c_str(), fd.pixels.data(), static_cast<size_t>(fd.width), static_cast<size_t>(fd.height), bpp);
 
                             mx::system_out << "acmx2: Saved raw frame: " << name << "\n";
                             fflush(stdout);
@@ -13419,9 +12294,7 @@ class ACView : public gl::GLObject {
                             std::ostringstream oss;
                             oss << std::put_time(&localTime, "%Y.%m.%d-%H.%M.%S");
                             std::string snapshot_type = fd.isHdr ? "ACMX2.HDR.Snapshot" : "ACMX2.Snapshot";
-                            std::string name = snap_prefix + "/" + snapshot_type + "-" + oss.str() + "-" +
-                                               std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" +
-                                               std::to_string(current_offset) + ".tiff";
+                            std::string name = snap_prefix + "/" + snapshot_type + "-" + oss.str() + "-" + std::to_string(fd.width) + "x" + std::to_string(fd.height) + "-" + std::to_string(current_offset) + ".tiff";
                             bool ok = false;
                             if (fd.isHdr) {
                                 ok = saveHdrTiffFromRgba16(name.c_str(), fd.pixels.data(), fd.width, fd.height, fd.hdrTrc);
@@ -13437,9 +12310,7 @@ class ACView : public gl::GLObject {
                         });
                     }
 #endif
-                    const bool is_snapshot_task =
-                        fd.isSnapshot || fd.isRawSnapshot ||
-                        fd.isTiffSnapshot;
+                    const bool is_snapshot_task = fd.isSnapshot || fd.isRawSnapshot || fd.isTiffSnapshot;
                     if (is_snapshot_task) {
                         continue;
                     }
@@ -13462,11 +12333,8 @@ class ACView : public gl::GLObject {
     void startAudioRecordingIfNeeded() {
 #ifdef AUDIO_ENABLED
         auto &recorder = audio_engine.recorder();
-        if (audio_is_enabled && !file_audio_mode && !audio_record_file.empty() &&
-            !recorder.is_recording()) {
-            if (!recorder.start(audio_record_file,
-                                audio_engine.analyzer().sample_rate(),
-                                audio_engine.input_channels())) {
+        if (audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !recorder.is_recording()) {
+            if (!recorder.start(audio_record_file, audio_engine.analyzer().sample_rate(), audio_engine.input_channels())) {
                 mx::system_err << "acmx2: Error could not start audio recording to: " << audio_record_file << "\n";
             }
         }
@@ -13505,8 +12373,7 @@ class ACView : public gl::GLObject {
      */
     bool needsMux() {
 #ifdef AUDIO_ENABLED
-        return audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !ofilename.empty() &&
-               (audio_engine.recorder().is_recording() || std::filesystem::exists(audio_record_file));
+        return audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && !ofilename.empty() && (audio_engine.recorder().is_recording() || std::filesystem::exists(audio_record_file));
 #else
         return false;
 #endif
@@ -13517,9 +12384,7 @@ class ACView : public gl::GLObject {
      *
      * This applies to non-repeating video-file input with `--copy-audio`.
      */
-    bool needsTransferAudio() {
-        return !filename.empty() && !repeat && copy_audio && writer.is_open();
-    }
+    bool needsTransferAudio() { return !filename.empty() && !repeat && copy_audio && writer.is_open(); }
 
     bool needsFileAudioMux() {
 #ifdef AUDIO_ENABLED
@@ -13574,10 +12439,8 @@ class ACView : public gl::GLObject {
         // to the timestamped video duration.
         const double audio_duration = recorder.duration_seconds();
         double itsscale = 1.0;
-        const bool timestamped_webcam =
-            filename.empty() && graphic.empty() && !no_drop_mode && fps > 0.0;
-        if (!timestamped_webcam && video_duration > 0.0 &&
-            audio_duration > 0.0) {
+        const bool timestamped_webcam = filename.empty() && graphic.empty() && !no_drop_mode && fps > 0.0;
+        if (!timestamped_webcam && video_duration > 0.0 && audio_duration > 0.0) {
             const double s = audio_duration / video_duration;
             if (s >= 0.5 && s <= 2.0) {
                 itsscale = s;
@@ -13589,8 +12452,7 @@ class ACView : public gl::GLObject {
         if (apply_itsscale) {
             cmd << " -itsscale " << std::fixed << std::setprecision(6) << itsscale;
         }
-        cmd << " -i \"" << ofilename << "\" -i \"" << audio_record_file
-            << "\" -map 0:v:0? -map 1:a:0?"
+        cmd << " -i \"" << ofilename << "\" -i \"" << audio_record_file << "\" -map 0:v:0? -map 1:a:0?"
             << " -c:v copy -c:a aac -b:a 192k";
         if (!apply_itsscale && video_duration > 0.0) {
             // Without itsscale the original video duration is correct,
@@ -13603,9 +12465,7 @@ class ACView : public gl::GLObject {
         cmd << " \"" << tmp_out << "\" 2>&1";
         mx::system_out << "acmx2: muxing recorded audio into video";
         if (apply_itsscale) {
-            mx::system_out << " (A/V resync itsscale=" << std::fixed << std::setprecision(4)
-                           << itsscale << ", video=" << std::setprecision(3) << video_duration
-                           << "s, audio=" << audio_duration << "s)";
+            mx::system_out << " (A/V resync itsscale=" << std::fixed << std::setprecision(4) << itsscale << ", video=" << std::setprecision(3) << video_duration << "s, audio=" << audio_duration << "s)";
         }
         mx::system_out << "...\n";
         fflush(stdout);
@@ -13654,32 +12514,21 @@ class ACView : public gl::GLObject {
             fflush(stderr);
             return;
         }
-        double video_duration =
-            (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps
-                                  : 0.0;
+        double video_duration = (fps > 0.0 && fc > 0) ? static_cast<double>(fc) / fps : 0.0;
         double mux_duration = video_duration;
         if (!filename.empty() && fps > 0.0 && totalFrames > 0.0) {
             const double source_video_duration = totalFrames / fps;
-            mux_duration =
-                mux_duration > 0.0
-                    ? std::min(mux_duration, source_video_duration)
-                    : source_video_duration;
+            mux_duration = mux_duration > 0.0 ? std::min(mux_duration, source_video_duration) : source_video_duration;
         }
         std::ostringstream cmd;
         cmd << "ffmpeg -y -i \"" << ofilename << "\"";
         if (audio_repeat_mode) {
             cmd << " -stream_loop -1";
         }
-        const std::vector<std::string> audioSources =
-            file_audio_source_paths();
+        const std::vector<std::string> audioSources = file_audio_source_paths();
         std::filesystem::path concatPath;
         if (audioSources.size() > 1) {
-            concatPath = std::filesystem::temp_directory_path() /
-                         ("acmx2-audio-" +
-                          std::to_string(std::chrono::steady_clock::now()
-                                             .time_since_epoch()
-                                             .count()) +
-                          ".ffconcat");
+            concatPath = std::filesystem::temp_directory_path() / ("acmx2-audio-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".ffconcat");
             std::ofstream concatFile(concatPath);
             concatFile << "ffconcat version 1.0\n";
             for (const std::string &source : audioSources) {
@@ -13693,31 +12542,22 @@ class ACView : public gl::GLObject {
                 concatFile << "file '" << escapedSource << "'\n";
             }
             concatFile.close();
-            cmd << " -f concat -safe 0 -i \"" << concatPath.string()
-                << "\"";
+            cmd << " -f concat -safe 0 -i \"" << concatPath.string() << "\"";
         } else {
-            const std::string audioSource =
-                audioSources.empty() ? audio_file_path : audioSources.front();
+            const std::string audioSource = audioSources.empty() ? audio_file_path : audioSources.front();
             cmd << " -i \"" << audioSource << "\"";
         }
         cmd << " -map 0:v:0? -map 1:a:0?"
             << " -c:v copy -c:a aac -b:a 192k";
         if (mux_duration > 0.0) {
-            cmd << " -t " << std::fixed << std::setprecision(6)
-                << mux_duration;
+            cmd << " -t " << std::fixed << std::setprecision(6) << mux_duration;
         }
         cmd << " -shortest";
         if (is_mp4_like) {
             cmd << " -movflags +faststart";
         }
         cmd << " \"" << tmp_out << "\" 2>&1";
-        mx::system_out << "acmx2: muxing audio file into video"
-                       << (audio_repeat_mode ? " (repeating)" : "")
-                       << " (shortest stream"
-                       << (mux_duration > 0.0
-                               ? ", max " + std::to_string(mux_duration) + "s"
-                               : std::string())
-                       << ")...\n";
+        mx::system_out << "acmx2: muxing audio file into video" << (audio_repeat_mode ? " (repeating)" : "") << " (shortest stream" << (mux_duration > 0.0 ? ", max " + std::to_string(mux_duration) + "s" : std::string()) << ")...\n";
         fflush(stdout);
         int ret = std::system(cmd.str().c_str());
         if (!concatPath.empty()) {
@@ -13770,8 +12610,7 @@ class ACView : public gl::GLObject {
         muxThread = std::thread([this]() {
             const bool shouldTransferAudio = !png_video_mode && !filename.empty() && !repeat && copy_audio;
 #ifdef AUDIO_ENABLED
-            const bool shouldRecordedMux = !png_video_mode && audio_is_enabled && !file_audio_mode && !audio_record_file.empty() &&
-                                           (audio_engine.recorder().is_recording() || std::filesystem::exists(audio_record_file));
+            const bool shouldRecordedMux = !png_video_mode && audio_is_enabled && !file_audio_mode && !audio_record_file.empty() && (audio_engine.recorder().is_recording() || std::filesystem::exists(audio_record_file));
             const bool shouldFileAudioMux = !png_video_mode && file_audio_mode && !audio_file_path.empty() && !audio_record_file.empty() && !ofilename.empty();
 #else
             const bool shouldRecordedMux = false;
@@ -13786,14 +12625,10 @@ class ACView : public gl::GLObject {
                 writer.close();
                 int64_t fc = writer.get_frame_count();
                 double ts = (fps > 0.0) ? static_cast<double>(fc) / fps : 0.0;
-                mx::system_out << "acmx2: wrote " << fc << " frames ("
-                               << static_cast<int>(ts / 3600) << ":"
-                               << static_cast<int>(ts / 60) % 60 << ":"
-                               << static_cast<int>(ts) % 60 << ") to file: " << ofilename << "\n";
+                mx::system_out << "acmx2: wrote " << fc << " frames (" << static_cast<int>(ts / 3600) << ":" << static_cast<int>(ts / 60) % 60 << ":" << static_cast<int>(ts) % 60 << ") to file: " << ofilename << "\n";
                 fflush(stdout);
             } else if (png_video_mode) {
-                mx::system_out << "acmx2: wrote " << png_video_frame_counter.load()
-                               << " PNG frames to directory: " << png_video_dir << "\n";
+                mx::system_out << "acmx2: wrote " << png_video_frame_counter.load() << " PNG frames to directory: " << png_video_dir << "\n";
                 fflush(stdout);
             }
             if (shouldTransferAudio) {
@@ -13839,9 +12674,7 @@ class ACView : public gl::GLObject {
             minutes = static_cast<uint64_t>(total_secs / 60) % 60;
             seconds = static_cast<uint64_t>(total_secs) % 60;
             std::ostringstream timerStr;
-            timerStr << std::setfill('0') << std::setw(2) << hours << ":"
-                     << std::setfill('0') << std::setw(2) << minutes << ":"
-                     << std::setfill('0') << std::setw(2) << seconds;
+            timerStr << std::setfill('0') << std::setw(2) << hours << ":" << std::setfill('0') << std::setw(2) << minutes << ":" << std::setfill('0') << std::setw(2) << seconds;
 
             mx::system_out << "acmx2: " << " wrote " << timerStr.str() << " (" << final_frame_count << " frames) to file: " << ofilename << "\n";
             if (!skip_audio_mux_on_exit.load() && !filename.empty() && repeat == false && copy_audio) {
@@ -13851,13 +12684,11 @@ class ACView : public gl::GLObject {
             fflush(stdout);
             fflush(stderr);
         } else if (png_video_mode) {
-            mx::system_out << "acmx2: wrote " << png_video_frame_counter.load()
-                           << " PNG frames to directory: " << png_video_dir << "\n";
+            mx::system_out << "acmx2: wrote " << png_video_frame_counter.load() << " PNG frames to directory: " << png_video_dir << "\n";
             fflush(stdout);
         }
         if (generate_mode) {
-            mx::system_out << "acmx2: --generate: saved " << generate_saved_counter.load()
-                           << " PNG frames to directory: " << generate_dir << "\n";
+            mx::system_out << "acmx2: --generate: saved " << generate_saved_counter.load() << " PNG frames to directory: " << generate_dir << "\n";
             fflush(stdout);
         }
     }
@@ -13874,8 +12705,7 @@ class MainWindow : public gl::GLWindow {
     bool silent_mode = false;
 
     static int eventFilter(void *userdata, SDL_Event *event) {
-        if (event->type == SDL_QUIT ||
-            (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE)) {
+        if (event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE)) {
             auto *win = static_cast<MainWindow *>(userdata);
             auto *view = static_cast<ACView *>(win->object.get());
             if (view && view->needsAsyncShutdown()) {
@@ -13916,13 +12746,7 @@ class MainWindow : public gl::GLWindow {
      * @param args Parsed CLI arguments (resolution, asset path, etc.).
      * @param context_config Requested OpenGL context version.
      */
-    MainWindow(const MXArguments &args, const OpenGLContextConfig &context_config)
-        : gl::GLWindow("ACMX2", args.tw, args.th, false, gl::GLMode::DESKTOP,
-                       context_config.major, context_config.minor,
-                       args.fps_value <= 60.0),
-          silent_mode(args.silent) {
-        initCommon(args);
-    }
+    MainWindow(const MXArguments &args, const OpenGLContextConfig &context_config) : gl::GLWindow("ACMX2", args.tw, args.th, false, gl::GLMode::DESKTOP, context_config.major, context_config.minor, args.fps_value <= 60.0), silent_mode(args.silent) { initCommon(args); }
 
     /**
      * @brief Construct a headless (off-screen) MainWindow for silent batch processing.
@@ -13935,19 +12759,13 @@ class MainWindow : public gl::GLWindow {
      * @param context_config Requested OpenGL context version.
      * @param headless       Unused disambiguator parameter.
      */
-    MainWindow(const MXArguments &args, const OpenGLContextConfig &context_config,
-               bool headless)
-        : gl::GLWindow("ACMX2", args.tw, args.th, false, gl::GLMode::DESKTOP,
-                       context_config.major, context_config.minor, false),
-          silent_mode(true) {
+    MainWindow(const MXArguments &args, const OpenGLContextConfig &context_config, bool headless) : gl::GLWindow("ACMX2", args.tw, args.th, false, gl::GLMode::DESKTOP, context_config.major, context_config.minor, false), silent_mode(true) {
         static_cast<void>(headless);
         SDL_HideWindow(getWindow());
         initCommon(args);
     }
 
-    ~MainWindow() override {
-        SDL_SetEventFilter(nullptr, nullptr);
-    }
+    ~MainWindow() override { SDL_SetEventFilter(nullptr, nullptr); }
 
     /**
      * @brief Per-frame callback: clear, draw ACView, swap buffers.
@@ -13986,8 +12804,7 @@ class MainWindow : public gl::GLWindow {
     }
 
     /// @brief Placeholder—SDL events are forwarded to ACView::event() by libmx2.
-    void event(SDL_Event &e) override {
-    }
+    void event(SDL_Event &e) override {}
 };
 
 /// @brief Verify CUDA device availability and print GPU info.
@@ -14076,10 +12893,8 @@ namespace {
         return c;
     }
 
-    template <typename Stream>
-    void printSection(Stream &out, const CliColors &c, std::string_view name, const std::vector<HelpEntry> &entries) {
-        out << c.section << "\n"
-            << name << c.reset << "\n";
+    template <typename Stream> void printSection(Stream &out, const CliColors &c, std::string_view name, const std::vector<HelpEntry> &entries) {
+        out << c.section << "\n" << name << c.reset << "\n";
         for (const auto &entry : entries) {
             out << "  " << c.flag << entry.flags << c.reset << "\n";
             out << "    " << c.desc << entry.description << c.reset << "\n";
@@ -14089,8 +12904,7 @@ namespace {
         }
     }
 
-    template <typename Stream>
-    void printDetailedArguments(Stream &out) {
+    template <typename Stream> void printDetailedArguments(Stream &out) {
         const CliColors c = makeCliColors();
         out << c.title << "\nArguments" << c.reset << "\n";
         out << c.example << "Short and long forms are equivalent; values shown in <> are required." << c.reset << "\n";
@@ -14099,20 +12913,90 @@ namespace {
 
         printSection(out, c, "Input Source", {{"-i <file>, --input <file>", "Input video file.", "acmx2 --input clip.mp4"}, {"-g <file>, --graphic <file>", "Input still image instead of camera/video.", "acmx2 --graphic frame.png"}, {"-d <idx>, --device <idx>", "Camera device index to open.", "acmx2 --device 0"}, {"-c <WxH>, --camera-res <WxH>", "Request camera capture resolution.", "acmx2 --camera-res 1280x720"}, {"--enumerate-device <idx>", "Print camera resolutions/formats supported by device and exit.", "acmx2 --enumerate-device 0"}, {"--use-yuv", "Prefer YUYV camera capture over MJPG for compatible devices.", "acmx2 --device 0 --use-yuv"}});
 
-        printSection(out, c, "Shaders And Visual Pipeline", {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"}, {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"}, {"--shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"}, {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"}, {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"}, {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"}, {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"}, {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"}, {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"}, {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"}, {"--normalized", "Advance time_f by a fixed output-frame interval instead of wall time.", "acmx2 --normalized --time-speed 0.5"}, {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"}, {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"}, {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"}, {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"}, {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"}, {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"}, {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"}, {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"}, {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"}, {"--rotate <mode>", "Rotate input frames clockwise, 180 degrees, or counterclockwise.", "acmx2 --rotate clockwise"}});
+        printSection(out,
+                     c,
+                     "Shaders And Visual Pipeline",
+                     {{"-s <library-dir>, --shaders <library-dir>", "Use a shader library directory (library.json preferred, index.txt fallback).", "acmx2 --shaders ./shaders"},
+                      {"-f <frag.glsl>, --fragment <frag.glsl>", "Use a single fragment shader file directly.", "acmx2 --fragment ./shaders/wave.glsl"},
+                      {"--shader <index>", "Select initial shader index from the active library.", "acmx2 --shaders ./shaders --shader 3"},
+                      {"--shader-pass <list>", "Run multiple shader indices per frame (comma-separated).", "acmx2 --shader-pass 0,4,7"},
+                      {"--playlist <file>", "Load shader playlist text file (one shader name per line).", "acmx2 --playlist live_set.txt"},
+                      {"--cross-fade <seconds>", "Set smooth transition time between playlist shader switches.", "acmx2 --playlist live_set.txt --cross-fade 1.25"},
+                      {"--autopilot-frames <N>", "Auto-switch to random playlist shader every N rendered frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-frames 240"},
+                      {"--autopilot-timeout <N>", "Alias for --autopilot-frames (minimum 4).", "acmx2 --shaders ./shaders --autopilot-timeout 240"},
+                      {"--autopilot-random <N>", "Use random autopilot interval 4..N frames for each J/Y autoplay switch.", "acmx2 --shaders ./shaders --autopilot-random 300"},
+                      {"--time-speed <mult>", "Scale shader time uniform speed (1.0 = normal).", "acmx2 --time-speed 0.5"},
+                      {"--normalized", "Advance time_f by a fixed output-frame interval instead of wall time.", "acmx2 --normalized --time-speed 0.5"},
+                      {"--build <library-path>", "Compile shader library into cache, then exit.", "acmx2 --build ./shaders"},
+                      {"--remove-broken <library-path>", "Compile-check each shader and remove failing manifest entries, then exit.", "acmx2 --remove-broken ./shaders"},
+                      {"--no-cache", "Disable shader binary cache and always compile at startup.", "acmx2 --no-cache"},
+                      {"--texture-cache", "Enable texture/frame cache for cache-aware shader effects.", "acmx2 --texture-cache"},
+                      {"--cache-delay <frames>", "Delay frame cache feed by N frames for temporal effects.", "acmx2 --texture-cache --cache-delay 6"},
+                      {"--texture-cache-size <N>", "Set texture cache ring buffer size (1-64, default 8).", "acmx2 --texture-cache --texture-cache-size 16"},
+                      {"--enable-3d", "Enable 3D object rendering pipeline.", "acmx2 --enable-3d"},
+                      {"--model <file>", "Load a custom 3D model file for the 3D scene.", "acmx2 --enable-3d --model scene.obj"},
+                      {"--flip", "Flip final output vertically before display/encode.", "acmx2 --flip"},
+                      {"--rotate <mode>", "Rotate input frames clockwise, 180 degrees, or counterclockwise.", "acmx2 --rotate clockwise"}});
 
         printSection(out, c, "Texture Array Cache", {{"--texture-cache-array", "Store frame history in one sampler2DArray named history.", "acmx2 --texture-cache-array"}});
 
-        printSection(out, c, "DNN And ONNX Models", {{"--human <file>", "Load ONNX human segmentation model (e.g., pphumanseg .onnx) to isolate foreground person.", "acmx2 --human human_seg.onnx -i input.mp4 -o output.mp4"}, {"--background", "When --human is used, apply shaders only to background; composite person on top.", "acmx2 --human model.onnx --background"}, {"--black <threshold>", "Set mask black point / shadow crush threshold for color/segmentation masks (default: 0.35).", "acmx2 --human seg.onnx --black 0.25"}, {"--white <threshold>", "Set mask white point / opacity saturation threshold for color/segmentation masks (default: 0.75).", "acmx2 --human seg.onnx --white 0.85"}, {"--edge <file>", "Load ONNX edge detection model (e.g., Dexined .onnx) to replace frame with edge map.", "acmx2 --edge edges.onnx -i video.mp4 -o edges.mp4"}, {"--onnx <file>", "Load generic ONNX model from YAML config file; replaces frame with model output.", "acmx2 --onnx bubble.yaml -i input.mp4 -o output.mp4"}, {"--check-dnn", "Report whether this build has OpenCV DNN support enabled.", "acmx2 --check-dnn"}});
+        printSection(out,
+                     c,
+                     "DNN And ONNX Models",
+                     {{"--human <file>", "Load ONNX human segmentation model (e.g., pphumanseg .onnx) to isolate foreground person.", "acmx2 --human human_seg.onnx -i input.mp4 -o output.mp4"},
+                      {"--background", "When --human is used, apply shaders only to background; composite person on top.", "acmx2 --human model.onnx --background"},
+                      {"--black <threshold>", "Set mask black point / shadow crush threshold for color/segmentation masks (default: 0.35).", "acmx2 --human seg.onnx --black 0.25"},
+                      {"--white <threshold>", "Set mask white point / opacity saturation threshold for color/segmentation masks (default: 0.75).", "acmx2 --human seg.onnx --white 0.85"},
+                      {"--edge <file>", "Load ONNX edge detection model (e.g., Dexined .onnx) to replace frame with edge map.", "acmx2 --edge edges.onnx -i video.mp4 -o edges.mp4"},
+                      {"--onnx <file>", "Load generic ONNX model from YAML config file; replaces frame with model output.", "acmx2 --onnx bubble.yaml -i input.mp4 -o output.mp4"},
+                      {"--check-dnn", "Report whether this build has OpenCV DNN support enabled.", "acmx2 --check-dnn"}});
 
         printSection(out, c, "GPU And CUDA", {{"--gpu-filter <list>", "Apply CUDA filter chain by index list (comma-separated).", "acmx2 --gpu-filter 1,12,18"}, {"--gpu-buffer <N>", "Set GPU temporal frame buffer size (4..32).", "acmx2 --gpu-buffer 12"}, {"--list-filters", "List all built-in GPU filters and their indices.", "acmx2 --list-filters"}, {"-m <idx>, --cuda-device <idx>", "Select CUDA device index to run processing on.", "acmx2 --cuda-device 0"}, {"--list-cuda-devices", "List CUDA devices visible to the runtime.", "acmx2 --list-cuda-devices"}, {"--check-cuda", "Report whether this build has CUDA support enabled.", "acmx2 --check-cuda"}});
 
-        printSection(out, c, "Recording And Encoding", {{"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"}, {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"}, {"--generate <N>", "Save a PNG frame every N frames in an output subdirectory (video or camera mode).", "acmx2 -i in.mp4 --generate 30"}, {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"}, {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"}, {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"}, {"--encode-preset <name>", "Encoder speed/quality preset (ultrafast .. veryslow).", "acmx2 --encode-preset fast"}, {"--encode-tune <name>", "Tune encoder for content type or low latency.", "acmx2 --encode-tune film"}, {"--encode-crf <0-51>", "Set encoder quality directly (lower = better quality/larger file).", "acmx2 --encode-crf 18"}, {"--encode-codec <name>", "Select auto/software/nvenc or an exact installed FFmpeg encoder.", "acmx2 --encode-codec libx265"}, {"--list-encoders", "List FFmpeg video encoders visible to MXWrite and exit.", "acmx2 --list-encoders"}, {"--list-encoder-options <name>", "List AVOptions accepted by one exact encoder and exit.", "acmx2 --list-encoder-options libx265"}, {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"}, {"--no-drop", "File/graphics mode: never drop frames; ignored for webcams.", "acmx2 -i in.mp4 -o out.mp4 --no-drop"}, {"--display-filter", "Show current shader/stack and GPU filter in upper-left corner.", "acmx2 --display-filter"}, {"--use-watermark <text>", "Enable watermark with given text in recorded videos (upper-left).", "acmx2 --use-watermark \"My Channel\""}, {"--use-watermark-color <r,g,b>", "Watermark text color as 0-255 components.", "acmx2 --use-watermark-color 255,255,0"}, {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"}, {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}});
+        printSection(out,
+                     c,
+                     "Recording And Encoding",
+                     {{"-o <file>, --output <file>", "Write processed video to output file.", "acmx2 -i in.mp4 -o out.mp4"},
+                      {"--png", "Video file mode: write output as PNG frame sequence in an output subdirectory.", "acmx2 -i in.mp4 -o out.mp4 --png"},
+                      {"--generate <N>", "Save a PNG frame every N frames in an output subdirectory (video or camera mode).", "acmx2 -i in.mp4 --generate 30"},
+                      {"-e <prefix>, --prefix <prefix>", "Snapshot filename prefix for captured frames.", "acmx2 --prefix snap/frame_"},
+                      {"-u <fps>, --fps <fps>", "Set output frame rate for recording.", "acmx2 --fps 60"},
+                      {"-b <crf>, --bitrate <crf>", "Legacy CRF quality option for encoder.", "acmx2 --bitrate 20"},
+                      {"--encode-preset <name>", "Encoder speed/quality preset (ultrafast .. veryslow).", "acmx2 --encode-preset fast"},
+                      {"--encode-tune <name>", "Tune encoder for content type or low latency.", "acmx2 --encode-tune film"},
+                      {"--encode-crf <0-51>", "Set encoder quality directly (lower = better quality/larger file).", "acmx2 --encode-crf 18"},
+                      {"--encode-codec <name>", "Select auto/software/nvenc or an exact installed FFmpeg encoder.", "acmx2 --encode-codec libx265"},
+                      {"--list-encoders", "List FFmpeg video encoders visible to MXWrite and exit.", "acmx2 --list-encoders"},
+                      {"--list-encoder-options <name>", "List AVOptions accepted by one exact encoder and exit.", "acmx2 --list-encoder-options libx265"},
+                      {"--encode-realtime", "Enable low-latency encoder settings for live pipelines.", "acmx2 --encode-realtime"},
+                      {"--no-drop", "File/graphics mode: never drop frames; ignored for webcams.", "acmx2 -i in.mp4 -o out.mp4 --no-drop"},
+                      {"--display-filter", "Show current shader/stack and GPU filter in upper-left corner.", "acmx2 --display-filter"},
+                      {"--use-watermark <text>", "Enable watermark with given text in recorded videos (upper-left).", "acmx2 --use-watermark \"My Channel\""},
+                      {"--use-watermark-color <r,g,b>", "Watermark text color as 0-255 components.", "acmx2 --use-watermark-color 255,255,0"},
+                      {"--copy-audio", "Mux input audio track into encoded output when possible.", "acmx2 -i in.mp4 -o out.mp4 --copy-audio"},
+                      {"-a, --repeat", "Loop video input source continuously.", "acmx2 -i loop.mp4 --repeat"}});
 
         printSection(out, c, "Advanced Encoder Parameters", {{"--encode-params <string>", "Pass additional FFmpeg-style video encoder options through MXWrite.", "acmx2 --encode-codec hevc_nvenc --encode-params \"-preset p6 -tune lossless -profile:v rext -pix_fmt yuv444p\""}});
 
 #ifdef AUDIO_ENABLED
-        printSection(out, c, "Audio Reactivity", {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"}, {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"}, {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"}, {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"}, {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"}, {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""}, {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""}, {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"}, {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"}, {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"}, {"--audio-file <file>", "Use an audio file or M3U playlist as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.m3u"}, {"--audio-trunc", "Stop playback/output when the audio source reaches EOF.", "acmx2 --audio-file soundtrack.m3u --audio-trunc"}, {"--audio-repeat", "Restart file audio or the full playlist at EOF.", "acmx2 --audio-file soundtrack.m3u --audio-repeat"}, {"--enable-audio-buffers <N>", "Allocate one sampler1DArray with N spectrum-history layers (GPU-limited).", "acmx2 --enable-audio --enable-audio-buffers 8"}, {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
+        printSection(out,
+                     c,
+                     "Audio Reactivity",
+                     {{"-w, --enable-audio", "Enable audio-reactive shader modulation.", "acmx2 --enable-audio"},
+                      {"-l <N>, --channels <N>", "Number of audio channels to capture/process.", "acmx2 --channels 2"},
+                      {"-q <value>, --sense <value>", "Set audio sensitivity multiplier for visual response.", "acmx2 --sense 1.4"},
+                      {"--audio-warm-rate <value>", "Startup audio warmup rate in 1/sec (0.5 ~= 2s fade-in, 1.0 ~= 1s, 0 disables warmup).", "acmx2 --enable-audio --audio-warm-rate 0.35"},
+                      {"-y, --pass-through", "Play live input or file audio through the selected output device.", "acmx2 --audio-file soundtrack.mp3 --pass-through"},
+                      {"--audio-input <device>", "Select input audio device name/id.", "acmx2 --audio-input \"USB Audio\""},
+                      {"--audio-output <device>", "Select pass-through output device name/id.", "acmx2 --audio-output \"Built-in Output\""},
+                      {"--list-devices", "List available audio input/output devices.", "acmx2 --list-devices"},
+                      {"--record-audio <wav-file>", "Record captured audio stream to a WAV file.", "acmx2 --record-audio take.wav"},
+                      {"--record-gain <0.0-2.0>", "Set recording gain multiplier (1.0 = unity).", "acmx2 --record-gain 1.2"},
+                      {"--audio-file <file>", "Use an audio file or M3U playlist as reactivity source instead of microphone input.", "acmx2 --audio-file soundtrack.m3u"},
+                      {"--audio-trunc", "Stop playback/output when the audio source reaches EOF.", "acmx2 --audio-file soundtrack.m3u --audio-trunc"},
+                      {"--audio-repeat", "Restart file audio or the full playlist at EOF.", "acmx2 --audio-file soundtrack.m3u --audio-repeat"},
+                      {"--enable-audio-buffers <N>", "Allocate one sampler1DArray with N spectrum-history layers (GPU-limited).", "acmx2 --enable-audio --enable-audio-buffers 8"},
+                      {"--check-audio", "Report whether this build has audio support enabled.", "acmx2 --check-audio"}});
 #endif
 
 #ifdef MIDI_ENABLED
@@ -14122,12 +13006,38 @@ namespace {
         printSection(out, c, "Runtime Overlay", {{"--disable-counter", "Hide timer and FPS overlay text.", "acmx2 --disable-counter"}});
     }
 
-    template <typename Stream>
-    void printKeyboardControls(Stream &out) {
+    template <typename Stream> void printKeyboardControls(Stream &out) {
         const CliColors c = makeCliColors();
         out << c.title << "\nKeyboard Controls" << c.reset << "\n";
 
-        printSection(out, c, "Main", {{"Escape", "Quit.", ""}, {"Ctrl+X", "Quit without audio mux.", ""}, {"Up Arrow", "Crossfade to the previous shader (or playlist entry in playlist/autopilot mode).", ""}, {"Down Arrow", "Crossfade to the next shader (or playlist entry in playlist/autopilot mode).", ""}, {"Shift+Up Arrow", "In playlist/autopilot mode: change post-multipass shader backward.", ""}, {"Shift+Down Arrow", "In playlist/autopilot mode: change post-multipass shader forward.", ""}, {"Left Arrow", "Previous GPU filter (if enabled).", ""}, {"Right Arrow", "Next GPU filter (if enabled).", ""}, {"Space", "Enable/disable processing.", ""}, {"L", "Toggle video freeze (Video/Image modes).", ""}, {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""}, {"J", "Toggle autopilot mode (requires playlist).", ""}, {"Y", "Toggle sequential autopilot (cycles playlist in order, requires playlist).", ""}, {"N", "Toggle random crossfade selection for autopilot shader switches.", ""}, {"T", "Enable/disable time.", ""}, {"U / I", "Step time when time is disabled.", ""}, {"Page Up / Page Down", "Increase/decrease time speed.", ""}, {"M", "Toggle multi-pass / multi-shader pass.", ""}, {"F", "Toggle fullscreen.", ""}, {"Q", "Toggle reactive time (if AUDIO_ENABLED).", ""}, {"Insert", "Increase audio sensitivity.", ""}, {"Delete", "Decrease audio sensitivity.", ""}, {"End", "Toggle spectrum sensitivity scaling.", ""}, {"Home", "Toggle audio delta time scaling.", ""}, {"3", "Toggle 2D/3D mode.", ""}});
+        printSection(out,
+                     c,
+                     "Main",
+                     {{"Escape", "Quit.", ""},
+                      {"Ctrl+X", "Quit without audio mux.", ""},
+                      {"Up Arrow", "Crossfade to the previous shader (or playlist entry in playlist/autopilot mode).", ""},
+                      {"Down Arrow", "Crossfade to the next shader (or playlist entry in playlist/autopilot mode).", ""},
+                      {"Shift+Up Arrow", "In playlist/autopilot mode: change post-multipass shader backward.", ""},
+                      {"Shift+Down Arrow", "In playlist/autopilot mode: change post-multipass shader forward.", ""},
+                      {"Left Arrow", "Previous GPU filter (if enabled).", ""},
+                      {"Right Arrow", "Next GPU filter (if enabled).", ""},
+                      {"Space", "Enable/disable processing.", ""},
+                      {"L", "Toggle video freeze (Video/Image modes).", ""},
+                      {"P", "Toggle pause (Video/Image) or toggle shader playlist.", ""},
+                      {"J", "Toggle autopilot mode (requires playlist).", ""},
+                      {"Y", "Toggle sequential autopilot (cycles playlist in order, requires playlist).", ""},
+                      {"N", "Toggle random crossfade selection for autopilot shader switches.", ""},
+                      {"T", "Enable/disable time.", ""},
+                      {"U / I", "Step time when time is disabled.", ""},
+                      {"Page Up / Page Down", "Increase/decrease time speed.", ""},
+                      {"M", "Toggle multi-pass / multi-shader pass.", ""},
+                      {"F", "Toggle fullscreen.", ""},
+                      {"Q", "Toggle reactive time (if AUDIO_ENABLED).", ""},
+                      {"Insert", "Increase audio sensitivity.", ""},
+                      {"Delete", "Decrease audio sensitivity.", ""},
+                      {"End", "Toggle spectrum sensitivity scaling.", ""},
+                      {"Home", "Toggle audio delta time scaling.", ""},
+                      {"3", "Toggle 2D/3D mode.", ""}});
 
         printSection(out, c, "Snapshots", {{"Z", "Save PNG snapshot (SDR 8-bit; HDR mode still outputs SDR PNG).", ""}, {"4", "Save TIFF snapshot (SDR: 8-bit RGBA; HDR: 16-bit RGBA; requires ACMX2_WITH_TIFF).", ""}, {"5", "Save lossless WebP snapshot (HDR is tone-mapped; requires ACMX2_WITH_WEBP).", ""}, {"6", "Save raw RGBA snapshot (HDR: 16-bit RGBA, otherwise 8-bit RGBA).", "ffplay -f rawvideo -pixel_format rgba64le -video_size WxH file.raw"}});
 
@@ -14450,8 +13360,7 @@ int main(int argc, char **argv) {
             case 276:
                 args.cache = true;
                 args.cache_array = true;
-                mx::system_out
-                    << "acmx2: Texture cache array enabled as uniform history.\n";
+                mx::system_out << "acmx2: Texture cache array enabled as uniform history.\n";
                 break;
             case 258:
                 args.copy_audio = true;
@@ -14616,9 +13525,7 @@ int main(int argc, char **argv) {
                 size_t start = 0;
                 while (true) {
                     size_t pos = pass_list.find(',', start);
-                    std::string tok = (pos == std::string::npos)
-                                          ? pass_list.substr(start)
-                                          : pass_list.substr(start, pos - start);
+                    std::string tok = (pos == std::string::npos) ? pass_list.substr(start) : pass_list.substr(start, pos - start);
                     if (!tok.empty()) {
                         try {
                             int idx = std::stoi(tok);
@@ -14649,23 +13556,18 @@ int main(int argc, char **argv) {
                     size_t consumed = 0;
                     size_t nameLength = 0;
                     try {
-                        nameLength = std::stoull(
-                            passFiles.substr(start, separator - start),
-                            &consumed);
+                        nameLength = std::stoull(passFiles.substr(start, separator - start), &consumed);
                     } catch (...) {
                         break;
                     }
-                    if (consumed != separator - start ||
-                        nameLength > passFiles.size() - separator - 1)
+                    if (consumed != separator - start || nameLength > passFiles.size() - separator - 1)
                         break;
                     const size_t nameStart = separator + 1;
-                    args.shader_pass_files.push_back(
-                        passFiles.substr(nameStart, nameLength));
+                    args.shader_pass_files.push_back(passFiles.substr(nameStart, nameLength));
                     start = nameStart + nameLength;
                 }
                 if (start != passFiles.size()) {
-                    mx::system_err
-                        << "acmx2: Invalid --shader-pass-files payload\n";
+                    mx::system_err << "acmx2: Invalid --shader-pass-files payload\n";
                     return EXIT_FAILURE;
                 }
                 break;
@@ -14707,8 +13609,7 @@ int main(int argc, char **argv) {
                 args.autopilot_random_timeout = atoi(arg.arg_value.c_str());
                 if (args.autopilot_random_timeout < 4)
                     args.autopilot_random_timeout = 4;
-                mx::system_out << "acmx2: Autopilot random interval enabled (4-"
-                               << args.autopilot_random_timeout << " frames)\n";
+                mx::system_out << "acmx2: Autopilot random interval enabled (4-" << args.autopilot_random_timeout << " frames)\n";
                 break;
             case 411:
                 args.duration = atof(arg.arg_value.c_str());
@@ -14719,9 +13620,7 @@ int main(int argc, char **argv) {
             case 610:
                 args.max_size_mb = atof(arg.arg_value.c_str());
                 if (args.max_size_mb > 0.0) {
-                    mx::system_out << "acmx2: Max output size set to: "
-                                   << std::fixed << std::setprecision(2) << args.max_size_mb
-                                   << " MB\n";
+                    mx::system_out << "acmx2: Max output size set to: " << std::fixed << std::setprecision(2) << args.max_size_mb << " MB\n";
                 } else {
                     args.max_size_mb = 0.0;
                 }
@@ -14765,30 +13664,21 @@ int main(int argc, char **argv) {
                     mx::system_out << "  Card   : " << cap.card << "\n";
                     mx::system_out << "  Bus    : " << cap.bus_info << "\n";
                     const std::string driver(reinterpret_cast<const char *>(cap.driver));
-                    loopback_device = driver.find("v4l2loopback") != std::string::npos ||
-                                      driver.find("v4l2 loopback") != std::string::npos;
+                    loopback_device = driver.find("v4l2loopback") != std::string::npos || driver.find("v4l2 loopback") != std::string::npos;
                 }
 
                 double current_fps = 0.0;
                 v4l2_streamparm stream_parameters{};
                 stream_parameters.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                if (ioctl(fd, VIDIOC_G_PARM, &stream_parameters) == 0 &&
-                    stream_parameters.parm.capture.timeperframe.numerator != 0) {
-                    const v4l2_fract &interval =
-                        stream_parameters.parm.capture.timeperframe;
-                    current_fps = static_cast<double>(interval.denominator) /
-                                  interval.numerator;
+                if (ioctl(fd, VIDIOC_G_PARM, &stream_parameters) == 0 && stream_parameters.parm.capture.timeperframe.numerator != 0) {
+                    const v4l2_fract &interval = stream_parameters.parm.capture.timeperframe;
+                    current_fps = static_cast<double>(interval.denominator) / interval.numerator;
                 }
                 v4l2_fmtdesc fmt{};
                 fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 fmt.index = 0;
                 while (ioctl(fd, VIDIOC_ENUM_FMT, &fmt) == 0) {
-                    char fourcc[5] = {
-                        static_cast<char>(fmt.pixelformat & 0xFF),
-                        static_cast<char>((fmt.pixelformat >> 8) & 0xFF),
-                        static_cast<char>((fmt.pixelformat >> 16) & 0xFF),
-                        static_cast<char>((fmt.pixelformat >> 24) & 0xFF),
-                        '\0'};
+                    char fourcc[5] = {static_cast<char>(fmt.pixelformat & 0xFF), static_cast<char>((fmt.pixelformat >> 8) & 0xFF), static_cast<char>((fmt.pixelformat >> 16) & 0xFF), static_cast<char>((fmt.pixelformat >> 24) & 0xFF), '\0'};
                     mx::system_out << "\n  Format: " << fourcc << " (" << fmt.description << ")\n";
                     v4l2_frmsizeenum fsize{};
                     fsize.pixel_format = fmt.pixelformat;
@@ -14801,11 +13691,7 @@ int main(int argc, char **argv) {
                                 if (frame_rate <= 0.0) {
                                     return;
                                 }
-                                const auto existing = std::find_if(
-                                    frame_rates.begin(), frame_rates.end(),
-                                    [frame_rate](double value) {
-                                        return std::abs(value - frame_rate) < 0.05;
-                                    });
+                                const auto existing = std::find_if(frame_rates.begin(), frame_rates.end(), [frame_rate](double value) { return std::abs(value - frame_rate) < 0.05; });
                                 if (existing == frame_rates.end()) {
                                     frame_rates.push_back(frame_rate);
                                 }
@@ -14818,21 +13704,14 @@ int main(int argc, char **argv) {
                             while (ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &fival) == 0) {
                                 if (fival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
                                     if (fival.discrete.numerator != 0) {
-                                        append_frame_rate(
-                                            static_cast<double>(fival.discrete.denominator) /
-                                            fival.discrete.numerator);
+                                        append_frame_rate(static_cast<double>(fival.discrete.denominator) / fival.discrete.numerator);
                                     }
-                                } else if (fival.type == V4L2_FRMIVAL_TYPE_STEPWISE ||
-                                           fival.type == V4L2_FRMIVAL_TYPE_CONTINUOUS) {
+                                } else if (fival.type == V4L2_FRMIVAL_TYPE_STEPWISE || fival.type == V4L2_FRMIVAL_TYPE_CONTINUOUS) {
                                     if (fival.stepwise.min.numerator != 0) {
-                                        append_frame_rate(
-                                            static_cast<double>(fival.stepwise.min.denominator) /
-                                            fival.stepwise.min.numerator);
+                                        append_frame_rate(static_cast<double>(fival.stepwise.min.denominator) / fival.stepwise.min.numerator);
                                     }
                                     if (fival.stepwise.max.numerator != 0) {
-                                        append_frame_rate(
-                                            static_cast<double>(fival.stepwise.max.denominator) /
-                                            fival.stepwise.max.numerator);
+                                        append_frame_rate(static_cast<double>(fival.stepwise.max.denominator) / fival.stepwise.max.numerator);
                                     }
                                 }
                                 fival.index++;
@@ -14844,28 +13723,21 @@ int main(int argc, char **argv) {
                                 // but accepts consumer-selected time-per-frame
                                 // values. Include common real-time and constrained
                                 // high-speed camera rates for the interface.
-                                constexpr double LOOPBACK_FRAME_RATES[] = {
-                                    24.0, 25.0, 30.0, 50.0, 60.0,
-                                    90.0, 120.0, 144.0, 240.0};
+                                constexpr double LOOPBACK_FRAME_RATES[] = {24.0, 25.0, 30.0, 50.0, 60.0, 90.0, 120.0, 144.0, 240.0};
                                 for (double frame_rate : LOOPBACK_FRAME_RATES) {
                                     append_frame_rate(frame_rate);
                                 }
                             }
 
-                            std::sort(frame_rates.begin(), frame_rates.end(),
-                                      std::greater<double>());
+                            std::sort(frame_rates.begin(), frame_rates.end(), std::greater<double>());
                             bool first = true;
                             for (double frame_rate : frame_rates) {
-                                mx::system_out << (first ? " @ " : ", ")
-                                               << std::fixed << std::setprecision(1)
-                                               << frame_rate << " fps";
+                                mx::system_out << (first ? " @ " : ", ") << std::fixed << std::setprecision(1) << frame_rate << " fps";
                                 first = false;
                             }
                             mx::system_out << "\n";
                         } else if (fsize.type == V4L2_FRMSIZE_TYPE_STEPWISE || fsize.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) {
-                            mx::system_out << "    " << fsize.stepwise.min_width << "x" << fsize.stepwise.min_height
-                                           << " to " << fsize.stepwise.max_width << "x" << fsize.stepwise.max_height
-                                           << " (step " << fsize.stepwise.step_width << "x" << fsize.stepwise.step_height << ")\n";
+                            mx::system_out << "    " << fsize.stepwise.min_width << "x" << fsize.stepwise.min_height << " to " << fsize.stepwise.max_width << "x" << fsize.stepwise.max_height << " (step " << fsize.stepwise.step_width << "x" << fsize.stepwise.step_height << ")\n";
                             break;
                         }
                         fsize.index++;
@@ -14917,29 +13789,19 @@ int main(int argc, char **argv) {
                 break;
             case 617: {
                 std::string rotation = arg.arg_value;
-                std::transform(rotation.begin(), rotation.end(),
-                               rotation.begin(), [](unsigned char character) {
-                                   return static_cast<char>(std::tolower(character));
-                               });
-                if (rotation == "clockwise" || rotation == "cw" ||
-                    rotation == "90" || rotation == "90cw") {
+                std::transform(rotation.begin(), rotation.end(), rotation.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+                if (rotation == "clockwise" || rotation == "cw" || rotation == "90" || rotation == "90cw") {
                     args.frame_rotation = FrameRotation::Clockwise90;
-                    mx::system_out
-                        << "acmx2: Input frame rotation: 90 degrees clockwise\n";
+                    mx::system_out << "acmx2: Input frame rotation: 90 degrees clockwise\n";
                 } else if (rotation == "180") {
                     args.frame_rotation = FrameRotation::Rotate180;
-                    mx::system_out
-                        << "acmx2: Input frame rotation: 180 degrees\n";
-                } else if (rotation == "counterclockwise" ||
-                           rotation == "ccw" || rotation == "90ccw" ||
-                           rotation == "270") {
+                    mx::system_out << "acmx2: Input frame rotation: 180 degrees\n";
+                } else if (rotation == "counterclockwise" || rotation == "ccw" || rotation == "90ccw" || rotation == "270") {
                     args.frame_rotation = FrameRotation::Counterclockwise90;
-                    mx::system_out
-                        << "acmx2: Input frame rotation: 90 degrees counterclockwise\n";
+                    mx::system_out << "acmx2: Input frame rotation: 90 degrees counterclockwise\n";
                 } else {
-                    mx::system_err
-                        << "acmx2: --rotate requires clockwise, 180, or "
-                           "counterclockwise\n";
+                    mx::system_err << "acmx2: --rotate requires clockwise, 180, or "
+                                      "counterclockwise\n";
                     mx::system_err.flush();
                     exit(EXIT_FAILURE);
                 }
@@ -14968,27 +13830,21 @@ int main(int argc, char **argv) {
                         g = std::stoi(v.substr(c1 + 1, c2 - c1 - 1));
                         b = std::stoi(v.substr(c2 + 1));
                     } catch (...) {
-                        mx::system_err << "acmx2: --use-watermark-color: invalid value '"
-                                       << v << "'; expected r,g,b\n";
+                        mx::system_err << "acmx2: --use-watermark-color: invalid value '" << v << "'; expected r,g,b\n";
                         break;
                     }
                     args.watermark_r = std::clamp(r, 0, 255);
                     args.watermark_g = std::clamp(g, 0, 255);
                     args.watermark_b = std::clamp(b, 0, 255);
-                    mx::system_out << "acmx2: --use-watermark-color: "
-                                   << args.watermark_r << ","
-                                   << args.watermark_g << ","
-                                   << args.watermark_b << "\n";
+                    mx::system_out << "acmx2: --use-watermark-color: " << args.watermark_r << "," << args.watermark_g << "," << args.watermark_b << "\n";
                 } else {
-                    mx::system_err << "acmx2: --use-watermark-color: invalid value '"
-                                   << v << "'; expected r,g,b\n";
+                    mx::system_err << "acmx2: --use-watermark-color: invalid value '" << v << "'; expected r,g,b\n";
                 }
                 break;
             }
             case 614:
                 args.encode_opts.ffmpeg_options = arg.arg_value;
-                mx::system_out << "acmx2: Extra FFmpeg encoder parameters: "
-                               << args.encode_opts.ffmpeg_options << "\n";
+                mx::system_out << "acmx2: Extra FFmpeg encoder parameters: " << args.encode_opts.ffmpeg_options << "\n";
                 break;
             case 615: {
                 auto clean_field = [](std::string value) {
@@ -14997,12 +13853,7 @@ int main(int argc, char **argv) {
                 };
                 mx::system_out << "MXWRITE_ENCODERS\t1\n";
                 for (const EncoderInfo &encoder : available_video_encoders()) {
-                    mx::system_out << "ENCODER\t" << clean_field(encoder.name) << '\t'
-                                   << clean_field(encoder.long_name) << '\t'
-                                   << clean_field(encoder.codec_name) << '\t'
-                                   << (encoder.hardware ? "hardware" : "software") << '\t'
-                                   << (encoder.experimental ? "experimental" : "stable") << '\t'
-                                   << clean_field(encoder.pixel_formats) << '\n';
+                    mx::system_out << "ENCODER\t" << clean_field(encoder.name) << '\t' << clean_field(encoder.long_name) << '\t' << clean_field(encoder.codec_name) << '\t' << (encoder.hardware ? "hardware" : "software") << '\t' << (encoder.experimental ? "experimental" : "stable") << '\t' << clean_field(encoder.pixel_formats) << '\n';
                 }
                 mx::system_out.flush();
                 return EXIT_SUCCESS;
@@ -15012,23 +13863,14 @@ int main(int argc, char **argv) {
                     std::replace_if(value.begin(), value.end(), [](char ch) { return ch == '\t' || ch == '\r' || ch == '\n'; }, ' ');
                     return value;
                 };
-                const std::vector<EncoderOptionInfo> options =
-                    video_encoder_options(arg.arg_value);
-                if (options.empty() &&
-                    !avcodec_find_encoder_by_name(arg.arg_value.c_str())) {
+                const std::vector<EncoderOptionInfo> options = video_encoder_options(arg.arg_value);
+                if (options.empty() && !avcodec_find_encoder_by_name(arg.arg_value.c_str())) {
                     mx::system_err << "acmx2: encoder not found: " << arg.arg_value << '\n';
                     return EXIT_FAILURE;
                 }
-                mx::system_out << "MXWRITE_ENCODER_OPTIONS\t1\t"
-                               << clean_field(arg.arg_value) << '\n';
+                mx::system_out << "MXWRITE_ENCODER_OPTIONS\t1\t" << clean_field(arg.arg_value) << '\n';
                 for (const EncoderOptionInfo &option : options) {
-                    mx::system_out << "OPTION\t" << clean_field(option.name) << '\t'
-                                   << clean_field(option.type) << '\t'
-                                   << clean_field(option.default_value) << '\t'
-                                   << clean_field(option.minimum) << '\t'
-                                   << clean_field(option.maximum) << '\t'
-                                   << clean_field(option.choices) << '\t'
-                                   << clean_field(option.help) << '\n';
+                    mx::system_out << "OPTION\t" << clean_field(option.name) << '\t' << clean_field(option.type) << '\t' << clean_field(option.default_value) << '\t' << clean_field(option.minimum) << '\t' << clean_field(option.maximum) << '\t' << clean_field(option.choices) << '\t' << clean_field(option.help) << '\n';
                 }
                 mx::system_out.flush();
                 return EXIT_SUCCESS;
@@ -15079,8 +13921,7 @@ int main(int argc, char **argv) {
             const std::filesystem::path installed_assets = installed_assets_directory();
             if (!installed_assets.empty()) {
                 args.path = installed_assets.string();
-                mx::system_out << "acmx2: Using installed assets relative to executable: "
-                               << args.path << "\n";
+                mx::system_out << "acmx2: Using installed assets relative to executable: " << args.path << "\n";
             } else {
                 args.path = ".";
                 mx::system_out << "acmx2: Path name not provided, using current path...\n";
@@ -15108,8 +13949,7 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
         if (shaderManifestPath(args.remove_broken_path).empty()) {
-            mx::system_err << "acmx2: Error: No library.json or index.txt found at: "
-                           << args.remove_broken_path << "\n";
+            mx::system_err << "acmx2: Error: No library.json or index.txt found at: " << args.remove_broken_path << "\n";
             mx::system_err.flush();
             return EXIT_FAILURE;
         }
@@ -15122,8 +13962,7 @@ int main(int argc, char **argv) {
                 set_environment_if_missing("SDL_AUDIODRIVER", "dummy");
                 SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
                 installHeadlessSignalHandlers();
-                mx::system_out
-                    << "acmx2: remove-broken hidden build window enabled\n";
+                mx::system_out << "acmx2: remove-broken hidden build window enabled\n";
             }
 #endif
             mx::system_out << "acmx2: Creating scan window for remove-broken...\n";
@@ -15148,14 +13987,7 @@ int main(int argc, char **argv) {
                 bool done = false;
                 bool active = true;
 
-                RemoveBrokenWindow(const std::string &path, bool is3d,
-                                   const std::string &assets,
-                                   const OpenGLContextConfig &context_config,
-                                   bool headless)
-                    : gl::GLWindow("ACMX2 Remove-Broken", 640, 480, false,
-                                   gl::GLMode::DESKTOP, context_config.major,
-                                   context_config.minor, false),
-                      lib_path(path), enable_3d(is3d), assets_path(assets) {
+                RemoveBrokenWindow(const std::string &path, bool is3d, const std::string &assets, const OpenGLContextConfig &context_config, bool headless) : gl::GLWindow("ACMX2 Remove-Broken", 640, 480, false, gl::GLMode::DESKTOP, context_config.major, context_config.minor, false), lib_path(path), enable_3d(is3d), assets_path(assets) {
                     if (headless)
                         SDL_HideWindow(getWindow());
                     update_compute_shader_support();
@@ -15199,14 +14031,12 @@ int main(int argc, char **argv) {
 
 #if defined(__linux__) || defined(_WIN32)
             if (args.silent) {
-                RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d,
-                                          args.path, context_config, true);
+                RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d, args.path, context_config, true);
                 rb_win.scanLoop();
                 return rb_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
             }
 #endif
-            RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d,
-                                      args.path, context_config, false);
+            RemoveBrokenWindow rb_win(args.remove_broken_path, args.is3d, args.path, context_config, false);
             rb_win.scanLoop();
             return rb_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
         } catch (const mx::Exception &e) {
@@ -15227,8 +14057,7 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
         if (shaderManifestPath(args.build_library_path).empty()) {
-            mx::system_err << "acmx2: Error: No library.json or index.txt found at: "
-                           << args.build_library_path << "\n";
+            mx::system_err << "acmx2: Error: No library.json or index.txt found at: " << args.build_library_path << "\n";
             mx::system_err.flush();
             return EXIT_FAILURE;
         }
@@ -15277,15 +14106,7 @@ int main(int argc, char **argv) {
                  * @param is3d   Include 3-D shaders in the cache.
                  * @param assets Base asset path for vertex shader lookup.
                  */
-                BuildWindow(const std::string &path, bool is3d,
-                            const std::string &assets, int tex_cache_size,
-                            bool use_array,
-                            const OpenGLContextConfig &context_config,
-                            bool headless)
-                    : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false,
-                                   gl::GLMode::DESKTOP, context_config.major,
-                                   context_config.minor, false),
-                      lib_path(path), enable_3d(is3d), assets_path(assets) {
+                BuildWindow(const std::string &path, bool is3d, const std::string &assets, int tex_cache_size, bool use_array, const OpenGLContextConfig &context_config, bool headless) : gl::GLWindow("ACMX2 Shader Builder", 640, 480, false, gl::GLMode::DESKTOP, context_config.major, context_config.minor, false), lib_path(path), enable_3d(is3d), assets_path(assets) {
                     if (headless)
                         SDL_HideWindow(getWindow());
                     update_compute_shader_support();
@@ -15312,18 +14133,16 @@ int main(int argc, char **argv) {
                         build_done = true;
 
                         // Display logo.png while the build runs
-                        static constexpr const char *kBldLogoVert =
-                            "#version 330 core\n"
-                            "layout(location = 0) in vec3 aPos;\n"
-                            "layout(location = 1) in vec2 aTex;\n"
-                            "out vec2 tc;\n"
-                            "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
-                        static constexpr const char *kBldLogoFrag =
-                            "#version 330 core\n"
-                            "in vec2 tc;\n"
-                            "out vec4 color;\n"
-                            "uniform sampler2D samp;\n"
-                            "void main() { color = texture(samp, tc); }\n";
+                        static constexpr const char *kBldLogoVert = "#version 330 core\n"
+                                                                    "layout(location = 0) in vec3 aPos;\n"
+                                                                    "layout(location = 1) in vec2 aTex;\n"
+                                                                    "out vec2 tc;\n"
+                                                                    "void main() { gl_Position = vec4(aPos, 1.0); tc = aTex; }\n";
+                        static constexpr const char *kBldLogoFrag = "#version 330 core\n"
+                                                                    "in vec2 tc;\n"
+                                                                    "out vec4 color;\n"
+                                                                    "uniform sampler2D samp;\n"
+                                                                    "void main() { color = texture(samp, tc); }\n";
                         gl::ShaderProgram logo_sh;
                         gl::GLSprite logo_sp;
                         std::string logo_path = util.getFilePath("data/logo.png");
@@ -15394,16 +14213,12 @@ int main(int argc, char **argv) {
 
 #if defined(__linux__) || defined(_WIN32)
             if (args.silent) {
-                BuildWindow build_win(args.build_library_path, args.is3d,
-                                      args.path, args.cache_size,
-                                      args.cache_array, context_config, true);
+                BuildWindow build_win(args.build_library_path, args.is3d, args.path, args.cache_size, args.cache_array, context_config, true);
                 build_win.buildLoop();
                 return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
             }
 #endif
-            BuildWindow build_win(args.build_library_path, args.is3d,
-                                  args.path, args.cache_size,
-                                  args.cache_array, context_config, false);
+            BuildWindow build_win(args.build_library_path, args.is3d, args.path, args.cache_size, args.cache_array, context_config, false);
             build_win.buildLoop();
 
             return build_win.success ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -15419,17 +14234,11 @@ int main(int argc, char **argv) {
     }
 
     try {
-        const std::vector<std::string> requestedShaderFiles =
-            args.mode == 1 &&
-                    (!args.shader_file.empty() || !args.shader_pass_files.empty())
-                ? sortedShaderLibraryEntries(args.library)
-                : std::vector<std::string>{};
+        const std::vector<std::string> requestedShaderFiles = args.mode == 1 && (!args.shader_file.empty() || !args.shader_pass_files.empty()) ? sortedShaderLibraryEntries(args.library) : std::vector<std::string>{};
         if (args.mode == 1 && !args.shader_file.empty()) {
-            const int selectedIndex = shaderIndexForFile(requestedShaderFiles,
-                                                         args.shader_file);
+            const int selectedIndex = shaderIndexForFile(requestedShaderFiles, args.shader_file);
             if (selectedIndex < 0) {
-                mx::system_err << "acmx2: Shader file is not present in the active library: "
-                               << args.shader_file << "\n";
+                mx::system_err << "acmx2: Shader file is not present in the active library: " << args.shader_file << "\n";
                 return EXIT_FAILURE;
             }
             args.shader_index = selectedIndex;
@@ -15437,20 +14246,16 @@ int main(int argc, char **argv) {
         if (args.mode == 1 && !args.shader_pass_files.empty()) {
             args.shader_pass_list.clear();
             for (const std::string &shaderFile : args.shader_pass_files) {
-                const int passIndex = shaderIndexForFile(requestedShaderFiles,
-                                                         shaderFile);
+                const int passIndex = shaderIndexForFile(requestedShaderFiles, shaderFile);
                 if (passIndex < 0) {
-                    mx::system_err << "acmx2: Shader pass file is not present in the active library: "
-                                   << shaderFile << "\n";
+                    mx::system_err << "acmx2: Shader pass file is not present in the active library: " << shaderFile << "\n";
                     return EXIT_FAILURE;
                 }
                 args.shader_pass_list.push_back(passIndex);
             }
             args.shader_pass_enabled = !args.shader_pass_list.empty();
         }
-        args.slib = std::make_tuple(args.mode,
-                                    (args.mode == 0) ? args.fragment : args.library,
-                                    (args.mode == 0) ? 0 : args.shader_index);
+        args.slib = std::make_tuple(args.mode, (args.mode == 0) ? args.fragment : args.library, (args.mode == 0) ? 0 : args.shader_index);
         // Texture cache works in video, graphics, and camera modes.
 
         if (args.silent) {
@@ -15494,14 +14299,10 @@ int main(int argc, char **argv) {
             set_environment_if_missing("SDL_AUDIODRIVER", "dummy");
             SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
 #ifdef _WIN32
-            mx::system_out
-                << "acmx2: Headless: using a hidden native Windows OpenGL "
-                   "window\n";
+            mx::system_out << "acmx2: Headless: using a hidden native Windows OpenGL "
+                              "window\n";
 #else
-            mx::system_out << "acmx2: Headless: SDL_VIDEODRIVER="
-                           << (getenv("SDL_VIDEODRIVER") ? getenv("SDL_VIDEODRIVER") : "(unset)")
-                           << ", SDL_AUDIODRIVER="
-                           << (getenv("SDL_AUDIODRIVER") ? getenv("SDL_AUDIODRIVER") : "(unset)") << "\n";
+            mx::system_out << "acmx2: Headless: SDL_VIDEODRIVER=" << (getenv("SDL_VIDEODRIVER") ? getenv("SDL_VIDEODRIVER") : "(unset)") << ", SDL_AUDIODRIVER=" << (getenv("SDL_AUDIODRIVER") ? getenv("SDL_AUDIODRIVER") : "(unset)") << "\n";
 #endif
             // Install Ctrl+C / SIGTERM / SIGHUP handlers so batch/headless runs
             // can be interrupted cleanly: the writer flushes, mp4 trailer is
@@ -15523,36 +14324,29 @@ int main(int argc, char **argv) {
         if (!args.graphic_file.empty() && !args.sizev.has_value()) {
             const cv::Mat graphic_size_probe = cv::imread(args.graphic_file);
             if (graphic_size_probe.empty()) {
-                mx::system_err << "acmx2: Error: graphics file not found or unreadable: "
-                               << args.graphic_file << "\n";
+                mx::system_err << "acmx2: Error: graphics file not found or unreadable: " << args.graphic_file << "\n";
                 mx::system_err.flush();
                 return EXIT_FAILURE;
             }
 
             args.tw = graphic_size_probe.cols;
             args.th = graphic_size_probe.rows;
-            if (args.frame_rotation == FrameRotation::Clockwise90 ||
-                args.frame_rotation == FrameRotation::Counterclockwise90) {
+            if (args.frame_rotation == FrameRotation::Clockwise90 || args.frame_rotation == FrameRotation::Counterclockwise90) {
                 std::swap(args.tw, args.th);
             }
-            mx::system_out << "acmx2: Graphics window initial size: "
-                           << args.tw << "x" << args.th << "\n";
+            mx::system_out << "acmx2: Graphics window initial size: " << args.tw << "x" << args.th << "\n";
         } else if (!args.filename.empty() && !args.sizev.has_value()) {
-            const std::optional<cv::Size> video_size =
-                probe_video_size(args.filename);
+            const std::optional<cv::Size> video_size = probe_video_size(args.filename);
             if (video_size.has_value()) {
                 args.tw = video_size->width;
                 args.th = video_size->height;
-                if (args.frame_rotation == FrameRotation::Clockwise90 ||
-                    args.frame_rotation == FrameRotation::Counterclockwise90) {
+                if (args.frame_rotation == FrameRotation::Clockwise90 || args.frame_rotation == FrameRotation::Counterclockwise90) {
                     std::swap(args.tw, args.th);
                 }
-                mx::system_out << "acmx2: Video window initial size: "
-                               << args.tw << "x" << args.th << "\n";
+                mx::system_out << "acmx2: Video window initial size: " << args.tw << "x" << args.th << "\n";
             } else {
-                mx::system_out
-                    << "acmx2: Could not probe video dimensions before window "
-                       "creation; using the startup fallback size\n";
+                mx::system_out << "acmx2: Could not probe video dimensions before window "
+                                  "creation; using the startup fallback size\n";
             }
         }
 

@@ -5,6 +5,7 @@
 #include <rtmidi/RtMidi.h>
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <deque>
 #include <fstream>
@@ -14,45 +15,43 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
-#include<charconv>
 
 namespace acmxvk::midi {
 
     void parse_block(std::string_view b) {
-	    int stat = 0, value = 0, code = 0;
-	    const char *cur = b.data();
-	    const char *end = b.data() + b.size();
-	    auto [ptr_value, e] = std::from_chars(cur, end, stat);
-	    if(e  != std::errc{}) {
-		    std::cerr << "failed to parse status bytesn\n";
-		    return;
-	    }
-	    cur = ptr_value;
-	    while(cur != end && *cur == ' ') {
-		    cur ++;
-	    }
+        int stat = 0, value = 0, code = 0;
+        const char *cur = b.data();
+        const char *end = b.data() + b.size();
+        auto [ptr_value, e] = std::from_chars(cur, end, stat);
+        if (e != std::errc{}) {
+            std::cerr << "failed to parse status bytesn\n";
+            return;
+        }
+        cur = ptr_value;
+        while (cur != end && *cur == ' ') {
+            cur++;
+        }
 
-	    auto [ptr_value2, e2] = std::from_chars(cur, end, code);
-	    if(e2 != std::errc{}) {
-		    std::cerr << "Failed to parse code\n";
-		    return;
-	    }
-	    cur = ptr_value2;
-	    while(cur != end && *cur == ' ') {
-		    cur++;
-	    }
-	    auto [ptr3, e3] = std::from_chars(cur, end, value);
-	    if(e3 != std::errc{}) {
-		    std::cerr << "Error failed to pasre  value\n";
-		    return;
-	    }
+        auto [ptr_value2, e2] = std::from_chars(cur, end, code);
+        if (e2 != std::errc{}) {
+            std::cerr << "Failed to parse code\n";
+            return;
+        }
+        cur = ptr_value2;
+        while (cur != end && *cur == ' ') {
+            cur++;
+        }
+        auto [ptr3, e3] = std::from_chars(cur, end, value);
+        if (e3 != std::errc{}) {
+            std::cerr << "Error failed to pasre  value\n";
+            return;
+        }
 
-	    std::cout <<  "Status: " << stat << " CC: " << code << " Value: " << value << "\n";
+        std::cout << "Status: " << stat << " CC: " << code << " Value: " << value << "\n";
     }
 
     std::vector<MidiMapping> load_mapping_file(const std::string &filename) {
-        input::validate_string(filename, input::StringKind::Path,
-                               "MIDI map path");
+        input::validate_string(filename, input::StringKind::Path, "MIDI map path");
         input::validate_file_size(filename, "MIDI map file");
         std::ifstream mapping_input(filename);
         if (!mapping_input) {
@@ -62,21 +61,18 @@ namespace acmxvk::midi {
         std::vector<MidiMapping> mappings;
         std::string line;
         std::size_t line_number = 0;
-        while (input::read_bounded_line(mapping_input, line, "MIDI map file",
-                                        line_number + 1)) {
+        while (input::read_bounded_line(mapping_input, line, "MIDI map file", line_number + 1)) {
 
-	    parse_block(line);
+            parse_block(line);
             ++line_number;
             const std::size_t first = line.find_first_not_of(" \t\r");
             if (first == std::string::npos || line[first] == '#') {
                 continue;
             }
             if (mappings.size() >= input::MAX_MIDI_MAPPINGS) {
-                throw std::runtime_error(
-                    "MIDI map file contains too many mappings");
+                throw std::runtime_error("MIDI map file contains too many mappings");
             }
-            input::validate_string(line, input::StringKind::StructuredValue,
-                                   "MIDI map entry");
+            input::validate_string(line, input::StringKind::StructuredValue, "MIDI map entry");
 
             std::istringstream stream(line);
             std::string action_pair;
@@ -85,27 +81,17 @@ namespace acmxvk::midi {
             int status = 0;
             int data1 = 0;
             int data2 = 0;
-            if (!(stream >> action_pair >> open_brace >> status >> data1 >> data2 >>
-                  close_brace) ||
-                open_brace != '{' || close_brace != '}') {
-                throw std::runtime_error(
-                    "invalid MIDI map entry at " + filename + ':' +
-                    std::to_string(line_number));
+            if (!(stream >> action_pair >> open_brace >> status >> data1 >> data2 >> close_brace) || open_brace != '{' || close_brace != '}') {
+                throw std::runtime_error("invalid MIDI map entry at " + filename + ':' + std::to_string(line_number));
             }
             stream >> std::ws;
             if (!stream.eof()) {
-                throw std::runtime_error(
-                    "unexpected text in MIDI map at " + filename + ':' +
-                    std::to_string(line_number));
+                throw std::runtime_error("unexpected text in MIDI map at " + filename + ':' + std::to_string(line_number));
             }
 
             const std::size_t colon = action_pair.find(':');
-            if (colon == std::string::npos || colon == 0 ||
-                colon + 1 >= action_pair.size() ||
-                action_pair.find(':', colon + 1) != std::string::npos) {
-                throw std::runtime_error(
-                    "invalid MIDI action pair at " + filename + ':' +
-                    std::to_string(line_number));
+            if (colon == std::string::npos || colon == 0 || colon + 1 >= action_pair.size() || action_pair.find(':', colon + 1) != std::string::npos) {
+                throw std::runtime_error("invalid MIDI action pair at " + filename + ':' + std::to_string(line_number));
             }
 
             std::size_t primary_parsed = 0;
@@ -113,29 +99,16 @@ namespace acmxvk::midi {
             int primary = 0;
             int secondary = 0;
             try {
-                primary = std::stoi(action_pair.substr(0, colon),
-                                    &primary_parsed);
-                secondary = std::stoi(action_pair.substr(colon + 1),
-                                      &secondary_parsed);
+                primary = std::stoi(action_pair.substr(0, colon), &primary_parsed);
+                secondary = std::stoi(action_pair.substr(colon + 1), &secondary_parsed);
             } catch (const std::exception &) {
-                throw std::runtime_error(
-                    "invalid MIDI action code at " + filename + ':' +
-                    std::to_string(line_number));
+                throw std::runtime_error("invalid MIDI action code at " + filename + ':' + std::to_string(line_number));
             }
-            if (primary_parsed != colon ||
-                secondary_parsed != action_pair.size() - colon - 1 ||
-                primary <= 0 || primary > 65535 || secondary < 0 ||
-                secondary > 65535 || status < 0 || status > 255 ||
-                data1 < 0 || data1 > 255 || data2 < 0 || data2 > 255) {
-                throw std::runtime_error(
-                    "MIDI map value outside its valid range at " + filename +
-                    ':' + std::to_string(line_number));
+            if (primary_parsed != colon || secondary_parsed != action_pair.size() - colon - 1 || primary <= 0 || primary > 65535 || secondary < 0 || secondary > 65535 || status < 0 || status > 255 || data1 < 0 || data1 > 255 || data2 < 0 || data2 > 255) {
+                throw std::runtime_error("MIDI map value outside its valid range at " + filename + ':' + std::to_string(line_number));
             }
 
-            mappings.push_back(
-                {primary, secondary, static_cast<unsigned char>(status),
-                 static_cast<unsigned char>(data1),
-                 static_cast<unsigned char>(data2)});
+            mappings.push_back({primary, secondary, static_cast<unsigned char>(status), static_cast<unsigned char>(data1), static_cast<unsigned char>(data2)});
         }
         return mappings;
     }
@@ -164,27 +137,21 @@ namespace acmxvk::midi {
                     return false;
                 }
                 if (port >= port_count) {
-                    std::cerr << "acmxvk: MIDI input port " << port
-                              << " is outside the available range 0.."
-                              << (port_count - 1) << '\n';
+                    std::cerr << "acmxvk: MIDI input port " << port << " is outside the available range 0.." << (port_count - 1) << '\n';
                     input.reset();
                     return false;
                 }
 
                 port_name = input->getPortName(port);
-                acmxvk::input::validate_string(
-                    port_name, acmxvk::input::StringKind::DisplayText,
-                    "MIDI port name");
+                acmxvk::input::validate_string(port_name, acmxvk::input::StringKind::DisplayText, "MIDI port name");
                 input->ignoreTypes(false, false, false);
                 input->setCallback(&Impl::messageCallback, this);
                 input->openPort(port, "ACMXVK MIDI Input");
                 open_port = requested_port;
-                std::cout << "acmxvk: MIDI input " << open_port << ": "
-                          << port_name << '\n';
+                std::cout << "acmxvk: MIDI input " << open_port << ": " << port_name << '\n';
                 return input->isPortOpen();
             } catch (const RtMidiError &error) {
-                std::cerr << "acmxvk: MIDI input error: " << error.getMessage()
-                          << '\n';
+                std::cerr << "acmxvk: MIDI input error: " << error.getMessage() << '\n';
                 close();
                 return false;
             }
@@ -198,8 +165,7 @@ namespace acmxvk::midi {
                         input->closePort();
                     }
                 } catch (const RtMidiError &error) {
-                    std::cerr << "acmxvk: error closing MIDI input: "
-                              << error.getMessage() << '\n';
+                    std::cerr << "acmxvk: error closing MIDI input: " << error.getMessage() << '\n';
                 }
                 input.reset();
             }
@@ -213,9 +179,7 @@ namespace acmxvk::midi {
             port_name.clear();
         }
 
-        [[nodiscard]] bool is_open() const {
-            return input != nullptr && input->isPortOpen();
-        }
+        [[nodiscard]] bool is_open() const { return input != nullptr && input->isPortOpen(); }
 
         [[nodiscard]] std::vector<MidiMessage> pollMessages() {
             std::lock_guard<std::mutex> lock(queue_mutex);
@@ -233,17 +197,14 @@ namespace acmxvk::midi {
             return dropped_messages;
         }
 
-        static void messageCallback(double delta_seconds,
-                                    std::vector<unsigned char> *bytes,
-                                    void *user_data) {
+        static void messageCallback(double delta_seconds, std::vector<unsigned char> *bytes, void *user_data) {
             if (user_data == nullptr || bytes == nullptr || bytes->empty()) {
                 return;
             }
             static_cast<Impl *>(user_data)->enqueue(delta_seconds, *bytes);
         }
 
-        void enqueue(double delta_seconds,
-                     const std::vector<unsigned char> &bytes) {
+        void enqueue(double delta_seconds, const std::vector<unsigned char> &bytes) {
             std::lock_guard<std::mutex> lock(queue_mutex);
             if (bytes.size() > MAX_MESSAGE_BYTES) {
                 ++dropped_messages;
@@ -253,11 +214,7 @@ namespace acmxvk::midi {
                 pending_messages.pop_front();
                 ++dropped_messages;
             }
-            pending_messages.push_back(
-                MidiMessage{std::isfinite(delta_seconds)
-                                ? std::max(delta_seconds, 0.0)
-                                : 0.0,
-                            bytes, ++message_sequence});
+            pending_messages.push_back(MidiMessage{std::isfinite(delta_seconds) ? std::max(delta_seconds, 0.0) : 0.0, bytes, ++message_sequence});
         }
 
         std::unique_ptr<RtMidiIn> input;
@@ -272,25 +229,15 @@ namespace acmxvk::midi {
     MidiInput::MidiInput() : impl(std::make_unique<Impl>()) {}
     MidiInput::~MidiInput() = default;
 
-    bool MidiInput::open(int port) {
-        return impl->open(port);
-    }
+    bool MidiInput::open(int port) { return impl->open(port); }
 
-    void MidiInput::close() {
-        impl->close();
-    }
+    void MidiInput::close() { impl->close(); }
 
-    bool MidiInput::is_open() const {
-        return impl->is_open();
-    }
+    bool MidiInput::is_open() const { return impl->is_open(); }
 
-    std::vector<MidiMessage> MidiInput::poll_messages() {
-        return impl->pollMessages();
-    }
+    std::vector<MidiMessage> MidiInput::poll_messages() { return impl->pollMessages(); }
 
-    std::uint64_t MidiInput::dropped_message_count() const {
-        return impl->droppedMessageCount();
-    }
+    std::uint64_t MidiInput::dropped_message_count() const { return impl->droppedMessageCount(); }
 
     void MidiInput::list_ports(std::ostream &output) {
         try {
@@ -299,14 +246,11 @@ namespace acmxvk::midi {
             output << "acmxvk: found " << port_count << " MIDI input port(s)\n";
             for (unsigned int port = 0; port < port_count; ++port) {
                 const std::string name = input.getPortName(port);
-                acmxvk::input::validate_string(
-                    name, acmxvk::input::StringKind::DisplayText,
-                    "MIDI port name");
+                acmxvk::input::validate_string(name, acmxvk::input::StringKind::DisplayText, "MIDI port name");
                 output << "  " << port << ": " << name << '\n';
             }
         } catch (const RtMidiError &error) {
-            throw std::runtime_error(std::string("could not enumerate MIDI inputs: ") +
-                                     error.getMessage());
+            throw std::runtime_error(std::string("could not enumerate MIDI inputs: ") + error.getMessage());
         }
     }
 

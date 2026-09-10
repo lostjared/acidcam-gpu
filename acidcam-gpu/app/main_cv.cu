@@ -46,10 +46,7 @@ cv::Size extractResolution(const std::string &text) {
     return cv::Size(std::stoi(left), std::stoi(right));
 }
 
-void updateAndDraw(cv::Mat &frame, ac_gpu::DynamicFrameBuffer &buffer,
-                   cv::cuda::GpuMat &gpuWorkingBuffer, unsigned char **d_ptrList,
-                   ac_gpu::Filter *activeFilters, size_t filterCount,
-                   ac_gpu::GPUFilter **d_list_ptr, bool &changed) {
+void updateAndDraw(cv::Mat &frame, ac_gpu::DynamicFrameBuffer &buffer, cv::cuda::GpuMat &gpuWorkingBuffer, unsigned char **d_ptrList, ac_gpu::Filter *activeFilters, size_t filterCount, ac_gpu::GPUFilter **d_list_ptr, bool &changed) {
 
     if (gState.alpha_dir == 1) {
         gState.alpha += 0.01f;
@@ -91,30 +88,11 @@ void updateAndDraw(cv::Mat &frame, ac_gpu::DynamicFrameBuffer &buffer,
         }
     }
 
-    CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.getDeviceFramePointers(),
-                          buffer.arraySize * sizeof(unsigned char *),
-                          cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_ptrList, buffer.getDeviceFramePointers(), buffer.arraySize * sizeof(unsigned char *), cudaMemcpyHostToDevice));
 
-    CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.data, gpuWorkingBuffer.step,
-                            buffer.deviceFrames.back().data, buffer.framePitch,
-                            buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice));
+    CHECK_CUDA(cudaMemcpy2D(gpuWorkingBuffer.data, gpuWorkingBuffer.step, buffer.deviceFrames.back().data, buffer.framePitch, buffer.w * 4, buffer.h, cudaMemcpyDeviceToDevice));
 
-    launch_filter(
-        activeFilters,
-        filterCount,
-        gpuWorkingBuffer.data,
-        d_ptrList,
-        buffer.arraySize,
-        gpuWorkingBuffer.cols,
-        gpuWorkingBuffer.rows,
-        gpuWorkingBuffer.step,
-        gState.alpha,
-        false,
-        gState.square_size,
-        current_frame_index,
-        index_dir,
-        d_list_ptr,
-        changed);
+    launch_filter(activeFilters, filterCount, gpuWorkingBuffer.data, d_ptrList, buffer.arraySize, gpuWorkingBuffer.cols, gpuWorkingBuffer.rows, gpuWorkingBuffer.step, gState.alpha, false, gState.square_size, current_frame_index, index_dir, d_list_ptr, changed);
 }
 
 void checkDevices() {
@@ -142,8 +120,7 @@ void listGraphicsCards() {
     std::cout << "Available Graphics Cards:" << std::endl;
     for (int i = 0; i < device_count; ++i) {
         cv::cuda::DeviceInfo device(i);
-        std::cout << "  [" << i << "] " << device.name()
-                  << " - Total Memory: " << (device.totalMemory() / (1024 * 1024)) << " MB" << std::endl;
+        std::cout << "  [" << i << "] " << device.name() << " - Total Memory: " << (device.totalMemory() / (1024 * 1024)) << " MB" << std::endl;
     }
 }
 
@@ -192,9 +169,7 @@ void listCameras() {
 
 class Interrupt {};
 
-void signalHandler(int signum) {
-    throw Interrupt();
-}
+void signalHandler(int signum) { throw Interrupt(); }
 
 int main(int argc, char **argv) {
     std::cout << "acidcam-gpu-cli " << CURRENT_VERSION << std::endl;
@@ -225,7 +200,33 @@ int main(int argc, char **argv) {
     bool expose = false;
     bool silent = false;
     double fps = 0.0;
-    argz.addOptionSingleValue('i', "input").addOptionDoubleValue(255, "input", "Input video").addOptionSingleValue('c', "camera").addOptionDoubleValue(258, "camera", "Camera ID").addOptionSingleValue('f', "filters").addOptionDoubleValue(256, "filters", "Filter IDs").addOptionSingleValue('b', "buffer").addOptionDoubleValue(257, "buffer", "Buffer 4-32").addOptionSingleValue('r', "resolution").addOptionDoubleValue(260, "resolution", "Window size").addOptionDoubleValue(289, "camera-res", "Camera size").addOptionDoubleValue(290, "output", "Filename").addOptionDoubleValue(293, "speed", "Tick speed").addOptionDoubleValue(291, "crf", "CRF").addOptionDoubleValue(292, "fps", "FPS").addOptionDoubleValue(294, "time", "How many seconds to record").addOptionDoubleValue(301, "device", "Select Cuda Device").addOptionDouble(304, "repeat", "repeat video").addOptionDoubleValue(305, "skip", "Skip to frame in video").addOptionDoubleValue(306, "jump", "Jump to second in video").addOptionDouble(302, "list", "List all devices").addOptionDouble(300, "hide", "hide HUD").addOptionDouble(307, "exposure", "Disable Auto Exposurre").addOptionDouble(308, "list-devices", "List graphics cards and cameras").addOptionDouble(320, "list", "List all filters").addOptionSingle('h', "help").addOptionDouble(400, "silent", "Supress video shown, run in command line mode");
+    argz.addOptionSingleValue('i', "input")
+        .addOptionDoubleValue(255, "input", "Input video")
+        .addOptionSingleValue('c', "camera")
+        .addOptionDoubleValue(258, "camera", "Camera ID")
+        .addOptionSingleValue('f', "filters")
+        .addOptionDoubleValue(256, "filters", "Filter IDs")
+        .addOptionSingleValue('b', "buffer")
+        .addOptionDoubleValue(257, "buffer", "Buffer 4-32")
+        .addOptionSingleValue('r', "resolution")
+        .addOptionDoubleValue(260, "resolution", "Window size")
+        .addOptionDoubleValue(289, "camera-res", "Camera size")
+        .addOptionDoubleValue(290, "output", "Filename")
+        .addOptionDoubleValue(293, "speed", "Tick speed")
+        .addOptionDoubleValue(291, "crf", "CRF")
+        .addOptionDoubleValue(292, "fps", "FPS")
+        .addOptionDoubleValue(294, "time", "How many seconds to record")
+        .addOptionDoubleValue(301, "device", "Select Cuda Device")
+        .addOptionDouble(304, "repeat", "repeat video")
+        .addOptionDoubleValue(305, "skip", "Skip to frame in video")
+        .addOptionDoubleValue(306, "jump", "Jump to second in video")
+        .addOptionDouble(302, "list", "List all devices")
+        .addOptionDouble(300, "hide", "hide HUD")
+        .addOptionDouble(307, "exposure", "Disable Auto Exposurre")
+        .addOptionDouble(308, "list-devices", "List graphics cards and cameras")
+        .addOptionDouble(320, "list", "List all filters")
+        .addOptionSingle('h', "help")
+        .addOptionDouble(400, "silent", "Supress video shown, run in command line mode");
     try {
         Argument<std::string> a;
         int code = 0;

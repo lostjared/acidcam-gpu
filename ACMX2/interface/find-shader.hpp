@@ -28,8 +28,7 @@ class FindShaderDialog : public QDialog {
 
   signals:
     /// @brief Emitted when the user opens one search result.
-    void resultActivated(const QString &filePath, int lineNumber,
-                         int columnNumber, int matchLength);
+    void resultActivated(const QString &filePath, int lineNumber, int columnNumber, int matchLength);
 
   protected:
     void closeEvent(QCloseEvent *event) override;

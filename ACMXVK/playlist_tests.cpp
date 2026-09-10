@@ -15,11 +15,8 @@ namespace {
     class TemporaryDirectory {
       public:
         TemporaryDirectory() {
-            const auto suffix = std::chrono::steady_clock::now()
-                                    .time_since_epoch()
-                                    .count();
-            path = fs::temp_directory_path() /
-                   ("acmxvk-playlist-" + std::to_string(suffix));
+            const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
+            path = fs::temp_directory_path() / ("acmxvk-playlist-" + std::to_string(suffix));
             fs::create_directories(path);
         }
 
@@ -53,16 +50,10 @@ int main() {
     try {
         TemporaryDirectory temporary;
         const fs::path library = temporary.path / "library";
-        const std::vector<fs::path> shaders{
-            library / "orphan.frag.spv", library / "one.frag.spv",
-            library / "compute/two.comp.spv"};
+        const std::vector<fs::path> shaders{library / "orphan.frag.spv", library / "one.frag.spv", library / "compute/two.comp.spv"};
 
-        expect(acmxvk::find_shader_path(shaders, library, " one.frag ") ==
-                   shaders[1],
-               "fragment shader name was not resolved");
-        expect(acmxvk::find_shader_path(shaders, library,
-                                        "compute/two.comp") == shaders[2],
-               "relative compute shader path was not resolved");
+        expect(acmxvk::find_shader_path(shaders, library, " one.frag ") == shaders[1], "fragment shader name was not resolved");
+        expect(acmxvk::find_shader_path(shaders, library, "compute/two.comp") == shaders[2], "relative compute shader path was not resolved");
 
         const fs::path playlist_path = temporary.path / "test.playlist.txt";
         write_text(playlist_path,
@@ -75,32 +66,19 @@ int main() {
                    "[Empty]\n"
                    "missing-again.frag\n");
         std::ostringstream warnings;
-        const std::vector<acmxvk::PlaylistNode> playlist =
-            acmxvk::load_playlist(playlist_path, shaders, library, warnings);
+        const std::vector<acmxvk::PlaylistNode> playlist = acmxvk::load_playlist(playlist_path, shaders, library, warnings);
         expect(playlist.size() == 3, "empty playlist node was not removed");
-        expect(playlist[0].name == "Default" &&
-                   playlist[0].shaders ==
-                       std::vector<fs::path>{shaders[0]},
-               "default playlist entries were not retained");
-        expect(playlist[1].name == "Warm" &&
-                   playlist[1].shaders ==
-                       std::vector<fs::path>{shaders[1]},
-               "named fragment node was parsed incorrectly");
-        expect(playlist[2].name == "Compute" &&
-                   playlist[2].shaders ==
-                       std::vector<fs::path>{shaders[2]},
-               "named compute node was parsed incorrectly");
-        expect(acmxvk::playlist_shader_count(playlist) == 3,
-               "playlist shader count is incorrect");
-        expect(warnings.str().find("missing.frag") != std::string::npos,
-               "missing shader warning was not emitted");
+        expect(playlist[0].name == "Default" && playlist[0].shaders == std::vector<fs::path>{shaders[0]}, "default playlist entries were not retained");
+        expect(playlist[1].name == "Warm" && playlist[1].shaders == std::vector<fs::path>{shaders[1]}, "named fragment node was parsed incorrectly");
+        expect(playlist[2].name == "Compute" && playlist[2].shaders == std::vector<fs::path>{shaders[2]}, "named compute node was parsed incorrectly");
+        expect(acmxvk::playlist_shader_count(playlist) == 3, "playlist shader count is incorrect");
+        expect(warnings.str().find("missing.frag") != std::string::npos, "missing shader warning was not emitted");
 
         const fs::path malformed_path = temporary.path / "malformed.txt";
         write_text(malformed_path, "[Broken\none.frag\n");
         bool rejected_malformed = false;
         try {
-            static_cast<void>(acmxvk::load_playlist(
-                malformed_path, shaders, library, warnings));
+            static_cast<void>(acmxvk::load_playlist(malformed_path, shaders, library, warnings));
         } catch (const std::runtime_error &) {
             rejected_malformed = true;
         }
@@ -108,27 +86,22 @@ int main() {
 
         const fs::path maximum_path = temporary.path / "maximum.txt";
         std::ostringstream maximum_playlist;
-        for (std::size_t index = 0;
-             index < acmxvk::input::MAX_PLAYLIST_NODES; ++index) {
+        for (std::size_t index = 0; index < acmxvk::input::MAX_PLAYLIST_NODES; ++index) {
             maximum_playlist << "[Node " << index << "]\none.frag\n";
         }
         write_text(maximum_path, maximum_playlist.str());
-        const std::vector<acmxvk::PlaylistNode> maximum_nodes =
-            acmxvk::load_playlist(maximum_path, shaders, library, warnings);
-        expect(maximum_nodes.size() == acmxvk::input::MAX_PLAYLIST_NODES,
-               "maximum playlist node count was not accepted");
+        const std::vector<acmxvk::PlaylistNode> maximum_nodes = acmxvk::load_playlist(maximum_path, shaders, library, warnings);
+        expect(maximum_nodes.size() == acmxvk::input::MAX_PLAYLIST_NODES, "maximum playlist node count was not accepted");
 
         maximum_playlist << "[Too many]\none.frag\n";
         write_text(maximum_path, maximum_playlist.str());
         bool rejected_excess_nodes = false;
         try {
-            static_cast<void>(acmxvk::load_playlist(
-                maximum_path, shaders, library, warnings));
+            static_cast<void>(acmxvk::load_playlist(maximum_path, shaders, library, warnings));
         } catch (const std::runtime_error &) {
             rejected_excess_nodes = true;
         }
-        expect(rejected_excess_nodes,
-               "excess playlist node count was accepted");
+        expect(rejected_excess_nodes, "excess playlist node count was accepted");
     } catch (const std::exception &error) {
         std::cerr << "playlist test failed: " << error.what() << '\n';
         return 1;

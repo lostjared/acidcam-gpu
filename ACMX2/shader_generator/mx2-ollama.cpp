@@ -84,11 +84,7 @@ namespace mx {
                 << "\"prompt\":\"";
 
         std::ostringstream stream;
-        stream << "you are a master GLSL graphics programmer can you take this shader '"
-               << shader
-               << "' and apply these changes to the texture: "
-               << prompt
-               << "\n"
+        stream << "you are a master GLSL graphics programmer can you take this shader '" << shader << "' and apply these changes to the texture: " << prompt << "\n"
                << "Do not add any other uniform variables. You can create new local variables, but do not create variables and then not define them. Be creative and make it awesome.\n";
 
         std::string prompt_text = stream.str();
@@ -182,8 +178,7 @@ namespace mx {
         curl_easy_getinfo(curl_raii.curl, CURLINFO_RESPONSE_CODE, &response_code);
 
         if (response_code != 200) {
-            throw ObjectRequestException("HTTP request failed with response code: " + std::to_string(response_code) +
-                                         "\nResponse: " + response_data.response);
+            throw ObjectRequestException("HTTP request failed with response code: " + std::to_string(response_code) + "\nResponse: " + response_data.response);
         }
 
         std::string value = response_data.shader_stream.str();
@@ -197,8 +192,7 @@ namespace mx {
 
             if (line_end != std::string::npos) {
                 std::string lang_line = value.substr(after_backticks, line_end - after_backticks);
-                if (lang_line.find("glsl") != std::string::npos || lang_line.empty() ||
-                    std::all_of(lang_line.begin(), lang_line.end(), ::isspace)) {
+                if (lang_line.find("glsl") != std::string::npos || lang_line.empty() || std::all_of(lang_line.begin(), lang_line.end(), ::isspace)) {
 
                     size_t code_start = line_end + 1;
                     size_t code_end = value.find("```", code_start);

@@ -36,8 +36,7 @@ class DeepDreamSettingsDialog : public QDialog {
     Q_OBJECT
 
   public:
-    explicit DeepDreamSettingsDialog(bool gpu_filter_enabled,
-                                     QWidget *parent = nullptr);
+    explicit DeepDreamSettingsDialog(bool gpu_filter_enabled, QWidget *parent = nullptr);
     [[nodiscard]] DeepDreamConfiguration configuration() const;
 
   signals:

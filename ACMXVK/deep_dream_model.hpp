@@ -61,19 +61,12 @@ namespace acmxvk::dream {
         Model(const Model &) = delete;
         Model &operator=(const Model &) = delete;
 
-        [[nodiscard]] static Model load(std::string_view filename,
-                                        int cuda_device,
-                                        std::string_view layer = {},
-                                        bool use_half = false);
+        [[nodiscard]] static Model load(std::string_view filename, int cuda_device, std::string_view layer = {}, bool use_half = false);
         [[nodiscard]] const ModelMetadata &metadata() const;
         [[nodiscard]] std::size_t selected_layer() const;
         [[nodiscard]] std::size_t selected_channels() const;
-        [[nodiscard]] GradientAscentResult apply_gradient_ascent(
-            cv::Mat &rgba, const GradientAscentOptions &options = {});
-        [[nodiscard]] GradientAscentResult apply_gradient_ascent_cuda(
-            const cv::cuda::GpuMat &rgba, cv::cuda::GpuMat &output,
-            cv::cuda::Stream &stream,
-            const GradientAscentOptions &options = {});
+        [[nodiscard]] GradientAscentResult apply_gradient_ascent(cv::Mat &rgba, const GradientAscentOptions &options = {});
+        [[nodiscard]] GradientAscentResult apply_gradient_ascent_cuda(const cv::cuda::GpuMat &rgba, cv::cuda::GpuMat &output, cv::cuda::Stream &stream, const GradientAscentOptions &options = {});
         void print(std::ostream &output) const;
 
       private:

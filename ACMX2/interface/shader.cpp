@@ -7,10 +7,7 @@
 #include <QRegularExpression>
 #include <QSettings>
 
-ShaderDialog::ShaderDialog(acmx2::Backend selectedBackend, QWidget *parent)
-    : QDialog(parent), backend(selectedBackend) {
-    init();
-}
+ShaderDialog::ShaderDialog(acmx2::Backend selectedBackend, QWidget *parent) : QDialog(parent), backend(selectedBackend) { init(); }
 
 void ShaderDialog::init() {
     QVBoxLayout *layout = new QVBoxLayout(this);
@@ -19,19 +16,14 @@ void ShaderDialog::init() {
     layout->addWidget(instructionLabel);
 
     shaderNameEdit = new QLineEdit(this);
-    shaderNameEdit->setPlaceholderText(
-        backend == acmx2::Backend::Acmxvk
-            ? "Shader name (e.g., myshader.frag)"
-            : "Shader name (e.g., myshader.glsl)");
+    shaderNameEdit->setPlaceholderText(backend == acmx2::Backend::Acmxvk ? "Shader name (e.g., myshader.frag)" : "Shader name (e.g., myshader.glsl)");
     layout->addWidget(shaderNameEdit);
 
     QLabel *shaderTypeLabel = new QLabel("Shader type:", this);
     layout->addWidget(shaderTypeLabel);
 
     shaderTypeComboBox = new QComboBox(this);
-    shaderTypeComboBox->addItem(
-        backend == acmx2::Backend::Acmxvk ? "Fragment shader (.frag)"
-                                          : "Fragment shader (.glsl)");
+    shaderTypeComboBox->addItem(backend == acmx2::Backend::Acmxvk ? "Fragment shader (.frag)" : "Fragment shader (.glsl)");
     shaderTypeComboBox->addItem("Compute shader (.comp)");
     layout->addWidget(shaderTypeComboBox);
 
@@ -40,27 +32,14 @@ void ShaderDialog::init() {
     layout->addWidget(defaultCodeCheckBox);
 
     cacheShaderCheckBox = new QCheckBox("Create as cache shader (_cache.glsl)", this);
-    cacheShaderCheckBox->setToolTip(
-        "Create a texture-cache shader starter with frame-cache and spectrum-history sampling.");
+    cacheShaderCheckBox->setToolTip("Create a texture-cache shader starter with frame-cache and spectrum-history sampling.");
     layout->addWidget(cacheShaderCheckBox);
 
-    connect(shaderTypeComboBox,
-            QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [this](int index) {
-                const bool createComputeShader = index == 1;
-                cacheShaderCheckBox->setText(
-                    createComputeShader
-                        ? "Create as cache shader (_cache.comp)"
-                        : (backend == acmx2::Backend::Acmxvk
-                               ? "Create as cache shader (_cache.frag)"
-                               : "Create as cache shader (_cache.glsl)"));
-                shaderNameEdit->setPlaceholderText(
-                    createComputeShader
-                        ? "Shader name (e.g., myshader.comp)"
-                        : (backend == acmx2::Backend::Acmxvk
-                               ? "Shader name (e.g., myshader.frag)"
-                               : "Shader name (e.g., myshader.glsl)"));
-            });
+    connect(shaderTypeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        const bool createComputeShader = index == 1;
+        cacheShaderCheckBox->setText(createComputeShader ? "Create as cache shader (_cache.comp)" : (backend == acmx2::Backend::Acmxvk ? "Create as cache shader (_cache.frag)" : "Create as cache shader (_cache.glsl)"));
+        shaderNameEdit->setPlaceholderText(createComputeShader ? "Shader name (e.g., myshader.comp)" : (backend == acmx2::Backend::Acmxvk ? "Shader name (e.g., myshader.frag)" : "Shader name (e.g., myshader.glsl)"));
+    });
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     okButton = new QPushButton("OK", this);
@@ -86,8 +65,7 @@ void ShaderDialog::onOkButtonClicked() {
         return;
     }
 
-    if (shaderName.endsWith(".glsl", Qt::CaseInsensitive) ||
-        shaderName.endsWith(".frag", Qt::CaseInsensitive)) {
+    if (shaderName.endsWith(".glsl", Qt::CaseInsensitive) || shaderName.endsWith(".frag", Qt::CaseInsensitive)) {
         shaderName.chop(5);
     } else if (shaderName.endsWith(".comp", Qt::CaseInsensitive)) {
         shaderName.chop(5);
@@ -98,47 +76,34 @@ void ShaderDialog::onOkButtonClicked() {
         return;
     }
 
-    static const QRegularExpression safeName(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_.-]*$"));
-    if (!safeName.match(shaderName).hasMatch() || shaderName == "." ||
-        shaderName == "..") {
-        QMessageBox::warning(
-            this, "Warning",
-            "Shader names may contain only letters, numbers, '.', '_', and '-'.");
+    static const QRegularExpression safeName(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_.-]*$"));
+    if (!safeName.match(shaderName).hasMatch() || shaderName == "." || shaderName == "..") {
+        QMessageBox::warning(this, "Warning", "Shader names may contain only letters, numbers, '.', '_', and '-'.");
         return;
     }
 
     const bool createComputeShader = shaderTypeComboBox->currentIndex() == 1;
     const bool createCacheShader = cacheShaderCheckBox->isChecked();
-    if (createCacheShader &&
-        !shaderName.endsWith("_cache", Qt::CaseInsensitive)) {
+    if (createCacheShader && !shaderName.endsWith("_cache", Qt::CaseInsensitive)) {
         shaderName += "_cache";
     }
-    shaderName += createComputeShader
-                      ? ".comp"
-                      : (backend == acmx2::Backend::Acmxvk ? ".frag" : ".glsl");
+    shaderName += createComputeShader ? ".comp" : (backend == acmx2::Backend::Acmxvk ? ".frag" : ".glsl");
 
     QString relativeShaderName = shaderName;
     if (backend == acmx2::Backend::Acmxvk && createComputeShader)
         relativeShaderName = QStringLiteral("compute/") + shaderName;
-    const QString absoluteShaderName =
-        QDir(shaderPath).filePath(relativeShaderName);
+    const QString absoluteShaderName = QDir(shaderPath).filePath(relativeShaderName);
     if (QFileInfo::exists(absoluteShaderName)) {
-        QMessageBox::warning(
-            this, "Shader Already Exists",
-            QString("The shader already exists and was not changed:\n%1")
-                .arg(absoluteShaderName));
+        QMessageBox::warning(this, "Shader Already Exists", QString("The shader already exists and was not changed:\n%1").arg(absoluteShaderName));
         return;
     }
     if (!QDir().mkpath(QFileInfo(absoluteShaderName).absolutePath())) {
-        QMessageBox::critical(this, "Error",
-                              "Failed to create the shader directory.");
+        QMessageBox::critical(this, "Error", "Failed to create the shader directory.");
         return;
     }
 
     const bool includeDefaultCode = defaultCodeCheckBox->isChecked();
-    if (!createShaderFile(absoluteShaderName, includeDefaultCode,
-                          createCacheShader, createComputeShader)) {
+    if (!createShaderFile(absoluteShaderName, includeDefaultCode, createCacheShader, createComputeShader)) {
         return;
     }
 
@@ -146,22 +111,18 @@ void ShaderDialog::onOkButtonClicked() {
     bool manifestCreated = false;
     if (backend == acmx2::Backend::Acmxvk) {
         QStringList manifestShaders;
-        if (!acmx2::load_shader_manifest(shaderPath, manifestShaders,
-                                         manifestError)) {
+        if (!acmx2::load_shader_manifest(shaderPath, manifestShaders, manifestError)) {
             QFile::remove(absoluteShaderName);
             QMessageBox::critical(this, "Error", manifestError);
             return;
         }
-        if (!manifestShaders.contains(relativeShaderName,
-                                      Qt::CaseInsensitive)) {
+        if (!manifestShaders.contains(relativeShaderName, Qt::CaseInsensitive)) {
             manifestShaders.append(relativeShaderName);
         }
         acmx2::AcmxvkSourceManifestResult result;
-        manifestCreated = acmx2::create_acmxvk_source_manifest_for_shaders(
-            shaderPath, manifestShaders, QString(), result, manifestError);
+        manifestCreated = acmx2::create_acmxvk_source_manifest_for_shaders(shaderPath, manifestShaders, QString(), result, manifestError);
     } else {
-        manifestCreated = acmx2::append_shader_manifest(
-            shaderPath, relativeShaderName, manifestError);
+        manifestCreated = acmx2::append_shader_manifest(shaderPath, relativeShaderName, manifestError);
     }
     if (!manifestCreated) {
         QFile::remove(absoluteShaderName);
@@ -172,13 +133,9 @@ void ShaderDialog::onOkButtonClicked() {
     accept();
 }
 
-void ShaderDialog::setShaderPath(const QString &path) {
-    shaderPath = path;
-}
+void ShaderDialog::setShaderPath(const QString &path) { shaderPath = path; }
 
-void ShaderDialog::onCancelButtonClicked() {
-    reject();
-}
+void ShaderDialog::onCancelButtonClicked() { reject(); }
 
 namespace {
     constexpr const char *DEFAULT_SHADER_CODE = R"(#version 330 core
@@ -416,27 +373,19 @@ void main() {
 )";
 } // namespace
 
-bool ShaderDialog::createShaderFile(const QString &shaderName,
-                                    bool includeDefaultCode,
-                                    bool createCacheShader,
-                                    bool createComputeShader) {
+bool ShaderDialog::createShaderFile(const QString &shaderName, bool includeDefaultCode, bool createCacheShader, bool createComputeShader) {
     QFile file(shaderName);
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&file);
         if (includeDefaultCode) {
             if (backend == acmx2::Backend::Acmxvk) {
                 if (createComputeShader) {
-                    out << (createCacheShader
-                                ? ACMXVK_COMPUTE_CACHE_SHADER_CODE
-                                : ACMXVK_COMPUTE_SHADER_CODE);
+                    out << (createCacheShader ? ACMXVK_COMPUTE_CACHE_SHADER_CODE : ACMXVK_COMPUTE_SHADER_CODE);
                 } else {
-                    out << (createCacheShader
-                                ? ACMXVK_FRAGMENT_CACHE_SHADER_CODE
-                                : ACMXVK_FRAGMENT_SHADER_CODE);
+                    out << (createCacheShader ? ACMXVK_FRAGMENT_CACHE_SHADER_CODE : ACMXVK_FRAGMENT_SHADER_CODE);
                 }
             } else if (createComputeShader) {
-                out << (createCacheShader ? COMPUTE_CACHE_SHADER_CODE
-                                          : COMPUTE_SHADER_CODE);
+                out << (createCacheShader ? COMPUTE_CACHE_SHADER_CODE : COMPUTE_SHADER_CODE);
             } else {
                 out << (createCacheShader ? CACHE_SHADER_CODE : DEFAULT_SHADER_CODE);
             }

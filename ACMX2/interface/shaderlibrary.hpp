@@ -26,8 +26,7 @@ class LibraryWindow : public QDialog {
     Q_OBJECT
 
   public:
-    explicit LibraryWindow(acmx2::Backend backend,
-                           QWidget *parent = nullptr);
+    explicit LibraryWindow(acmx2::Backend backend, QWidget *parent = nullptr);
 
   private:
     QLineEdit *folderPathEdit;

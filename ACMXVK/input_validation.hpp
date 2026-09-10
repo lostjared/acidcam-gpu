@@ -35,29 +35,17 @@ namespace acmxvk::input {
     constexpr std::size_t MAX_MIDI_MAPPINGS = 4096;
     constexpr std::size_t MAX_AUDIO_PLAYLIST_ENTRIES = 4096;
 
-    void validate_string(std::string_view value, StringKind kind,
-                         std::string_view context, bool allow_empty = false);
+    void validate_string(std::string_view value, StringKind kind, std::string_view context, bool allow_empty = false);
 
-    void validate_file_size(
-        const std::filesystem::path &path, std::string_view context,
-        std::uintmax_t maximum_bytes = MAX_CONFIGURATION_FILE_BYTES);
+    void validate_file_size(const std::filesystem::path &path, std::string_view context, std::uintmax_t maximum_bytes = MAX_CONFIGURATION_FILE_BYTES);
 
-    void validate_text_file(
-        const std::filesystem::path &path, std::string_view context,
-        std::uintmax_t maximum_bytes = MAX_CONFIGURATION_FILE_BYTES,
-        std::size_t maximum_line_bytes = MAX_CONFIGURATION_FILE_BYTES);
+    void validate_text_file(const std::filesystem::path &path, std::string_view context, std::uintmax_t maximum_bytes = MAX_CONFIGURATION_FILE_BYTES, std::size_t maximum_line_bytes = MAX_CONFIGURATION_FILE_BYTES);
 
-    void validate_spirv_file(const std::filesystem::path &path,
-                             std::string_view context);
+    void validate_spirv_file(const std::filesystem::path &path, std::string_view context);
 
-    [[nodiscard]] std::string truncate_utf8(std::string_view value,
-                                            std::size_t maximum_bytes,
-                                            std::string_view suffix = "...");
+    [[nodiscard]] std::string truncate_utf8(std::string_view value, std::size_t maximum_bytes, std::string_view suffix = "...");
 
-    [[nodiscard]] bool read_bounded_line(
-        std::istream &input, std::string &line, std::string_view context,
-        std::size_t line_number,
-        std::size_t maximum_bytes = MAX_CONFIGURATION_LINE_BYTES);
+    [[nodiscard]] bool read_bounded_line(std::istream &input, std::string &line, std::string_view context, std::size_t line_number, std::size_t maximum_bytes = MAX_CONFIGURATION_LINE_BYTES);
 
 } // namespace acmxvk::input
 

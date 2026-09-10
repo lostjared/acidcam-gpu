@@ -70,10 +70,7 @@ namespace {
                     return false;
                 }
 
-                const unsigned int device =
-                    output_device >= 0
-                        ? static_cast<unsigned int>(output_device)
-                        : audio.getDefaultOutputDevice();
+                const unsigned int device = output_device >= 0 ? static_cast<unsigned int>(output_device) : audio.getDefaultOutputDevice();
                 const RtAudio::DeviceInfo info = audio.getDeviceInfo(device);
                 if (info.outputChannels == 0) {
                     std::cerr << "acmx2: file_audio: Selected device has no output channels\n";
@@ -94,17 +91,12 @@ namespace {
                 output_parameters.firstChannel = 0;
 
                 unsigned int buffer_frames = 512;
-                audio.openStream(&output_parameters, nullptr, RTAUDIO_FLOAT32,
-                                 output_sample_rate, &buffer_frames,
-                                 &FileAudioOutput::audio_callback, this);
+                audio.openStream(&output_parameters, nullptr, RTAUDIO_FLOAT32, output_sample_rate, &buffer_frames, &FileAudioOutput::audio_callback, this);
                 configured = true;
-                std::cout << "acmx2: file_audio: Playback configured on device "
-                          << device << ": " << info.name << " (" << output_channels
-                          << " ch, " << output_sample_rate << " Hz)\n";
+                std::cout << "acmx2: file_audio: Playback configured on device " << device << ": " << info.name << " (" << output_channels << " ch, " << output_sample_rate << " Hz)\n";
                 return true;
             } catch (const std::exception &error) {
-                std::cerr << "acmx2: file_audio: Could not open output stream: "
-                          << error.what() << "\n";
+                std::cerr << "acmx2: file_audio: Could not open output stream: " << error.what() << "\n";
                 close();
                 return false;
             }
@@ -122,8 +114,7 @@ namespace {
             } catch (const std::exception &error) {
                 active.store(false, std::memory_order_release);
                 started.store(false, std::memory_order_release);
-                std::cerr << "acmx2: file_audio: Could not start output stream: "
-                          << error.what() << "\n";
+                std::cerr << "acmx2: file_audio: Could not start output stream: " << error.what() << "\n";
                 return false;
             }
         }
@@ -136,8 +127,7 @@ namespace {
                         audio.stopStream();
                     audio.closeStream();
                 } catch (const std::exception &error) {
-                    std::cerr << "acmx2: file_audio: Error closing output stream: "
-                              << error.what() << "\n";
+                    std::cerr << "acmx2: file_audio: Error closing output stream: " << error.what() << "\n";
                 }
             }
             configured = false;
@@ -152,49 +142,33 @@ namespace {
 
         bool is_configured() const { return configured; }
 
-        bool is_started() const {
-            return started.load(std::memory_order_acquire);
-        }
+        bool is_started() const { return started.load(std::memory_order_acquire); }
 
-        std::size_t position() const {
-            return playback_position.load(std::memory_order_acquire);
-        }
+        std::size_t position() const { return playback_position.load(std::memory_order_acquire); }
 
-        std::size_t total_position() const {
-            return total_playback_position.load(std::memory_order_acquire);
-        }
+        std::size_t total_position() const { return total_playback_position.load(std::memory_order_acquire); }
 
       private:
         static unsigned int choose_sample_rate(const std::vector<unsigned int> &rates) {
-            if (rates.empty() ||
-                std::find(rates.begin(), rates.end(), FILE_AUDIO_SAMPLE_RATE) != rates.end())
+            if (rates.empty() || std::find(rates.begin(), rates.end(), FILE_AUDIO_SAMPLE_RATE) != rates.end())
                 return FILE_AUDIO_SAMPLE_RATE;
             if (std::find(rates.begin(), rates.end(), 48000U) != rates.end())
                 return 48000;
             return rates.front();
         }
 
-        static int audio_callback(void *output_buffer, void *, unsigned int frame_count,
-                                  double, RtAudioStreamStatus, void *user_data) {
-            return static_cast<FileAudioOutput *>(user_data)
-                ->write_samples(static_cast<float *>(output_buffer), frame_count);
-        }
+        static int audio_callback(void *output_buffer, void *, unsigned int frame_count, double, RtAudioStreamStatus, void *user_data) { return static_cast<FileAudioOutput *>(user_data)->write_samples(static_cast<float *>(output_buffer), frame_count); }
 
         int write_samples(float *output, unsigned int frame_count) {
             if (output == nullptr)
                 return 0;
 
-            const double source_step =
-                static_cast<double>(FILE_AUDIO_SAMPLE_RATE) /
-                static_cast<double>(output_sample_rate);
+            const double source_step = static_cast<double>(FILE_AUDIO_SAMPLE_RATE) / static_cast<double>(output_sample_rate);
             for (unsigned int frame = 0; frame < frame_count; ++frame) {
                 float sample = 0.0f;
-                if (active.load(std::memory_order_relaxed) &&
-                    source_position >= static_cast<double>(source_sample_count)) {
+                if (active.load(std::memory_order_relaxed) && source_position >= static_cast<double>(source_sample_count)) {
                     if (fileAudioRepeat.load(std::memory_order_relaxed)) {
-                        source_position = std::fmod(
-                            source_position,
-                            static_cast<double>(source_sample_count));
+                        source_position = std::fmod(source_position, static_cast<double>(source_sample_count));
                     } else {
                         active.store(false, std::memory_order_release);
                         source_position = static_cast<double>(source_sample_count);
@@ -203,14 +177,9 @@ namespace {
 
                 const std::size_t index = static_cast<std::size_t>(source_position);
                 if (active.load(std::memory_order_relaxed) && index < source_sample_count) {
-                    const std::size_t next_index =
-                        fileAudioRepeat.load(std::memory_order_relaxed)
-                            ? (index + 1) % source_sample_count
-                            : std::min(index + 1, source_sample_count - 1);
-                    const float fraction =
-                        static_cast<float>(source_position - static_cast<double>(index));
-                    sample = source_samples[index] +
-                             (source_samples[next_index] - source_samples[index]) * fraction;
+                    const std::size_t next_index = fileAudioRepeat.load(std::memory_order_relaxed) ? (index + 1) % source_sample_count : std::min(index + 1, source_sample_count - 1);
+                    const float fraction = static_cast<float>(source_position - static_cast<double>(index));
+                    sample = source_samples[index] + (source_samples[next_index] - source_samples[index]) * fraction;
                     source_position += source_step;
                     total_source_position += source_step;
                 } else if (!fileAudioRepeat.load(std::memory_order_relaxed)) {
@@ -222,12 +191,8 @@ namespace {
                     output[frame * output_channels + channel] = sample;
             }
 
-            playback_position.store(
-                std::min(static_cast<std::size_t>(source_position), source_sample_count),
-                std::memory_order_release);
-            total_playback_position.store(
-                static_cast<std::size_t>(total_source_position),
-                std::memory_order_release);
+            playback_position.store(std::min(static_cast<std::size_t>(source_position), source_sample_count), std::memory_order_release);
+            total_playback_position.store(static_cast<std::size_t>(total_source_position), std::memory_order_release);
             return 0;
         }
 
@@ -270,31 +235,23 @@ static std::string trimPlaylistLine(std::string line) {
 
 static bool isM3uPath(const std::string &filepath) {
     std::string extension = std::filesystem::path(filepath).extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(),
-                   [](unsigned char value) {
-                       return static_cast<char>(std::tolower(value));
-                   });
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
     return extension == ".m3u" || extension == ".m3u8";
 }
 
 static std::vector<std::string> readM3uPlaylist(const std::string &filepath) {
     std::ifstream input(filepath);
     if (!input) {
-        std::cerr << "acmx2: file_audio: Cannot open M3U playlist: "
-                  << filepath << "\n";
+        std::cerr << "acmx2: file_audio: Cannot open M3U playlist: " << filepath << "\n";
         return {};
     }
 
-    const std::filesystem::path playlistDirectory =
-        std::filesystem::absolute(std::filesystem::path(filepath)).parent_path();
+    const std::filesystem::path playlistDirectory = std::filesystem::absolute(std::filesystem::path(filepath)).parent_path();
     std::vector<std::string> paths;
     std::string line;
     bool firstLine = true;
     while (std::getline(input, line)) {
-        if (firstLine && line.size() >= 3 &&
-            static_cast<unsigned char>(line[0]) == 0xef &&
-            static_cast<unsigned char>(line[1]) == 0xbb &&
-            static_cast<unsigned char>(line[2]) == 0xbf) {
+        if (firstLine && line.size() >= 3 && static_cast<unsigned char>(line[0]) == 0xef && static_cast<unsigned char>(line[1]) == 0xbb && static_cast<unsigned char>(line[2]) == 0xbf) {
             line.erase(0, 3);
         }
         firstLine = false;
@@ -355,9 +312,7 @@ static bool decodeAllSamples() {
                 int outSamples = swr_get_out_samples(swrCtx, frame->nb_samples);
                 std::vector<float> buf(outSamples);
                 uint8_t *outBuf = reinterpret_cast<uint8_t *>(buf.data());
-                int converted = swr_convert(swrCtx, &outBuf, outSamples,
-                                            const_cast<const uint8_t **>(frame->extended_data),
-                                            frame->nb_samples);
+                int converted = swr_convert(swrCtx, &outBuf, outSamples, const_cast<const uint8_t **>(frame->extended_data), frame->nb_samples);
                 if (converted > 0) {
                     decodedSamples.insert(decodedSamples.end(), buf.begin(), buf.begin() + converted);
                 }
@@ -423,10 +378,7 @@ static bool decodeAudioFile(const std::string &filepath) {
 
     // Set up resampler: input format → mono float 44100 Hz
     AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_MONO;
-    int ret = swr_alloc_set_opts2(&swrCtx,
-                                  &outLayout, AV_SAMPLE_FMT_FLT, 44100,
-                                  &codecCtx->ch_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
-                                  0, nullptr);
+    int ret = swr_alloc_set_opts2(&swrCtx, &outLayout, AV_SAMPLE_FMT_FLT, 44100, &codecCtx->ch_layout, codecCtx->sample_fmt, codecCtx->sample_rate, 0, nullptr);
     if (ret < 0 || swr_init(swrCtx) < 0) {
         std::cerr << "acmx2: file_audio: Cannot init resampler\n";
         closeDecoderResources();
@@ -447,9 +399,7 @@ static bool decodeAudioFile(const std::string &filepath) {
         return false;
     }
 
-    std::cout << "acmx2: file_audio: Loaded " << decodedSampleCount
-              << " samples (" << (decodedSampleCount / 44100.0)
-              << "s) from: " << filepath << "\n";
+    std::cout << "acmx2: file_audio: Loaded " << decodedSampleCount << " samples (" << (decodedSampleCount / 44100.0) << "s) from: " << filepath << "\n";
     return true;
 }
 
@@ -461,12 +411,9 @@ bool file_audio_open(const std::string &filepath) {
     decodedSamples.reserve(44100 * 300); // reserve ~5 minutes
 
     const bool playlist = isM3uPath(filepath);
-    const std::vector<std::string> requestedPaths =
-        playlist ? readM3uPlaylist(filepath)
-                 : std::vector<std::string>{filepath};
+    const std::vector<std::string> requestedPaths = playlist ? readM3uPlaylist(filepath) : std::vector<std::string>{filepath};
     if (requestedPaths.empty()) {
-        std::cerr << "acmx2: file_audio: M3U playlist contains no tracks: "
-                  << filepath << "\n";
+        std::cerr << "acmx2: file_audio: M3U playlist contains no tracks: " << filepath << "\n";
         return false;
     }
 
@@ -475,8 +422,7 @@ bool file_audio_open(const std::string &filepath) {
             fileAudioSourcePaths.push_back(trackPath);
             fileAudioSourceEndPositions.push_back(decodedSamples.size());
         } else if (playlist) {
-            std::cerr << "acmx2: file_audio: Skipping unusable playlist track: "
-                      << trackPath << "\n";
+            std::cerr << "acmx2: file_audio: Skipping unusable playlist track: " << trackPath << "\n";
         }
     }
     if (fileAudioSourcePaths.empty()) {
@@ -489,30 +435,20 @@ bool file_audio_open(const std::string &filepath) {
     fileAudioActive = true;
 
     if (playlist) {
-        std::cout << "acmx2: file_audio: Loaded M3U playlist with "
-                  << fileAudioSourcePaths.size() << " track(s), "
-                  << (decodedSamples.size() / 44100.0) << "s total: "
-                  << filepath << "\n";
+        std::cout << "acmx2: file_audio: Loaded M3U playlist with " << fileAudioSourcePaths.size() << " track(s), " << (decodedSamples.size() / 44100.0) << "s total: " << filepath << "\n";
     }
 
     return true;
 }
 
-std::vector<std::string> file_audio_source_paths() {
-    return fileAudioSourcePaths;
-}
+std::vector<std::string> file_audio_source_paths() { return fileAudioSourcePaths; }
 
 std::string file_audio_current_source_path() {
-    if (!fileAudioActive.load(std::memory_order_acquire) ||
-        fileAudioSourcePaths.empty() || fileAudioSourceEndPositions.empty())
+    if (!fileAudioActive.load(std::memory_order_acquire) || fileAudioSourcePaths.empty() || fileAudioSourceEndPositions.empty())
         return {};
 
-    const auto source = std::upper_bound(fileAudioSourceEndPositions.begin(),
-                                         fileAudioSourceEndPositions.end(),
-                                         playbackPos);
-    const std::size_t sourceIndex = std::min(
-        static_cast<std::size_t>(source - fileAudioSourceEndPositions.begin()),
-        fileAudioSourcePaths.size() - 1);
+    const auto source = std::upper_bound(fileAudioSourceEndPositions.begin(), fileAudioSourceEndPositions.end(), playbackPos);
+    const std::size_t sourceIndex = std::min(static_cast<std::size_t>(source - fileAudioSourceEndPositions.begin()), fileAudioSourcePaths.size() - 1);
     return fileAudioSourcePaths[sourceIndex];
 }
 
@@ -521,28 +457,21 @@ bool file_audio_enable_output(int output_device) {
         return false;
 
     fileAudioOutput = std::make_unique<FileAudioOutput>();
-    if (!fileAudioOutput->open(decodedSamples.data(), decodedSamples.size(),
-                               output_device)) {
+    if (!fileAudioOutput->open(decodedSamples.data(), decodedSamples.size(), output_device)) {
         fileAudioOutput.reset();
         return false;
     }
     return true;
 }
 
-void file_audio_set_repeat(bool enabled) {
-    fileAudioRepeat.store(enabled, std::memory_order_release);
-}
+void file_audio_set_repeat(bool enabled) { fileAudioRepeat.store(enabled, std::memory_order_release); }
 
-bool file_audio_has_output_clock() {
-    return fileAudioActive.load(std::memory_order_acquire) &&
-           fileAudioOutput != nullptr && fileAudioOutput->is_configured();
-}
+bool file_audio_has_output_clock() { return fileAudioActive.load(std::memory_order_acquire) && fileAudioOutput != nullptr && fileAudioOutput->is_configured(); }
 
 double file_audio_playback_time() {
     if (!file_audio_has_output_clock())
         return 0.0;
-    return static_cast<double>(fileAudioOutput->total_position()) /
-           static_cast<double>(FILE_AUDIO_SAMPLE_RATE);
+    return static_cast<double>(fileAudioOutput->total_position()) / static_cast<double>(FILE_AUDIO_SAMPLE_RATE);
 }
 
 /// @brief Advance one video-frame worth of samples and update audio analysis.
@@ -550,8 +479,7 @@ void file_audio_process_frame(double video_fps, acmx2::audio::AudioAnalyzer &ana
     if (!fileAudioActive || decodedSamples.empty())
         return;
 
-    const bool output_playback =
-        fileAudioOutput != nullptr && fileAudioOutput->is_configured();
+    const bool output_playback = fileAudioOutput != nullptr && fileAudioOutput->is_configured();
     if (output_playback && fileAudioOutput->is_started())
         playbackPos = fileAudioOutput->position();
 
@@ -565,24 +493,17 @@ void file_audio_process_frame(double video_fps, acmx2::audio::AudioAnalyzer &ana
         }
     }
 
-    const double samples_per_frame =
-        video_fps > 0.0
-            ? static_cast<double>(FILE_AUDIO_SAMPLE_RATE) / video_fps
-            : 512.0;
+    const double samples_per_frame = video_fps > 0.0 ? static_cast<double>(FILE_AUDIO_SAMPLE_RATE) / video_fps : 512.0;
     size_t next_playback_pos = playbackPos;
     if (output_playback) {
-        next_playback_pos += std::max<size_t>(
-            1, static_cast<size_t>(std::floor(samples_per_frame)));
+        next_playback_pos += std::max<size_t>(1, static_cast<size_t>(std::floor(samples_per_frame)));
     } else {
         framePlaybackPos += samples_per_frame;
-        next_playback_pos = std::max(
-            playbackPos + 1,
-            static_cast<size_t>(std::floor(framePlaybackPos)));
+        next_playback_pos = std::max(playbackPos + 1, static_cast<size_t>(std::floor(framePlaybackPos)));
     }
     next_playback_pos = std::min(next_playback_pos, decodedSamples.size());
 
-    unsigned int available =
-        static_cast<unsigned int>(next_playback_pos - playbackPos);
+    unsigned int available = static_cast<unsigned int>(next_playback_pos - playbackPos);
     const float *samples = decodedSamples.data() + playbackPos;
 
     analyzer.process_samples(samples, available, 1);
@@ -599,9 +520,7 @@ void file_audio_process_frame(double video_fps, acmx2::audio::AudioAnalyzer &ana
 }
 
 /// @brief Return true while decoded file-audio samples remain.
-bool file_audio_is_active() {
-    return fileAudioActive.load(std::memory_order_relaxed);
-}
+bool file_audio_is_active() { return fileAudioActive.load(std::memory_order_relaxed); }
 
 /// @brief Stop file-audio playback and release decoder/sample resources.
 void file_audio_close() {

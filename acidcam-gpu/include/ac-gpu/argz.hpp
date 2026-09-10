@@ -26,14 +26,9 @@ concept StringType = std::is_class_v<T> && requires(T type) {
     { type = T{} } -> std::same_as<T &>;
 };
 
-enum class ArgType { ARG_SINGLE,
-                     ARG_SINGLE_VALUE,
-                     ARG_DOUBLE,
-                     ARG_DOUBLE_VALUE,
-                     ARG_NONE };
+enum class ArgType { ARG_SINGLE, ARG_SINGLE_VALUE, ARG_DOUBLE, ARG_DOUBLE_VALUE, ARG_NONE };
 
-template <StringType String>
-struct Argument {
+template <StringType String> struct Argument {
     String arg_name;
     int arg_letter;
     String arg_value;
@@ -52,8 +47,7 @@ struct Argument {
     auto operator<=>(const Argument<String> &a) const { return (arg_letter <=> a.arg_letter); }
 };
 
-template <StringType String>
-struct ArgumentData {
+template <StringType String> struct ArgumentData {
     std::vector<String> args;
     int argc;
     ArgumentData() = default;
@@ -74,8 +68,7 @@ struct ArgumentData {
     }
 };
 
-template <StringType String>
-class ArgException {
+template <StringType String> class ArgException {
   public:
     ArgException() = default;
     ArgException(const String &s) : value{s} {}
@@ -85,8 +78,7 @@ class ArgException {
     String value;
 };
 
-template <StringType String>
-class Argz {
+template <StringType String> class Argz {
   public:
     Argz() = default;
     Argz(int argc, char **argv) { initArgs(argc, argv); }
@@ -329,8 +321,7 @@ class Argz {
         return -1;
     }
 
-    template <typename T>
-    void help(T &cout) {
+    template <typename T> void help(T &cout) {
         using char_type = typename std::decay<decltype(*std::declval<T>().rdbuf())>::type::char_type;
         std::vector<Argument<String>> v;
         std::vector<Argument<String>> v2;

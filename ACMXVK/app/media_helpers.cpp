@@ -8,9 +8,7 @@
 #include <utility>
 
 namespace acmxvk {
-    LatestCameraFrame::~LatestCameraFrame() {
-        stop();
-    }
+    LatestCameraFrame::~LatestCameraFrame() { stop(); }
 
     void LatestCameraFrame::start(mxvk::VK_Capture &source) {
         stop();
@@ -44,12 +42,9 @@ namespace acmxvk {
     bool LatestCameraFrame::takeLatest(cv::Mat &frame, bool wait_for_first) {
         std::unique_lock<std::mutex> lock(frame_mutex);
         if (wait_for_first && published_generation == 0 && !stopping) {
-            frame_condition.wait_for(lock, std::chrono::seconds(3), [&] {
-                return stopping || published_generation > 0;
-            });
+            frame_condition.wait_for(lock, std::chrono::seconds(3), [&] { return stopping || published_generation > 0; });
         }
-        if (stopping || published_generation == consumed_generation ||
-            latest_frame.empty()) {
+        if (stopping || published_generation == consumed_generation || latest_frame.empty()) {
             return false;
         }
         frame = latest_frame;
@@ -76,8 +71,7 @@ namespace acmxvk {
             try {
                 read_frame = source->read(captured);
             } catch (const std::exception &error) {
-                std::cerr << "acmxvk: asynchronous camera read failed: "
-                          << error.what() << '\n';
+                std::cerr << "acmxvk: asynchronous camera read failed: " << error.what() << '\n';
             } catch (...) {
                 std::cerr << "acmxvk: asynchronous camera read failed\n";
             }

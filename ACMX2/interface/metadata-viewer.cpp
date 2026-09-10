@@ -50,10 +50,7 @@ namespace {
             return QStringLiteral("null");
         case QJsonValue::Array:
         case QJsonValue::Object:
-            return QString::fromUtf8(QJsonDocument(v.isArray()
-                                                       ? QJsonDocument(v.toArray())
-                                                       : QJsonDocument(v.toObject()))
-                                         .toJson(QJsonDocument::Compact));
+            return QString::fromUtf8(QJsonDocument(v.isArray() ? QJsonDocument(v.toArray()) : QJsonDocument(v.toObject())).toJson(QJsonDocument::Compact));
         default:
             return QString();
         }
@@ -230,10 +227,7 @@ MetadataViewer::MetadataViewer(QWidget *parent) : QDialog(parent) {
     viewPalette.setColor(QPalette::WindowText, Qt::white);
     viewPalette.setColor(QPalette::ButtonText, Qt::white);
     viewPalette.setColor(QPalette::HighlightedText, Qt::white);
-    for (auto *w : {static_cast<QWidget *>(markdownPreview),
-                    static_cast<QWidget *>(htmlPreview),
-                    static_cast<QWidget *>(textPreview),
-                    static_cast<QWidget *>(tree)}) {
+    for (auto *w : {static_cast<QWidget *>(markdownPreview), static_cast<QWidget *>(htmlPreview), static_cast<QWidget *>(textPreview), static_cast<QWidget *>(tree)}) {
         w->setPalette(viewPalette);
         if (auto *vp = w->findChild<QWidget *>("qt_scrollarea_viewport"))
             vp->setPalette(viewPalette);
@@ -276,12 +270,8 @@ void MetadataViewer::updateCopyButtonLabel() {
 }
 
 void MetadataViewer::browseFile() {
-    const QString start = pathEdit->text().isEmpty()
-                              ? QString()
-                              : QFileInfo(pathEdit->text()).absolutePath();
-    const QString chosen = QFileDialog::getOpenFileName(
-        this, tr("Select Media File"), start,
-        tr("Media files (*.mp4 *.mkv *.mov *.webm *.avi *.m4v *.ts *.flv);;All files (*.*)"));
+    const QString start = pathEdit->text().isEmpty() ? QString() : QFileInfo(pathEdit->text()).absolutePath();
+    const QString chosen = QFileDialog::getOpenFileName(this, tr("Select Media File"), start, tr("Media files (*.mp4 *.mkv *.mov *.webm *.avi *.m4v *.ts *.flv);;All files (*.*)"));
     if (!chosen.isEmpty()) {
         pathEdit->setText(chosen);
     }
@@ -290,8 +280,7 @@ void MetadataViewer::browseFile() {
 void MetadataViewer::analyzeFile() {
     const QString path = pathEdit->text().trimmed();
     if (path.isEmpty() || !QFileInfo::exists(path)) {
-        QMessageBox::warning(this, tr("Metadata Viewer"),
-                             tr("Please select an existing media file."));
+        QMessageBox::warning(this, tr("Metadata Viewer"), tr("Please select an existing media file."));
         return;
     }
 
@@ -304,24 +293,20 @@ void MetadataViewer::analyzeFile() {
          << "-show_streams"
          << "-show_frames"
          << "-read_intervals" << "%+#1"
-         << "-show_entries" << "frame=side_data_list:format:stream"
-         << path;
+         << "-show_entries" << "frame=side_data_list:format:stream" << path;
     proc.start("ffprobe", args);
     if (!proc.waitForStarted(5000)) {
-        QMessageBox::critical(this, tr("Metadata Viewer"),
-                              tr("Failed to launch ffprobe. Is it installed and on PATH?"));
+        QMessageBox::critical(this, tr("Metadata Viewer"), tr("Failed to launch ffprobe. Is it installed and on PATH?"));
         return;
     }
     if (!proc.waitForFinished(30000)) {
         proc.kill();
-        QMessageBox::critical(this, tr("Metadata Viewer"),
-                              tr("ffprobe timed out."));
+        QMessageBox::critical(this, tr("Metadata Viewer"), tr("ffprobe timed out."));
         return;
     }
     if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
         const QString err = QString::fromUtf8(proc.readAllStandardError());
-        QMessageBox::critical(this, tr("Metadata Viewer"),
-                              tr("ffprobe failed:\n%1").arg(err.isEmpty() ? tr("(no error output)") : err));
+        QMessageBox::critical(this, tr("Metadata Viewer"), tr("ffprobe failed:\n%1").arg(err.isEmpty() ? tr("(no error output)") : err));
         return;
     }
 
@@ -329,8 +314,7 @@ void MetadataViewer::analyzeFile() {
     const QByteArray out = proc.readAllStandardOutput();
     const QJsonDocument doc = QJsonDocument::fromJson(out, &parseErr);
     if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
-        QMessageBox::critical(this, tr("Metadata Viewer"),
-                              tr("Failed to parse ffprobe JSON: %1").arg(parseErr.errorString()));
+        QMessageBox::critical(this, tr("Metadata Viewer"), tr("Failed to parse ffprobe JSON: %1").arg(parseErr.errorString()));
         return;
     }
 
@@ -342,8 +326,7 @@ void MetadataViewer::analyzeFile() {
     copyButton->setEnabled(true);
 }
 
-void MetadataViewer::addJsonValue(QTreeWidgetItem *parent, const QString &key,
-                                  const QJsonValue &value) {
+void MetadataViewer::addJsonValue(QTreeWidgetItem *parent, const QString &key, const QJsonValue &value) {
     auto *item = new QTreeWidgetItem(parent);
     item->setText(0, key);
     if (value.isObject()) {
@@ -435,9 +418,7 @@ QString MetadataViewer::buildMarkdown(const QJsonObject &root) const {
         out << "| # | Type | Codec | Profile | Pix/Sample fmt | Resolution / Rate | Color | Bitrate |\n";
         out << "|---|------|-------|---------|----------------|-------------------|-------|---------|\n";
         for (const StreamRow &r : rows) {
-            out << "| " << r.index << " | " << r.type << " | " << r.codec << " | " << r.profile
-                << " | " << r.fmtPix << " | " << r.sizeRate
-                << " | " << r.color << " | " << r.bitrate << " |\n";
+            out << "| " << r.index << " | " << r.type << " | " << r.codec << " | " << r.profile << " | " << r.fmtPix << " | " << r.sizeRate << " | " << r.color << " | " << r.bitrate << " |\n";
         }
         out << "\n";
     }
@@ -448,8 +429,7 @@ QString MetadataViewer::buildMarkdown(const QJsonObject &root) const {
         if (hdr.hasMastering) {
             out << QString("- **Mastering display**: R(%1, %2) G(%3, %4) B(%5, %6) "
                            "WP(%7, %8) L(%9, %10)\n")
-                       .arg(hdr.redX, hdr.redY, hdr.greenX, hdr.greenY,
-                            hdr.blueX, hdr.blueY, hdr.whiteX, hdr.whiteY)
+                       .arg(hdr.redX, hdr.redY, hdr.greenX, hdr.greenY, hdr.blueX, hdr.blueY, hdr.whiteX, hdr.whiteY)
                        .arg(hdr.maxLum, hdr.minLum);
         }
         if (hdr.hasCll) {
@@ -517,12 +497,7 @@ QString MetadataViewer::buildHtml(const QJsonObject &root) const {
     if (hdr.hasMastering || hdr.hasCll) {
         out << "<h3>HDR Static Metadata</h3>\n<ul>\n";
         if (hdr.hasMastering) {
-            out << "  <li><b>Mastering display:</b> R("
-                << esc(hdr.redX) << ", " << esc(hdr.redY) << ") G("
-                << esc(hdr.greenX) << ", " << esc(hdr.greenY) << ") B("
-                << esc(hdr.blueX) << ", " << esc(hdr.blueY) << ") WP("
-                << esc(hdr.whiteX) << ", " << esc(hdr.whiteY) << ") L("
-                << esc(hdr.maxLum) << ", " << esc(hdr.minLum) << ")</li>\n";
+            out << "  <li><b>Mastering display:</b> R(" << esc(hdr.redX) << ", " << esc(hdr.redY) << ") G(" << esc(hdr.greenX) << ", " << esc(hdr.greenY) << ") B(" << esc(hdr.blueX) << ", " << esc(hdr.blueY) << ") WP(" << esc(hdr.whiteX) << ", " << esc(hdr.whiteY) << ") L(" << esc(hdr.maxLum) << ", " << esc(hdr.minLum) << ")</li>\n";
         }
         if (hdr.hasCll) {
             out << "  <li><b>MaxCLL:</b> " << esc(hdr.maxCll) << " cd/m&sup2;</li>\n";
@@ -618,8 +593,7 @@ void MetadataViewer::copyCurrentTab() {
         src = textPreview;
         format = tr("text");
     } else {
-        QMessageBox::information(this, tr("Metadata Viewer"),
-                                 tr("Switch to the Markdown, HTML, or Text tab to copy."));
+        QMessageBox::information(this, tr("Metadata Viewer"), tr("Switch to the Markdown, HTML, or Text tab to copy."));
         return;
     }
 
@@ -652,6 +626,5 @@ void MetadataViewer::copyCurrentTab() {
 #endif
     }
 
-    QMessageBox::information(this, tr("Metadata Viewer"),
-                             tr("%1 copied to clipboard.").arg(format));
+    QMessageBox::information(this, tr("Metadata Viewer"), tr("%1 copied to clipboard.").arg(format));
 }

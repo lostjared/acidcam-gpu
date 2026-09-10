@@ -8,8 +8,7 @@
 #include <QTextStream>
 #include <algorithm>
 
-GPUFilterDialog::GPUFilterDialog(const QString &executablePath, QWidget *parent)
-    : QDialog(parent), execPath(executablePath) {
+GPUFilterDialog::GPUFilterDialog(const QString &executablePath, QWidget *parent) : QDialog(parent), execPath(executablePath) {
     setWindowTitle("GPU Filter Settings");
     setMinimumSize(500, 500);
     setupUI();
@@ -182,8 +181,7 @@ void GPUFilterDialog::loadFiltersFromExecutable() {
 
     process.start(execPath, args);
     if (!process.waitForFinished(10000)) {
-        QMessageBox::warning(this, "Error",
-                             "Failed to get filter list from acmx2.\nMake sure the executable path is correct.");
+        QMessageBox::warning(this, "Error", "Failed to get filter list from acmx2.\nMake sure the executable path is correct.");
         return;
     }
 
@@ -206,10 +204,7 @@ void GPUFilterDialog::loadFiltersFromExecutable() {
         }
     }
 
-    std::sort(tempFilters.begin(), tempFilters.end(),
-              [](const QPair<QString, int> &a, const QPair<QString, int> &b) {
-                  return a.first.toLower() < b.first.toLower();
-              });
+    std::sort(tempFilters.begin(), tempFilters.end(), [](const QPair<QString, int> &a, const QPair<QString, int> &b) { return a.first.toLower() < b.first.toLower(); });
 
     for (const auto &filter : tempFilters) {
         filterNames.append(filter.first);
@@ -220,8 +215,7 @@ void GPUFilterDialog::loadFiltersFromExecutable() {
     }
 
     if (filterNames.isEmpty()) {
-        QMessageBox::warning(this, "Warning",
-                             "No GPU filters found. Make sure acmx2 is compiled with GPU filter support.");
+        QMessageBox::warning(this, "Warning", "No GPU filters found. Make sure acmx2 is compiled with GPU filter support.");
     }
 }
 
@@ -266,13 +260,9 @@ void GPUFilterDialog::moveDown() {
     }
 }
 
-void GPUFilterDialog::clearAll() {
-    selectedFiltersList->clear();
-}
+void GPUFilterDialog::clearAll() { selectedFiltersList->clear(); }
 
-bool GPUFilterDialog::isGPUFilterEnabled() const {
-    return enableCheckBox->isChecked() && selectedFiltersList->count() > 0;
-}
+bool GPUFilterDialog::isGPUFilterEnabled() const { return enableCheckBox->isChecked() && selectedFiltersList->count() > 0; }
 
 QStringList GPUFilterDialog::getSelectedFilterIndices() const {
     QStringList indices;
@@ -285,9 +275,7 @@ QStringList GPUFilterDialog::getSelectedFilterIndices() const {
     return indices;
 }
 
-int GPUFilterDialog::getBufferSize() const {
-    return bufferSizeSpinBox->value();
-}
+int GPUFilterDialog::getBufferSize() const { return bufferSizeSpinBox->value(); }
 
 QString GPUFilterDialog::getFilterArgument() const {
     QStringList indices = getSelectedFilterIndices();

@@ -8,8 +8,7 @@
 #include <QTextStream>
 #include <algorithm>
 
-ShaderPassDialog::ShaderPassDialog(const QStringList &shaderNames, QWidget *parent)
-    : QDialog(parent) {
+ShaderPassDialog::ShaderPassDialog(const QStringList &shaderNames, QWidget *parent) : QDialog(parent) {
     setWindowTitle("Multi-Pass Shader Settings");
     setMinimumSize(500, 500);
     setupUI();
@@ -22,10 +21,9 @@ void ShaderPassDialog::setupUI() {
     enableCheckBox = new QCheckBox("Enable Multi-Pass Shader Processing", this);
     mainLayout->addWidget(enableCheckBox);
 
-    QLabel *infoLabel = new QLabel(
-        "Multi-pass rendering applies multiple shaders in sequence.\n"
-        "Each shader processes the output of the previous shader.",
-        this);
+    QLabel *infoLabel = new QLabel("Multi-pass rendering applies multiple shaders in sequence.\n"
+                                   "Each shader processes the output of the previous shader.",
+                                   this);
     infoLabel->setWordWrap(true);
     mainLayout->addWidget(infoLabel);
     QGroupBox *shaderGroup = new QGroupBox("Shader Pass Selection", this);
@@ -111,14 +109,11 @@ void ShaderPassDialog::setupUI() {
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(searchLineEdit, &QLineEdit::textChanged, this, &ShaderPassDialog::filterSearchChanged);
-    connect(selectedShadersList, &QListWidget::currentRowChanged, this, [this](int row) {
-        insertButton->setEnabled(enableCheckBox->isChecked() && row >= 0);
+    connect(selectedShadersList, &QListWidget::currentRowChanged, this, [this](int row) { insertButton->setEnabled(enableCheckBox->isChecked() && row >= 0); });
+    connect(selectedShadersList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
+        if (item)
+            emit shaderEditRequested(item->text());
     });
-    connect(selectedShadersList, &QListWidget::itemDoubleClicked, this,
-            [this](QListWidgetItem *item) {
-                if (item)
-                    emit shaderEditRequested(item->text());
-            });
 
     connect(enableCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         shaderComboBox->setEnabled(checked);
@@ -171,8 +166,7 @@ void ShaderPassDialog::loadShaders(const QStringList &shaderNames) {
     }
 
     if (shaderNamesList.isEmpty()) {
-        QMessageBox::warning(this, "Warning",
-                             "No shaders loaded. Please load a shader library first.");
+        QMessageBox::warning(this, "Warning", "No shaders loaded. Please load a shader library first.");
     }
 }
 
@@ -235,13 +229,9 @@ void ShaderPassDialog::moveDown() {
     }
 }
 
-void ShaderPassDialog::clearAll() {
-    selectedShadersList->clear();
-}
+void ShaderPassDialog::clearAll() { selectedShadersList->clear(); }
 
-bool ShaderPassDialog::isShaderPassEnabled() const {
-    return enableCheckBox->isChecked() && selectedShadersList->count() > 0;
-}
+bool ShaderPassDialog::isShaderPassEnabled() const { return enableCheckBox->isChecked() && selectedShadersList->count() > 0; }
 
 QStringList ShaderPassDialog::getSelectedShaderIndices() const {
     QStringList indices;
@@ -258,9 +248,7 @@ QString ShaderPassDialog::getShaderPassArgument() const {
     return indices.join(",");
 }
 
-void ShaderPassDialog::setEnabled(bool enabled) {
-    enableCheckBox->setChecked(enabled);
-}
+void ShaderPassDialog::setEnabled(bool enabled) { enableCheckBox->setChecked(enabled); }
 
 void ShaderPassDialog::setSelectedIndices(const QStringList &indices) {
     selectedShadersList->clear();
@@ -297,13 +285,9 @@ void ShaderPassDialog::setSelectedShaderNames(const QStringList &names) {
     }
 }
 
-void ShaderPassDialog::updateShaderList(const QStringList &shaderNames) {
-    loadShaders(shaderNames);
-}
+void ShaderPassDialog::updateShaderList(const QStringList &shaderNames) { loadShaders(shaderNames); }
 
-void ShaderPassDialog::applyChanges() {
-    emit settingsApplied(isShaderPassEnabled(), getSelectedShaderNames());
-}
+void ShaderPassDialog::applyChanges() { emit settingsApplied(isShaderPassEnabled(), getSelectedShaderNames()); }
 
 void ShaderPassDialog::saveShaderPass() {
     if (selectedShadersList->count() == 0) {

@@ -18,15 +18,11 @@ namespace acmxvk::ipc {
     // This layout intentionally mirrors ACMX2/shader_selection_shm.hpp version
     // 11. Keeping a local protocol declaration lets ACMXVK remain buildable as
     // a standalone source tree while sharing the Qt launcher's control block.
-    inline constexpr const char *SHADER_SELECTION_SHM_NAME =
-        "/acmx2_shader_selection_v11";
-    inline constexpr const char *SHADER_SELECTION_SEMAPHORE_NAME =
-        "/acmx2_shm_v11";
+    inline constexpr const char *SHADER_SELECTION_SHM_NAME = "/acmx2_shader_selection_v11";
+    inline constexpr const char *SHADER_SELECTION_SEMAPHORE_NAME = "/acmx2_shm_v11";
 #ifdef _WIN32
-    inline constexpr const wchar_t *SHADER_SELECTION_MAPPING_NAME_WINDOWS =
-        L"Local\\ACMX2ShaderSelectionV11";
-    inline constexpr const wchar_t *SHADER_SELECTION_MUTEX_NAME_WINDOWS =
-        L"Local\\ACMX2ShaderSelectionMutexV11";
+    inline constexpr const wchar_t *SHADER_SELECTION_MAPPING_NAME_WINDOWS = L"Local\\ACMX2ShaderSelectionV11";
+    inline constexpr const wchar_t *SHADER_SELECTION_MUTEX_NAME_WINDOWS = L"Local\\ACMX2ShaderSelectionMutexV11";
 #endif
     inline constexpr std::uint32_t SHADER_SELECTION_MAGIC = 0x41434D58;
     inline constexpr std::uint32_t SHADER_SELECTION_VERSION = 11;
@@ -122,8 +118,7 @@ namespace acmxvk::ipc {
         explicit InterfaceLock(HANDLE value) : mutex(value) {
             if (mutex == nullptr)
                 return;
-            const DWORD result =
-                ::WaitForSingleObject(mutex, INTERFACE_LOCK_TIMEOUT_MS);
+            const DWORD result = ::WaitForSingleObject(mutex, INTERFACE_LOCK_TIMEOUT_MS);
             locked = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
         }
 #endif

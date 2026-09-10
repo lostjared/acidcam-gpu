@@ -12,30 +12,9 @@
 namespace acmxvk {
     namespace fs = std::filesystem;
 
-    constexpr std::array<std::string_view, 35> CROSSFADE_NAMES{
-        "xfade_01_linear", "xfade_02_block",
-        "xfade_03_wipe", "xfade_04_radial",
-        "xfade_05_pixelate", "xfade_06_dissolve",
-        "xfade_07_swirl", "xfade_08_glitch",
-        "xfade_09_diamond", "xfade_10_burn",
-        "xfade_11_fade_black", "xfade_12_fade_white",
-        "xfade_13_slide_left", "xfade_14_slide_right",
-        "xfade_15_slide_up", "xfade_16_slide_down",
-        "xfade_17_diagonal_wipe", "xfade_18_iris_open",
-        "xfade_19_iris_close", "xfade_20_checker",
-        "xfade_21_blinds_h", "xfade_22_blinds_v",
-        "xfade_23_zoom_in", "xfade_24_zoom_out",
-        "xfade_25_rotate", "xfade_26_ripple",
-        "xfade_27_wave", "xfade_28_chroma",
-        "xfade_29_invert", "xfade_30_flash",
-        "xfade_31_explode", "xfade_32_mosaic",
-        "xfade_33_shutter", "xfade_34_luma",
-        "xfade_35_noise"};
+    constexpr std::array<std::string_view, 35> CROSSFADE_NAMES{"xfade_01_linear", "xfade_02_block", "xfade_03_wipe", "xfade_04_radial", "xfade_05_pixelate", "xfade_06_dissolve", "xfade_07_swirl", "xfade_08_glitch", "xfade_09_diamond", "xfade_10_burn", "xfade_11_fade_black", "xfade_12_fade_white", "xfade_13_slide_left", "xfade_14_slide_right", "xfade_15_slide_up", "xfade_16_slide_down", "xfade_17_diagonal_wipe", "xfade_18_iris_open", "xfade_19_iris_close", "xfade_20_checker", "xfade_21_blinds_h", "xfade_22_blinds_v", "xfade_23_zoom_in", "xfade_24_zoom_out", "xfade_25_rotate", "xfade_26_ripple", "xfade_27_wave", "xfade_28_chroma", "xfade_29_invert", "xfade_30_flash", "xfade_31_explode", "xfade_32_mosaic", "xfade_33_shutter", "xfade_34_luma", "xfade_35_noise"};
 
-    enum class FrameRotation { None,
-                               Clockwise90,
-                               Rotate180,
-                               Counterclockwise90 };
+    enum class FrameRotation { None, Clockwise90, Rotate180, Counterclockwise90 };
 
     struct StableDiffusionLora {
         std::string file;

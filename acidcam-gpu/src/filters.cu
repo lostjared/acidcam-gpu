@@ -3,914 +3,912 @@
 #include <string>
 #include <vector>
 namespace ac_gpu {
-    Filter filters[] = {
-        {0, "SelfAlphaBlend"},
-        {1, "MedianBlend"},
-        {2, "MedianBlendXor"},
-        {3, "SquareBlockResize"},
-        {4, "SelfScaleRefined"},
-        {5, "StrangeGlitch"},
-        {6, "MatrixOutline"},
-        {7, "AuraTrails"},
-        {8, "MirrorReverseColor"},
-        {9, "SquareShrink"},
-        {10, "MotionGhostTrails"},
-        {11, "StretchColMatrix8"},
-        {12, "StretchColMatrix16"},
-        {13, "StretchColMatrix32"},
-        {14, "GradientFlashColor"},
-        {15, "HorizontalGlitch"},
-        {16, "VerticalGlitch"},
-        {17, "WaveTrails"},
-        {18, "PixelInterlace"},
-        {19, "ColorWaveTrails"},
-        {20, "ParticleSlide"},
-        {21, "DiagPixelated"},
-        {22, "DiagPixelatedResize"},
-        {23, "RGBShiftTrails"},
-        {24, "PictureShiftDown"},
-        {25, "PictureShiftRight"},
-        {26, "PictureShiftVariable"},
-        {27, "StretchR_Right"},
-        {28, "StretchG_Right"},
-        {29, "StretchB_Right"},
-        {30, "StretchR_Down"},
-        {31, "StretchG_Down"},
-        {32, "StretchB_Down"},
-        {33, "Distorted_LinesY"},
-        {34, "Distorted_LinesX"},
-        {35, "TripHSV"},
-        {36, "XorSumStrobe"},
-        {37, "DetectEdges"},
-        {38, "SobelNorm"},
-        {39, "LineInLineOut"},
-        {40, "LineInLineOut4_Increase"},
-        {41, "LineInLineOut_ReverseIncrease"},
-        {42, "LineInLineOut_ReverseIncrease2"},
-        {43, "LineInLineOut_InvertedY"},
-        {44, "LineInLineOut_ReverseInvertedY"},
-        {45, "LineInLineOut_Vertical"},
-        {46, "LineInLineOut_VerticalIncrease"},
-        {47, "LineInLineOut_IncreaseImage"},
-        {48, "SquareByRow"},
-        {49, "SquareByRowRev"},
-        {50, "SquareByRow2"},
-        {51, "DivideByValue"},
-        {52, "ColorCollectionSubtleStrobe"},
-        {53, "CollectionRandom"},
-        {54, "CollectionAlphaXor"},
-        {55, "ColorCollection64X"},
-        {56, "ColorCollectionSwitch"},
-        {57, "ColorCollectionRGB_Index"},
-        {58, "ColorCollectionGhostTrails"},
-        {59, "ColorCollectionScale"},
-        {60, "ColorCollectionReverseStrobe"},
-        {61, "ColorCollectionXorPixel"},
-        {62, "BlendWithSource25"},
-        {63, "BlendWithSource50"},
-        {64, "BlendWithSource75"},
-        {65, "BlendWithSource100"},
-        {66, "ColorCollectionXorOffsetFlash"},
-        {67, "ColorCollectionMatrixGhost"},
-        {68, "MildStrobe"},
-        {69, "ReduceBy50"},
-        {70, "ColorPositionAverageXor"},
-        {71, "ColorPositionXor"},
-        {72, "GrayStrobe"},
-        {73, "ColorStrobeXor"},
-        {74, "ColorGhost"},
-        {75, "BlurredOutXor"},
-        {76, "DizzyFilter"},
-        {77, "Buzzed"},
-        {78, "BuzzedDark"},
-        {79, "AllRed"},
-        {80, "AllGreen"},
-        {81, "AllBlue"},
-        {82, "NegativeStrobe"},
-        {83, "XorAddMul"},
-        {84, "HorizontalLines"},
-        {85, "StrobeRedGreenBlue"},
-        {86, "Pulse"},
-        {87, "DiamondPattern"},
-        {88, "Bitwise_XOR"},
-        {89, "Bitwise_AND"},
-        {90, "Bitwise_OR"},
-        {91, "BlendSwitch"},
-        {92, "LineRGB"},
-        {93, "PixelRGB"},
-        {94, "InvertedScanlines"},
-        {95, "ScanSwitch"},
-        {96, "ScanAlphaSwitch"},
-        {97, "RGBFlash"},
-        {98, "DiagonalLines"},
-        {99, "Darken"},
-        {100, "SelfXorBlend"},
-        {101, "SelfXorDoubleFlash"},
-        {102, "SelfOrDoubleFlash"},
-        {103, "BlendRowCurvedSqrt"},
-        {104, "XorAlpha"},
-        {105, "RandomXorBlend"},
-        {106, "AndStrobe"},
-        {107, "AndStrobeScale"},
-        {108, "AndPixelStrobe"},
-        {109, "AndOrXorStrobe"},
-        {110, "FadeInAndOut"},
-        {111, "BrightStrobe"},
-        {112, "DarkStrobe"},
-        {113, "RandomXorOpposite"},
-        {114, "GradientRainbow"},
-        {115, "cossinMultiply"},
-        {116, "colorAccumulate1"},
-        {117, "colorAccumulate2"},
-        {118, "WeakBlend"},
-        {119, "StrobeEffect"},
-        {120, "Blend3"},
-        {121, "NegParadox"},
-        {122, "ThoughtMode"},
-        {123, "Tri"},
-        {124, "Distort"},
-        {125, "colorAccumulate3"},
-        {126, "filter8"},
-        {127, "filter3"},
-        {128, "rainbowBlend"},
-        {129, "pixelScale"},
-        {130, "GradientSelf"},
-        {131, "GradientSelfVertical"},
-        {132, "GradientDown"},
-        {133, "GraidentHorizontal"},
-        {134, "Inter"},
-        {135, "BlendedScanLines"},
-        {136, "GradientStripes"},
-        {137, "XorSine"},
-        {138, "Circular"},
-        {139, "RandomPixels"},
-        {140, "DarkRandomPixels"},
-        {141, "Bars"},
-        {142, "NegativeByRow"},
-        {143, "XorScale"},
-        {144, "SelfAlphaRGB"},
-        {145, "BitwiseXorStrobe"},
-        {146, "OrStrobe"},
-        {147, "DivideAndIncH"},
-        {148, "DivideAndIncW"},
-        {149, "RandomIncrease"},
-        {150, "SelfAlphaScaleBlend"},
-        {151, "FadeBars"},
-        {152, "StrobeXor"},
-        {153, "Blank"},
-        {154, "ColorVariableBlend"},
-        {155, "ColorXorBlend"},
-        {156, "ColorAddBlend"},
-        {157, "SurroundingPixels"},
-        {158, "SurroundingPixelsAlpha"},
-        {159, "DarkModBlend"},
-        {160, "IncreaseDecreaseGamma"},
-        {161, "BlendChannelXor"},
-        {162, "IncDifference"},
-        {163, "IncDifferenceAlpha"},
-        {164, "MirrorXorAlpha"},
-        {165, "IntertwinedMirror"},
-        {166, "ColorFadeFilter"},
-        {167, "ColorChannelMoveUpAndDown"},
-        {168, "MedianStrobe"},
-        {169, "RGBBlend"},
-        {170, "BGRBlend"},
-        {171, "FlipAlphaBlend"},
-        {172, "RandomFlipFilter"},
-        {173, "SelfScaleByFrame"},
-        {174, "AlphaBlendMirror"},
-        {175, "TwistedVision"},
-        {176, "TruncateColor"},
-        {177, "TruncateVariable"},
-        {178, "TruncateVariableScale"},
-        {179, "XorFade"},
-        {180, "SineValue"},
-        {181, "FadeRtoGtoB"},
-        {182, "FadeRandomChannel"},
-        {183, "VariableLines"},
-        {184, "VariableLinesVertical"},
-        {185, "RowMedianBlend"},
-        {186, "MirrorReverseColorBlend"},
-        {187, "PsychoticVision"},
-        {188, "PixelGlitch"},
-        {189, "StaticGlitch"},
-        {190, "WavePattern"},
-        {191, "WavePatternXor"},
-        {192, "DiagonalXor"},
-        {193, "RGBShiftBlend"},
-        {194, "ChannelShuffle"},
-        {195, "ChannelShuffleRand"},
-        {196, "PixelCounter"},
-        {197, "PixelCounterXor"},
-        {198, "RowColorBlend"},
-        {199, "ColumnColorBlend"},
-        {200, "CheckerboardXor"},
-        {201, "CheckerboardBlend"},
-        {202, "SineWaveDistort"},
-        {203, "CosineWaveDistort"},
-        {204, "SinCosBlend"},
-        {205, "PixelReverseXor"},
-        {206, "LinesAcrossX"},
-        {207, "XorLineX"},
-        {208, "AlphaComponentIncrease"},
-        {209, "ExpandContract"},
-        {210, "LongLines"},
-        {211, "TearRight"},
-        {212, "TearDown"},
-        {213, "DistortionByRow"},
-        {214, "DistortionByCol"},
-        {215, "AlternateAlpha"},
-        {216, "DiagSquareRGB"},
-        {217, "ShiftPixelsRGB"},
-        {218, "ColorWaveTrailsRGB"},
-        {219, "ProperTrails"},
-        {220, "XorLag"},
-        {221, "PixelateBlend"},
-        {222, "DiagPixel"},
-        {223, "DiagPixelY"},
-        {224, "ExpandLeftRight"},
-        {225, "DiagSquare"},
-        {226, "HorizontalColorOffset"},
-        {227, "PrevFrameNotEqual"},
-        {228, "BlackLines"},
-        {229, "DizzyMode"},
-        {230, "GhostShift"},
-        {231, "RGBSplitFilter"},
-        {232, "PixelateRect"},
-        {233, "CollectionXor4"},
-        {234, "RectangleSpin"},
-        {235, "RectanglePlotXY"},
-        {236, "ShiftLinesDown"},
-        {237, "PictureStretch"},
-        {238, "PictureStretchPieces"},
-        {239, "VisualSnow"},
-        {240, "VisualSnowX2"},
-        {241, "LineGlitch"},
-        {242, "SlitReverse64"},
-        {243, "SlitReverse64_Increase"},
-        {244, "SlitStretch"},
-        {245, "LineLeftRight"},
-        {246, "LineLeftRightResize"},
-        {247, "RGBLineTrails"},
-        {248, "RGBCollectionBlend"},
-        {249, "RGBCollectionIncrease"},
-        {250, "RGBLongTrails"},
-        {251, "FadeRGB_Speed"},
-        {252, "RGBStrobeTrails"},
-        {253, "BoxGlitch"},
-        {254, "VerticalPictureDistort"},
-        {255, "ShortTrail"},
-        {256, "DiagInward"},
-        {257, "DiagSquareInward"},
-        {258, "DiagSquareInwardResize"},
-        {259, "PictureShiftDownRight"},
-        {260, "FlipPictureShift"},
-        {261, "RGBWideTrails"},
-        {262, "LineInLineOut_Increase"},
-        {263, "LineInLineOut2_Increase"},
-        {264, "LineInLineOut3_Increase"},
-        {265, "SquareByRow2Plus"},
-        {266, "FrameSep"},
-        {267, "FrameSep2"},
-        {268, "FrameStopStart"},
-        {269, "OutOfOrder"},
-        {270, "TrackingDown"},
-        {271, "TrackingDownBlend"},
-        {272, "TrackingRev"},
-        {273, "TrackingMirror"},
-        {274, "BlockPixels"},
-        {275, "FrameChop"},
-        {276, "YLineDown"},
-        {277, "YLineDownBlend"},
-        {278, "SquareDiff1"},
-        {279, "LineAcrossX"},
-        {280, "ColorGlitch"},
-        {281, "PixelShiftUp"},
-        {282, "PixelShiftDown"},
-        {283, "PixelShiftLeft"},
-        {284, "PixelShiftRight"},
-        {285, "PixelShiftDiagonal"},
-        {286, "WaveBlend"},
-        {287, "WaveBlendX2"},
-        {288, "SineWaveBlend"},
-        {289, "CosineWaveBlend"},
-        {290, "SpiralWave"},
-        {291, "RadialBlur"},
-        {292, "ZoomBlur"},
-        {293, "RotateBlend"},
-        {294, "MirrorWave"},
-        {295, "MirrorWaveX"},
-        {296, "MirrorWaveY"},
-        {297, "PixelDrift"},
-        {298, "PixelDriftX"},
-        {299, "PixelDriftY"},
-        {300, "ColorPulse"},
-        {301, "ColorPulseRGB"},
-        {302, "ColorPulseXor"},
-        {303, "GlitchBlock"},
-        {304, "GlitchBlockXor"},
-        {305, "GlitchLine"},
-        {306, "GlitchLineX"},
-        {307, "NoiseBlend"},
-        {308, "NoiseBlendX2"},
-        {309, "NoiseXor"},
-        {310, "ChannelShift"},
-        {311, "ChannelShiftX"},
-        {312, "ChannelRotate"},
-        {313, "DiagonalStretch"},
-        {314, "DiagonalStretchX"},
-        {315, "DiagonalMirror"},
-        {316, "SquareWave"},
-        {317, "SquareWaveX"},
-        {318, "SquareWaveBlend"},
-        {319, "TriangleWave"},
-        {320, "TriangleWaveBlend"},
-        {321, "SawtoothWave"},
-        {322, "SawtoothWaveBlend"},
-        {323, "PulseWave"},
-        {324, "PulseWaveBlend"},
-        {325, "StepWave"},
-        {326, "StepWaveBlend"},
-        {327, "RippleEffect"},
-        {328, "RippleEffectX2"},
-        {329, "ShockWave"},
-        {330, "ShockWaveBlend"},
-        {331, "TwistEffect"},
-        {332, "TwistEffectBlend"},
-        {333, "FishEye"},
-        {334, "FishEyeBlend"},
-        {335, "Kaleidoscope"},
-        {336, "KaleidoscopeBlend"},
-        {337, "TunnelEffect"},
-        {338, "TunnelEffectBlend"},
-        {339, "VortexEffect"},
-        {340, "VortexEffectBlend"},
-        {341, "ColorDrift"},
-        {342, "ColorDriftX"},
-        {343, "RGBShift"},
-        {344, "RGBShiftX"},
-        {345, "ChromaticAberration"},
-        {346, "ChromaticAberrationX"},
-        {347, "Posterize"},
-        {348, "PosterizeBlend"},
-        {349, "Solarize"},
-        {350, "SolarizeBlend"},
-        {351, "GammaBright"},
-        {352, "GammaDark"},
-        {353, "ContrastBoost"},
-        {354, "ContrastReduce"},
-        {355, "EdgeGlowBlend"},
-        {356, "FrameBlendMulti"},
-        {357, "FrameBlendMultiX"},
-        {358, "AcidTrailsBlend"},
-        {359, "AcidGlitchX"},
-        {360, "AlphaXorBlend"},
-        {361, "AlphaXorBlendDouble"},
-        {362, "AndOrXorStrobeScale"},
-        {363, "AveragePixelsXorBlend"},
-        {364, "BitwiseRotateBlend"},
-        {365, "BitwiseRotateDiffBlend"},
-        {366, "BitwiseXorScaleBlend"},
-        {367, "BlackAndWhiteStrobe"},
-        {368, "BlendAlphaXorScale"},
-        {369, "BlendBurredXor"},
-        {370, "BlendCombinedXor"},
-        {371, "BlendIncreaseRGB"},
-        {372, "BlendThreeXor"},
-        {373, "BlurDistortionBlend"},
-        {374, "ColorAccumulate"},
-        {375, "ColorAccumulateBlend"},
-        {376, "ColorAccumulateXor"},
-        {377, "ColorChannelBlend"},
-        {378, "ColorChannelXor"},
-        {379, "ColorCollectionEnergy"},
-        {380, "ColorCollectionWave"},
-        {381, "ColorFadeXor"},
-        {382, "ColorIntensityBlend"},
-        {383, "ColorIntensityXor"},
-        {384, "ColorMoveBlend"},
-        {385, "ColorPixelBlend"},
-        {386, "ColorPixelXor"},
-        {387, "ColorScaleBlend"},
-        {388, "ColorWaveXor"},
-        {389, "CosineMultiplyBlend"},
-        {390, "DarkModBlendXor"},
-        {391, "DifferenceBlend"},
-        {392, "DifferenceXorBlend"},
-        {393, "DistortBlend"},
-        {394, "DiamondPatternBlend"},
-        {395, "FadeBlendXor"},
-        {396, "FlashBlendXor"},
-        {397, "GhostTrailsBlend"},
-        {398, "AddInvert"},
-        {399, "AlphaBlendSimple"},
-        {400, "AlphaBlendDoubleX"},
-        {401, "AlphaStrobeBlendX"},
-        {402, "BitwiseAndBlend"},
-        {403, "BitwiseXorAverage"},
-        {404, "BitwiseXorBlendX"},
-        {405, "BlackStrobe"},
-        {406, "BlendAlphaXorX"},
-        {407, "BlendCombinedValuesX"},
-        {408, "BlendFor360"},
-        {409, "BlendForward16"},
-        {410, "BlendForward32"},
-        {411, "BlendFromXtoY"},
-        {412, "BlendIncreaseX"},
-        {413, "BlendRedGreenBlue"},
-        {414, "BlendWithColorX"},
-        {415, "BlendAngle"},
-        {416, "BlockScale"},
-        {417, "BlockStrobe"},
-        {418, "BlockXor"},
-        {419, "BlockyTrails16"},
-        {420, "BlockyTrails32"},
-        {421, "BlurDistortionX"},
-        {422, "CannyStrobe"},
-        {423, "ColorFadeSlow"},
-        {424, "ColorFibonacci"},
-        {425, "CurtainEffect"},
-        {426, "DarkColorFibonacci"},
-        {427, "DarkColorsBlend"},
-        {428, "EnergizeBlend"},
-        {429, "AverageLines"},
-        {430, "AverageLinesBlendX"},
-        {431, "BlendRowAlpha"},
-        {432, "BlendInOut"},
-        {433, "ColorFlashIncreaseX"},
-        {434, "ColorIncreaseInOut"},
-        {435, "ColorLinesX"},
-        {436, "ColorMoveDownX"},
-        {437, "ColorOrderSwapX"},
-        {438, "ColorPulseAlphaX"},
-        {439, "ColorRowShiftX"},
-        {440, "ColorShiftXorX"},
-        {441, "CopyXorAlphaX"},
-        {442, "CycleShiftRGBX"},
-        {443, "DarkNegateX"},
-        {444, "DarkSelfAlphaX"},
-        {445, "DiagonalGlitch"},
-        {446, "DigitalHaze"},
-        {447, "DoubleXorBlend"},
-        {448, "EchoBlend"},
-        {449, "ElectricEdge"},
-        {450, "FlashColorStrobe"},
-        {451, "FrameDiffXor"},
-        {452, "GhostMirror"},
-        {453, "GlitchSort"},
-        {454, "HeatWave"},
-        {455, "InterlaceBlend"},
-        {456, "InvertStrobe"},
-        {457, "KaleidoBlend"},
-        {458, "LightStrobe"},
-        {459, "LineGlitchX"},
-        {460, "MosaicBlend"},
-        {461, "NegatePulse"},
-        {462, "OffsetGhost"},
-        {463, "PixelateWave"},
-        {464, "QuantizeBlend"},
-        {465, "RandomLines"},
-        {466, "RippleDisplace"},
-        {467, "RotateShift"},
-        {468, "SaturationGlow"},
-        {469, "ScaleToCenter"},
-        {470, "ShadowMirror"},
-        {471, "ShiftChannels"},
-        {472, "SliceGlitch"},
-        {473, "SobelGlow"},
-        {474, "SpectralShift"},
-        {475, "SpiralTrail"},
-        {476, "SquareTrails"},
-        {477, "StrobeNegate"},
-        {478, "ThermalBlend"},
-        {479, "TintShift"},
-        {480, "TrailEcho"},
-        {481, "TransitionBlend"},
-        {482, "TwistWarp"},
-        {483, "VerticalShift"},
-        {484, "VortexBlend"},
-        {485, "WeavePattern"},
-        {486, "WhiteBurst"},
-        {487, "WiggleDisplace"},
-        {488, "XorPulseX"},
-        {489, "YellowShift"},
-        {490, "ZigzagGlitch"},
-        {491, "AlphaModulate"},
-        {492, "BlockSwap"},
-        {493, "ColorResonance"},
-        {494, "DepthGlitch"},
-        {495, "EchoShift"},
-        {496, "FractalNoise"},
-        {497, "GradientRotate"},
-        {498, "HarmonicShift"},
-        {499, "AcidWarp"},
-        {500, "BlendDiagonal"},
-        {501, "ChromaFlash"},
-        {502, "CircleWave"},
-        {503, "ColorCrush"},
-        {504, "CrosshatchBlend"},
-        {505, "CyberGlitch"},
-        {506, "DarkPulse"},
-        {507, "DiamondPatternX"},
-        {508, "DigitalRain"},
-        {509, "DisplaceX"},
-        {510, "DriftBlend"},
-        {511, "EdgePulse"},
-        {512, "FlameEffect"},
-        {513, "FlickerShift"},
-        {514, "GhostLayer"},
-        {515, "GlitchBlockX"},
-        {516, "GlowPulse"},
-        {517, "GridDistort"},
-        {518, "HexPattern"},
-        {519, "HueRotate"},
-        {520, "InterweaveX"},
-        {521, "JitterBlend"},
-        {522, "KaleidoScope4"},
-        {523, "LaserScan"},
-        {524, "LightLeak"},
-        {525, "MeltDown"},
-        {526, "MirrorDiag"},
-        {527, "NeonGlow"},
-        {528, "NoiseBlendX"},
-        {529, "PixelDrift"},
-        {530, "PlasmaWave"},
-        {531, "PrismSplit"},
-        {532, "PulseRadial"},
-        {533, "RainbowStrobe"},
-        {534, "RefractionX"},
-        {535, "ScanlineX"},
-        {536, "ShatterEffect"},
-        {537, "StaticNoise"},
-        {538, "TunnelVision"},
-        {539, "AberrationPulse"},
-        {540, "AquaWave"},
-        {541, "BinaryFlash"},
-        {542, "BloomGlow"},
-        {543, "CellularNoise"},
-        {544, "ChromaShift2"},
-        {545, "ColorBands"},
-        {546, "ColorVortex"},
-        {547, "CrystalMosaic"},
-        {548, "CubicDistort"},
-        {549, "DepthFade"},
-        {550, "DiscoFlash"},
-        {551, "DitherBlend"},
-        {552, "DoubleVision"},
-        {553, "DreamHaze"},
-        {554, "ElectricStorm"},
-        {555, "EmbossShift"},
-        {556, "FiberOptic"},
-        {557, "FilmGrain"},
-        {558, "FireWorks"},
-        {559, "FluidMotion"},
-        {560, "FogRoll"},
-        {561, "GlassRefract"},
-        {562, "GlowTrails"},
-        {563, "GridPulse"},
-        {564, "HalftoneBlend"},
-        {565, "HeatDistort"},
-        {566, "HoloGlitch"},
-        {567, "InfraredView"},
-        {568, "LavaLamp"},
-        {569, "LensFlare"},
-        {570, "LightningBolt"},
-        {571, "LiquidMetal"},
-        {572, "MatrixCode"},
-        {573, "MirrorKaleid"},
-        {574, "NightVision"},
-        {575, "OilSlick"},
-        {576, "ParticleField"},
-        {577, "PinwheelSpin"},
-        {578, "PixelStorm"},
-        {579, "PlaidPattern"},
-        {580, "PolarInvert"},
-        {581, "PolychromeTint"},
-        {582, "PopArtDots"},
-        {583, "PrismaticEdge"},
-        {584, "PulseWarp"},
-        {585, "QuantumNoise"},
-        {586, "QuiltBlend"},
-        {587, "RadarSweep"},
-        {588, "RaindropRipple"},
-        {589, "RasterBars"},
-        {590, "RetroTube"},
-        {591, "RingWave"},
-        {592, "RippleTank"},
-        {593, "RotatingPrism"},
-        {594, "SandStorm"},
-        {595, "SaturationPulse"},
-        {596, "ScatterPixel"},
-        {597, "ShadowPlay"},
-        {598, "ShimmerGlass"},
-        {599, "SilhouetteBlend"},
-        {600, "SketchOutline"},
-        {601, "SliceShift"},
-        {602, "SmearMotion"},
-        {603, "SmokeWisp"},
-        {604, "SnowDrift"},
-        {605, "SolarFlare"},
-        {606, "SparkShower"},
-        {607, "SpectrumWave"},
-        {608, "SpiralZoom"},
-        {609, "SplitMirror"},
-        {610, "StarBurst"},
-        {611, "StaticPulse"},
-        {612, "StencilCut"},
-        {613, "StippleShade"},
-        {614, "StormCloud"},
-        {615, "StreakBlur"},
-        {616, "StrobeEdge"},
-        {617, "SubpixelShift"},
-        {618, "SwimDistort"},
-        {619, "TangentWarp"},
-        {620, "TapeGlitch"},
-        {621, "TechnoGrid"},
-        {622, "TeleportPixel"},
-        {623, "TemporalBlur"},
-        {624, "TerraFracture"},
-        {625, "TextureWave"},
-        {626, "ThresholdPulse"},
-        {627, "TidalWave"},
-        {628, "TintCycle"},
-        {629, "TraceEdge"},
-        {630, "TriangleMosaic"},
-        {631, "TripleSplit"},
-        {632, "TurbulentFlow"},
-        {633, "UnderwaterCaustic"},
-        {634, "UnsharpPulse"},
-        {635, "VaporTrail"},
-        {636, "VectorField"},
-        {637, "VelocityBlur"},
-        {638, "VerticalMelt"},
-        {639, "VHSTracking"},
-        {640, "VibrantPop"},
-        {641, "VignetteFlash"},
-        {642, "VoronoiShatter"},
-        {643, "WarpSpeed"},
-        {644, "WaterColor"},
-        {645, "WaveCollapse"},
-        {646, "WebPattern"},
-        {647, "WhirlpoolSpin"},
-        {648, "WindBlast"},
-        {649, "WireframePulse"},
-        {650, "XRayFlash"},
-        {651, "ZebraStripe"},
-        {652, "ZenRipple"},
-        {653, "ZigzagWave"},
-        {654, "ZoomPulse"},
-        {655, "ZoneTint"},
-        {656, "AcidDrip"},
-        {657, "AuroraWave"},
-        {658, "BandPass"},
-        {659, "BilinearStretch"},
-        {660, "BleedThrough"},
-        {661, "BlockShatter"},
-        {662, "BlurMask"},
-        {663, "BokehBlur"},
-        {664, "BounceWave"},
-        {665, "BrokenGlass"},
-        {666, "BubbleWarp"},
-        {667, "CRTCurvature"},
-        {668, "CascadeBlend"},
-        {669, "CelShade"},
-        {670, "ChainReaction"},
-        {671, "ChannelDelay"},
-        {672, "ChromaBleed"},
-        {673, "CircuitTrace"},
-        {674, "ClockWipe"},
-        {675, "CloudShadow"},
-        {676, "ColorBurn"},
-        {677, "ColorHalves"},
-        {678, "ComicDots"},
-        {679, "ConcentricPulse"},
-        {680, "CopperTone"},
-        {681, "CornerStretch"},
-        {682, "CosmicDust"},
-        {683, "CrossBlur"},
-        {684, "CrossProcess"},
-        {685, "CrystalEdge"},
-        {686, "CubeRotate"},
-        {687, "CurtainReveal"},
-        {688, "CyberPunk"},
-        {689, "DataCorrupt"},
-        {690, "DebrisField"},
-        {691, "DeepFry"},
-        {692, "DesyncRGB"},
-        {693, "DiagonalWipe"},
-        {694, "DigitalArtifact"},
-        {695, "DimensionRift"},
-        {696, "DotCrawl"},
-        {697, "DualTone"},
-        {698, "EchoFade"},
-        {699, "EdgeMelt"},
-        {700, "ElasticWarp"},
-        {701, "EmberGlow"},
-        {702, "EntropyShift"},
-        {703, "ErosionBlend"},
-        {704, "ExplosionBurst"},
-        {705, "FacetMirror"},
-        {706, "FadeStreak"},
-        {707, "FeatherEdge"},
-        {708, "FlashFreeze"},
-        {709, "FlipMirror"},
-        {710, "FloatDrift"},
-        {711, "FlowField"},
-        {712, "FoldWarp"},
-        {713, "FragmentScatter"},
-        {714, "FrequencyPulse"},
-        {715, "FrostBite"},
-        {716, "FuseBlend"},
-        {717, "GalaxySpiral"},
-        {718, "GelWobble"},
-        {719, "GhostEcho"},
-        {720, "GlassShatter"},
-        {721, "GlimmerPulse"},
-        {722, "GlitchMosaic"},
-        {723, "GlowEdge"},
-        {724, "GradientMelt"},
-        {725, "GrainStorm"},
-        {726, "GravityPull"},
-        {727, "GridWarp"},
-        {728, "HazeLayer"},
-        {729, "HeatRipple"},
-        {730, "HexagonBlur"},
-        {731, "HighContrast"},
-        {732, "HologramScan"},
-        {733, "HorizonBend"},
-        {734, "HotSpot"},
-        {735, "HueWobble"},
-        {736, "glitch_alpha_diamond1"},
-        {737, "glitch_alpha_diamond2"},
-        {738, "glitch_alpha_diamond3"},
-        {739, "glitch_alpha_diamond4"},
-        {740, "glitch_alpha_diamond5"},
-        {741, "glitch_alphatrails"},
-        {742, "glitch_color_fade_ex1"},
-        {743, "glitch_color_fade_ex2"},
-        {744, "glitch_color_shift"},
-        {745, "glitch_colorxor01"},
-        {746, "glitch_colorxor02"},
-        {747, "glitch_colorxor03"},
-        {748, "glitch_colorxor04"},
-        {749, "glitch_colorxor05"},
-        {750, "glitch_colorxor06"},
-        {751, "glitch_colorxor07"},
-        {752, "glitch_colorxor08"},
-        {753, "glitch_colorxor09"},
-        {754, "glitch_colorxor10"},
-        {755, "glitch_colorxor11"},
-        {756, "glitch_colorxor12"},
-        {757, "glitch_colorxor13"},
-        {758, "glitch_colorxor14"},
-        {759, "glitch_colorxor15"},
-        {760, "glitch_colorxor16"},
-        {761, "glitch_colorxor17"},
-        {762, "glitch_colorxor18"},
-        {763, "glitch_colorxor19"},
-        {764, "glitch_colorxor20"},
-        {765, "glitch_distort_picture"},
-        {766, "glitch_echo"},
-        {767, "glitch_fast_monocolortrails"},
-        {768, "glitch_frame_pixels"},
-        {769, "glitch_frame_resize_stretch"},
-        {770, "glitch_frame_skip"},
-        {771, "glitch_frame_skip_resize"},
-        {772, "glitch_frame_skip_shadow"},
-        {773, "glitch_frame_skip_shadow_x2"},
-        {774, "glitch_frame_slide01"},
-        {775, "glitch_frame_slide02"},
-        {776, "glitch_frame_slide03"},
-        {777, "glitch_frame_slide04"},
-        {778, "glitch_frame_square_col"},
-        {779, "glitch_frame_stutter_filter"},
-        {780, "glitch_glitch_x1"},
-        {781, "glitch_gpt1"},
-        {782, "glitch_gpt2"},
-        {783, "glitch_gpt3"},
-        {784, "glitch_invertflash"},
-        {785, "glitch_line_across_side01"},
-        {786, "glitch_line_across_side02"},
-        {787, "glitch_line_across_side03"},
-        {788, "glitch_line_across_side04"},
-        {789, "glitch_line_across_side05"},
-        {790, "glitch_line_across_side06"},
-        {791, "glitch_line_collection01"},
-        {792, "glitch_line_collection02"},
-        {793, "glitch_line_collection03"},
-        {794, "glitch_line_collection04"},
-        {795, "glitch_line_collection05"},
-        {796, "glitch_line_collection06"},
-        {797, "glitch_line_collection07"},
-        {798, "glitch_line_offset_inout"},
-        {799, "glitch_line_offset_inout2"},
-        {800, "glitch_line_offset_inout3"},
-        {801, "glitch_newrandblend"},
-        {802, "glitch_newstretchlines"},
-        {803, "glitch_newvarlines"},
-        {804, "glitch_outoforder"},
-        {805, "glitch_pic_adjust1"},
-        {806, "glitch_pic_adjust2"},
-        {807, "glitch_picture_jump01"},
-        {808, "glitch_picture_jump02"},
-        {809, "glitch_picture_jump03"},
-        {810, "glitch_picture_jump04"},
-        {811, "glitch_picture_jump05"},
-        {812, "glitch_picture_jump06"},
-        {813, "glitch_picture_jump07"},
-        {814, "glitch_picture_jump08"},
-        {815, "glitch_picture_jump09"},
-        {816, "glitch_picture_jump10"},
-        {817, "glitch_picture_jump11"},
-        {818, "glitch_picture_jump12"},
-        {819, "glitch_picture_jump13"},
-        {820, "glitch_picture_jump14"},
-        {821, "glitch_picture_jump15"},
-        {822, "glitch_picture_jump16"},
-        {823, "glitch_picture_jump17"},
-        {824, "glitch_picture_jump18"},
-        {825, "glitch_picture_jump19"},
-        {826, "glitch_picture_jump20"},
-        {827, "glitch_picture_jump21"},
-        {828, "glitch_picture_jump22"},
-        {829, "glitch_picture_jump23"},
-        {830, "glitch_picture_jump24"},
-        {831, "glitch_picture_jump25"},
-        {832, "glitch_picture_jump26"},
-        {833, "glitch_picture_jump27"},
-        {834, "glitch_picture_jump28"},
-        {835, "glitch_picture_jump29"},
-        {836, "glitch_picture_jump30"},
-        {837, "glitch_picture_jump31"},
-        {838, "glitch_rect_size"},
-        {839, "glitch_rsquare2"},
-        {840, "glitch_rsquare3"},
-        {841, "glitch_rsquare4"},
-        {842, "glitch_rsquare5"},
-        {843, "glitch_slice_frame"},
-        {844, "glitch_slice_frame_w"},
-        {845, "glitch_square_block_v2a"},
-        {846, "glitch_square_block_v2b"},
-        {847, "glitch_square_block_v2c"},
-        {848, "glitch_square_block_v2d"},
-        {849, "glitch_square_block_v2e"},
-        {850, "glitch_square_block_v2f"},
-        {851, "glitch_square_block_v2g"},
-        {852, "glitch_square_block_v2h"},
-        {853, "glitch_square_xor"},
-        {854, "glitch_store_frame10"},
-        {855, "glitch_stuckframe"},
-        {856, "glitch_stutter_long"},
-        {857, "glitch_stutter_sbrv"},
-        {858, "acgl_glitch_AlphaBlendFive"},
-        {859, "acgl_glitch_AlphaBlendTri"},
-        {860, "acgl_glitch_AlphaBlendExpand"},
-        {861, "acgl_glitch_BarsCol"},
-        {862, "acgl_glitch_BarsColAlpha"},
-        {863, "acgl_glitch_BarsHoriz"},
-        {864, "acgl_glitch_BarsHorizAlpha"},
-        {865, "acgl_glitch_BlackSquare"},
-        {866, "acgl_glitch_BlendStuck"},
-        {867, "acgl_glitch_ColorDistort"},
-        {868, "acgl_glitch_ColorRect"},
-        {869, "acgl_glitch_ColorOnOff"},
-        {870, "acgl_glitch_DEM"},
-        {871, "acgl_glitch_FrameMirror"},
-        {872, "acgl_glitch_FramePix"},
-        {873, "acgl_glitch_FrameReverse"},
-        {874, "acgl_glitch_FrameReverse2"},
-        {875, "acgl_glitch_FrameReverseNoBlend"},
-        {876, "acgl_glitch_FrameSepBand"},
-        {877, "acgl_glitch_FrameSwap"},
-        {878, "acgl_glitch_FrameXBlend"},
-        {879, "acgl_glitch_FrameXBlendXor"},
-        {880, "acgl_glitch_FrameYBlend"},
-        {881, "acgl_glitch_FrameYBlendXor"},
-        {882, "acgl_glitch_AddMulXor"},
-        {883, "acgl_glitch_AddXor"},
-        {884, "acgl_glitch_ColorBarsRand"},
-        {885, "acgl_glitch_ColorBarsX"},
-        {886, "acgl_glitch_ColorBarsY"},
-        {887, "acgl_glitch_ColorShiftY"},
-        {888, "acgl_glitch_LineCollectionRGB"},
-        {889, "acgl_glitch_FrameX2"},
-        {890, "acgl_glitch_NewBars"},
-        {891, "acgl_glitch_NewBars2"},
-        {892, "acgl_glitch_NewBlendLines"},
-        {893, "acgl_glitch_NewLines"},
-        {894, "acgl_glitch_NewOne"},
-        {895, "acgl_glitch_StrobeCycle"},
-        {896, "acgl_glitch_StuckFrame2"},
-        {897, "acgl_glitch_StuckLine"},
-        {898, "acgl_glitch_StuckRow"},
-        {899, "acgl_glitch_StuckRowLine"},
-        {900, "acgl_glitch_SepBlocks"},
-        {901, "acgl_glitch_Plug1"},
-        {902, "acgl_glitch_OppositeDir"},
-        {903, "acgl_glitch_OffStuck"},
-        {904, "acgl_glitch_NewVarBlendLines"},
-        {905, "Square_Block_Resize_Vertical"}
-    };
+    Filter filters[] = {{0, "SelfAlphaBlend"},
+                        {1, "MedianBlend"},
+                        {2, "MedianBlendXor"},
+                        {3, "SquareBlockResize"},
+                        {4, "SelfScaleRefined"},
+                        {5, "StrangeGlitch"},
+                        {6, "MatrixOutline"},
+                        {7, "AuraTrails"},
+                        {8, "MirrorReverseColor"},
+                        {9, "SquareShrink"},
+                        {10, "MotionGhostTrails"},
+                        {11, "StretchColMatrix8"},
+                        {12, "StretchColMatrix16"},
+                        {13, "StretchColMatrix32"},
+                        {14, "GradientFlashColor"},
+                        {15, "HorizontalGlitch"},
+                        {16, "VerticalGlitch"},
+                        {17, "WaveTrails"},
+                        {18, "PixelInterlace"},
+                        {19, "ColorWaveTrails"},
+                        {20, "ParticleSlide"},
+                        {21, "DiagPixelated"},
+                        {22, "DiagPixelatedResize"},
+                        {23, "RGBShiftTrails"},
+                        {24, "PictureShiftDown"},
+                        {25, "PictureShiftRight"},
+                        {26, "PictureShiftVariable"},
+                        {27, "StretchR_Right"},
+                        {28, "StretchG_Right"},
+                        {29, "StretchB_Right"},
+                        {30, "StretchR_Down"},
+                        {31, "StretchG_Down"},
+                        {32, "StretchB_Down"},
+                        {33, "Distorted_LinesY"},
+                        {34, "Distorted_LinesX"},
+                        {35, "TripHSV"},
+                        {36, "XorSumStrobe"},
+                        {37, "DetectEdges"},
+                        {38, "SobelNorm"},
+                        {39, "LineInLineOut"},
+                        {40, "LineInLineOut4_Increase"},
+                        {41, "LineInLineOut_ReverseIncrease"},
+                        {42, "LineInLineOut_ReverseIncrease2"},
+                        {43, "LineInLineOut_InvertedY"},
+                        {44, "LineInLineOut_ReverseInvertedY"},
+                        {45, "LineInLineOut_Vertical"},
+                        {46, "LineInLineOut_VerticalIncrease"},
+                        {47, "LineInLineOut_IncreaseImage"},
+                        {48, "SquareByRow"},
+                        {49, "SquareByRowRev"},
+                        {50, "SquareByRow2"},
+                        {51, "DivideByValue"},
+                        {52, "ColorCollectionSubtleStrobe"},
+                        {53, "CollectionRandom"},
+                        {54, "CollectionAlphaXor"},
+                        {55, "ColorCollection64X"},
+                        {56, "ColorCollectionSwitch"},
+                        {57, "ColorCollectionRGB_Index"},
+                        {58, "ColorCollectionGhostTrails"},
+                        {59, "ColorCollectionScale"},
+                        {60, "ColorCollectionReverseStrobe"},
+                        {61, "ColorCollectionXorPixel"},
+                        {62, "BlendWithSource25"},
+                        {63, "BlendWithSource50"},
+                        {64, "BlendWithSource75"},
+                        {65, "BlendWithSource100"},
+                        {66, "ColorCollectionXorOffsetFlash"},
+                        {67, "ColorCollectionMatrixGhost"},
+                        {68, "MildStrobe"},
+                        {69, "ReduceBy50"},
+                        {70, "ColorPositionAverageXor"},
+                        {71, "ColorPositionXor"},
+                        {72, "GrayStrobe"},
+                        {73, "ColorStrobeXor"},
+                        {74, "ColorGhost"},
+                        {75, "BlurredOutXor"},
+                        {76, "DizzyFilter"},
+                        {77, "Buzzed"},
+                        {78, "BuzzedDark"},
+                        {79, "AllRed"},
+                        {80, "AllGreen"},
+                        {81, "AllBlue"},
+                        {82, "NegativeStrobe"},
+                        {83, "XorAddMul"},
+                        {84, "HorizontalLines"},
+                        {85, "StrobeRedGreenBlue"},
+                        {86, "Pulse"},
+                        {87, "DiamondPattern"},
+                        {88, "Bitwise_XOR"},
+                        {89, "Bitwise_AND"},
+                        {90, "Bitwise_OR"},
+                        {91, "BlendSwitch"},
+                        {92, "LineRGB"},
+                        {93, "PixelRGB"},
+                        {94, "InvertedScanlines"},
+                        {95, "ScanSwitch"},
+                        {96, "ScanAlphaSwitch"},
+                        {97, "RGBFlash"},
+                        {98, "DiagonalLines"},
+                        {99, "Darken"},
+                        {100, "SelfXorBlend"},
+                        {101, "SelfXorDoubleFlash"},
+                        {102, "SelfOrDoubleFlash"},
+                        {103, "BlendRowCurvedSqrt"},
+                        {104, "XorAlpha"},
+                        {105, "RandomXorBlend"},
+                        {106, "AndStrobe"},
+                        {107, "AndStrobeScale"},
+                        {108, "AndPixelStrobe"},
+                        {109, "AndOrXorStrobe"},
+                        {110, "FadeInAndOut"},
+                        {111, "BrightStrobe"},
+                        {112, "DarkStrobe"},
+                        {113, "RandomXorOpposite"},
+                        {114, "GradientRainbow"},
+                        {115, "cossinMultiply"},
+                        {116, "colorAccumulate1"},
+                        {117, "colorAccumulate2"},
+                        {118, "WeakBlend"},
+                        {119, "StrobeEffect"},
+                        {120, "Blend3"},
+                        {121, "NegParadox"},
+                        {122, "ThoughtMode"},
+                        {123, "Tri"},
+                        {124, "Distort"},
+                        {125, "colorAccumulate3"},
+                        {126, "filter8"},
+                        {127, "filter3"},
+                        {128, "rainbowBlend"},
+                        {129, "pixelScale"},
+                        {130, "GradientSelf"},
+                        {131, "GradientSelfVertical"},
+                        {132, "GradientDown"},
+                        {133, "GraidentHorizontal"},
+                        {134, "Inter"},
+                        {135, "BlendedScanLines"},
+                        {136, "GradientStripes"},
+                        {137, "XorSine"},
+                        {138, "Circular"},
+                        {139, "RandomPixels"},
+                        {140, "DarkRandomPixels"},
+                        {141, "Bars"},
+                        {142, "NegativeByRow"},
+                        {143, "XorScale"},
+                        {144, "SelfAlphaRGB"},
+                        {145, "BitwiseXorStrobe"},
+                        {146, "OrStrobe"},
+                        {147, "DivideAndIncH"},
+                        {148, "DivideAndIncW"},
+                        {149, "RandomIncrease"},
+                        {150, "SelfAlphaScaleBlend"},
+                        {151, "FadeBars"},
+                        {152, "StrobeXor"},
+                        {153, "Blank"},
+                        {154, "ColorVariableBlend"},
+                        {155, "ColorXorBlend"},
+                        {156, "ColorAddBlend"},
+                        {157, "SurroundingPixels"},
+                        {158, "SurroundingPixelsAlpha"},
+                        {159, "DarkModBlend"},
+                        {160, "IncreaseDecreaseGamma"},
+                        {161, "BlendChannelXor"},
+                        {162, "IncDifference"},
+                        {163, "IncDifferenceAlpha"},
+                        {164, "MirrorXorAlpha"},
+                        {165, "IntertwinedMirror"},
+                        {166, "ColorFadeFilter"},
+                        {167, "ColorChannelMoveUpAndDown"},
+                        {168, "MedianStrobe"},
+                        {169, "RGBBlend"},
+                        {170, "BGRBlend"},
+                        {171, "FlipAlphaBlend"},
+                        {172, "RandomFlipFilter"},
+                        {173, "SelfScaleByFrame"},
+                        {174, "AlphaBlendMirror"},
+                        {175, "TwistedVision"},
+                        {176, "TruncateColor"},
+                        {177, "TruncateVariable"},
+                        {178, "TruncateVariableScale"},
+                        {179, "XorFade"},
+                        {180, "SineValue"},
+                        {181, "FadeRtoGtoB"},
+                        {182, "FadeRandomChannel"},
+                        {183, "VariableLines"},
+                        {184, "VariableLinesVertical"},
+                        {185, "RowMedianBlend"},
+                        {186, "MirrorReverseColorBlend"},
+                        {187, "PsychoticVision"},
+                        {188, "PixelGlitch"},
+                        {189, "StaticGlitch"},
+                        {190, "WavePattern"},
+                        {191, "WavePatternXor"},
+                        {192, "DiagonalXor"},
+                        {193, "RGBShiftBlend"},
+                        {194, "ChannelShuffle"},
+                        {195, "ChannelShuffleRand"},
+                        {196, "PixelCounter"},
+                        {197, "PixelCounterXor"},
+                        {198, "RowColorBlend"},
+                        {199, "ColumnColorBlend"},
+                        {200, "CheckerboardXor"},
+                        {201, "CheckerboardBlend"},
+                        {202, "SineWaveDistort"},
+                        {203, "CosineWaveDistort"},
+                        {204, "SinCosBlend"},
+                        {205, "PixelReverseXor"},
+                        {206, "LinesAcrossX"},
+                        {207, "XorLineX"},
+                        {208, "AlphaComponentIncrease"},
+                        {209, "ExpandContract"},
+                        {210, "LongLines"},
+                        {211, "TearRight"},
+                        {212, "TearDown"},
+                        {213, "DistortionByRow"},
+                        {214, "DistortionByCol"},
+                        {215, "AlternateAlpha"},
+                        {216, "DiagSquareRGB"},
+                        {217, "ShiftPixelsRGB"},
+                        {218, "ColorWaveTrailsRGB"},
+                        {219, "ProperTrails"},
+                        {220, "XorLag"},
+                        {221, "PixelateBlend"},
+                        {222, "DiagPixel"},
+                        {223, "DiagPixelY"},
+                        {224, "ExpandLeftRight"},
+                        {225, "DiagSquare"},
+                        {226, "HorizontalColorOffset"},
+                        {227, "PrevFrameNotEqual"},
+                        {228, "BlackLines"},
+                        {229, "DizzyMode"},
+                        {230, "GhostShift"},
+                        {231, "RGBSplitFilter"},
+                        {232, "PixelateRect"},
+                        {233, "CollectionXor4"},
+                        {234, "RectangleSpin"},
+                        {235, "RectanglePlotXY"},
+                        {236, "ShiftLinesDown"},
+                        {237, "PictureStretch"},
+                        {238, "PictureStretchPieces"},
+                        {239, "VisualSnow"},
+                        {240, "VisualSnowX2"},
+                        {241, "LineGlitch"},
+                        {242, "SlitReverse64"},
+                        {243, "SlitReverse64_Increase"},
+                        {244, "SlitStretch"},
+                        {245, "LineLeftRight"},
+                        {246, "LineLeftRightResize"},
+                        {247, "RGBLineTrails"},
+                        {248, "RGBCollectionBlend"},
+                        {249, "RGBCollectionIncrease"},
+                        {250, "RGBLongTrails"},
+                        {251, "FadeRGB_Speed"},
+                        {252, "RGBStrobeTrails"},
+                        {253, "BoxGlitch"},
+                        {254, "VerticalPictureDistort"},
+                        {255, "ShortTrail"},
+                        {256, "DiagInward"},
+                        {257, "DiagSquareInward"},
+                        {258, "DiagSquareInwardResize"},
+                        {259, "PictureShiftDownRight"},
+                        {260, "FlipPictureShift"},
+                        {261, "RGBWideTrails"},
+                        {262, "LineInLineOut_Increase"},
+                        {263, "LineInLineOut2_Increase"},
+                        {264, "LineInLineOut3_Increase"},
+                        {265, "SquareByRow2Plus"},
+                        {266, "FrameSep"},
+                        {267, "FrameSep2"},
+                        {268, "FrameStopStart"},
+                        {269, "OutOfOrder"},
+                        {270, "TrackingDown"},
+                        {271, "TrackingDownBlend"},
+                        {272, "TrackingRev"},
+                        {273, "TrackingMirror"},
+                        {274, "BlockPixels"},
+                        {275, "FrameChop"},
+                        {276, "YLineDown"},
+                        {277, "YLineDownBlend"},
+                        {278, "SquareDiff1"},
+                        {279, "LineAcrossX"},
+                        {280, "ColorGlitch"},
+                        {281, "PixelShiftUp"},
+                        {282, "PixelShiftDown"},
+                        {283, "PixelShiftLeft"},
+                        {284, "PixelShiftRight"},
+                        {285, "PixelShiftDiagonal"},
+                        {286, "WaveBlend"},
+                        {287, "WaveBlendX2"},
+                        {288, "SineWaveBlend"},
+                        {289, "CosineWaveBlend"},
+                        {290, "SpiralWave"},
+                        {291, "RadialBlur"},
+                        {292, "ZoomBlur"},
+                        {293, "RotateBlend"},
+                        {294, "MirrorWave"},
+                        {295, "MirrorWaveX"},
+                        {296, "MirrorWaveY"},
+                        {297, "PixelDrift"},
+                        {298, "PixelDriftX"},
+                        {299, "PixelDriftY"},
+                        {300, "ColorPulse"},
+                        {301, "ColorPulseRGB"},
+                        {302, "ColorPulseXor"},
+                        {303, "GlitchBlock"},
+                        {304, "GlitchBlockXor"},
+                        {305, "GlitchLine"},
+                        {306, "GlitchLineX"},
+                        {307, "NoiseBlend"},
+                        {308, "NoiseBlendX2"},
+                        {309, "NoiseXor"},
+                        {310, "ChannelShift"},
+                        {311, "ChannelShiftX"},
+                        {312, "ChannelRotate"},
+                        {313, "DiagonalStretch"},
+                        {314, "DiagonalStretchX"},
+                        {315, "DiagonalMirror"},
+                        {316, "SquareWave"},
+                        {317, "SquareWaveX"},
+                        {318, "SquareWaveBlend"},
+                        {319, "TriangleWave"},
+                        {320, "TriangleWaveBlend"},
+                        {321, "SawtoothWave"},
+                        {322, "SawtoothWaveBlend"},
+                        {323, "PulseWave"},
+                        {324, "PulseWaveBlend"},
+                        {325, "StepWave"},
+                        {326, "StepWaveBlend"},
+                        {327, "RippleEffect"},
+                        {328, "RippleEffectX2"},
+                        {329, "ShockWave"},
+                        {330, "ShockWaveBlend"},
+                        {331, "TwistEffect"},
+                        {332, "TwistEffectBlend"},
+                        {333, "FishEye"},
+                        {334, "FishEyeBlend"},
+                        {335, "Kaleidoscope"},
+                        {336, "KaleidoscopeBlend"},
+                        {337, "TunnelEffect"},
+                        {338, "TunnelEffectBlend"},
+                        {339, "VortexEffect"},
+                        {340, "VortexEffectBlend"},
+                        {341, "ColorDrift"},
+                        {342, "ColorDriftX"},
+                        {343, "RGBShift"},
+                        {344, "RGBShiftX"},
+                        {345, "ChromaticAberration"},
+                        {346, "ChromaticAberrationX"},
+                        {347, "Posterize"},
+                        {348, "PosterizeBlend"},
+                        {349, "Solarize"},
+                        {350, "SolarizeBlend"},
+                        {351, "GammaBright"},
+                        {352, "GammaDark"},
+                        {353, "ContrastBoost"},
+                        {354, "ContrastReduce"},
+                        {355, "EdgeGlowBlend"},
+                        {356, "FrameBlendMulti"},
+                        {357, "FrameBlendMultiX"},
+                        {358, "AcidTrailsBlend"},
+                        {359, "AcidGlitchX"},
+                        {360, "AlphaXorBlend"},
+                        {361, "AlphaXorBlendDouble"},
+                        {362, "AndOrXorStrobeScale"},
+                        {363, "AveragePixelsXorBlend"},
+                        {364, "BitwiseRotateBlend"},
+                        {365, "BitwiseRotateDiffBlend"},
+                        {366, "BitwiseXorScaleBlend"},
+                        {367, "BlackAndWhiteStrobe"},
+                        {368, "BlendAlphaXorScale"},
+                        {369, "BlendBurredXor"},
+                        {370, "BlendCombinedXor"},
+                        {371, "BlendIncreaseRGB"},
+                        {372, "BlendThreeXor"},
+                        {373, "BlurDistortionBlend"},
+                        {374, "ColorAccumulate"},
+                        {375, "ColorAccumulateBlend"},
+                        {376, "ColorAccumulateXor"},
+                        {377, "ColorChannelBlend"},
+                        {378, "ColorChannelXor"},
+                        {379, "ColorCollectionEnergy"},
+                        {380, "ColorCollectionWave"},
+                        {381, "ColorFadeXor"},
+                        {382, "ColorIntensityBlend"},
+                        {383, "ColorIntensityXor"},
+                        {384, "ColorMoveBlend"},
+                        {385, "ColorPixelBlend"},
+                        {386, "ColorPixelXor"},
+                        {387, "ColorScaleBlend"},
+                        {388, "ColorWaveXor"},
+                        {389, "CosineMultiplyBlend"},
+                        {390, "DarkModBlendXor"},
+                        {391, "DifferenceBlend"},
+                        {392, "DifferenceXorBlend"},
+                        {393, "DistortBlend"},
+                        {394, "DiamondPatternBlend"},
+                        {395, "FadeBlendXor"},
+                        {396, "FlashBlendXor"},
+                        {397, "GhostTrailsBlend"},
+                        {398, "AddInvert"},
+                        {399, "AlphaBlendSimple"},
+                        {400, "AlphaBlendDoubleX"},
+                        {401, "AlphaStrobeBlendX"},
+                        {402, "BitwiseAndBlend"},
+                        {403, "BitwiseXorAverage"},
+                        {404, "BitwiseXorBlendX"},
+                        {405, "BlackStrobe"},
+                        {406, "BlendAlphaXorX"},
+                        {407, "BlendCombinedValuesX"},
+                        {408, "BlendFor360"},
+                        {409, "BlendForward16"},
+                        {410, "BlendForward32"},
+                        {411, "BlendFromXtoY"},
+                        {412, "BlendIncreaseX"},
+                        {413, "BlendRedGreenBlue"},
+                        {414, "BlendWithColorX"},
+                        {415, "BlendAngle"},
+                        {416, "BlockScale"},
+                        {417, "BlockStrobe"},
+                        {418, "BlockXor"},
+                        {419, "BlockyTrails16"},
+                        {420, "BlockyTrails32"},
+                        {421, "BlurDistortionX"},
+                        {422, "CannyStrobe"},
+                        {423, "ColorFadeSlow"},
+                        {424, "ColorFibonacci"},
+                        {425, "CurtainEffect"},
+                        {426, "DarkColorFibonacci"},
+                        {427, "DarkColorsBlend"},
+                        {428, "EnergizeBlend"},
+                        {429, "AverageLines"},
+                        {430, "AverageLinesBlendX"},
+                        {431, "BlendRowAlpha"},
+                        {432, "BlendInOut"},
+                        {433, "ColorFlashIncreaseX"},
+                        {434, "ColorIncreaseInOut"},
+                        {435, "ColorLinesX"},
+                        {436, "ColorMoveDownX"},
+                        {437, "ColorOrderSwapX"},
+                        {438, "ColorPulseAlphaX"},
+                        {439, "ColorRowShiftX"},
+                        {440, "ColorShiftXorX"},
+                        {441, "CopyXorAlphaX"},
+                        {442, "CycleShiftRGBX"},
+                        {443, "DarkNegateX"},
+                        {444, "DarkSelfAlphaX"},
+                        {445, "DiagonalGlitch"},
+                        {446, "DigitalHaze"},
+                        {447, "DoubleXorBlend"},
+                        {448, "EchoBlend"},
+                        {449, "ElectricEdge"},
+                        {450, "FlashColorStrobe"},
+                        {451, "FrameDiffXor"},
+                        {452, "GhostMirror"},
+                        {453, "GlitchSort"},
+                        {454, "HeatWave"},
+                        {455, "InterlaceBlend"},
+                        {456, "InvertStrobe"},
+                        {457, "KaleidoBlend"},
+                        {458, "LightStrobe"},
+                        {459, "LineGlitchX"},
+                        {460, "MosaicBlend"},
+                        {461, "NegatePulse"},
+                        {462, "OffsetGhost"},
+                        {463, "PixelateWave"},
+                        {464, "QuantizeBlend"},
+                        {465, "RandomLines"},
+                        {466, "RippleDisplace"},
+                        {467, "RotateShift"},
+                        {468, "SaturationGlow"},
+                        {469, "ScaleToCenter"},
+                        {470, "ShadowMirror"},
+                        {471, "ShiftChannels"},
+                        {472, "SliceGlitch"},
+                        {473, "SobelGlow"},
+                        {474, "SpectralShift"},
+                        {475, "SpiralTrail"},
+                        {476, "SquareTrails"},
+                        {477, "StrobeNegate"},
+                        {478, "ThermalBlend"},
+                        {479, "TintShift"},
+                        {480, "TrailEcho"},
+                        {481, "TransitionBlend"},
+                        {482, "TwistWarp"},
+                        {483, "VerticalShift"},
+                        {484, "VortexBlend"},
+                        {485, "WeavePattern"},
+                        {486, "WhiteBurst"},
+                        {487, "WiggleDisplace"},
+                        {488, "XorPulseX"},
+                        {489, "YellowShift"},
+                        {490, "ZigzagGlitch"},
+                        {491, "AlphaModulate"},
+                        {492, "BlockSwap"},
+                        {493, "ColorResonance"},
+                        {494, "DepthGlitch"},
+                        {495, "EchoShift"},
+                        {496, "FractalNoise"},
+                        {497, "GradientRotate"},
+                        {498, "HarmonicShift"},
+                        {499, "AcidWarp"},
+                        {500, "BlendDiagonal"},
+                        {501, "ChromaFlash"},
+                        {502, "CircleWave"},
+                        {503, "ColorCrush"},
+                        {504, "CrosshatchBlend"},
+                        {505, "CyberGlitch"},
+                        {506, "DarkPulse"},
+                        {507, "DiamondPatternX"},
+                        {508, "DigitalRain"},
+                        {509, "DisplaceX"},
+                        {510, "DriftBlend"},
+                        {511, "EdgePulse"},
+                        {512, "FlameEffect"},
+                        {513, "FlickerShift"},
+                        {514, "GhostLayer"},
+                        {515, "GlitchBlockX"},
+                        {516, "GlowPulse"},
+                        {517, "GridDistort"},
+                        {518, "HexPattern"},
+                        {519, "HueRotate"},
+                        {520, "InterweaveX"},
+                        {521, "JitterBlend"},
+                        {522, "KaleidoScope4"},
+                        {523, "LaserScan"},
+                        {524, "LightLeak"},
+                        {525, "MeltDown"},
+                        {526, "MirrorDiag"},
+                        {527, "NeonGlow"},
+                        {528, "NoiseBlendX"},
+                        {529, "PixelDrift"},
+                        {530, "PlasmaWave"},
+                        {531, "PrismSplit"},
+                        {532, "PulseRadial"},
+                        {533, "RainbowStrobe"},
+                        {534, "RefractionX"},
+                        {535, "ScanlineX"},
+                        {536, "ShatterEffect"},
+                        {537, "StaticNoise"},
+                        {538, "TunnelVision"},
+                        {539, "AberrationPulse"},
+                        {540, "AquaWave"},
+                        {541, "BinaryFlash"},
+                        {542, "BloomGlow"},
+                        {543, "CellularNoise"},
+                        {544, "ChromaShift2"},
+                        {545, "ColorBands"},
+                        {546, "ColorVortex"},
+                        {547, "CrystalMosaic"},
+                        {548, "CubicDistort"},
+                        {549, "DepthFade"},
+                        {550, "DiscoFlash"},
+                        {551, "DitherBlend"},
+                        {552, "DoubleVision"},
+                        {553, "DreamHaze"},
+                        {554, "ElectricStorm"},
+                        {555, "EmbossShift"},
+                        {556, "FiberOptic"},
+                        {557, "FilmGrain"},
+                        {558, "FireWorks"},
+                        {559, "FluidMotion"},
+                        {560, "FogRoll"},
+                        {561, "GlassRefract"},
+                        {562, "GlowTrails"},
+                        {563, "GridPulse"},
+                        {564, "HalftoneBlend"},
+                        {565, "HeatDistort"},
+                        {566, "HoloGlitch"},
+                        {567, "InfraredView"},
+                        {568, "LavaLamp"},
+                        {569, "LensFlare"},
+                        {570, "LightningBolt"},
+                        {571, "LiquidMetal"},
+                        {572, "MatrixCode"},
+                        {573, "MirrorKaleid"},
+                        {574, "NightVision"},
+                        {575, "OilSlick"},
+                        {576, "ParticleField"},
+                        {577, "PinwheelSpin"},
+                        {578, "PixelStorm"},
+                        {579, "PlaidPattern"},
+                        {580, "PolarInvert"},
+                        {581, "PolychromeTint"},
+                        {582, "PopArtDots"},
+                        {583, "PrismaticEdge"},
+                        {584, "PulseWarp"},
+                        {585, "QuantumNoise"},
+                        {586, "QuiltBlend"},
+                        {587, "RadarSweep"},
+                        {588, "RaindropRipple"},
+                        {589, "RasterBars"},
+                        {590, "RetroTube"},
+                        {591, "RingWave"},
+                        {592, "RippleTank"},
+                        {593, "RotatingPrism"},
+                        {594, "SandStorm"},
+                        {595, "SaturationPulse"},
+                        {596, "ScatterPixel"},
+                        {597, "ShadowPlay"},
+                        {598, "ShimmerGlass"},
+                        {599, "SilhouetteBlend"},
+                        {600, "SketchOutline"},
+                        {601, "SliceShift"},
+                        {602, "SmearMotion"},
+                        {603, "SmokeWisp"},
+                        {604, "SnowDrift"},
+                        {605, "SolarFlare"},
+                        {606, "SparkShower"},
+                        {607, "SpectrumWave"},
+                        {608, "SpiralZoom"},
+                        {609, "SplitMirror"},
+                        {610, "StarBurst"},
+                        {611, "StaticPulse"},
+                        {612, "StencilCut"},
+                        {613, "StippleShade"},
+                        {614, "StormCloud"},
+                        {615, "StreakBlur"},
+                        {616, "StrobeEdge"},
+                        {617, "SubpixelShift"},
+                        {618, "SwimDistort"},
+                        {619, "TangentWarp"},
+                        {620, "TapeGlitch"},
+                        {621, "TechnoGrid"},
+                        {622, "TeleportPixel"},
+                        {623, "TemporalBlur"},
+                        {624, "TerraFracture"},
+                        {625, "TextureWave"},
+                        {626, "ThresholdPulse"},
+                        {627, "TidalWave"},
+                        {628, "TintCycle"},
+                        {629, "TraceEdge"},
+                        {630, "TriangleMosaic"},
+                        {631, "TripleSplit"},
+                        {632, "TurbulentFlow"},
+                        {633, "UnderwaterCaustic"},
+                        {634, "UnsharpPulse"},
+                        {635, "VaporTrail"},
+                        {636, "VectorField"},
+                        {637, "VelocityBlur"},
+                        {638, "VerticalMelt"},
+                        {639, "VHSTracking"},
+                        {640, "VibrantPop"},
+                        {641, "VignetteFlash"},
+                        {642, "VoronoiShatter"},
+                        {643, "WarpSpeed"},
+                        {644, "WaterColor"},
+                        {645, "WaveCollapse"},
+                        {646, "WebPattern"},
+                        {647, "WhirlpoolSpin"},
+                        {648, "WindBlast"},
+                        {649, "WireframePulse"},
+                        {650, "XRayFlash"},
+                        {651, "ZebraStripe"},
+                        {652, "ZenRipple"},
+                        {653, "ZigzagWave"},
+                        {654, "ZoomPulse"},
+                        {655, "ZoneTint"},
+                        {656, "AcidDrip"},
+                        {657, "AuroraWave"},
+                        {658, "BandPass"},
+                        {659, "BilinearStretch"},
+                        {660, "BleedThrough"},
+                        {661, "BlockShatter"},
+                        {662, "BlurMask"},
+                        {663, "BokehBlur"},
+                        {664, "BounceWave"},
+                        {665, "BrokenGlass"},
+                        {666, "BubbleWarp"},
+                        {667, "CRTCurvature"},
+                        {668, "CascadeBlend"},
+                        {669, "CelShade"},
+                        {670, "ChainReaction"},
+                        {671, "ChannelDelay"},
+                        {672, "ChromaBleed"},
+                        {673, "CircuitTrace"},
+                        {674, "ClockWipe"},
+                        {675, "CloudShadow"},
+                        {676, "ColorBurn"},
+                        {677, "ColorHalves"},
+                        {678, "ComicDots"},
+                        {679, "ConcentricPulse"},
+                        {680, "CopperTone"},
+                        {681, "CornerStretch"},
+                        {682, "CosmicDust"},
+                        {683, "CrossBlur"},
+                        {684, "CrossProcess"},
+                        {685, "CrystalEdge"},
+                        {686, "CubeRotate"},
+                        {687, "CurtainReveal"},
+                        {688, "CyberPunk"},
+                        {689, "DataCorrupt"},
+                        {690, "DebrisField"},
+                        {691, "DeepFry"},
+                        {692, "DesyncRGB"},
+                        {693, "DiagonalWipe"},
+                        {694, "DigitalArtifact"},
+                        {695, "DimensionRift"},
+                        {696, "DotCrawl"},
+                        {697, "DualTone"},
+                        {698, "EchoFade"},
+                        {699, "EdgeMelt"},
+                        {700, "ElasticWarp"},
+                        {701, "EmberGlow"},
+                        {702, "EntropyShift"},
+                        {703, "ErosionBlend"},
+                        {704, "ExplosionBurst"},
+                        {705, "FacetMirror"},
+                        {706, "FadeStreak"},
+                        {707, "FeatherEdge"},
+                        {708, "FlashFreeze"},
+                        {709, "FlipMirror"},
+                        {710, "FloatDrift"},
+                        {711, "FlowField"},
+                        {712, "FoldWarp"},
+                        {713, "FragmentScatter"},
+                        {714, "FrequencyPulse"},
+                        {715, "FrostBite"},
+                        {716, "FuseBlend"},
+                        {717, "GalaxySpiral"},
+                        {718, "GelWobble"},
+                        {719, "GhostEcho"},
+                        {720, "GlassShatter"},
+                        {721, "GlimmerPulse"},
+                        {722, "GlitchMosaic"},
+                        {723, "GlowEdge"},
+                        {724, "GradientMelt"},
+                        {725, "GrainStorm"},
+                        {726, "GravityPull"},
+                        {727, "GridWarp"},
+                        {728, "HazeLayer"},
+                        {729, "HeatRipple"},
+                        {730, "HexagonBlur"},
+                        {731, "HighContrast"},
+                        {732, "HologramScan"},
+                        {733, "HorizonBend"},
+                        {734, "HotSpot"},
+                        {735, "HueWobble"},
+                        {736, "glitch_alpha_diamond1"},
+                        {737, "glitch_alpha_diamond2"},
+                        {738, "glitch_alpha_diamond3"},
+                        {739, "glitch_alpha_diamond4"},
+                        {740, "glitch_alpha_diamond5"},
+                        {741, "glitch_alphatrails"},
+                        {742, "glitch_color_fade_ex1"},
+                        {743, "glitch_color_fade_ex2"},
+                        {744, "glitch_color_shift"},
+                        {745, "glitch_colorxor01"},
+                        {746, "glitch_colorxor02"},
+                        {747, "glitch_colorxor03"},
+                        {748, "glitch_colorxor04"},
+                        {749, "glitch_colorxor05"},
+                        {750, "glitch_colorxor06"},
+                        {751, "glitch_colorxor07"},
+                        {752, "glitch_colorxor08"},
+                        {753, "glitch_colorxor09"},
+                        {754, "glitch_colorxor10"},
+                        {755, "glitch_colorxor11"},
+                        {756, "glitch_colorxor12"},
+                        {757, "glitch_colorxor13"},
+                        {758, "glitch_colorxor14"},
+                        {759, "glitch_colorxor15"},
+                        {760, "glitch_colorxor16"},
+                        {761, "glitch_colorxor17"},
+                        {762, "glitch_colorxor18"},
+                        {763, "glitch_colorxor19"},
+                        {764, "glitch_colorxor20"},
+                        {765, "glitch_distort_picture"},
+                        {766, "glitch_echo"},
+                        {767, "glitch_fast_monocolortrails"},
+                        {768, "glitch_frame_pixels"},
+                        {769, "glitch_frame_resize_stretch"},
+                        {770, "glitch_frame_skip"},
+                        {771, "glitch_frame_skip_resize"},
+                        {772, "glitch_frame_skip_shadow"},
+                        {773, "glitch_frame_skip_shadow_x2"},
+                        {774, "glitch_frame_slide01"},
+                        {775, "glitch_frame_slide02"},
+                        {776, "glitch_frame_slide03"},
+                        {777, "glitch_frame_slide04"},
+                        {778, "glitch_frame_square_col"},
+                        {779, "glitch_frame_stutter_filter"},
+                        {780, "glitch_glitch_x1"},
+                        {781, "glitch_gpt1"},
+                        {782, "glitch_gpt2"},
+                        {783, "glitch_gpt3"},
+                        {784, "glitch_invertflash"},
+                        {785, "glitch_line_across_side01"},
+                        {786, "glitch_line_across_side02"},
+                        {787, "glitch_line_across_side03"},
+                        {788, "glitch_line_across_side04"},
+                        {789, "glitch_line_across_side05"},
+                        {790, "glitch_line_across_side06"},
+                        {791, "glitch_line_collection01"},
+                        {792, "glitch_line_collection02"},
+                        {793, "glitch_line_collection03"},
+                        {794, "glitch_line_collection04"},
+                        {795, "glitch_line_collection05"},
+                        {796, "glitch_line_collection06"},
+                        {797, "glitch_line_collection07"},
+                        {798, "glitch_line_offset_inout"},
+                        {799, "glitch_line_offset_inout2"},
+                        {800, "glitch_line_offset_inout3"},
+                        {801, "glitch_newrandblend"},
+                        {802, "glitch_newstretchlines"},
+                        {803, "glitch_newvarlines"},
+                        {804, "glitch_outoforder"},
+                        {805, "glitch_pic_adjust1"},
+                        {806, "glitch_pic_adjust2"},
+                        {807, "glitch_picture_jump01"},
+                        {808, "glitch_picture_jump02"},
+                        {809, "glitch_picture_jump03"},
+                        {810, "glitch_picture_jump04"},
+                        {811, "glitch_picture_jump05"},
+                        {812, "glitch_picture_jump06"},
+                        {813, "glitch_picture_jump07"},
+                        {814, "glitch_picture_jump08"},
+                        {815, "glitch_picture_jump09"},
+                        {816, "glitch_picture_jump10"},
+                        {817, "glitch_picture_jump11"},
+                        {818, "glitch_picture_jump12"},
+                        {819, "glitch_picture_jump13"},
+                        {820, "glitch_picture_jump14"},
+                        {821, "glitch_picture_jump15"},
+                        {822, "glitch_picture_jump16"},
+                        {823, "glitch_picture_jump17"},
+                        {824, "glitch_picture_jump18"},
+                        {825, "glitch_picture_jump19"},
+                        {826, "glitch_picture_jump20"},
+                        {827, "glitch_picture_jump21"},
+                        {828, "glitch_picture_jump22"},
+                        {829, "glitch_picture_jump23"},
+                        {830, "glitch_picture_jump24"},
+                        {831, "glitch_picture_jump25"},
+                        {832, "glitch_picture_jump26"},
+                        {833, "glitch_picture_jump27"},
+                        {834, "glitch_picture_jump28"},
+                        {835, "glitch_picture_jump29"},
+                        {836, "glitch_picture_jump30"},
+                        {837, "glitch_picture_jump31"},
+                        {838, "glitch_rect_size"},
+                        {839, "glitch_rsquare2"},
+                        {840, "glitch_rsquare3"},
+                        {841, "glitch_rsquare4"},
+                        {842, "glitch_rsquare5"},
+                        {843, "glitch_slice_frame"},
+                        {844, "glitch_slice_frame_w"},
+                        {845, "glitch_square_block_v2a"},
+                        {846, "glitch_square_block_v2b"},
+                        {847, "glitch_square_block_v2c"},
+                        {848, "glitch_square_block_v2d"},
+                        {849, "glitch_square_block_v2e"},
+                        {850, "glitch_square_block_v2f"},
+                        {851, "glitch_square_block_v2g"},
+                        {852, "glitch_square_block_v2h"},
+                        {853, "glitch_square_xor"},
+                        {854, "glitch_store_frame10"},
+                        {855, "glitch_stuckframe"},
+                        {856, "glitch_stutter_long"},
+                        {857, "glitch_stutter_sbrv"},
+                        {858, "acgl_glitch_AlphaBlendFive"},
+                        {859, "acgl_glitch_AlphaBlendTri"},
+                        {860, "acgl_glitch_AlphaBlendExpand"},
+                        {861, "acgl_glitch_BarsCol"},
+                        {862, "acgl_glitch_BarsColAlpha"},
+                        {863, "acgl_glitch_BarsHoriz"},
+                        {864, "acgl_glitch_BarsHorizAlpha"},
+                        {865, "acgl_glitch_BlackSquare"},
+                        {866, "acgl_glitch_BlendStuck"},
+                        {867, "acgl_glitch_ColorDistort"},
+                        {868, "acgl_glitch_ColorRect"},
+                        {869, "acgl_glitch_ColorOnOff"},
+                        {870, "acgl_glitch_DEM"},
+                        {871, "acgl_glitch_FrameMirror"},
+                        {872, "acgl_glitch_FramePix"},
+                        {873, "acgl_glitch_FrameReverse"},
+                        {874, "acgl_glitch_FrameReverse2"},
+                        {875, "acgl_glitch_FrameReverseNoBlend"},
+                        {876, "acgl_glitch_FrameSepBand"},
+                        {877, "acgl_glitch_FrameSwap"},
+                        {878, "acgl_glitch_FrameXBlend"},
+                        {879, "acgl_glitch_FrameXBlendXor"},
+                        {880, "acgl_glitch_FrameYBlend"},
+                        {881, "acgl_glitch_FrameYBlendXor"},
+                        {882, "acgl_glitch_AddMulXor"},
+                        {883, "acgl_glitch_AddXor"},
+                        {884, "acgl_glitch_ColorBarsRand"},
+                        {885, "acgl_glitch_ColorBarsX"},
+                        {886, "acgl_glitch_ColorBarsY"},
+                        {887, "acgl_glitch_ColorShiftY"},
+                        {888, "acgl_glitch_LineCollectionRGB"},
+                        {889, "acgl_glitch_FrameX2"},
+                        {890, "acgl_glitch_NewBars"},
+                        {891, "acgl_glitch_NewBars2"},
+                        {892, "acgl_glitch_NewBlendLines"},
+                        {893, "acgl_glitch_NewLines"},
+                        {894, "acgl_glitch_NewOne"},
+                        {895, "acgl_glitch_StrobeCycle"},
+                        {896, "acgl_glitch_StuckFrame2"},
+                        {897, "acgl_glitch_StuckLine"},
+                        {898, "acgl_glitch_StuckRow"},
+                        {899, "acgl_glitch_StuckRowLine"},
+                        {900, "acgl_glitch_SepBlocks"},
+                        {901, "acgl_glitch_Plug1"},
+                        {902, "acgl_glitch_OppositeDir"},
+                        {903, "acgl_glitch_OffStuck"},
+                        {904, "acgl_glitch_NewVarBlendLines"},
+                        {905, "Square_Block_Resize_Vertical"}};
     struct FilterParams {
         float alpha;
         bool isNegative;
@@ -942,11 +940,7 @@ namespace ac_gpu {
         }
         data[idx + 3] = 255;
     }
-    __device__ bool colorBounds(unsigned char r1, unsigned char g1, unsigned char b1,
-                                unsigned char r2, unsigned char g2, unsigned char b2,
-                                int ir, int ig, int ib) {
-        return (abs(r1 - r2) < ir && abs(g1 - g2) < ig && abs(b1 - b2) < ib);
-    }
+    __device__ bool colorBounds(unsigned char r1, unsigned char g1, unsigned char b1, unsigned char r2, unsigned char g2, unsigned char b2, int ir, int ig, int ib) { return (abs(r1 - r2) < ir && abs(g1 - g2) < ig && abs(b1 - b2) < ib); }
     __device__ void processSelfAlphaBlend(int x, int y, unsigned char *data, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         unsigned char b = data[idx];
@@ -1645,10 +1639,7 @@ namespace ac_gpu {
     }
     __device__ void processColorStrobeXor(int x, int y, unsigned char *data, unsigned char **allFrames, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        unsigned char randVal[3] = {
-            (unsigned char)(params.sumB % 256),
-            (unsigned char)(params.sumG % 256),
-            (unsigned char)(params.sumR % 256)};
+        unsigned char randVal[3] = {(unsigned char)(params.sumB % 256), (unsigned char)(params.sumG % 256), (unsigned char)(params.sumR % 256)};
         float sval[3] = {0, 0, 0};
         int count = (params.numFrames > 8) ? 8 : params.numFrames;
         for (int q = 0; q < count; ++q) {
@@ -7608,8 +7599,7 @@ namespace ac_gpu {
             float amount = 0.5f + 0.5f * sinf(params.frame_count * 0.08f);
             for (int j = 0; j < 3; ++j) {
                 int center = data[idx + j] * 5;
-                int neighbors = data[(y - 1) * step + x * 4 + j] + data[(y + 1) * step + x * 4 + j] +
-                                data[y * step + (x - 1) * 4 + j] + data[y * step + (x + 1) * 4 + j];
+                int neighbors = data[(y - 1) * step + x * 4 + j] + data[(y + 1) * step + x * 4 + j] + data[y * step + (x - 1) * 4 + j] + data[y * step + (x + 1) * 4 + j];
                 float sharp = center - neighbors;
                 data[idx + j] = (unsigned char)fmaxf(0.0f, fminf(255.0f, data[idx + j] + sharp * amount * 0.25f));
             }
@@ -8809,31 +8799,39 @@ namespace ac_gpu {
 
     __device__ unsigned char gpu_wrap_cast(float d) {
         unsigned long val = static_cast<unsigned long>(fabsf(d));
-        if(val > 255)
+        if (val > 255)
             val = val % 256;
         return static_cast<unsigned char>(val);
     }
     __device__ int gpu_AC_GetFX(int oldw, int x, int nw) {
-        if(nw <= 0 || oldw <= 0) return 0;
+        if (nw <= 0 || oldw <= 0)
+            return 0;
         float xp = (float)x * (float)oldw / (float)nw;
         int result = (int)xp;
-        if(result >= oldw) result = oldw - 1;
-        if(result < 0) result = 0;
+        if (result >= oldw)
+            result = oldw - 1;
+        if (result < 0)
+            result = 0;
         return result;
     }
     __device__ int gpu_AC_GetFZ(int oldh, int y, int nh) {
-        if(nh <= 0 || oldh <= 0) return 0;
+        if (nh <= 0 || oldh <= 0)
+            return 0;
         float yp = (float)y * (float)oldh / (float)nh;
         int result = (int)yp;
-        if(result >= oldh) result = oldh - 1;
-        if(result < 0) result = 0;
+        if (result >= oldh)
+            result = oldh - 1;
+        if (result < 0)
+            result = 0;
         return result;
     }
     __device__ int gpu_triangle_wave(int t, int period) {
-        if(period <= 0) return 0;
+        if (period <= 0)
+            return 0;
         int mod = 2 * period;
         int pos = t % mod;
-        if(pos < 0) pos += mod;
+        if (pos < 0)
+            pos += mod;
         return (pos < period) ? pos : (mod - pos);
     }
     __device__ void process_glitch_AlphaDiamond1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
@@ -8843,9 +8841,9 @@ namespace ac_gpu {
         int start_x = ((index + y) % width + width) % width;
         int src_x = ((start_x + x) % width + width) % width;
         unsigned char *ref = allFrames[offset % params.numFrames];
-        if(ref) {
+        if (ref) {
             int src_idx = y * step + src_x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
         }
     }
@@ -8855,9 +8853,9 @@ namespace ac_gpu {
         int offset = gpu_triangle_wave(params.frame_count, 7) + 1;
         int src_x = ((index + y + x) % width + width) % width;
         unsigned char *ref = allFrames[offset % params.numFrames];
-        if(ref) {
+        if (ref) {
             int src_idx = y * step + src_x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
         }
     }
@@ -8868,9 +8866,9 @@ namespace ac_gpu {
         int offset = gpu_triangle_wave(params.frame_count, 7) + 1;
         int src_x = ((index + y + x) % width + width) % width;
         unsigned char *ref = allFrames[offset % params.numFrames];
-        if(ref) {
+        if (ref) {
             int src_idx = y * step + src_x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[src_idx + j]);
         }
     }
@@ -8882,9 +8880,9 @@ namespace ac_gpu {
         int src_x = ((index + y + x) % width + width) % width;
         int fsel = (int)(gpu_rand(x, y, params.seed) * 9.0f) % params.numFrames;
         unsigned char *ref = allFrames[fsel];
-        if(ref) {
+        if (ref) {
             int src_idx = y * step + src_x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[src_idx + j]);
         }
     }
@@ -8895,9 +8893,9 @@ namespace ac_gpu {
         int src_x = ((index + y + x) % width + width) % width;
         int fsel = (int)(gpu_rand(x, y, params.seed + params.frame_count) * 9.0f) % params.numFrames;
         unsigned char *ref = allFrames[fsel];
-        if(ref) {
+        if (ref) {
             int src_idx = y * step + src_x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[src_idx + j]);
         }
     }
@@ -8905,16 +8903,16 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         float alpha = 0.1f + 0.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f));
         int f_indices[3] = {1 % params.numFrames, (params.numFrames / 2) % params.numFrames, (params.numFrames - 1) % params.numFrames};
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             unsigned char *ref = allFrames[f_indices[j]];
-            if(ref) {
+            if (ref) {
                 data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[idx]);
             }
         }
     }
     __device__ void process_glitch_ColorFadeEx1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float color_val = fmodf((float)(y * width + x + params.frame_count * 7 + j * 83), 254.0f);
             data[idx + j] = gpu_wrap_cast(data[idx + j] + color_val);
         }
@@ -8940,8 +8938,8 @@ namespace ac_gpu {
         unsigned char *r2 = allFrames[f2];
         unsigned char *r3 = allFrames[f3];
         bool strobe = (params.frame_count % 2) == 0;
-        if(r1 && r2 && r3) {
-            if(strobe) {
+        if (r1 && r2 && r3) {
+            if (strobe) {
                 data[idx] = r1[y * step + offset_r * 4];
                 data[idx + 1] = r2[y * step + offset_g * 4 + 1];
                 data[idx + 2] = r3[y * step + offset_b * 4 + 2];
@@ -8954,7 +8952,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor01(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.1f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -8962,15 +8960,15 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor02(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
-            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.07f + gpu_rand(x,y,params.seed)*0.5f));
+        for (int j = 0; j < 3; ++j) {
+            float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.07f + gpu_rand(x, y, params.seed) * 0.5f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
         }
     }
     __device__ void process_glitch_Colorxor03(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f + j * 1.5f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -8978,7 +8976,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor04(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + fmodf(params.frame_count * 0.03f + j * 0.7f, 2.0f);
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -8987,28 +8985,34 @@ namespace ac_gpu {
     __device__ void process_glitch_Colorxor05(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int op_type = (params.frame_count + (int)(gpu_rand(x, y, params.seed) * 3.0f)) % 3;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.08f + j * 2.1f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
-            if(op_type == 0) data[idx + j] = data[idx + j] ^ val;
-            else if(op_type == 1) data[idx + j] = data[idx + j] & val;
-            else data[idx + j] = data[idx + j] | val;
+            if (op_type == 0)
+                data[idx + j] = data[idx + j] ^ val;
+            else if (op_type == 1)
+                data[idx + j] = data[idx + j] & val;
+            else
+                data[idx + j] = data[idx + j] | val;
         }
     }
     __device__ void process_glitch_Colorxor06(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int op_type = (params.frame_count + (int)(gpu_rand(x, y, params.seed) * 3.0f)) % 3;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * cosf(params.frame_count * 0.06f + j * 1.3f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
-            if(op_type == 0) data[idx + j] = data[idx + j] ^ val;
-            else if(op_type == 1) data[idx + j] = data[idx + j] & val;
-            else data[idx + j] = data[idx + j] | val;
+            if (op_type == 0)
+                data[idx + j] = data[idx + j] ^ val;
+            else if (op_type == 1)
+                data[idx + j] = data[idx + j] & val;
+            else
+                data[idx + j] = data[idx + j] | val;
         }
     }
     __device__ void process_glitch_Colorxor07(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.04f + j * 0.9f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9016,7 +9020,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor08(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.035f + j * 1.1f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9024,7 +9028,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor09(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.03f + j * 0.8f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9032,7 +9036,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor10(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * cosf(params.frame_count * 0.03f + j * 0.6f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9040,7 +9044,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor11(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.025f + j * 1.7f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9048,7 +9052,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor12(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.0f + 3.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.028f + j * 2.0f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9056,7 +9060,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor13(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.1f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.04f + j * 1.2f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9064,7 +9068,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor14(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.1f + 1.9f * (0.5f + 0.5f * cosf(params.frame_count * 0.035f + j * 1.4f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9072,7 +9076,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor15(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.1f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.038f + j * 1.6f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9080,7 +9084,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor16(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.1f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.033f + j * 1.8f + x * 0.001f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9088,7 +9092,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor17(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.1f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.042f + j * 2.2f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9096,7 +9100,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor18(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 1.1f + 1.9f * (0.5f + 0.5f * cosf(params.frame_count * 0.045f + j * 1.0f));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9104,7 +9108,7 @@ namespace ac_gpu {
     }
     __device__ void process_glitch_Colorxor19(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float a = 0.5f * (1.0f + 1.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.04f + j * 1.3f)));
             unsigned char val = gpu_wrap_cast(a * data[idx + j]);
             data[idx + j] = data[idx + j] ^ val;
@@ -9116,8 +9120,8 @@ namespace ac_gpu {
         int sq_y = (int)(gpu_rand(y, x, params.seed) * height);
         int sq_w = (int)(gpu_rand(x + y, y - x, params.seed) * width);
         int sq_h = (int)(gpu_rand(x * y, x + y, params.seed) * height);
-        if(x >= sq_x && x < sq_x + sq_w && y >= sq_y && y < sq_y + sq_h) {
-            for(int j = 0; j < 3; ++j) {
+        if (x >= sq_x && x < sq_x + sq_w && y >= sq_y && y < sq_y + sq_h) {
+            for (int j = 0; j < 3; ++j) {
                 float a = 1.0f + 2.0f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f + j * 1.5f));
                 unsigned char val = gpu_wrap_cast(a * data[idx + j]);
                 data[idx + j] = data[idx + j] ^ val;
@@ -9130,9 +9134,9 @@ namespace ac_gpu {
         int offx = gpu_AC_GetFX(width - 1, x, rwidth);
         int offset = (y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[offset];
-        if(ref && offx >= 0 && offx < width) {
+        if (ref && offx >= 0 && offx < width) {
             int src_idx = y * step + offx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9141,19 +9145,20 @@ namespace ac_gpu {
         int cx = width / 2, cy = height / 2;
         int x2 = cx + (x - cx) / 2, y2 = cy + (y - cy) / 2;
         int x3 = cx + (x - cx) / 4, y3 = cy + (y - cy) / 4;
-        if(x2 >= 0 && x2 < width && y2 >= 0 && y2 < height && x3 >= 0 && x3 < width && y3 >= 0 && y3 < height) {
+        if (x2 >= 0 && x2 < width && y2 >= 0 && y2 < height && x3 >= 0 && x3 < width && y3 >= 0 && y3 < height) {
             int idx2 = y2 * step + x2 * 4;
             int idx3 = y3 * step + x3 * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(0.4f * data[idx + j] + 0.3f * data[idx2 + j] + 0.3f * data[idx3 + j]);
         }
     }
     __device__ void process_glitch_FastMonocolortrails(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int f_indices[3] = {1 % params.numFrames, (params.numFrames / 2) % params.numFrames, (params.numFrames - 1) % params.numFrames};
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             unsigned char *ref = allFrames[f_indices[j]];
-            if(ref) data[idx + j] = ref[idx];
+            if (ref)
+                data[idx + j] = ref[idx];
         }
     }
     __device__ void process_glitch_FramePixels(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
@@ -9162,22 +9167,23 @@ namespace ac_gpu {
         int sub_x = x % 64, sub_y = y % 64;
         int off = ((bx + by) * 8 + (sub_x / 8 + sub_y / 8)) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_FrameResizeStretch(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int frame_size = width / 32;
-        if(frame_size < 1) frame_size = 1;
+        if (frame_size < 1)
+            frame_size = 1;
         int off = ((y / frame_size) + params.frame_count) % params.numFrames;
         int frame_x_off = (int)(gpu_rand(0, y / frame_size, params.seed) * (width / 16));
         int off_x = gpu_AC_GetFX(width - 1, x, width + frame_x_off);
         unsigned char *ref = allFrames[off];
-        if(ref && off_x >= 0 && off_x < width) {
+        if (ref && off_x >= 0 && off_x < width) {
             int src_idx = y * step + off_x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9185,10 +9191,10 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         bool on = ((params.frame_count / 10) % 2) == 0;
         int off = params.frame_count % params.numFrames;
-        if(on) {
+        if (on) {
             unsigned char *ref = allFrames[off];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -9197,14 +9203,14 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         bool on = ((params.frame_count / 12) % 2) == 0;
         int off = params.frame_count % params.numFrames;
-        if(on) {
+        if (on) {
             int bsize = 8 + gpu_triangle_wave(params.frame_count, 16);
             int bx = (x / bsize) * bsize;
             int by = (y / bsize) * bsize;
             unsigned char *ref = allFrames[off];
-            if(ref && bx < width && by < height) {
+            if (ref && bx < width && by < height) {
                 int src_idx = by * step + bx * 4;
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[src_idx + j];
             }
         }
@@ -9213,10 +9219,10 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         bool on = ((params.frame_count / 15) % 2) == 0;
         int off = gpu_triangle_wave(params.frame_count, params.numFrames - 1);
-        if(on) {
+        if (on) {
             unsigned char *ref = allFrames[off % params.numFrames];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
             }
         }
@@ -9225,11 +9231,11 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         bool on = ((params.frame_count / 15) % 2) == 0;
         int off = gpu_triangle_wave(params.frame_count, params.numFrames - 1);
-        if(on) {
+        if (on) {
             unsigned char *ref1 = allFrames[off % params.numFrames];
             unsigned char *ref2 = allFrames[(params.numFrames - 2) % params.numFrames];
-            if(ref1 && ref2) {
-                for(int j = 0; j < 3; ++j)
+            if (ref1 && ref2) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.33f * data[idx + j] + 0.33f * ref1[idx + j] + 0.33f * ref2[idx + j]);
             }
         }
@@ -9239,10 +9245,10 @@ namespace ac_gpu {
         int half_w = width / 2;
         int offset_x = gpu_triangle_wave(params.frame_count * 10, width - half_w - 1);
         int off = params.frame_count % params.numFrames;
-        if(x >= offset_x && x < offset_x + half_w) {
+        if (x >= offset_x && x < offset_x + half_w) {
             unsigned char *ref = allFrames[off];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -9252,10 +9258,10 @@ namespace ac_gpu {
         int half_h = height / 2;
         int offset_y = gpu_triangle_wave(params.frame_count * 10, height - half_h - 1);
         int off = params.frame_count % params.numFrames;
-        if(y >= offset_y && y < offset_y + half_h) {
+        if (y >= offset_y && y < offset_y + half_h) {
             unsigned char *ref = allFrames[off];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -9265,10 +9271,10 @@ namespace ac_gpu {
         int half_w = width / 2;
         int offset_x = gpu_triangle_wave(params.frame_count * 10, width - half_w - 1);
         int off = (int)(gpu_rand(0, 0, params.seed) * params.numFrames) % params.numFrames;
-        if(x >= offset_x && x < offset_x + half_w) {
+        if (x >= offset_x && x < offset_x + half_w) {
             unsigned char *ref = allFrames[off];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -9278,10 +9284,10 @@ namespace ac_gpu {
         int half_h = height / 2;
         int offset_y = gpu_triangle_wave(params.frame_count * 10, height - half_h - 1);
         int off = (int)(gpu_rand(0, 0, params.seed) * params.numFrames) % params.numFrames;
-        if(y >= offset_y && y < offset_y + half_h) {
+        if (y >= offset_y && y < offset_y + half_h) {
             unsigned char *ref = allFrames[off];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -9290,11 +9296,11 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int bx = x / 34, by = y / 34;
         int inner_x = x % 34, inner_y = y % 34;
-        if(inner_x < 30 && inner_y < 30) {
+        if (inner_x < 30 && inner_y < 30) {
             int off = gpu_triangle_wave(bx + by * (width / 34), params.numFrames - 1);
             unsigned char *ref = allFrames[off % params.numFrames];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -9302,11 +9308,11 @@ namespace ac_gpu {
     __device__ void process_glitch_FrameStutterFilter(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         bool stutter = ((params.frame_count / 8) % 3) != 0;
-        if(stutter) {
+        if (stutter) {
             int off = (params.frame_count / 8) % params.numFrames;
             unsigned char *ref = allFrames[off];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -9314,14 +9320,15 @@ namespace ac_gpu {
     __device__ void process_glitch_GlitchX1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int divisor = height / 4;
-        if(divisor < 1) divisor = 1;
+        if (divisor < 1)
+            divisor = 1;
         int band = y / divisor;
         float r = gpu_rand(0, band, params.seed + params.frame_count);
-        if(r > 0.25f) {
+        if (r > 0.25f) {
             int off = ((int)(r * 100) + params.frame_count) % params.numFrames;
             unsigned char *ref = allFrames[off];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -9334,7 +9341,7 @@ namespace ac_gpu {
         int sy = (y + row_shift) % height;
         data[idx + 2] = data[y * step + sx * 4 + 2];
         data[idx + 1] = data[sy * step + x * 4 + 1];
-        if(gpu_rand(x, y, params.seed) < 0.2f)
+        if (gpu_rand(x, y, params.seed) < 0.2f)
             data[idx] = (unsigned char)(gpu_rand(x, y, params.seed + 1) * 255.0f);
     }
     __device__ void process_glitch_Gpt2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
@@ -9346,9 +9353,9 @@ namespace ac_gpu {
         int dy = (int)(amplitude * cosf(frequency * x + phase));
         int nx = x + dx;
         int ny = y + dy;
-        if(nx >= 0 && nx < width && ny >= 0 && ny < height) {
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
             int src_idx = ny * step + nx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = data[src_idx + j];
         }
     }
@@ -9361,16 +9368,16 @@ namespace ac_gpu {
         float factor = 1.0f + 0.3f * sinf(params.frame_count * 0.05f) * (dist / maxDist);
         int nx = (int)(cx + dx * factor);
         int ny = (int)(cy + dy * factor);
-        if(nx >= 0 && nx < width && ny >= 0 && ny < height) {
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
             int src_idx = ny * step + nx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = data[src_idx + j];
         }
     }
     __device__ void process_glitch_Invertflash(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        if((params.frame_count / 4) % 2 == 0) {
-            for(int j = 0; j < 3; ++j)
+        if ((params.frame_count / 4) % 2 == 0) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = 255 - data[idx + j];
         }
     }
@@ -9380,14 +9387,13 @@ namespace ac_gpu {
         int row_x = gpu_AC_GetFX(width - 1, x, row_col);
         int off = (y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && row_x >= 0 && row_x < width) {
+        if (ref && row_x >= 0 && row_x < width) {
             int src_idx = y * step + row_x * 4;
-            for(int j = 0; j < 3; ++j) {
-                if(1.0f < 1.0f)
+            for (int j = 0; j < 3; ++j) {
+                if (1.0f < 1.0f)
                     data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[src_idx + j]);
                 else
                     data[idx + j] = ref[src_idx + j];
-                
             }
         }
     }
@@ -9397,14 +9403,13 @@ namespace ac_gpu {
         int row_x = gpu_AC_GetFX(width - 1, x, row_col);
         int off = (y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && row_x >= 0 && row_x < width) {
+        if (ref && row_x >= 0 && row_x < width) {
             int src_idx = y * step + row_x * 4;
-            for(int j = 0; j < 3; ++j) {
-                if(1.0f < 1.0f)
+            for (int j = 0; j < 3; ++j) {
+                if (1.0f < 1.0f)
                     data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[src_idx + j]);
                 else
                     data[idx + j] = ref[src_idx + j];
-                
             }
         }
     }
@@ -9414,14 +9419,13 @@ namespace ac_gpu {
         int row_x = gpu_AC_GetFX(width - 1, x, row_col);
         int off = (y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && row_x >= 0 && row_x < width) {
+        if (ref && row_x >= 0 && row_x < width) {
             int src_idx = y * step + row_x * 4;
-            for(int j = 0; j < 3; ++j) {
-                if(0.5f < 1.0f)
+            for (int j = 0; j < 3; ++j) {
+                if (0.5f < 1.0f)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
                 else
                     data[idx + j] = ref[src_idx + j];
-                
             }
         }
     }
@@ -9431,10 +9435,10 @@ namespace ac_gpu {
         int row_x = gpu_AC_GetFX(width - 1, x, row_col);
         int off = (y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && row_x >= 0 && row_x < width) {
+        if (ref && row_x >= 0 && row_x < width) {
             int src_idx = y * step + row_x * 4;
-            for(int j = 0; j < 3; ++j) {
-                if(0.5f < 1.0f)
+            for (int j = 0; j < 3; ++j) {
+                if (0.5f < 1.0f)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
                 else
                     data[idx + j] = ref[src_idx + j];
@@ -9448,14 +9452,13 @@ namespace ac_gpu {
         int row_x = gpu_AC_GetFX(width - 1, x, row_col);
         int off = (y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && row_x >= 0 && row_x < width) {
+        if (ref && row_x >= 0 && row_x < width) {
             int src_idx = y * step + row_x * 4;
-            for(int j = 0; j < 3; ++j) {
-                if(0.5f < 1.0f)
+            for (int j = 0; j < 3; ++j) {
+                if (0.5f < 1.0f)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
                 else
                     data[idx + j] = ref[src_idx + j];
-                
             }
         }
     }
@@ -9465,133 +9468,142 @@ namespace ac_gpu {
         int row_x = gpu_AC_GetFX(width - 1, x, row_col);
         int off = (y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && row_x >= 0 && row_x < width) {
+        if (ref && row_x >= 0 && row_x < width) {
             int src_idx = y * step + row_x * 4;
-            for(int j = 0; j < 3; ++j) {
-                if(1.0f < 1.0f)
+            for (int j = 0; j < 3; ++j) {
+                if (1.0f < 1.0f)
                     data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[src_idx + j]);
                 else
                     data[idx + j] = ref[src_idx + j];
-                
             }
         }
     }
     __device__ void process_glitch_LineCollection01(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int band = width / 32;
-        if(band < 1) band = 1;
+        if (band < 1)
+            band = 1;
         int seg = x / band;
         int off = (seg + y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineCollection02(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int band = width / 32;
-        if(band < 1) band = 1;
+        if (band < 1)
+            band = 1;
         int seg = x / band;
         int off = (seg + y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineCollection03(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int band = 2;
-        if(band < 1) band = 1;
+        if (band < 1)
+            band = 1;
         int seg = x / band;
         int off = (seg + y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineCollection04(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int band = 10;
-        if(band < 1) band = 1;
+        if (band < 1)
+            band = 1;
         int seg = x / band;
         int off = (seg + y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineCollection05(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int band = 50;
-        if(band < 1) band = 1;
+        if (band < 1)
+            band = 1;
         int seg = x / band;
         int off = (seg + y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineCollection06(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int band = 50;
-        if(band < 1) band = 1;
+        if (band < 1)
+            band = 1;
         int seg = x / band;
         int off = (seg + y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineCollection07(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int band = 50;
-        if(band < 1) band = 1;
+        if (band < 1)
+            band = 1;
         int seg = x / band;
         int off = (seg + y + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineOffsetInout(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int num = 1 + (int)(gpu_rand(0, y, params.seed) * 50.0f);
-        if(num < 1) num = 1;
+        if (num < 1)
+            num = 1;
         int off = (y / num + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineOffsetInout2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int num = 1 + (int)(gpu_rand(0, y, params.seed + 1) * 250.0f);
-        if(num < 1) num = 1;
+        if (num < 1)
+            num = 1;
         int off = gpu_triangle_wave(y / num + params.frame_count, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_LineOffsetInout3(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int num = 1 + (int)(gpu_rand(0, y, params.seed + 2) * 250.0f);
-        if(num < 1) num = 1;
+        if (num < 1)
+            num = 1;
         int off = gpu_triangle_wave(y / num + params.frame_count, params.numFrames - 1);
         int offx = gpu_AC_GetFX(width - 1, x, width + num);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref && offx >= 0 && offx < width) {
+        if (ref && offx >= 0 && offx < width) {
             int src_idx = y * step + offx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9599,8 +9611,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = (int)(gpu_rand(x, y, params.seed + params.frame_count) * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
         }
     }
@@ -9610,9 +9622,9 @@ namespace ac_gpu {
         int sx = gpu_AC_GetFX(width - 1, x, stretch);
         int off = params.frame_count % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && sx >= 0 && sx < width) {
+        if (ref && sx >= 0 && sx < width) {
             int src_idx = y * step + sx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9621,8 +9633,8 @@ namespace ac_gpu {
         int var = 2 + (int)(gpu_rand(0, y, params.seed) * 30.0f);
         int off = (x / var + params.frame_count) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -9631,15 +9643,15 @@ namespace ac_gpu {
         int scramble = (int)(gpu_rand(0, y / 4, params.seed) * params.numFrames);
         int off = scramble % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_PicAdjust1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         float factor = 1.0f + 0.5f * sinf(params.frame_count * 0.05f);
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             float val = data[idx + j] * factor;
             data[idx + j] = (unsigned char)fminf(255.0f, fmaxf(0.0f, val));
         }
@@ -9656,52 +9668,56 @@ namespace ac_gpu {
     __device__ void process_glitch_PictureJump01(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_y = height / 16 + y + params.frame_count * 1;
-        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        if (size_y > height * 2)
+            size_y = height / 16 + (size_y % (height * 2));
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 1) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
         }
     }
     __device__ void process_glitch_PictureJump02(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_y = height / 16 + y + params.frame_count * 2;
-        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        if (size_y > height * 2)
+            size_y = height / 16 + (size_y % (height * 2));
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 2) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
         }
     }
     __device__ void process_glitch_PictureJump03(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_y = height / 16 + y + params.frame_count * 3;
-        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        if (size_y > height * 2)
+            size_y = height / 16 + (size_y % (height * 2));
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 3) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
         }
     }
     __device__ void process_glitch_PictureJump04(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_x = width / 16 + y + params.frame_count * 4;
-        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        if (size_x > width * 2)
+            size_x = width / 16 + (size_x % (width * 2));
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 4) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cx >= 0 && cx < width) {
+        if (ref && cx >= 0 && cx < width) {
             int src_idx = y * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9711,61 +9727,65 @@ namespace ac_gpu {
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 5) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
     __device__ void process_glitch_PictureJump06(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_y = height / 16 + y + params.frame_count * 6;
-        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        if (size_y > height * 2)
+            size_y = height / 16 + (size_y % (height * 2));
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 6) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
         }
     }
     __device__ void process_glitch_PictureJump07(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_y = height / 16 + y + params.frame_count * 7;
-        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        if (size_y > height * 2)
+            size_y = height / 16 + (size_y % (height * 2));
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 7) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
         }
     }
     __device__ void process_glitch_PictureJump08(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_y = height / 16 + y + params.frame_count * 8;
-        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        if (size_y > height * 2)
+            size_y = height / 16 + (size_y % (height * 2));
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 8) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
         }
     }
     __device__ void process_glitch_PictureJump09(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_y = height / 16 + y + params.frame_count * 9;
-        if(size_y > height * 2) size_y = height / 16 + (size_y % (height * 2));
+        if (size_y > height * 2)
+            size_y = height / 16 + (size_y % (height * 2));
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 9) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.2f * data[idx + j] + 0.8f * ref[src_idx + j]);
         }
     }
@@ -9775,61 +9795,65 @@ namespace ac_gpu {
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 10) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
     __device__ void process_glitch_PictureJump11(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_x = width / 16 + y + params.frame_count * 11;
-        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        if (size_x > width * 2)
+            size_x = width / 16 + (size_x % (width * 2));
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 11) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cx >= 0 && cx < width) {
+        if (ref && cx >= 0 && cx < width) {
             int src_idx = y * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
     __device__ void process_glitch_PictureJump12(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_x = width / 16 + y + params.frame_count * 12;
-        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        if (size_x > width * 2)
+            size_x = width / 16 + (size_x % (width * 2));
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 12) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cx >= 0 && cx < width) {
+        if (ref && cx >= 0 && cx < width) {
             int src_idx = y * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
     __device__ void process_glitch_PictureJump13(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_x = width / 16 + y + params.frame_count * 13;
-        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        if (size_x > width * 2)
+            size_x = width / 16 + (size_x % (width * 2));
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 13) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cx >= 0 && cx < width) {
+        if (ref && cx >= 0 && cx < width) {
             int src_idx = y * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
     __device__ void process_glitch_PictureJump14(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int size_x = width / 16 + y + params.frame_count * 14;
-        if(size_x > width * 2) size_x = width / 16 + (size_x % (width * 2));
+        if (size_x > width * 2)
+            size_x = width / 16 + (size_x % (width * 2));
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 14) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cx >= 0 && cx < width) {
+        if (ref && cx >= 0 && cx < width) {
             int src_idx = y * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9839,9 +9863,9 @@ namespace ac_gpu {
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 15) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9851,9 +9875,9 @@ namespace ac_gpu {
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 16) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9863,9 +9887,9 @@ namespace ac_gpu {
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 17) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9875,9 +9899,9 @@ namespace ac_gpu {
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 18) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9887,9 +9911,9 @@ namespace ac_gpu {
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 19) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9899,9 +9923,9 @@ namespace ac_gpu {
         int cy = gpu_AC_GetFZ(height - 1, y, size_y);
         int off = (params.frame_count + 20) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height) {
+        if (ref && cy >= 0 && cy < height) {
             int src_idx = cy * step + x * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9913,9 +9937,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 21) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9927,9 +9951,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 22) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9941,9 +9965,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 23) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9955,9 +9979,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 24) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9969,9 +9993,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 25) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9983,9 +10007,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 26) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -9997,9 +10021,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 27) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -10011,9 +10035,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 28) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -10025,9 +10049,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 29) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -10039,9 +10063,9 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 30) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
@@ -10053,25 +10077,28 @@ namespace ac_gpu {
         int cx = gpu_AC_GetFX(width - 1, x, size_x);
         int off = (params.frame_count + 31) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
+        if (ref && cy >= 0 && cy < height && cx >= 0 && cx < width) {
             int src_idx = cy * step + cx * 4;
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[src_idx + j];
         }
     }
     __device__ void process_glitch_RectSize(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int num = 8 + gpu_triangle_wave(params.frame_count * 2, 56);
-        if(num < 1) num = 1;
+        if (num < 1)
+            num = 1;
         int row_size = height / num;
         int col_size = width / num;
-        if(row_size < 1) row_size = 1;
-        if(col_size < 1) col_size = 1;
+        if (row_size < 1)
+            row_size = 1;
+        if (col_size < 1)
+            col_size = 1;
         int bx = x / col_size, by = y / row_size;
         int off = (int)(gpu_rand(bx, by, params.seed) * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
         }
     }
@@ -10081,8 +10108,8 @@ namespace ac_gpu {
         float r2 = gpu_rand(x / 64, y / 64, params.seed + 0 + 100);
         int off = (int)(r1 * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && r2 > 0.3f) {
-            for(int j = 0; j < 3; ++j)
+        if (ref && r2 > 0.3f) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10092,8 +10119,8 @@ namespace ac_gpu {
         float r2 = gpu_rand(x / 64, y / 64, params.seed + 1 + 100);
         int off = (int)(r1 * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && r2 > 0.3f) {
-            for(int j = 0; j < 3; ++j)
+        if (ref && r2 > 0.3f) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10103,8 +10130,8 @@ namespace ac_gpu {
         float r2 = gpu_rand(x / 64, y / 64, params.seed + 2 + 100);
         int off = (int)(r1 * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && r2 > 0.3f) {
-            for(int j = 0; j < 3; ++j)
+        if (ref && r2 > 0.3f) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10114,22 +10141,22 @@ namespace ac_gpu {
         float r2 = gpu_rand(x / 64, y / 64, params.seed + 3 + 100);
         int off = (int)(r1 * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref && r2 > 0.3f) {
-            for(int j = 0; j < 3; ++j)
+        if (ref && r2 > 0.3f) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_SliceFrame(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         bool active = ((params.frame_count / 30) % 2) == 0;
-        if(active) {
+        if (active) {
             int rand_start = (int)(gpu_rand(0, 0, params.seed) * (height / 8));
             int half = width / 2;
             int offset_y = (x < half) ? rand_start : (int)(gpu_rand(1, 1, params.seed) * (height / 8));
             int src_y = y - offset_y;
-            if(src_y >= 0 && src_y < height) {
+            if (src_y >= 0 && src_y < height) {
                 int src_idx = src_y * step + x * 4;
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
             }
         }
@@ -10137,14 +10164,14 @@ namespace ac_gpu {
     __device__ void process_glitch_SliceFrameW(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         bool active = ((params.frame_count / 30) % 2) == 0;
-        if(active) {
+        if (active) {
             int rand_start = (int)(gpu_rand(0, 0, params.seed) * (width / 8));
             int half = height / 2;
             int offset_x = (y < half) ? rand_start : (int)(gpu_rand(1, 1, params.seed) * (width / 8));
             int src_x = x - offset_x;
-            if(src_x >= 0 && src_x < width) {
+            if (src_x >= 0 && src_x < width) {
                 int src_idx = y * step + src_x * 4;
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
             }
         }
@@ -10152,16 +10179,17 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareBlockV2A(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 0, 6);
-        if(sq < 1) sq = 1;
+        if (sq < 1)
+            sq = 1;
         int row_band = y / sq;
         int off = gpu_triangle_wave(row_band + 0, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            if(1.0f < 1.0f) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if (1.0f < 1.0f) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[idx + j]);
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10169,16 +10197,17 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareBlockV2B(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 3, 6);
-        if(sq < 1) sq = 1;
+        if (sq < 1)
+            sq = 1;
         int row_band = y / sq;
         int off = gpu_triangle_wave(row_band + 1, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            if(1.0f < 1.0f) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if (1.0f < 1.0f) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(1.0f * data[idx + j] + 1.0f * ref[idx + j]);
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10186,16 +10215,17 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareBlockV2C(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 6, 6);
-        if(sq < 1) sq = 1;
+        if (sq < 1)
+            sq = 1;
         int row_band = y / sq;
         int off = gpu_triangle_wave(row_band + 2, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            if(0.5f < 1.0f) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if (0.5f < 1.0f) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10203,16 +10233,17 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareBlockV2D(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 9, 6);
-        if(sq < 1) sq = 1;
+        if (sq < 1)
+            sq = 1;
         int row_band = y / sq;
         int off = gpu_triangle_wave(row_band + 3, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            if(0.5f < 1.0f) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if (0.5f < 1.0f) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10220,16 +10251,17 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareBlockV2E(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 12, 6);
-        if(sq < 1) sq = 1;
+        if (sq < 1)
+            sq = 1;
         int row_band = y / sq;
         int off = gpu_triangle_wave(row_band + 4, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            if(0.5f < 1.0f) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if (0.5f < 1.0f) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10237,16 +10269,17 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareBlockV2F(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 15, 6);
-        if(sq < 1) sq = 1;
+        if (sq < 1)
+            sq = 1;
         int row_band = y / sq;
         int off = gpu_triangle_wave(row_band + 5, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            if(0.5f < 1.0f) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if (0.5f < 1.0f) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10254,16 +10287,17 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareBlockV2G(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 18, 6);
-        if(sq < 1) sq = 1;
+        if (sq < 1)
+            sq = 1;
         int row_band = y / sq;
         int off = gpu_triangle_wave(row_band + 6, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            if(0.5f < 1.0f) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if (0.5f < 1.0f) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10271,16 +10305,17 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareBlockV2H(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int sq = 2 + gpu_triangle_wave(params.frame_count * 2 + 21, 6);
-        if(sq < 1) sq = 1;
+        if (sq < 1)
+            sq = 1;
         int row_band = y / sq;
         int off = gpu_triangle_wave(row_band + 7, params.numFrames - 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            if(0.5f < 1.0f) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if (0.5f < 1.0f) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10288,16 +10323,16 @@ namespace ac_gpu {
     __device__ void process_glitch_SquareXor(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         float alpha = 1.0f + 24.0f * (0.5f + 0.5f * sinf((x + y + params.frame_count) * 0.05f));
-        if(x + 1 < width && y + 1 < height) {
+        if (x + 1 < width && y + 1 < height) {
             unsigned char total[3] = {0, 0, 0};
-            for(int dy = 0; dy <= 1 && y + dy < height; ++dy) {
-                for(int dx = 0; dx <= 1 && x + dx < width; ++dx) {
+            for (int dy = 0; dy <= 1 && y + dy < height; ++dy) {
+                for (int dx = 0; dx <= 1 && x + dx < width; ++dx) {
                     int sidx = (y + dy) * step + (x + dx) * 4;
-                    for(int j = 0; j < 3; ++j)
+                    for (int j = 0; j < 3; ++j)
                         total[j] = (unsigned char)fminf(255.0f, total[j] + data[sidx + j] * 0.25f);
                 }
             }
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] ^= (unsigned char)(alpha * total[j]);
         }
     }
@@ -10305,8 +10340,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = (params.frame_count / 4) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10316,26 +10351,28 @@ namespace ac_gpu {
         int arr_off = ((params.frame_count % 6) + 6) % 6;
         int pixel_idx = y * width + x;
         int off = 0;
-        for(int k = 0; k < pixel_idx % 16; ++k) {
+        for (int k = 0; k < pixel_idx % 16; ++k) {
             off += arr[(arr_off + k) % 6];
-            if(off >= params.numFrames) off = off % params.numFrames;
+            if (off >= params.numFrames)
+                off = off % params.numFrames;
         }
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void process_glitch_StutterLong(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int period = 15 + (int)(gpu_rand(0, 0, params.seed) * 15.0f);
-        if(period < 1) period = 1;
+        if (period < 1)
+            period = 1;
         bool show = (params.frame_count % period) == 0;
-        if(show) {
+        if (show) {
             int off = gpu_triangle_wave(params.frame_count / period, params.numFrames - 1);
             unsigned char *ref = allFrames[off % params.numFrames];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10343,17 +10380,18 @@ namespace ac_gpu {
     __device__ void process_glitch_StutterSbrv(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int period = 10 + (int)(gpu_rand(0, 0, params.seed + 1) * 20.0f);
-        if(period < 1) period = 1;
+        if (period < 1)
+            period = 1;
         bool show = (params.frame_count % period) < (period / 2);
-        if(show) {
+        if (show) {
             int sq = 4 + gpu_triangle_wave(params.frame_count, 12);
             int bx = (x / sq) * sq;
             int by = (y / sq) * sq;
             int off = params.frame_count % params.numFrames;
             unsigned char *ref = allFrames[off];
-            if(ref && bx < width && by < height) {
+            if (ref && bx < width && by < height) {
                 int src_idx = by * step + bx * 4;
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[src_idx + j];
             }
         }
@@ -10364,17 +10402,17 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         float sum[3] = {0, 0, 0};
         int valid = 0;
-        for(int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 5; ++i) {
             int fi = i % params.numFrames;
             unsigned char *ref = allFrames[fi];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     sum[j] += ref[idx + j];
                 valid++;
             }
         }
-        if(valid > 0) {
-            for(int j = 0; j < 3; ++j)
+        if (valid > 0) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(sum[j] / valid);
         }
     }
@@ -10384,52 +10422,57 @@ namespace ac_gpu {
         int f1 = 3 % params.numFrames;
         int f2 = (params.numFrames - 1) % params.numFrames;
         unsigned char *r0 = allFrames[f0], *r1 = allFrames[f1], *r2 = allFrames[f2];
-        if(r0 && r1 && r2) {
-            for(int j = 0; j < 3; ++j)
+        if (r0 && r1 && r2) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(0.33f * r0[idx + j] + 0.33f * r1[idx + j] + 0.33f * r2[idx + j]);
         }
     }
     __device__ void acgl_glitch_AlphaBlendExpand(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int maxN = params.numFrames < 10 ? params.numFrames : 10;
-        if(maxN < 2) maxN = 2;
+        if (maxN < 2)
+            maxN = 2;
         int iter = 1 + gpu_triangle_wave(params.frame_count, maxN - 1);
-        if(iter < 1) iter = 1;
-        if(iter > params.numFrames) iter = params.numFrames;
+        if (iter < 1)
+            iter = 1;
+        if (iter > params.numFrames)
+            iter = params.numFrames;
         float weight = 1.0f / iter;
         float sum[3] = {0, 0, 0};
-        for(int q = 0; q < iter; ++q) {
+        for (int q = 0; q < iter; ++q) {
             unsigned char *ref = allFrames[q % params.numFrames];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     sum[j] += weight * ref[idx + j];
             }
         }
-        for(int j = 0; j < 3; ++j)
+        for (int j = 0; j < 3; ++j)
             data[idx + j] = gpu_wrap_cast(sum[j]);
     }
     __device__ void acgl_glitch_BarsCol(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int num_cols = 64 + gpu_triangle_wave(params.frame_count, 64);
-        if(num_cols < 1) num_cols = 1;
+        if (num_cols < 1)
+            num_cols = 1;
         int band = x / num_cols;
         int fsel = (int)(gpu_rand(band, params.frame_count / 4, params.seed) * 8.0f) % params.numFrames;
         unsigned char *ref = allFrames[fsel];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
         }
     }
     __device__ void acgl_glitch_BarsColAlpha(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int num_cols = 64 + gpu_triangle_wave(params.frame_count, 64);
-        if(num_cols < 1) num_cols = 1;
+        if (num_cols < 1)
+            num_cols = 1;
         int band = x / num_cols;
         float alpha = 0.1f + 0.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f));
         int fsel = (int)(gpu_rand(band, params.frame_count / 4, params.seed) * 8.0f) % params.numFrames;
         unsigned char *ref = allFrames[fsel];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[idx + j]);
         }
     }
@@ -10437,12 +10480,13 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int range = height / 4 > 25 ? height / 4 - 25 : 1;
         int band_h = 25 + gpu_triangle_wave(params.frame_count * 5, range);
-        if(band_h < 5) band_h = 5;
+        if (band_h < 5)
+            band_h = 5;
         int band = y / band_h;
         int fsel = (int)(gpu_rand(band, params.frame_count / 3, params.seed) * 8.0f) % params.numFrames;
         unsigned char *ref = allFrames[fsel];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
         }
     }
@@ -10450,13 +10494,14 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int range = height / 4 > 25 ? height / 4 - 25 : 1;
         int band_h = 25 + gpu_triangle_wave(params.frame_count * 5, range);
-        if(band_h < 5) band_h = 5;
+        if (band_h < 5)
+            band_h = 5;
         int band = y / band_h;
         float alpha = 0.1f + 0.9f * (0.5f + 0.5f * sinf(params.frame_count * 0.05f));
         int fsel = (int)(gpu_rand(band, params.frame_count / 3, params.seed) * 8.0f) % params.numFrames;
         unsigned char *ref = allFrames[fsel];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(alpha * data[idx + j] + (1.0f - alpha) * ref[idx + j]);
         }
     }
@@ -10466,9 +10511,9 @@ namespace ac_gpu {
         int by = (y / 32) * 32;
         int inner_x = x - bx;
         int inner_y = y - by;
-        if(inner_x >= 1 && inner_x < 31 && inner_y >= 1 && inner_y < 31) {
+        if (inner_x >= 1 && inner_x < 31 && inner_y >= 1 && inner_y < 31) {
             float r = gpu_rand(bx, by, params.seed);
-            if(r > 0.4f) {
+            if (r > 0.4f) {
                 data[idx] = 0;
                 data[idx + 1] = 0;
                 data[idx + 2] = 0;
@@ -10479,8 +10524,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = (int)(gpu_rand(y, 0, params.seed + params.frame_count / 50) * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
         }
     }
@@ -10489,20 +10534,20 @@ namespace ac_gpu {
         int pos = params.frame_count % 3;
         int offset = (params.frame_count / 3) % params.numFrames;
         unsigned char *ref = allFrames[offset];
-        if(ref) {
-            switch(pos) {
+        if (ref) {
+            switch (pos) {
             case 0:
-                data[idx]     ^= ref[idx + 1];
+                data[idx] ^= ref[idx + 1];
                 data[idx + 1] &= ref[idx + 2];
                 data[idx + 2] |= ref[idx];
                 break;
             case 1:
-                data[idx]     &= ref[idx + 2];
+                data[idx] &= ref[idx + 2];
                 data[idx + 1] ^= ref[idx];
                 data[idx + 2] |= ref[idx + 1];
                 break;
             case 2:
-                data[idx]     |= ref[idx];
+                data[idx] |= ref[idx];
                 data[idx + 1] &= ref[idx + 1];
                 data[idx + 2] ^= ref[idx + 2];
                 break;
@@ -10515,9 +10560,9 @@ namespace ac_gpu {
         int rect_h = 1 + (int)(gpu_rand(1, 0, params.seed) * (height / 8));
         int offset = (int)(gpu_rand(2, 0, params.seed) * params.numFrames) % params.numFrames;
         int off = (int)(gpu_rand(3, 0, params.seed) * 3.0f) % 3;
-        if(y >= cy_start && y < cy_start + rect_h) {
+        if (y >= cy_start && y < cy_start + rect_h) {
             unsigned char *ref = allFrames[offset];
-            if(ref) {
+            if (ref) {
                 data[idx] = ref[idx];
                 data[idx + 1] = ref[idx + 1];
                 data[idx + 2] = ref[idx + 2];
@@ -10530,30 +10575,37 @@ namespace ac_gpu {
         int off = (y + params.frame_count) % params.numFrames;
         int dir = params.frame_count % 2;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            if(dir == 0) {
-                if(data[idx] > 150)     data[idx]     = ref[idx] ^ data[idx];
-                if(data[idx + 1] < 150) data[idx + 1] = ref[idx + 1] ^ data[idx + 1];
-                if(data[idx + 2] > 215) data[idx + 2] = ref[idx + 2] ^ data[idx + 2];
+        if (ref) {
+            if (dir == 0) {
+                if (data[idx] > 150)
+                    data[idx] = ref[idx] ^ data[idx];
+                if (data[idx + 1] < 150)
+                    data[idx + 1] = ref[idx + 1] ^ data[idx + 1];
+                if (data[idx + 2] > 215)
+                    data[idx + 2] = ref[idx + 2] ^ data[idx + 2];
             } else {
-                if(data[idx + 2] > 150) data[idx]     = ref[idx] ^ data[idx];
-                if(data[idx + 1] < 150) data[idx + 1] = ref[idx + 1] ^ data[idx + 1];
-                if(data[idx] > 215)     data[idx + 2] = ref[idx + 2] ^ data[idx + 2];
+                if (data[idx + 2] > 150)
+                    data[idx] = ref[idx] ^ data[idx];
+                if (data[idx + 1] < 150)
+                    data[idx + 1] = ref[idx + 1] ^ data[idx + 1];
+                if (data[idx] > 215)
+                    data[idx + 2] = ref[idx + 2] ^ data[idx + 2];
             }
         }
     }
     __device__ void acgl_glitch_DEM(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int cycle = 1 + (int)(gpu_rand(0, 0, params.seed + params.frame_count / 10) * 10.0f);
-        if(cycle < 1) cycle = 1;
+        if (cycle < 1)
+            cycle = 1;
         int off = (params.frame_count / cycle) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            if((off % 4) == 0) {
-                for(int j = 0; j < 3; ++j)
+        if (ref) {
+            if ((off % 4) == 0) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(data[idx + j] + (data[idx + j] ^ ref[idx + j]));
             } else {
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + ref[idx + j] * 0.5f);
             }
         }
@@ -10562,11 +10614,11 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = gpu_triangle_wave(params.frame_count, params.numFrames > 1 ? params.numFrames - 1 : 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
+        if (ref) {
             int mirror_x = width - 1 - x;
-            if(mirror_x >= 0 && mirror_x < width) {
+            if (mirror_x >= 0 && mirror_x < width) {
                 int src_idx = y * step + mirror_x * 4;
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[src_idx + j]);
             }
         }
@@ -10574,11 +10626,13 @@ namespace ac_gpu {
     __device__ void acgl_glitch_FramePix(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int half_h = height / 2;
-        if(half_h < 1) half_h = 1;
+        if (half_h < 1)
+            half_h = 1;
         int offset_y = (y + params.frame_count) % half_h;
-        if(offset_y < 1) offset_y = 1;
+        if (offset_y < 1)
+            offset_y = 1;
         unsigned char b = data[idx], g = data[idx + 1], r = data[idx + 2];
-        data[idx]     = gpu_wrap_cast((r / 2.0f) * offset_y);
+        data[idx] = gpu_wrap_cast((r / 2.0f) * offset_y);
         data[idx + 1] = gpu_wrap_cast((g / 3.0f) * offset_y);
         data[idx + 2] = gpu_wrap_cast((b / 4.0f) * offset_y);
     }
@@ -10586,8 +10640,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = gpu_triangle_wave(params.frame_count, params.numFrames > 1 ? params.numFrames - 1 : 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
         }
     }
@@ -10595,8 +10649,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = gpu_triangle_wave(params.frame_count * 2, params.numFrames > 1 ? params.numFrames - 1 : 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref[idx + j]);
         }
     }
@@ -10604,8 +10658,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = gpu_triangle_wave(params.frame_count, params.numFrames > 1 ? params.numFrames - 1 : 1);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10613,8 +10667,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = (y / 240) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10622,10 +10676,10 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = gpu_triangle_wave(params.frame_count, params.numFrames > 1 ? params.numFrames - 1 : 1);
         bool on = (params.frame_count % 2) == 0;
-        if(on) {
+        if (on) {
             unsigned char *ref = allFrames[off % params.numFrames];
-            if(ref) {
-                for(int j = 0; j < 3; ++j)
+            if (ref) {
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[idx + j];
             }
         }
@@ -10634,28 +10688,28 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int offset_x = (y + params.frame_count) % width;
         int src_idx = y * step + offset_x * 4;
-        for(int j = 0; j < 3; ++j)
+        for (int j = 0; j < 3; ++j)
             data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
     }
     __device__ void acgl_glitch_FrameXBlendXor(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int offset_x = (y + params.frame_count) % width;
         int src_idx = y * step + offset_x * 4;
-        for(int j = 0; j < 3; ++j)
+        for (int j = 0; j < 3; ++j)
             data[idx + j] ^= data[src_idx + j];
     }
     __device__ void acgl_glitch_FrameYBlend(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int offset_y = (x + params.frame_count) % height;
         int src_idx = offset_y * step + x * 4;
-        for(int j = 0; j < 3; ++j)
+        for (int j = 0; j < 3; ++j)
             data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * data[src_idx + j]);
     }
     __device__ void acgl_glitch_FrameYBlendXor(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int offset_y = (x + params.frame_count) % height;
         int src_idx = offset_y * step + x * 4;
-        for(int j = 0; j < 3; ++j)
+        for (int j = 0; j < 3; ++j)
             data[idx + j] ^= data[src_idx + j];
     }
     __device__ void acgl_glitch_AddMulXor(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
@@ -10663,13 +10717,14 @@ namespace ac_gpu {
         int off = y % params.numFrames;
         int r_ch = params.frame_count % 3;
         unsigned char *ref = allFrames[off];
-        if(ref) {
+        if (ref) {
             unsigned char color_val = gpu_wrap_cast(0.5f * data[idx + r_ch] + 0.5f * ref[idx + r_ch]);
             int div = width / 4;
-            if(div < 1) div = 1;
-            if((x % div) == 0)
+            if (div < 1)
+                div = 1;
+            if ((x % div) == 0)
                 color_val ^= ref[idx + r_ch];
-            for(int j = 0; j < 3; ++j)
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(0.5f * data[idx + j] + 0.5f * color_val);
         }
     }
@@ -10677,11 +10732,11 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = ((x + y) / 4) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
+        if (ref) {
             unsigned char c0 = ref[idx] ^ data[idx];
             unsigned char c1 = ref[idx + 1] ^ data[idx + 1];
             unsigned char c2 = ref[idx + 2] ^ data[idx + 2];
-            data[idx]     = (unsigned char)(0.5f * data[idx]     + 0.5f * c0);
+            data[idx] = (unsigned char)(0.5f * data[idx] + 0.5f * c0);
             data[idx + 1] = (unsigned char)(0.5f * data[idx + 1] + 0.5f * c1);
             data[idx + 2] = (unsigned char)(0.5f * data[idx + 2] + 0.5f * c2);
         }
@@ -10694,16 +10749,24 @@ namespace ac_gpu {
         int off_b = (int)(gpu_rand(x + 2, y, params.seed) * width) % width;
         int f1 = 1 % params.numFrames, f4 = 4 % params.numFrames, f7 = (params.numFrames - 1) % params.numFrames;
         unsigned char *r1 = allFrames[f1], *r4 = allFrames[f4], *r7 = allFrames[f7];
-        if(r1 && r4 && r7) {
+        if (r1 && r4 && r7) {
             unsigned char pix[3][3];
             int s0 = y * step + off_x * 4;
             int s2 = y * step + off_b * 4;
-            pix[0][0] = r1[s0]; pix[0][1] = r1[s0 + 1]; pix[0][2] = r1[s0 + 2];
-            pix[1][0] = r4[idx]; pix[1][1] = r4[idx + 1]; pix[1][2] = r4[idx + 2];
-            pix[2][0] = r7[s2]; pix[2][1] = r7[s2 + 1]; pix[2][2] = r7[s2 + 2];
-            for(int j = 0; j < 3; ++j) {
-                if(!strobe) data[idx + j] = pix[offset][j];
-                else data[idx + j] = pix[j][j];
+            pix[0][0] = r1[s0];
+            pix[0][1] = r1[s0 + 1];
+            pix[0][2] = r1[s0 + 2];
+            pix[1][0] = r4[idx];
+            pix[1][1] = r4[idx + 1];
+            pix[1][2] = r4[idx + 2];
+            pix[2][0] = r7[s2];
+            pix[2][1] = r7[s2 + 1];
+            pix[2][2] = r7[s2 + 2];
+            for (int j = 0; j < 3; ++j) {
+                if (!strobe)
+                    data[idx + j] = pix[offset][j];
+                else
+                    data[idx + j] = pix[j][j];
             }
         }
     }
@@ -10716,14 +10779,22 @@ namespace ac_gpu {
         int off_b = ((x + params.frame_count) * 19) % width;
         int f1 = 1 % params.numFrames, f4 = 4 % params.numFrames, f7 = (params.numFrames - 1) % params.numFrames;
         unsigned char *r1 = allFrames[f1], *r4 = allFrames[f4], *r7 = allFrames[f7];
-        if(r1 && r4 && r7) {
+        if (r1 && r4 && r7) {
             unsigned char pix[3][3];
-            pix[0][0] = r1[y * step + off_x * 4]; pix[0][1] = r1[y * step + off_x * 4 + 1]; pix[0][2] = r1[y * step + off_x * 4 + 2];
-            pix[1][0] = r4[y * step + off_g * 4]; pix[1][1] = r4[y * step + off_g * 4 + 1]; pix[1][2] = r4[y * step + off_g * 4 + 2];
-            pix[2][0] = r7[y * step + off_b * 4]; pix[2][1] = r7[y * step + off_b * 4 + 1]; pix[2][2] = r7[y * step + off_b * 4 + 2];
-            for(int j = 0; j < 3; ++j) {
-                if(!strobe) data[idx + j] = pix[offset][j];
-                else data[idx + j] = pix[j][j];
+            pix[0][0] = r1[y * step + off_x * 4];
+            pix[0][1] = r1[y * step + off_x * 4 + 1];
+            pix[0][2] = r1[y * step + off_x * 4 + 2];
+            pix[1][0] = r4[y * step + off_g * 4];
+            pix[1][1] = r4[y * step + off_g * 4 + 1];
+            pix[1][2] = r4[y * step + off_g * 4 + 2];
+            pix[2][0] = r7[y * step + off_b * 4];
+            pix[2][1] = r7[y * step + off_b * 4 + 1];
+            pix[2][2] = r7[y * step + off_b * 4 + 2];
+            for (int j = 0; j < 3; ++j) {
+                if (!strobe)
+                    data[idx + j] = pix[offset][j];
+                else
+                    data[idx + j] = pix[j][j];
             }
         }
     }
@@ -10735,14 +10806,22 @@ namespace ac_gpu {
         int off_g = ((y + params.frame_count) * 13) % height;
         int f1 = 1 % params.numFrames, f4 = 4 % params.numFrames, f7 = (params.numFrames - 1) % params.numFrames;
         unsigned char *r1 = allFrames[f1], *r4 = allFrames[f4], *r7 = allFrames[f7];
-        if(r1 && r4 && r7) {
+        if (r1 && r4 && r7) {
             unsigned char pix[3][3];
-            pix[0][0] = r1[off_r * step + x * 4]; pix[0][1] = r1[off_r * step + x * 4 + 1]; pix[0][2] = r1[off_r * step + x * 4 + 2];
-            pix[1][0] = r4[off_g * step + x * 4]; pix[1][1] = r4[off_g * step + x * 4 + 1]; pix[1][2] = r4[off_g * step + x * 4 + 2];
-            pix[2][0] = r7[idx]; pix[2][1] = r7[idx + 1]; pix[2][2] = r7[idx + 2];
-            for(int j = 0; j < 3; ++j) {
-                if(!strobe) data[idx + j] = pix[offset][j];
-                else data[idx + j] = pix[j][j];
+            pix[0][0] = r1[off_r * step + x * 4];
+            pix[0][1] = r1[off_r * step + x * 4 + 1];
+            pix[0][2] = r1[off_r * step + x * 4 + 2];
+            pix[1][0] = r4[off_g * step + x * 4];
+            pix[1][1] = r4[off_g * step + x * 4 + 1];
+            pix[1][2] = r4[off_g * step + x * 4 + 2];
+            pix[2][0] = r7[idx];
+            pix[2][1] = r7[idx + 1];
+            pix[2][2] = r7[idx + 2];
+            for (int j = 0; j < 3; ++j) {
+                if (!strobe)
+                    data[idx + j] = pix[offset][j];
+                else
+                    data[idx + j] = pix[j][j];
             }
         }
     }
@@ -10754,26 +10833,35 @@ namespace ac_gpu {
         int off_g = ((y * 5 + x + params.frame_count) * 11) % height;
         int f1 = 1 % params.numFrames, f4 = 4 % params.numFrames, f7 = (params.numFrames - 1) % params.numFrames;
         unsigned char *r1 = allFrames[f1], *r4 = allFrames[f4], *r7 = allFrames[f7];
-        if(r1 && r4 && r7) {
+        if (r1 && r4 && r7) {
             unsigned char pix[3][3];
-            pix[0][0] = r1[off_r * step + x * 4]; pix[0][1] = r1[off_r * step + x * 4 + 1]; pix[0][2] = r1[off_r * step + x * 4 + 2];
-            pix[1][0] = r4[off_g * step + x * 4]; pix[1][1] = r4[off_g * step + x * 4 + 1]; pix[1][2] = r4[off_g * step + x * 4 + 2];
-            pix[2][0] = r7[idx]; pix[2][1] = r7[idx + 1]; pix[2][2] = r7[idx + 2];
-            for(int j = 0; j < 3; ++j) {
-                if(!strobe) data[idx + j] = pix[offset][j];
-                else data[idx + j] = pix[j][j];
+            pix[0][0] = r1[off_r * step + x * 4];
+            pix[0][1] = r1[off_r * step + x * 4 + 1];
+            pix[0][2] = r1[off_r * step + x * 4 + 2];
+            pix[1][0] = r4[off_g * step + x * 4];
+            pix[1][1] = r4[off_g * step + x * 4 + 1];
+            pix[1][2] = r4[off_g * step + x * 4 + 2];
+            pix[2][0] = r7[idx];
+            pix[2][1] = r7[idx + 1];
+            pix[2][2] = r7[idx + 2];
+            for (int j = 0; j < 3; ++j) {
+                if (!strobe)
+                    data[idx + j] = pix[offset][j];
+                else
+                    data[idx + j] = pix[j][j];
             }
         }
     }
     __device__ void acgl_glitch_LineCollectionRGB(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int r_count = 1 + (int)(gpu_rand(y, params.frame_count, params.seed) * 50.0f);
-        if(r_count < 1) r_count = 1;
+        if (r_count < 1)
+            r_count = 1;
         int rgb = (params.frame_count + y / r_count) % 3;
         int segment = x / r_count;
         int fsel = (int)(gpu_rand(y, segment, params.seed + params.frame_count) * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[fsel];
-        if(ref) {
+        if (ref) {
             data[idx + rgb] = ref[idx + rgb];
         }
     }
@@ -10782,14 +10870,15 @@ namespace ac_gpu {
         int bx = x / 16, by = y / 16;
         int off = ((bx + by + params.frame_count) % params.numFrames);
         float r = gpu_rand(bx, by, params.seed);
-        if(r > 0.5f) {
+        if (r > 0.5f) {
             int stretch = off + 1;
-            if(stretch < 1) stretch = 1;
+            if (stretch < 1)
+                stretch = 1;
             int off_x = gpu_AC_GetFX(width - 1, x, width * stretch);
             unsigned char *ref = allFrames[off % params.numFrames];
-            if(ref && off_x >= 0 && off_x < width) {
+            if (ref && off_x >= 0 && off_x < width) {
                 int src_idx = y * step + off_x * 4;
-                for(int j = 0; j < 3; ++j)
+                for (int j = 0; j < 3; ++j)
                     data[idx + j] = ref[src_idx + j];
             }
         }
@@ -10798,42 +10887,57 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int nf = params.numFrames > 0 ? params.numFrames : 1;
         int max_band = height / nf;
-        if(max_band < 1) max_band = 1;
+        if (max_band < 1)
+            max_band = 1;
         int off = (y / max_band) % nf;
         unsigned char *ref = allFrames[off];
-        if(ref) {
+        if (ref) {
             int rnd = (int)(gpu_rand(x, y, params.seed) * 3.0f) % 3;
             unsigned char b = data[idx], g = data[idx + 1], r = data[idx + 2];
             unsigned char rb = ref[idx], rg = ref[idx + 1], rr = ref[idx + 2];
             unsigned char ob, og, or_;
-            switch(rnd) {
-            case 0: ob = b & rb; og = g | rg; or_ = r ^ rr; break;
-            case 1: ob = b | rb; og = g ^ rg; or_ = r & rr; break;
-            default: ob = b ^ rb; og = g & rg; or_ = r | rr; break;
+            switch (rnd) {
+            case 0:
+                ob = b & rb;
+                og = g | rg;
+                or_ = r ^ rr;
+                break;
+            case 1:
+                ob = b | rb;
+                og = g ^ rg;
+                or_ = r & rr;
+                break;
+            default:
+                ob = b ^ rb;
+                og = g & rg;
+                or_ = r | rr;
+                break;
             }
-            data[idx]     = (unsigned char)(0.5f * b + 0.5f * ob);
+            data[idx] = (unsigned char)(0.5f * b + 0.5f * ob);
             data[idx + 1] = (unsigned char)(0.5f * g + 0.5f * og);
             data[idx + 2] = (unsigned char)(0.5f * r + 0.5f * or_);
         }
     }
     __device__ void acgl_glitch_NewBars2(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        for(int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 3; ++j) {
             int off = ((y * width + x) * 3 + j + params.frame_count) % params.numFrames;
             unsigned char *ref = allFrames[off];
-            if(ref)
+            if (ref)
                 data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + ref[idx + j] * 0.5f);
         }
     }
     __device__ void acgl_glitch_NewBlendLines(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int mx = 1 + (int)(gpu_rand(0, 0, params.seed + params.frame_count) * params.numFrames);
-        if(mx < 1) mx = 1;
-        if(mx > params.numFrames) mx = params.numFrames;
+        if (mx < 1)
+            mx = 1;
+        if (mx > params.numFrames)
+            mx = params.numFrames;
         int off = y % mx;
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + ref[idx + j] * 0.5f);
         }
     }
@@ -10841,8 +10945,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = (int)(gpu_rand(y, 0, params.seed + params.frame_count) * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10851,14 +10955,20 @@ namespace ac_gpu {
         int fsel = (int)(gpu_rand(0, 0, params.seed + params.frame_count) * params.numFrames) % params.numFrames;
         int rnd_op = (int)(gpu_rand(1, 0, params.seed + params.frame_count) * 3.0f) % 3;
         unsigned char *ref = allFrames[fsel];
-        if(ref) {
+        if (ref) {
             float chance = gpu_rand(x, y, params.seed);
-            if(chance < 0.077f) {
-                for(int j = 0; j < 3; ++j) {
-                    switch(rnd_op) {
-                    case 0: data[idx + j] &= ref[idx + j]; break;
-                    case 1: data[idx + j] ^= ref[idx + j]; break;
-                    case 2: data[idx + j] |= ref[idx + j]; break;
+            if (chance < 0.077f) {
+                for (int j = 0; j < 3; ++j) {
+                    switch (rnd_op) {
+                    case 0:
+                        data[idx + j] &= ref[idx + j];
+                        break;
+                    case 1:
+                        data[idx + j] ^= ref[idx + j];
+                        break;
+                    case 2:
+                        data[idx + j] |= ref[idx + j];
+                        break;
                     }
                 }
             }
@@ -10870,14 +10980,22 @@ namespace ac_gpu {
         int offset = (params.frame_count / 10) % 3;
         int f1 = 1 % params.numFrames, f4 = 4 % params.numFrames, f7 = (params.numFrames - 1) % params.numFrames;
         unsigned char *r1 = allFrames[f1], *r4 = allFrames[f4], *r7 = allFrames[f7];
-        if(r1 && r4 && r7) {
+        if (r1 && r4 && r7) {
             unsigned char pix[3][3];
-            pix[0][0] = r1[idx]; pix[0][1] = r1[idx + 1]; pix[0][2] = r1[idx + 2];
-            pix[1][0] = r4[idx]; pix[1][1] = r4[idx + 1]; pix[1][2] = r4[idx + 2];
-            pix[2][0] = r7[idx]; pix[2][1] = r7[idx + 1]; pix[2][2] = r7[idx + 2];
-            for(int j = 0; j < 3; ++j) {
-                if(!strobe) data[idx + j] = pix[offset][j];
-                else data[idx + j] = pix[j][j];
+            pix[0][0] = r1[idx];
+            pix[0][1] = r1[idx + 1];
+            pix[0][2] = r1[idx + 2];
+            pix[1][0] = r4[idx];
+            pix[1][1] = r4[idx + 1];
+            pix[1][2] = r4[idx + 2];
+            pix[2][0] = r7[idx];
+            pix[2][1] = r7[idx + 1];
+            pix[2][2] = r7[idx + 2];
+            for (int j = 0; j < 3; ++j) {
+                if (!strobe)
+                    data[idx + j] = pix[offset][j];
+                else
+                    data[idx + j] = pix[j][j];
             }
         }
     }
@@ -10890,8 +11008,8 @@ namespace ac_gpu {
         int period = params.numFrames > 1 ? params.numFrames - 1 : 1;
         int off = gpu_triangle_wave(pixel_id * step_val, period);
         unsigned char *ref = allFrames[off % params.numFrames];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10899,8 +11017,8 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         int off = y % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10909,20 +11027,21 @@ namespace ac_gpu {
         int stride = 1 + (params.frame_count % 3);
         int off = (y * stride) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void acgl_glitch_StuckRowLine(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int rsize = 25 + (int)(gpu_rand(y / 25, 0, params.seed + params.frame_count) * 25.0f);
-        if(rsize < 1) rsize = 1;
+        if (rsize < 1)
+            rsize = 1;
         int segment = y / rsize;
         int off = (int)(gpu_rand(segment, 0, params.seed + params.frame_count) * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
@@ -10930,20 +11049,20 @@ namespace ac_gpu {
         int idx = y * step + x * 4;
         bool strobe = (params.frame_count % 2) == 0;
         int offset = gpu_triangle_wave(params.frame_count / 6, params.numFrames > 1 ? params.numFrames - 1 : 1);
-        if(strobe) {
-            if(y < height / 4) {
+        if (strobe) {
+            if (y < height / 4) {
                 unsigned char *ref = allFrames[offset % params.numFrames];
-                if(ref) {
-                    for(int j = 0; j < 3; ++j)
+                if (ref) {
+                    for (int j = 0; j < 3; ++j)
                         data[idx + j] = ref[idx + j];
                 }
             }
             int start_y = (int)(gpu_rand(0, 0, params.seed + params.frame_count) * height);
-            if(y >= start_y) {
+            if (y >= start_y) {
                 int f7 = (params.numFrames - 1) % params.numFrames;
                 unsigned char *ref = allFrames[f7];
-                if(ref) {
-                    for(int j = 0; j < 3; ++j)
+                if (ref) {
+                    for (int j = 0; j < 3; ++j)
                         data[idx + j] = ref[idx + j];
                 }
             }
@@ -10951,25 +11070,27 @@ namespace ac_gpu {
     }
     __device__ void acgl_glitch_Plug1(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
-        data[idx]     = (unsigned char)(gpu_rand(x, y, params.seed) * 255.0f);
+        data[idx] = (unsigned char)(gpu_rand(x, y, params.seed) * 255.0f);
         data[idx + 1] = (unsigned char)(gpu_rand(x + 1, y, params.seed) * 255.0f);
         data[idx + 2] = (unsigned char)(gpu_rand(x, y + 1, params.seed) * 255.0f);
     }
     __device__ void acgl_glitch_OppositeDir(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int cx = 50 + gpu_triangle_wave(params.frame_count, 50);
-        if(cx < 1) cx = 1;
+        if (cx < 1)
+            cx = 1;
         int off_fwd = (y / cx) % params.numFrames;
         unsigned char *ref_fwd = allFrames[off_fwd];
-        if(ref_fwd) {
-            for(int j = 0; j < 3; ++j)
+        if (ref_fwd) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref_fwd[idx + j]);
         }
         int off_rev = (params.numFrames - 1 - off_fwd) % params.numFrames;
-        if(off_rev < 0) off_rev = 0;
+        if (off_rev < 0)
+            off_rev = 0;
         unsigned char *ref_rev = allFrames[off_rev];
-        if(ref_rev) {
-            for(int j = 0; j < 3; ++j)
+        if (ref_rev) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = gpu_wrap_cast(0.5f * data[idx + j] + 0.5f * ref_rev[idx + j]);
         }
     }
@@ -10978,21 +11099,24 @@ namespace ac_gpu {
         float r = gpu_rand(x / 8, y / 8, params.seed + params.frame_count);
         int off = (int)(r * params.numFrames) % params.numFrames;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = ref[idx + j];
         }
     }
     __device__ void acgl_glitch_NewVarBlendLines(int x, int y, unsigned char *data, unsigned char **allFrames, int width, int height, size_t step, const FilterParams &params) {
         int idx = y * step + x * 4;
         int r = 1 + (int)(gpu_rand(0, 0, params.seed + params.frame_count) * 64.0f);
-        if(r < 1) r = 1;
+        if (r < 1)
+            r = 1;
         int off = params.numFrames - 1 - (y / r) % params.numFrames;
-        if(off < 0) off = 0;
-        if(off >= params.numFrames) off = params.numFrames - 1;
+        if (off < 0)
+            off = 0;
+        if (off >= params.numFrames)
+            off = params.numFrames - 1;
         unsigned char *ref = allFrames[off];
-        if(ref) {
-            for(int j = 0; j < 3; ++j)
+        if (ref) {
+            for (int j = 0; j < 3; ++j)
                 data[idx + j] = (unsigned char)(data[idx + j] * 0.5f + ref[idx + j] * 0.5f);
         }
     }
@@ -11021,7 +11145,7 @@ namespace ac_gpu {
             return;
         }
         int idx = y * step + x * 4;
-        data[idx]     = (unsigned char)(0.5f * data[idx]     + 0.5f * hist_frame[idx]);
+        data[idx] = (unsigned char)(0.5f * data[idx] + 0.5f * hist_frame[idx]);
         data[idx + 1] = (unsigned char)(0.5f * data[idx + 1] + 0.5f * hist_frame[idx + 1]);
         data[idx + 2] = (unsigned char)(0.5f * data[idx + 2] + 0.5f * hist_frame[idx + 2]);
     }
@@ -13914,7 +14038,7 @@ extern "C" void launch_filter(ac_gpu::Filter *f_host, size_t c, unsigned char *d
     params.frame_count = frame_counter++;
     int blocks_in_frame = (height + square_size - 1) / square_size;
     params.global_block_counter += blocks_in_frame;
-    
+
     params.sumR = rand() % 255;
     params.sumG = rand() % 255;
     params.sumB = rand() % 255;

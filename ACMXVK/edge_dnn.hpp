@@ -53,14 +53,8 @@ namespace acmxvk::dnn {
         std::unique_ptr<Impl> impl;
     };
 
-    [[nodiscard]] cv::Mat hardenedAlphaMask(const cv::Mat &image,
-                                            const cv::Mat &mask,
-                                            float black_point,
-                                            float white_point);
-    [[nodiscard]] cv::Mat isolateBody(const cv::Mat &image,
-                                      const cv::Mat &mask,
-                                      float black_point,
-                                      float white_point);
+    [[nodiscard]] cv::Mat hardenedAlphaMask(const cv::Mat &image, const cv::Mat &mask, float black_point, float white_point);
+    [[nodiscard]] cv::Mat isolateBody(const cv::Mat &image, const cv::Mat &mask, float black_point, float white_point);
 
 } // namespace acmxvk::dnn
 

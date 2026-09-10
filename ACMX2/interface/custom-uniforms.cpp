@@ -37,54 +37,41 @@ namespace {
     }
 
     int sliderStepCount(const acmx2::CustomUniformDefinition &uniform) {
-        const double count = std::ceil(
-            (uniform.maximum - uniform.minimum) / uniform.step);
+        const double count = std::ceil((uniform.maximum - uniform.minimum) / uniform.step);
         if (count >= MAX_SLIDER_STEPS)
             return MAX_SLIDER_STEPS;
         return std::max(static_cast<int>(count), 1);
     }
 
-    double sliderValue(const acmx2::CustomUniformDefinition &uniform, int position) {
-        return std::min(uniform.maximum,
-                        uniform.minimum + uniform.step * position);
-    }
+    double sliderValue(const acmx2::CustomUniformDefinition &uniform, int position) { return std::min(uniform.maximum, uniform.minimum + uniform.step * position); }
 
     int sliderPosition(const acmx2::CustomUniformDefinition &uniform, double value) {
-        const double position =
-            std::round((value - uniform.minimum) / uniform.step);
-        return std::clamp(static_cast<int>(position), 0,
-                          sliderStepCount(uniform));
+        const double position = std::round((value - uniform.minimum) / uniform.step);
+        return std::clamp(static_cast<int>(position), 0, sliderStepCount(uniform));
     }
 
     int decimalsForStep(double step) {
         if (step >= 1.0)
             return 6;
-        return std::clamp(static_cast<int>(std::ceil(-std::log10(step))) + 2,
-                          2, 10);
+        return std::clamp(static_cast<int>(std::ceil(-std::log10(step))) + 2, 2, 10);
     }
 
     QString uniformLocation(const acmx2::CustomUniformDefinition &uniform) {
         if (uniform.slot < 0)
             return {};
         static const QString components = QStringLiteral("xyzw");
-        return QStringLiteral("ext.custom_uniforms[%1].%2")
-            .arg(uniform.slot / 4)
-            .arg(components.at(uniform.slot % 4));
+        return QStringLiteral("ext.custom_uniforms[%1].%2").arg(uniform.slot / 4).arg(components.at(uniform.slot % 4));
     }
 
-    QString uniformSourceDefinition(
-        const acmx2::CustomUniformDefinition &uniform,
-        acmx2::Backend backend) {
+    QString uniformSourceDefinition(const acmx2::CustomUniformDefinition &uniform, acmx2::Backend backend) {
         if (backend == acmx2::Backend::Acmxvk) {
-            return QStringLiteral("#define %1 %2")
-                .arg(uniform.name, uniformLocation(uniform));
+            return QStringLiteral("#define %1 %2").arg(uniform.name, uniformLocation(uniform));
         }
         return QStringLiteral("uniform float %1;").arg(uniform.name);
     }
 } // namespace
 
-CustomUniformDialog::CustomUniformDialog(QWidget *parent)
-    : QDialog(parent) {
+CustomUniformDialog::CustomUniformDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Custom Uniforms"));
     resize(850, 520);
     setModal(false);
@@ -118,10 +105,9 @@ CustomUniformDialog::CustomUniformDialog(QWidget *parent)
     addLayout->addWidget(addButton);
     mainLayout->addLayout(addLayout);
 
-    auto *hint = new QLabel(
-        tr("Names become GLSL float uniforms. Values and slots are saved in "
-           "library.json and sent live to the active engine."),
-        this);
+    auto *hint = new QLabel(tr("Names become GLSL float uniforms. Values and slots are saved in "
+                               "library.json and sent live to the active engine."),
+                            this);
     hint->setWordWrap(true);
     mainLayout->addWidget(hint);
 
@@ -143,21 +129,15 @@ CustomUniformDialog::CustomUniformDialog(QWidget *parent)
     saveTimer = new QTimer(this);
     saveTimer->setSingleShot(true);
     saveTimer->setInterval(150);
-    connect(saveTimer, &QTimer::timeout, this,
-            &CustomUniformDialog::savePendingChanges);
-    connect(addButton, &QPushButton::clicked, this,
-            &CustomUniformDialog::addUniform);
-    connect(nameEdit, &QLineEdit::returnPressed, this,
-            &CustomUniformDialog::addUniform);
-    connect(buttons, &QDialogButtonBox::rejected, this,
-            &CustomUniformDialog::hide);
+    connect(saveTimer, &QTimer::timeout, this, &CustomUniformDialog::savePendingChanges);
+    connect(addButton, &QPushButton::clicked, this, &CustomUniformDialog::addUniform);
+    connect(nameEdit, &QLineEdit::returnPressed, this, &CustomUniformDialog::addUniform);
+    connect(buttons, &QDialogButtonBox::rejected, this, &CustomUniformDialog::hide);
 
     rebuildUniformRows();
 }
 
-bool CustomUniformDialog::loadLibrary(const QString &directory,
-                                      acmx2::Backend backend,
-                                      QString *error) {
+bool CustomUniformDialog::loadLibrary(const QString &directory, acmx2::Backend backend, QString *error) {
     if (saveTimer->isActive()) {
         saveTimer->stop();
         saveUniforms(false);
@@ -178,24 +158,19 @@ bool CustomUniformDialog::loadLibrary(const QString &directory,
             *error = loadError;
         return false;
     }
-    if (loadedUniforms.size() >
-        static_cast<int>(acmx2::ipc::kShaderSelectionMaxCustomUniforms)) {
+    if (loadedUniforms.size() > static_cast<int>(acmx2::ipc::kShaderSelectionMaxCustomUniforms)) {
         clearFailedLoad();
         if (error) {
-            *error = tr("library.json contains more than %1 custom uniforms.")
-                         .arg(acmx2::ipc::kShaderSelectionMaxCustomUniforms);
+            *error = tr("library.json contains more than %1 custom uniforms.").arg(acmx2::ipc::kShaderSelectionMaxCustomUniforms);
         }
         return false;
     }
     for (const auto &uniform : loadedUniforms) {
-        const double stepCount =
-            std::ceil((uniform.maximum - uniform.minimum) / uniform.step);
+        const double stepCount = std::ceil((uniform.maximum - uniform.minimum) / uniform.step);
         if (stepCount > MAX_SLIDER_STEPS) {
             clearFailedLoad();
             if (error) {
-                *error = tr("Custom uniform '%1' has more than %2 slider positions. Increase its step size.")
-                             .arg(uniform.name)
-                             .arg(MAX_SLIDER_STEPS);
+                *error = tr("Custom uniform '%1' has more than %2 slider positions. Increase its step size.").arg(uniform.name).arg(MAX_SLIDER_STEPS);
             }
             return false;
         }
@@ -208,8 +183,7 @@ bool CustomUniformDialog::loadLibrary(const QString &directory,
             addedExplicitSlots = true;
         }
     }
-    if (addedExplicitSlots &&
-        !acmx2::write_custom_uniforms(directory, loadedUniforms, loadError)) {
+    if (addedExplicitSlots && !acmx2::write_custom_uniforms(directory, loadedUniforms, loadError)) {
         clearFailedLoad();
         if (error)
             *error = loadError;
@@ -223,9 +197,7 @@ bool CustomUniformDialog::loadLibrary(const QString &directory,
     return true;
 }
 
-const QList<acmx2::CustomUniformDefinition> &CustomUniformDialog::uniforms() const {
-    return uniformDefinitions;
-}
+const QList<acmx2::CustomUniformDefinition> &CustomUniformDialog::uniforms() const { return uniformDefinitions; }
 
 bool CustomUniformDialog::setUniformValue(const QString &name, double value) {
     const int index = uniformIndex(name);
@@ -242,34 +214,22 @@ bool CustomUniformDialog::setUniformValue(const QString &name, double value) {
 
 void CustomUniformDialog::addUniform() {
     if (libraryDirectory.isEmpty()) {
-        QMessageBox::information(this, tr("Custom Uniforms"),
-                                 tr("Load a shader library first."));
+        QMessageBox::information(this, tr("Custom Uniforms"), tr("Load a shader library first."));
         return;
     }
-    if (uniformDefinitions.size() >=
-        static_cast<int>(acmx2::ipc::kShaderSelectionMaxCustomUniforms)) {
-        QMessageBox::warning(
-            this, tr("Custom Uniform Limit"),
-            tr("A library can contain at most %1 custom uniforms.")
-                .arg(acmx2::ipc::kShaderSelectionMaxCustomUniforms));
+    if (uniformDefinitions.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxCustomUniforms)) {
+        QMessageBox::warning(this, tr("Custom Uniform Limit"), tr("A library can contain at most %1 custom uniforms.").arg(acmx2::ipc::kShaderSelectionMaxCustomUniforms));
         return;
     }
 
     const QString name = nameEdit->text().trimmed();
-    static const QRegularExpression identifier(
-        QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
-    if (!identifier.match(name).hasMatch() || name.startsWith("gl_") ||
-        name.toUtf8().size() >=
-            static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName)) {
-        QMessageBox::warning(
-            this, tr("Invalid Uniform Name"),
-            tr("Use a GLSL identifier that does not begin with gl_."));
+    static const QRegularExpression identifier(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
+    if (!identifier.match(name).hasMatch() || name.startsWith("gl_") || name.toUtf8().size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName)) {
+        QMessageBox::warning(this, tr("Invalid Uniform Name"), tr("Use a GLSL identifier that does not begin with gl_."));
         return;
     }
     if (uniformIndex(name) >= 0) {
-        QMessageBox::warning(this, tr("Duplicate Uniform"),
-                             tr("A custom uniform named '%1' already exists.")
-                                 .arg(name));
+        QMessageBox::warning(this, tr("Duplicate Uniform"), tr("A custom uniform named '%1' already exists.").arg(name));
         return;
     }
 
@@ -277,23 +237,16 @@ void CustomUniformDialog::addUniform() {
     const double maximum = maximumSpin->value();
     const double step = stepSpin->value();
     if (maximum <= minimum || step <= 0.0) {
-        QMessageBox::warning(this, tr("Invalid Range"),
-                             tr("Maximum must be greater than minimum and step must be positive."));
+        QMessageBox::warning(this, tr("Invalid Range"), tr("Maximum must be greater than minimum and step must be positive."));
         return;
     }
     const double steps = std::ceil((maximum - minimum) / step);
     if (steps > MAX_SLIDER_STEPS) {
-        QMessageBox::warning(
-            this, tr("Too Many Slider Steps"),
-            tr("Increase the step size so the slider has no more than %1 positions.")
-                .arg(MAX_SLIDER_STEPS));
+        QMessageBox::warning(this, tr("Too Many Slider Steps"), tr("Increase the step size so the slider has no more than %1 positions.").arg(MAX_SLIDER_STEPS));
         return;
     }
 
-    acmx2::CustomUniformDefinition uniform{name, minimum, maximum, step,
-                                           minimum,
-                                           static_cast<int>(
-                                               uniformDefinitions.size())};
+    acmx2::CustomUniformDefinition uniform{name, minimum, maximum, step, minimum, static_cast<int>(uniformDefinitions.size())};
     uniformDefinitions.append(uniform);
     if (!saveUniforms(true)) {
         uniformDefinitions.removeLast();
@@ -305,9 +258,7 @@ void CustomUniformDialog::addUniform() {
     emit uniformDefinitionsChanged();
 }
 
-void CustomUniformDialog::savePendingChanges() {
-    saveUniforms(true);
-}
+void CustomUniformDialog::savePendingChanges() { saveUniforms(true); }
 
 void CustomUniformDialog::rebuildUniformRows() {
     while (QLayoutItem *item = rowsLayout->takeAt(0)) {
@@ -317,8 +268,7 @@ void CustomUniformDialog::rebuildUniformRows() {
     }
 
     if (uniformDefinitions.isEmpty()) {
-        auto *emptyLabel = new QLabel(
-            tr("No custom uniforms are defined for this library."), rowsWidget);
+        auto *emptyLabel = new QLabel(tr("No custom uniforms are defined for this library."), rowsWidget);
         emptyLabel->setAlignment(Qt::AlignCenter);
         rowsLayout->addWidget(emptyLabel);
         rowsLayout->addStretch();
@@ -342,23 +292,12 @@ void CustomUniformDialog::rebuildUniformRows() {
         valueSpin->setValue(uniform.value);
         valueSpin->setKeyboardTracking(false);
         valueSpin->setMinimumWidth(130);
-        auto *rangeLabel = new QLabel(
-            tr("%1 to %2, step %3")
-                .arg(uniform.minimum, 0, 'g', 8)
-                .arg(uniform.maximum, 0, 'g', 8)
-                .arg(uniform.step, 0, 'g', 8),
-            row);
+        auto *rangeLabel = new QLabel(tr("%1 to %2, step %3").arg(uniform.minimum, 0, 'g', 8).arg(uniform.maximum, 0, 'g', 8).arg(uniform.step, 0, 'g', 8), row);
         const QString location = uniformLocation(uniform);
-        auto *locationLabel = new QLabel(
-            activeBackend == acmx2::Backend::Acmxvk
-                ? tr("Slot %1: %2").arg(uniform.slot).arg(location)
-                : tr("Slot %1").arg(uniform.slot),
-            row);
+        auto *locationLabel = new QLabel(activeBackend == acmx2::Backend::Acmxvk ? tr("Slot %1: %2").arg(uniform.slot).arg(location) : tr("Slot %1").arg(uniform.slot), row);
         locationLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
         auto *copyButton = new QPushButton(tr("Copy"), row);
-        copyButton->setToolTip(
-            tr("Copy the source declaration:\n%1")
-                .arg(uniformSourceDefinition(uniform, activeBackend)));
+        copyButton->setToolTip(tr("Copy the source declaration:\n%1").arg(uniformSourceDefinition(uniform, activeBackend)));
         auto *deleteButton = new QPushButton(tr("Delete"), row);
         disableDefaultButton(copyButton);
         disableDefaultButton(deleteButton);
@@ -373,42 +312,33 @@ void CustomUniformDialog::rebuildUniformRows() {
         layout->setColumnStretch(1, 1);
         rowsLayout->addWidget(row);
 
-        connect(slider, &QSlider::valueChanged, this,
-                [this, name = uniform.name, valueSpin](int position) {
-                    const int index = uniformIndex(name);
-                    if (index < 0)
-                        return;
-                    auto &definition = uniformDefinitions[index];
-                    definition.value = sliderValue(definition, position);
-                    const QSignalBlocker blocker(valueSpin);
-                    valueSpin->setValue(definition.value);
-                    saveTimer->start();
-                    emit uniformsChanged();
-                });
-        connect(valueSpin,
-                static_cast<void (QDoubleSpinBox::*)(double)>(
-                    &QDoubleSpinBox::valueChanged),
-                this, [this, name = uniform.name, slider, valueSpin](double value) {
-                    const int index = uniformIndex(name);
-                    if (index < 0)
-                        return;
-                    auto &definition = uniformDefinitions[index];
-                    const int position = sliderPosition(definition, value);
-                    definition.value = sliderValue(definition, position);
-                    const QSignalBlocker sliderBlocker(slider);
-                    const QSignalBlocker spinBlocker(valueSpin);
-                    slider->setValue(position);
-                    valueSpin->setValue(definition.value);
-                    saveTimer->start();
-                    emit uniformsChanged();
-                });
-        connect(deleteButton, &QPushButton::clicked, this,
-                [this, name = uniform.name]() { removeUniform(name); });
-        connect(copyButton, &QPushButton::clicked, this,
-                [uniform, backend = activeBackend]() {
-                    QGuiApplication::clipboard()->setText(
-                        uniformSourceDefinition(uniform, backend));
-                });
+        connect(slider, &QSlider::valueChanged, this, [this, name = uniform.name, valueSpin](int position) {
+            const int index = uniformIndex(name);
+            if (index < 0)
+                return;
+            auto &definition = uniformDefinitions[index];
+            definition.value = sliderValue(definition, position);
+            const QSignalBlocker blocker(valueSpin);
+            valueSpin->setValue(definition.value);
+            saveTimer->start();
+            emit uniformsChanged();
+        });
+        connect(valueSpin, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), this, [this, name = uniform.name, slider, valueSpin](double value) {
+            const int index = uniformIndex(name);
+            if (index < 0)
+                return;
+            auto &definition = uniformDefinitions[index];
+            const int position = sliderPosition(definition, value);
+            definition.value = sliderValue(definition, position);
+            const QSignalBlocker sliderBlocker(slider);
+            const QSignalBlocker spinBlocker(valueSpin);
+            slider->setValue(position);
+            valueSpin->setValue(definition.value);
+            saveTimer->start();
+            emit uniformsChanged();
+        });
+        connect(deleteButton, &QPushButton::clicked, this, [this, name = uniform.name]() { removeUniform(name); });
+        connect(copyButton, &QPushButton::clicked, this, [uniform, backend = activeBackend]() { QGuiApplication::clipboard()->setText(uniformSourceDefinition(uniform, backend)); });
     }
     rowsLayout->addStretch();
 }
@@ -417,10 +347,8 @@ void CustomUniformDialog::removeUniform(const QString &name) {
     const int index = uniformIndex(name);
     if (index < 0)
         return;
-    const QList<acmx2::CustomUniformDefinition> previousDefinitions =
-        uniformDefinitions;
-    const acmx2::CustomUniformDefinition removed =
-        uniformDefinitions.takeAt(index);
+    const QList<acmx2::CustomUniformDefinition> previousDefinitions = uniformDefinitions;
+    const acmx2::CustomUniformDefinition removed = uniformDefinitions.takeAt(index);
     if (removed.slot >= 0) {
         for (acmx2::CustomUniformDefinition &uniform : uniformDefinitions) {
             if (uniform.slot > removed.slot)
@@ -448,8 +376,7 @@ bool CustomUniformDialog::saveUniforms(bool showError) {
     if (libraryDirectory.isEmpty())
         return false;
     QString error;
-    if (acmx2::write_custom_uniforms(libraryDirectory, uniformDefinitions,
-                                     error)) {
+    if (acmx2::write_custom_uniforms(libraryDirectory, uniformDefinitions, error)) {
         return true;
     }
     if (showError)

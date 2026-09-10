@@ -15,9 +15,7 @@
 #include <numeric>
 #include <random>
 
-PlaylistDialog::PlaylistDialog(const QStringList &shaderNames,
-                               acmx2::Backend backend, QWidget *parent)
-    : QDialog(parent), backend(backend) {
+PlaylistDialog::PlaylistDialog(const QStringList &shaderNames, acmx2::Backend backend, QWidget *parent) : QDialog(parent), backend(backend) {
     setWindowTitle("Shader Playlist Settings");
     setMinimumSize(600, 600);
     setupUI();
@@ -30,10 +28,9 @@ void PlaylistDialog::setupUI() {
     enableCheckBox = new QCheckBox("Enable Shader Playlist", this);
     mainLayout->addWidget(enableCheckBox);
 
-    QLabel *infoLabel = new QLabel(
-        "Build a playlist tree of shaders. Create named nodes, then add shaders to each node.\n"
-        "When enabled, the playlist file is passed to acmx2. Press P to toggle; Up/Down to navigate.",
-        this);
+    QLabel *infoLabel = new QLabel("Build a playlist tree of shaders. Create named nodes, then add shaders to each node.\n"
+                                   "When enabled, the playlist file is passed to acmx2. Press P to toggle; Up/Down to navigate.",
+                                   this);
     infoLabel->setWordWrap(true);
     mainLayout->addWidget(infoLabel);
 
@@ -106,9 +103,8 @@ void PlaylistDialog::setupUI() {
     concatButton = new QPushButton("Concat Playlist...", this);
     if (backend == acmx2::Backend::Acmxvk) {
         generateRandomButton = new QPushButton("Generate Random...", this);
-        generateRandomButton->setToolTip(
-            "Create randomized multipass nodes from the active ACMXVK shader "
-            "library.");
+        generateRandomButton->setToolTip("Create randomized multipass nodes from the active ACMXVK shader "
+                                         "library.");
     }
     fileButtonLayout->addWidget(saveButton);
     fileButtonLayout->addWidget(loadButton);
@@ -119,9 +115,7 @@ void PlaylistDialog::setupUI() {
     shaderMainLayout->addLayout(fileButtonLayout);
 
     QHBoxLayout *autopilotLayout = new QHBoxLayout();
-    QLabel *autopilotLabel = new QLabel(
-        "Autopilot frames (minimum 4; switch to a random shader after this many frames, toggle with J):",
-        this);
+    QLabel *autopilotLabel = new QLabel("Autopilot frames (minimum 4; switch to a random shader after this many frames, toggle with J):", this);
     autopilotLabel->setWordWrap(true);
     autopilotFramesSpinBox = new QSpinBox(this);
     autopilotFramesSpinBox->setRange(4, 1000000);
@@ -155,8 +149,7 @@ void PlaylistDialog::setupUI() {
     connect(clearButton, &QPushButton::clicked, this, &PlaylistDialog::clearAll);
     connect(shuffleButton, &QPushButton::clicked, this, &PlaylistDialog::shufflePlaylist);
     if (generateRandomButton) {
-        connect(generateRandomButton, &QPushButton::clicked, this,
-                &PlaylistDialog::generateRandomPlaylist);
+        connect(generateRandomButton, &QPushButton::clicked, this, &PlaylistDialog::generateRandomPlaylist);
     }
     connect(concatButton, &QPushButton::clicked, this, &PlaylistDialog::concatPlaylist);
     connect(saveButton, &QPushButton::clicked, this, &PlaylistDialog::savePlaylist);
@@ -228,13 +221,10 @@ void PlaylistDialog::loadShaders(const QStringList &shaderNames) {
         const QString normalizedName = QDir::fromNativeSeparators(name);
         shaderAliasToName.insert(normalizedName.toLower(), name);
         if (backend == acmx2::Backend::Acmxvk) {
-            if (normalizedName.endsWith(QStringLiteral(".spv"),
-                                        Qt::CaseInsensitive)) {
-                shaderAliasToName.insert(
-                    normalizedName.chopped(4).toLower(), name);
+            if (normalizedName.endsWith(QStringLiteral(".spv"), Qt::CaseInsensitive)) {
+                shaderAliasToName.insert(normalizedName.chopped(4).toLower(), name);
             } else {
-                shaderAliasToName.insert(
-                    (normalizedName + QStringLiteral(".spv")).toLower(), name);
+                shaderAliasToName.insert((normalizedName + QStringLiteral(".spv")).toLower(), name);
             }
         }
         QStandardItem *item = new QStandardItem(name);
@@ -247,16 +237,13 @@ void PlaylistDialog::loadShaders(const QStringList &shaderNames) {
     }
 }
 
-QString
-PlaylistDialog::resolvePlaylistShaderName(const QString &name) const {
+QString PlaylistDialog::resolvePlaylistShaderName(const QString &name) const {
     const QString key = QDir::fromNativeSeparators(name.trimmed()).toLower();
     return shaderAliasToName.value(key);
 }
 
-QString
-PlaylistDialog::runtimePlaylistShaderName(const QString &name) const {
-    if (backend == acmx2::Backend::Acmxvk &&
-        !name.endsWith(QStringLiteral(".spv"), Qt::CaseInsensitive)) {
+QString PlaylistDialog::runtimePlaylistShaderName(const QString &name) const {
+    if (backend == acmx2::Backend::Acmxvk && !name.endsWith(QStringLiteral(".spv"), Qt::CaseInsensitive)) {
         return name + QStringLiteral(".spv");
     }
     return name;
@@ -313,10 +300,7 @@ void PlaylistDialog::removeNode() {
     }
 
     if (node->childCount() > 0) {
-        auto reply = QMessageBox::question(this, "Remove Node",
-                                           "Node \"" + node->text(0) + "\" has " + QString::number(node->childCount()) +
-                                               " shader(s). Remove it and all its shaders?",
-                                           QMessageBox::Yes | QMessageBox::No);
+        auto reply = QMessageBox::question(this, "Remove Node", "Node \"" + node->text(0) + "\" has " + QString::number(node->childCount()) + " shader(s). Remove it and all its shaders?", QMessageBox::Yes | QMessageBox::No);
         if (reply != QMessageBox::Yes)
             return;
     }
@@ -408,9 +392,7 @@ void PlaylistDialog::moveDown() {
     }
 }
 
-void PlaylistDialog::clearAll() {
-    playlistTree->clear();
-}
+void PlaylistDialog::clearAll() { playlistTree->clear(); }
 
 void PlaylistDialog::shufflePlaylist() {
     int totalShaders = 0;
@@ -451,17 +433,14 @@ void PlaylistDialog::generateRandomPlaylist() {
     QSet<QString> seenShaders;
     for (const QString &shaderName : shaderNamesList) {
         const QString normalized = QDir::fromNativeSeparators(shaderName);
-        if (normalized.trimmed().isEmpty() ||
-            seenShaders.contains(normalized)) {
+        if (normalized.trimmed().isEmpty() || seenShaders.contains(normalized)) {
             continue;
         }
         seenShaders.insert(normalized);
         availableShaders.append(shaderName);
     }
     if (availableShaders.isEmpty()) {
-        QMessageBox::information(
-            this, "No Shaders",
-            "Load an ACMXVK shader library before generating a playlist.");
+        QMessageBox::information(this, "No Shaders", "Load an ACMXVK shader library before generating a playlist.");
         return;
     }
 
@@ -469,84 +448,63 @@ void PlaylistDialog::generateRandomPlaylist() {
     QDialog optionsDialog(this);
     optionsDialog.setWindowTitle("Generate Random ACMXVK Playlist");
     auto *layout = new QVBoxLayout(&optionsDialog);
-    auto *description = new QLabel(
-        "Each node receives a random selection of unique shaders from the "
-        "active library.",
-        &optionsDialog);
+    auto *description = new QLabel("Each node receives a random selection of unique shaders from the "
+                                   "active library.",
+                                   &optionsDialog);
     description->setWordWrap(true);
     layout->addWidget(description);
 
     auto *form = new QFormLayout();
     auto *nodeCount = new QSpinBox(&optionsDialog);
     nodeCount->setRange(1, MAX_PLAYLIST_NODES);
-    nodeCount->setValue(
-        appSettings.value("playlist/random_nodes", 100).toInt());
+    nodeCount->setValue(appSettings.value("playlist/random_nodes", 100).toInt());
     nodeCount->setSuffix(" nodes");
     form->addRow("Playlist nodes:", nodeCount);
 
     auto *maximumShaders = new QSpinBox(&optionsDialog);
-    maximumShaders->setRange(
-        1, std::min(static_cast<int>(availableShaders.size()),
-                    MAX_PLAYLIST_ENTRIES));
-    maximumShaders->setValue(std::min(
-        appSettings.value("playlist/random_max_shaders", 4).toInt(),
-        maximumShaders->maximum()));
+    maximumShaders->setRange(1, std::min(static_cast<int>(availableShaders.size()), MAX_PLAYLIST_ENTRIES));
+    maximumShaders->setValue(std::min(appSettings.value("playlist/random_max_shaders", 4).toInt(), maximumShaders->maximum()));
     maximumShaders->setSuffix(" shaders");
     form->addRow("Maximum per node:", maximumShaders);
 
     auto *fixedSeed = new QCheckBox("Use repeatable seed", &optionsDialog);
-    fixedSeed->setChecked(
-        appSettings.value("playlist/random_fixed_seed", false).toBool());
+    fixedSeed->setChecked(appSettings.value("playlist/random_fixed_seed", false).toBool());
     form->addRow(QString(), fixedSeed);
 
     auto *seedValue = new QSpinBox(&optionsDialog);
     seedValue->setRange(0, std::numeric_limits<int>::max());
-    seedValue->setValue(
-        appSettings.value("playlist/random_seed", 1).toInt());
+    seedValue->setValue(appSettings.value("playlist/random_seed", 1).toInt());
     seedValue->setEnabled(fixedSeed->isChecked());
     form->addRow("Seed:", seedValue);
     layout->addLayout(form);
 
-    auto *buttons = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &optionsDialog);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &optionsDialog);
     buttons->button(QDialogButtonBox::Ok)->setText("Generate");
     layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, &optionsDialog,
-            &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &optionsDialog,
-            &QDialog::reject);
-    connect(fixedSeed, &QCheckBox::toggled, seedValue,
-            &QWidget::setEnabled);
+    connect(buttons, &QDialogButtonBox::accepted, &optionsDialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &optionsDialog, &QDialog::reject);
+    connect(fixedSeed, &QCheckBox::toggled, seedValue, &QWidget::setEnabled);
     acmx2::applyCustomStyleIfEnabled(&optionsDialog);
 
     if (optionsDialog.exec() != QDialog::Accepted)
         return;
-    if (playlistTree->topLevelItemCount() > 0 &&
-        QMessageBox::question(
-            this, "Replace Playlist",
-            "Generating a random playlist will replace the current playlist "
-            "tree. Continue?",
-            QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes) {
+    if (playlistTree->topLevelItemCount() > 0 && QMessageBox::question(this,
+                                                                       "Replace Playlist",
+                                                                       "Generating a random playlist will replace the current playlist "
+                                                                       "tree. Continue?",
+                                                                       QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes) {
         return;
     }
 
     appSettings.setValue("playlist/random_nodes", nodeCount->value());
-    appSettings.setValue("playlist/random_max_shaders",
-                         maximumShaders->value());
-    appSettings.setValue("playlist/random_fixed_seed",
-                         fixedSeed->isChecked());
+    appSettings.setValue("playlist/random_max_shaders", maximumShaders->value());
+    appSettings.setValue("playlist/random_fixed_seed", fixedSeed->isChecked());
     appSettings.setValue("playlist/random_seed", seedValue->value());
 
     std::random_device seedSource;
-    const unsigned int seed =
-        fixedSeed->isChecked()
-            ? static_cast<unsigned int>(seedValue->value())
-            : std::uniform_int_distribution<unsigned int>(
-                  0U, static_cast<unsigned int>(
-                          std::numeric_limits<int>::max()))(seedSource);
+    const unsigned int seed = fixedSeed->isChecked() ? static_cast<unsigned int>(seedValue->value()) : std::uniform_int_distribution<unsigned int>(0U, static_cast<unsigned int>(std::numeric_limits<int>::max()))(seedSource);
     std::mt19937 randomGenerator(seed);
-    std::vector<int> shaderIndices(
-        static_cast<std::size_t>(availableShaders.size()));
+    std::vector<int> shaderIndices(static_cast<std::size_t>(availableShaders.size()));
     std::iota(shaderIndices.begin(), shaderIndices.end(), 0);
 
     playlistTree->setUpdatesEnabled(false);
@@ -555,36 +513,24 @@ void PlaylistDialog::generateRandomPlaylist() {
     for (int nodeIndex = 1; nodeIndex <= nodeCount->value(); ++nodeIndex) {
         const int remainingNodes = nodeCount->value() - nodeIndex;
         const int remainingCapacity = MAX_PLAYLIST_ENTRIES - totalEntries;
-        const int nodeMaximum =
-            std::min(maximumShaders->value(),
-                     remainingCapacity - remainingNodes);
-        const int shaderCount =
-            std::uniform_int_distribution<int>(1, nodeMaximum)(
-                randomGenerator);
+        const int nodeMaximum = std::min(maximumShaders->value(), remainingCapacity - remainingNodes);
+        const int shaderCount = std::uniform_int_distribution<int>(1, nodeMaximum)(randomGenerator);
 
-        for (int selectionIndex = 0; selectionIndex < shaderCount;
-             ++selectionIndex) {
-            const int swapIndex = std::uniform_int_distribution<int>(
-                selectionIndex,
-                static_cast<int>(shaderIndices.size()) - 1)(randomGenerator);
-            std::swap(shaderIndices[static_cast<std::size_t>(selectionIndex)],
-                      shaderIndices[static_cast<std::size_t>(swapIndex)]);
+        for (int selectionIndex = 0; selectionIndex < shaderCount; ++selectionIndex) {
+            const int swapIndex = std::uniform_int_distribution<int>(selectionIndex, static_cast<int>(shaderIndices.size()) - 1)(randomGenerator);
+            std::swap(shaderIndices[static_cast<std::size_t>(selectionIndex)], shaderIndices[static_cast<std::size_t>(swapIndex)]);
         }
 
         auto *node = new QTreeWidgetItem(playlistTree);
-        node->setText(0, QStringLiteral("Random %1")
-                             .arg(nodeIndex, 4, 10, QLatin1Char('0')));
+        node->setText(0, QStringLiteral("Random %1").arg(nodeIndex, 4, 10, QLatin1Char('0')));
         node->setFlags(node->flags() | Qt::ItemIsEditable);
         node->setExpanded(nodeCount->value() <= 100);
-        for (int selectionIndex = 0; selectionIndex < shaderCount;
-             ++selectionIndex) {
-            const QString &shaderName = availableShaders.at(
-                shaderIndices[static_cast<std::size_t>(selectionIndex)]);
+        for (int selectionIndex = 0; selectionIndex < shaderCount; ++selectionIndex) {
+            const QString &shaderName = availableShaders.at(shaderIndices[static_cast<std::size_t>(selectionIndex)]);
             auto *item = new QTreeWidgetItem(node);
             item->setText(0, shaderName);
             if (shaderNameToIndex.contains(shaderName)) {
-                item->setData(0, Qt::UserRole,
-                              shaderNameToIndex.value(shaderName));
+                item->setData(0, Qt::UserRole, shaderNameToIndex.value(shaderName));
             }
         }
         totalEntries += shaderCount;
@@ -592,19 +538,13 @@ void PlaylistDialog::generateRandomPlaylist() {
     playlistTree->setUpdatesEnabled(true);
     playlistFilePath.clear();
 
-    QMessageBox::information(
-        this, "Random Playlist Generated",
-        QStringLiteral("Created %1 nodes with %2 shader entries.\nSeed: %3")
-            .arg(nodeCount->value())
-            .arg(totalEntries)
-            .arg(seed));
+    QMessageBox::information(this, "Random Playlist Generated", QStringLiteral("Created %1 nodes with %2 shader entries.\nSeed: %3").arg(nodeCount->value()).arg(totalEntries).arg(seed));
 }
 
 void PlaylistDialog::concatPlaylist() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastPlaylistDir", "").toString();
-    QString filePath = QFileDialog::getOpenFileName(this, "Concat Playlist", lastDir,
-                                                    "Text Files (*.txt);;All Files (*)");
+    QString filePath = QFileDialog::getOpenFileName(this, "Concat Playlist", lastDir, "Text Files (*.txt);;All Files (*)");
     if (filePath.isEmpty())
         return;
 
@@ -649,8 +589,7 @@ void PlaylistDialog::concatPlaylist() {
             if (!shaderName.isEmpty()) {
                 auto *item = new QTreeWidgetItem(currentNode);
                 item->setText(0, shaderName);
-                item->setData(0, Qt::UserRole,
-                              shaderNameToIndex[shaderName]);
+                item->setData(0, Qt::UserRole, shaderNameToIndex[shaderName]);
                 ++loadedCount;
             } else {
                 ++skippedCount;
@@ -659,8 +598,7 @@ void PlaylistDialog::concatPlaylist() {
     }
     file.close();
 
-    QString msg = "Concatenated " + QString::number(loadedCount) + " shader(s) into " +
-                  QString::number(nodesAdded) + " node(s).";
+    QString msg = "Concatenated " + QString::number(loadedCount) + " shader(s) into " + QString::number(nodesAdded) + " node(s).";
     if (skippedCount > 0)
         msg += "\n" + QString::number(skippedCount) + " shader(s) not found and skipped.";
     QMessageBox::information(this, "Playlist Concatenated", msg);
@@ -695,8 +633,7 @@ void PlaylistDialog::savePlaylist() {
         QTreeWidgetItem *node = playlistTree->topLevelItem(i);
         out << "[" << node->text(0) << "]\n";
         for (int j = 0; j < node->childCount(); ++j) {
-            out << runtimePlaylistShaderName(node->child(j)->text(0))
-                << "\n";
+            out << runtimePlaylistShaderName(node->child(j)->text(0)) << "\n";
         }
     }
     file.close();
@@ -747,8 +684,7 @@ void PlaylistDialog::loadPlaylist() {
             if (!shaderName.isEmpty()) {
                 auto *item = new QTreeWidgetItem(currentNode);
                 item->setText(0, shaderName);
-                item->setData(0, Qt::UserRole,
-                              shaderNameToIndex[shaderName]);
+                item->setData(0, Qt::UserRole, shaderNameToIndex[shaderName]);
                 ++loadedCount;
             } else {
                 ++skippedCount;
@@ -798,17 +734,11 @@ QList<QPair<QString, QStringList>> PlaylistDialog::getPlaylistTree() const {
     return tree;
 }
 
-QString PlaylistDialog::getPlaylistFile() const {
-    return playlistFilePath;
-}
+QString PlaylistDialog::getPlaylistFile() const { return playlistFilePath; }
 
-int PlaylistDialog::getAutopilotFrames() const {
-    return autopilotFramesSpinBox ? autopilotFramesSpinBox->value() : 0;
-}
+int PlaylistDialog::getAutopilotFrames() const { return autopilotFramesSpinBox ? autopilotFramesSpinBox->value() : 0; }
 
-bool PlaylistDialog::isAutopilotRandom() const {
-    return autopilotRandomCheckBox ? autopilotRandomCheckBox->isChecked() : false;
-}
+bool PlaylistDialog::isAutopilotRandom() const { return autopilotRandomCheckBox ? autopilotRandomCheckBox->isChecked() : false; }
 
 void PlaylistDialog::setAutopilotFrames(int frames) {
     if (autopilotFramesSpinBox) {
@@ -824,9 +754,7 @@ void PlaylistDialog::setAutopilotRandom(bool enabled) {
     }
 }
 
-void PlaylistDialog::setEnabled(bool enabled) {
-    enableCheckBox->setChecked(enabled);
-}
+void PlaylistDialog::setEnabled(bool enabled) { enableCheckBox->setChecked(enabled); }
 
 void PlaylistDialog::setSelectedShaderNames(const QStringList &names) {
     playlistTree->clear();
@@ -843,8 +771,7 @@ void PlaylistDialog::setSelectedShaderNames(const QStringList &names) {
         if (!shaderName.isEmpty()) {
             auto *item = new QTreeWidgetItem(node);
             item->setText(0, shaderName);
-            item->setData(0, Qt::UserRole,
-                          shaderNameToIndex[shaderName]);
+            item->setData(0, Qt::UserRole, shaderNameToIndex[shaderName]);
         }
     }
 }
@@ -861,8 +788,7 @@ void PlaylistDialog::setPlaylistTree(const QList<QPair<QString, QStringList>> &t
             if (!shaderName.isEmpty()) {
                 auto *item = new QTreeWidgetItem(node);
                 item->setText(0, shaderName);
-                item->setData(0, Qt::UserRole,
-                              shaderNameToIndex[shaderName]);
+                item->setData(0, Qt::UserRole, shaderNameToIndex[shaderName]);
             }
         }
     }
@@ -899,14 +825,12 @@ void PlaylistDialog::setPlaylistFile(const QString &path) {
                         currentNode->setFlags(currentNode->flags() | Qt::ItemIsEditable);
                         currentNode->setExpanded(true);
                     } else if (currentNode) {
-                        const QString shaderName =
-                            resolvePlaylistShaderName(line);
+                        const QString shaderName = resolvePlaylistShaderName(line);
                         if (shaderName.isEmpty())
                             continue;
                         auto *item = new QTreeWidgetItem(currentNode);
                         item->setText(0, shaderName);
-                        item->setData(0, Qt::UserRole,
-                                      shaderNameToIndex[shaderName]);
+                        item->setData(0, Qt::UserRole, shaderNameToIndex[shaderName]);
                     }
                 }
                 file.close();
@@ -915,6 +839,4 @@ void PlaylistDialog::setPlaylistFile(const QString &path) {
     }
 }
 
-void PlaylistDialog::updateShaderList(const QStringList &shaderNames) {
-    loadShaders(shaderNames);
-}
+void PlaylistDialog::updateShaderList(const QStringList &shaderNames) { loadShaders(shaderNames); }

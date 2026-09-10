@@ -50,9 +50,7 @@ class UniformReferenceDialog;
 class MainWindow : public QMainWindow {
     Q_OBJECT
   public:
-    MainWindow(QWidget *parent = 0) : QMainWindow(parent) {
-        initControls();
-    }
+    MainWindow(QWidget *parent = 0) : QMainWindow(parent) { initControls(); }
     /// @brief Build menus, actions, widgets, and signal wiring.
     void initControls();
     /// @brief Append timestamped text to the UI log output.
@@ -130,15 +128,13 @@ class MainWindow : public QMainWindow {
                 hdr10Process->kill();
             }
         }
-        if (liveShaderCompileProcess &&
-            liveShaderCompileProcess->state() == QProcess::Running) {
+        if (liveShaderCompileProcess && liveShaderCompileProcess->state() == QProcess::Running) {
             liveShaderCompileProcess->terminate();
             if (!liveShaderCompileProcess->waitForFinished(5000)) {
                 liveShaderCompileProcess->kill();
             }
         }
-        if (editorPreviewProcess &&
-            editorPreviewProcess->state() == QProcess::Running) {
+        if (editorPreviewProcess && editorPreviewProcess->state() == QProcess::Running) {
             editorPreviewProcess->kill();
             editorPreviewProcess->waitForFinished(2000);
         }
@@ -156,10 +152,7 @@ class MainWindow : public QMainWindow {
     ///        recomputing Last Modified, Compile Health, and Type columns.
     void populateShaderTree();
     /// @brief Compile-health status for a single shader.
-    enum class CompileHealth { Unknown,
-                               Cached,
-                               Failed,
-                               Stale };
+    enum class CompileHealth { Unknown, Cached, Failed, Stale };
     /// @brief Cached map of shader stem -> failed flag for the current library.
     QHash<QString, bool> shaderCacheStatus;
     /// @brief Modification time of the shader cache file when last read.
@@ -173,8 +166,7 @@ class MainWindow : public QMainWindow {
     /// @brief Select the row at @p row and scroll it into view.
     void selectShaderRow(int row);
     /// @brief Open or focus an editor for a shader source location.
-    void openShaderEditor(const QString &filePath, int lineNumber = 1,
-                          int columnNumber = 0, int matchLength = 0);
+    void openShaderEditor(const QString &filePath, int lineNumber = 1, int columnNumber = 0, int matchLength = 0);
     /// @brief Validate, load, persist, and remember a shader library directory.
     bool loadLibraryPath(const QString &path);
     /// @brief Add a library directory to the persisted recent-libraries list.
@@ -187,16 +179,10 @@ class MainWindow : public QMainWindow {
     void update_backend_ui();
     /// @brief Return whether the active backend can be launched.
     bool backend_launch_available() const;
-    enum class PendingAcmxvkAction { None,
-                                     RunSelected,
-                                     RunAll,
-                                     CopyCommand };
-    enum class AcmxvkBuildMode { Strict,
-                                 Fix,
-                                 Prune };
+    enum class PendingAcmxvkAction { None, RunSelected, RunAll, CopyCommand };
+    enum class AcmxvkBuildMode { Strict, Fix, Prune };
     /// @brief Offer to rebuild a stale or incomplete ACMXVK source library.
-    void prompt_acmxvk_rebuild(const QString &reason,
-                               PendingAcmxvkAction resume_action);
+    void prompt_acmxvk_rebuild(const QString &reason, PendingAcmxvkAction resume_action);
     /// @brief Start a strict, failure-tolerant, or destructive ACMXVK build.
     void start_acmxvk_build(const QString &build_path, AcmxvkBuildMode mode);
     QMenu *fileMenu = nullptr;
@@ -208,8 +194,7 @@ class MainWindow : public QMainWindow {
     QMenu *listMenu = nullptr;
     QMenu *viewMenu = nullptr;
     QMenu *helpMenu = nullptr;
-    QAction *fileMenu_loadLibrary = nullptr, *fileMenu_prop = nullptr,
-            *fileMenu_exit = nullptr;
+    QAction *fileMenu_loadLibrary = nullptr, *fileMenu_prop = nullptr, *fileMenu_exit = nullptr;
     QAction *cameraSet = nullptr, *audioSet = nullptr;
     QAction *runMenu_select = nullptr, *runMenu_all = nullptr;
     QAction *runMenu_copyCommand = nullptr;
@@ -272,10 +257,7 @@ class MainWindow : public QMainWindow {
     /// @param resume_action Action to resume after an ACMXVK build, if needed.
     /// @param include_extra_arguments Append the persisted user arguments when true.
     /// @return true if arguments were built, false on user-facing error.
-    bool buildRunArguments(
-        QStringList &arguments,
-        PendingAcmxvkAction resume_action = PendingAcmxvkAction::None,
-        bool include_extra_arguments = true);
+    bool buildRunArguments(QStringList &arguments, PendingAcmxvkAction resume_action = PendingAcmxvkAction::None, bool include_extra_arguments = true);
     /// @brief Run ffmpeg to convert the just-produced acmx2 output (assumed
     ///        HLG HDR) into HDR10 (HEVC NVENC, BT.2020 / SMPTE2084) and pipe
     ///        ffmpeg's stdout/stderr to the main log window.
@@ -453,17 +435,12 @@ class MainWindow : public QMainWindow {
     void handleSavedShader(const QString &filePath);
     void queueAcmxvkLiveCompile(const QString &filePath);
     void startNextAcmxvkLiveCompile();
-    void queueAcmxvkEditorPreview(const QString &filePath,
-                                  const QString &source);
-    bool publishAcmx2EditorPreview(const QString &filePath,
-                                   const QString &source);
+    void queueAcmxvkEditorPreview(const QString &filePath, const QString &source);
+    bool publishAcmx2EditorPreview(const QString &filePath, const QString &source);
     void startNextAcmxvkEditorPreview();
-    void updateOpenEditorCompileStatus(const QString &sourcePath, bool pending,
-                                       bool success = false,
-                                       const QString &diagnostics = QString());
+    void updateOpenEditorCompileStatus(const QString &sourcePath, bool pending, bool success = false, const QString &diagnostics = QString());
     void updateOpenEditorShaderContexts();
-    void publishAcmxvkCompiledShaderReload(const QString &sourcePath,
-                                           const QString &runtimePath);
+    void publishAcmxvkCompiledShaderReload(const QString &sourcePath, const QString &runtimePath);
     void publishSelectedShaderIndexToRunningProcess();
     void publishShaderReloadToRunningProcess(const QString &filePath);
     void publishMultipassShadersToRunningProcess();

@@ -10,8 +10,7 @@
 #include <fstream>
 #include <sstream>
 
-MidiMapWindow::MidiMapWindow(QWidget *parent)
-    : QMainWindow(parent), midiIn(nullptr) {
+MidiMapWindow::MidiMapWindow(QWidget *parent) : QMainWindow(parent), midiIn(nullptr) {
     setupUi();
     applyStyleSheet();
     populateActions();
@@ -52,14 +51,12 @@ void MidiMapWindow::setupUi() {
     target_combo = new QComboBox(this);
     target_combo->addItem("ACMX2");
     target_combo->addItem("ACMXVK");
-    target_combo->setToolTip(
-        "Selects target-specific action names while preserving the shared "
-        ".midi_cfg file format.");
+    target_combo->setToolTip("Selects target-specific action names while preserving the shared "
+                             ".midi_cfg file format.");
     target_layout->addWidget(target_combo);
     mainLayout->addWidget(target_group);
 
-    connect(target_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MidiMapWindow::change_target);
+    connect(target_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MidiMapWindow::change_target);
 
     // --- Device section ---
     auto *deviceGroup = new QGroupBox("MIDI Device", this);
@@ -128,31 +125,30 @@ void MidiMapWindow::setupUi() {
 }
 
 void MidiMapWindow::applyStyleSheet() {
-    setStyleSheet(
-        "QMainWindow { background-color: rgb(0, 0, 0); }"
-        "* { color: white; font-family: 'Courier New', Courier, monospace; font-size: 13px; }"
-        "QGroupBox { border: 1px solid #444444; border-radius: 4px; margin-top: 8px; padding-top: 14px; font-weight: bold; color: white; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: white; }"
-        "QPushButton { border: 1px solid #555555; background-color: #1a1a1a; padding: 6px 14px; border-radius: 3px; font-weight: bold; color: white; }"
-        "QPushButton:hover { background-color: #333333; color: white; }"
-        "QPushButton:pressed { background-color: #555555; color: white; }"
-        "QPushButton:disabled { border: 1px solid #2a2a2a; color: #444444; background-color: #0d0d0d; }"
-        "QComboBox { border: 1px solid #555555; background-color: #1a1a1a; padding: 4px; color: white; selection-background-color: #444444; }"
-        "QComboBox::drop-down { border-left: 1px solid #555555; }"
-        "QComboBox QAbstractItemView { background-color: #1a1a1a; border: 1px solid #555555; selection-background-color: #444444; color: white; }"
-        "QLineEdit { border: 1px solid #555555; background-color: #1a1a1a; padding: 4px; color: white; selection-background-color: #444444; }"
-        "QTableWidget { background-color: black; color: white; font-size: 13px; gridline-color: #333333; border: 1px solid #444444; }"
-        "QTableWidget::item { padding: 4px; }"
-        "QTableWidget::item:selected { background-color: #444444; color: white; }"
-        "QHeaderView::section { background-color: #1a1a1a; border: 1px solid #444444; padding: 4px; font-weight: bold; color: white; }"
-        "QStatusBar { background-color: black; border-top: 1px solid #444444; color: lime; font-size: 13px; }"
-        "QLabel#midiMonitor { background-color: black; border: 1px solid #444444; padding: 6px; font-size: 14px; color: lime; }"
-        "QScrollBar:vertical { background: #0d0d0d; width: 12px; border: 1px solid #333333; }"
-        "QScrollBar::handle:vertical { background: #555555; min-height: 20px; border-radius: 3px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-        "QMessageBox { background-color: #1a1a1a; color: white; }"
-        "QMessageBox QLabel { color: white; }"
-        "QMessageBox QPushButton { min-width: 70px; }");
+    setStyleSheet("QMainWindow { background-color: rgb(0, 0, 0); }"
+                  "* { color: white; font-family: 'Courier New', Courier, monospace; font-size: 13px; }"
+                  "QGroupBox { border: 1px solid #444444; border-radius: 4px; margin-top: 8px; padding-top: 14px; font-weight: bold; color: white; }"
+                  "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: white; }"
+                  "QPushButton { border: 1px solid #555555; background-color: #1a1a1a; padding: 6px 14px; border-radius: 3px; font-weight: bold; color: white; }"
+                  "QPushButton:hover { background-color: #333333; color: white; }"
+                  "QPushButton:pressed { background-color: #555555; color: white; }"
+                  "QPushButton:disabled { border: 1px solid #2a2a2a; color: #444444; background-color: #0d0d0d; }"
+                  "QComboBox { border: 1px solid #555555; background-color: #1a1a1a; padding: 4px; color: white; selection-background-color: #444444; }"
+                  "QComboBox::drop-down { border-left: 1px solid #555555; }"
+                  "QComboBox QAbstractItemView { background-color: #1a1a1a; border: 1px solid #555555; selection-background-color: #444444; color: white; }"
+                  "QLineEdit { border: 1px solid #555555; background-color: #1a1a1a; padding: 4px; color: white; selection-background-color: #444444; }"
+                  "QTableWidget { background-color: black; color: white; font-size: 13px; gridline-color: #333333; border: 1px solid #444444; }"
+                  "QTableWidget::item { padding: 4px; }"
+                  "QTableWidget::item:selected { background-color: #444444; color: white; }"
+                  "QHeaderView::section { background-color: #1a1a1a; border: 1px solid #444444; padding: 4px; font-weight: bold; color: white; }"
+                  "QStatusBar { background-color: black; border-top: 1px solid #444444; color: lime; font-size: 13px; }"
+                  "QLabel#midiMonitor { background-color: black; border: 1px solid #444444; padding: 6px; font-size: 14px; color: lime; }"
+                  "QScrollBar:vertical { background: #0d0d0d; width: 12px; border: 1px solid #333333; }"
+                  "QScrollBar::handle:vertical { background: #555555; min-height: 20px; border-radius: 3px; }"
+                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+                  "QMessageBox { background-color: #1a1a1a; color: white; }"
+                  "QMessageBox QLabel { color: white; }"
+                  "QMessageBox QPushButton { min-width: 70px; }");
 }
 
 void MidiMapWindow::populateActions() {
@@ -288,8 +284,7 @@ void MidiMapWindow::change_target(int index) {
         return;
     }
 
-    const MidiTargetProfile next_profile =
-        index == 0 ? MidiTargetProfile::Acmx2 : MidiTargetProfile::Acmxvk;
+    const MidiTargetProfile next_profile = index == 0 ? MidiTargetProfile::Acmx2 : MidiTargetProfile::Acmxvk;
     if (next_profile == target_profile) {
         return;
     }
@@ -301,10 +296,8 @@ void MidiMapWindow::change_target(int index) {
         captureButton->setEnabled(deviceOpen);
     }
 
-    const std::size_t previous_profile_index =
-        target_profile == MidiTargetProfile::Acmx2 ? 0U : 1U;
-    const std::size_t next_profile_index =
-        next_profile == MidiTargetProfile::Acmx2 ? 0U : 1U;
+    const std::size_t previous_profile_index = target_profile == MidiTargetProfile::Acmx2 ? 0U : 1U;
+    const std::size_t next_profile_index = next_profile == MidiTargetProfile::Acmx2 ? 0U : 1U;
     profile_mappings[previous_profile_index] = mappings;
     const std::vector<MidiMapping> previous_mappings = mappings;
     target_profile = next_profile;
@@ -312,20 +305,11 @@ void MidiMapWindow::change_target(int index) {
     if (profile_mappings[next_profile_index].empty()) {
         populateActions();
         for (MidiMapping &mapping : mappings) {
-            const bool target_specific_meaning =
-                mapping.key2 == 0 &&
-                (mapping.key1 == 53 || mapping.key1 == 70 ||
-                 mapping.key1 == 91 || mapping.key1 == 93);
+            const bool target_specific_meaning = mapping.key2 == 0 && (mapping.key1 == 53 || mapping.key1 == 70 || mapping.key1 == 91 || mapping.key1 == 93);
             if (target_specific_meaning) {
                 continue;
             }
-            const auto previous = std::find_if(
-                previous_mappings.begin(), previous_mappings.end(),
-                [&](const MidiMapping &candidate) {
-                    return candidate.captured &&
-                           candidate.key1 == mapping.key1 &&
-                           candidate.key2 == mapping.key2;
-                });
+            const auto previous = std::find_if(previous_mappings.begin(), previous_mappings.end(), [&](const MidiMapping &candidate) { return candidate.captured && candidate.key1 == mapping.key1 && candidate.key2 == mapping.key2; });
             if (previous == previous_mappings.end()) {
                 continue;
             }
@@ -339,8 +323,7 @@ void MidiMapWindow::change_target(int index) {
         mappings = profile_mappings[next_profile_index];
     }
 
-    const QString target_name =
-        target_profile == MidiTargetProfile::Acmx2 ? "ACMX2" : "ACMXVK";
+    const QString target_name = target_profile == MidiTargetProfile::Acmx2 ? "ACMX2" : "ACMXVK";
     setWindowTitle(target_name + " MIDI Map Configuration");
     updateTable();
     setStatus(QString("%1 profile selected — %2 actions available; shared "
@@ -356,9 +339,7 @@ void MidiMapWindow::updateTable() {
         table->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(m.actionName)));
         table->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(m.description)));
 
-        QString keys = (m.key2 != 0)
-                           ? QString("%1:%2").arg(m.key1).arg(m.key2)
-                           : QString("%1:0").arg(m.key1);
+        QString keys = (m.key2 != 0) ? QString("%1:%2").arg(m.key1).arg(m.key2) : QString("%1:0").arg(m.key1);
         table->setItem(i, 2, new QTableWidgetItem(keys));
 
         if (m.captured) {
@@ -419,15 +400,15 @@ void MidiMapWindow::openDevice(int index) {
         pollTimer->start(10);
         setStatus(QString("Opened: %1").arg(deviceCombo->currentText()));
     } catch (RtMidiError &e) {
-        QMessageBox::critical(this, "Error",
-                              QString("Could not open port: %1").arg(e.getMessage().c_str()));
+        QMessageBox::critical(this, "Error", QString("Could not open port: %1").arg(e.getMessage().c_str()));
         setStatus("Failed to open device");
     }
 }
 
 void MidiMapWindow::captureMapping() {
     if (!deviceOpen) {
-        QMessageBox::warning(this, "No Device",
+        QMessageBox::warning(this,
+                             "No Device",
                              "Please select and open a MIDI device first.\n"
                              "Click a device in the dropdown to connect.");
         return;
@@ -435,7 +416,8 @@ void MidiMapWindow::captureMapping() {
 
     int row = table->currentRow();
     if (row < 0 || row >= static_cast<int>(mappings.size())) {
-        QMessageBox::information(this, "Select Action",
+        QMessageBox::information(this,
+                                 "Select Action",
                                  "Select a row in the table, then click Capture.\n"
                                  "Move a knob or press a button on your MIDI controller.");
         return;
@@ -443,8 +425,7 @@ void MidiMapWindow::captureMapping() {
 
     capturing = true;
     captureRow = row;
-    setStatus(QString("Waiting for MIDI input for: %1 — move a knob or press a button...")
-                  .arg(QString::fromStdString(mappings[row].actionName)));
+    setStatus(QString("Waiting for MIDI input for: %1 — move a knob or press a button...").arg(QString::fromStdString(mappings[row].actionName)));
     captureButton->setText("Listening...");
     captureButton->setEnabled(false);
 }
@@ -452,8 +433,7 @@ void MidiMapWindow::captureMapping() {
 void MidiMapWindow::clearMapping() {
     int row = table->currentRow();
     if (row < 0 || row >= static_cast<int>(mappings.size())) {
-        QMessageBox::information(this, "Select Action",
-                                 "Select a row in the table to clear its mapping.");
+        QMessageBox::information(this, "Select Action", "Select a row in the table to clear its mapping.");
         return;
     }
 
@@ -476,11 +456,7 @@ void MidiMapWindow::pollMidi() {
     if (message.size() < 3)
         return;
 
-    midiMonitorLabel->setText(QString("Last MIDI: [%1 %2 %3]  (ch %4)")
-                                  .arg(message[0])
-                                  .arg(message[1])
-                                  .arg(message[2])
-                                  .arg((message[0] & 0x0F) + 1));
+    midiMonitorLabel->setText(QString("Last MIDI: [%1 %2 %3]  (ch %4)").arg(message[0]).arg(message[1]).arg(message[2]).arg((message[0] & 0x0F) + 1));
 
     if (capturing && captureRow >= 0 && captureRow < static_cast<int>(mappings.size())) {
         mappings[captureRow].byte0 = message[0];
@@ -496,18 +472,9 @@ void MidiMapWindow::pollMidi() {
 
         QString statusMsg;
         if (mappings[captureRow].key2 != 0) {
-            statusMsg = QString("Captured knob CC [%1 %2] for: %3 — value >64 = %4, <=64 = %5")
-                            .arg(message[0])
-                            .arg(message[1])
-                            .arg(QString::fromStdString(mappings[captureRow].actionName))
-                            .arg(QString::fromStdString(mappings[captureRow].actionName).split('/').first().trimmed())
-                            .arg(QString::fromStdString(mappings[captureRow].actionName).split('/').last().trimmed());
+            statusMsg = QString("Captured knob CC [%1 %2] for: %3 — value >64 = %4, <=64 = %5").arg(message[0]).arg(message[1]).arg(QString::fromStdString(mappings[captureRow].actionName)).arg(QString::fromStdString(mappings[captureRow].actionName).split('/').first().trimmed()).arg(QString::fromStdString(mappings[captureRow].actionName).split('/').last().trimmed());
         } else {
-            statusMsg = QString("Captured [%1 %2 %3] for: %4")
-                            .arg(message[0])
-                            .arg(message[1])
-                            .arg(message[2])
-                            .arg(QString::fromStdString(mappings[captureRow].actionName));
+            statusMsg = QString("Captured [%1 %2 %3] for: %4").arg(message[0]).arg(message[1]).arg(message[2]).arg(QString::fromStdString(mappings[captureRow].actionName));
         }
         setStatus(statusMsg);
 
@@ -519,8 +486,7 @@ void MidiMapWindow::pollMidi() {
 }
 
 void MidiMapWindow::saveConfig() {
-    QString fileName = QFileDialog::getSaveFileName(this, "Save MIDI Config",
-                                                    fileEdit->text(), "MIDI Config (*.midi_cfg);;All Files (*)");
+    QString fileName = QFileDialog::getSaveFileName(this, "Save MIDI Config", fileEdit->text(), "MIDI Config (*.midi_cfg);;All Files (*)");
     if (fileName.isEmpty())
         return;
 
@@ -534,10 +500,7 @@ void MidiMapWindow::saveConfig() {
     for (const auto &m : mappings) {
         if (!m.captured)
             continue;
-        file << m.key1 << ":" << m.key2 << " {"
-             << static_cast<int>(m.byte0) << " "
-             << static_cast<int>(m.byte1) << " "
-             << static_cast<int>(m.byte2) << "}\n";
+        file << m.key1 << ":" << m.key2 << " {" << static_cast<int>(m.byte0) << " " << static_cast<int>(m.byte1) << " " << static_cast<int>(m.byte2) << "}\n";
         ++count;
     }
     file.close();
@@ -546,8 +509,7 @@ void MidiMapWindow::saveConfig() {
 }
 
 void MidiMapWindow::loadConfig() {
-    QString fileName = QFileDialog::getOpenFileName(this, "Load MIDI Config",
-                                                    fileEdit->text(), "MIDI Config (*.midi_cfg);;All Files (*)");
+    QString fileName = QFileDialog::getOpenFileName(this, "Load MIDI Config", fileEdit->text(), "MIDI Config (*.midi_cfg);;All Files (*)");
     if (fileName.isEmpty())
         return;
 
@@ -606,6 +568,4 @@ void MidiMapWindow::loadConfig() {
     setStatus(QString("Loaded %1 mapping(s) from %2").arg(loaded).arg(fileName));
 }
 
-void MidiMapWindow::setStatus(const QString &msg) {
-    statusBar()->showMessage(msg);
-}
+void MidiMapWindow::setStatus(const QString &msg) { statusBar()->showMessage(msg); }

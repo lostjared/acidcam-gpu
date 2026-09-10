@@ -27,15 +27,13 @@ namespace {
     constexpr int MAX_RESULTS = 10000;
 } // namespace
 
-FindShaderDialog::FindShaderDialog(const QString &shaderPath, QWidget *parent)
-    : QDialog(parent), shaderPath(QFileInfo(shaderPath).absoluteFilePath()) {
+FindShaderDialog::FindShaderDialog(const QString &shaderPath, QWidget *parent) : QDialog(parent), shaderPath(QFileInfo(shaderPath).absoluteFilePath()) {
     setWindowTitle(tr("Find in Shader Files"));
     setAttribute(Qt::WA_DeleteOnClose);
     setModal(false);
 
     auto *layout = new QVBoxLayout(this);
-    layout->addWidget(new QLabel(
-        tr("Search the active shader library using a regular expression:"), this));
+    layout->addWidget(new QLabel(tr("Search the active shader library using a regular expression:"), this));
     auto *pathLabel = new QLabel(tr("Library: %1").arg(this->shaderPath), this);
     pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     layout->addWidget(pathLabel);
@@ -55,8 +53,7 @@ FindShaderDialog::FindShaderDialog(const QString &shaderPath, QWidget *parent)
 
     resultsTree = new QTreeWidget(this);
     resultsTree->setColumnCount(4);
-    resultsTree->setHeaderLabels(
-        {tr("Shader"), tr("Line"), tr("Match"), tr("Source")});
+    resultsTree->setHeaderLabels({tr("Shader"), tr("Line"), tr("Match"), tr("Source")});
     resultsTree->setRootIsDecorated(false);
     resultsTree->setAlternatingRowColors(false);
     resultsTree->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -78,21 +75,14 @@ FindShaderDialog::FindShaderDialog(const QString &shaderPath, QWidget *parent)
 
     connect(searchButton, &QPushButton::clicked, this, &FindShaderDialog::performSearch);
     connect(patternEdit, &QLineEdit::returnPressed, this, &FindShaderDialog::performSearch);
-    connect(patternEdit, &QLineEdit::textChanged, this, [this]() {
-        statusLabel->clear();
-    });
-    connect(resultsTree, &QTreeWidget::itemSelectionChanged,
-            this, &FindShaderDialog::updateOpenButton);
-    connect(resultsTree, &QTreeWidget::itemActivated,
-            this, [this](QTreeWidgetItem *item, int) { openResult(item); });
-    connect(openButton, &QPushButton::clicked, this, [this]() {
-        openResult(resultsTree->currentItem());
-    });
+    connect(patternEdit, &QLineEdit::textChanged, this, [this]() { statusLabel->clear(); });
+    connect(resultsTree, &QTreeWidget::itemSelectionChanged, this, &FindShaderDialog::updateOpenButton);
+    connect(resultsTree, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem *item, int) { openResult(item); });
+    connect(openButton, &QPushButton::clicked, this, [this]() { openResult(resultsTree->currentItem()); });
     connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::close);
 
     QSettings settings("LostSideDead");
-    caseSensitiveCheck->setChecked(
-        settings.value("findInFiles/caseSensitive", false).toBool());
+    caseSensitiveCheck->setChecked(settings.value("findInFiles/caseSensitive", false).toBool());
     if (!restoreGeometry(settings.value("findInFiles/geometry").toByteArray()))
         resize(950, 600);
     patternEdit->setFocus();
@@ -118,10 +108,7 @@ void FindShaderDialog::performSearch() {
         options |= QRegularExpression::CaseInsensitiveOption;
     const QRegularExpression expression(pattern, options);
     if (!expression.isValid()) {
-        statusLabel->setText(
-            tr("Invalid regular expression at position %1: %2")
-                .arg(expression.patternErrorOffset())
-                .arg(expression.errorString()));
+        statusLabel->setText(tr("Invalid regular expression at position %1: %2").arg(expression.patternErrorOffset()).arg(expression.errorString()));
         return;
     }
 
@@ -133,8 +120,7 @@ void FindShaderDialog::performSearch() {
     resultsTree->setSortingEnabled(false);
 
     const QStringList filters = {"*.glsl", "*.frag", "*.vert", "*.comp"};
-    QDirIterator files(shaderPath, filters, QDir::Files | QDir::Readable,
-                       QDirIterator::Subdirectories);
+    QDirIterator files(shaderPath, filters, QDir::Files | QDir::Readable, QDirIterator::Subdirectories);
     int fileCount = 0;
     int resultCount = 0;
     bool limitReached = false;
@@ -158,9 +144,7 @@ void FindShaderDialog::performSearch() {
                 auto *item = new QTreeWidgetItem(resultsTree);
                 item->setText(0, root.relativeFilePath(filePath));
                 item->setText(1, QString::number(lineNumber));
-                item->setText(2, match.captured(0).isEmpty()
-                                     ? tr("(zero-length match)")
-                                     : match.captured(0));
+                item->setText(2, match.captured(0).isEmpty() ? tr("(zero-length match)") : match.captured(0));
                 item->setText(3, line.trimmed());
                 item->setData(0, FILE_PATH_ROLE, QFileInfo(filePath).absoluteFilePath());
                 item->setData(0, LINE_NUMBER_ROLE, lineNumber);
@@ -180,28 +164,16 @@ void FindShaderDialog::performSearch() {
     QApplication::restoreOverrideCursor();
 
     if (limitReached) {
-        statusLabel->setText(
-            tr("Showing the first %1 matches from %2 shader files.")
-                .arg(resultCount)
-                .arg(fileCount));
+        statusLabel->setText(tr("Showing the first %1 matches from %2 shader files.").arg(resultCount).arg(fileCount));
     } else {
-        statusLabel->setText(
-            tr("Found %1 match(es) in %2 shader file(s).")
-                .arg(resultCount)
-                .arg(fileCount));
+        statusLabel->setText(tr("Found %1 match(es) in %2 shader file(s).").arg(resultCount).arg(fileCount));
     }
 }
 
 void FindShaderDialog::openResult(QTreeWidgetItem *item) {
     if (!item)
         return;
-    emit resultActivated(
-        item->data(0, FILE_PATH_ROLE).toString(),
-        item->data(0, LINE_NUMBER_ROLE).toInt(),
-        item->data(0, COLUMN_NUMBER_ROLE).toInt(),
-        item->data(0, MATCH_LENGTH_ROLE).toInt());
+    emit resultActivated(item->data(0, FILE_PATH_ROLE).toString(), item->data(0, LINE_NUMBER_ROLE).toInt(), item->data(0, COLUMN_NUMBER_ROLE).toInt(), item->data(0, MATCH_LENGTH_ROLE).toInt());
 }
 
-void FindShaderDialog::updateOpenButton() {
-    openButton->setEnabled(resultsTree->currentItem() != nullptr);
-}
+void FindShaderDialog::updateOpenButton() { openButton->setEnabled(resultsTree->currentItem() != nullptr); }

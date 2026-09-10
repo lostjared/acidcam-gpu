@@ -22,8 +22,7 @@ class LibraryBuilderDialog : public QDialog {
     Q_OBJECT
 
   public:
-    explicit LibraryBuilderDialog(acmx2::Backend backend,
-                                  QWidget *parent = nullptr);
+    explicit LibraryBuilderDialog(acmx2::Backend backend, QWidget *parent = nullptr);
     /// @brief Return the backend whose source format this dialog exports.
     acmx2::Backend selectedBackend() const;
 

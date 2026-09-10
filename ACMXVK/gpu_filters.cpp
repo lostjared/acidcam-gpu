@@ -14,15 +14,13 @@ namespace acmxvk::gpu {
     namespace {
         void check_cuda(cudaError_t result, const std::string &operation) {
             if (result != cudaSuccess) {
-                throw std::runtime_error(operation + ": " +
-                                         cudaGetErrorString(result));
+                throw std::runtime_error(operation + ": " + cudaGetErrorString(result));
             }
         }
 
         int validate_frame_buffer_size(int frame_buffer_size) {
             if (frame_buffer_size < 4 || frame_buffer_size > 32) {
-                throw std::runtime_error(
-                    "GPU frame buffer must be between 4 and 32");
+                throw std::runtime_error("GPU frame buffer must be between 4 and 32");
             }
             return frame_buffer_size;
         }
@@ -30,24 +28,16 @@ namespace acmxvk::gpu {
 
     class FilterEngine::Impl {
       public:
-        Impl(std::vector<int> filter_indices, int frame_buffer_size)
-            : frame_buffer(std::make_unique<ac_gpu::DynamicFrameBuffer>(
-                  validate_frame_buffer_size(frame_buffer_size))) {
+        Impl(std::vector<int> filter_indices, int frame_buffer_size) : frame_buffer(std::make_unique<ac_gpu::DynamicFrameBuffer>(validate_frame_buffer_size(frame_buffer_size))) {
             FilterEngine::validate_filter_indices(filter_indices);
             for (int index : filter_indices) {
                 filters.push_back({index, ac_gpu::filters[index].name});
             }
 
-            check_cuda(cudaMalloc(&device_frame_pointers,
-                                  static_cast<std::size_t>(frame_buffer_size) *
-                                      sizeof(unsigned char *)),
-                       "could not allocate CUDA frame-pointer list");
-            std::cout << "acmxvk: CUDA filter chain (" << filters.size()
-                      << " filters, " << frame_buffer_size
-                      << " history frames):\n";
+            check_cuda(cudaMalloc(&device_frame_pointers, static_cast<std::size_t>(frame_buffer_size) * sizeof(unsigned char *)), "could not allocate CUDA frame-pointer list");
+            std::cout << "acmxvk: CUDA filter chain (" << filters.size() << " filters, " << frame_buffer_size << " history frames):\n";
             for (const ac_gpu::Filter &filter : filters) {
-                std::cout << "  " << filter.index << ": " << filter.name
-                          << '\n';
+                std::cout << "  " << filter.index << ": " << filter.name << '\n';
             }
         }
 
@@ -68,8 +58,7 @@ namespace acmxvk::gpu {
             return process_current_frame();
         }
 
-        [[nodiscard]] bool process(const cv::cuda::GpuMat &rgba,
-                                   cv::cuda::Stream &source_stream) {
+        [[nodiscard]] bool process(const cv::cuda::GpuMat &rgba, cv::cuda::Stream &source_stream) {
             if (rgba.empty() || rgba.type() != CV_8UC4) {
                 return false;
             }
@@ -79,38 +68,15 @@ namespace acmxvk::gpu {
         }
 
         [[nodiscard]] bool process_current_frame() {
-            if (working_buffer.empty() ||
-                working_buffer.cols != frame_buffer->w ||
-                working_buffer.rows != frame_buffer->h) {
-                working_buffer.create(frame_buffer->h, frame_buffer->w,
-                                      CV_8UC4);
+            if (working_buffer.empty() || working_buffer.cols != frame_buffer->w || working_buffer.rows != frame_buffer->h) {
+                working_buffer.create(frame_buffer->h, frame_buffer->w, CV_8UC4);
             }
 
             update_parameters();
-            check_cuda(
-                cudaMemcpy(device_frame_pointers,
-                           frame_buffer->getDeviceFramePointers(),
-                           static_cast<std::size_t>(frame_buffer->arraySize) *
-                               sizeof(unsigned char *),
-                           cudaMemcpyHostToDevice),
-                "could not upload CUDA frame-pointer list");
-            check_cuda(
-                cudaMemcpy2D(
-                    working_buffer.ptr<unsigned char>(), working_buffer.step,
-                    frame_buffer->deviceFrames.back().ptr<unsigned char>(),
-                    frame_buffer->framePitch,
-                    static_cast<std::size_t>(frame_buffer->w) * 4U,
-                    static_cast<std::size_t>(frame_buffer->h),
-                    cudaMemcpyDeviceToDevice),
-                "could not prepare CUDA filter frame");
+            check_cuda(cudaMemcpy(device_frame_pointers, frame_buffer->getDeviceFramePointers(), static_cast<std::size_t>(frame_buffer->arraySize) * sizeof(unsigned char *), cudaMemcpyHostToDevice), "could not upload CUDA frame-pointer list");
+            check_cuda(cudaMemcpy2D(working_buffer.ptr<unsigned char>(), working_buffer.step, frame_buffer->deviceFrames.back().ptr<unsigned char>(), frame_buffer->framePitch, static_cast<std::size_t>(frame_buffer->w) * 4U, static_cast<std::size_t>(frame_buffer->h), cudaMemcpyDeviceToDevice), "could not prepare CUDA filter frame");
 
-            launch_filter(filters.data(), filters.size(),
-                          working_buffer.ptr<unsigned char>(),
-                          device_frame_pointers, frame_buffer->arraySize,
-                          working_buffer.cols, working_buffer.rows,
-                          working_buffer.step, alpha, false, square_size,
-                          frame_index, frame_direction, &device_filter_list,
-                          filters_changed);
+            launch_filter(filters.data(), filters.size(), working_buffer.ptr<unsigned char>(), device_frame_pointers, frame_buffer->arraySize, working_buffer.cols, working_buffer.rows, working_buffer.step, alpha, false, square_size, frame_index, frame_direction, &device_filter_list, filters_changed);
             filters_changed = false;
             return true;
         }
@@ -123,13 +89,10 @@ namespace acmxvk::gpu {
             const int step = direction < 0 ? -1 : 1;
             const int filter_count = ac_gpu::AC_FILTER_MAX;
             const int current_index = filters.front().index;
-            const int next_index =
-                (current_index + step + filter_count) % filter_count;
-            filters.assign(
-                1, {next_index, ac_gpu::filters[next_index].name});
+            const int next_index = (current_index + step + filter_count) % filter_count;
+            filters.assign(1, {next_index, ac_gpu::filters[next_index].name});
             filters_changed = true;
-            std::cout << "acmxvk: CUDA filter: " << filters.front().name
-                      << " [" << next_index << "]\n";
+            std::cout << "acmxvk: CUDA filter: " << filters.front().name << " [" << next_index << "]\n";
             return true;
         }
 
@@ -180,88 +143,58 @@ namespace acmxvk::gpu {
         int frame_direction = 1;
     };
 
-    FilterEngine::FilterEngine(std::vector<int> filter_indices,
-                               int frame_buffer_size)
-        : impl(std::make_unique<Impl>(std::move(filter_indices),
-                                      frame_buffer_size)) {}
+    FilterEngine::FilterEngine(std::vector<int> filter_indices, int frame_buffer_size) : impl(std::make_unique<Impl>(std::move(filter_indices), frame_buffer_size)) {}
 
     FilterEngine::~FilterEngine() = default;
 
-    bool FilterEngine::process(const cv::Mat &rgba) {
-        return impl->process(rgba);
-    }
+    bool FilterEngine::process(const cv::Mat &rgba) { return impl->process(rgba); }
 
-    bool FilterEngine::process(const cv::cuda::GpuMat &rgba,
-                               cv::cuda::Stream &source_stream) {
-        return impl->process(rgba, source_stream);
-    }
+    bool FilterEngine::process(const cv::cuda::GpuMat &rgba, cv::cuda::Stream &source_stream) { return impl->process(rgba, source_stream); }
 
-    bool FilterEngine::select_relative_filter(int direction) {
-        return impl->select_relative_filter(direction);
-    }
+    bool FilterEngine::select_relative_filter(int direction) { return impl->select_relative_filter(direction); }
 
-    std::string FilterEngine::active_filter_description() const {
-        return impl->active_filter_description();
-    }
+    std::string FilterEngine::active_filter_description() const { return impl->active_filter_description(); }
 
-    const cv::cuda::GpuMat &FilterEngine::output() const {
-        return impl->working_buffer;
-    }
+    const cv::cuda::GpuMat &FilterEngine::output() const { return impl->working_buffer; }
 
-    cv::cuda::Stream &FilterEngine::stream() {
-        return impl->upload_stream;
-    }
+    cv::cuda::Stream &FilterEngine::stream() { return impl->upload_stream; }
 
     void FilterEngine::select_device(int device_index) {
         int device_count = 0;
-        check_cuda(cudaGetDeviceCount(&device_count),
-                   "could not enumerate CUDA devices");
+        check_cuda(cudaGetDeviceCount(&device_count), "could not enumerate CUDA devices");
         if (device_index < 0 || device_index >= device_count) {
-            throw std::runtime_error(
-                "CUDA device index must be between 0 and " +
-                std::to_string(std::max(device_count - 1, 0)));
+            throw std::runtime_error("CUDA device index must be between 0 and " + std::to_string(std::max(device_count - 1, 0)));
         }
         check_cuda(cudaSetDevice(device_index), "could not select CUDA device");
         const cv::cuda::DeviceInfo device(device_index);
-        std::cout << "acmxvk: CUDA device " << device_index << ": "
-                  << device.name() << '\n';
+        std::cout << "acmxvk: CUDA device " << device_index << ": " << device.name() << '\n';
     }
 
-    void FilterEngine::validate_filter_indices(
-        const std::vector<int> &filter_indices) {
+    void FilterEngine::validate_filter_indices(const std::vector<int> &filter_indices) {
         if (filter_indices.empty()) {
             throw std::runtime_error("CUDA filter list cannot be empty");
         }
         for (int index : filter_indices) {
             if (index < 0 || index >= ac_gpu::AC_FILTER_MAX) {
-                throw std::runtime_error(
-                    "CUDA filter index must be between 0 and " +
-                    std::to_string(ac_gpu::AC_FILTER_MAX - 1) + ": " +
-                    std::to_string(index));
+                throw std::runtime_error("CUDA filter index must be between 0 and " + std::to_string(ac_gpu::AC_FILTER_MAX - 1) + ": " + std::to_string(index));
             }
         }
     }
 
     void FilterEngine::list_devices(std::ostream &output_stream) {
         int device_count = 0;
-        check_cuda(cudaGetDeviceCount(&device_count),
-                   "could not enumerate CUDA devices");
-        output_stream << "acmxvk: found " << device_count
-                      << " CUDA device(s)\n";
+        check_cuda(cudaGetDeviceCount(&device_count), "could not enumerate CUDA devices");
+        output_stream << "acmxvk: found " << device_count << " CUDA device(s)\n";
         for (int index = 0; index < device_count; ++index) {
             const cv::cuda::DeviceInfo device(index);
-            output_stream << "  " << index << ": " << device.name() << " ("
-                          << (device.totalMemory() / (1024U * 1024U))
-                          << " MiB)\n";
+            output_stream << "  " << index << ": " << device.name() << " (" << (device.totalMemory() / (1024U * 1024U)) << " MiB)\n";
         }
     }
 
     void FilterEngine::list_filters(std::ostream &output_stream) {
-        output_stream << "acmxvk: found " << ac_gpu::AC_FILTER_MAX
-                      << " CUDA filter(s)\n";
+        output_stream << "acmxvk: found " << ac_gpu::AC_FILTER_MAX << " CUDA filter(s)\n";
         for (int index = 0; index < ac_gpu::AC_FILTER_MAX; ++index) {
-            output_stream << "  " << index << ": "
-                          << ac_gpu::filters[index].name << '\n';
+            output_stream << "  " << index << ": " << ac_gpu::filters[index].name << '\n';
         }
     }
 

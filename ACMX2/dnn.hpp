@@ -56,8 +56,7 @@ namespace ac_dnn {
     class PPHS {
       public:
         // Passing -1/-1 enables the one-time automatic CPU/CUDA benchmark.
-        explicit PPHS(const std::string &modelPath,
-                      int backendId = -1, int targetId = -1);
+        explicit PPHS(const std::string &modelPath, int backendId = -1, int targetId = -1);
         ~PPHS();
 
         PPHS(const PPHS &) = delete;
@@ -72,10 +71,8 @@ namespace ac_dnn {
         std::unique_ptr<Impl> impl;
     };
 
-    cv::Mat isolateBody(const cv::Mat &image, const cv::Mat &mask,
-                        float blackPoint = 0.35f, float whitePoint = 0.75f);
-    cv::Mat hardenedAlphaMask(const cv::Mat &image, const cv::Mat &mask,
-                              float blackPoint = 0.35f, float whitePoint = 0.75f);
+    cv::Mat isolateBody(const cv::Mat &image, const cv::Mat &mask, float blackPoint = 0.35f, float whitePoint = 0.75f);
+    cv::Mat hardenedAlphaMask(const cv::Mat &image, const cv::Mat &mask, float blackPoint = 0.35f, float whitePoint = 0.75f);
 
 } // namespace ac_dnn
 

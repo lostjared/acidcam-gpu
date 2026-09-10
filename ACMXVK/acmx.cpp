@@ -35,10 +35,7 @@
 int main(int argc, char **argv) {
     try {
         for (int index = 1; index < argc; ++index) {
-            if (argv[index] != nullptr &&
-                (std::string_view(argv[index]) == "--unbuffered" ||
-                 std::string_view(argv[index]) == "--silent" ||
-                 std::string_view(argv[index]) == "--headless")) {
+            if (argv[index] != nullptr && (std::string_view(argv[index]) == "--unbuffered" || std::string_view(argv[index]) == "--silent" || std::string_view(argv[index]) == "--headless")) {
                 std::cout << std::unitbuf;
                 std::cerr << std::unitbuf;
                 break;
@@ -53,15 +50,10 @@ int main(int argc, char **argv) {
             return acmxvk::buildShaderLibrary(options);
         }
         if (options.enumerate_camera_device >= 0) {
-            return acmxvk::probeCameraDevice(options.enumerate_camera_device,
-                                             std::cout, std::cerr)
-                       ? EXIT_SUCCESS
-                       : EXIT_FAILURE;
+            return acmxvk::probeCameraDevice(options.enumerate_camera_device, std::cout, std::cerr) ? EXIT_SUCCESS : EXIT_FAILURE;
         }
         if (options.list_camera_devices) {
-            return acmxvk::listCameraDevices(std::cout, std::cerr)
-                       ? EXIT_SUCCESS
-                       : EXIT_FAILURE;
+            return acmxvk::listCameraDevices(std::cout, std::cerr) ? EXIT_SUCCESS : EXIT_FAILURE;
         }
         if (options.check_audio) {
 #ifdef AUDIO_ENABLED
@@ -102,20 +94,7 @@ int main(int argc, char **argv) {
         }
         if (options.check_deep_dream) {
 #ifdef ACMXVK_WITH_DEEP_DREAM
-            return acmxvk::dream::probe(
-                       options.cuda_device, options.dream_model,
-                       options.dream_layer, options.dream_iterations,
-                       static_cast<float>(options.dream_strength),
-                       static_cast<float>(options.dream_feedback),
-                       static_cast<float>(options.dream_zoom),
-                       static_cast<float>(options.dream_rotation),
-                       options.dream_size, options.dream_fp16,
-                       options.dream_channel, options.dream_octaves,
-                       static_cast<float>(options.dream_octave_scale),
-                       options.dream_jitter, options.dream_smoothing,
-                       std::cout, std::cerr)
-                       ? EXIT_SUCCESS
-                       : EXIT_FAILURE;
+            return acmxvk::dream::probe(options.cuda_device, options.dream_model, options.dream_layer, options.dream_iterations, static_cast<float>(options.dream_strength), static_cast<float>(options.dream_feedback), static_cast<float>(options.dream_zoom), static_cast<float>(options.dream_rotation), options.dream_size, options.dream_fp16, options.dream_channel, options.dream_octaves, static_cast<float>(options.dream_octave_scale), options.dream_jitter, options.dream_smoothing, std::cout, std::cerr) ? EXIT_SUCCESS : EXIT_FAILURE;
 #else
             if (!options.dream_model.empty()) {
                 std::cerr << "Deep Dream model inspection requires an ACMXVK "
@@ -135,15 +114,12 @@ int main(int argc, char **argv) {
             return EXIT_SUCCESS;
         }
         if (!options.probe_hdr_file.empty()) {
-            const acmxvk::VideoHdrInfo info =
-                acmxvk::probeVideoHdrInfo(options.probe_hdr_file);
+            const acmxvk::VideoHdrInfo info = acmxvk::probeVideoHdrInfo(options.probe_hdr_file);
             if (!info.valid) {
-                std::cerr << "acmxvk: unable to probe HDR metadata: "
-                          << options.probe_hdr_file << '\n';
+                std::cerr << "acmxvk: unable to probe HDR metadata: " << options.probe_hdr_file << '\n';
                 return EXIT_FAILURE;
             }
-            std::cout << "acmxvk: HDR probe: " << options.probe_hdr_file
-                      << '\n';
+            std::cout << "acmxvk: HDR probe: " << options.probe_hdr_file << '\n';
             acmxvk::printVideoHdrInfo(info, std::cout);
             return EXIT_SUCCESS;
         }
@@ -152,8 +128,7 @@ int main(int argc, char **argv) {
             acmxvk::audio::AudioEngine::list_devices();
             return EXIT_SUCCESS;
 #else
-            throw std::runtime_error(
-                "--list-devices requires an ACMXVK build configured with -DAUDIO=ON");
+            throw std::runtime_error("--list-devices requires an ACMXVK build configured with -DAUDIO=ON");
 #endif
         }
         if (options.list_midi_devices) {
@@ -161,8 +136,7 @@ int main(int argc, char **argv) {
             acmxvk::midi::MidiInput::list_ports(std::cout);
             return EXIT_SUCCESS;
 #else
-            throw std::runtime_error(
-                "--list-midi requires an ACMXVK build configured with -DMIDI=ON");
+            throw std::runtime_error("--list-midi requires an ACMXVK build configured with -DMIDI=ON");
 #endif
         }
         if (options.list_gpu_filters) {
@@ -170,9 +144,8 @@ int main(int argc, char **argv) {
             acmxvk::gpu::FilterEngine::list_filters(std::cout);
             return EXIT_SUCCESS;
 #else
-            throw std::runtime_error(
-                "--list-filters requires an ACMXVK build configured with "
-                "-DWITH_CUDA=ON");
+            throw std::runtime_error("--list-filters requires an ACMXVK build configured with "
+                                     "-DWITH_CUDA=ON");
 #endif
         }
         if (options.list_cuda_devices) {
@@ -180,58 +153,46 @@ int main(int argc, char **argv) {
             acmxvk::list_cuda_devices(std::cout);
             return EXIT_SUCCESS;
 #else
-            throw std::runtime_error(
-                "--list-cuda-devices requires a CUDA-enabled MXVK installation");
+            throw std::runtime_error("--list-cuda-devices requires a CUDA-enabled MXVK installation");
 #endif
         }
 #ifndef AUDIO_ENABLED
         if (options.enable_audio) {
-            throw std::runtime_error(
-                "--enable-audio requires an ACMXVK build configured with -DAUDIO=ON");
+            throw std::runtime_error("--enable-audio requires an ACMXVK build configured with -DAUDIO=ON");
         }
 #endif
 #ifndef MIDI_ENABLED
-        if (options.midi_device_specified || options.midi_monitor ||
-            !options.midi_map_file.empty() || !options.midi_cc_mappings.empty()) {
-            throw std::runtime_error(
-                "MIDI input requires an ACMXVK build configured with -DMIDI=ON");
+        if (options.midi_device_specified || options.midi_monitor || !options.midi_map_file.empty() || !options.midi_cc_mappings.empty()) {
+            throw std::runtime_error("MIDI input requires an ACMXVK build configured with -DMIDI=ON");
         }
 #endif
 #ifndef ACMXVK_WITH_DEEP_DREAM
         if (!options.dream_model.empty()) {
-            throw std::runtime_error(
-                "--dream-model requires an ACMXVK build configured with "
-                "-DWITH_DEEP_DREAM=ON");
+            throw std::runtime_error("--dream-model requires an ACMXVK build configured with "
+                                     "-DWITH_DEEP_DREAM=ON");
         }
 #endif
 #ifndef ACMXVK_WITH_STABLE_DIFFUSION
         if (!options.stable_diffusion_model.empty()) {
-            throw std::runtime_error(
-                "--sd-model requires an ACMXVK build configured with "
-                "-DWITH_STABLE_DIFFUSION=ON");
+            throw std::runtime_error("--sd-model requires an ACMXVK build configured with "
+                                     "-DWITH_STABLE_DIFFUSION=ON");
         }
 #endif
 #ifndef ACMXVK_WITH_CUDA
         if (!options.gpu_filter_indices.empty()) {
-            throw std::runtime_error(
-                "CUDA filters require an ACMXVK build configured with "
-                "-DWITH_CUDA=ON");
+            throw std::runtime_error("CUDA filters require an ACMXVK build configured with "
+                                     "-DWITH_CUDA=ON");
         }
 #endif
 #ifndef ACMXVK_WITH_MXVK_CUDA
         if (options.cuda_device_specified && options.dream_model.empty()) {
-            throw std::runtime_error(
-                "--cuda-device requires a CUDA-enabled MXVK installation");
+            throw std::runtime_error("--cuda-device requires a CUDA-enabled MXVK installation");
         }
 #endif
 #ifndef ACMXVK_WITH_DNN
-        if (!options.edge_model.empty() || !options.human_model.empty() ||
-            !options.onnx_configuration.empty() ||
-            options.human_background || options.human_black_specified ||
-            options.human_white_specified) {
-            throw std::runtime_error(
-                "DNN effects require an ACMXVK build configured with "
-                "-DWITH_OPENCV_DNN=ON");
+        if (!options.edge_model.empty() || !options.human_model.empty() || !options.onnx_configuration.empty() || options.human_background || options.human_black_specified || options.human_white_specified) {
+            throw std::runtime_error("DNN effects require an ACMXVK build configured with "
+                                     "-DWITH_OPENCV_DNN=ON");
         }
 #endif
         if (options.list_encoders) {
@@ -239,23 +200,16 @@ int main(int argc, char **argv) {
             return EXIT_SUCCESS;
         }
         if (!options.list_encoder_options.empty()) {
-            return acmxvk::printEncoderOptions(options.list_encoder_options, std::cout,
-                                               std::cerr)
-                       ? EXIT_SUCCESS
-                       : EXIT_FAILURE;
+            return acmxvk::printEncoderOptions(options.list_encoder_options, std::cout, std::cerr) ? EXIT_SUCCESS : EXIT_FAILURE;
         }
 
-        if (std::signal(SIGINT, acmxvk::request_headless_shutdown) == SIG_ERR ||
-            std::signal(SIGTERM, acmxvk::request_headless_shutdown) ==
-                SIG_ERR) {
-            throw std::runtime_error(
-                "unable to install ACMXVK shutdown signal handlers");
+        if (std::signal(SIGINT, acmxvk::request_headless_shutdown) == SIG_ERR || std::signal(SIGTERM, acmxvk::request_headless_shutdown) == SIG_ERR) {
+            throw std::runtime_error("unable to install ACMXVK shutdown signal handlers");
         }
 
 #ifdef ACMXVK_WITH_CUDA
         if (!options.gpu_filter_indices.empty()) {
-            acmxvk::gpu::FilterEngine::validate_filter_indices(
-                options.gpu_filter_indices);
+            acmxvk::gpu::FilterEngine::validate_filter_indices(options.gpu_filter_indices);
         }
 #endif
 #ifdef ACMXVK_WITH_MXVK_CUDA

@@ -15,8 +15,7 @@ class AudioPlaylistDialog : public QDialog {
     Q_OBJECT
 
   public:
-    explicit AudioPlaylistDialog(const QString &playlistPath = QString(),
-                                 QWidget *parent = nullptr);
+    explicit AudioPlaylistDialog(const QString &playlistPath = QString(), QWidget *parent = nullptr);
 
     /// @brief Return the playlist most recently opened or saved.
     QString playlistPath() const;

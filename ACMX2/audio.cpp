@@ -47,28 +47,23 @@ namespace acmx2::audio {
                     for (int j = 0; j < length / 2; ++j) {
                         const int even = i + j;
                         const int odd = even + length / 2;
-                        const float odd_real =
-                            current_real * data[2 * odd] - current_imaginary * data[2 * odd + 1];
-                        const float odd_imaginary =
-                            current_real * data[2 * odd + 1] + current_imaginary * data[2 * odd];
+                        const float odd_real = current_real * data[2 * odd] - current_imaginary * data[2 * odd + 1];
+                        const float odd_imaginary = current_real * data[2 * odd + 1] + current_imaginary * data[2 * odd];
 
                         data[2 * odd] = data[2 * even] - odd_real;
                         data[2 * odd + 1] = data[2 * even + 1] - odd_imaginary;
                         data[2 * even] += odd_real;
                         data[2 * even + 1] += odd_imaginary;
 
-                        const float next_real =
-                            current_real * rotation_real - current_imaginary * rotation_imaginary;
-                        current_imaginary =
-                            current_real * rotation_imaginary + current_imaginary * rotation_real;
+                        const float next_real = current_real * rotation_real - current_imaginary * rotation_imaginary;
+                        current_imaginary = current_real * rotation_imaginary + current_imaginary * rotation_real;
                         current_real = next_real;
                     }
                 }
             }
         }
 
-        void write_wav_header(std::ofstream &file, std::uint32_t data_size,
-                              std::uint32_t sample_rate, std::uint16_t channels) {
+        void write_wav_header(std::ofstream &file, std::uint32_t data_size, std::uint32_t sample_rate, std::uint16_t channels) {
             constexpr std::uint16_t bits_per_sample = 16;
             const std::uint32_t byte_rate = sample_rate * channels * bits_per_sample / 8;
             const std::uint16_t block_align = channels * bits_per_sample / 8;
@@ -120,12 +115,10 @@ namespace acmx2::audio {
                 square_sum += sample * sample;
             }
 
-            const float amplitude_value =
-                amplitude_sum / static_cast<float>(frame_count * channels);
+            const float amplitude_value = amplitude_sum / static_cast<float>(frame_count * channels);
             amplitude.store(amplitude_value, std::memory_order_relaxed);
             peak.store(peak_value, std::memory_order_relaxed);
-            rms.store(std::sqrt(square_sum / static_cast<float>(frame_count)),
-                      std::memory_order_relaxed);
+            rms.store(std::sqrt(square_sum / static_cast<float>(frame_count)), std::memory_order_relaxed);
 
             constexpr float smooth_alpha = 0.15f;
             smooth_value += smooth_alpha * (amplitude_value - smooth_value);
@@ -148,28 +141,21 @@ namespace acmx2::audio {
                 mid_sum += mid_sample * mid_sample;
                 high_sum += high_sample * high_sample;
             }
-            low.store(std::sqrt(low_sum / static_cast<float>(frame_count)),
-                      std::memory_order_relaxed);
-            mid.store(std::sqrt(mid_sum / static_cast<float>(frame_count)),
-                      std::memory_order_relaxed);
-            high.store(std::sqrt(high_sum / static_cast<float>(frame_count)),
-                       std::memory_order_relaxed);
+            low.store(std::sqrt(low_sum / static_cast<float>(frame_count)), std::memory_order_relaxed);
+            mid.store(std::sqrt(mid_sum / static_cast<float>(frame_count)), std::memory_order_relaxed);
+            high.store(std::sqrt(high_sum / static_cast<float>(frame_count)), std::memory_order_relaxed);
 
             unsigned int crossings = 0;
             for (unsigned int frame = 1; frame < frame_count; ++frame) {
                 const float previous = samples[(frame - 1) * channels];
                 const float current = samples[frame * channels];
-                if ((previous >= 0.0f && current < 0.0f) ||
-                    (previous < 0.0f && current >= 0.0f))
+                if ((previous >= 0.0f && current < 0.0f) || (previous < 0.0f && current >= 0.0f))
                     ++crossings;
             }
-            frequency.store(
-                static_cast<float>(crossings) * rate / (2.0f * static_cast<float>(frame_count)),
-                std::memory_order_relaxed);
+            frequency.store(static_cast<float>(crossings) * rate / (2.0f * static_cast<float>(frame_count)), std::memory_order_relaxed);
 
             const int back = 1 - spectrum_front.load(std::memory_order_acquire);
-            const unsigned int copied_frames =
-                std::min(static_cast<unsigned int>(FFT_SIZE), frame_count);
+            const unsigned int copied_frames = std::min(static_cast<unsigned int>(FFT_SIZE), frame_count);
             for (unsigned int i = 0; i < copied_frames; ++i)
                 spectrum_samples[back][i].store(samples[i * channels], std::memory_order_relaxed);
             for (unsigned int i = copied_frames; i < FFT_SIZE; ++i)
@@ -194,17 +180,13 @@ namespace acmx2::audio {
 
         std::array<std::array<std::atomic<float>, FFT_SIZE>, 2> spectrum_samples{};
         std::atomic<int> spectrum_front{0};
-        std::vector<float> spectrum_magnitudes =
-            std::vector<float>(FFT_SIZE / 2, 0.0f);
+        std::vector<float> spectrum_magnitudes = std::vector<float>(FFT_SIZE / 2, 0.0f);
     };
 
     AudioAnalyzer::AudioAnalyzer() : impl(std::make_unique<Impl>()) {}
     AudioAnalyzer::~AudioAnalyzer() = default;
 
-    void AudioAnalyzer::process_samples(const float *samples, unsigned int frame_count,
-                                        unsigned int channels) {
-        impl->process_samples(samples, frame_count, channels);
-    }
+    void AudioAnalyzer::process_samples(const float *samples, unsigned int frame_count, unsigned int channels) { impl->process_samples(samples, frame_count, channels); }
 
     void AudioAnalyzer::reset() {
         const float current_sensitivity = sensitivity();
@@ -214,22 +196,13 @@ namespace acmx2::audio {
         set_sample_rate(current_sample_rate);
     }
 
-    void AudioAnalyzer::set_sample_rate(unsigned int sample_rate) {
-        impl->sample_rate.store(std::max(sample_rate, 1U), std::memory_order_relaxed);
-    }
+    void AudioAnalyzer::set_sample_rate(unsigned int sample_rate) { impl->sample_rate.store(std::max(sample_rate, 1U), std::memory_order_relaxed); }
 
-    unsigned int AudioAnalyzer::sample_rate() const {
-        return impl->sample_rate.load(std::memory_order_relaxed);
-    }
+    unsigned int AudioAnalyzer::sample_rate() const { return impl->sample_rate.load(std::memory_order_relaxed); }
 
-    void AudioAnalyzer::set_sensitivity(float sensitivity) {
-        impl->sensitivity.store(std::clamp(sensitivity, 0.1f, 5.0f),
-                                std::memory_order_relaxed);
-    }
+    void AudioAnalyzer::set_sensitivity(float sensitivity) { impl->sensitivity.store(std::clamp(sensitivity, 0.1f, 5.0f), std::memory_order_relaxed); }
 
-    float AudioAnalyzer::sensitivity() const {
-        return impl->sensitivity.load(std::memory_order_relaxed);
-    }
+    float AudioAnalyzer::sensitivity() const { return impl->sensitivity.load(std::memory_order_relaxed); }
 
     AudioMetrics AudioAnalyzer::metrics() const {
         return {
@@ -248,11 +221,8 @@ namespace acmx2::audio {
         const int front = impl->spectrum_front.load(std::memory_order_acquire);
         std::array<float, FFT_SIZE * 2> complex{};
         for (std::size_t i = 0; i < FFT_SIZE; ++i) {
-            const float hann =
-                0.5f * (1.0f - std::cos(2.0f * PI * static_cast<float>(i) /
-                                        static_cast<float>(FFT_SIZE - 1)));
-            complex[2 * i] =
-                impl->spectrum_samples[front][i].load(std::memory_order_relaxed) * hann;
+            const float hann = 0.5f * (1.0f - std::cos(2.0f * PI * static_cast<float>(i) / static_cast<float>(FFT_SIZE - 1)));
+            complex[2 * i] = impl->spectrum_samples[front][i].load(std::memory_order_relaxed) * hann;
         }
 
         fft_radix2(complex.data(), static_cast<int>(FFT_SIZE));
@@ -261,21 +231,17 @@ namespace acmx2::audio {
         for (std::size_t i = 0; i < FFT_SIZE / 2; ++i) {
             const float real = complex[2 * i];
             const float imaginary = complex[2 * i + 1];
-            impl->spectrum_magnitudes[i] =
-                std::sqrt(real * real + imaginary * imaginary) * inverse;
+            impl->spectrum_magnitudes[i] = std::sqrt(real * real + imaginary * imaginary) * inverse;
         }
     }
 
-    const std::vector<float> &AudioAnalyzer::spectrum() const {
-        return impl->spectrum_magnitudes;
-    }
+    const std::vector<float> &AudioAnalyzer::spectrum() const { return impl->spectrum_magnitudes; }
 
     class AudioRecorder::Impl {
       public:
         ~Impl() { stop(); }
 
-        bool start(const std::string &filepath, unsigned int new_sample_rate,
-                   unsigned int new_channels) {
+        bool start(const std::string &filepath, unsigned int new_sample_rate, unsigned int new_channels) {
             if (recording.load(std::memory_order_acquire) || new_channels == 0)
                 return false;
 
@@ -310,18 +276,14 @@ namespace acmx2::audio {
 
             if (file.is_open()) {
                 const std::uint64_t bytes = data_size.load(std::memory_order_relaxed);
-                const std::uint32_t wav_bytes = static_cast<std::uint32_t>(
-                    std::min<std::uint64_t>(bytes, std::numeric_limits<std::uint32_t>::max()));
-                write_wav_header(file, wav_bytes, sample_rate,
-                                 static_cast<std::uint16_t>(channels));
+                const std::uint32_t wav_bytes = static_cast<std::uint32_t>(std::min<std::uint64_t>(bytes, std::numeric_limits<std::uint32_t>::max()));
+                write_wav_header(file, wav_bytes, sample_rate, static_cast<std::uint16_t>(channels));
                 file.close();
-                std::cout << "acmx2: Audio recording stopped (" << bytes
-                          << " bytes written)\n";
+                std::cout << "acmx2: Audio recording stopped (" << bytes << " bytes written)\n";
             }
         }
 
-        void capture(const float *samples, unsigned int frame_count,
-                     unsigned int input_channels) {
+        void capture(const float *samples, unsigned int frame_count, unsigned int input_channels) {
             if (samples == nullptr || !recording.load(std::memory_order_acquire))
                 return;
 
@@ -342,12 +304,10 @@ namespace acmx2::audio {
 
                 float sample = std::clamp(samples[i] * current_gain, -1.0f, 1.0f);
                 if (fade < RECORD_FADE_SAMPLES) {
-                    sample *= static_cast<float>(fade) /
-                              static_cast<float>(RECORD_FADE_SAMPLES);
+                    sample *= static_cast<float>(fade) / static_cast<float>(RECORD_FADE_SAMPLES);
                     ++fade;
                 }
-                ring[head & RING_MASK] =
-                    static_cast<std::int16_t>(sample * 32767.0f);
+                ring[head & RING_MASK] = static_cast<std::int16_t>(sample * 32767.0f);
                 ++head;
             }
             ring_head.store(head, std::memory_order_release);
@@ -357,9 +317,7 @@ namespace acmx2::audio {
 
         void write_to_disk() {
             std::array<std::int16_t, WRITE_BATCH_SIZE> batch{};
-            while (disk_running.load(std::memory_order_acquire) ||
-                   ring_tail.load(std::memory_order_relaxed) !=
-                       ring_head.load(std::memory_order_acquire)) {
+            while (disk_running.load(std::memory_order_acquire) || ring_tail.load(std::memory_order_relaxed) != ring_head.load(std::memory_order_acquire)) {
                 const std::size_t tail = ring_tail.load(std::memory_order_relaxed);
                 const std::size_t head = ring_head.load(std::memory_order_acquire);
                 if (tail == head) {
@@ -367,16 +325,14 @@ namespace acmx2::audio {
                     continue;
                 }
 
-                const std::size_t count =
-                    std::min<std::size_t>(head - tail, WRITE_BATCH_SIZE);
+                const std::size_t count = std::min<std::size_t>(head - tail, WRITE_BATCH_SIZE);
                 for (std::size_t i = 0; i < count; ++i)
                     batch[i] = ring[(tail + i) & RING_MASK];
                 ring_tail.store(tail + count, std::memory_order_release);
 
                 if (file.is_open()) {
                     const auto bytes = count * sizeof(std::int16_t);
-                    file.write(reinterpret_cast<const char *>(batch.data()),
-                               static_cast<std::streamsize>(bytes));
+                    file.write(reinterpret_cast<const char *>(batch.data()), static_cast<std::streamsize>(bytes));
                     data_size.fetch_add(bytes, std::memory_order_relaxed);
                 }
             }
@@ -401,37 +357,21 @@ namespace acmx2::audio {
     AudioRecorder::AudioRecorder() : impl(std::make_unique<Impl>()) {}
     AudioRecorder::~AudioRecorder() = default;
 
-    bool AudioRecorder::start(const std::string &filepath, unsigned int sample_rate,
-                              unsigned int channels) {
-        return impl->start(filepath, sample_rate, channels);
-    }
+    bool AudioRecorder::start(const std::string &filepath, unsigned int sample_rate, unsigned int channels) { return impl->start(filepath, sample_rate, channels); }
 
-    void AudioRecorder::stop() {
-        impl->stop();
-    }
+    void AudioRecorder::stop() { impl->stop(); }
 
-    bool AudioRecorder::is_recording() const {
-        return impl->recording.load(std::memory_order_relaxed);
-    }
+    bool AudioRecorder::is_recording() const { return impl->recording.load(std::memory_order_relaxed); }
 
-    void AudioRecorder::capture(const float *samples, unsigned int frame_count,
-                                unsigned int channels) {
-        impl->capture(samples, frame_count, channels);
-    }
+    void AudioRecorder::capture(const float *samples, unsigned int frame_count, unsigned int channels) { impl->capture(samples, frame_count, channels); }
 
-    void AudioRecorder::set_gain(float gain) {
-        impl->gain.store(std::clamp(gain, 0.0f, 2.0f), std::memory_order_relaxed);
-    }
+    void AudioRecorder::set_gain(float gain) { impl->gain.store(std::clamp(gain, 0.0f, 2.0f), std::memory_order_relaxed); }
 
-    float AudioRecorder::gain() const {
-        return impl->gain.load(std::memory_order_relaxed);
-    }
+    float AudioRecorder::gain() const { return impl->gain.load(std::memory_order_relaxed); }
 
     double AudioRecorder::duration_seconds() const {
         const std::uint64_t bytes = impl->data_size.load(std::memory_order_relaxed);
-        const std::uint64_t bytes_per_second =
-            static_cast<std::uint64_t>(impl->sample_rate) * impl->channels *
-            sizeof(std::int16_t);
+        const std::uint64_t bytes_per_second = static_cast<std::uint64_t>(impl->sample_rate) * impl->channels * sizeof(std::int16_t);
         if (bytes_per_second == 0)
             return 0.0;
         return static_cast<double>(bytes) / static_cast<double>(bytes_per_second);
@@ -486,14 +426,12 @@ namespace acmx2::audio {
                 return false;
             }
 
-            std::cout << "acmx2: Selected input device " << input_device << ": "
-                      << input_info.name << "\n";
+            std::cout << "acmx2: Selected input device " << input_device << ": " << input_info.name << "\n";
             std::cout << "acmx2:   Input channels: " << input_info.inputChannels << "\n";
             if (input_info.isDefaultInput)
                 std::cout << "acmx2:   [DEFAULT INPUT]\n";
 
-            input_channels = std::min(std::max(config.channels, 1U),
-                                      input_info.inputChannels);
+            input_channels = std::min(std::max(config.channels, 1U), input_info.inputChannels);
             pass_through = config.pass_through;
             analyzer.reset();
             analyzer.set_sensitivity(config.sensitivity);
@@ -507,13 +445,8 @@ namespace acmx2::audio {
             RtAudio::StreamParameters *output_parameters_ptr = nullptr;
             output_channels = 0;
             if (pass_through) {
-                const unsigned int output_device =
-                    config.output_device >= 0
-                        ? static_cast<unsigned int>(config.output_device)
-                        : stream.getDefaultOutputDevice();
-                std::cout << "acmx2: Using "
-                          << (config.output_device >= 0 ? "specified" : "default")
-                          << " output device: " << output_device << "\n";
+                const unsigned int output_device = config.output_device >= 0 ? static_cast<unsigned int>(config.output_device) : stream.getDefaultOutputDevice();
+                std::cout << "acmx2: Using " << (config.output_device >= 0 ? "specified" : "default") << " output device: " << output_device << "\n";
 
                 const RtAudio::DeviceInfo output_info = stream.getDeviceInfo(output_device);
                 if (output_info.outputChannels > 0) {
@@ -522,9 +455,7 @@ namespace acmx2::audio {
                     output_parameters.nChannels = output_channels;
                     output_parameters.firstChannel = 0;
                     output_parameters_ptr = &output_parameters;
-                    std::cout << "acmx2: Audio pass-through enabled on device "
-                              << output_device << ": " << output_info.name << " ("
-                              << output_channels << " ch)\n";
+                    std::cout << "acmx2: Audio pass-through enabled on device " << output_device << ": " << output_info.name << " (" << output_channels << " ch)\n";
                 } else {
                     std::cerr << "acmx2: Output device has no output channels, "
                                  "pass-through disabled.\n";
@@ -533,20 +464,16 @@ namespace acmx2::audio {
             }
 
             unsigned int sample_rate = 44100;
-            if (!input_info.sampleRates.empty() &&
-                std::find(input_info.sampleRates.begin(), input_info.sampleRates.end(),
-                          sample_rate) == input_info.sampleRates.end()) {
+            if (!input_info.sampleRates.empty() && std::find(input_info.sampleRates.begin(), input_info.sampleRates.end(), sample_rate) == input_info.sampleRates.end()) {
                 sample_rate = 48000;
-                if (std::find(input_info.sampleRates.begin(), input_info.sampleRates.end(),
-                              sample_rate) == input_info.sampleRates.end())
+                if (std::find(input_info.sampleRates.begin(), input_info.sampleRates.end(), sample_rate) == input_info.sampleRates.end())
                     sample_rate = input_info.sampleRates.front();
             }
             analyzer.set_sample_rate(sample_rate);
 
             unsigned int buffer_frames = static_cast<unsigned int>(FFT_SIZE);
             try {
-                stream.openStream(output_parameters_ptr, &input_parameters, RTAUDIO_FLOAT32,
-                                  sample_rate, &buffer_frames, &Impl::audio_callback, this);
+                stream.openStream(output_parameters_ptr, &input_parameters, RTAUDIO_FLOAT32, sample_rate, &buffer_frames, &Impl::audio_callback, this);
                 stream.startStream();
             } catch (const std::exception &error) {
                 std::cerr << "acmx2: Audio error: " << error.what() << "\n";
@@ -558,9 +485,7 @@ namespace acmx2::audio {
                 return false;
             }
 
-            std::cout << "acmx2: Audio input stream opened (rate=" << sample_rate
-                      << " Hz, channels=" << input_channels
-                      << ", sensitivity=" << analyzer.sensitivity() << ")\n";
+            std::cout << "acmx2: Audio input stream opened (rate=" << sample_rate << " Hz, channels=" << input_channels << ", sensitivity=" << analyzer.sensitivity() << ")\n";
             return stream.isStreamOpen();
         }
 
@@ -578,15 +503,9 @@ namespace acmx2::audio {
             }
         }
 
-        static int audio_callback(void *output_buffer, void *input_buffer,
-                                  unsigned int frame_count, double,
-                                  RtAudioStreamStatus status, void *user_data) {
-            return static_cast<Impl *>(user_data)
-                ->process_callback(output_buffer, input_buffer, frame_count, status);
-        }
+        static int audio_callback(void *output_buffer, void *input_buffer, unsigned int frame_count, double, RtAudioStreamStatus status, void *user_data) { return static_cast<Impl *>(user_data)->process_callback(output_buffer, input_buffer, frame_count, status); }
 
-        int process_callback(void *output_buffer, void *input_buffer,
-                             unsigned int frame_count, RtAudioStreamStatus status) {
+        int process_callback(void *output_buffer, void *input_buffer, unsigned int frame_count, RtAudioStreamStatus status) {
             auto *input = static_cast<float *>(input_buffer);
             auto *output = static_cast<float *>(output_buffer);
             if (status || input == nullptr) {
@@ -598,11 +517,8 @@ namespace acmx2::audio {
             if (output != nullptr && output_channels > 0) {
                 for (unsigned int frame = 0; frame < frame_count; ++frame) {
                     for (unsigned int channel = 0; channel < output_channels; ++channel) {
-                        const unsigned int input_channel =
-                            channel < input_channels ? channel : 0;
-                        output[frame * output_channels + channel] =
-                            pass_through ? input[frame * input_channels + input_channel]
-                                         : 0.0f;
+                        const unsigned int input_channel = channel < input_channels ? channel : 0;
+                        output[frame * output_channels + channel] = pass_through ? input[frame * input_channels + input_channel] : 0.0f;
                     }
                 }
             }
@@ -623,37 +539,21 @@ namespace acmx2::audio {
     AudioEngine::AudioEngine() : impl(std::make_unique<Impl>()) {}
     AudioEngine::~AudioEngine() = default;
 
-    bool AudioEngine::open(const AudioStreamConfig &config) {
-        return impl->open(config);
-    }
+    bool AudioEngine::open(const AudioStreamConfig &config) { return impl->open(config); }
 
-    void AudioEngine::close() {
-        impl->close();
-    }
+    void AudioEngine::close() { impl->close(); }
 
-    bool AudioEngine::is_open() const {
-        return impl->stream.isStreamOpen();
-    }
+    bool AudioEngine::is_open() const { return impl->stream.isStreamOpen(); }
 
-    unsigned int AudioEngine::input_channels() const {
-        return impl->input_channels;
-    }
+    unsigned int AudioEngine::input_channels() const { return impl->input_channels; }
 
-    AudioAnalyzer &AudioEngine::analyzer() {
-        return impl->analyzer;
-    }
+    AudioAnalyzer &AudioEngine::analyzer() { return impl->analyzer; }
 
-    const AudioAnalyzer &AudioEngine::analyzer() const {
-        return impl->analyzer;
-    }
+    const AudioAnalyzer &AudioEngine::analyzer() const { return impl->analyzer; }
 
-    AudioRecorder &AudioEngine::recorder() {
-        return impl->recorder;
-    }
+    AudioRecorder &AudioEngine::recorder() { return impl->recorder; }
 
-    const AudioRecorder &AudioEngine::recorder() const {
-        return impl->recorder;
-    }
+    const AudioRecorder &AudioEngine::recorder() const { return impl->recorder; }
 
     void AudioEngine::list_devices() {
         RtAudio stream = make_rt_audio();

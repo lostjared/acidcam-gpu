@@ -23,9 +23,7 @@ namespace {
         return h;
     }
 
-    static uint64_t fnv1a64_str(const std::string &s) {
-        return fnv1a64_bytes(s.data(), s.size());
-    }
+    static uint64_t fnv1a64_str(const std::string &s) { return fnv1a64_bytes(s.data(), s.size()); }
 
     static uint64_t fnv1a64_file(const std::string &filepath) {
         std::ifstream f(filepath, std::ios::binary);
@@ -116,9 +114,7 @@ namespace {
         return true;
     }
 
-    static std::string cacheDirDefault() {
-        return "shader_cache";
-    }
+    static std::string cacheDirDefault() { return "shader_cache"; }
 
     static std::string cacheFilePath(uint64_t key) {
         char name[64];
@@ -242,17 +238,9 @@ namespace {
 
 namespace ac {
 
-    bool loadComputeProgramBinaryFromCache(const std::string &source,
-                                           GLuint &program) {
-        return tryLoadProgramBinary(computeComputeProgramKeyFromText(source),
-                                    program);
-    }
+    bool loadComputeProgramBinaryFromCache(const std::string &source, GLuint &program) { return tryLoadProgramBinary(computeComputeProgramKeyFromText(source), program); }
 
-    bool saveComputeProgramBinaryToCache(const std::string &source,
-                                         GLuint program) {
-        return saveProgramBinary(computeComputeProgramKeyFromText(source),
-                                 program);
-    }
+    bool saveComputeProgramBinaryToCache(const std::string &source, GLuint program) { return saveProgramBinary(computeComputeProgramKeyFromText(source), program); }
 
     bool ShaderProgram::loadProgram(const std::string &v, const std::string &f) {
         uint64_t key = computeProgramKeyFromFiles(v, f);

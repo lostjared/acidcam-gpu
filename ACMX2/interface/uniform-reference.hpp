@@ -17,8 +17,7 @@ class UniformReferenceDialog : public QDialog {
     Q_OBJECT
 
   public:
-    explicit UniformReferenceDialog(acmx2::Backend backend,
-                                    QWidget *parent = nullptr);
+    explicit UniformReferenceDialog(acmx2::Backend backend, QWidget *parent = nullptr);
     void setBackend(acmx2::Backend backend);
 
   private slots:

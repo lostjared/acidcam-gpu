@@ -8,10 +8,7 @@
 #include <QSettings>
 #include <QTextStream>
 
-LibraryWindow::LibraryWindow(acmx2::Backend selectedBackend, QWidget *parent)
-    : QDialog(parent), backend(selectedBackend) {
-    init();
-}
+LibraryWindow::LibraryWindow(acmx2::Backend selectedBackend, QWidget *parent) : QDialog(parent), backend(selectedBackend) { init(); }
 
 void LibraryWindow::init() {
     QVBoxLayout *layout = new QVBoxLayout(this);
@@ -32,20 +29,17 @@ void LibraryWindow::init() {
         createDefaultShaderCheckBox->setText("Create default.frag passthrough shader");
         createDefaultShaderCheckBox->setChecked(true);
         createDefaultShaderCheckBox->setEnabled(false);
-        createDefaultShaderCheckBox->setToolTip(
-            "A new ACMXVK source library starts with a valid fragment shader.");
+        createDefaultShaderCheckBox->setToolTip("A new ACMXVK source library starts with a valid fragment shader.");
     }
     layout->addWidget(createDefaultShaderCheckBox);
 
     createJsonManifestCheckBox = new QCheckBox("Use library.json manifest", this);
-    createJsonManifestCheckBox->setToolTip(
-        "Store the shader list as JSON. Existing libraries continue to support index.txt.");
+    createJsonManifestCheckBox->setToolTip("Store the shader list as JSON. Existing libraries continue to support index.txt.");
     layout->addWidget(createJsonManifestCheckBox);
     if (backend == acmx2::Backend::Acmxvk) {
         createJsonManifestCheckBox->setChecked(true);
         createJsonManifestCheckBox->setEnabled(false);
-        createJsonManifestCheckBox->setToolTip(
-            "ACMXVK source libraries always use library.json.");
+        createJsonManifestCheckBox->setToolTip("ACMXVK source libraries always use library.json.");
     }
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
@@ -105,35 +99,25 @@ void LibraryWindow::onOkButtonClicked() {
         return;
     }
 
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "Confirm",
-        QString("Do you want to create a shader library in the folder: %1?").arg(folderPath),
-        QMessageBox::Yes | QMessageBox::No);
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Confirm", QString("Do you want to create a shader library in the folder: %1?").arg(folderPath), QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
         QDir dir;
         if (!dir.mkpath(folderPath)) {
-            QMessageBox::critical(this, "Error",
-                                  "Failed to create the shader library directory.");
+            QMessageBox::critical(this, "Error", "Failed to create the shader library directory.");
             return;
         }
         path = folderPath;
 
-        const QString defaultName =
-            backend == acmx2::Backend::Acmxvk ? QStringLiteral("default.frag")
-                                              : QStringLiteral("default.glsl");
+        const QString defaultName = backend == acmx2::Backend::Acmxvk ? QStringLiteral("default.frag") : QStringLiteral("default.glsl");
         QFile file(QDir(folderPath).filePath(defaultName));
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QMessageBox::critical(
-                this, "Error",
-                QString("Failed to create %1: %2")
-                    .arg(defaultName, file.errorString()));
+            QMessageBox::critical(this, "Error", QString("Failed to create %1: %2").arg(defaultName, file.errorString()));
             return;
         }
         QTextStream out(&file);
         if (createDefaultShaderCheckBox->isChecked())
-            out << (backend == acmx2::Backend::Acmxvk ? defaultAcmxvkFile
-                                                      : defaultFile);
+            out << (backend == acmx2::Backend::Acmxvk ? defaultAcmxvkFile : defaultFile);
         out << "\n";
         file.close();
 
@@ -145,28 +129,21 @@ void LibraryWindow::onOkButtonClicked() {
     }
 }
 
-QString LibraryWindow::getShaderPath() {
-    return path;
-}
+QString LibraryWindow::getShaderPath() { return path; }
 
-void LibraryWindow::onCancelButtonClicked() {
-    reject();
-}
+void LibraryWindow::onCancelButtonClicked() { reject(); }
 
 bool LibraryWindow::createShaderManifest(const QString &folderPath) {
     QString error;
     if (backend == acmx2::Backend::Acmxvk) {
         acmx2::AcmxvkSourceManifestResult result;
-        if (!acmx2::create_acmxvk_source_manifest(folderPath, QString(), result,
-                                                  error)) {
+        if (!acmx2::create_acmxvk_source_manifest(folderPath, QString(), result, error)) {
             QMessageBox::critical(this, "Error", error);
             return false;
         }
         return true;
     }
-    const auto format = createJsonManifestCheckBox->isChecked()
-                            ? acmx2::ShaderManifestFormat::Json
-                            : acmx2::ShaderManifestFormat::Text;
+    const auto format = createJsonManifestCheckBox->isChecked() ? acmx2::ShaderManifestFormat::Json : acmx2::ShaderManifestFormat::Text;
     if (!acmx2::create_shader_manifest(folderPath, format, {"default.glsl"}, error)) {
         QMessageBox::critical(this, "Error", error);
         return false;

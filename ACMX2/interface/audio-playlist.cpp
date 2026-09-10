@@ -25,9 +25,7 @@ namespace {
 
     constexpr int TRACK_PATH_ROLE = Qt::UserRole;
 
-    bool isUrl(const QString &path) {
-        return path.contains("://");
-    }
+    bool isUrl(const QString &path) { return path.contains("://"); }
 
     QString displayName(const QString &path) {
         if (isUrl(path))
@@ -38,28 +36,23 @@ namespace {
 
 } // namespace
 
-AudioPlaylistDialog::AudioPlaylistDialog(const QString &playlistPath,
-                                         QWidget *parent)
-    : QDialog(parent) {
+AudioPlaylistDialog::AudioPlaylistDialog(const QString &playlistPath, QWidget *parent) : QDialog(parent) {
     setupUi();
     if (!playlistPath.isEmpty() && QFileInfo::exists(playlistPath))
         loadPlaylist(playlistPath);
     updateWindowState();
 }
 
-QString AudioPlaylistDialog::playlistPath() const {
-    return currentPlaylistPath;
-}
+QString AudioPlaylistDialog::playlistPath() const { return currentPlaylistPath; }
 
 void AudioPlaylistDialog::setupUi() {
     setWindowTitle("Audio M3U Playlist Editor");
     setMinimumSize(720, 520);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    QLabel *instructions = new QLabel(
-        "Add audio tracks in playback order. You can reorder, sort, shuffle, "
-        "open an existing M3U playlist, or save the current list as M3U.",
-        this);
+    QLabel *instructions = new QLabel("Add audio tracks in playback order. You can reorder, sort, shuffle, "
+                                      "open an existing M3U playlist, or save the current list as M3U.",
+                                      this);
     instructions->setWordWrap(true);
     mainLayout->addWidget(instructions);
 
@@ -105,51 +98,36 @@ void AudioPlaylistDialog::setupUi() {
     fileButtons->addWidget(cancelButton);
     mainLayout->addLayout(fileButtons);
 
-    connect(addButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::addTracks);
-    connect(removeButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::removeSelected);
-    connect(upButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::moveUp);
-    connect(downButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::moveDown);
-    connect(sortButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::sortTracks);
-    connect(shuffleButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::shuffleTracks);
-    connect(clearButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::clearTracks);
-    connect(openButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::openPlaylist);
-    connect(saveButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::savePlaylist);
-    connect(saveAsButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::savePlaylistAs);
-    connect(doneButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::finishEditing);
-    connect(cancelButton, &QPushButton::clicked, this,
-            &AudioPlaylistDialog::reject);
-    connect(trackList, &QListWidget::itemSelectionChanged, this,
-            &AudioPlaylistDialog::updateWindowState);
-    connect(trackList->model(), &QAbstractItemModel::rowsMoved, this,
-            [this]() { setDirty(); });
+    connect(addButton, &QPushButton::clicked, this, &AudioPlaylistDialog::addTracks);
+    connect(removeButton, &QPushButton::clicked, this, &AudioPlaylistDialog::removeSelected);
+    connect(upButton, &QPushButton::clicked, this, &AudioPlaylistDialog::moveUp);
+    connect(downButton, &QPushButton::clicked, this, &AudioPlaylistDialog::moveDown);
+    connect(sortButton, &QPushButton::clicked, this, &AudioPlaylistDialog::sortTracks);
+    connect(shuffleButton, &QPushButton::clicked, this, &AudioPlaylistDialog::shuffleTracks);
+    connect(clearButton, &QPushButton::clicked, this, &AudioPlaylistDialog::clearTracks);
+    connect(openButton, &QPushButton::clicked, this, &AudioPlaylistDialog::openPlaylist);
+    connect(saveButton, &QPushButton::clicked, this, &AudioPlaylistDialog::savePlaylist);
+    connect(saveAsButton, &QPushButton::clicked, this, &AudioPlaylistDialog::savePlaylistAs);
+    connect(doneButton, &QPushButton::clicked, this, &AudioPlaylistDialog::finishEditing);
+    connect(cancelButton, &QPushButton::clicked, this, &AudioPlaylistDialog::reject);
+    connect(trackList, &QListWidget::itemSelectionChanged, this, &AudioPlaylistDialog::updateWindowState);
+    connect(trackList->model(), &QAbstractItemModel::rowsMoved, this, [this]() { setDirty(); });
 
     acmx2::applyCustomStyleIfEnabled(this);
 }
 
 void AudioPlaylistDialog::addTracks() {
     QSettings settings("LostSideDead", "acmx2");
-    const QString startDirectory =
-        settings.value("audio/playlist_track_dir", QString()).toString();
-    const QStringList paths = QFileDialog::getOpenFileNames(
-        this, "Add Audio Tracks", startDirectory,
-        "Audio Files (*.wav *.mp3 *.flac *.aac *.ogg *.m4a *.wma *.opus "
-        "*.mp4 *.mkv *.mov *.avi);;All Files (*)");
+    const QString startDirectory = settings.value("audio/playlist_track_dir", QString()).toString();
+    const QStringList paths = QFileDialog::getOpenFileNames(this,
+                                                            "Add Audio Tracks",
+                                                            startDirectory,
+                                                            "Audio Files (*.wav *.mp3 *.flac *.aac *.ogg *.m4a *.wma *.opus "
+                                                            "*.mp4 *.mkv *.mov *.avi);;All Files (*)");
     if (paths.isEmpty())
         return;
 
-    settings.setValue("audio/playlist_track_dir",
-                      QFileInfo(paths.front()).absolutePath());
+    settings.setValue("audio/playlist_track_dir", QFileInfo(paths.front()).absolutePath());
     for (const QString &path : paths) {
         const QString absolutePath = QFileInfo(path).absoluteFilePath();
         auto *item = new QListWidgetItem(displayName(absolutePath), trackList);
@@ -207,12 +185,7 @@ void AudioPlaylistDialog::sortTracks() {
     paths.reserve(static_cast<std::size_t>(trackList->count()));
     for (int row = 0; row < trackList->count(); ++row)
         paths.push_back(itemPath(row));
-    std::stable_sort(paths.begin(), paths.end(),
-                     [](const QString &left, const QString &right) {
-                         return QString::compare(displayName(left),
-                                                 displayName(right),
-                                                 Qt::CaseInsensitive) < 0;
-                     });
+    std::stable_sort(paths.begin(), paths.end(), [](const QString &left, const QString &right) { return QString::compare(displayName(left), displayName(right), Qt::CaseInsensitive) < 0; });
 
     trackList->clear();
     for (const QString &path : paths) {
@@ -245,9 +218,7 @@ void AudioPlaylistDialog::shuffleTracks() {
 void AudioPlaylistDialog::clearTracks() {
     if (trackList->count() == 0)
         return;
-    if (QMessageBox::question(this, "Clear Playlist",
-                              "Remove every track from the playlist?") !=
-        QMessageBox::Yes)
+    if (QMessageBox::question(this, "Clear Playlist", "Remove every track from the playlist?") != QMessageBox::Yes)
         return;
     trackList->clear();
     setDirty();
@@ -255,11 +226,8 @@ void AudioPlaylistDialog::clearTracks() {
 
 void AudioPlaylistDialog::openPlaylist() {
     QSettings settings("LostSideDead", "acmx2");
-    const QString startDirectory =
-        settings.value("audio/playlist_dir", QString()).toString();
-    const QString path = QFileDialog::getOpenFileName(
-        this, "Open Audio Playlist", startDirectory,
-        "M3U Playlists (*.m3u *.m3u8)");
+    const QString startDirectory = settings.value("audio/playlist_dir", QString()).toString();
+    const QString path = QFileDialog::getOpenFileName(this, "Open Audio Playlist", startDirectory, "M3U Playlists (*.m3u *.m3u8)");
     if (!path.isEmpty() && confirmDiscardChanges())
         loadPlaylist(path);
 }
@@ -267,9 +235,7 @@ void AudioPlaylistDialog::openPlaylist() {
 bool AudioPlaylistDialog::loadPlaylist(const QString &path) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Open Playlist",
-                              "Could not open the playlist:\n" + path +
-                                  "\n\n" + file.errorString());
+        QMessageBox::critical(this, "Open Playlist", "Could not open the playlist:\n" + path + "\n\n" + file.errorString());
         return false;
     }
 
@@ -297,8 +263,7 @@ bool AudioPlaylistDialog::loadPlaylist(const QString &path) {
 
     currentPlaylistPath = QFileInfo(path).absoluteFilePath();
     QSettings settings("LostSideDead", "acmx2");
-    settings.setValue("audio/playlist_dir",
-                      QFileInfo(currentPlaylistPath).absolutePath());
+    settings.setValue("audio/playlist_dir", QFileInfo(currentPlaylistPath).absolutePath());
     setDirty(false);
     return true;
 }
@@ -315,25 +280,20 @@ void AudioPlaylistDialog::savePlaylistAs() {
     QSettings settings("LostSideDead", "acmx2");
     QString suggestedPath = currentPlaylistPath;
     if (suggestedPath.isEmpty()) {
-        const QString directory =
-            settings.value("audio/playlist_dir", QString()).toString();
+        const QString directory = settings.value("audio/playlist_dir", QString()).toString();
         suggestedPath = QDir(directory).filePath("audio-playlist.m3u");
     }
-    QString path = QFileDialog::getSaveFileName(
-        this, "Save Audio Playlist", suggestedPath,
-        "M3U Playlists (*.m3u);;UTF-8 M3U Playlists (*.m3u8)");
+    QString path = QFileDialog::getSaveFileName(this, "Save Audio Playlist", suggestedPath, "M3U Playlists (*.m3u);;UTF-8 M3U Playlists (*.m3u8)");
     if (path.isEmpty())
         return;
-    if (!path.endsWith(".m3u", Qt::CaseInsensitive) &&
-        !path.endsWith(".m3u8", Qt::CaseInsensitive))
+    if (!path.endsWith(".m3u", Qt::CaseInsensitive) && !path.endsWith(".m3u8", Qt::CaseInsensitive))
         path += ".m3u";
     writePlaylist(path);
 }
 
 bool AudioPlaylistDialog::writePlaylist(const QString &path) {
     if (trackList->count() == 0) {
-        QMessageBox::information(this, "Save Playlist",
-                                 "Add at least one audio track before saving.");
+        QMessageBox::information(this, "Save Playlist", "Add at least one audio track before saving.");
         return false;
     }
 
@@ -349,11 +309,8 @@ bool AudioPlaylistDialog::writePlaylist(const QString &path) {
     }
 
     QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text) ||
-        file.write(contents) != contents.size() || !file.commit()) {
-        QMessageBox::critical(this, "Save Playlist",
-                              "Could not save the playlist:\n" + path +
-                                  "\n\n" + file.errorString());
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text) || file.write(contents) != contents.size() || !file.commit()) {
+        QMessageBox::critical(this, "Save Playlist", "Could not save the playlist:\n" + path + "\n\n" + file.errorString());
         return false;
     }
 
@@ -366,10 +323,7 @@ bool AudioPlaylistDialog::writePlaylist(const QString &path) {
 
 void AudioPlaylistDialog::finishEditing() {
     if (dirty) {
-        const QMessageBox::StandardButton choice = QMessageBox::question(
-            this, "Save Playlist", "Save the playlist before closing?",
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-            QMessageBox::Save);
+        const QMessageBox::StandardButton choice = QMessageBox::question(this, "Save Playlist", "Save the playlist before closing?", QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
         if (choice == QMessageBox::Cancel)
             return;
         if (choice == QMessageBox::Save) {
@@ -392,18 +346,14 @@ void AudioPlaylistDialog::reject() {
 bool AudioPlaylistDialog::confirmDiscardChanges() {
     if (!dirty)
         return true;
-    const QMessageBox::StandardButton choice = QMessageBox::question(
-        this, "Unsaved Playlist", "Discard the unsaved playlist changes?",
-        QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    const QMessageBox::StandardButton choice = QMessageBox::question(this, "Unsaved Playlist", "Discard the unsaved playlist changes?", QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
     return choice == QMessageBox::Discard;
 }
 
 void AudioPlaylistDialog::updateWindowState() {
     const bool hasTracks = trackList->count() > 0;
     const bool hasSelection = !trackList->selectedItems().isEmpty();
-    pathLabel->setText(currentPlaylistPath.isEmpty()
-                           ? "Playlist: New playlist"
-                           : "Playlist: " + currentPlaylistPath);
+    pathLabel->setText(currentPlaylistPath.isEmpty() ? "Playlist: New playlist" : "Playlist: " + currentPlaylistPath);
     removeButton->setEnabled(hasSelection);
     upButton->setEnabled(hasSelection);
     downButton->setEnabled(hasSelection);

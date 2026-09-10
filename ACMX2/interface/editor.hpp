@@ -34,9 +34,7 @@ class QTimer;
 class QVBoxLayout;
 class QStringListModel;
 
-enum class ShaderDiagnosticSeverity { Error,
-                                      Warning,
-                                      Note };
+enum class ShaderDiagnosticSeverity { Error, Warning, Note };
 
 struct ShaderDiagnostic {
     int line = 1;
@@ -113,14 +111,10 @@ class LineNumberArea : public QWidget {
   public:
     explicit LineNumberArea(CustomTextEdit *editor) : QWidget(editor), m_editor(editor) {}
 
-    QSize sizeHint() const override {
-        return QSize(m_editor->lineNumberAreaWidth(), 0);
-    }
+    QSize sizeHint() const override { return QSize(m_editor->lineNumberAreaWidth(), 0); }
 
   protected:
-    void paintEvent(QPaintEvent *event) override {
-        m_editor->lineNumberAreaPaintEvent(event);
-    }
+    void paintEvent(QPaintEvent *event) override { m_editor->lineNumberAreaPaintEvent(event); }
 
   private:
     CustomTextEdit *m_editor;
@@ -147,9 +141,7 @@ class TextEditor : public QDialog {
     /// @brief Show compiler status and source diagnostics for the associated shader.
     void setCompileResult(bool success, const QString &compilerOutput);
     /// @brief Configure ACMXVK completion and snippets from the active manifest.
-    void setShaderContext(bool acmxvk,
-                          const QVector<ShaderEditorUniform> &uniforms,
-                          const QString &libraryDirectory = QString());
+    void setShaderContext(bool acmxvk, const QVector<ShaderEditorUniform> &uniforms, const QString &libraryDirectory = QString());
     void setUniformValue(const QString &name, double value);
 
   signals:

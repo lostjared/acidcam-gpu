@@ -34,8 +34,7 @@ class SettingsWindow : public QDialog {
     /// @param execPath Path to the selected backend used for capability discovery.
     /// @param backend Active rendering backend, used to expose compatible options.
     /// @param parent Parent widget.
-    explicit SettingsWindow(const QString &execPath, acmx2::Backend backend,
-                            QWidget *parent = nullptr);
+    explicit SettingsWindow(const QString &execPath, acmx2::Backend backend, QWidget *parent = nullptr);
     /// @brief Show or hide CUDA-specific controls based on availability.
     /// @param available True when CUDA runtime/device support is available.
     void setCudaAvailable(bool available);

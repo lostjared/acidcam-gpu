@@ -25,8 +25,7 @@ namespace acmxvk {
 
     [[nodiscard]] bool isValidCustomUniformName(const std::string &name);
     [[nodiscard]] ShaderManifest loadShaderManifest(const fs::path &directory);
-    [[nodiscard]] fs::path resolveShaderManifestEntry(const fs::path &directory,
-                                                      std::string entry);
+    [[nodiscard]] fs::path resolveShaderManifestEntry(const fs::path &directory, std::string entry);
     [[nodiscard]] int buildShaderLibrary(const Options &options);
 
 } // namespace acmxvk

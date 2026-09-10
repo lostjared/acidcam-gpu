@@ -49,13 +49,9 @@ static QColor currentLineBackground(const QPalette &palette) {
     const QColor text = palette.color(QPalette::Text);
     const qreal textMix = base.lightnessF() > 0.5 ? 0.08 : 0.15;
 
-    auto blendChannel = [textMix](int baseChannel, int textChannel) {
-        return qRound(baseChannel + (textChannel - baseChannel) * textMix);
-    };
+    auto blendChannel = [textMix](int baseChannel, int textChannel) { return qRound(baseChannel + (textChannel - baseChannel) * textMix); };
 
-    return QColor(blendChannel(base.red(), text.red()),
-                  blendChannel(base.green(), text.green()),
-                  blendChannel(base.blue(), text.blue()));
+    return QColor(blendChannel(base.red(), text.red()), blendChannel(base.green(), text.green()), blendChannel(base.blue(), text.blue()));
 }
 
 static QColor diagnosticColor(ShaderDiagnosticSeverity severity) {
@@ -78,10 +74,7 @@ CustomTextEdit::CustomTextEdit(QWidget *parent) : QPlainTextEdit(parent) {
     m_completer->setCompletionMode(QCompleter::PopupCompletion);
     m_completer->setCaseSensitivity(Qt::CaseInsensitive);
     m_completer->setFilterMode(Qt::MatchStartsWith);
-    connect(m_completer,
-            static_cast<void (QCompleter::*)(const QString &)>(
-                &QCompleter::activated),
-            this, &CustomTextEdit::insertCompletion);
+    connect(m_completer, static_cast<void (QCompleter::*)(const QString &)>(&QCompleter::activated), this, &CustomTextEdit::insertCompletion);
 
     connect(this, &QPlainTextEdit::blockCountChanged, this, &CustomTextEdit::updateLineNumberAreaWidth);
     connect(this, &QPlainTextEdit::updateRequest, this, &CustomTextEdit::updateLineNumberArea);
@@ -95,8 +88,7 @@ CustomTextEdit::CustomTextEdit(QWidget *parent) : QPlainTextEdit(parent) {
 void CustomTextEdit::changeEvent(QEvent *event) {
     QPlainTextEdit::changeEvent(event);
 
-    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange ||
-        event->type() == QEvent::ApplicationPaletteChange) {
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange || event->type() == QEvent::ApplicationPaletteChange) {
         matchBrackets();
         m_lineNumberArea->update();
         emit themeChanged();
@@ -114,8 +106,7 @@ int CustomTextEdit::lineNumberAreaWidth() {
     return 24 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
 }
 
-void CustomTextEdit::setDiagnostics(
-    const QVector<ShaderDiagnostic> &diagnostics) {
+void CustomTextEdit::setDiagnostics(const QVector<ShaderDiagnostic> &diagnostics) {
     m_diagnostics = diagnostics;
     m_lineNumberArea->update();
     matchBrackets();
@@ -134,8 +125,7 @@ QString CustomTextEdit::completionPrefix() const {
     int start = end;
     while (start > 0) {
         const QChar character = document()->characterAt(start - 1);
-        if (!character.isLetterOrNumber() && character != QLatin1Char('_') &&
-            character != QLatin1Char('.')) {
+        if (!character.isLetterOrNumber() && character != QLatin1Char('_') && character != QLatin1Char('.')) {
             break;
         }
         --start;
@@ -150,8 +140,7 @@ void CustomTextEdit::insertCompletion(const QString &completion) {
     const QString prefix = completionPrefix();
     if (!prefix.isEmpty()) {
         cursor.setPosition(cursor.position() - prefix.size());
-        cursor.setPosition(cursor.position() + prefix.size(),
-                           QTextCursor::KeepAnchor);
+        cursor.setPosition(cursor.position() + prefix.size(), QTextCursor::KeepAnchor);
     }
     cursor.insertText(completion);
     setTextCursor(cursor);
@@ -168,20 +157,13 @@ void CustomTextEdit::showCompletionPopup(bool forced) {
         m_completer->popup()->hide();
         return;
     }
-    m_completer->popup()->setCurrentIndex(
-        m_completer->completionModel()->index(0, 0));
+    m_completer->popup()->setCurrentIndex(m_completer->completionModel()->index(0, 0));
     QRect popupRect = cursorRect();
-    popupRect.setWidth(qMax(280, m_completer->popup()->sizeHintForColumn(0) +
-                                     m_completer->popup()
-                                         ->verticalScrollBar()
-                                         ->sizeHint()
-                                         .width()));
+    popupRect.setWidth(qMax(280, m_completer->popup()->sizeHintForColumn(0) + m_completer->popup()->verticalScrollBar()->sizeHint().width()));
     m_completer->complete(popupRect);
 }
 
-void CustomTextEdit::updateLineNumberAreaWidth(int /*newBlockCount*/) {
-    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
-}
+void CustomTextEdit::updateLineNumberAreaWidth(int /*newBlockCount*/) { setViewportMargins(lineNumberAreaWidth(), 0, 0, 0); }
 
 void CustomTextEdit::updateLineNumberArea(const QRect &rect, int dy) {
     if (dy)
@@ -214,17 +196,14 @@ void CustomTextEdit::lineNumberAreaPaintEvent(QPaintEvent *event) {
             painter.setPen(QColor(120, 120, 120));
             if (blockNumber == textCursor().blockNumber())
                 painter.setPen(QColor(220, 220, 220));
-            painter.drawText(14, top, m_lineNumberArea->width() - 19,
-                             fontMetrics().height(),
-                             Qt::AlignRight, number);
+            painter.drawText(14, top, m_lineNumberArea->width() - 19, fontMetrics().height(), Qt::AlignRight, number);
             for (const ShaderDiagnostic &diagnostic : m_diagnostics) {
                 if (diagnostic.line != blockNumber + 1)
                     continue;
                 painter.setBrush(diagnosticColor(diagnostic.severity));
                 painter.setPen(Qt::NoPen);
                 const int diameter = qMin(9, fontMetrics().height() - 2);
-                painter.drawEllipse(2, top + (fontMetrics().height() - diameter) / 2,
-                                    diameter, diameter);
+                painter.drawEllipse(2, top + (fontMetrics().height() - diameter) / 2, diameter, diameter);
                 break;
             }
         }
@@ -235,9 +214,7 @@ void CustomTextEdit::lineNumberAreaPaintEvent(QPaintEvent *event) {
     }
 }
 
-void CustomTextEdit::highlightCurrentLine() {
-    matchBrackets();
-}
+void CustomTextEdit::highlightCurrentLine() { matchBrackets(); }
 
 static QChar matchingBracket(QChar ch) {
     if (ch == '(')
@@ -255,9 +232,7 @@ static QChar matchingBracket(QChar ch) {
     return QChar();
 }
 
-static bool isOpenBracket(QChar ch) {
-    return ch == '(' || ch == '{' || ch == '[';
-}
+static bool isOpenBracket(QChar ch) { return ch == '(' || ch == '{' || ch == '['; }
 
 void CustomTextEdit::matchBrackets() {
     QList<QTextEdit::ExtraSelection> selections;
@@ -324,8 +299,7 @@ void CustomTextEdit::matchBrackets() {
         tryMatch(pos - 1);
 
     for (const ShaderDiagnostic &diagnostic : m_diagnostics) {
-        const QTextBlock block =
-            doc->findBlockByLineNumber(qMax(0, diagnostic.line - 1));
+        const QTextBlock block = doc->findBlockByLineNumber(qMax(0, diagnostic.line - 1));
         if (!block.isValid())
             continue;
 
@@ -334,13 +308,9 @@ void CustomTextEdit::matchBrackets() {
         QTextEdit::ExtraSelection diagnosticSelection;
         diagnosticSelection.cursor = QTextCursor(block);
         diagnosticSelection.cursor.setPosition(block.position() + column);
-        diagnosticSelection.cursor.setPosition(
-            block.position() + qMin(lineLength, column + qMax(1, lineLength - column)),
-            QTextCursor::KeepAnchor);
-        diagnosticSelection.format.setUnderlineStyle(
-            QTextCharFormat::WaveUnderline);
-        diagnosticSelection.format.setUnderlineColor(
-            diagnosticColor(diagnostic.severity));
+        diagnosticSelection.cursor.setPosition(block.position() + qMin(lineLength, column + qMax(1, lineLength - column)), QTextCursor::KeepAnchor);
+        diagnosticSelection.format.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+        diagnosticSelection.format.setUnderlineColor(diagnosticColor(diagnostic.severity));
         diagnosticSelection.format.setToolTip(diagnostic.message);
         selections.append(diagnosticSelection);
     }
@@ -602,8 +572,7 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
         }
     }
 
-    if (event->key() == Qt::Key_Space &&
-        event->modifiers() == Qt::ControlModifier) {
+    if (event->key() == Qt::Key_Space && event->modifiers() == Qt::ControlModifier) {
         showCompletionPopup(true);
         return;
     }
@@ -685,8 +654,7 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
         if (!cursor.hasSelection() && cursor.position() > 0) {
             const QChar previous = document()->characterAt(cursor.position() - 1);
             const QChar next = document()->characterAt(cursor.position());
-            const bool isPair = (isOpenBracket(previous) && matchingBracket(previous) == next) ||
-                                ((previous == '"' || previous == '\'') && previous == next);
+            const bool isPair = (isOpenBracket(previous) && matchingBracket(previous) == next) || ((previous == '"' || previous == '\'') && previous == next);
             if (isPair) {
                 cursor.beginEditBlock();
                 cursor.deletePreviousChar();
@@ -705,8 +673,7 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
             selectedText.replace(QChar::ParagraphSeparator, '\n');
             cursor.insertText(QString(opening) + selectedText + QString(closing));
             cursor.setPosition(selectionStart + 1);
-            cursor.setPosition(selectionStart + 1 + selectedText.size(),
-                               QTextCursor::KeepAnchor);
+            cursor.setPosition(selectionStart + 1 + selectedText.size(), QTextCursor::KeepAnchor);
         } else {
             cursor.insertText(QString(opening) + QString(closing));
             cursor.movePosition(QTextCursor::Left);
@@ -760,11 +727,8 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
     }
 
     QPlainTextEdit::keyPressEvent(event);
-    const bool canComplete =
-        event->modifiers() == Qt::NoModifier ||
-        event->modifiers() == Qt::ShiftModifier;
-    if (canComplete &&
-        (!event->text().isEmpty() || event->key() == Qt::Key_Backspace)) {
+    const bool canComplete = event->modifiers() == Qt::NoModifier || event->modifiers() == Qt::ShiftModifier;
+    if (canComplete && (!event->text().isEmpty() || event->key() == Qt::Key_Backspace)) {
         showCompletionPopup(false);
     } else {
         m_completer->popup()->hide();
@@ -772,12 +736,10 @@ void CustomTextEdit::keyPressEvent(QKeyEvent *event) {
 }
 
 void CustomTextEdit::mousePressEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton &&
-        (event->modifiers() & Qt::ControlModifier)) {
+    if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ControlModifier)) {
         const QTextCursor cursor = cursorForPosition(event->pos());
         const QString line = cursor.block().text();
-        const QRegularExpression includeExpression(
-            QStringLiteral("^\\s*#\\s*include\\s*[<\"]([^>\"]+)[>\"]"));
+        const QRegularExpression includeExpression(QStringLiteral("^\\s*#\\s*include\\s*[<\"]([^>\"]+)[>\"]"));
         const QRegularExpressionMatch match = includeExpression.match(line);
         if (match.hasMatch()) {
             const int column = cursor.positionInBlock();
@@ -793,11 +755,7 @@ void CustomTextEdit::mousePressEvent(QMouseEvent *event) {
     QPlainTextEdit::mousePressEvent(event);
 }
 
-TextEditor::TextEditor(QWidget *parent)
-    : QDialog(parent), m_modified(false), m_textEdit(nullptr), m_highlighter(nullptr),
-      m_statusBar(nullptr), m_lineColLabel(nullptr), m_fontSize(24) {
-    init();
-}
+TextEditor::TextEditor(QWidget *parent) : QDialog(parent), m_modified(false), m_textEdit(nullptr), m_highlighter(nullptr), m_statusBar(nullptr), m_lineColLabel(nullptr), m_fontSize(24) { init(); }
 
 void TextEditor::setText(const QString &text) {
     m_textEdit->setPlainText(text);
@@ -812,13 +770,10 @@ void TextEditor::setFileName(const QString &filen) {
     updateWindowTitle();
 }
 
-QString TextEditor::fileName() const {
-    return filename;
-}
+QString TextEditor::fileName() const { return filename; }
 
 void TextEditor::revealLocation(int lineNumber, int columnNumber, int matchLength) {
-    const QTextBlock block = m_textEdit->document()->findBlockByLineNumber(
-        qMax(0, lineNumber - 1));
+    const QTextBlock block = m_textEdit->document()->findBlockByLineNumber(qMax(0, lineNumber - 1));
     if (!block.isValid())
         return;
 
@@ -828,8 +783,7 @@ void TextEditor::revealLocation(int lineNumber, int columnNumber, int matchLengt
     QTextCursor cursor(block);
     cursor.setPosition(block.position() + column);
     if (selectionLength > 0) {
-        cursor.setPosition(block.position() + column + selectionLength,
-                           QTextCursor::KeepAnchor);
+        cursor.setPosition(block.position() + column + selectionLength, QTextCursor::KeepAnchor);
     }
     m_textEdit->setTextCursor(cursor);
     m_textEdit->centerCursor();
@@ -846,8 +800,7 @@ void TextEditor::setCompilePending() {
     m_compileStatusLabel->setToolTip(QString());
 }
 
-void TextEditor::setCompileResult(bool success,
-                                  const QString &compilerOutput) {
+void TextEditor::setCompileResult(bool success, const QString &compilerOutput) {
     m_diagnostics = parseDiagnostics(compilerOutput);
     m_currentDiagnostic = -1;
     m_textEdit->setDiagnostics(m_diagnostics);
@@ -860,38 +813,23 @@ void TextEditor::setCompileResult(bool success,
         warnings += diagnostic.severity == ShaderDiagnosticSeverity::Warning;
     }
     if (success) {
-        m_compileStatusLabel->setText(
-            warnings > 0
-                ? QString("Compiled successfully · %1 warning(s)").arg(warnings)
-                : QStringLiteral("Compiled successfully"));
-        m_compileStatusLabel->setStyleSheet(
-            warnings > 0 ? "color: #e5b84b;" : "color: #55c878;");
+        m_compileStatusLabel->setText(warnings > 0 ? QString("Compiled successfully · %1 warning(s)").arg(warnings) : QStringLiteral("Compiled successfully"));
+        m_compileStatusLabel->setStyleSheet(warnings > 0 ? "color: #e5b84b;" : "color: #55c878;");
         m_compileStatusLabel->setToolTip(compilerOutput.left(8192));
-        m_statusBar->showMessage(
-            warnings > 0 ? "Shader applied; press F8 to review warnings"
-                         : "Shader compiled and applied",
-            3000);
+        m_statusBar->showMessage(warnings > 0 ? "Shader applied; press F8 to review warnings" : "Shader compiled and applied", 3000);
         return;
     }
     QString status = "Compile failed";
     if (!m_diagnostics.isEmpty()) {
-        status += QString(" · %1 error(s), %2 warning(s)")
-                      .arg(errors)
-                      .arg(warnings);
+        status += QString(" · %1 error(s), %2 warning(s)").arg(errors).arg(warnings);
     }
     m_compileStatusLabel->setText(status);
     m_compileStatusLabel->setStyleSheet("color: #e14b4b;");
     m_compileStatusLabel->setToolTip(compilerOutput.left(8192));
-    m_statusBar->showMessage(
-        m_diagnostics.isEmpty()
-            ? "Compilation failed; see the ACMX log for compiler output"
-            : "Press F8 to visit the first compiler diagnostic",
-        5000);
+    m_statusBar->showMessage(m_diagnostics.isEmpty() ? "Compilation failed; see the ACMX log for compiler output" : "Press F8 to visit the first compiler diagnostic", 5000);
 }
 
-void TextEditor::setShaderContext(
-    bool acmxvk, const QVector<ShaderEditorUniform> &uniforms,
-    const QString &libraryDirectory) {
+void TextEditor::setShaderContext(bool acmxvk, const QVector<ShaderEditorUniform> &uniforms, const QString &libraryDirectory) {
     m_acmxvkContext = acmxvk;
     m_uniforms = uniforms;
     m_libraryDirectory = libraryDirectory;
@@ -913,10 +851,7 @@ void TextEditor::setUniformValue(const QString &name, double value) {
         if (QSlider *slider = m_uniformSliders.value(name)) {
             const QSignalBlocker blocker(slider);
             const double range = uniform.maximum - uniform.minimum;
-            const int position = range > 0.0
-                                     ? qRound((uniform.value - uniform.minimum) /
-                                              range * slider->maximum())
-                                     : 0;
+            const int position = range > 0.0 ? qRound((uniform.value - uniform.minimum) / range * slider->maximum()) : 0;
             slider->setValue(position);
         }
         break;
@@ -925,9 +860,7 @@ void TextEditor::setUniformValue(const QString &name, double value) {
 
 void TextEditor::openInclude(const QString &includeName) {
     const QFileInfo sourceInfo(filename);
-    const QStringList candidates{
-        sourceInfo.dir().filePath(includeName),
-        QDir(m_libraryDirectory).filePath(includeName)};
+    const QStringList candidates{sourceInfo.dir().filePath(includeName), QDir(m_libraryDirectory).filePath(includeName)};
     for (const QString &candidate : candidates) {
         const QFileInfo includeInfo(candidate);
         if (includeInfo.exists() && includeInfo.isFile()) {
@@ -935,8 +868,7 @@ void TextEditor::openInclude(const QString &includeName) {
             return;
         }
     }
-    m_statusBar->showMessage(
-        QStringLiteral("Include file not found: %1").arg(includeName), 4000);
+    m_statusBar->showMessage(QStringLiteral("Include file not found: %1").arg(includeName), 4000);
 }
 
 void TextEditor::requestPreview() {
@@ -981,10 +913,7 @@ void TextEditor::rebuildUniformControls() {
     for (const ShaderEditorUniform &uniform : m_uniforms) {
         auto *nameLabel = new QLabel(uniform.name, m_uniformPanel);
         if (uniform.slot >= 0) {
-            nameLabel->setToolTip(
-                QStringLiteral("ext.custom_uniforms[%1].%2")
-                    .arg(uniform.slot / 4)
-                    .arg(QStringLiteral("xyzw").at(uniform.slot % 4)));
+            nameLabel->setToolTip(QStringLiteral("ext.custom_uniforms[%1].%2").arg(uniform.slot / 4).arg(QStringLiteral("xyzw").at(uniform.slot % 4)));
         }
         auto *slider = new QSlider(Qt::Horizontal, m_uniformPanel);
         slider->setRange(0, 1000);
@@ -994,78 +923,35 @@ void TextEditor::rebuildUniformControls() {
         spin->setSingleStep(uniform.step);
         spin->setValue(uniform.value);
         const double range = uniform.maximum - uniform.minimum;
-        slider->setValue(range > 0.0
-                             ? qRound((uniform.value - uniform.minimum) /
-                                      range * slider->maximum())
-                             : 0);
+        slider->setValue(range > 0.0 ? qRound((uniform.value - uniform.minimum) / range * slider->maximum()) : 0);
         m_uniformLayout->addWidget(nameLabel);
         m_uniformLayout->addWidget(slider);
         m_uniformLayout->addWidget(spin);
         m_uniformSpins.insert(uniform.name, spin);
         m_uniformSliders.insert(uniform.name, slider);
 
-        connect(slider, &QSlider::valueChanged, this,
-                [this, uniform, spin, slider](int position) {
-                    const double ratio = slider->maximum() > 0
-                                             ? static_cast<double>(position) /
-                                                   slider->maximum()
-                                             : 0.0;
-                    const double raw = uniform.minimum +
-                                       (uniform.maximum - uniform.minimum) * ratio;
-                    const double steps = uniform.step > 0.0
-                                             ? qRound((raw - uniform.minimum) /
-                                                      uniform.step)
-                                             : 0.0;
-                    const double value = qBound(
-                        uniform.minimum,
-                        uniform.minimum + steps * uniform.step,
-                        uniform.maximum);
-                    const QSignalBlocker blocker(spin);
-                    spin->setValue(value);
-                    emit uniformValueChanged(uniform.name, value);
-                });
-        connect(spin,
-                static_cast<void (QDoubleSpinBox::*)(double)>(
-                    &QDoubleSpinBox::valueChanged),
-                this, [this, uniform, slider](double value) {
-                    const double range = uniform.maximum - uniform.minimum;
-                    const int position = range > 0.0
-                                             ? qRound((value - uniform.minimum) /
-                                                      range * slider->maximum())
-                                             : 0;
-                    const QSignalBlocker blocker(slider);
-                    slider->setValue(position);
-                    emit uniformValueChanged(uniform.name, value);
-                });
+        connect(slider, &QSlider::valueChanged, this, [this, uniform, spin, slider](int position) {
+            const double ratio = slider->maximum() > 0 ? static_cast<double>(position) / slider->maximum() : 0.0;
+            const double raw = uniform.minimum + (uniform.maximum - uniform.minimum) * ratio;
+            const double steps = uniform.step > 0.0 ? qRound((raw - uniform.minimum) / uniform.step) : 0.0;
+            const double value = qBound(uniform.minimum, uniform.minimum + steps * uniform.step, uniform.maximum);
+            const QSignalBlocker blocker(spin);
+            spin->setValue(value);
+            emit uniformValueChanged(uniform.name, value);
+        });
+        connect(spin, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), this, [this, uniform, slider](double value) {
+            const double range = uniform.maximum - uniform.minimum;
+            const int position = range > 0.0 ? qRound((value - uniform.minimum) / range * slider->maximum()) : 0;
+            const QSignalBlocker blocker(slider);
+            slider->setValue(position);
+            emit uniformValueChanged(uniform.name, value);
+        });
     }
     m_uniformLayout->addStretch();
 }
 
 void TextEditor::updateCompletionWords() {
-    QStringList words{
-        "break", "case", "const", "continue",
-        "default", "discard", "do", "else",
-        "false", "for", "if", "in",
-        "inout", "layout", "out", "precision",
-        "return", "struct", "switch", "true",
-        "uniform", "while", "bool", "int",
-        "uint", "float", "double", "vec2",
-        "vec3", "vec4", "ivec2", "ivec3",
-        "ivec4", "uvec2", "uvec3", "uvec4",
-        "bvec2", "bvec3", "bvec4", "mat2",
-        "mat3", "mat4", "sampler1D", "sampler2D",
-        "sampler2DArray", "samplerCube", "image2D", "abs",
-        "acos", "all", "any", "asin",
-        "atan", "ceil", "clamp", "cos",
-        "cross", "degrees", "distance", "dot",
-        "exp", "exp2", "floor", "fract",
-        "imageLoad", "imageSize", "imageStore", "length",
-        "log", "log2", "max", "min",
-        "mix", "mod", "normalize", "pow",
-        "radians", "reflect", "refract", "round",
-        "sign", "sin", "smoothstep", "sqrt",
-        "step", "tan", "texelFetch", "texture",
-        "textureSize", "transpose"};
+    QStringList words{"break", "case", "const", "continue", "default", "discard", "do", "else", "false", "for", "if", "in", "inout", "layout", "out", "precision", "return", "struct", "switch", "true", "uniform", "while", "bool", "int", "uint", "float", "double", "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4", "uvec2", "uvec3", "uvec4", "bvec2", "bvec3", "bvec4", "mat2", "mat3", "mat4", "sampler1D", "sampler2D", "sampler2DArray", "samplerCube", "image2D", "abs", "acos", "all", "any", "asin", "atan", "ceil", "clamp", "cos", "cross", "degrees", "distance", "dot", "exp", "exp2", "floor", "fract", "imageLoad", "imageSize", "imageStore", "length", "log", "log2", "max", "min", "mix", "mod", "normalize", "pow", "radians", "reflect", "refract", "round", "sign", "sin", "smoothstep", "sqrt", "step", "tan", "texelFetch", "texture", "textureSize", "transpose"};
 
     if (m_acmxvkContext) {
         words << "input_image"
@@ -1105,10 +991,9 @@ void TextEditor::updateCompletionWords() {
     }
 
     const QString source = m_textEdit->toPlainText();
-    const QRegularExpression declarations(
-        QStringLiteral("(?:#\\s*define|\\b(?:void|bool|int|uint|float|double|"
-                       "[biu]?vec[234]|mat[234])\\s+)\\s*"
-                       "([A-Za-z_][A-Za-z0-9_]*)"));
+    const QRegularExpression declarations(QStringLiteral("(?:#\\s*define|\\b(?:void|bool|int|uint|float|double|"
+                                                         "[biu]?vec[234]|mat[234])\\s+)\\s*"
+                                                         "([A-Za-z_][A-Za-z0-9_]*)"));
     QRegularExpressionMatchIterator matches = declarations.globalMatch(source);
     while (matches.hasNext())
         words.append(matches.next().captured(1));
@@ -1121,18 +1006,14 @@ QString TextEditor::customUniformDefines() const {
     for (int index = 0; index < m_uniforms.size(); ++index) {
         const ShaderEditorUniform &uniform = m_uniforms[index];
         const int slot = uniform.slot >= 0 ? uniform.slot : index;
-        defines += QString("#define %1 ext.custom_uniforms[%2].%3\n")
-                       .arg(uniform.name)
-                       .arg(slot / 4)
-                       .arg(components.at(slot % 4));
+        defines += QString("#define %1 ext.custom_uniforms[%2].%3\n").arg(uniform.name).arg(slot / 4).arg(components.at(slot % 4));
     }
     return defines;
 }
 
 void TextEditor::insertSnippet(const QString &snippet) {
     if (snippet.isEmpty()) {
-        m_statusBar->showMessage("The active library has no custom uniforms",
-                                 3000);
+        m_statusBar->showMessage("The active library has no custom uniforms", 3000);
         return;
     }
     QTextCursor cursor = m_textEdit->textCursor();
@@ -1147,19 +1028,16 @@ void TextEditor::insertSnippet(const QString &snippet) {
     updateCompletionWords();
 }
 
-QVector<ShaderDiagnostic>
-TextEditor::parseDiagnostics(const QString &compilerOutput) const {
+QVector<ShaderDiagnostic> TextEditor::parseDiagnostics(const QString &compilerOutput) const {
     QVector<ShaderDiagnostic> diagnostics;
     const QFileInfo editedFile(filename);
     const QString editedCanonical = editedFile.canonicalFilePath();
-    const QRegularExpression withColumn(
-        QStringLiteral("^(.+):(\\d+):(\\d+):\\s*"
-                       "(?:(error|warning|note)\\s*:\\s*)?(.*)$"),
-        QRegularExpression::CaseInsensitiveOption);
-    const QRegularExpression withoutColumn(
-        QStringLiteral("^(.+):(\\d+):\\s*"
-                       "(?:(error|warning|note)\\s*:\\s*)?(.*)$"),
-        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpression withColumn(QStringLiteral("^(.+):(\\d+):(\\d+):\\s*"
+                                                       "(?:(error|warning|note)\\s*:\\s*)?(.*)$"),
+                                        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpression withoutColumn(QStringLiteral("^(.+):(\\d+):\\s*"
+                                                          "(?:(error|warning|note)\\s*:\\s*)?(.*)$"),
+                                           QRegularExpression::CaseInsensitiveOption);
 
     const QStringList lines = compilerOutput.split(QLatin1Char('\n'));
     for (const QString &line : lines) {
@@ -1171,8 +1049,7 @@ TextEditor::parseDiagnostics(const QString &compilerOutput) const {
             continue;
 
         QString reportedPath = match.captured(1).trimmed();
-        if (reportedPath.startsWith(QLatin1Char('"')) &&
-            reportedPath.endsWith(QLatin1Char('"'))) {
+        if (reportedPath.startsWith(QLatin1Char('"')) && reportedPath.endsWith(QLatin1Char('"'))) {
             reportedPath = reportedPath.mid(1, reportedPath.size() - 2);
         }
         QFileInfo reportedFile(reportedPath);
@@ -1180,27 +1057,20 @@ TextEditor::parseDiagnostics(const QString &compilerOutput) const {
             reportedFile = QFileInfo(editedFile.absoluteDir(), reportedPath);
         }
         const QString reportedCanonical = reportedFile.canonicalFilePath();
-        const bool sameFile =
-            (!editedCanonical.isEmpty() && !reportedCanonical.isEmpty() &&
-             editedCanonical == reportedCanonical) ||
-            QFileInfo(reportedPath).fileName() == editedFile.fileName();
+        const bool sameFile = (!editedCanonical.isEmpty() && !reportedCanonical.isEmpty() && editedCanonical == reportedCanonical) || QFileInfo(reportedPath).fileName() == editedFile.fileName();
         if (!sameFile)
             continue;
 
         ShaderDiagnostic diagnostic;
         diagnostic.line = qMax(1, match.captured(2).toInt());
-        diagnostic.column = hasColumn
-                                ? qMax(0, match.captured(3).toInt() - 1)
-                                : 0;
-        const QString severity =
-            match.captured(hasColumn ? 4 : 3).toLower();
+        diagnostic.column = hasColumn ? qMax(0, match.captured(3).toInt() - 1) : 0;
+        const QString severity = match.captured(hasColumn ? 4 : 3).toLower();
         if (severity == QStringLiteral("warning"))
             diagnostic.severity = ShaderDiagnosticSeverity::Warning;
         else if (severity == QStringLiteral("note"))
             diagnostic.severity = ShaderDiagnosticSeverity::Note;
         const QString detail = match.captured(hasColumn ? 5 : 4).trimmed();
-        diagnostic.message =
-            detail.isEmpty() ? line.trimmed() : detail;
+        diagnostic.message = detail.isEmpty() ? line.trimmed() : detail;
         diagnostics.append(diagnostic);
     }
     return diagnostics;
@@ -1212,16 +1082,10 @@ void TextEditor::navigateDiagnostic(int offset) {
     if (m_currentDiagnostic < 0)
         m_currentDiagnostic = offset < 0 ? m_diagnostics.size() - 1 : 0;
     else
-        m_currentDiagnostic =
-            (m_currentDiagnostic + offset + m_diagnostics.size()) %
-            m_diagnostics.size();
+        m_currentDiagnostic = (m_currentDiagnostic + offset + m_diagnostics.size()) % m_diagnostics.size();
     const ShaderDiagnostic &diagnostic = m_diagnostics[m_currentDiagnostic];
     revealLocation(diagnostic.line, diagnostic.column, 1);
-    m_statusBar->showMessage(
-        QString("Diagnostic %1 of %2: %3")
-            .arg(m_currentDiagnostic + 1)
-            .arg(m_diagnostics.size())
-            .arg(diagnostic.message));
+    m_statusBar->showMessage(QString("Diagnostic %1 of %2: %3").arg(m_currentDiagnostic + 1).arg(m_diagnostics.size()).arg(diagnostic.message));
 }
 
 void TextEditor::updateDiagnosticActions() {
@@ -1338,25 +1202,17 @@ void TextEditor::init() {
     QMenu *diagnosticsMenu = menuBar->addMenu("&Diagnostics");
     m_nextDiagnosticAction = diagnosticsMenu->addAction("&Next Diagnostic");
     m_nextDiagnosticAction->setShortcut(QKeySequence(Qt::Key_F8));
-    m_previousDiagnosticAction =
-        diagnosticsMenu->addAction("&Previous Diagnostic");
-    m_previousDiagnosticAction->setShortcut(
-        QKeySequence(Qt::SHIFT | Qt::Key_F8));
+    m_previousDiagnosticAction = diagnosticsMenu->addAction("&Previous Diagnostic");
+    m_previousDiagnosticAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F8));
 
     m_snippetsMenu = menuBar->addMenu("&Snippets");
-    QAction *engineStateSnippet =
-        m_snippetsMenu->addAction("Input and Engine State Bindings");
-    QAction *pushConstantsSnippet =
-        m_snippetsMenu->addAction("Fragment Push Constants");
-    QAction *historySnippet =
-        m_snippetsMenu->addAction("Frame History Binding");
-    QAction *audioSnippet =
-        m_snippetsMenu->addAction("FFT and FFT History Bindings");
-    QAction *uniformSnippet =
-        m_snippetsMenu->addAction("Custom Uniform Defines");
+    QAction *engineStateSnippet = m_snippetsMenu->addAction("Input and Engine State Bindings");
+    QAction *pushConstantsSnippet = m_snippetsMenu->addAction("Fragment Push Constants");
+    QAction *historySnippet = m_snippetsMenu->addAction("Frame History Binding");
+    QAction *audioSnippet = m_snippetsMenu->addAction("FFT and FFT History Bindings");
+    QAction *uniformSnippet = m_snippetsMenu->addAction("Custom Uniform Defines");
     m_snippetsMenu->addSeparator();
-    QAction *computeMainSnippet =
-        m_snippetsMenu->addAction("Compute Output and Main Function");
+    QAction *computeMainSnippet = m_snippetsMenu->addAction("Compute Output and Main Function");
     m_snippetsMenu->setEnabled(false);
 
     QMenu *viewMenu = menuBar->addMenu("&View");
@@ -1374,8 +1230,7 @@ void TextEditor::init() {
 
     QAction *toggleWordWrapAction = viewMenu->addAction("Word Wrap");
     toggleWordWrapAction->setCheckable(true);
-    toggleWordWrapAction->setChecked(
-        editorSettings.value("editor/wordWrap", false).toBool());
+    toggleWordWrapAction->setChecked(editorSettings.value("editor/wordWrap", false).toBool());
 
     layout->setMenuBar(menuBar);
 
@@ -1388,8 +1243,7 @@ void TextEditor::init() {
         button->setDefault(false);
     }
     m_livePreviewCheck = new QCheckBox(tr("Live Preview"), this);
-    m_livePreviewCheck->setChecked(
-        editorSettings.value("editor/livePreview", false).toBool());
+    m_livePreviewCheck->setChecked(editorSettings.value("editor/livePreview", false).toBool());
     m_livePreviewCheck->setEnabled(false);
     previewBar->addWidget(previewButton);
     previewBar->addWidget(saveApplyButton);
@@ -1401,9 +1255,7 @@ void TextEditor::init() {
     auto *splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_textEdit = new CustomTextEdit(splitter);
-    m_textEdit->setLineWrapMode(toggleWordWrapAction->isChecked()
-                                    ? QPlainTextEdit::WidgetWidth
-                                    : QPlainTextEdit::NoWrap);
+    m_textEdit->setLineWrapMode(toggleWordWrapAction->isChecked() ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
     m_textEdit->setTabStopDistance(4 * m_textEdit->fontMetrics().horizontalAdvance(' '));
     updateFontSize();
 
@@ -1434,9 +1286,7 @@ void TextEditor::init() {
 
     m_highlighter = new GlslSyntaxHighlighter(m_textEdit->document());
     m_highlighter->setEditorPalette(m_textEdit->palette());
-    connect(m_textEdit, &CustomTextEdit::themeChanged, this, [this]() {
-        m_highlighter->setEditorPalette(m_textEdit->palette());
-    });
+    connect(m_textEdit, &CustomTextEdit::themeChanged, this, [this]() { m_highlighter->setEditorPalette(m_textEdit->palette()); });
 
     setLayout(layout);
     if (!restoreGeometry(editorSettings.value("editor/geometry").toByteArray()))
@@ -1452,18 +1302,14 @@ void TextEditor::init() {
     connect(saveAction, &QAction::triggered, this, &TextEditor::saveContents);
     connect(saveAsAction, &QAction::triggered, this, &TextEditor::saveAs);
     connect(closeAction, &QAction::triggered, this, &TextEditor::close);
-    connect(previewButton, &QPushButton::clicked, this,
-            &TextEditor::requestPreview);
-    connect(saveApplyButton, &QPushButton::clicked, this,
-            &TextEditor::saveContents);
-    connect(revertButton, &QPushButton::clicked, this,
-            &TextEditor::revertContents);
-    connect(m_livePreviewCheck, &QCheckBox::toggled, this,
-            [this](bool checked) {
-                QSettings("LostSideDead").setValue("editor/livePreview", checked);
-                if (checked)
-                    m_previewTimer->start();
-            });
+    connect(previewButton, &QPushButton::clicked, this, &TextEditor::requestPreview);
+    connect(saveApplyButton, &QPushButton::clicked, this, &TextEditor::saveContents);
+    connect(revertButton, &QPushButton::clicked, this, &TextEditor::revertContents);
+    connect(m_livePreviewCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        QSettings("LostSideDead").setValue("editor/livePreview", checked);
+        if (checked)
+            m_previewTimer->start();
+    });
 
     connect(undoAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::undo);
     connect(redoAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::redo);
@@ -1491,16 +1337,10 @@ void TextEditor::init() {
         QSettings("LostSideDead").setValue("editor/wordWrap", checked);
     });
 
-    connect(shiftRightAction, &QAction::triggered, this, [this]() {
-        m_textEdit->indentSelection();
-    });
-    connect(shiftLeftAction, &QAction::triggered, this, [this]() {
-        m_textEdit->unindentSelection();
-    });
-    connect(m_nextDiagnosticAction, &QAction::triggered, this,
-            [this]() { navigateDiagnostic(1); });
-    connect(m_previousDiagnosticAction, &QAction::triggered, this,
-            [this]() { navigateDiagnostic(-1); });
+    connect(shiftRightAction, &QAction::triggered, this, [this]() { m_textEdit->indentSelection(); });
+    connect(shiftLeftAction, &QAction::triggered, this, [this]() { m_textEdit->unindentSelection(); });
+    connect(m_nextDiagnosticAction, &QAction::triggered, this, [this]() { navigateDiagnostic(1); });
+    connect(m_previousDiagnosticAction, &QAction::triggered, this, [this]() { navigateDiagnostic(-1); });
     updateDiagnosticActions();
     connect(engineStateSnippet, &QAction::triggered, this, [this]() {
         insertSnippet(QStringLiteral(R"glsl(layout(set = 0, binding = 0) uniform sampler2D input_image;
@@ -1537,16 +1377,12 @@ layout(set = 0, binding = 1, std140) uniform SpriteExtended {
     vec4 params;
 } pc;)glsl"));
     });
-    connect(historySnippet, &QAction::triggered, this, [this]() {
-        insertSnippet(QStringLiteral(
-            "layout(set = 0, binding = 2) uniform sampler2DArray history;"));
-    });
+    connect(historySnippet, &QAction::triggered, this, [this]() { insertSnippet(QStringLiteral("layout(set = 0, binding = 2) uniform sampler2DArray history;")); });
     connect(audioSnippet, &QAction::triggered, this, [this]() {
         insertSnippet(QStringLiteral(R"glsl(layout(set = 0, binding = 3) uniform sampler1D spectrum;
 layout(set = 0, binding = 4) uniform sampler1DArray spectrum_history;)glsl"));
     });
-    connect(uniformSnippet, &QAction::triggered, this,
-            [this]() { insertSnippet(customUniformDefines()); });
+    connect(uniformSnippet, &QAction::triggered, this, [this]() { insertSnippet(customUniformDefines()); });
     connect(computeMainSnippet, &QAction::triggered, this, [this]() {
         insertSnippet(QStringLiteral(R"glsl(layout(set = 0, binding = 5, rgba8) writeonly uniform image2D output_image;
 
@@ -1563,36 +1399,29 @@ void main() {
 })glsl"));
     });
 
-    connect(m_textEdit->document(), &QTextDocument::modificationChanged,
-            this, [this, saveAction](bool modified) {
-                m_modified = modified;
-                saveAction->setEnabled(modified);
-                updateWindowTitle();
-            });
+    connect(m_textEdit->document(), &QTextDocument::modificationChanged, this, [this, saveAction](bool modified) {
+        m_modified = modified;
+        saveAction->setEnabled(modified);
+        updateWindowTitle();
+    });
     m_previewTimer = new QTimer(this);
     m_previewTimer->setSingleShot(true);
     m_previewTimer->setInterval(650);
-    connect(m_previewTimer, &QTimer::timeout, this,
-            &TextEditor::requestPreview);
-    connect(m_textEdit->document(), &QTextDocument::contentsChanged, this,
-            [this]() {
-                updateCompletionWords();
-                if (m_livePreviewCheck->isChecked())
-                    m_previewTimer->start();
-            });
-    connect(m_textEdit, &CustomTextEdit::includeRequested, this,
-            &TextEditor::openInclude);
+    connect(m_previewTimer, &QTimer::timeout, this, &TextEditor::requestPreview);
+    connect(m_textEdit->document(), &QTextDocument::contentsChanged, this, [this]() {
+        updateCompletionWords();
+        if (m_livePreviewCheck->isChecked())
+            m_previewTimer->start();
+    });
+    connect(m_textEdit, &CustomTextEdit::includeRequested, this, &TextEditor::openInclude);
 
     connect(m_textEdit, &QPlainTextEdit::cursorPositionChanged, this, &TextEditor::updateCursorPosition);
     connect(m_textEdit, &QPlainTextEdit::copyAvailable, cutAction, &QAction::setEnabled);
     connect(m_textEdit, &QPlainTextEdit::copyAvailable, copyAction, &QAction::setEnabled);
     connect(m_textEdit, &QPlainTextEdit::undoAvailable, undoAction, &QAction::setEnabled);
     connect(m_textEdit, &QPlainTextEdit::redoAvailable, redoAction, &QAction::setEnabled);
-    connect(m_textEdit->document(), &QTextDocument::blockCountChanged,
-            this, [this](int) { updateCursorPosition(); });
-    connect(QApplication::clipboard(), &QClipboard::dataChanged, this, [pasteAction]() {
-        pasteAction->setEnabled(QApplication::clipboard()->mimeData()->hasText());
-    });
+    connect(m_textEdit->document(), &QTextDocument::blockCountChanged, this, [this](int) { updateCursorPosition(); });
+    connect(QApplication::clipboard(), &QClipboard::dataChanged, this, [pasteAction]() { pasteAction->setEnabled(QApplication::clipboard()->mimeData()->hasText()); });
     setAttribute(Qt::WA_DeleteOnClose);
 }
 
@@ -1608,9 +1437,7 @@ void TextEditor::saveContents() {
 bool TextEditor::writeFile(const QString &filePath) {
     QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(
-            this, "Error",
-            "Could not save file: " + filePath + "\n\n" + file.errorString());
+        QMessageBox::warning(this, "Error", "Could not save file: " + filePath + "\n\n" + file.errorString());
         return false;
     }
 
@@ -1623,9 +1450,7 @@ bool TextEditor::writeFile(const QString &filePath) {
         return false;
     }
     if (!file.commit()) {
-        QMessageBox::warning(
-            this, "Error",
-            "Could not finish saving file: " + filePath + "\n\n" + file.errorString());
+        QMessageBox::warning(this, "Error", "Could not finish saving file: " + filePath + "\n\n" + file.errorString());
         return false;
     }
 
@@ -1641,8 +1466,7 @@ bool TextEditor::writeFile(const QString &filePath) {
 void TextEditor::saveAs() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastEditorSaveDir", QFileInfo(filename).absolutePath()).toString();
-    QString newFileName = QFileDialog::getSaveFileName(
-        this, "Save File As", lastDir + "/" + QFileInfo(filename).fileName(), "GLSL Files (*.glsl *.frag *.vert *.comp);;All Files (*)");
+    QString newFileName = QFileDialog::getSaveFileName(this, "Save File As", lastDir + "/" + QFileInfo(filename).fileName(), "GLSL Files (*.glsl *.frag *.vert *.comp);;All Files (*)");
 
     if (!newFileName.isEmpty()) {
         if (writeFile(newFileName)) {
@@ -1657,8 +1481,7 @@ void TextEditor::findText() {
     const QString selectedText = m_textEdit->textCursor().selectedText();
     if (!selectedText.isEmpty() && !selectedText.contains(QChar::ParagraphSeparator))
         initialText = selectedText;
-    QString searchText = QInputDialog::getText(this, "Find", "Enter text to find:",
-                                               QLineEdit::Normal, initialText, &ok);
+    QString searchText = QInputDialog::getText(this, "Find", "Enter text to find:", QLineEdit::Normal, initialText, &ok);
     if (ok && !searchText.isEmpty()) {
         m_lastSearchText = searchText;
         findNext();
@@ -1718,20 +1541,15 @@ void TextEditor::findPrevious() {
 
 void TextEditor::replaceText() {
     bool ok;
-    QString searchText = QInputDialog::getText(this, "Replace", "Find:",
-                                               QLineEdit::Normal, m_lastSearchText, &ok);
+    QString searchText = QInputDialog::getText(this, "Replace", "Find:", QLineEdit::Normal, m_lastSearchText, &ok);
     if (!ok || searchText.isEmpty())
         return;
 
-    QString replaceWith = QInputDialog::getText(this, "Replace", "Replace with:",
-                                                QLineEdit::Normal, "", &ok);
+    QString replaceWith = QInputDialog::getText(this, "Replace", "Replace with:", QLineEdit::Normal, "", &ok);
     if (!ok)
         return;
 
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "Replace All",
-        "Replace all occurrences of '" + searchText + "' with '" + replaceWith + "'?",
-        QMessageBox::Yes | QMessageBox::No);
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Replace All", "Replace all occurrences of '" + searchText + "' with '" + replaceWith + "'?", QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
         QString text = m_textEdit->toPlainText();
@@ -1751,8 +1569,7 @@ void TextEditor::replaceText() {
 
 void TextEditor::gotoLine() {
     bool ok;
-    int lineNumber = QInputDialog::getInt(this, "Go to Line", "Line number:",
-                                          1, 1, m_textEdit->document()->blockCount(), 1, &ok);
+    int lineNumber = QInputDialog::getInt(this, "Go to Line", "Line number:", 1, 1, m_textEdit->document()->blockCount(), 1, &ok);
     if (ok) {
         QTextCursor cursor(m_textEdit->document()->findBlockByLineNumber(lineNumber - 1));
         m_textEdit->setTextCursor(cursor);
@@ -1785,20 +1602,18 @@ void TextEditor::resetFontSize() {
 void TextEditor::updateFontSize() {
     QString styleSheet;
     if (acmx2::isCustomStyleEnabled()) {
-        styleSheet = QString(
-                         "QPlainTextEdit { "
-                         "font-size: %1px; "
-                         "font-family: 'Courier New', Courier, monospace; "
-                         "}")
+        styleSheet = QString("QPlainTextEdit { "
+                             "font-size: %1px; "
+                             "font-family: 'Courier New', Courier, monospace; "
+                             "}")
                          .arg(m_fontSize);
     } else {
-        styleSheet = QString(
-                         "QPlainTextEdit { "
-                         "color: white; "
-                         "font-size: %1px; "
-                         "font-family: 'Courier New', Courier, monospace; "
-                         "background-color: black; "
-                         "}")
+        styleSheet = QString("QPlainTextEdit { "
+                             "color: white; "
+                             "font-size: %1px; "
+                             "font-family: 'Courier New', Courier, monospace; "
+                             "background-color: black; "
+                             "}")
                          .arg(m_fontSize);
     }
 
@@ -1811,10 +1626,7 @@ void TextEditor::updateCursorPosition() {
     QTextCursor cursor = m_textEdit->textCursor();
     int line = cursor.blockNumber() + 1;
     int col = cursor.columnNumber() + 1;
-    QString status = QString("Line: %1, Col: %2 | Lines: %3")
-                         .arg(line)
-                         .arg(col)
-                         .arg(m_textEdit->document()->blockCount());
+    QString status = QString("Line: %1, Col: %2 | Lines: %3").arg(line).arg(col).arg(m_textEdit->document()->blockCount());
     if (cursor.hasSelection())
         status += QString(" | Selected: %1").arg(cursor.selectionEnd() - cursor.selectionStart());
     m_lineColLabel->setText(status);
@@ -1844,10 +1656,7 @@ void TextEditor::keyPressEvent(QKeyEvent *event) {
 bool TextEditor::maybePromptSave() {
     if (!m_modified)
         return true;
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "Unsaved Changes",
-        "The document has been modified. Do you want to save your changes?",
-        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Unsaved Changes", "The document has been modified. Do you want to save your changes?", QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
 
     if (reply == QMessageBox::Save) {
         saveContents();

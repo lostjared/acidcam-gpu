@@ -9,8 +9,7 @@
 #include <QRegularExpression>
 #include <QSettings>
 
-MidiSettings::MidiSettings(const QString &executablePath, QWidget *parent)
-    : QDialog(parent), execPath(executablePath) {
+MidiSettings::MidiSettings(const QString &executablePath, QWidget *parent) : QDialog(parent), execPath(executablePath) {
     setWindowTitle("MIDI Settings");
     setMinimumWidth(500);
 
@@ -79,13 +78,9 @@ MidiSettings::MidiSettings(const QString &executablePath, QWidget *parent)
     loadUiState();
 }
 
-bool MidiSettings::isMidiEnabled() const {
-    return enableCheckBox->isChecked();
-}
+bool MidiSettings::isMidiEnabled() const { return enableCheckBox->isChecked(); }
 
-QString MidiSettings::getMidiConfigFile() const {
-    return configFileEdit->text();
-}
+QString MidiSettings::getMidiConfigFile() const { return configFileEdit->text(); }
 
 int MidiSettings::getMidiDeviceIndex() const {
     if (deviceComboBox->count() == 0)
@@ -115,9 +110,7 @@ void MidiSettings::saveUiState() {
 void MidiSettings::browseConfigFile() {
     QSettings appSettings("LostSideDead");
     QString lastDir = appSettings.value("lastMidiConfigDir", QFileInfo(configFileEdit->text()).absolutePath()).toString();
-    QString fileName = QFileDialog::getOpenFileName(
-        this, "Select MIDI Config File", lastDir,
-        "MIDI Config (*.midi_cfg);;All Files (*)");
+    QString fileName = QFileDialog::getOpenFileName(this, "Select MIDI Config File", lastDir, "MIDI Config (*.midi_cfg);;All Files (*)");
     if (!fileName.isEmpty()) {
         appSettings.setValue("lastMidiConfigDir", QFileInfo(fileName).absolutePath());
         configFileEdit->setText(fileName);
@@ -126,15 +119,14 @@ void MidiSettings::browseConfigFile() {
 
 void MidiSettings::launchMidiMapTool() {
     if (!QProcess::startDetached("midi-map", {})) {
-        QMessageBox::warning(this, "Launch Failed",
+        QMessageBox::warning(this,
+                             "Launch Failed",
                              "Could not launch midi-map.\n"
                              "Make sure it is installed and available in your system PATH.");
     }
 }
 
-void MidiSettings::refreshDevices() {
-    populateMidiDevices();
-}
+void MidiSettings::refreshDevices() { populateMidiDevices(); }
 
 void MidiSettings::populateMidiDevices() {
     deviceComboBox->clear();
