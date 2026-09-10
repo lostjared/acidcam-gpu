@@ -37,6 +37,11 @@ namespace acmxvk {
                                Rotate180,
                                Counterclockwise90 };
 
+    struct StableDiffusionLora {
+        std::string file;
+        double multiplier = 1.0;
+    };
+
     struct Options {
         int width = 1280;
         int height = 720;
@@ -178,6 +183,7 @@ namespace acmxvk {
         std::vector<std::string> custom_uniform_overrides;
         std::vector<std::string> midi_cc_mappings;
         std::vector<int> gpu_filter_indices;
+        std::vector<StableDiffusionLora> stable_diffusion_loras;
         std::string input_file;
         std::string graphic_file;
         std::string shader_directory;

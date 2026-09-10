@@ -7,12 +7,20 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace acmxvk::stable_diffusion {
+    struct Lora {
+        std::filesystem::path path;
+        double multiplier = 1.0;
+    };
+
     struct Settings {
         std::filesystem::path server_executable;
         std::filesystem::path model;
         std::filesystem::path upscale_model;
+        std::filesystem::path lora_directory;
+        std::vector<Lora> loras;
         std::string prompt;
         std::string negative_prompt;
         std::string sampler;

@@ -11,12 +11,15 @@
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
@@ -25,6 +28,8 @@
 namespace {
     constexpr int STABLE_DIMENSION_MINIMUM = 64;
     constexpr int STABLE_DIMENSION_MAXIMUM = 2048;
+    constexpr int LORA_PATH_ROLE = Qt::UserRole;
+    constexpr int LORA_MULTIPLIER_ROLE = Qt::UserRole + 1;
 
     bool parse_stable_resolution(const QString &text, int &width, int &height) {
         static const QRegularExpression RESOLUTION_PATTERN(
@@ -66,6 +71,17 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     prompt_edit->setPlaceholderText("Describe the desired image style...");
     negative_prompt_edit = new QLineEdit(this);
     negative_prompt_edit->setPlaceholderText("Optional unwanted features...");
+    lora_list_widget = new QListWidget(this);
+    lora_list_widget->setSelectionMode(
+        QAbstractItemView::ExtendedSelection);
+    lora_list_widget->setMinimumHeight(100);
+    add_lora_button = new QPushButton("Add...", this);
+    remove_lora_button = new QPushButton("Remove", this);
+    lora_multiplier_spin_box = new QDoubleSpinBox(this);
+    lora_multiplier_spin_box->setRange(-10.0, 10.0);
+    lora_multiplier_spin_box->setDecimals(3);
+    lora_multiplier_spin_box->setSingleStep(0.05);
+    lora_multiplier_spin_box->setValue(1.0);
 
     server_edit = new QLineEdit(this);
     server_edit->setPlaceholderText("sd-server");
@@ -131,6 +147,20 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     model_layout->addRow("Prompt:", prompt_edit);
     model_layout->addRow("Negative prompt:", negative_prompt_edit);
 
+    auto *lora_group = new QGroupBox("LoRA Models", this);
+    lora_group->setToolTip(
+        "Optional adapters applied by sd-server. All selected LoRA files "
+        "must be in the same folder.");
+    auto *lora_layout = new QVBoxLayout(lora_group);
+    lora_layout->addWidget(lora_list_widget);
+    auto *lora_controls = new QHBoxLayout;
+    lora_controls->addWidget(add_lora_button);
+    lora_controls->addWidget(remove_lora_button);
+    lora_controls->addStretch();
+    lora_controls->addWidget(new QLabel("Selected multiplier:", this));
+    lora_controls->addWidget(lora_multiplier_spin_box);
+    lora_layout->addLayout(lora_controls);
+
     auto *generation_group = new QGroupBox("Generation", this);
     auto *generation_layout = new QFormLayout(generation_group);
     generation_layout->addRow("Resolution:", resolution_combo_box);
@@ -159,6 +189,7 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     auto *contents_layout = new QVBoxLayout(contents);
     contents_layout->addWidget(enable_check_box);
     contents_layout->addWidget(model_group);
+    contents_layout->addWidget(lora_group);
     contents_layout->addWidget(generation_group);
     contents_layout->addWidget(server_group);
     contents_layout->addStretch();
@@ -179,6 +210,15 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
             [this](bool) { update_enabled_state(); });
     connect(browse_model_button, &QPushButton::clicked, this,
             &StableDiffusionSettingsDialog::browse_model);
+    connect(add_lora_button, &QPushButton::clicked, this,
+            &StableDiffusionSettingsDialog::add_lora_models);
+    connect(remove_lora_button, &QPushButton::clicked, this,
+            &StableDiffusionSettingsDialog::remove_lora_models);
+    connect(lora_list_widget, &QListWidget::itemSelectionChanged, this,
+            &StableDiffusionSettingsDialog::select_lora_model);
+    connect(lora_multiplier_spin_box,
+            qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            &StableDiffusionSettingsDialog::update_lora_multiplier);
     connect(browse_upscale_model_button, &QPushButton::clicked, this,
             &StableDiffusionSettingsDialog::browse_upscale_model);
     connect(upscale_check_box, &QCheckBox::toggled, this, [this](bool checked) {
@@ -212,6 +252,13 @@ StableDiffusionSettingsDialog::configuration() const {
     StableDiffusionConfiguration result;
     result.enabled = enable_check_box->isChecked();
     result.model_file = model_file_edit->text().trimmed();
+    for (int row = 0; row < lora_list_widget->count(); ++row) {
+        const QListWidgetItem *item = lora_list_widget->item(row);
+        result.lora_files.append(
+            item->data(LORA_PATH_ROLE).toString());
+        result.lora_multipliers.append(
+            item->data(LORA_MULTIPLIER_ROLE).toDouble());
+    }
     if (server_upscale_check_box->isChecked()) {
         result.upscale_model_file = upscale_model_edit->text().trimmed();
     }
@@ -245,6 +292,91 @@ void StableDiffusionSettingsDialog::browse_model() {
     model_file_edit->setText(QFileInfo(filename).absoluteFilePath());
     settings.setValue("stable_diffusion/last_model_directory",
                       QFileInfo(filename).absolutePath());
+}
+
+void StableDiffusionSettingsDialog::add_lora_item(const QString &filename,
+                                                  double multiplier) {
+    const QString absolute_file = QFileInfo(filename).absoluteFilePath();
+    for (int row = 0; row < lora_list_widget->count(); ++row) {
+        if (lora_list_widget->item(row)
+                ->data(LORA_PATH_ROLE)
+                .toString() == absolute_file) {
+            return;
+        }
+    }
+    auto *item = new QListWidgetItem(lora_list_widget);
+    item->setData(LORA_PATH_ROLE, absolute_file);
+    item->setData(LORA_MULTIPLIER_ROLE, multiplier);
+    item->setToolTip(absolute_file);
+    update_lora_item_text(lora_list_widget->row(item));
+}
+
+void StableDiffusionSettingsDialog::update_lora_item_text(int row) {
+    QListWidgetItem *item = lora_list_widget->item(row);
+    if (item == nullptr) {
+        return;
+    }
+    const QString filename =
+        QFileInfo(item->data(LORA_PATH_ROLE).toString()).fileName();
+    const double multiplier =
+        item->data(LORA_MULTIPLIER_ROLE).toDouble();
+    item->setText(QStringLiteral("%1  —  %2")
+                      .arg(filename)
+                      .arg(multiplier, 0, 'f', 3));
+}
+
+void StableDiffusionSettingsDialog::add_lora_models() {
+    QSettings settings("LostSideDead", "acmx2");
+    const QString directory =
+        settings.value("stable_diffusion/last_lora_directory").toString();
+    const QStringList filenames = QFileDialog::getOpenFileNames(
+        this, "Select LoRA Models", directory,
+        "LoRA Models (*.safetensors *.ckpt *.pt *.pth *.gguf);;All Files (*)");
+    if (filenames.isEmpty()) {
+        return;
+    }
+    for (const QString &filename : filenames) {
+        add_lora_item(filename, 1.0);
+    }
+    settings.setValue("stable_diffusion/last_lora_directory",
+                      QFileInfo(filenames.first()).absolutePath());
+    lora_list_widget->setCurrentRow(lora_list_widget->count() - 1);
+}
+
+void StableDiffusionSettingsDialog::remove_lora_models() {
+    const QList<QListWidgetItem *> selected =
+        lora_list_widget->selectedItems();
+    for (QListWidgetItem *item : selected) {
+        delete lora_list_widget->takeItem(lora_list_widget->row(item));
+    }
+    select_lora_model();
+}
+
+void StableDiffusionSettingsDialog::select_lora_model() {
+    const QList<QListWidgetItem *> selected =
+        lora_list_widget->selectedItems();
+    const bool one_selected = selected.size() == 1;
+    remove_lora_button->setEnabled(enable_check_box->isChecked() &&
+                                   !selected.isEmpty());
+    lora_multiplier_spin_box->setEnabled(
+        enable_check_box->isChecked() && one_selected);
+    if (one_selected) {
+        const QSignalBlocker blocker(lora_multiplier_spin_box);
+        lora_multiplier_spin_box->setValue(
+            selected.front()->data(LORA_MULTIPLIER_ROLE).toDouble());
+    }
+}
+
+void StableDiffusionSettingsDialog::update_lora_multiplier(
+    double multiplier) {
+    const QList<QListWidgetItem *> selected =
+        lora_list_widget->selectedItems();
+    if (selected.size() != 1) {
+        return;
+    }
+    QListWidgetItem *item = selected.front();
+    item->setData(LORA_MULTIPLIER_ROLE, multiplier);
+    update_lora_item_text(lora_list_widget->row(item));
 }
 
 void StableDiffusionSettingsDialog::browse_upscale_model() {
@@ -299,6 +431,29 @@ bool StableDiffusionSettingsDialog::validate_settings() {
                              "Select an existing safetensors model file.");
         return false;
     }
+    QString lora_directory;
+    for (int row = 0; row < lora_list_widget->count(); ++row) {
+        const QString filename = lora_list_widget->item(row)
+                                     ->data(LORA_PATH_ROLE)
+                                     .toString();
+        const QFileInfo file_info(filename);
+        if (!file_info.isFile()) {
+            QMessageBox::warning(
+                this, "LoRA Model Not Found",
+                QStringLiteral("The selected LoRA model does not exist:\n%1")
+                    .arg(filename));
+            return false;
+        }
+        if (lora_directory.isEmpty()) {
+            lora_directory = file_info.absolutePath();
+        } else if (lora_directory != file_info.absolutePath()) {
+            QMessageBox::warning(
+                this, "LoRA Folder Mismatch",
+                "All selected LoRA models must be in the same folder. "
+                "sd-server scans one LoRA model directory per launch.");
+            return false;
+        }
+    }
     if (prompt_edit->text().trimmed().isEmpty()) {
         QMessageBox::warning(this, "Stable Diffusion Prompt Required",
                              "Enter an image-to-image prompt.");
@@ -351,6 +506,19 @@ void StableDiffusionSettingsDialog::load_ui_state() {
         settings.value("stable_diffusion/enabled", false).toBool());
     model_file_edit->setText(
         settings.value("stable_diffusion/model_file").toString());
+    const QStringList lora_files =
+        settings.value("stable_diffusion/lora_files").toStringList();
+    const QStringList lora_multiplier_values =
+        settings.value("stable_diffusion/lora_multipliers").toStringList();
+    for (int index = 0; index < lora_files.size(); ++index) {
+        bool multiplier_ok = false;
+        const double saved_multiplier =
+            index < lora_multiplier_values.size()
+                ? lora_multiplier_values.at(index).toDouble(&multiplier_ok)
+                : 1.0;
+        add_lora_item(lora_files.at(index),
+                      multiplier_ok ? saved_multiplier : 1.0);
+    }
     prompt_edit->setText(settings.value("stable_diffusion/prompt").toString());
     negative_prompt_edit->setText(
         settings.value("stable_diffusion/negative_prompt").toString());
@@ -397,6 +565,13 @@ void StableDiffusionSettingsDialog::save_ui_state() {
     QSettings settings("LostSideDead", "acmx2");
     settings.setValue("stable_diffusion/enabled", current.enabled);
     settings.setValue("stable_diffusion/model_file", current.model_file);
+    settings.setValue("stable_diffusion/lora_files", current.lora_files);
+    QStringList lora_multiplier_values;
+    for (const double multiplier : current.lora_multipliers) {
+        lora_multiplier_values.append(QString::number(multiplier, 'g', 12));
+    }
+    settings.setValue("stable_diffusion/lora_multipliers",
+                      lora_multiplier_values);
     settings.setValue("stable_diffusion/prompt", current.prompt);
     settings.setValue("stable_diffusion/negative_prompt",
                       current.negative_prompt);
@@ -426,6 +601,11 @@ void StableDiffusionSettingsDialog::update_enabled_state() {
     browse_model_button->setEnabled(enabled);
     prompt_edit->setEnabled(enabled);
     negative_prompt_edit->setEnabled(enabled);
+    lora_list_widget->setEnabled(enabled);
+    add_lora_button->setEnabled(enabled);
+    remove_lora_button->setEnabled(
+        enabled && !lora_list_widget->selectedItems().isEmpty());
+    select_lora_model();
     server_edit->setEnabled(enabled);
     browse_server_button->setEnabled(enabled);
     server_port_spin_box->setEnabled(enabled);

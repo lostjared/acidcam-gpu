@@ -39,7 +39,8 @@ optional features for supported NVIDIA configurations.
 - **Stable Diffusion video** is an optional ACMXVK integration with a compatible
   `stable-diffusion.cpp` `sd-server`. It keeps the model loaded for img2img
   processing, supports preview and constant-frame-rate recording, and can use
-  either the Vulkan compute upscaler or a server-side ESRGAN model.
+  multiple weighted LoRA adapters plus either the Vulkan compute upscaler or a
+  server-side ESRGAN model.
 
 ACMXVK is the active expansion path, but it is not a drop-in shader replacement
 for ACMX2: OpenGL GLSL libraries use a different uniform and descriptor ABI from

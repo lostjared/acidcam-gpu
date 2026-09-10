@@ -23,11 +23,13 @@
 #include <QDateTime>
 #include <QFile>
 #include <QHash>
+#include <QList>
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QPointer>
 #include <QProcess>
 #include <QSettings>
+#include <QStringList>
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <random>
@@ -343,6 +345,8 @@ class MainWindow : public QMainWindow {
     bool stable_diffusion_enabled = false;
     QString stable_diffusion_model;
     QString stable_diffusion_upscale_model;
+    QStringList stable_diffusion_lora_files;
+    QList<double> stable_diffusion_lora_multipliers;
     QString stable_diffusion_prompt;
     QString stable_diffusion_negative_prompt;
     QString stable_diffusion_server = "sd-server";

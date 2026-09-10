@@ -123,6 +123,11 @@ namespace acmxvk {
         input::validate_string(options.stable_diffusion_upscale_model,
                                input::StringKind::Path, "--upscale-model",
                                true);
+        for (const StableDiffusionLora &lora :
+             options.stable_diffusion_loras) {
+            input::validate_string(lora.file, input::StringKind::Path,
+                                   "--sd-lora");
+        }
         input::validate_string(options.stable_diffusion_server,
                                input::StringKind::Path, "--sd-server");
         input::validate_string(options.stable_diffusion_prompt,
@@ -751,6 +756,23 @@ namespace acmxvk {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_negative_prompt =
                     optionValue(index, argc, argv, option);
+            } else if (option == "--sd-lora") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_loras.push_back(
+                    {optionValue(index, argc, argv, option), 1.0});
+            } else if (option == "--sd-lora-strength") {
+                options.stable_diffusion_option_specified = true;
+                if (options.stable_diffusion_loras.empty()) {
+                    throw std::runtime_error(
+                        "--sd-lora-strength must follow --sd-lora");
+                }
+                const double multiplier =
+                    parseNumber(optionValue(index, argc, argv, option), option);
+                if (multiplier < -10.0 || multiplier > 10.0) {
+                    throw std::runtime_error(
+                        "--sd-lora-strength must be between -10 and 10");
+                }
+                options.stable_diffusion_loras.back().multiplier = multiplier;
             } else if (option == "--sd-server") {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_server =
@@ -1640,6 +1662,8 @@ namespace acmxvk {
                << "      --sd-prompt <text>      Required image-to-image prompt\n"
                << "      --sd-negative-prompt <text>\n"
                << "                              Optional negative prompt\n"
+               << "      --sd-lora <file>        Add LoRA model (repeatable; same folder)\n"
+               << "      --sd-lora-strength <N>  Preceding LoRA multiplier, -10 to 10\n"
                << "      --sd-size <WxH>         Neural size, multiples of 64 (default 576x320)\n"
                << "      --sd-steps <N>          Sampling steps, 1-150 (default 12)\n"
                << "      --sd-strength <N>       Image denoising strength, 0-1 (default 0.35)\n"

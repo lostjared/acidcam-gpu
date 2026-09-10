@@ -1497,6 +1497,20 @@ void MainWindow::loadSessionSettings() {
         settings.value("stable_diffusion/enabled", false).toBool();
     stable_diffusion_model =
         settings.value("stable_diffusion/model_file").toString();
+    stable_diffusion_lora_files =
+        settings.value("stable_diffusion/lora_files").toStringList();
+    const QStringList stable_diffusion_lora_multiplier_values =
+        settings.value("stable_diffusion/lora_multipliers").toStringList();
+    for (int index = 0; index < stable_diffusion_lora_files.size(); ++index) {
+        bool multiplier_ok = false;
+        const double multiplier =
+            index < stable_diffusion_lora_multiplier_values.size()
+                ? stable_diffusion_lora_multiplier_values.at(index).toDouble(
+                      &multiplier_ok)
+                : 1.0;
+        stable_diffusion_lora_multipliers.append(
+            multiplier_ok ? std::clamp(multiplier, -10.0, 10.0) : 1.0);
+    }
     if (settings.value("stable_diffusion/server_upscale", false).toBool()) {
         stable_diffusion_upscale_model =
             settings.value("stable_diffusion/upscale_model_file").toString();
@@ -4523,6 +4537,8 @@ void MainWindow::menuStableDiffusionSettings() {
                 stable_diffusion_enabled = config.enabled;
                 stable_diffusion_model = config.model_file;
                 stable_diffusion_upscale_model = config.upscale_model_file;
+                stable_diffusion_lora_files = config.lora_files;
+                stable_diffusion_lora_multipliers = config.lora_multipliers;
                 stable_diffusion_prompt = config.prompt;
                 stable_diffusion_negative_prompt = config.negative_prompt;
                 stable_diffusion_server = config.server_executable;
@@ -4539,7 +4555,7 @@ void MainWindow::menuStableDiffusionSettings() {
 
                 if (stable_diffusion_enabled) {
                     Log(tr("Stable Diffusion Settings Applied: %1, %2x%3, "
-                           "%4 step(s)%5; changes apply on the next launch")
+                           "%4 step(s)%5%6; changes apply on the next launch")
                             .arg(QFileInfo(stable_diffusion_model).fileName())
                             .arg(stable_diffusion_width)
                             .arg(stable_diffusion_height)
@@ -4548,7 +4564,12 @@ void MainWindow::menuStableDiffusionSettings() {
                                      ? tr(", compute upscale")
                                  : !stable_diffusion_upscale_model.isEmpty()
                                      ? tr(", ESRGAN upscale")
-                                     : QString()));
+                                     : QString())
+                            .arg(stable_diffusion_lora_files.isEmpty()
+                                     ? QString()
+                                     : tr(", %1 LoRA(s)")
+                                           .arg(stable_diffusion_lora_files
+                                                    .size())));
                 } else {
                     Log("Stable Diffusion Disabled");
                 }
@@ -4582,6 +4603,35 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
         error = tr("The configured Stable Diffusion model does not exist:\n%1")
                     .arg(stable_diffusion_model);
         return false;
+    }
+    if (stable_diffusion_lora_files.size() !=
+        stable_diffusion_lora_multipliers.size()) {
+        error = tr("The saved Stable Diffusion LoRA settings are incomplete. "
+                   "Open Stable Diffusion Settings and apply them again.");
+        return false;
+    }
+    QString lora_directory;
+    for (int index = 0; index < stable_diffusion_lora_files.size(); ++index) {
+        const QString filename = stable_diffusion_lora_files.at(index);
+        const QFileInfo file_info(filename);
+        if (!file_info.isFile()) {
+            error = tr("The configured LoRA model does not exist:\n%1")
+                        .arg(filename);
+            return false;
+        }
+        if (lora_directory.isEmpty()) {
+            lora_directory = file_info.absolutePath();
+        } else if (lora_directory != file_info.absolutePath()) {
+            error = tr("All configured LoRA models must be in the same folder. "
+                       "sd-server scans one LoRA model directory per launch.");
+            return false;
+        }
+        const double multiplier =
+            stable_diffusion_lora_multipliers.at(index);
+        if (multiplier < -10.0 || multiplier > 10.0) {
+            error = tr("LoRA multipliers must be between -10 and 10.");
+            return false;
+        }
     }
     if (!stable_diffusion_upscale_model.isEmpty() &&
         !QFileInfo(stable_diffusion_upscale_model).isFile()) {
@@ -4625,6 +4675,12 @@ void MainWindow::appendStableDiffusionArguments(
     if (!stable_diffusion_negative_prompt.trimmed().isEmpty()) {
         arguments << "--sd-negative-prompt"
                   << stable_diffusion_negative_prompt;
+    }
+    for (int index = 0; index < stable_diffusion_lora_files.size(); ++index) {
+        arguments << "--sd-lora" << stable_diffusion_lora_files.at(index);
+        arguments << "--sd-lora-strength"
+                  << QString::number(
+                         stable_diffusion_lora_multipliers.at(index), 'g', 12);
     }
     arguments << "--sd-server" << stable_diffusion_server;
     arguments << "--sd-server-port"

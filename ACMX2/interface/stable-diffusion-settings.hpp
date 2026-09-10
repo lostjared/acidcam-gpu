@@ -2,12 +2,15 @@
 #define STABLE_DIFFUSION_SETTINGS_HPP
 
 #include <QDialog>
+#include <QList>
 #include <QString>
+#include <QStringList>
 
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLineEdit;
+class QListWidget;
 class QPushButton;
 class QSpinBox;
 
@@ -15,6 +18,8 @@ struct StableDiffusionConfiguration {
     bool enabled = false;
     QString model_file;
     QString upscale_model_file;
+    QStringList lora_files;
+    QList<double> lora_multipliers;
     QString prompt;
     QString negative_prompt;
     QString server_executable = "sd-server";
@@ -42,6 +47,10 @@ class StableDiffusionSettingsDialog : public QDialog {
 
   private slots:
     void browse_model();
+    void add_lora_models();
+    void remove_lora_models();
+    void select_lora_model();
+    void update_lora_multiplier(double multiplier);
     void browse_upscale_model();
     void browse_server();
     void apply_settings();
@@ -52,12 +61,18 @@ class StableDiffusionSettingsDialog : public QDialog {
     void load_ui_state();
     void save_ui_state();
     void update_enabled_state();
+    void add_lora_item(const QString &filename, double multiplier);
+    void update_lora_item_text(int row);
 
     QCheckBox *enable_check_box = nullptr;
     QLineEdit *model_file_edit = nullptr;
     QPushButton *browse_model_button = nullptr;
     QLineEdit *prompt_edit = nullptr;
     QLineEdit *negative_prompt_edit = nullptr;
+    QListWidget *lora_list_widget = nullptr;
+    QPushButton *add_lora_button = nullptr;
+    QPushButton *remove_lora_button = nullptr;
+    QDoubleSpinBox *lora_multiplier_spin_box = nullptr;
     QLineEdit *server_edit = nullptr;
     QPushButton *browse_server_button = nullptr;
     QSpinBox *server_port_spin_box = nullptr;

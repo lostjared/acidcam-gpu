@@ -1152,6 +1152,25 @@ namespace acmxvk {
         stable_diffusion::Settings settings;
         settings.server_executable = options.stable_diffusion_server;
         settings.model = model;
+        for (const StableDiffusionLora &configured_lora :
+             options.stable_diffusion_loras) {
+            const fs::path lora_model =
+                fs::absolute(configured_lora.file).lexically_normal();
+            if (!fs::is_regular_file(lora_model)) {
+                throw std::runtime_error(
+                    "Stable Diffusion LoRA model is not a regular file: " +
+                    lora_model.string());
+            }
+            if (settings.lora_directory.empty()) {
+                settings.lora_directory = lora_model.parent_path();
+            } else if (settings.lora_directory != lora_model.parent_path()) {
+                throw std::runtime_error(
+                    "all Stable Diffusion LoRA models must be in the same "
+                    "directory");
+            }
+            settings.loras.push_back(
+                {lora_model.filename(), configured_lora.multiplier});
+        }
         if (!options.stable_diffusion_upscale_model.empty()) {
             const fs::path upscale_model =
                 fs::absolute(options.stable_diffusion_upscale_model)

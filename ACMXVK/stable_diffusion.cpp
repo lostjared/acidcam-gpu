@@ -248,6 +248,20 @@ namespace acmxvk::stable_diffusion {
             }
             return {width, height};
         }
+
+        void appendLoras(Json::Value &root, const Settings &settings) {
+            if (settings.loras.empty()) {
+                return;
+            }
+            root["lora"] = Json::arrayValue;
+            for (const Lora &lora : settings.loras) {
+                Json::Value entry;
+                entry["path"] = lora.path.generic_string();
+                entry["multiplier"] = lora.multiplier;
+                entry["is_high_noise"] = false;
+                root["lora"].append(std::move(entry));
+            }
+        }
     } // namespace
 
     Server::Server(Settings settings) : settings(std::move(settings)) {
@@ -279,7 +293,8 @@ namespace acmxvk::stable_diffusion {
             "--listen-port", port, "--model",
             model, "--type", "f16",
             "--mmap", "--fa", "--diffusion-conv-direct",
-            "--vae-conv-direct", "--lora-model-dir", ""};
+            "--vae-conv-direct", "--lora-model-dir",
+            settings.lora_directory.string()};
         if (!settings.upscale_model.empty()) {
             argument_storage.emplace_back("--hires-upscalers-dir");
             argument_storage.push_back(
@@ -410,10 +425,11 @@ namespace acmxvk::stable_diffusion {
     }
 
     void Server::waitUntilReady() {
-        const bool require_hires_api = !settings.upscale_model.empty();
+        const bool require_capabilities =
+            !settings.upscale_model.empty() || !settings.loras.empty();
         const std::string url =
-            endpoint + (require_hires_api ? "/sdcpp/v1/capabilities"
-                                          : "/sdapi/v1/options");
+            endpoint + (require_capabilities ? "/sdcpp/v1/capabilities"
+                                             : "/sdapi/v1/options");
         const auto deadline = std::chrono::steady_clock::now() +
                               std::chrono::minutes(5);
         while (std::chrono::steady_clock::now() < deadline) {
@@ -438,7 +454,7 @@ namespace acmxvk::stable_diffusion {
                     if (!response.value.empty()) {
                         const Json::Value document =
                             parseJson(response.value, "sd-server");
-                        if (require_hires_api) {
+                        if (!settings.upscale_model.empty()) {
                             const std::string upscaler_name =
                                 settings.upscale_model.stem().string();
                             bool found = false;
@@ -457,6 +473,23 @@ namespace acmxvk::stable_diffusion {
                                     upscaler_name);
                             }
                         }
+                        for (const Lora &lora : settings.loras) {
+                            bool found = false;
+                            for (const Json::Value &entry :
+                                 document["loras"]) {
+                                if (entry["path"].asString() ==
+                                    lora.path.generic_string()) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                throw std::runtime_error(
+                                    "sd-server did not discover the requested "
+                                    "LoRA model: " +
+                                    lora.path.generic_string());
+                            }
+                        }
                     }
                     std::cout << "acmxvk: sd-server model ready; processing "
                               << settings.width << 'x' << settings.height
@@ -471,6 +504,10 @@ namespace acmxvk::stable_diffusion {
                                   << ", final resolution "
                                   << settings.upscale_width << 'x'
                                   << settings.upscale_height;
+                    }
+                    if (!settings.loras.empty()) {
+                        std::cout << "; " << settings.loras.size()
+                                  << " LoRA model(s)";
                     }
                     std::cout << '\n';
                     resetDiagnosticLog();
@@ -516,6 +553,7 @@ namespace acmxvk::stable_diffusion {
         root["width"] = settings.width;
         root["height"] = settings.height;
         root["seed"] = settings.seed;
+        appendLoras(root, settings);
         std::string encoded_output;
         if (settings.upscale_model.empty()) {
             root["steps"] = settings.steps;

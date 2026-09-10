@@ -569,6 +569,30 @@ shader chain. This avoids the normal CPU linear resize and gives every user
 shader a full-resolution input. The upscaler is optional and does not change
 existing renders when omitted.
 
+LoRA adapters can be applied to every generated frame without modifying the
+base model. Add each adapter with `--sd-lora` and set its multiplier with the
+following `--sd-lora-strength`; a missing multiplier defaults to `1.0`:
+
+```bash
+./build/acmxvk-sd/acmxvk \
+    --input input.mp4 \
+    --fragment shaders/passthrough.frag.spv \
+    --sd-model /path/to/v1-5-pruned-emaonly.safetensors \
+    --sd-prompt "psychedelic oil painting" \
+    --sd-lora /path/to/loras/paint-style.safetensors \
+    --sd-lora-strength 0.8 \
+    --sd-lora /path/to/loras/fine-detail.safetensors \
+    --sd-lora-strength 0.35
+```
+
+The multiplier range is `-10` through `10`, and both options may be repeated.
+All LoRA files selected for one launch must be in the same directory because
+ACMXVK gives sd-server one deliberately restricted scan directory. ACMXVK sends
+the adapters through sd-server's structured `lora` request field; prompt tags
+such as `<lora:name:weight>` are not used by the server API. The interface's
+Stable Diffusion Settings dialog provides a persistent multi-selection list,
+Add and Remove buttons, and an editable multiplier for the selected adapter.
+
 Alternatively, pass an ESRGAN or RealESRGAN model to `sd-server` and use its
 neural upscaler instead of the Vulkan compute stage:
 
