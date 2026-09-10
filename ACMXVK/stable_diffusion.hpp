@@ -21,6 +21,7 @@ namespace acmxvk::stable_diffusion {
         std::filesystem::path upscale_model;
         std::filesystem::path lora_directory;
         std::vector<Lora> loras;
+        std::vector<std::string> server_arguments;
         std::string prompt;
         std::string negative_prompt;
         std::string sampler;

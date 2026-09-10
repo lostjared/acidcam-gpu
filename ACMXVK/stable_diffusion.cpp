@@ -300,6 +300,9 @@ namespace acmxvk::stable_diffusion {
             argument_storage.push_back(
                 settings.upscale_model.parent_path().string());
         }
+        argument_storage.insert(argument_storage.end(),
+                                settings.server_arguments.begin(),
+                                settings.server_arguments.end());
         std::vector<char *> arguments;
         arguments.reserve(argument_storage.size() + 1U);
         for (std::string &argument : argument_storage) {

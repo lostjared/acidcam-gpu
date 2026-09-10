@@ -625,11 +625,18 @@ latter sends final Vulkan readback directly through Stable Diffusion to
 MXWrite.
 
 Use `--sd-server /path/to/sd-server` when it is not on `PATH`, and choose an
-unused loopback port with `--sd-server-port`. The model warm-up makes the first
-frame slower; subsequent frames reuse the same loaded model. Existing source
-audio and audio-reactive options remain available and follow the media
-timeline. This first implementation supports SDR video input; it does not
-support still images, HDR output, PNG sequences, or `--fill-pts-gaps`.
+unused loopback port with `--sd-server-port`. Additional server startup flags
+can be forwarded by repeating `--sd-server-arg`, for example
+`--sd-server-arg --vae-tiling --sd-server-arg --offload-to-cpu`. In the
+interface, enter the equivalent command-line text in **Extra flags** under
+Stable Diffusion Settings; quoted values containing spaces are preserved as
+one argument. These flags are appended after ACMXVK's required server options,
+so conflicting model, address, port, LoRA-directory, or upscaler-directory
+flags can prevent startup. The model warm-up makes the first frame slower;
+subsequent frames reuse the same loaded model. Existing source audio and
+audio-reactive options remain available and follow the media timeline. This
+first implementation supports SDR video input; it does not support still
+images, HDR output, PNG sequences, or `--fill-pts-gaps`.
 
 ### Pcons
 

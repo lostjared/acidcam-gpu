@@ -23,6 +23,7 @@ struct StableDiffusionConfiguration {
     QString prompt;
     QString negative_prompt;
     QString server_executable = "sd-server";
+    QString server_arguments;
     int server_port = 1234;
     int width = 576;
     int height = 320;
@@ -74,6 +75,7 @@ class StableDiffusionSettingsDialog : public QDialog {
     QPushButton *remove_lora_button = nullptr;
     QDoubleSpinBox *lora_multiplier_spin_box = nullptr;
     QLineEdit *server_edit = nullptr;
+    QLineEdit *server_arguments_edit = nullptr;
     QPushButton *browse_server_button = nullptr;
     QSpinBox *server_port_spin_box = nullptr;
     QComboBox *resolution_combo_box = nullptr;

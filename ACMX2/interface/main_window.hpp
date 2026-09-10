@@ -350,6 +350,7 @@ class MainWindow : public QMainWindow {
     QString stable_diffusion_prompt;
     QString stable_diffusion_negative_prompt;
     QString stable_diffusion_server = "sd-server";
+    QString stable_diffusion_server_arguments;
     int stable_diffusion_server_port = 1234;
     int stable_diffusion_width = 576;
     int stable_diffusion_height = 320;

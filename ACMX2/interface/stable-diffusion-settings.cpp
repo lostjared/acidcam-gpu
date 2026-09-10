@@ -15,6 +15,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
@@ -85,6 +86,12 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
 
     server_edit = new QLineEdit(this);
     server_edit->setPlaceholderText("sd-server");
+    server_arguments_edit = new QLineEdit(this);
+    server_arguments_edit->setPlaceholderText(
+        "Optional flags, for example --vae-tiling --offload-to-cpu");
+    server_arguments_edit->setToolTip(
+        "Additional command-line arguments passed directly to sd-server. "
+        "Use quotes around values containing spaces.");
     browse_server_button = new QPushButton("Browse...", this);
     server_port_spin_box = new QSpinBox(this);
     server_port_spin_box->setRange(1024, 65535);
@@ -183,6 +190,7 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent)
     server_row->addWidget(server_edit, 1);
     server_row->addWidget(browse_server_button);
     server_layout->addRow("Executable:", server_row);
+    server_layout->addRow("Extra flags:", server_arguments_edit);
     server_layout->addRow("Loopback port:", server_port_spin_box);
 
     auto *contents = new QWidget(this);
@@ -265,6 +273,7 @@ StableDiffusionSettingsDialog::configuration() const {
     result.prompt = prompt_edit->text().trimmed();
     result.negative_prompt = negative_prompt_edit->text().trimmed();
     result.server_executable = server_edit->text().trimmed();
+    result.server_arguments = server_arguments_edit->text().trimmed();
     result.server_port = server_port_spin_box->value();
     parse_stable_resolution(resolution_combo_box->currentText(), result.width,
                             result.height);
@@ -464,6 +473,26 @@ bool StableDiffusionSettingsDialog::validate_settings() {
                              "Enter sd-server or select its executable.");
         return false;
     }
+    const QStringList server_arguments =
+        QProcess::splitCommand(server_arguments_edit->text());
+    constexpr int MAX_SERVER_ARGUMENTS = 256;
+    constexpr int MAX_SERVER_ARGUMENT_BYTES = 8192;
+    if (server_arguments.size() > MAX_SERVER_ARGUMENTS) {
+        QMessageBox::warning(
+            this, "Too Many sd-server Flags",
+            "Extra sd-server flags are limited to 256 arguments.");
+        return false;
+    }
+    for (const QString &argument : server_arguments) {
+        if (argument.isEmpty() ||
+            argument.toUtf8().size() > MAX_SERVER_ARGUMENT_BYTES) {
+            QMessageBox::warning(
+                this, "Invalid sd-server Flag",
+                "Each extra sd-server argument must be non-empty and no "
+                "larger than 8192 UTF-8 bytes.");
+            return false;
+        }
+    }
     if (server_upscale_check_box->isChecked() &&
         !QFileInfo(upscale_model_edit->text().trimmed()).isFile()) {
         QMessageBox::warning(this, "Upscale Model Required",
@@ -524,6 +553,8 @@ void StableDiffusionSettingsDialog::load_ui_state() {
         settings.value("stable_diffusion/negative_prompt").toString());
     server_edit->setText(
         settings.value("stable_diffusion/server", "sd-server").toString());
+    server_arguments_edit->setText(
+        settings.value("stable_diffusion/server_arguments").toString());
     server_port_spin_box->setValue(
         settings.value("stable_diffusion/port", 1234).toInt());
     const int width = settings.value("stable_diffusion/width", 576).toInt();
@@ -576,6 +607,8 @@ void StableDiffusionSettingsDialog::save_ui_state() {
     settings.setValue("stable_diffusion/negative_prompt",
                       current.negative_prompt);
     settings.setValue("stable_diffusion/server", current.server_executable);
+    settings.setValue("stable_diffusion/server_arguments",
+                      current.server_arguments);
     settings.setValue("stable_diffusion/port", current.server_port);
     settings.setValue("stable_diffusion/width", current.width);
     settings.setValue("stable_diffusion/height", current.height);
@@ -607,6 +640,7 @@ void StableDiffusionSettingsDialog::update_enabled_state() {
         enabled && !lora_list_widget->selectedItems().isEmpty());
     select_lora_model();
     server_edit->setEnabled(enabled);
+    server_arguments_edit->setEnabled(enabled);
     browse_server_button->setEnabled(enabled);
     server_port_spin_box->setEnabled(enabled);
     resolution_combo_box->setEnabled(enabled);

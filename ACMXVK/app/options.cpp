@@ -128,6 +128,11 @@ namespace acmxvk {
             input::validate_string(lora.file, input::StringKind::Path,
                                    "--sd-lora");
         }
+        for (const std::string &argument :
+             options.stable_diffusion_server_arguments) {
+            input::validate_string(argument, input::StringKind::Argument,
+                                   "--sd-server-arg");
+        }
         input::validate_string(options.stable_diffusion_server,
                                input::StringKind::Path, "--sd-server");
         input::validate_string(options.stable_diffusion_prompt,
@@ -777,6 +782,16 @@ namespace acmxvk {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_server =
                     optionValue(index, argc, argv, option);
+            } else if (option == "--sd-server-arg") {
+                options.stable_diffusion_option_specified = true;
+                constexpr std::size_t MAX_SERVER_ARGUMENTS = 256U;
+                if (options.stable_diffusion_server_arguments.size() >=
+                    MAX_SERVER_ARGUMENTS) {
+                    throw std::runtime_error(
+                        "--sd-server-arg may be repeated at most 256 times");
+                }
+                options.stable_diffusion_server_arguments.push_back(
+                    optionValue(index, argc, argv, option));
             } else if (option == "--sd-server-port") {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_server_port = parseInteger(
@@ -1672,6 +1687,7 @@ namespace acmxvk {
                << "      --sd-sampler <name>     Sampler (default euler_a)\n"
                << "      --sd-scheduler <name>   Scheduler (default discrete)\n"
                << "      --sd-server <file>      sd-server executable (default sd-server)\n"
+               << "      --sd-server-arg <arg>   Extra sd-server argument (repeatable)\n"
                << "      --sd-server-port <N>    Local server port (default 1234)\n"
                << "      --sd-after-shaders      Preserve shader-chain-then-SD ordering\n"
                << "      --sd-upscale            High-quality compute upscale before shaders\n"

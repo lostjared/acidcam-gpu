@@ -184,6 +184,7 @@ namespace acmxvk {
         std::vector<std::string> midi_cc_mappings;
         std::vector<int> gpu_filter_indices;
         std::vector<StableDiffusionLora> stable_diffusion_loras;
+        std::vector<std::string> stable_diffusion_server_arguments;
         std::string input_file;
         std::string graphic_file;
         std::string shader_directory;

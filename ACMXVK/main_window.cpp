@@ -1152,6 +1152,8 @@ namespace acmxvk {
         stable_diffusion::Settings settings;
         settings.server_executable = options.stable_diffusion_server;
         settings.model = model;
+        settings.server_arguments =
+            options.stable_diffusion_server_arguments;
         for (const StableDiffusionLora &configured_lora :
              options.stable_diffusion_loras) {
             const fs::path lora_model =

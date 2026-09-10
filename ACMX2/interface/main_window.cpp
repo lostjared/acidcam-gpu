@@ -1521,6 +1521,8 @@ void MainWindow::loadSessionSettings() {
         settings.value("stable_diffusion/negative_prompt").toString();
     stable_diffusion_server =
         settings.value("stable_diffusion/server", "sd-server").toString();
+    stable_diffusion_server_arguments =
+        settings.value("stable_diffusion/server_arguments").toString();
     stable_diffusion_server_port = std::clamp(
         settings.value("stable_diffusion/port", 1234).toInt(), 1024, 65535);
     stable_diffusion_width = std::clamp(
@@ -4542,6 +4544,7 @@ void MainWindow::menuStableDiffusionSettings() {
                 stable_diffusion_prompt = config.prompt;
                 stable_diffusion_negative_prompt = config.negative_prompt;
                 stable_diffusion_server = config.server_executable;
+                stable_diffusion_server_arguments = config.server_arguments;
                 stable_diffusion_server_port = config.server_port;
                 stable_diffusion_width = config.width;
                 stable_diffusion_height = config.height;
@@ -4683,6 +4686,11 @@ void MainWindow::appendStableDiffusionArguments(
                          stable_diffusion_lora_multipliers.at(index), 'g', 12);
     }
     arguments << "--sd-server" << stable_diffusion_server;
+    const QStringList server_arguments =
+        QProcess::splitCommand(stable_diffusion_server_arguments);
+    for (const QString &argument : server_arguments) {
+        arguments << "--sd-server-arg" << argument;
+    }
     arguments << "--sd-server-port"
               << QString::number(stable_diffusion_server_port);
     arguments << "--sd-size"
