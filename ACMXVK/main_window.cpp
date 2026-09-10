@@ -3525,6 +3525,17 @@ namespace acmxvk {
         const double elapsed_seconds =
             static_cast<double>(processed_frames) / recording_fps;
         const double wall_elapsed_seconds = hudWallElapsedSeconds();
+        const bool estimate_available = expected_frames > 0U &&
+                                        processed_frames > 0U;
+        double estimated_remaining_seconds = 0.0;
+        if (estimate_available && !complete) {
+            const double average_seconds_per_frame =
+                wall_elapsed_seconds /
+                static_cast<double>(processed_frames);
+            estimated_remaining_seconds =
+                average_seconds_per_frame *
+                static_cast<double>(expected_frames - processed_frames);
+        }
 
         std::cout << "acmxvk: [";
         if (percent >= 0) {
@@ -3540,7 +3551,13 @@ namespace acmxvk {
         }
         std::cout << " | Written: " << written_frames
                   << " | Time: " << formatHudTime(elapsed_seconds)
-                  << " | Elapsed: " << formatHudTime(wall_elapsed_seconds);
+                  << " | Elapsed: " << formatHudTime(wall_elapsed_seconds)
+                  << " | Estimated: ";
+        if (estimate_available) {
+            std::cout << formatHudTime(estimated_remaining_seconds);
+        } else {
+            std::cout << "--:--:--";
+        }
         if (writer.is_open()) {
             constexpr double BYTES_PER_MEGABYTE = 1024.0 * 1024.0;
             const double file_size_mb =
