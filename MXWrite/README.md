@@ -109,6 +109,21 @@ installed extension uses a relative loader path to the MXWrite shared library
 on Linux and macOS; Windows installations also place the MXWrite DLL beside
 the extension.
 
+The Python example generates an animated RGBA test pattern, queries the
+available FFmpeg encoders and their options, writes a video, and validates the
+reported frame count, duration, and output size. NumPy is required to supply
+frames to the module:
+
+```bash
+python3 -m pip install numpy
+PYTHONPATH=build/mxwrite-python \
+    python3 MXWrite/examples/python_example.py \
+    --output /tmp/mxwrite-python-example.mp4
+```
+
+Pass `--explicit-pts` to exercise `open_ts()` and `write_at_pts()`. Use
+`--help` to see the resolution, frame-rate, encoder, preset, and CRF options.
+
 CMake automatically enables `MXWRITE_HAS_CUDA_COPY` when it finds the CUDA
 Toolkit. This definition changes the layout of `Writer`, so every translation
 unit using `mxwrite.hpp` must receive the same definition as the library. The
