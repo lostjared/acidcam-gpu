@@ -126,6 +126,49 @@ cmake -S ACMX2/interface -B build/interface -DCMAKE_BUILD_TYPE=Release
 cmake --build build/interface --parallel
 ```
 
+### Headless ACMXVK rendering
+
+ACMXVK can render an input video without opening an SDL window. Supply an
+encoded output and use `--headless` (or its `--silent` alias):
+
+```bash
+./build/acmxvk/acmxvk \
+    --headless --input input.mp4 --output rendered.mp4 \
+    --shaders /path/to/spv-library --shader-file effect.frag.spv \
+    --constant-frame-rate --no-drop
+```
+
+For a looping batch render, add an explicit duration. This gives the job a
+defined completion point and lets ACMXVK report an accurate percentage and
+estimated remaining render time across every source loop:
+
+```bash
+./build/acmxvk/acmxvk \
+    --headless --input short-clip.mp4 --output repeated.mp4 \
+    --shaders /path/to/spv-library --shader-file effect.frag.spv \
+    --repeat --duration 60 --constant-frame-rate --no-drop
+```
+
+Headless mode intentionally ignores `--interface-shm`; the Qt interface cannot
+replace shader, playback, or render settings while an offline render is in
+progress. See the [ACMXVK headless guide](ACMXVK/README.md#headless-terminal-processing)
+for source-audio, HDR, Deep Dream, and Stable Diffusion combinations.
+
+### MXWrite Python module
+
+MXWrite’s optional nanobind module can be installed directly from this checkout
+after FFmpeg development packages and a C++ toolchain are available:
+
+```bash
+python3 -m pip install ./MXWrite
+python3 -c "import mxwrite_ext; print(len(mxwrite_ext.available_video_encoders()))"
+```
+
+The package builds the local CMake project with scikit-build-core and installs
+NumPy for host RGBA frame input. Run
+`MXWrite/examples/python_example.py` after installation for a self-checking
+encode example, including an `--explicit-pts` timestamp mode.
+
 ### Complete project helpers
 
 `build-project-pcons.py` builds libmx2, MXVK, ACMX2, ACMXVK, and the Qt

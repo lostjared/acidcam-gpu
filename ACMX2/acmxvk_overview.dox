@@ -220,10 +220,27 @@ tone-mapped to SDR; TIFF and raw snapshots can retain normalized 16-bit data.
 
 <tt>--headless</tt> and its compatibility alias <tt>--silent</tt> run a
 surface-free Vulkan render without creating an SDL window. Headless operation
-is restricted to recording jobs. Ctrl+C requests an orderly shutdown so the
-writer can flush and finalize its container. Repeating headless input requires
-a duration limit and reports percentage, frame, encoded-size, and elapsed-time
-progress in the terminal.
+is restricted to recording jobs and intentionally disables the
+<tt>--interface-shm</tt> live-control channel. Ctrl+C requests an orderly
+shutdown so the writer can flush and finalize its container.
+
+For a repeated file source, headless mode requires a positive
+<tt>--duration</tt>. The duration defines the complete batch target rather than
+the first source pass, allowing the terminal to report media time, wall elapsed
+time, encoded frame count and size, percentage, and an estimated remaining
+render time across every loop. A typical deterministic batch command is:
+
+@code{.sh}
+acmxvk --headless --input short-clip.mp4 --output render.mp4 \
+    --shaders /path/to/library --shader-file effect.frag.spv \
+    --repeat --duration 60 --constant-frame-rate --no-drop
+@endcode
+
+Use <tt>--constant-frame-rate</tt> with <tt>--no-drop</tt> when a downstream
+editor needs evenly spaced encoded timestamps. Source-audio analysis, HDR,
+Deep Dream, Stable Diffusion, and supported shader chains remain available in
+headless jobs; their exact command combinations are documented in
+<tt>ACMXVK/README.md</tt>.
 
 @section acmxvk_3d Three-Dimensional Mode
 

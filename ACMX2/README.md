@@ -4,7 +4,7 @@ ACMX2 is ACMX's established OpenGL/libmx2 rendering backend. Its engine version
 is **2.101.1**; it is controlled either directly from the command line or by the
 shared ACMX Qt interface, currently version **2.137.0**. For the overall project,
 the Vulkan backend, and cross-backend build helpers, start with the
-[root ACMX README](../README.md). The Vulkan-specific documentation remains in
+[root ACMX README](https://github.com/lostjared/acidcam-gpu/blob/main/README.md). The Vulkan-specific documentation remains in
 [ACMXVK/README.md](../ACMXVK/README.md).
 
 <img width="2560" height="1440" alt="Screenshot From 2026-04-13 07-41-08" src="https://github.com/user-attachments/assets/0e0cd74f-ce6b-47e5-abfa-bc268cd74d4b" />
@@ -543,7 +543,7 @@ adding their directory to `PATH`:
 ### Linux
 
 ACMX2 is part of the ACMX project. The commands below provide a basic native
-Linux build; the [root README](../README.md) describes the complete-project
+Linux build; the [root README](https://github.com/lostjared/acidcam-gpu/blob/main/README.md) describes the complete-project
 helpers and links to the other components.
 
 ```bash
