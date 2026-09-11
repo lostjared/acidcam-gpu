@@ -191,6 +191,16 @@ namespace acmxvk {
         return {};
     }
 
+    fs::path mxvk_shader_directory(const Options &options) {
+        for (const fs::path &resource_directory : resource_directories(options)) {
+            const fs::path candidate = resource_directory.parent_path() / "mxvk" / "shaders";
+            if (fs::is_directory(candidate)) {
+                return candidate;
+            }
+        }
+        return {};
+    }
+
     fs::path sprite_vertex_shader_path(const Options &options) { return resolve_resource(options, "shaders/sprite.vert.spv", ACMXVK_INSTALL_SPRITE_VERTEX_SHADER, ACMXVK_BUILD_SPRITE_VERTEX_SHADER); }
 
     fs::path echo_cache_shader_path(const Options &options) { return resolve_resource(options, "shaders/echo_cache.frag.spv", ACMXVK_INSTALL_ECHO_CACHE_SHADER, ACMXVK_BUILD_ECHO_CACHE_SHADER); }

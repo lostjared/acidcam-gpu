@@ -4,6 +4,7 @@
  */
 
 #include <mxvk/mxvk_exception.hpp>
+#include <mxvk/mxvk_runtime_options.hpp>
 
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
@@ -20,6 +21,7 @@
 #include "app/camera_probe.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
+#include "app/resource_paths.hpp"
 #include "app/shader_library.hpp"
 #include "main_window.hpp"
 
@@ -227,6 +229,12 @@ int main(int argc, char **argv) {
                     std::swap(options.width, options.height);
                 }
             }
+        }
+
+        const std::filesystem::path mxvk_shader_path = acmxvk::mxvk_shader_directory(options);
+        if (!mxvk_shader_path.empty()) {
+            mxvk::setDefaultShaderDirectory(mxvk_shader_path.string());
+            std::cout << "acmxvk: MXVK internal shaders: " << mxvk_shader_path.string() << '\n';
         }
 
         acmxvk::MainWindow main_window(std::move(options));

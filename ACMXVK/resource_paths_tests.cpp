@@ -48,21 +48,25 @@ namespace {
 int main() {
     try {
         TemporaryDirectory temporary;
-        const fs::path flip = temporary.path / "shaders/flip.frag.spv";
-        const fs::path crossfade = temporary.path / "shaders/xfade/xfade_01_linear.frag.spv";
-        const fs::path model = temporary.path / "models/cube.obj";
-        const fs::path font = temporary.path / "data/font.ttf";
+        const fs::path resource_directory = temporary.path / "share/acmxvk";
+        const fs::path mxvk_shaders = temporary.path / "share/mxvk/shaders";
+        const fs::path flip = resource_directory / "shaders/flip.frag.spv";
+        const fs::path crossfade = resource_directory / "shaders/xfade/xfade_01_linear.frag.spv";
+        const fs::path model = resource_directory / "models/cube.obj";
+        const fs::path font = resource_directory / "data/font.ttf";
         create_file(flip);
         create_file(crossfade);
         create_file(model);
         create_file(font);
+        create_file(mxvk_shaders / "sprite.frag.spv");
 
         acmxvk::Options options;
-        options.resource_directory = temporary.path.string();
+        options.resource_directory = resource_directory.string();
         expect_equal(acmxvk::flip_shader_path(options), flip, "user resource shader");
         expect_equal(acmxvk::crossfade_shader_path(options, 0), crossfade, "user resource crossfade");
         expect_equal(acmxvk::default_model_path(options), model, "user resource model");
         expect_equal(acmxvk::overlay_font_path(options), font, "user resource font");
+        expect_equal(acmxvk::mxvk_shader_directory(options), mxvk_shaders, "installed MXVK shader directory");
 
         if (!acmxvk::find_resource(options, "../outside").empty()) {
             throw std::runtime_error("parent traversal was accepted");
