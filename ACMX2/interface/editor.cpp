@@ -1378,7 +1378,7 @@ void TextEditor::init() {
     m_livePreviewCheck->setEnabled(false);
     m_loopSafetyCheck = new QCheckBox(tr("Guard Loops"), this);
     m_loopSafetyCheck->setChecked(editorSettings.value("editor/guardLoops", true).toBool());
-    m_loopSafetyCheck->setToolTip(tr("Add a 10,000-iteration break guard to braced ACMXVK for/while loops before previewing or saving."));
+    m_loopSafetyCheck->setToolTip(tr("Add a 10,000-iteration break guard to braced ACMXVK for/while loops in temporary preview sources."));
     m_loopSafetyCheck->setEnabled(false);
     previewBar->addWidget(previewButton);
     previewBar->addWidget(saveApplyButton);
@@ -1572,17 +1572,6 @@ void TextEditor::saveContents() {
 }
 
 bool TextEditor::writeFile(const QString &filePath) {
-    QString source = m_textEdit->toPlainText();
-    if (m_acmxvkContext && m_loopSafetyCheck->isChecked()) {
-        source = inject_safety_counters(source);
-        if (source != m_textEdit->toPlainText()) {
-            const int cursor_position = m_textEdit->textCursor().position();
-            m_textEdit->setPlainText(source);
-            QTextCursor cursor = m_textEdit->textCursor();
-            cursor.setPosition(qMin(cursor_position, source.size()));
-            m_textEdit->setTextCursor(cursor);
-        }
-    }
     QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QMessageBox::warning(this, "Error", "Could not save file: " + filePath + "\n\n" + file.errorString());
@@ -1590,7 +1579,7 @@ bool TextEditor::writeFile(const QString &filePath) {
     }
 
     QTextStream out(&file);
-    out << source;
+    out << m_textEdit->toPlainText();
     out.flush();
     if (out.status() != QTextStream::Ok) {
         file.cancelWriting();

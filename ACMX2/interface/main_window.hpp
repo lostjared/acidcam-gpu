@@ -140,6 +140,8 @@ class MainWindow : public QMainWindow {
         }
         for (const QString &path : editorPreviewTemporaryFiles)
             QFile::remove(path);
+        if (!liveShaderCompileInput.isEmpty())
+            QFile::remove(liveShaderCompileInput);
         cleanupShaderSelectionSharedMemory();
         QMainWindow::closeEvent(event);
     }
@@ -415,6 +417,7 @@ class MainWindow : public QMainWindow {
     QProcess *liveShaderCompileProcess = nullptr;
     QStringList liveShaderCompileQueue;
     QString liveShaderCompileSource;
+    QString liveShaderCompileInput;
     QString liveShaderCompileOutput;
     QString liveShaderCompileTemporary;
     QString liveShaderCompileStdout;

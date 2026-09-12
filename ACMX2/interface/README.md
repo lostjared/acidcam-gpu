@@ -196,10 +196,12 @@ Interface version 2.137.0 includes the current ACMXVK integration increments:
   **Save & Apply** retains the established atomic saved-file workflow, and
   **Revert** restores the last saved source.
 - ACMXVK editor tabs enable **Guard Loops** by default. Before previewing or
-  saving, it wraps each braced `for` or `while` loop in an independently named
-  counter that breaks after 10,000 iterations. The generated guards are saved
-  with the shader so ordinary live reloads receive the same protection. Disable
-  the checkbox for intentionally long, finite GPU loops.
+  automatically compiling a saved shader for live reload, the interface writes
+  a temporary source containing independently named counters around each braced
+  `for` or `while` loop; a loop breaks after 10,000 iterations. The original
+  `.frag` or `.comp` source is never modified. Disable the checkbox for
+  intentionally long, finite loops; the setting applies to both manual and
+  automatic previews.
 - **Properties** (`Ctrl+,`) includes an ACMXVK shader-compiler section. Use
   **Automatic glslc** to resolve `glslc` from `PATH` or `VULKAN_SDK`, or select
   a custom glslc-compatible executable. The selected compiler is used for

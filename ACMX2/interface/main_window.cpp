@@ -2300,6 +2300,7 @@ void MainWindow::startNextAcmxvkLiveCompile() {
 
             updateOpenEditorCompileStatus(liveShaderCompileSource, false, installed, installed ? compilerOutput : editorDiagnostics);
 
+            QFile::remove(liveShaderCompileInput);
             if (!installed) {
                 QFile::remove(liveShaderCompileTemporary);
             } else {
@@ -2309,6 +2310,7 @@ void MainWindow::startNextAcmxvkLiveCompile() {
             }
 
             liveShaderCompileSource.clear();
+            liveShaderCompileInput.clear();
             liveShaderCompileOutput.clear();
             liveShaderCompileTemporary.clear();
             liveShaderCompileStdout.clear();
@@ -2346,7 +2348,37 @@ void MainWindow::startNextAcmxvkLiveCompile() {
     }
 
     liveShaderCompileTemporary = liveShaderCompileOutput + QStringLiteral(".live-tmp-%1-%2").arg(QCoreApplication::applicationPid()).arg(++liveShaderCompileSequence);
-    const QStringList arguments{QStringLiteral("-I"), sourceRoot, liveShaderCompileSource, QStringLiteral("-o"), liveShaderCompileTemporary};
+    const QFileInfo sourceInfo(liveShaderCompileSource);
+    liveShaderCompileInput = sourceInfo.absolutePath() + QLatin1Char('/') + QStringLiteral(".acmxvk-live-%1-%2.%3").arg(QCoreApplication::applicationPid()).arg(liveShaderCompileSequence).arg(sourceInfo.suffix());
+    QFile sourceFile(liveShaderCompileSource);
+    if (!sourceFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QString diagnostic = tr("Could not read shader source for live safety processing: %1").arg(sourceFile.errorString());
+        Log(QStringLiteral("<b style='color:red;'>%1</b>").arg(diagnostic.toHtmlEscaped()));
+        updateOpenEditorCompileStatus(liveShaderCompileSource, false, false, diagnostic);
+        liveShaderCompileTemporary.clear();
+        liveShaderCompileInput.clear();
+        liveShaderCompileSource.clear();
+        QTimer::singleShot(0, this, &MainWindow::startNextAcmxvkLiveCompile);
+        return;
+    }
+    const QString source = QString::fromUtf8(sourceFile.readAll());
+    const QSettings editorSettings("LostSideDead");
+    const QString guardedSource = editorSettings.value("editor/guardLoops", true).toBool() ? inject_safety_counters(source) : source;
+    sourceFile.close();
+    QSaveFile guardedFile(liveShaderCompileInput);
+    const QByteArray guardedBytes = guardedSource.toUtf8();
+    if (!guardedFile.open(QIODevice::WriteOnly | QIODevice::Text) || guardedFile.write(guardedBytes) != guardedBytes.size() || !guardedFile.commit()) {
+        const QString diagnostic = tr("Could not create temporary shader source for live safety processing.");
+        Log(QStringLiteral("<b style='color:red;'>%1</b>").arg(diagnostic.toHtmlEscaped()));
+        updateOpenEditorCompileStatus(liveShaderCompileSource, false, false, diagnostic);
+        QFile::remove(liveShaderCompileInput);
+        liveShaderCompileTemporary.clear();
+        liveShaderCompileInput.clear();
+        liveShaderCompileSource.clear();
+        QTimer::singleShot(0, this, &MainWindow::startNextAcmxvkLiveCompile);
+        return;
+    }
+    const QStringList arguments{QStringLiteral("-I"), sourceRoot, liveShaderCompileInput, QStringLiteral("-o"), liveShaderCompileTemporary};
     Log(tr("Live compiling ACMXVK shader: %1").arg(sourceName));
     Log(tr("Command: %1 %2<br>").arg(glslc, concatList(arguments)));
     liveShaderCompileStdout.clear();
@@ -2357,7 +2389,9 @@ void MainWindow::startNextAcmxvkLiveCompile() {
         Log(QStringLiteral("<b style='color:red;'>%1</b>").arg(diagnostic.toHtmlEscaped()));
         updateOpenEditorCompileStatus(liveShaderCompileSource, false, false, diagnostic);
         QFile::remove(liveShaderCompileTemporary);
+        QFile::remove(liveShaderCompileInput);
         liveShaderCompileSource.clear();
+        liveShaderCompileInput.clear();
         liveShaderCompileOutput.clear();
         liveShaderCompileTemporary.clear();
         liveShaderCompileStdout.clear();
