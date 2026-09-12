@@ -41,6 +41,133 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <algorithm>
+
+namespace {
+    constexpr int LOOP_SAFETY_LIMIT = 10000;
+    const QString LOOP_SAFETY_MARKER = QStringLiteral("ACMX_LOOP_GUARD");
+
+    bool is_identifier_character(QChar character) { return character.isLetterOrNumber() || character == QLatin1Char('_'); }
+
+    int skip_glsl_trivia(const QString &source, int position) {
+        while (position < source.size()) {
+            if (source.at(position).isSpace()) {
+                ++position;
+            } else if (source.mid(position, 2) == QStringLiteral("//")) {
+                position = source.indexOf(QLatin1Char('\n'), position + 2);
+                if (position < 0)
+                    return source.size();
+            } else if (source.mid(position, 2) == QStringLiteral("/*")) {
+                position = source.indexOf(QStringLiteral("*/"), position + 2);
+                if (position < 0)
+                    return source.size();
+                position += 2;
+            } else {
+                break;
+            }
+        }
+        return position;
+    }
+
+    int find_matching_glsl_delimiter(const QString &source, int opening, QChar open, QChar close) {
+        int depth = 0;
+        for (int position = opening; position < source.size(); ++position) {
+            if (source.mid(position, 2) == QStringLiteral("//")) {
+                position = source.indexOf(QLatin1Char('\n'), position + 2);
+                if (position < 0)
+                    return -1;
+            } else if (source.mid(position, 2) == QStringLiteral("/*")) {
+                position = source.indexOf(QStringLiteral("*/"), position + 2);
+                if (position < 0)
+                    return -1;
+                ++position;
+            } else if (source.at(position) == QLatin1Char('"')) {
+                ++position;
+                while (position < source.size() && source.at(position) != QLatin1Char('"')) {
+                    if (source.at(position) == QLatin1Char('\\'))
+                        ++position;
+                    ++position;
+                }
+            } else if (source.at(position) == open) {
+                ++depth;
+            } else if (source.at(position) == close && --depth == 0) {
+                return position;
+            }
+        }
+        return -1;
+    }
+
+    struct LoopRange {
+        int keyword = 0;
+        int body_open = 0;
+        int body_close = 0;
+    };
+} // namespace
+
+QString inject_safety_counters(const QString &glsl_source) {
+    QVector<LoopRange> loops;
+    for (int position = 0; position < glsl_source.size(); ++position) {
+        if (glsl_source.mid(position, 2) == QStringLiteral("//")) {
+            position = glsl_source.indexOf(QLatin1Char('\n'), position + 2);
+            if (position < 0)
+                break;
+            continue;
+        }
+        if (glsl_source.mid(position, 2) == QStringLiteral("/*")) {
+            position = glsl_source.indexOf(QStringLiteral("*/"), position + 2);
+            if (position < 0)
+                break;
+            ++position;
+            continue;
+        }
+        if (glsl_source.at(position) == QLatin1Char('"')) {
+            ++position;
+            while (position < glsl_source.size() && glsl_source.at(position) != QLatin1Char('"')) {
+                if (glsl_source.at(position) == QLatin1Char('\\'))
+                    ++position;
+                ++position;
+            }
+            continue;
+        }
+        const bool keyword_start = position == 0 || !is_identifier_character(glsl_source.at(position - 1));
+        const bool is_for = glsl_source.mid(position, 3) == QStringLiteral("for") && keyword_start && (position + 3 >= glsl_source.size() || !is_identifier_character(glsl_source.at(position + 3)));
+        const bool is_while = glsl_source.mid(position, 5) == QStringLiteral("while") && keyword_start && (position + 5 >= glsl_source.size() || !is_identifier_character(glsl_source.at(position + 5)));
+        if (!is_for && !is_while)
+            continue;
+
+        const int marker_start = qMax(0, position - 64);
+        if (glsl_source.mid(marker_start, position - marker_start).contains(LOOP_SAFETY_MARKER))
+            continue;
+        const int condition_open = skip_glsl_trivia(glsl_source, position + (is_for ? 3 : 5));
+        if (condition_open >= glsl_source.size() || glsl_source.at(condition_open) != QLatin1Char('('))
+            continue;
+        const int condition_close = find_matching_glsl_delimiter(glsl_source, condition_open, QLatin1Char('('), QLatin1Char(')'));
+        if (condition_close < 0)
+            continue;
+        const int body_open = skip_glsl_trivia(glsl_source, condition_close + 1);
+        if (body_open >= glsl_source.size() || glsl_source.at(body_open) != QLatin1Char('{'))
+            continue;
+        const int body_close = find_matching_glsl_delimiter(glsl_source, body_open, QLatin1Char('{'), QLatin1Char('}'));
+        if (body_close < 0)
+            continue;
+        loops.append({position, body_open, body_close});
+        position = condition_close;
+    }
+
+    QVector<QPair<int, QString>> insertions;
+    for (int index = 0; index < loops.size(); ++index) {
+        const LoopRange &loop = loops.at(index);
+        const QString counter = QStringLiteral("_acmx_loop_guard_%1").arg(index);
+        insertions.append({loop.body_close + 1, QStringLiteral("}")});
+        insertions.append({loop.body_open + 1, QStringLiteral("\nif (++%1 > %2) { break; }\n").arg(counter).arg(LOOP_SAFETY_LIMIT)});
+        insertions.append({loop.keyword, QStringLiteral("{ int %1 = 0; // %2\n").arg(counter, LOOP_SAFETY_MARKER)});
+    }
+    std::sort(insertions.begin(), insertions.end(), [](const QPair<int, QString> &left, const QPair<int, QString> &right) { return left.first > right.first; });
+    QString modified_source = glsl_source;
+    for (const QPair<int, QString> &insertion : insertions)
+        modified_source.insert(insertion.first, insertion.second);
+    return modified_source;
+}
 
 // --- CustomTextEdit ---
 
@@ -835,6 +962,7 @@ void TextEditor::setShaderContext(bool acmxvk, const QVector<ShaderEditorUniform
     m_libraryDirectory = libraryDirectory;
     m_snippetsMenu->setEnabled(acmxvk);
     m_livePreviewCheck->setEnabled(!libraryDirectory.isEmpty());
+    m_loopSafetyCheck->setEnabled(acmxvk && !libraryDirectory.isEmpty());
     updateCompletionWords();
     rebuildUniformControls();
 }
@@ -874,7 +1002,10 @@ void TextEditor::openInclude(const QString &includeName) {
 void TextEditor::requestPreview() {
     if (filename.isEmpty() || m_libraryDirectory.isEmpty())
         return;
-    emit previewRequested(filename, m_textEdit->toPlainText());
+    QString source = m_textEdit->toPlainText();
+    if (m_acmxvkContext && m_loopSafetyCheck->isChecked())
+        source = inject_safety_counters(source);
+    emit previewRequested(filename, source);
 }
 
 void TextEditor::revertContents() {
@@ -1245,10 +1376,15 @@ void TextEditor::init() {
     m_livePreviewCheck = new QCheckBox(tr("Live Preview"), this);
     m_livePreviewCheck->setChecked(editorSettings.value("editor/livePreview", false).toBool());
     m_livePreviewCheck->setEnabled(false);
+    m_loopSafetyCheck = new QCheckBox(tr("Guard Loops"), this);
+    m_loopSafetyCheck->setChecked(editorSettings.value("editor/guardLoops", true).toBool());
+    m_loopSafetyCheck->setToolTip(tr("Add a 10,000-iteration break guard to braced ACMXVK for/while loops before previewing or saving."));
+    m_loopSafetyCheck->setEnabled(false);
     previewBar->addWidget(previewButton);
     previewBar->addWidget(saveApplyButton);
     previewBar->addWidget(revertButton);
     previewBar->addStretch();
+    previewBar->addWidget(m_loopSafetyCheck);
     previewBar->addWidget(m_livePreviewCheck);
     layout->addLayout(previewBar);
 
@@ -1310,6 +1446,7 @@ void TextEditor::init() {
         if (checked)
             m_previewTimer->start();
     });
+    connect(m_loopSafetyCheck, &QCheckBox::toggled, this, [](bool checked) { QSettings("LostSideDead").setValue("editor/guardLoops", checked); });
 
     connect(undoAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::undo);
     connect(redoAction, &QAction::triggered, m_textEdit, &QPlainTextEdit::redo);
@@ -1435,6 +1572,17 @@ void TextEditor::saveContents() {
 }
 
 bool TextEditor::writeFile(const QString &filePath) {
+    QString source = m_textEdit->toPlainText();
+    if (m_acmxvkContext && m_loopSafetyCheck->isChecked()) {
+        source = inject_safety_counters(source);
+        if (source != m_textEdit->toPlainText()) {
+            const int cursor_position = m_textEdit->textCursor().position();
+            m_textEdit->setPlainText(source);
+            QTextCursor cursor = m_textEdit->textCursor();
+            cursor.setPosition(qMin(cursor_position, source.size()));
+            m_textEdit->setTextCursor(cursor);
+        }
+    }
     QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QMessageBox::warning(this, "Error", "Could not save file: " + filePath + "\n\n" + file.errorString());
@@ -1442,7 +1590,7 @@ bool TextEditor::writeFile(const QString &filePath) {
     }
 
     QTextStream out(&file);
-    out << m_textEdit->toPlainText();
+    out << source;
     out.flush();
     if (out.status() != QTextStream::Ok) {
         file.cancelWriting();

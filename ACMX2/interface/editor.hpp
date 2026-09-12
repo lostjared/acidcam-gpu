@@ -53,6 +53,11 @@ struct ShaderEditorUniform {
 };
 
 /**
+ * @brief Add bounded iteration guards to braced GLSL for and while loops.
+ */
+QString inject_safety_counters(const QString &glsl_source);
+
+/**
  * @brief Plain-text editor with line numbers and code-editing helpers.
  */
 class CustomTextEdit : public QPlainTextEdit {
@@ -200,6 +205,7 @@ class TextEditor : public QDialog {
     QScrollArea *m_uniformScroll = nullptr;
     QVBoxLayout *m_uniformLayout = nullptr;
     QCheckBox *m_livePreviewCheck = nullptr;
+    QCheckBox *m_loopSafetyCheck = nullptr;
     QTimer *m_previewTimer = nullptr;
     QHash<QString, QDoubleSpinBox *> m_uniformSpins;
     QHash<QString, QSlider *> m_uniformSliders;
