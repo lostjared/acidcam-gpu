@@ -15,19 +15,22 @@ then pass its prefix here when it is not discoverable through pkg-config:
 Options mirror the CMake project where applicable:
 
     AUDIO=0|1, MIDI=0|1, WEBP=0|1, TIFF=0|1, DNN=0|1,
-    STABLE_DIFFUSION=0|1,
+    STABLE_DIFFUSION=0|1, DEEP_DREAM=0|1,
     VALIDATION=0|1, WITH_CUDA=0|1, VARIANT=release|debug,
-    PREFIX=<dependency-prefix>, PCONS_INSTALL_PREFIX=<stage-prefix>,
+    PREFIX=<dependency-prefix>, TORCH_PREFIX=/opt/libtorch,
+    CUDA_PREFIX=/opt/cuda, PCONS_INSTALL_PREFIX=<stage-prefix>,
     PCONS_FINAL_PREFIX=<installed-prefix>.
 
-The CUDA filter configuration currently remains CMake-only because it requires
-a matching CUDA-enabled MXVK and installed acidcam-gpu library.
+Stable Diffusion requires libcurl and jsoncpp and supports Windows when a
+compatible sd-server.exe is available. Deep Dream is supported on Linux with
+CUDA-enabled LibTorch and CUDA-enabled OpenCV; it is independent of the
+CMake-only acidcam-gpu CUDA-filter configuration.
 """
 
 import os
 from pathlib import Path
 
-from pcons import Project, Target, find_c_toolchain, get_platform, get_var
+from pcons import ImportedTarget, PackageDescription, Project, Target, find_c_toolchain, get_platform, get_var
 from pcons.core.subst import PathToken
 
 project_dir = Path(__file__).parent.resolve()
@@ -83,6 +86,48 @@ def require_package(name: str) -> Target:
     return package
 
 
+def imported_package(name: str, include_dirs: list[Path], library_dir: Path, libraries: list[str]) -> ImportedTarget:
+    """Create a target for a dependency distributed without a pkg-config file."""
+    return ImportedTarget.from_package(
+        PackageDescription(
+            name=name,
+            include_dirs=[str(directory) for directory in include_dirs],
+            library_dirs=[str(library_dir)],
+            libraries=libraries,
+            compile_flags=[flag for directory in include_dirs for flag in ("-isystem", str(directory))],
+        )
+    )
+
+
+def find_cuda_runtime() -> ImportedTarget:
+    """Locate CUDA's runtime library for a CUDA-enabled LibTorch install."""
+    cuda_root = Path(get_var("CUDA_PREFIX", "/opt/cuda")).expanduser()
+    layouts = (
+        (cuda_root / "include", cuda_root / "lib64"),
+        (cuda_root / "include", cuda_root / "lib"),
+        (cuda_root / "targets" / "x86_64-linux" / "include", cuda_root / "targets" / "x86_64-linux" / "lib"),
+    )
+    for include_dir, library_dir in layouts:
+        if (include_dir / "cuda_runtime.h").is_file() and (library_dir / "libcudart.so").exists():
+            return imported_package("CUDA runtime", [include_dir], library_dir, ["cudart"])
+    raise SystemExit(f"DEEP_DREAM=1 requires CUDA under {cuda_root}. Set CUDA_PREFIX=/path/to/cuda.")
+
+
+def find_libtorch() -> ImportedTarget:
+    """Locate CUDA-enabled LibTorch used by ACMXVK Deep Dream."""
+    torch_root = Path(get_var("TORCH_PREFIX", "/opt/libtorch")).expanduser()
+    include_dir = torch_root / "include"
+    api_include_dir = include_dir / "torch" / "csrc" / "api" / "include"
+    library_dir = torch_root / "lib"
+    if not (include_dir / "torch" / "torch.h").is_file() or not library_dir.is_dir():
+        raise SystemExit(f"DEEP_DREAM=1 requires LibTorch under {torch_root}. Set TORCH_PREFIX=/path/to/libtorch.")
+    libraries = ["torch", "torch_cpu", "c10", "torch_cuda", "c10_cuda"]
+    missing = [library for library in libraries if not any((library_dir / f"lib{library}{suffix}").exists() for suffix in (".so", ".dylib", ".a"))]
+    if missing:
+        raise SystemExit("DEEP_DREAM=1 requires CUDA-enabled LibTorch; missing " + ", ".join(f"lib{library}" for library in missing) + f" under {library_dir}.")
+    return imported_package("LibTorch", [include_dir, api_include_dir], library_dir, libraries)
+
+
 extra_prefixes = [
     Path(prefix)
     for prefix in (get_var("PREFIX") or "").split(os.pathsep)
@@ -100,15 +145,14 @@ with_webp = option("WEBP")
 with_tiff = option("TIFF")
 with_dnn = option("DNN")
 with_stable_diffusion = option("STABLE_DIFFUSION")
+with_deep_dream = option("DEEP_DREAM")
 with_validation = option("VALIDATION")
 with_cuda = option("WITH_CUDA")
 
 if with_cuda and platform.is_macos:
     raise SystemExit("WITH_CUDA=1 is unavailable with MoltenVK on macOS.")
-if with_stable_diffusion and platform.is_windows:
-    raise SystemExit(
-        "STABLE_DIFFUSION=1 currently requires a POSIX platform."
-    )
+if with_deep_dream and not platform.is_linux:
+    raise SystemExit("DEEP_DREAM=1 currently requires Linux, CUDA, and CUDA-enabled LibTorch.")
 
 project = Project("acmxvk", root_dir=project_dir)
 env = project.Environment(toolchain=find_c_toolchain())
@@ -199,6 +243,10 @@ if with_stable_diffusion:
         [require_package("libcurl"), require_package("jsoncpp")]
     )
     env.cxx.defines.append("ACMXVK_WITH_STABLE_DIFFUSION")
+if with_deep_dream:
+    sources.extend([project_dir / "deep_dream.cpp", project_dir / "deep_dream_model.cpp"])
+    libraries.extend([find_cuda_runtime(), find_libtorch()])
+    env.cxx.defines.append("ACMXVK_WITH_DEEP_DREAM")
 if with_cuda:
     raise SystemExit(
         "WITH_CUDA=1 is not yet supported by the ACMXVK pcons target. "

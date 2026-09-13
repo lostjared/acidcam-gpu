@@ -6,27 +6,35 @@
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
-#include <cerrno>
 #include <chrono>
 #include <cmath>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <cerrno>
 #include <csignal>
 #include <cstring>
 #include <fcntl.h>
+#endif
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <spawn.h>
 #include <stdexcept>
 #include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
 
+#ifndef _WIN32
+#include <spawn.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
 extern char **environ;
+#endif
 
 namespace acmxvk::stable_diffusion {
     namespace {
@@ -38,6 +46,69 @@ namespace acmxvk::stable_diffusion {
         };
 
         [[nodiscard]] std::string curlError(CURLcode code) { return curl_easy_strerror(code); }
+
+#ifdef _WIN32
+        [[nodiscard]] std::string windowsError(DWORD error) {
+            LPWSTR message = nullptr;
+            const DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, error, 0, reinterpret_cast<LPWSTR>(&message), 0, nullptr);
+            std::string text;
+            if (length != 0U && message != nullptr) {
+                const int utf8_length = WideCharToMultiByte(CP_UTF8, 0, message, static_cast<int>(length), nullptr, 0, nullptr, nullptr);
+                if (utf8_length > 0) {
+                    text.resize(static_cast<std::size_t>(utf8_length));
+                    WideCharToMultiByte(CP_UTF8, 0, message, static_cast<int>(length), text.data(), utf8_length, nullptr, nullptr);
+                }
+            }
+            if (message != nullptr) {
+                LocalFree(message);
+            }
+            while (!text.empty() && (text.back() == '\r' || text.back() == '\n')) {
+                text.pop_back();
+            }
+            return text.empty() ? "Windows error " + std::to_string(error) : text;
+        }
+
+        [[nodiscard]] std::wstring utf8ToWide(std::string_view text) {
+            if (text.empty()) {
+                return {};
+            }
+            const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+            if (length <= 0) {
+                throw std::runtime_error("unable to convert sd-server argument to UTF-16: " + windowsError(GetLastError()));
+            }
+            std::wstring output(static_cast<std::size_t>(length), L'\0');
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), output.data(), length) <= 0) {
+                throw std::runtime_error("unable to convert sd-server argument to UTF-16: " + windowsError(GetLastError()));
+            }
+            return output;
+        }
+
+        [[nodiscard]] std::wstring quoteWindowsArgument(std::wstring_view argument) {
+            if (!argument.empty() && argument.find_first_of(L" \t\n\v\"") == std::wstring_view::npos) {
+                return std::wstring(argument);
+            }
+            std::wstring quoted(L"\"");
+            std::size_t backslashes = 0;
+            for (const wchar_t character : argument) {
+                if (character == L'\\') {
+                    ++backslashes;
+                    continue;
+                }
+                if (character == L'\"') {
+                    quoted.append(backslashes * 2U + 1U, L'\\');
+                    quoted.push_back(L'\"');
+                    backslashes = 0;
+                    continue;
+                }
+                quoted.append(backslashes, L'\\');
+                backslashes = 0;
+                quoted.push_back(character);
+            }
+            quoted.append(backslashes * 2U, L'\\');
+            quoted.push_back(L'\"');
+            return quoted;
+        }
+#endif
 
         std::size_t appendResponse(char *data, std::size_t size, std::size_t count, void *context) {
             auto *buffer = static_cast<ResponseBuffer *>(context);
@@ -254,6 +325,64 @@ namespace acmxvk::stable_diffusion {
             argument_storage.push_back(settings.upscale_model.parent_path().string());
         }
         argument_storage.insert(argument_storage.end(), settings.server_arguments.begin(), settings.server_arguments.end());
+#ifdef _WIN32
+        std::wstring command_line;
+        for (const std::string &argument : argument_storage) {
+            if (!command_line.empty()) {
+                command_line.push_back(L' ');
+            }
+            command_line += quoteWindowsArgument(utf8ToWide(argument));
+        }
+
+        STARTUPINFOW startup_info{};
+        startup_info.cb = sizeof(startup_info);
+        PROCESS_INFORMATION process_info{};
+        HANDLE log_handle = INVALID_HANDLE_VALUE;
+        HANDLE input_handle = INVALID_HANDLE_VALUE;
+        if (settings.quiet) {
+            std::vector<wchar_t> log_path(MAX_PATH, L'\0');
+            if (GetTempFileNameW(std::filesystem::temp_directory_path().wstring().c_str(), L"acm", 0, log_path.data()) == 0) {
+                throw std::runtime_error("unable to create sd-server diagnostic log: " + windowsError(GetLastError()));
+            }
+            diagnostic_log_path = std::filesystem::path(log_path.data());
+            log_handle = CreateFileW(diagnostic_log_path.wstring().c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (log_handle == INVALID_HANDLE_VALUE) {
+                throw std::runtime_error("unable to open sd-server diagnostic log: " + windowsError(GetLastError()));
+            }
+            input_handle = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (input_handle == INVALID_HANDLE_VALUE) {
+                const DWORD error = GetLastError();
+                CloseHandle(log_handle);
+                throw std::runtime_error("unable to configure sd-server input: " + windowsError(error));
+            }
+            if (!SetHandleInformation(log_handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) || !SetHandleInformation(input_handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)) {
+                const DWORD error = GetLastError();
+                CloseHandle(input_handle);
+                CloseHandle(log_handle);
+                throw std::runtime_error("unable to configure sd-server output: " + windowsError(error));
+            }
+            startup_info.dwFlags = STARTF_USESTDHANDLES;
+            startup_info.hStdOutput = log_handle;
+            startup_info.hStdError = log_handle;
+            startup_info.hStdInput = input_handle;
+        }
+        std::vector<wchar_t> mutable_command(command_line.begin(), command_line.end());
+        mutable_command.push_back(L'\0');
+        const BOOL launched = CreateProcessW(nullptr, mutable_command.data(), nullptr, nullptr, settings.quiet ? TRUE : FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup_info, &process_info);
+        const DWORD launch_error = launched ? ERROR_SUCCESS : GetLastError();
+        if (log_handle != INVALID_HANDLE_VALUE) {
+            CloseHandle(log_handle);
+        }
+        if (input_handle != INVALID_HANDLE_VALUE) {
+            CloseHandle(input_handle);
+        }
+        if (!launched) {
+            throw std::runtime_error("unable to launch sd-server: " + windowsError(launch_error));
+        }
+        CloseHandle(process_info.hThread);
+        process_handle = reinterpret_cast<std::intptr_t>(process_info.hProcess);
+        process_id = static_cast<std::int64_t>(process_info.dwProcessId);
+#else
         std::vector<char *> arguments;
         arguments.reserve(argument_storage.size() + 1U);
         for (std::string &argument : argument_storage) {
@@ -295,6 +424,7 @@ namespace acmxvk::stable_diffusion {
             throw std::runtime_error("unable to launch sd-server: " + std::string(std::strerror(result)));
         }
         process_id = child;
+#endif
         std::cout << "acmxvk: launched sd-server process " << process_id << " on 127.0.0.1:" << settings.port << '\n';
         if (!diagnostic_log_path.empty()) {
             std::cout << "acmxvk: sd-server diagnostic log: " << diagnostic_log_path << '\n';
@@ -331,6 +461,19 @@ namespace acmxvk::stable_diffusion {
     }
 
     void Server::stop() noexcept {
+#ifdef _WIN32
+        const HANDLE process = reinterpret_cast<HANDLE>(process_handle);
+        if (process == nullptr) {
+            return;
+        }
+        if (WaitForSingleObject(process, 1000U) == WAIT_TIMEOUT && !TerminateProcess(process, 0U)) {
+            std::cerr << "acmxvk: unable to stop sd-server process " << process_id << ": " << windowsError(GetLastError()) << '\n';
+        }
+        WaitForSingleObject(process, 1000U);
+        CloseHandle(process);
+        process_handle = 0;
+        process_id = -1;
+#else
         if (process_id <= 0) {
             return;
         }
@@ -353,6 +496,7 @@ namespace acmxvk::stable_diffusion {
             }
         }
         process_id = -1;
+#endif
     }
 
     void Server::waitUntilReady() {
@@ -363,9 +507,24 @@ namespace acmxvk::stable_diffusion {
             if (settings.cancelled && settings.cancelled()) {
                 throw std::runtime_error("Stable Diffusion startup cancelled");
             }
+            bool server_exited = false;
+#ifdef _WIN32
+            const HANDLE process = reinterpret_cast<HANDLE>(process_handle);
+            const DWORD wait_result = process == nullptr ? WAIT_OBJECT_0 : WaitForSingleObject(process, 0U);
+            if (wait_result == WAIT_FAILED) {
+                throw std::runtime_error("unable to inspect sd-server process: " + windowsError(GetLastError()));
+            }
+            server_exited = wait_result == WAIT_OBJECT_0;
+            if (server_exited && process != nullptr) {
+                CloseHandle(process);
+                process_handle = 0;
+            }
+#else
             int child_status = 0;
             const pid_t result = waitpid(static_cast<pid_t>(process_id), &child_status, WNOHANG);
-            if (result == static_cast<pid_t>(process_id)) {
+            server_exited = result == static_cast<pid_t>(process_id);
+#endif
+            if (server_exited) {
                 process_id = -1;
                 throw std::runtime_error("sd-server exited before accepting requests" + diagnosticLogDetails());
             }

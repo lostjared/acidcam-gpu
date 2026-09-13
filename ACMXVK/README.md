@@ -530,7 +530,10 @@ selected, ACMXVK automatically enables constant-frame-rate and no-drop output,
 so render speed does not change the output video's duration or frame rate.
 
 Install libcurl and jsoncpp development packages and make `sd-server`
-available on `PATH`, then build the optional client:
+available on `PATH`, then build the optional client. On Windows, use an
+`sd-server.exe` compatible with the local model and place it on `PATH` or pass
+its path with `--sd-server`; ACMXVK launches and stops it through the native
+Windows process API.
 
 ```bash
 cmake -S ACMXVK -B build/acmxvk-sd \
@@ -649,7 +652,8 @@ pcons -B build/pcons --reconfigure \
     PREFIX=/opt/mxvk \
     PCONS_INSTALL_PREFIX=/opt/acmxvk \
     PCONS_FINAL_PREFIX=/opt/acmxvk \
-    AUDIO=1 MIDI=1 WEBP=1 TIFF=1 DNN=1 STABLE_DIFFUSION=1 \
+    AUDIO=1 MIDI=1 WEBP=1 TIFF=1 DNN=1 \
+    STABLE_DIFFUSION=1 DEEP_DREAM=0 \
     all install
 ```
 
@@ -660,6 +664,30 @@ crossfades, playlists, MIDI examples, models, and overlay font under that
 prefix. Its CUDA filter path is intentionally unsupported for now; use the
 existing CMake build with `-DWITH_CUDA=ON` for a matching CUDA-enabled MXVK and
 acidcam-gpu installation.
+
+`STABLE_DIFFUSION` and `DEEP_DREAM` default to `0`. Use
+`STABLE_DIFFUSION=1` to compile the `sd-server` client; Pcons then requires
+`libcurl` and `jsoncpp` through `pkg-config`. The external server executable
+and model files are runtime dependencies and are not downloaded by the build.
+
+On Linux, `DEEP_DREAM=1` enables CUDA LibTorch Deep Dream. It requires CUDA,
+CUDA-enabled OpenCV, and a CUDA-enabled LibTorch distribution. Pcons searches
+`/opt/libtorch` and `/opt/cuda` by default; override these with
+`TORCH_PREFIX=/path/to/libtorch` and `CUDA_PREFIX=/path/to/cuda`:
+
+```bash
+cd ACMXVK
+pcons -B build/pcons --reconfigure \
+    PREFIX=/opt/mxvk \
+    PCONS_INSTALL_PREFIX=/opt/acmxvk \
+    PCONS_FINAL_PREFIX=/opt/acmxvk \
+    AUDIO=1 MIDI=1 DNN=1 DEEP_DREAM=1 \
+    TORCH_PREFIX=/opt/libtorch CUDA_PREFIX=/opt/cuda \
+    all install
+```
+
+Deep Dream is unavailable on macOS because it requires CUDA. Pcons
+`WITH_CUDA=1` (acidcam-gpu filters) remains a separate CMake-only path.
 
 ### DNN and generic ONNX processing
 

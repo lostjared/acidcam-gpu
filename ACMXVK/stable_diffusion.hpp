@@ -55,6 +55,9 @@ namespace acmxvk::stable_diffusion {
       private:
         Settings settings;
         std::int64_t process_id = -1;
+#ifdef _WIN32
+        std::intptr_t process_handle = 0;
+#endif
         std::string endpoint;
         std::filesystem::path diagnostic_log_path;
 

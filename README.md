@@ -182,8 +182,10 @@ python3 build-project-pcons.py --jobs 4
 The script clones missing libmx2 and MXVK checkouts beside this repository and
 prints the final `PATH` export. Use `--help` to select existing dependency
 sources, a build directory, an install prefix, or optional components. The
-Pcons path covers the normal portable feature set; use CMake for ACMXVK's
-LibTorch Deep Dream and Stable Diffusion integrations.
+Pcons also supports ACMXVK Stable Diffusion with `--stable-diffusion`, and
+Linux CUDA LibTorch Deep Dream with `--deep-dream`. Use `--help` for the
+`--torch-prefix` and `--cuda-prefix` overrides; the ACMXVK Pcons section lists
+the required packages and runtime dependencies.
 
 On macOS, `build-project-macos-cmake.sh` installs the required Homebrew
 dependencies, builds libmx2 and MXVK, configures ACMXVK with MoltenVK, then

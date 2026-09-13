@@ -9,6 +9,11 @@ PATH and pkg-config.
 
 The script installs only the projects it builds into a local prefix; it never
 uses a package manager or sudo.
+
+Examples:
+    python3 build-project-pcons.py --stable-diffusion
+    python3 build-project-pcons.py --deep-dream \
+        --torch-prefix /opt/libtorch --cuda-prefix /opt/cuda
 """
 
 from __future__ import annotations
@@ -103,6 +108,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-clone", action="store_true", help="require existing dependency checkouts")
     parser.add_argument("--dry-run", action="store_true", help="print commands without running them")
     parser.add_argument("--cuda", action="store_true", help="enable CUDA for ACMX2/acidcam-gpu only")
+    parser.add_argument("--stable-diffusion", action="store_true", help="enable ACMXVK's sd-server client (requires libcurl and jsoncpp)")
+    parser.add_argument("--deep-dream", action="store_true", help="enable ACMXVK CUDA LibTorch Deep Dream (Linux only)")
+    parser.add_argument("--torch-prefix", type=Path, default=Path("/opt/libtorch"), help="CUDA-enabled LibTorch prefix for --deep-dream (default: /opt/libtorch)")
+    parser.add_argument("--cuda-prefix", type=Path, default=Path("/opt/cuda"), help="CUDA Toolkit prefix for --deep-dream (default: /opt/cuda)")
     for name, help_text in (
         ("audio", "enable RtAudio support"),
         ("midi", "enable RtMidi support"),
@@ -141,6 +150,9 @@ def main() -> int:
         return 1
     if args.jobs is not None and args.jobs < 1:
         print("error: --jobs must be positive", file=sys.stderr)
+        return 2
+    if args.deep_dream and platform.system() != "Linux":
+        print("error: --deep-dream requires Linux, CUDA, CUDA-enabled OpenCV, and CUDA-enabled LibTorch", file=sys.stderr)
         return 2
     for command in ("git", "pkg-config", "uvx", "glslc"):
         require_command(command)
@@ -232,7 +244,15 @@ def main() -> int:
         ROOT_DIR / "ACMXVK",
         build_dir / "acmxvk",
         install_prefix,
-        [*common_options, "VALIDATION=0", "WITH_CUDA=0"],
+        [
+            *common_options,
+            "VALIDATION=0",
+            "WITH_CUDA=0",
+            "STABLE_DIFFUSION=" + enabled(args.stable_diffusion),
+            "DEEP_DREAM=" + enabled(args.deep_dream),
+            "TORCH_PREFIX=" + str(args.torch_prefix.expanduser()),
+            "CUDA_PREFIX=" + str(args.cuda_prefix.expanduser()),
+        ],
         jobs=args.jobs,
         dry_run=args.dry_run,
     )

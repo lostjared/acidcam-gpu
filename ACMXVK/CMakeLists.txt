@@ -282,10 +282,6 @@ if(WITH_DEEP_DREAM)
 endif()
 
 if(WITH_STABLE_DIFFUSION)
-    if(WIN32)
-        message(FATAL_ERROR
-            "WITH_STABLE_DIFFUSION currently requires a POSIX platform")
-    endif()
     pkg_check_modules(ACMXVK_CURL REQUIRED IMPORTED_TARGET libcurl)
     pkg_check_modules(ACMXVK_JSONCPP REQUIRED IMPORTED_TARGET jsoncpp)
 endif()

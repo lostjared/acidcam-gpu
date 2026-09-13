@@ -8,6 +8,9 @@ project under one local prefix.  It never uses sudo.
 Environment overrides mirror build-project-macos-cmake.sh:
   ACMX_MACOS_BUILD_DIRECTORY, ACMX_MACOS_INSTALL_PREFIX,
   LIBMX2_SOURCE_DIR, MXVK_SOURCE_DIR.
+
+Use --stable-diffusion to build ACMXVK's local sd-server client. Deep Dream is
+not available on macOS because it requires CUDA.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ BREW_PACKAGES = (
     "pkgconf",
     "uv",
     "curl",
+    "jsoncpp",
     "unzip",
     "ffmpeg",
     "opencv",
@@ -171,6 +175,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mxvk-source", type=Path, help="existing MXVK checkout")
     parser.add_argument("--skip-brew", action="store_true", help="do not install Homebrew packages")
     parser.add_argument("--dry-run", action="store_true", help="print commands without running them")
+    parser.add_argument("--stable-diffusion", action="store_true", help="enable ACMXVK's sd-server client (requires curl and jsoncpp)")
+    parser.add_argument("--deep-dream", action="store_true", help="unsupported on macOS because Deep Dream requires CUDA")
     return parser.parse_args()
 
 
@@ -193,6 +199,9 @@ def main() -> int:
     if platform.machine() not in {"arm64", "x86_64"}:
         print(f"error: unsupported macOS architecture: {platform.machine()}", file=sys.stderr)
         return 1
+    if args.deep_dream:
+        print("error: --deep-dream is unavailable on macOS because Deep Dream requires CUDA", file=sys.stderr)
+        return 2
     if not args.skip_brew:
         require_command("brew")
         print("Installing required Homebrew packages...")
@@ -290,6 +299,8 @@ def main() -> int:
             "DNN=1",
             "VALIDATION=0",
             "WITH_CUDA=0",
+            "STABLE_DIFFUSION=" + ("1" if args.stable_diffusion else "0"),
+            "DEEP_DREAM=0",
         ],
         environment=environment,
         dry_run=args.dry_run,
