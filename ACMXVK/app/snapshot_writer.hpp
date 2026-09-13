@@ -20,6 +20,7 @@ namespace acmxvk {
         std::vector<std::uint16_t> rgba16;
         std::uint32_t width = 0;
         std::uint32_t height = 0;
+        int png_level = 6;
         SnapshotFormat format = SnapshotFormat::Png;
     };
 
@@ -37,7 +38,7 @@ namespace acmxvk {
         [[nodiscard]] bool queueFull();
         void enqueue(SnapshotJob job);
 
-        static void savePng(const fs::path &path, std::uint8_t *rgba, int width, int height);
+        static void savePng(const fs::path &path, std::uint8_t *rgba, int width, int height, int png_level);
         [[nodiscard]] static std::string_view formatName(SnapshotFormat format) noexcept;
 
       private:

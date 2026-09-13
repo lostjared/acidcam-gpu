@@ -840,6 +840,11 @@ namespace acmxvk {
                 }
             } else if (option == "--png") {
                 options.png_output = true;
+            } else if (option == "--png-level") {
+                options.png_level = parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.png_level < 1 || options.png_level > 9) {
+                    throw std::runtime_error("--png-level must be between 1 and 9");
+                }
             } else if (option == "--generate") {
                 options.generate_interval = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.generate_interval <= 0) {
@@ -1286,6 +1291,7 @@ namespace acmxvk {
                << "      --duration <seconds>    Stop after this much output video\n"
                << "      --max-size <MB>         Stop when encoded output exceeds this size\n"
                << "      --png                   Write video output as a PNG sequence\n"
+               << "      --png-level <1-9>       PNG compression: 1 fastest/largest, 9 slowest/smallest (default 6)\n"
                << "      --generate <N>          Save a PNG every N processed frames\n"
                << "  -e, --prefix <directory>   Directory for Z snapshots (default .)\n"
                << "  -b, --encode-crf <0-51>     Encoder quality (default 18)\n"

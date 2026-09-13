@@ -83,6 +83,8 @@ class SettingsWindow : public QDialog {
     bool isCopyAudioEnabled() const;
     /// @brief Return whether Write PNG mode is enabled.
     bool isPngOutputEnabled() const;
+    /// @brief Return the selected ACMXVK PNG compression level.
+    int getPngLevel() const;
     /// @return True if --generate &lt;N&gt; mode is enabled.
     bool isGenerateEnabled() const;
     /// @return Frame interval to pass with --generate.
@@ -246,6 +248,7 @@ class SettingsWindow : public QDialog {
     QCheckBox *encodeConstantFrameRateCheckBox = nullptr;
     QCheckBox *encodeFillPtsGapsCheckBox = nullptr;
     QCheckBox *writePngCheckBox = nullptr;
+    QComboBox *pngLevelComboBox = nullptr;
     QCheckBox *generateCheckBox = nullptr;
     QSpinBox *generateIntervalSpinBox = nullptr;
 

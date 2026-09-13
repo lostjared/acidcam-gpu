@@ -3715,6 +3715,7 @@ namespace acmxvk {
             job.path = path;
             job.width = width;
             job.height = height;
+            job.png_level = options.png_level;
             job.format = request.snapshot_format;
             if (rgba16 != nullptr && (request.snapshot_format == SnapshotFormat::Tiff || request.snapshot_format == SnapshotFormat::Raw)) {
                 job.rgba16 = *rgba16;
@@ -3811,11 +3812,11 @@ namespace acmxvk {
             }
         }
         if (options.png_output) {
-            SnapshotWriter::savePng(frame_path(png_output_directory, png_frame_count), output_pixels, recording_width, recording_height);
+            SnapshotWriter::savePng(frame_path(png_output_directory, png_frame_count), output_pixels, recording_width, recording_height, options.png_level);
             ++png_frame_count;
         }
         if (options.generate_interval > 0 && (request.has_pts ? request.pts : output_frame_count) % static_cast<std::uint64_t>(options.generate_interval) == 0) {
-            SnapshotWriter::savePng(frame_path(generate_output_directory, generated_frame_count), output_pixels, recording_width, recording_height);
+            SnapshotWriter::savePng(frame_path(generate_output_directory, generated_frame_count), output_pixels, recording_width, recording_height, options.png_level);
             ++generated_frame_count;
         }
         ++output_frame_count;

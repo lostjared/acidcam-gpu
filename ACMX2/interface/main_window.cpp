@@ -1298,6 +1298,7 @@ void MainWindow::loadSessionSettings() {
     rotate_enabled = settings.value("interface/rotate", false).toBool();
     rotation_mode = settings.value("interface/rotation_mode", "clockwise").toString();
     png_output = settings.value("interface/write_png", false).toBool();
+    png_level = std::clamp(settings.value("interface/png_level", 6).toInt(), 1, 9);
     generate_enabled = settings.value("interface/generate_enabled", false).toBool();
     generate_interval = settings.value("interface/generate_interval", 30).toInt();
 
@@ -4175,6 +4176,7 @@ void MainWindow::cameraSettings() {
     rotate_enabled = settingsWindow.is_rotate_enabled();
     rotation_mode = settingsWindow.get_rotation_mode();
     png_output = settingsWindow.isPngOutputEnabled();
+    png_level = settingsWindow.getPngLevel();
     generate_enabled = settingsWindow.isGenerateEnabled();
     generate_interval = settingsWindow.getGenerateInterval();
     encode_preset = settingsWindow.getEncodePreset();
@@ -4328,6 +4330,9 @@ void MainWindow::runSelected() {
             arguments << "--copy-audio";
     }
     arguments << "--prefix" << prefix_path;
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        arguments << "--png-level" << QString::number(png_level);
+    }
 
     if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
@@ -4621,6 +4626,9 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
             arguments << "--copy-audio";
     }
     arguments << "--prefix" << prefix_path;
+    if (active_backend == acmx2::Backend::Acmxvk) {
+        arguments << "--png-level" << QString::number(png_level);
+    }
     if (!output_file.isEmpty()) {
         arguments << "--output" << output_file;
         if (active_backend == acmx2::Backend::Acmxvk && encode_rate_control == "bitrate")

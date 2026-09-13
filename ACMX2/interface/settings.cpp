@@ -816,6 +816,19 @@ void SettingsWindow::init() {
     copyAudioCheckBox->setEnabled(false);
 
     writePngCheckBox = new QCheckBox("Write PNG", this);
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        pngLevelComboBox = new QComboBox(this);
+        pngLevelComboBox->addItem("1 — Fastest; largest files", 1);
+        pngLevelComboBox->addItem("2 — Very fast; large files", 2);
+        pngLevelComboBox->addItem("3 — Fast; moderately large files", 3);
+        pngLevelComboBox->addItem("4 — Balanced toward speed", 4);
+        pngLevelComboBox->addItem("5 — Balanced", 5);
+        pngLevelComboBox->addItem("6 — Default balance of speed and size", 6);
+        pngLevelComboBox->addItem("7 — Balanced toward smaller files", 7);
+        pngLevelComboBox->addItem("8 — Slow; small files", 8);
+        pngLevelComboBox->addItem("9 — Slowest; smallest files", 9);
+        pngLevelComboBox->setToolTip("PNG compression only changes snapshot and PNG-sequence file size and save speed. It does not change image quality.");
+    }
 
     generateCheckBox = new QCheckBox("Generate every", this);
     generateCheckBox->setToolTip("Save a PNG frame every N frames to an output subdirectory (passes --generate <N>).");
@@ -1041,6 +1054,10 @@ void SettingsWindow::init() {
     outputGrid->addLayout(outputRow, r, 1);
     outputGrid->addWidget(copyAudioCheckBox, ++r, 0, 1, 2);
     outputGrid->addWidget(writePngCheckBox, ++r, 0, 1, 2);
+    if (pngLevelComboBox) {
+        outputGrid->addWidget(new QLabel("PNG compression:", this), ++r, 0);
+        outputGrid->addWidget(pngLevelComboBox, r, 1);
+    }
     outputGrid->addWidget(generateCheckBox, ++r, 0);
     outputGrid->addWidget(generateIntervalSpinBox, r, 1);
 
@@ -1497,6 +1514,11 @@ void SettingsWindow::loadUiState() {
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
     writePngCheckBox->setChecked(appSettings.value("interface/write_png", false).toBool());
+    if (pngLevelComboBox) {
+        const int saved_png_level = std::clamp(appSettings.value("interface/png_level", 6).toInt(), 1, 9);
+        const int png_level_index = pngLevelComboBox->findData(saved_png_level);
+        pngLevelComboBox->setCurrentIndex(png_level_index >= 0 ? png_level_index : 5);
+    }
     generateCheckBox->setChecked(appSettings.value("interface/generate_enabled", false).toBool());
     generateIntervalSpinBox->setValue(appSettings.value("interface/generate_interval", 30).toInt());
     generateIntervalSpinBox->setEnabled(generateCheckBox->isChecked());
@@ -1590,6 +1612,9 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
     appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
     appSettings.setValue("interface/write_png", writePngCheckBox->isChecked());
+    if (pngLevelComboBox) {
+        appSettings.setValue("interface/png_level", pngLevelComboBox->currentData().toInt());
+    }
     appSettings.setValue("interface/generate_enabled", generateCheckBox->isChecked());
     appSettings.setValue("interface/generate_interval", generateIntervalSpinBox->value());
     if (convertHdr10CheckBox) {
@@ -1670,6 +1695,8 @@ bool SettingsWindow::isUseSourceAudioEnabled() const { return useSourceAudioChec
 bool SettingsWindow::isCopyAudioEnabled() const { return copyAudioCheckBox->isChecked(); }
 
 bool SettingsWindow::isPngOutputEnabled() const { return writePngCheckBox->isChecked(); }
+
+int SettingsWindow::getPngLevel() const { return pngLevelComboBox ? pngLevelComboBox->currentData().toInt() : 6; }
 
 bool SettingsWindow::isGenerateEnabled() const { return generateCheckBox && generateCheckBox->isChecked(); }
 

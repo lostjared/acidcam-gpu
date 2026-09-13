@@ -61,8 +61,8 @@ namespace acmxvk {
         condition.notify_one();
     }
 
-    void SnapshotWriter::savePng(const fs::path &path, std::uint8_t *rgba, int width, int height) {
-        if (!mxvk::SavePNG_RGBA(path.string().c_str(), rgba, width, height)) {
+    void SnapshotWriter::savePng(const fs::path &path, std::uint8_t *rgba, int width, int height, int png_level) {
+        if (!mxvk::SavePNG_RGBA(path.string().c_str(), rgba, width, height, png_level)) {
             throw std::runtime_error("unable to write PNG frame: " + path.string());
         }
     }
@@ -227,7 +227,7 @@ namespace acmxvk {
                     throw std::runtime_error("WebP snapshot support is not compiled in");
 #endif
                 } else {
-                    savePng(job.path, job.rgba.data(), static_cast<int>(job.width), static_cast<int>(job.height));
+                    savePng(job.path, job.rgba.data(), static_cast<int>(job.width), static_cast<int>(job.height), job.png_level);
                 }
                 std::ostringstream message;
                 message << "acmxvk: took " << formatName(job.format) << " snapshot: " << job.path.string() << '\n';
