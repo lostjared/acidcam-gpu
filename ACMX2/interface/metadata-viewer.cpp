@@ -6,7 +6,6 @@
 #include "metadata-viewer.hpp"
 #include "custom_style.hpp"
 
-#include <QApplication>
 #include <QClipboard>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -217,21 +216,6 @@ MetadataViewer::MetadataViewer(QWidget *parent) : QDialog(parent) {
     markdownPreview->setFont(monoFont);
     htmlPreview->setFont(monoFont);
     textPreview->setFont(monoFont);
-
-    // Match application palette so previews and tabs blend with the dialog
-    // background instead of falling back to the style's default light Base/Button.
-    const QPalette appPalette = qApp->palette();
-    QPalette viewPalette = appPalette;
-    viewPalette.setColor(QPalette::Base, appPalette.color(QPalette::Window));
-    viewPalette.setColor(QPalette::Text, appPalette.color(QPalette::Text));
-    viewPalette.setColor(QPalette::WindowText, appPalette.color(QPalette::WindowText));
-    viewPalette.setColor(QPalette::ButtonText, appPalette.color(QPalette::ButtonText));
-    viewPalette.setColor(QPalette::HighlightedText, appPalette.color(QPalette::HighlightedText));
-    for (auto *w : {static_cast<QWidget *>(markdownPreview), static_cast<QWidget *>(htmlPreview), static_cast<QWidget *>(textPreview), static_cast<QWidget *>(tree)}) {
-        w->setPalette(viewPalette);
-        if (auto *vp = w->findChild<QWidget *>("qt_scrollarea_viewport"))
-            vp->setPalette(viewPalette);
-    }
 
     root->addWidget(tabs, 1);
 
