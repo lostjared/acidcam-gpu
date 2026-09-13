@@ -2740,10 +2740,15 @@ namespace acmxvk {
         }
         if (writer.is_open()) {
             constexpr double BYTES_PER_MEGABYTE = 1024.0 * 1024.0;
-            const double file_size_mb = static_cast<double>(writer.get_bytes_written()) / BYTES_PER_MEGABYTE;
+            const std::uint64_t bytes_written = writer.get_bytes_written();
+            const double file_size_mb = static_cast<double>(bytes_written) / BYTES_PER_MEGABYTE;
             std::ostringstream size_text;
             size_text << std::fixed << std::setprecision(2) << file_size_mb;
             std::cout << " | Size: " << size_text.str() << " MB";
+            if (elapsed_seconds > 0.0) {
+                const double bitrate_kbits = (static_cast<double>(bytes_written) * 8.0) / elapsed_seconds / 1000.0;
+                std::cout << " | Bitrate: " << std::fixed << std::setprecision(1) << bitrate_kbits << " kbits/s";
+            }
         }
         std::cout << '\n' << std::flush;
     }
