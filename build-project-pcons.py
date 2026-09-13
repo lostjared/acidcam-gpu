@@ -110,7 +110,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cuda", action="store_true", help="enable CUDA for ACMX2/acidcam-gpu only")
     parser.add_argument("--stable-diffusion", action="store_true", help="enable ACMXVK's sd-server client (requires libcurl and jsoncpp)")
     parser.add_argument("--deep-dream", action="store_true", help="enable ACMXVK CUDA LibTorch Deep Dream (Linux only)")
-    parser.add_argument("--torch-prefix", type=Path, default=Path("/opt/libtorch"), help="CUDA-enabled LibTorch prefix for --deep-dream (default: /opt/libtorch)")
+    parser.add_argument("--torch-prefix", type=Path, help="CUDA-enabled LibTorch prefix for --deep-dream (default: auto-detect /opt/libtorch, /usr, or /usr/local)")
     parser.add_argument("--cuda-prefix", type=Path, default=Path("/opt/cuda"), help="CUDA Toolkit prefix for --deep-dream (default: /opt/cuda)")
     for name, help_text in (
         ("audio", "enable RtAudio support"),
@@ -250,8 +250,8 @@ def main() -> int:
             "WITH_CUDA=0",
             "STABLE_DIFFUSION=" + enabled(args.stable_diffusion),
             "DEEP_DREAM=" + enabled(args.deep_dream),
-            "TORCH_PREFIX=" + str(args.torch_prefix.expanduser()),
             "CUDA_PREFIX=" + str(args.cuda_prefix.expanduser()),
+            *(["TORCH_PREFIX=" + str(args.torch_prefix.expanduser())] if args.torch_prefix else []),
         ],
         jobs=args.jobs,
         dry_run=args.dry_run,

@@ -114,18 +114,25 @@ def find_cuda_runtime() -> ImportedTarget:
 
 
 def find_libtorch() -> ImportedTarget:
-    """Locate CUDA-enabled LibTorch used by ACMXVK Deep Dream."""
-    torch_root = Path(get_var("TORCH_PREFIX", "/opt/libtorch")).expanduser()
-    include_dir = torch_root / "include"
-    api_include_dir = include_dir / "torch" / "csrc" / "api" / "include"
-    library_dir = torch_root / "lib"
-    if not (include_dir / "torch" / "torch.h").is_file() or not library_dir.is_dir():
-        raise SystemExit(f"DEEP_DREAM=1 requires LibTorch under {torch_root}. Set TORCH_PREFIX=/path/to/libtorch.")
+    """Locate CUDA-enabled LibTorch from an archive or a system package."""
+    configured_prefix = get_var("TORCH_PREFIX", "")
+    roots = [Path(configured_prefix).expanduser()] if configured_prefix else [Path("/opt/libtorch"), Path("/usr"), Path("/usr/local")]
     libraries = ["torch", "torch_cpu", "c10", "torch_cuda", "c10_cuda"]
-    missing = [library for library in libraries if not any((library_dir / f"lib{library}{suffix}").exists() for suffix in (".so", ".dylib", ".a"))]
-    if missing:
-        raise SystemExit("DEEP_DREAM=1 requires CUDA-enabled LibTorch; missing " + ", ".join(f"lib{library}" for library in missing) + f" under {library_dir}.")
-    return imported_package("LibTorch", [include_dir, api_include_dir], library_dir, libraries)
+    checked = []
+    for torch_root in roots:
+        include_dir = torch_root / "include"
+        api_include_dir = include_dir / "torch" / "csrc" / "api" / "include"
+        library_dirs = [torch_root / "lib", torch_root / "lib64", torch_root / "lib" / "x86_64-linux-gnu"]
+        for library_dir in library_dirs:
+            checked.append(str(library_dir))
+            if not (include_dir / "torch" / "torch.h").is_file() or not library_dir.is_dir():
+                continue
+            missing = [library for library in libraries if not any((library_dir / f"lib{library}{suffix}").exists() for suffix in (".so", ".dylib", ".a"))]
+            if not missing:
+                return imported_package("LibTorch", [include_dir, api_include_dir], library_dir, libraries)
+    if configured_prefix:
+        raise SystemExit(f"DEEP_DREAM=1 requires CUDA-enabled LibTorch under {roots[0]}. Set TORCH_PREFIX=/path/to/libtorch.")
+    raise SystemExit("DEEP_DREAM=1 requires CUDA-enabled LibTorch. Searched " + ", ".join(checked) + ". Set TORCH_PREFIX=/path/to/libtorch.")
 
 
 extra_prefixes = [

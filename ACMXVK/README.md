@@ -672,8 +672,9 @@ and model files are runtime dependencies and are not downloaded by the build.
 
 On Linux, `DEEP_DREAM=1` enables CUDA LibTorch Deep Dream. It requires CUDA,
 CUDA-enabled OpenCV, and a CUDA-enabled LibTorch distribution. Pcons searches
-`/opt/libtorch` and `/opt/cuda` by default; override these with
-`TORCH_PREFIX=/path/to/libtorch` and `CUDA_PREFIX=/path/to/cuda`:
+`/opt/libtorch`, `/usr`, and `/usr/local` for LibTorch, and `/opt/cuda` for
+CUDA by default; override these with `TORCH_PREFIX=/path/to/libtorch` and
+`CUDA_PREFIX=/path/to/cuda`:
 
 ```bash
 cd ACMXVK
