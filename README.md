@@ -15,7 +15,7 @@ libraries, live editing, custom uniforms, playlists, multipass effects, audio
 and MIDI controls, recording, and both rendering engines.
 
 The repository name, `acidcam-gpu`, is historical. The current application is
-**ACMX**, and the shared interface and ACMXVK backend are version **2.137.0**.
+**ACMX**, and the shared interface and ACMXVK backend are version **2.138.0**.
 The established ACMX2 engine retains its own backend version, **2.101.1**.
 
 ## Current status

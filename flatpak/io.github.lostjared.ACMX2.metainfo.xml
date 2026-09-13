@@ -31,6 +31,14 @@
   <url type="homepage">https://github.com/lostjared/acidcam-gpu</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.138.0" date="2026-09-13">
+      <description>
+        <ul>
+          <li>Add dedicated PNG-sequence directories for ACMXVK, including Stable Diffusion frame output.</li>
+          <li>Update the bundled MXVK requirement to version 0.34.1.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.135.0" date="2026-09-05">
       <description>
         <ul>
