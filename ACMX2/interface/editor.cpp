@@ -158,9 +158,11 @@ QString inject_safety_counters(const QString &glsl_source) {
     for (int index = 0; index < loops.size(); ++index) {
         const LoopRange &loop = loops.at(index);
         const QString counter = QStringLiteral("_acmx_loop_guard_%1").arg(index);
+        const int loop_line = glsl_source.left(loop.keyword).count(QLatin1Char('\n')) + 1;
+        const int body_line = glsl_source.left(loop.body_open).count(QLatin1Char('\n')) + 1;
         insertions.append({loop.body_close + 1, QStringLiteral("}")});
-        insertions.append({loop.body_open + 1, QStringLiteral("\nif (++%1 > %2) { break; }\n").arg(counter).arg(LOOP_SAFETY_LIMIT)});
-        insertions.append({loop.keyword, QStringLiteral("{ int %1 = 0; // %2\n").arg(counter, LOOP_SAFETY_MARKER)});
+        insertions.append({loop.body_open + 1, QStringLiteral("\n#line %1\nif (++%2 > %3) { break; }\n#line %1\n").arg(body_line).arg(counter).arg(LOOP_SAFETY_LIMIT)});
+        insertions.append({loop.keyword, QStringLiteral("{ int %1 = 0; // %2\n#line %3\n").arg(counter, LOOP_SAFETY_MARKER).arg(loop_line)});
     }
     std::sort(insertions.begin(), insertions.end(), [](const QPair<int, QString> &left, const QPair<int, QString> &right) { return left.first > right.first; });
     QString modified_source = glsl_source;

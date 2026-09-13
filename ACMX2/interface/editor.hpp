@@ -53,7 +53,7 @@ struct ShaderEditorUniform {
 };
 
 /**
- * @brief Add bounded iteration guards to braced GLSL for and while loops.
+ * @brief Add bounded iteration guards and preserve original GLSL diagnostic lines.
  */
 QString inject_safety_counters(const QString &glsl_source);
 
