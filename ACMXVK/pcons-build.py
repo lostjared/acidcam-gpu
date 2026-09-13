@@ -109,7 +109,7 @@ def find_cuda_runtime() -> ImportedTarget:
     )
     for include_dir, library_dir in layouts:
         if (include_dir / "cuda_runtime.h").is_file() and (library_dir / "libcudart.so").exists():
-            return imported_package("CUDA runtime", [include_dir], library_dir, ["cudart"])
+            return imported_package("cuda-runtime", [include_dir], library_dir, ["cudart"])
     raise SystemExit(f"DEEP_DREAM=1 requires CUDA under {cuda_root}. Set CUDA_PREFIX=/path/to/cuda.")
 
 
