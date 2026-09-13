@@ -265,6 +265,18 @@ namespace {
         return compiler;
     }
 
+    QString default_stable_diffusion_server() {
+#ifdef _WIN32
+        const QFileInfo bundled_server(QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("sd-server.exe")));
+        if (bundled_server.isFile()) {
+            return bundled_server.absoluteFilePath();
+        }
+        return QStringLiteral("sd-server.exe");
+#else
+        return QStringLiteral("sd-server");
+#endif
+    }
+
     QString resolve_backend_assets_path(acmx2::Backend backend, const QString &executable, const QString &libraryPath) {
         if (backend == acmx2::Backend::Acmx2)
             return resolveAssetsPath();
@@ -1270,7 +1282,7 @@ void MainWindow::loadSessionSettings() {
     }
     stable_diffusion_prompt = settings.value("stable_diffusion/prompt").toString();
     stable_diffusion_negative_prompt = settings.value("stable_diffusion/negative_prompt").toString();
-    stable_diffusion_server = settings.value("stable_diffusion/server", "sd-server").toString();
+    stable_diffusion_server = settings.value("stable_diffusion/server", default_stable_diffusion_server()).toString();
     stable_diffusion_server_arguments = settings.value("stable_diffusion/server_arguments").toString();
     stable_diffusion_server_port = std::clamp(settings.value("stable_diffusion/port", 1234).toInt(), 1024, 65535);
     stable_diffusion_width = std::clamp(settings.value("stable_diffusion/width", 576).toInt(), 64, 2048);

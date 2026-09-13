@@ -4,6 +4,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
@@ -53,6 +54,18 @@ namespace {
     }
 
     QString resolution_text(int width, int height) { return QStringLiteral("%1x%2").arg(width).arg(height); }
+
+    QString default_stable_diffusion_server() {
+#ifdef _WIN32
+        const QFileInfo bundled_server(QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("sd-server.exe")));
+        if (bundled_server.isFile()) {
+            return bundled_server.absoluteFilePath();
+        }
+        return QStringLiteral("sd-server.exe");
+#else
+        return QStringLiteral("sd-server");
+#endif
+    }
 } // namespace
 
 StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent) : QDialog(parent) {
@@ -80,7 +93,7 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent) : 
     lora_multiplier_spin_box->setValue(1.0);
 
     server_edit = new QLineEdit(this);
-    server_edit->setPlaceholderText("sd-server");
+    server_edit->setPlaceholderText(default_stable_diffusion_server());
     server_arguments_edit = new QLineEdit(this);
     server_arguments_edit->setPlaceholderText("Optional flags, for example --vae-tiling --offload-to-cpu");
     server_arguments_edit->setToolTip("Additional command-line arguments passed directly to sd-server. "
@@ -338,7 +351,12 @@ void StableDiffusionSettingsDialog::browse_upscale_model() {
 }
 
 void StableDiffusionSettingsDialog::browse_server() {
-    const QString filename = QFileDialog::getOpenFileName(this, "Select sd-server Executable", QFileInfo(server_edit->text()).absolutePath());
+#ifdef _WIN32
+    const QString filter = QStringLiteral("Windows Executables (*.exe);;All Files (*)");
+#else
+    const QString filter = QStringLiteral("All Files (*)");
+#endif
+    const QString filename = QFileDialog::getOpenFileName(this, "Select sd-server Executable", QFileInfo(server_edit->text()).absolutePath(), filter);
     if (!filename.isEmpty()) {
         server_edit->setText(QFileInfo(filename).absoluteFilePath());
     }
@@ -449,7 +467,7 @@ void StableDiffusionSettingsDialog::load_ui_state() {
     }
     prompt_edit->setText(settings.value("stable_diffusion/prompt").toString());
     negative_prompt_edit->setText(settings.value("stable_diffusion/negative_prompt").toString());
-    server_edit->setText(settings.value("stable_diffusion/server", "sd-server").toString());
+    server_edit->setText(settings.value("stable_diffusion/server", default_stable_diffusion_server()).toString());
     server_arguments_edit->setText(settings.value("stable_diffusion/server_arguments").toString());
     server_port_spin_box->setValue(settings.value("stable_diffusion/port", 1234).toInt());
     const int width = settings.value("stable_diffusion/width", 576).toInt();
