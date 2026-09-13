@@ -65,7 +65,7 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
 
 - A C++20 compiler and CMake 3.20 or newer
 - Vulkan SDK 1.4 with `glslc`
-- MXVK 0.33.1 or newer with the HDR increment 4 RGBA16 readback API, built with
+- MXVK 0.34.1 or newer with the HDR increment 4 RGBA16 readback API, built with
   `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
 - An FFmpeg build containing the `libx265` encoder for HDR Main10 recording

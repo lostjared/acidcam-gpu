@@ -14,7 +14,9 @@
       interface for the ACMX2 OpenGL and ACMXVK Vulkan backends. This package
       includes both non-CUDA engines, fragment and compute shader workflows,
       live audio and MIDI support, the ACMXVK shader-library builder, and the
-      MIDI-map companion utility.
+      MIDI-map companion utility. It also includes the Vulkan-enabled
+      stable-diffusion.cpp sd-server executable; users provide their own
+      Stable Diffusion, LoRA, and upscale model files.
     </p>
   </description>
   <launchable type="desktop-id">io.github.lostjared.ACMX2.desktop</launchable>
@@ -24,6 +26,7 @@
     <binary>acmxvk</binary>
     <binary>create_acmxvk_source_manifest</binary>
     <binary>midi-map</binary>
+    <binary>sd-server</binary>
   </provides>
   <url type="homepage">https://github.com/lostjared/acidcam-gpu</url>
   <content_rating type="oars-1.1"/>

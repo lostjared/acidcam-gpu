@@ -146,7 +146,7 @@ if(TIFF)
     pkg_check_modules(ACMXVK_TIFF REQUIRED IMPORTED_TARGET libtiff-4)
 endif()
 
-find_package(mxvk 0.33.1 CONFIG REQUIRED)
+find_package(mxvk 0.34.1 CONFIG REQUIRED)
 find_program(GLSLC_EXECUTABLE glslc REQUIRED)
 
 get_target_property(ACMXVK_MXVK_INCLUDE_DIRECTORIES

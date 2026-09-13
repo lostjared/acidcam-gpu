@@ -273,6 +273,10 @@ namespace {
         }
         return QStringLiteral("sd-server.exe");
 #else
+        const QFileInfo bundled_server(QStringLiteral("/app/bin/sd-server"));
+        if (bundled_server.isExecutable()) {
+            return bundled_server.absoluteFilePath();
+        }
         return QStringLiteral("sd-server");
 #endif
     }

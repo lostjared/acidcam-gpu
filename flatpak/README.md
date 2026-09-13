@@ -2,7 +2,8 @@
 
 This manifest builds the current ACMX2 OpenGL and ACMXVK Vulkan backends without
 CUDA. It includes the shared Qt interface, RtAudio support, MIDI support, the
-`midi-map` utility, and the `create_acmxvk_source_manifest` utility. Select the
+`midi-map` utility, the `create_acmxvk_source_manifest` utility, and the
+Vulkan-enabled `sd-server` executable from stable-diffusion.cpp. Select the
 backend from the interface's Backend menu.
 
 ACMX2 runtime assets are installed below `/app/share/acmx2`, including the
@@ -12,6 +13,9 @@ ACMX2 shader collection is pinned and installed below
 test shaders, playlists, MIDI examples, models, and fonts are installed below
 `/app/share/acmxvk`. Editable ACMXVK source libraries can be stored in the home
 directory and built to SPIR-V from the interface with the packaged `glslc`.
+Stable Diffusion models, LoRAs, and ESRGAN models are not included. Select
+user-provided model files from the Stable Diffusion settings dialog; the
+interface automatically uses the bundled `/app/bin/sd-server` executable.
 
 The x86_64 package builds OpenCV 4.12.0 with Intel IPP 2022.1.0 and the OpenCV
 IPP integration wrappers. OpenCV selects supported CPU paths at runtime,
@@ -46,8 +50,11 @@ flatpak run --command=acmxvk io.github.lostjared.ACMX2 --help
 flatpak run --command=create_acmxvk_source_manifest \
     io.github.lostjared.ACMX2 --help
 flatpak run --command=midi-map io.github.lostjared.ACMX2
+flatpak run --command=sd-server io.github.lostjared.ACMX2 --help
 ```
 
 The Flatpak exposes the host GPU through the standard Flatpak graphics-driver
 extensions. CUDA remains disabled for portability; ACMXVK uses the Vulkan
-driver made available by the runtime.
+driver made available by the runtime. The bundled sd-server uses that same
+Vulkan path. It is distributed under the MIT License; its license text is
+installed at `/app/share/licenses/acmx2/stable-diffusion.cpp-MIT.txt`.

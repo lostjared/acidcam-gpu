@@ -139,7 +139,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/MXVK.git
-        commit: 94d40ddb3be2b88c7f6ae042c75909e09bb82d9e
+        commit: 40a0959bd2b5e7e6773ed132f8b5baed6f3562d6
         disable-submodules: true
       - type: patch
         path: mxvk-installed-resources.patch
@@ -161,6 +161,53 @@ modules:
       - install -Dm755 /usr/bin/glslc /app/bin/glslc
       - cp -a /usr/lib/${FLATPAK_ARCH}-linux-gnu/libglslang.so.15* /app/lib/
 
+  - name: spirv-headers
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DSPIRV_HEADERS_ENABLE_INSTALL=ON
+    sources:
+      - type: git
+        url: https://github.com/KhronosGroup/SPIRV-Headers.git
+        commit: 04fd3caa1e8267e4d95c806cad901181728e1006
+        disable-submodules: true
+
+  - name: jsoncpp
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DBUILD_SHARED_LIBS=ON
+      - -DJSONCPP_WITH_POST_BUILD_UNITTEST=OFF
+      - -DJSONCPP_WITH_TESTS=OFF
+    sources:
+      - type: git
+        url: https://github.com/open-source-parsers/jsoncpp.git
+        commit: 3347a4b86bb914cb565f0cbda19c06e109513300
+        disable-submodules: true
+
+  - name: stable-diffusion.cpp
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DSD_BUILD_EXAMPLES=ON
+      - -DSD_SERVER_BUILD_FRONTEND=OFF
+      - -DSD_VULKAN=ON
+      - -DSD_WEBM=OFF
+      - -DSD_WEBP=OFF
+    post-install:
+      - install -Dm644 ../LICENSE /app/share/licenses/acmx2/stable-diffusion.cpp-MIT.txt
+    sources:
+      - type: git
+        url: https://github.com/lostjared/stable-diffusion.cpp.git
+        commit: d04e8950c1ec8d30248cbe996682b3182fb1adf6
+        disable-submodules: true
+      - type: git
+        url: https://github.com/leejet/ggml.git
+        commit: e20c3a14aa70ee84ca58499814206dd08d8026bc
+        dest: ggml
+        disable-submodules: true
+
   - name: acmx2
     buildsystem: simple
     build-commands:
@@ -170,7 +217,7 @@ modules:
       - cmake -S ACMX2 -B _build-acmx2 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app -DWITH_CUDA=OFF -DWITH_OPENCV_DNN=OFF -DAUDIO=ON -DMIDI=ON -DWEBP=OFF -DTIFF=OFF
       - cmake --build _build-acmx2
       - cmake --install _build-acmx2
-      - cmake -S ACMXVK -B _build-acmxvk -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app -DVALIDATION=OFF -DAUDIO=ON -DMIDI=ON -DWEBP=OFF -DTIFF=OFF -DWITH_CUDA=OFF -DWITH_OPENCV_DNN=OFF -DBUILD_TESTING=OFF
+      - cmake -S ACMXVK -B _build-acmxvk -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app -DVALIDATION=OFF -DAUDIO=ON -DMIDI=ON -DWEBP=OFF -DTIFF=OFF -DWITH_CUDA=OFF -DWITH_OPENCV_DNN=OFF -DWITH_STABLE_DIFFUSION=ON -DBUILD_TESTING=OFF
       - cmake --build _build-acmxvk
       - cmake --install _build-acmxvk
       - cmake -S ACMX2/interface -B _build-interface -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app
@@ -190,7 +237,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/acidcam-gpu.git
-        commit: 341a4e10ba46dedac5ad37ff232ba06ee53c496f
+        commit: af68d4ed84fbb3753b5fbf0591e016be61df616b
         disable-submodules: true
       - type: file
         path: io.github.lostjared.ACMX2.desktop
