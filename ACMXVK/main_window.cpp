@@ -8,6 +8,16 @@ namespace acmxvk {
         constexpr int COLOR_TRANSFER_SMPTE2084 = 16;
         constexpr int COLOR_TRANSFER_ARIB_STD_B67 = 18;
 
+        [[nodiscard]] std::string format_bitrate(std::uint64_t bytes_written, double duration_seconds) {
+            if (duration_seconds <= 0.0 || !std::isfinite(duration_seconds)) {
+                return {};
+            }
+            const double bitrate_kbits = (static_cast<double>(bytes_written) * 8.0) / duration_seconds / 1000.0;
+            std::ostringstream text;
+            text << std::fixed << std::setprecision(1) << bitrate_kbits << " kbits/s";
+            return text.str();
+        }
+
         [[nodiscard]] float decode_pq(float encoded) {
             constexpr float M1 = 2610.0F / 16384.0F;
             constexpr float M2 = 2523.0F / 32.0F;
@@ -2657,6 +2667,10 @@ namespace acmxvk {
                 constexpr double BYTES_PER_MEGABYTE = 1024.0 * 1024.0;
                 const double file_size_mb = static_cast<double>(writer.get_bytes_written()) / BYTES_PER_MEGABYTE;
                 title << " [File: " << std::fixed << std::setprecision(2) << file_size_mb << " MB]";
+                const std::string bitrate = format_bitrate(writer.get_bytes_written(), elapsed_seconds);
+                if (!bitrate.empty()) {
+                    title << " [Bitrate: " << bitrate << ']';
+                }
             }
         } else {
             title << " (Preview)";
@@ -2745,9 +2759,9 @@ namespace acmxvk {
             std::ostringstream size_text;
             size_text << std::fixed << std::setprecision(2) << file_size_mb;
             std::cout << " | Size: " << size_text.str() << " MB";
-            if (elapsed_seconds > 0.0) {
-                const double bitrate_kbits = (static_cast<double>(bytes_written) * 8.0) / elapsed_seconds / 1000.0;
-                std::cout << " | Bitrate: " << std::fixed << std::setprecision(1) << bitrate_kbits << " kbits/s";
+            const std::string bitrate = format_bitrate(bytes_written, elapsed_seconds);
+            if (!bitrate.empty()) {
+                std::cout << " | Bitrate: " << bitrate;
             }
         }
         std::cout << '\n' << std::flush;
@@ -2974,6 +2988,14 @@ namespace acmxvk {
         }
         printPreviewText(hudElapsedTimeString(), 10, y, status_color);
         y += line_height;
+        if (writer.is_open()) {
+            const double duration_seconds = recording_fps > 0.0 ? static_cast<double>(output_frame_count) / recording_fps : writer.get_duration();
+            const std::string bitrate = format_bitrate(writer.get_bytes_written(), duration_seconds);
+            if (!bitrate.empty()) {
+                printPreviewText("Bitrate: " + bitrate, 10, y, status_color);
+                y += line_height;
+            }
+        }
         std::ostringstream fps;
         fps << "Render: " << std::fixed << std::setprecision(1) << hud_display_fps << " FPS";
         printPreviewText(fps.str(), 10, y, status_color);
