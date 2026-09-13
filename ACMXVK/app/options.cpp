@@ -840,6 +840,7 @@ namespace acmxvk {
                 }
             } else if (option == "--png") {
                 options.png_output = true;
+                options.png_output_directory = optionValue(index, argc, argv, option);
             } else if (option == "--png-level") {
                 options.png_level = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.png_level < 1 || options.png_level > 9) {
@@ -969,9 +970,6 @@ namespace acmxvk {
             if (options.input_file.empty() || !options.graphic_file.empty()) {
                 throw std::runtime_error("Stable Diffusion processing requires --input <video>");
             }
-            if (options.png_output) {
-                throw std::runtime_error("Stable Diffusion processing does not support PNG output");
-            }
             if (options.stable_diffusion_prompt.empty()) {
                 throw std::runtime_error("--sd-model requires --sd-prompt <text>");
             }
@@ -1051,11 +1049,14 @@ namespace acmxvk {
         if (!options.output_file.empty() && !options.input_file.empty() && fs::absolute(options.output_file).lexically_normal() == fs::absolute(options.input_file).lexically_normal()) {
             throw std::runtime_error("output file must differ from the input file");
         }
-        if (options.duration > 0.0 && options.output_file.empty()) {
-            throw std::runtime_error("--duration requires --output <file>");
+        if (options.duration > 0.0 && options.output_file.empty() && !options.png_output) {
+            throw std::runtime_error("--duration requires --output <file> or --png <directory>");
         }
-        if (options.png_output && (options.input_file.empty() || options.output_file.empty())) {
-            throw std::runtime_error("--png requires video --input and --output");
+        if (options.png_output && options.input_file.empty()) {
+            throw std::runtime_error("--png requires video --input");
+        }
+        if (options.png_output && !options.output_file.empty()) {
+            throw std::runtime_error("--png <directory> cannot be combined with --output <file>");
         }
         if (options.max_size_mb > 0.0 && (options.output_file.empty() || options.png_output)) {
             throw std::runtime_error("--max-size requires encoded video output");
@@ -1094,8 +1095,8 @@ namespace acmxvk {
                 throw std::runtime_error("--headless/--silent requires --input <video> or "
                                          "--graphic <image>; camera input is not supported");
             }
-            if (options.output_file.empty()) {
-                throw std::runtime_error("--headless/--silent requires --output <file>");
+            if (options.output_file.empty() && !options.png_output) {
+                throw std::runtime_error("--headless/--silent requires --output <file> or --png <directory>");
             }
             if (!options.graphic_file.empty() && options.duration <= 0.0) {
                 throw std::runtime_error("headless graphic processing requires --duration "
@@ -1288,9 +1289,9 @@ namespace acmxvk {
                << "      --history-test          Enable history and the built-in echo demo\n\n"
                << "Recording:\n"
                << "  -o, --output <file>         Encode processed output with MXWrite\n"
-               << "      --duration <seconds>    Stop after this much output video\n"
+               << "      --duration <seconds>    Stop after this much encoded video or PNG output\n"
                << "      --max-size <MB>         Stop when encoded output exceeds this size\n"
-               << "      --png                   Write video output as a PNG sequence\n"
+               << "      --png <directory>       Write video frames as a PNG sequence in directory\n"
                << "      --png-level <1-9>       PNG compression: 1 fastest/largest, 9 slowest/smallest (default 6)\n"
                << "      --generate <N>          Save a PNG every N processed frames\n"
                << "  -e, --prefix <directory>   Directory for Z snapshots (default .)\n"
@@ -1370,7 +1371,7 @@ namespace acmxvk {
                << "Headless processing:\n"
                << "      --headless              Surface-free terminal/batch rendering\n"
                << "      --silent                Alias for --headless\n"
-               << "                              Requires video/image input and --output\n"
+               << "                              Requires video/image input and --output or --png\n"
                << "                              Cannot be combined with --pass-through\n"
                << "                              Image input and --repeat require --duration\n"
                << "                              Interface shared memory is disabled\n\n"

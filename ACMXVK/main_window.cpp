@@ -3623,7 +3623,7 @@ namespace acmxvk {
     [[nodiscard]] bool MainWindow::continuousReadbackEnabled() const { return writer.is_open() || options.png_output || options.generate_interval > 0; }
 
     void MainWindow::openOutput() {
-        if (options.output_file.empty() && options.generate_interval <= 0) {
+        if (options.output_file.empty() && !options.png_output && options.generate_interval <= 0) {
             return;
         }
 
@@ -3638,7 +3638,7 @@ namespace acmxvk {
         recording_fps = outputFrameRate();
 
         if (options.png_output) {
-            png_output_directory = output_frame_directory(options.output_file, "png");
+            png_output_directory = options.png_output_directory;
             create_output_directory(png_output_directory);
             std::cout << "acmxvk: writing PNG sequence to " << png_output_directory.string() << '\n';
         }

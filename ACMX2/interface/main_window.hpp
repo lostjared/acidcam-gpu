@@ -382,6 +382,7 @@ class MainWindow : public QMainWindow {
     bool rotate_enabled = false;
     QString rotation_mode = "clockwise";
     bool png_output = false;
+    QString png_output_directory;
     int png_level = 6;
     bool generate_enabled = false;
     int generate_interval = 30;

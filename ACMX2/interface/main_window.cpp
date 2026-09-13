@@ -1314,6 +1314,7 @@ void MainWindow::loadSessionSettings() {
     rotate_enabled = settings.value("interface/rotate", false).toBool();
     rotation_mode = settings.value("interface/rotation_mode", "clockwise").toString();
     png_output = settings.value("interface/write_png", false).toBool();
+    png_output_directory = settings.value("interface/png_output_directory", "").toString();
     png_level = std::clamp(settings.value("interface/png_level", 6).toInt(), 1, 9);
     generate_enabled = settings.value("interface/generate_enabled", false).toBool();
     generate_interval = settings.value("interface/generate_interval", 30).toInt();
@@ -3845,10 +3846,6 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
         error = tr("Stable Diffusion dimensions must be multiples of 64.");
         return false;
     }
-    if (png_output) {
-        error = tr("Stable Diffusion does not support PNG-sequence output.");
-        return false;
-    }
     if (encode_fill_pts_gaps) {
         error = tr("Stable Diffusion cannot be combined with Fill PTS Gaps.");
         return false;
@@ -4192,6 +4189,7 @@ void MainWindow::cameraSettings() {
     rotate_enabled = settingsWindow.is_rotate_enabled();
     rotation_mode = settingsWindow.get_rotation_mode();
     png_output = settingsWindow.isPngOutputEnabled();
+    png_output_directory = settingsWindow.getPngOutputDirectory();
     png_level = settingsWindow.getPngLevel();
     generate_enabled = settingsWindow.isGenerateEnabled();
     generate_interval = settingsWindow.getGenerateInterval();
@@ -4465,7 +4463,7 @@ void MainWindow::runSelected() {
             arguments << "--midi-device" << QString::number(midi_device);
     }
 
-    if (!output_file.isEmpty() && duration_limit_enabled && max_duration > 0.0) {
+    if ((!output_file.isEmpty() || (active_backend == acmx2::Backend::Acmxvk && png_output)) && duration_limit_enabled && max_duration > 0.0) {
         arguments << "--duration" << QString::number(max_duration, 'f', 1);
     }
 
@@ -4485,8 +4483,8 @@ void MainWindow::runSelected() {
         arguments << "--rotate" << rotation_mode;
     }
 
-    if (png_output && !output_file.isEmpty()) {
-        arguments << "--png";
+    if (active_backend == acmx2::Backend::Acmxvk && png_output && !png_output_directory.isEmpty()) {
+        arguments << "--png" << png_output_directory;
     }
 
     if (generate_enabled && generate_interval > 0) {
@@ -4817,7 +4815,7 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
         arguments << (autopilot_random ? "--autopilot-random" : "--autopilot-frames") << QString::number(autopilot_frames);
     }
 
-    if (!output_file.isEmpty() && duration_limit_enabled && max_duration > 0.0) {
+    if ((!output_file.isEmpty() || (active_backend == acmx2::Backend::Acmxvk && png_output)) && duration_limit_enabled && max_duration > 0.0) {
         arguments << "--duration" << QString::number(max_duration, 'f', 1);
     }
 
@@ -4837,8 +4835,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
         arguments << "--rotate" << rotation_mode;
     }
 
-    if (png_output && !output_file.isEmpty()) {
-        arguments << "--png";
+    if (active_backend == acmx2::Backend::Acmxvk && png_output && !png_output_directory.isEmpty()) {
+        arguments << "--png" << png_output_directory;
     }
 
     if (generate_enabled && generate_interval > 0) {

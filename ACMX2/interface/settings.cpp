@@ -815,7 +815,10 @@ void SettingsWindow::init() {
     copyAudioCheckBox->setChecked(false);
     copyAudioCheckBox->setEnabled(false);
 
-    writePngCheckBox = new QCheckBox("Write PNG", this);
+    writePngCheckBox = new QCheckBox("Write PNG Sequence", this);
+    pngOutputDirectoryLineEdit = new QLineEdit(this);
+    pngOutputDirectoryLineEdit->setReadOnly(true);
+    browsePngOutputDirectoryButton = new QPushButton("Browse", this);
     if (activeBackend == acmx2::Backend::Acmxvk) {
         pngLevelComboBox = new QComboBox(this);
         pngLevelComboBox->addItem("1 — Fastest; largest files", 1);
@@ -1054,6 +1057,12 @@ void SettingsWindow::init() {
     outputGrid->addLayout(outputRow, r, 1);
     outputGrid->addWidget(copyAudioCheckBox, ++r, 0, 1, 2);
     outputGrid->addWidget(writePngCheckBox, ++r, 0, 1, 2);
+    outputGrid->addWidget(new QLabel("PNG Directory:", this), ++r, 0);
+    auto *pngOutputRow = new QHBoxLayout;
+    pngOutputRow->setSpacing(4);
+    pngOutputRow->addWidget(pngOutputDirectoryLineEdit);
+    pngOutputRow->addWidget(browsePngOutputDirectoryButton);
+    outputGrid->addLayout(pngOutputRow, r, 1);
     if (pngLevelComboBox) {
         outputGrid->addWidget(new QLabel("PNG compression:", this), ++r, 0);
         outputGrid->addWidget(pngLevelComboBox, r, 1);
@@ -1337,10 +1346,18 @@ void SettingsWindow::init() {
     connect(saveOutputVideoCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         outputVideoFileLineEdit->setEnabled(checked);
         browseOutputVideoButton->setEnabled(checked);
+        if (checked)
+            writePngCheckBox->setChecked(false);
         bool enableAudio = checked && inputVideoOptionRadioButton->isChecked();
         copyAudioCheckBox->setEnabled(enableAudio);
         if (!enableAudio)
             copyAudioCheckBox->setChecked(false);
+    });
+    connect(writePngCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        pngOutputDirectoryLineEdit->setEnabled(checked);
+        browsePngOutputDirectoryButton->setEnabled(checked);
+        if (checked)
+            saveOutputVideoCheckBox->setChecked(false);
     });
 
     const auto updateConstantFrameRateControl = [this] {
@@ -1370,6 +1387,7 @@ void SettingsWindow::init() {
     connect(cancelButton, &QPushButton::clicked, this, &SettingsWindow::rejectSettings);
     connect(browseInputVideoButton, &QPushButton::clicked, this, &SettingsWindow::browseInputVideoFile);
     connect(browseOutputVideoButton, &QPushButton::clicked, this, &SettingsWindow::browseOutputVideoFile);
+    connect(browsePngOutputDirectoryButton, &QPushButton::clicked, this, &SettingsWindow::browsePngOutputDirectory);
     connect(browseGraphicsButton, &QPushButton::clicked, this, &SettingsWindow::browseGraphicsFile);
     connect(browseModelButton, &QPushButton::clicked, this, &SettingsWindow::browseModelFile);
 
@@ -1380,6 +1398,8 @@ void SettingsWindow::init() {
     browseGraphicsButton->setEnabled(false);
     outputVideoFileLineEdit->setEnabled(false);
     browseOutputVideoButton->setEnabled(false);
+    pngOutputDirectoryLineEdit->setEnabled(false);
+    browsePngOutputDirectoryButton->setEnabled(false);
 
     loadUiState();
     updateAcmxvkTimingControls();
@@ -1514,6 +1534,7 @@ void SettingsWindow::loadUiState() {
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
     writePngCheckBox->setChecked(appSettings.value("interface/write_png", false).toBool());
+    pngOutputDirectoryLineEdit->setText(appSettings.value("interface/png_output_directory", "").toString());
     if (pngLevelComboBox) {
         const int saved_png_level = std::clamp(appSettings.value("interface/png_level", 6).toInt(), 1, 9);
         const int png_level_index = pngLevelComboBox->findData(saved_png_level);
@@ -1612,6 +1633,7 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
     appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
     appSettings.setValue("interface/write_png", writePngCheckBox->isChecked());
+    appSettings.setValue("interface/png_output_directory", pngOutputDirectoryLineEdit->text());
     if (pngLevelComboBox) {
         appSettings.setValue("interface/png_level", pngLevelComboBox->currentData().toInt());
     }
@@ -1695,6 +1717,8 @@ bool SettingsWindow::isUseSourceAudioEnabled() const { return useSourceAudioChec
 bool SettingsWindow::isCopyAudioEnabled() const { return copyAudioCheckBox->isChecked(); }
 
 bool SettingsWindow::isPngOutputEnabled() const { return writePngCheckBox->isChecked(); }
+
+QString SettingsWindow::getPngOutputDirectory() const { return pngOutputDirectory; }
 
 int SettingsWindow::getPngLevel() const { return pngLevelComboBox ? pngLevelComboBox->currentData().toInt() : 6; }
 
@@ -1948,6 +1972,18 @@ void SettingsWindow::acceptSettings() {
             QMessageBox::critical(this, "Input and output files must be different", "You cannot process and write to the same video file. Select a different output file.");
             return;
         }
+    } else {
+        outputVideoFile.clear();
+    }
+
+    pngOutputDirectory.clear();
+    if (writePngCheckBox->isChecked()) {
+        pngOutputDirectory = pngOutputDirectoryLineEdit->text();
+        if (pngOutputDirectory.isEmpty()) {
+            QMessageBox::information(this, "PNG directory required", "Select a directory for the PNG sequence.");
+            reject();
+            return;
+        }
     }
 
     if (enable3dCheckBox->isChecked()) {
@@ -2113,6 +2149,16 @@ void SettingsWindow::browseOutputVideoFile() {
             fileName += ".mp4";
         }
         outputVideoFileLineEdit->setText(fileName);
+    }
+}
+
+void SettingsWindow::browsePngOutputDirectory() {
+    QSettings appSettings("LostSideDead");
+    const QString lastDir = appSettings.value("lastPngOutputDir", "").toString();
+    const QString directory = QFileDialog::getExistingDirectory(this, "Select PNG Sequence Directory", lastDir);
+    if (!directory.isEmpty()) {
+        appSettings.setValue("lastPngOutputDir", directory);
+        pngOutputDirectoryLineEdit->setText(directory);
     }
 }
 

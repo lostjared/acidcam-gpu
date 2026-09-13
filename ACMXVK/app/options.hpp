@@ -177,6 +177,7 @@ namespace acmxvk {
         std::string model_file;
         std::string playlist_file;
         std::string output_file;
+        std::string png_output_directory;
         std::string encode_preset = "medium";
         std::string encode_tune;
         std::string encode_codec = "auto";

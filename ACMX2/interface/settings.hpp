@@ -83,6 +83,8 @@ class SettingsWindow : public QDialog {
     bool isCopyAudioEnabled() const;
     /// @brief Return whether Write PNG mode is enabled.
     bool isPngOutputEnabled() const;
+    /// @brief Return the directory used for ACMXVK PNG-sequence output.
+    QString getPngOutputDirectory() const;
     /// @brief Return the selected ACMXVK PNG compression level.
     int getPngLevel() const;
     /// @return True if --generate &lt;N&gt; mode is enabled.
@@ -151,6 +153,7 @@ class SettingsWindow : public QDialog {
     void rejectSettings();
     void browseInputVideoFile();
     void browseOutputVideoFile();
+    void browsePngOutputDirectory();
     void browseGraphicsFile();
     void browseModelFile();
     void browseOnnxModelFile();
@@ -200,6 +203,8 @@ class SettingsWindow : public QDialog {
     QCheckBox *convertHdr10CheckBox = nullptr;
     QLineEdit *outputVideoFileLineEdit;
     QPushButton *browseOutputVideoButton;
+    QLineEdit *pngOutputDirectoryLineEdit = nullptr;
+    QPushButton *browsePngOutputDirectoryButton = nullptr;
     QLineEdit *graphicsFileLineEdit;
     QPushButton *browseGraphicsButton;
     QRadioButton *cameraOptionRadioButton;
@@ -271,6 +276,7 @@ class SettingsWindow : public QDialog {
     int cameraFPS;
     QString inputVideoFile;
     QString outputVideoFile;
+    QString pngOutputDirectory;
     bool useInputVideoFile;
     bool useGraphicsFile;
     bool saveOutputVideoFile;
