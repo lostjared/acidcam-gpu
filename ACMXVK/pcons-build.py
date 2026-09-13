@@ -122,14 +122,18 @@ def find_libtorch() -> ImportedTarget:
     for torch_root in roots:
         include_dir = torch_root / "include"
         api_include_dir = include_dir / "torch" / "csrc" / "api" / "include"
+        header_dirs = [api_include_dir]
+        if include_dir not in (Path("/usr/include"), Path("/usr/local/include")):
+            header_dirs.insert(0, include_dir)
+        has_torch_header = (include_dir / "torch" / "torch.h").is_file() or (api_include_dir / "torch" / "torch.h").is_file()
         library_dirs = [torch_root / "lib", torch_root / "lib64", torch_root / "lib" / "x86_64-linux-gnu"]
         for library_dir in library_dirs:
             checked.append(str(library_dir))
-            if not (include_dir / "torch" / "torch.h").is_file() or not library_dir.is_dir():
+            if not has_torch_header or not library_dir.is_dir():
                 continue
             missing = [library for library in libraries if not any((library_dir / f"lib{library}{suffix}").exists() for suffix in (".so", ".dylib", ".a"))]
             if not missing:
-                return imported_package("LibTorch", [include_dir, api_include_dir], library_dir, libraries)
+                return imported_package("LibTorch", header_dirs, library_dir, libraries)
     if configured_prefix:
         raise SystemExit(f"DEEP_DREAM=1 requires CUDA-enabled LibTorch under {roots[0]}. Set TORCH_PREFIX=/path/to/libtorch.")
     raise SystemExit("DEEP_DREAM=1 requires CUDA-enabled LibTorch. Searched " + ", ".join(checked) + ". Set TORCH_PREFIX=/path/to/libtorch.")
@@ -252,8 +256,8 @@ if with_stable_diffusion:
     env.cxx.defines.append("ACMXVK_WITH_STABLE_DIFFUSION")
 if with_deep_dream:
     sources.extend([project_dir / "deep_dream.cpp", project_dir / "deep_dream_model.cpp"])
-    libraries.extend([find_cuda_runtime(), find_libtorch()])
-    env.cxx.defines.append("ACMXVK_WITH_DEEP_DREAM")
+    libraries.extend([find_cuda_runtime(), find_libtorch(), require_package("gflags"), require_package("libglog")])
+    env.cxx.defines.extend(["ACMXVK_WITH_DEEP_DREAM", "GLOG_USE_GFLAGS", "GLOG_USE_GLOG_EXPORT"])
 if with_cuda:
     raise SystemExit(
         "WITH_CUDA=1 is not yet supported by the ACMXVK pcons target. "
