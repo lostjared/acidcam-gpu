@@ -223,10 +223,10 @@ MetadataViewer::MetadataViewer(QWidget *parent) : QDialog(parent) {
     const QPalette appPalette = qApp->palette();
     QPalette viewPalette = appPalette;
     viewPalette.setColor(QPalette::Base, appPalette.color(QPalette::Window));
-    viewPalette.setColor(QPalette::Text, Qt::white);
-    viewPalette.setColor(QPalette::WindowText, Qt::white);
-    viewPalette.setColor(QPalette::ButtonText, Qt::white);
-    viewPalette.setColor(QPalette::HighlightedText, Qt::white);
+    viewPalette.setColor(QPalette::Text, appPalette.color(QPalette::Text));
+    viewPalette.setColor(QPalette::WindowText, appPalette.color(QPalette::WindowText));
+    viewPalette.setColor(QPalette::ButtonText, appPalette.color(QPalette::ButtonText));
+    viewPalette.setColor(QPalette::HighlightedText, appPalette.color(QPalette::HighlightedText));
     for (auto *w : {static_cast<QWidget *>(markdownPreview), static_cast<QWidget *>(htmlPreview), static_cast<QWidget *>(textPreview), static_cast<QWidget *>(tree)}) {
         w->setPalette(viewPalette);
         if (auto *vp = w->findChild<QWidget *>("qt_scrollarea_viewport"))
