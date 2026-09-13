@@ -109,7 +109,7 @@ def find_cuda_runtime() -> ImportedTarget:
     )
     for include_dir, library_dir in layouts:
         if (include_dir / "cuda_runtime.h").is_file() and (library_dir / "libcudart.so").exists():
-            return imported_package("cuda-runtime", [include_dir], library_dir, ["cudart"])
+            return imported_package("cuda-runtime", [include_dir], library_dir, ["cudart", "nppicc", "nppidei", "nppc"])
     raise SystemExit(f"DEEP_DREAM=1 requires CUDA under {cuda_root}. Set CUDA_PREFIX=/path/to/cuda.")
 
 
@@ -181,12 +181,15 @@ if platform.is_macos:
 
 mxvk = require_package("mxvk")
 mxvk_defines = " ".join(str(define) for define in mxvk.public.defines)
-if "MXVK_CUDA" in mxvk_defines and not with_cuda:
+mxvk_with_cuda = "MXVK_CUDA" in mxvk_defines
+if mxvk_with_cuda and not with_cuda:
     raise SystemExit(
         "The selected MXVK prefix was built with CUDA, but WITH_CUDA=0 was "
-        "requested. Rebuild/install MXVK with WITH_CUDA=OFF, or use the "
-        "matching CUDA ACMXVK CMake build."
+        "requested. Rebuild/install MXVK with WITH_CUDA=OFF, or configure "
+        "ACMXVK with WITH_CUDA=1."
     )
+if with_cuda and not mxvk_with_cuda:
+    raise SystemExit("WITH_CUDA=1 requires an MXVK prefix built with WITH_CUDA=ON.")
 ffmpeg = require_package("libavcodec")
 for package_name in ("libavformat", "libavutil", "libswscale", "libswresample"):
     ffmpeg.link(require_package(package_name))
@@ -254,15 +257,17 @@ if with_stable_diffusion:
         [require_package("libcurl"), require_package("jsoncpp")]
     )
     env.cxx.defines.append("ACMXVK_WITH_STABLE_DIFFUSION")
+cuda_runtime: ImportedTarget | None = find_cuda_runtime() if with_deep_dream or with_cuda else None
 if with_deep_dream:
     sources.extend([project_dir / "deep_dream.cpp", project_dir / "deep_dream_model.cpp"])
-    libraries.extend([find_cuda_runtime(), find_libtorch(), require_package("gflags"), require_package("libglog")])
+    libraries.extend([cuda_runtime, find_libtorch(), require_package("gflags"), require_package("libglog")])
     env.cxx.defines.extend(["ACMXVK_WITH_DEEP_DREAM", "GLOG_USE_GFLAGS", "GLOG_USE_GLOG_EXPORT"])
+if mxvk_with_cuda:
+    env.cxx.defines.append("ACMXVK_WITH_MXVK_CUDA")
 if with_cuda:
-    raise SystemExit(
-        "WITH_CUDA=1 is not yet supported by the ACMXVK pcons target. "
-        "Use CMake for CUDA ACMXVK builds."
-    )
+    sources.extend([project_dir / "gpu_filters.cpp"])
+    libraries.extend([require_package("acidcam-gpu"), cuda_runtime])
+    env.cxx.defines.append("ACMXVK_WITH_CUDA")
 
 runtime_dir = (project_dir / project.build_dir / "runtime").resolve()
 shader_output_dir = runtime_dir / "shaders"

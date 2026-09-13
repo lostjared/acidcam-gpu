@@ -107,7 +107,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--jobs", type=int, help="parallel Pcons job count")
     parser.add_argument("--skip-clone", action="store_true", help="require existing dependency checkouts")
     parser.add_argument("--dry-run", action="store_true", help="print commands without running them")
-    parser.add_argument("--cuda", action="store_true", help="enable CUDA for ACMX2/acidcam-gpu only")
+    parser.add_argument("--cuda", action="store_true", help="enable CUDA for MXVK, ACMXVK, ACMX2, and acidcam-gpu")
     parser.add_argument("--stable-diffusion", action="store_true", help="enable ACMXVK's sd-server client (requires libcurl and jsoncpp)")
     parser.add_argument("--deep-dream", action="store_true", help="enable ACMXVK CUDA LibTorch Deep Dream (Linux only)")
     parser.add_argument("--torch-prefix", type=Path, help="CUDA-enabled LibTorch prefix for --deep-dream (default: auto-detect /opt/libtorch, /usr, or /usr/local)")
@@ -209,7 +209,8 @@ def main() -> int:
             "PREFIX=" + str(install_prefix),
             "OPENCV_PACKAGE=" + opencv_package,
             "EXAMPLES=0",
-            "WITH_CUDA=OFF",
+            "WITH_CUDA=" + ("ON" if args.cuda else "OFF"),
+            "CUDA_PREFIX=" + str(args.cuda_prefix.expanduser()),
             "CV=ON",
             "VALIDATION=OFF",
         ],
@@ -247,7 +248,7 @@ def main() -> int:
         [
             *common_options,
             "VALIDATION=0",
-            "WITH_CUDA=0",
+            "WITH_CUDA=" + enabled(args.cuda),
             "STABLE_DIFFUSION=" + enabled(args.stable_diffusion),
             "DEEP_DREAM=" + enabled(args.deep_dream),
             "CUDA_PREFIX=" + str(args.cuda_prefix.expanduser()),
