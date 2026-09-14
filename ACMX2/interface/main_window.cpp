@@ -1320,7 +1320,7 @@ void MainWindow::loadSessionSettings() {
     flip_enabled = settings.value("interface/flip", false).toBool();
     rotate_enabled = settings.value("interface/rotate", false).toBool();
     rotation_mode = settings.value("interface/rotation_mode", "clockwise").toString();
-    png_output = settings.value("interface/write_png", false).toBool();
+    png_output = active_backend == acmx2::Backend::Acmxvk && settings.value("interface/write_png", false).toBool();
     png_output_directory = settings.value("interface/png_output_directory", "").toString();
     png_level = std::clamp(settings.value("interface/png_level", 6).toInt(), 1, 9);
     generate_enabled = settings.value("interface/generate_enabled", false).toBool();
@@ -4240,7 +4240,7 @@ void MainWindow::cameraSettings() {
     flip_enabled = settingsWindow.isFlipEnabled();
     rotate_enabled = settingsWindow.is_rotate_enabled();
     rotation_mode = settingsWindow.get_rotation_mode();
-    png_output = settingsWindow.isPngOutputEnabled();
+    png_output = active_backend == acmx2::Backend::Acmxvk && settingsWindow.isPngOutputEnabled();
     png_output_directory = settingsWindow.getPngOutputDirectory();
     png_level = settingsWindow.getPngLevel();
     generate_enabled = settingsWindow.isGenerateEnabled();

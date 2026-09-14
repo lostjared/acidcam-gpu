@@ -821,6 +821,10 @@ void SettingsWindow::init() {
     pngOutputDirectoryLineEdit = new QLineEdit(this);
     pngOutputDirectoryLineEdit->setReadOnly(true);
     browsePngOutputDirectoryButton = new QPushButton("Browse", this);
+    const bool supportsPngSequence = activeBackend == acmx2::Backend::Acmxvk;
+    writePngCheckBox->setVisible(supportsPngSequence);
+    pngOutputDirectoryLineEdit->setVisible(supportsPngSequence);
+    browsePngOutputDirectoryButton->setVisible(supportsPngSequence);
     if (activeBackend == acmx2::Backend::Acmxvk) {
         pngLevelComboBox = new QComboBox(this);
         pngLevelComboBox->addItem("1 — Fastest; largest files", 1);
@@ -1060,7 +1064,9 @@ void SettingsWindow::init() {
     outputGrid->addLayout(outputRow, r, 1);
     outputGrid->addWidget(copyAudioCheckBox, ++r, 0, 1, 2);
     outputGrid->addWidget(writePngCheckBox, ++r, 0, 1, 2);
-    outputGrid->addWidget(new QLabel("PNG Directory:", this), ++r, 0);
+    auto *pngDirectoryLabel = new QLabel("PNG Directory:", this);
+    pngDirectoryLabel->setVisible(activeBackend == acmx2::Backend::Acmxvk);
+    outputGrid->addWidget(pngDirectoryLabel, ++r, 0);
     auto *pngOutputRow = new QHBoxLayout;
     pngOutputRow->setSpacing(4);
     pngOutputRow->addWidget(pngOutputDirectoryLineEdit);
@@ -1557,7 +1563,7 @@ void SettingsWindow::loadUiState() {
     saveOutputLogCheckBox->setChecked(save_output && appSettings.value("interface/save_output_log", false).toBool());
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
-    writePngCheckBox->setChecked(appSettings.value("interface/write_png", false).toBool());
+    writePngCheckBox->setChecked(activeBackend == acmx2::Backend::Acmxvk && appSettings.value("interface/write_png", false).toBool());
     pngOutputDirectoryLineEdit->setText(appSettings.value("interface/png_output_directory", "").toString());
     if (pngLevelComboBox) {
         const int saved_png_level = std::clamp(appSettings.value("interface/png_level", 6).toInt(), 1, 9);
@@ -1743,7 +1749,7 @@ bool SettingsWindow::isUseSourceAudioEnabled() const { return useSourceAudioChec
 
 bool SettingsWindow::isCopyAudioEnabled() const { return copyAudioCheckBox->isChecked(); }
 
-bool SettingsWindow::isPngOutputEnabled() const { return writePngCheckBox->isChecked(); }
+bool SettingsWindow::isPngOutputEnabled() const { return activeBackend == acmx2::Backend::Acmxvk && writePngCheckBox->isChecked(); }
 
 QString SettingsWindow::getPngOutputDirectory() const { return pngOutputDirectory; }
 
@@ -2005,7 +2011,7 @@ void SettingsWindow::acceptSettings() {
     }
 
     pngOutputDirectory.clear();
-    if (writePngCheckBox->isChecked()) {
+    if (activeBackend == acmx2::Backend::Acmxvk && writePngCheckBox->isChecked()) {
         pngOutputDirectory = pngOutputDirectoryLineEdit->text();
         if (pngOutputDirectory.isEmpty()) {
             QMessageBox::information(this, "PNG directory required", "Select a directory for the PNG sequence.");
