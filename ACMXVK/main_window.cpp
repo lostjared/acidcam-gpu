@@ -3648,18 +3648,6 @@ namespace acmxvk {
             std::cout << '\n';
         }
 
-        if (options.generate_interval > 0) {
-            if (!options.output_file.empty()) {
-                generate_output_directory = output_frame_directory(options.output_file, "generate");
-            } else if (!options.input_file.empty()) {
-                generate_output_directory = output_frame_directory(options.input_file, "generate");
-            } else {
-                generate_output_directory = "camera-generate";
-            }
-            create_output_directory(generate_output_directory);
-            std::cout << "acmxvk: saving every " << options.generate_interval << "th frame to " << png_output_directory.string() << '\n';
-        }
-
         if (!options.output_file.empty() && !options.png_output) {
             EncodeOptions encode_options;
             encode_options.preset = options.encode_preset;

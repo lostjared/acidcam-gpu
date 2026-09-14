@@ -143,7 +143,6 @@ namespace acmxvk {
         fs::path shader_library_directory;
         fs::path shader_manifest_path;
         fs::path png_output_directory;
-        fs::path generate_output_directory;
         InterfaceClient interface_client;
         std::uint32_t interface_last_sequence = 0;
         std::chrono::steady_clock::time_point interface_next_connect_attempt{};
