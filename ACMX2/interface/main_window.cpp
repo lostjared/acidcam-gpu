@@ -590,6 +590,7 @@ void MainWindow::initControls() {
         stdoutBuffer += QString::fromLocal8Bit(process->readAllStandardOutput());
         QString line;
         while (take_process_output_line(stdoutBuffer, line)) {
+            appendOutputRunLog(line);
             if (active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(line)) {
                 continue;
             }
@@ -613,9 +614,11 @@ void MainWindow::initControls() {
         stderrBuffer += QString::fromLocal8Bit(process->readAllStandardError());
         QString line;
         while (take_process_output_line(stderrBuffer, line)) {
+            appendOutputRunLog(line);
             writeStderrLine(line);
         }
         if (stderrBuffer.size() > 4096) {
+            appendOutputRunLog(stderrBuffer);
             writeStderrLine(stderrBuffer);
             stderrBuffer.clear();
         }
@@ -625,6 +628,7 @@ void MainWindow::initControls() {
         if (!stdoutBuffer.isEmpty() && !(active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(stdoutBuffer))) {
             this->Write(stdoutBuffer + "<br>");
         }
+        appendOutputRunLog(stdoutBuffer);
         stdoutBuffer.clear();
         if (!stderrBuffer.isEmpty() && !stderrBuffer.contains("GStreamer") && !(active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(stderrBuffer))) {
             if (stderrBuffer.contains("[ WARN:") || stderrBuffer.contains("[WARN "))
@@ -632,11 +636,13 @@ void MainWindow::initControls() {
             else
                 this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
         }
+        appendOutputRunLog(stderrBuffer);
         stderrBuffer.clear();
         QString text;
         QTextStream stream(&text);
         stream << acmx2::backend_name(active_backend) << ": Exited with Code: " << exitCode;
         Log(text + "<br>");
+        finishOutputRunLog(exitCode, exitStatus);
         play_stop->setEnabled(false);
 
         if (exitStatus == QProcess::CrashExit) {
@@ -1234,6 +1240,7 @@ void MainWindow::loadSessionSettings() {
 
     const bool saveOutput = settings.value("interface/save_output", false).toBool();
     output_file = saveOutput ? settings.value("interface/output_video", "").toString() : QString();
+    save_output_log = saveOutput && settings.value("interface/save_output_log", false).toBool();
     full_screen_value = settings.value("interface/fullscreen", false).toBool();
     copy_audio = videoMode && saveOutput && settings.value("interface/copy_audio", false).toBool();
 
@@ -3008,6 +3015,49 @@ void MainWindow::Write(const QString &message) {
     }
 }
 
+void MainWindow::beginOutputRunLog(const QString &command) {
+    if (!save_output_log || output_file.isEmpty()) {
+        return;
+    }
+
+    if (output_run_log.isOpen()) {
+        output_run_log.close();
+    }
+    output_run_log.setFileName(output_file + QStringLiteral(".log"));
+    if (!output_run_log.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        Log(tr("<b style='color:red;'>Unable to save render log: %1</b>").arg(output_run_log.errorString()));
+        return;
+    }
+
+    appendOutputRunLog(tr("ACMX render log"));
+    appendOutputRunLog(tr("Started: %1").arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
+    appendOutputRunLog(tr("Command: %1").arg(command));
+    appendOutputRunLog(QString());
+}
+
+void MainWindow::appendOutputRunLog(const QString &message) {
+    if (!output_run_log.isOpen()) {
+        return;
+    }
+
+    output_run_log.write(message.toUtf8());
+    if (!message.endsWith(QLatin1Char('\n'))) {
+        output_run_log.write("\n");
+    }
+    output_run_log.flush();
+}
+
+void MainWindow::finishOutputRunLog(int exitCode, QProcess::ExitStatus exitStatus) {
+    if (!output_run_log.isOpen()) {
+        return;
+    }
+
+    appendOutputRunLog(QString());
+    appendOutputRunLog(tr("Finished: %1").arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
+    appendOutputRunLog(tr("Exit: %1 (%2)").arg(exitCode).arg(exitStatus == QProcess::NormalExit ? tr("normal") : tr("crashed")));
+    output_run_log.close();
+}
+
 void MainWindow::menuLoadLibrary() {
     QSettings settings("LostSideDead");
     QString startDirectory = settings.value("lastShaderDir").toString();
@@ -4163,8 +4213,10 @@ void MainWindow::cameraSettings() {
         }
         if (settingsWindow.isSavingToOutputVideoFile()) {
             output_file = settingsWindow.getOutputVideoFile();
+            save_output_log = settingsWindow.isSavingOutputLog();
         } else {
             output_file = "";
+            save_output_log = false;
         }
         // Only meaningful in input-video mode + with an output file. The
         // settings dialog already gates this on HDR detection, but we re-check
@@ -4505,8 +4557,11 @@ void MainWindow::runSelected() {
     // ACMX2 single-source mode bypasses its binary cache. ACMXVK uses the
     // selected runtime library and does not accept ACMX2 cache controls.
     Log("shell: " + executable_path + " " + concatList(arguments) + "<br>");
+    beginOutputRunLog(executable_path + " " + concatList(arguments));
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
+        appendOutputRunLog(tr("Failed to start: %1").arg(process->errorString()));
+        finishOutputRunLog(-1, QProcess::CrashExit);
         Log("<b style='color:red;'>Failed to start the program.</b>");
         QMessageBox::critical(this, "Error", "Failed to start the program.");
     } else {
@@ -4993,8 +5048,11 @@ void MainWindow::runAll() {
     publishRuntimeSettingsToRunningProcess();
 
     Log("shell: " + executable_path + " " + concatList(arguments) + "<br>");
+    beginOutputRunLog(executable_path + " " + concatList(arguments));
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
+        appendOutputRunLog(tr("Failed to start: %1").arg(process->errorString()));
+        finishOutputRunLog(-1, QProcess::CrashExit);
         Log("<b style='color:red;'>Failed to start the program.</b>");
         QMessageBox::critical(this, "Error", "Failed to start the program.");
     } else {
@@ -5138,8 +5196,11 @@ void MainWindow::copyCommand() {
 #endif
         Log("shell: " + cmdText + "<br>");
         initShaderSelectionSharedMemory();
+        beginOutputRunLog(cmdText);
         process->start(shell, shellArgs);
         if (!process->waitForStarted()) {
+            appendOutputRunLog(tr("Failed to start: %1").arg(process->errorString()));
+            finishOutputRunLog(-1, QProcess::CrashExit);
             Log("<b style='color:red;'>Failed to start the program.</b>");
             QMessageBox::critical(&dialog, tr("Error"), tr("Failed to start the program."));
             return;

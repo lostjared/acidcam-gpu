@@ -24,6 +24,8 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+class QScrollArea;
+
 /**
  * @brief Dialog that collects camera, input source, output, and runtime options.
  */
@@ -61,6 +63,8 @@ class SettingsWindow : public QDialog {
     bool isUsingGraphicsFile() const;
     /// @return True if save-to-file is enabled.
     bool isSavingToOutputVideoFile() const;
+    /// @return True when the video render log should be saved beside its output file.
+    bool isSavingOutputLog() const;
     /// @return True if HDR was detected in the currently selected input video.
     bool isInputHdrDetected() const;
     /// @return True if the user enabled the post-process HDR10 conversion.
@@ -211,6 +215,7 @@ class SettingsWindow : public QDialog {
     QRadioButton *inputVideoOptionRadioButton;
     QRadioButton *graphicsFileOptionRadioButton;
     QCheckBox *saveOutputVideoCheckBox;
+    QCheckBox *saveOutputLogCheckBox = nullptr;
     QCheckBox *textureCacheCheckBox;
     QSpinBox *cacheDelaySpinBox;
     QSpinBox *cacheSizeSpinBox;
@@ -256,6 +261,8 @@ class SettingsWindow : public QDialog {
     QComboBox *pngLevelComboBox = nullptr;
     QCheckBox *generateCheckBox = nullptr;
     QSpinBox *generateIntervalSpinBox = nullptr;
+    QScrollArea *settingsScrollArea = nullptr;
+    QWidget *settingsContent = nullptr;
 
     // Responsive layout: groups are reflowed between 1 and 2 columns
     // depending on the dialog width when the user resizes the window.
@@ -280,6 +287,7 @@ class SettingsWindow : public QDialog {
     bool useInputVideoFile;
     bool useGraphicsFile;
     bool saveOutputVideoFile;
+    bool saveOutputLog = false;
     QString graphicsFile;
     int graphicsDuration;
     QString modelFile;

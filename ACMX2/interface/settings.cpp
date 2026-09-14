@@ -807,6 +807,8 @@ void SettingsWindow::init() {
     screenResolutionComboBox->setCurrentIndex(0);
 
     saveOutputVideoCheckBox = new QCheckBox("Save Output to Video File", this);
+    saveOutputLogCheckBox = new QCheckBox("Save Log when writing file", this);
+    saveOutputLogCheckBox->setToolTip("Save this render's launcher and engine output as filename.mp4.log beside the video.");
     outputVideoFileLineEdit = new QLineEdit(this);
     outputVideoFileLineEdit->setReadOnly(true);
     browseOutputVideoButton = new QPushButton("Browse", this);
@@ -1048,7 +1050,8 @@ void SettingsWindow::init() {
     r = 0;
     outputGrid->addWidget(new QLabel("Screen Resolution:", this), r, 0);
     outputGrid->addWidget(screenResolutionComboBox, r, 1);
-    outputGrid->addWidget(saveOutputVideoCheckBox, ++r, 0, 1, 2);
+    outputGrid->addWidget(saveOutputVideoCheckBox, ++r, 0);
+    outputGrid->addWidget(saveOutputLogCheckBox, r, 1);
     outputGrid->addWidget(new QLabel("Output File:", this), ++r, 0);
     auto *outputRow = new QHBoxLayout;
     outputRow->setSpacing(4);
@@ -1189,11 +1192,18 @@ void SettingsWindow::init() {
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
 
+    settingsContent = new QWidget(this);
+    settingsContent->setLayout(groupsRow);
+    settingsScrollArea = new QScrollArea(this);
+    settingsScrollArea->setWidget(settingsContent);
+    settingsScrollArea->setWidgetResizable(true);
+    settingsScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    settingsScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(12, 12, 12, 12);
     mainLayout->setSpacing(8);
-    mainLayout->addLayout(groupsRow, 1);
-    mainLayout->addStretch();
+    mainLayout->addWidget(settingsScrollArea, 1);
     mainLayout->addLayout(buttonLayout);
     setLayout(mainLayout);
     setWindowTitle("Settings");
@@ -1346,6 +1356,9 @@ void SettingsWindow::init() {
     connect(saveOutputVideoCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         outputVideoFileLineEdit->setEnabled(checked);
         browseOutputVideoButton->setEnabled(checked);
+        saveOutputLogCheckBox->setEnabled(checked);
+        if (!checked)
+            saveOutputLogCheckBox->setChecked(false);
         if (checked)
             writePngCheckBox->setChecked(false);
         bool enableAudio = checked && inputVideoOptionRadioButton->isChecked();
@@ -1398,6 +1411,7 @@ void SettingsWindow::init() {
     browseGraphicsButton->setEnabled(false);
     outputVideoFileLineEdit->setEnabled(false);
     browseOutputVideoButton->setEnabled(false);
+    saveOutputLogCheckBox->setEnabled(false);
     pngOutputDirectoryLineEdit->setEnabled(false);
     browsePngOutputDirectoryButton->setEnabled(false);
 
@@ -1464,11 +1478,15 @@ void SettingsWindow::reflowGroupColumns(int columns) {
             groupsRow->setStretch(1, 0);
         }
     }
+    if (settingsContent && groupsRow) {
+        settingsContent->setMinimumHeight(groupsRow->sizeHint().height());
+        settingsContent->updateGeometry();
+    }
 }
 
 void SettingsWindow::resizeEvent(QResizeEvent *event) {
     QDialog::resizeEvent(event);
-    const int w = width();
+    const int w = settingsScrollArea ? settingsScrollArea->viewport()->width() : width();
     const int columns = (w >= 720) ? 2 : 1;
     reflowGroupColumns(columns);
 }
@@ -1530,7 +1548,9 @@ void SettingsWindow::loadUiState() {
     inputVideoFileLineEdit->setText(appSettings.value("interface/input_video", "").toString());
     graphicsFileLineEdit->setText(appSettings.value("interface/graphics_file", "").toString());
 
-    saveOutputVideoCheckBox->setChecked(appSettings.value("interface/save_output", false).toBool());
+    const bool save_output = appSettings.value("interface/save_output", false).toBool();
+    saveOutputVideoCheckBox->setChecked(save_output);
+    saveOutputLogCheckBox->setChecked(save_output && appSettings.value("interface/save_output_log", false).toBool());
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
     writePngCheckBox->setChecked(appSettings.value("interface/write_png", false).toBool());
@@ -1630,6 +1650,7 @@ void SettingsWindow::saveUiState() {
     appSettings.setValue("interface/graphics_file", graphicsFileLineEdit->text());
 
     appSettings.setValue("interface/save_output", saveOutputVideoCheckBox->isChecked());
+    appSettings.setValue("interface/save_output_log", saveOutputLogCheckBox->isChecked());
     appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
     appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
     appSettings.setValue("interface/write_png", writePngCheckBox->isChecked());
@@ -1695,6 +1716,8 @@ bool SettingsWindow::isUsingInputVideoFile() const { return useInputVideoFile; }
 bool SettingsWindow::isUsingGraphicsFile() const { return useGraphicsFile; }
 
 bool SettingsWindow::isSavingToOutputVideoFile() const { return saveOutputVideoFile; }
+
+bool SettingsWindow::isSavingOutputLog() const { return saveOutputLog; }
 
 bool SettingsWindow::isInputHdrDetected() const { return inputHdrDetected; }
 
@@ -1929,6 +1952,7 @@ void SettingsWindow::acceptSettings() {
     useInputVideoFile = inputVideoOptionRadioButton->isChecked();
     useGraphicsFile = graphicsFileOptionRadioButton->isChecked();
     saveOutputVideoFile = saveOutputVideoCheckBox->isChecked();
+    saveOutputLog = saveOutputLogCheckBox->isChecked() && saveOutputVideoFile;
 
     if (useInputVideoFile) {
         if (inputVideoFileLineEdit->text().isEmpty()) {

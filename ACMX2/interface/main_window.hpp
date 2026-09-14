@@ -235,6 +235,8 @@ class MainWindow : public QMainWindow {
     QString graphics_file;
     QString prefix_path;
     QString output_file;
+    bool save_output_log = false;
+    QFile output_run_log;
     double output_fps = 24.0f;
     QString encode_preset = "medium";
     QString encode_tune; // empty => "none"
@@ -260,6 +262,9 @@ class MainWindow : public QMainWindow {
     /// @param include_extra_arguments Append the persisted user arguments when true.
     /// @return true if arguments were built, false on user-facing error.
     bool buildRunArguments(QStringList &arguments, PendingAcmxvkAction resume_action = PendingAcmxvkAction::None, bool include_extra_arguments = true);
+    void beginOutputRunLog(const QString &command);
+    void appendOutputRunLog(const QString &message);
+    void finishOutputRunLog(int exitCode, QProcess::ExitStatus exitStatus);
     /// @brief Run ffmpeg to convert the just-produced acmx2 output (assumed
     ///        HLG HDR) into HDR10 (HEVC NVENC, BT.2020 / SMPTE2084) and pipe
     ///        ffmpeg's stdout/stderr to the main log window.
