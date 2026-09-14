@@ -1218,7 +1218,7 @@ void SettingsWindow::init() {
     setMinimumSize(420, 320);
     // Give both responsive columns enough room for descriptive encoder names,
     // option buttons, and status text without requiring an initial resize.
-    QSize preferred(960, 840);
+    QSize preferred(1280, 840);
     if (QScreen *scr = QGuiApplication::primaryScreen()) {
         const QSize avail = scr->availableSize();
         preferred.setWidth(std::min(preferred.width(), avail.width() - 40));
@@ -1227,6 +1227,10 @@ void SettingsWindow::init() {
     resize(preferred);
     // Initial flow uses 2 columns; resizeEvent will adapt as needed.
     reflowGroupColumns(2);
+    QTimer::singleShot(0, this, [this] {
+        const int available_width = settingsScrollArea ? settingsScrollArea->viewport()->width() : width();
+        reflowGroupColumns(available_width >= 720 ? 2 : 1);
+    });
 
     // ── Signals ───────────────────────────────────────────────────────
     connect(cameraIndexComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsWindow::onCameraDeviceChanged);
