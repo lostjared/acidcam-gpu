@@ -3640,7 +3640,12 @@ namespace acmxvk {
         if (options.png_output) {
             png_output_directory = options.png_output_directory;
             create_output_directory(png_output_directory);
-            std::cout << "acmxvk: writing PNG sequence to " << png_output_directory.string() << '\n';
+            const int png_interval = std::max(1, options.generate_interval);
+            std::cout << "acmxvk: writing PNG sequence to " << png_output_directory.string();
+            if (png_interval > 1) {
+                std::cout << " (every " << png_interval << "th frame)";
+            }
+            std::cout << '\n';
         }
 
         if (options.generate_interval > 0) {
@@ -3652,7 +3657,7 @@ namespace acmxvk {
                 generate_output_directory = "camera-generate";
             }
             create_output_directory(generate_output_directory);
-            std::cout << "acmxvk: saving every " << options.generate_interval << "th frame to " <<  png_output_directory.string() << '\n';
+            std::cout << "acmxvk: saving every " << options.generate_interval << "th frame to " << png_output_directory.string() << '\n';
         }
 
         if (!options.output_file.empty() && !options.png_output) {
@@ -3838,17 +3843,19 @@ namespace acmxvk {
                 }
             }
         }
-        if (options.png_output && options.generate_interval >= 1) {
-	    if((png_frame_count%options.generate_interval) == 0) {
-	            SnapshotWriter::savePng(frame_path(png_output_directory, generated_frame_count), output_pixels, recording_width, recording_height, options.png_level);
-		    if(options.generate_interval > 1)
-			    std::cout << "acmxvk: Wrote png  in sequence: " << generated_frame_count << "/" << png_frame_count << "\n";
-		    ++generated_frame_count;
-	    }
+        if (options.png_output) {
+            const int png_interval = std::max(1, options.generate_interval);
+            if ((png_frame_count % static_cast<std::uint64_t>(png_interval)) == 0U) {
+                SnapshotWriter::savePng(frame_path(png_output_directory, generated_frame_count), output_pixels, recording_width, recording_height, options.png_level);
+                if (png_interval > 1) {
+                    std::cout << "acmxvk: Wrote PNG in sequence: " << generated_frame_count << "/" << png_frame_count << "\n";
+                }
+                ++generated_frame_count;
+            }
             ++png_frame_count;
         }
-        
-	++output_frame_count;
+
+        ++output_frame_count;
         emitHeadlessProgress(false);
 
         if (options.duration > 0.0) {
