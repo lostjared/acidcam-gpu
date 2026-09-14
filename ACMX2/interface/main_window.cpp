@@ -4539,8 +4539,9 @@ void MainWindow::runSelected() {
         arguments << "--png" << png_output_directory;
     }
 
-    if (generate_enabled && generate_interval > 0) {
-        arguments << "--generate" << QString::number(generate_interval);
+    const int effective_generate_interval = generate_enabled ? generate_interval : (active_backend == acmx2::Backend::Acmxvk && png_output ? 1 : 0);
+    if (effective_generate_interval > 0) {
+        arguments << "--generate" << QString::number(effective_generate_interval);
     }
 
     if (watermark_enabled && !watermark_text.isEmpty()) {
@@ -4894,8 +4895,9 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
         arguments << "--png" << png_output_directory;
     }
 
-    if (generate_enabled && generate_interval > 0) {
-        arguments << "--generate" << QString::number(generate_interval);
+    const int effective_generate_interval = generate_enabled ? generate_interval : (active_backend == acmx2::Backend::Acmxvk && png_output ? 1 : 0);
+    if (effective_generate_interval > 0) {
+        arguments << "--generate" << QString::number(effective_generate_interval);
     }
 
     if (watermark_enabled && !watermark_text.isEmpty()) {
