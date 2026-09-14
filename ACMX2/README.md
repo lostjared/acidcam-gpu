@@ -2,7 +2,7 @@
 
 ACMX2 is ACMX's established OpenGL/libmx2 rendering backend. Its engine version
 is **2.101.1**; it is controlled either directly from the command line or by the
-shared ACMX Qt interface, currently version **2.138.0**. For the overall project,
+shared ACMX Qt interface, currently version **2.139.0**. For the overall project,
 the Vulkan backend, and cross-backend build helpers, start with the
 [root ACMX README](https://github.com/lostjared/acidcam-gpu/blob/main/README.md). The Vulkan-specific documentation remains in
 [ACMXVK/README.md](../ACMXVK/README.md).
