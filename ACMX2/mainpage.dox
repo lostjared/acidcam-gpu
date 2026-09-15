@@ -66,10 +66,11 @@ and FFT history, custom uniforms, audio/MIDI control, 3D model texturing,
 recording, snapshots, live shader rebuild/reload, and surface-free headless
 recording. Vulkan shaders require the ACMXVK descriptor ABI and SPIR-V build
 workflow; legacy ACMX2 GLSL is not automatically interchangeable. Optional
-Stable Diffusion processing keeps one local <tt>sd-server</tt> model loaded for
-image-to-image frames, LoRAs, and server-side ESRGAN. A separate ESRGAN-only
-mode can upscale frames before the Vulkan shader chain without loading a
-diffusion model.
+Stable Diffusion processing uses the project's maintained
+<a href="https://github.com/lostjared/stable-diffusion.cpp">stable-diffusion.cpp
+fork</a> and keeps one local <tt>sd-server</tt> model loaded for image-to-image
+frames, LoRAs, and server-side ESRGAN. A separate ESRGAN-only mode can upscale
+frames before the Vulkan shader chain without loading a diffusion model.
 
 The project currently targets native Linux, macOS/Apple Silicon through
 MoltenVK, and Windows. Portable builds do not require CUDA. CUDA acceleration,
@@ -80,9 +81,9 @@ codec, camera, and hardware combinations continue to be tested and hardened.
 
 The portable Linux build includes the Qt interface, ACMX2 and ACMXVK engines,
 RtAudio, MIDI support, shader resources, and a Vulkan-enabled
-<tt>stable-diffusion.cpp</tt> <tt>sd-server</tt> without requiring NVIDIA CUDA.
-Users supply their own Stable Diffusion, LoRA, and ESRGAN model files. Download
-it from the
+<a href="https://github.com/lostjared/stable-diffusion.cpp">stable-diffusion.cpp
+fork</a>'s <tt>sd-server</tt> without requiring NVIDIA CUDA. Users supply their
+own Stable Diffusion, LoRA, and ESRGAN model files. Download it from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX Linux Flatpak release page</a>.
 The current bundle is <b>ACMX v2.139.0</b> (71,566,960 bytes; 69 MiB) with
 SHA-256

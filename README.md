@@ -37,11 +37,12 @@ optional features for supported NVIDIA configurations.
   Inception V3 feature models, temporal feedback, octaves, random animation,
   channel targeting, and live interface control.
 - **Stable Diffusion video** is an optional ACMXVK integration with a compatible
-  `stable-diffusion.cpp` `sd-server`. It keeps the model loaded for img2img
-  processing, supports preview and constant-frame-rate recording, and can use
-  multiple weighted LoRA adapters. It also supports Vulkan compute upscale,
-  server-side ESRGAN during image-to-image processing, or standalone ESRGAN
-  upscale-only preprocessing before the shader chain, with a configurable
+  [`stable-diffusion.cpp`](https://github.com/lostjared/stable-diffusion.cpp)
+  `sd-server` from the project's maintained fork. It keeps the model loaded for
+  img2img processing, supports preview and constant-frame-rate recording, and
+  can use multiple weighted LoRA adapters. It also supports Vulkan compute
+  upscale, server-side ESRGAN during image-to-image processing, or standalone
+  ESRGAN upscale-only preprocessing before the shader chain, with a configurable
   neural working resolution.
 
 ACMXVK is the active expansion path, but it is not a drop-in shader replacement

@@ -131,11 +131,12 @@ effects render to an offscreen image that becomes the model texture.
 @section acmxvk_stable_diffusion Stable Diffusion and ESRGAN Processing
 
 When built with <tt>-DWITH_STABLE_DIFFUSION=ON</tt>, ACMXVK can launch one local
-compatible <tt>stable-diffusion.cpp</tt> <tt>sd-server</tt> and retain the
-selected image-to-image model across video frames. The generated image enters
-the normal Vulkan shader chain, so fragment and compute effects remain usable
-as post-processing stages. Image-to-image mode supports prompts, negative
-prompts, seed and sampler controls, weighted LoRA adapters, preview, and
+<a href="https://github.com/lostjared/stable-diffusion.cpp">project-maintained
+stable-diffusion.cpp fork</a> <tt>sd-server</tt> and retain the selected
+image-to-image model across video frames. The generated image enters the normal
+Vulkan shader chain, so fragment and compute effects remain usable as
+post-processing stages. Image-to-image mode supports prompts, negative prompts,
+seed and sampler controls, weighted LoRA adapters, preview, and
 constant-frame-rate encoded output.
 
 The server can also provide ESRGAN or RealESRGAN upscale. In full
