@@ -268,6 +268,9 @@ namespace acmxvk::stable_diffusion {
         }
 
         [[nodiscard]] cv::Size neuralUpscaleWorkingSize(const Settings &settings, const cv::Size &fallback) {
+            if (settings.upscale_working_width > 0 && settings.upscale_working_height > 0) {
+                return {settings.upscale_working_width, settings.upscale_working_height};
+            }
             int width = settings.upscale_width > 0 ? settings.upscale_width : fallback.width;
             int height = settings.upscale_height > 0 ? settings.upscale_height : fallback.height;
             constexpr double MAX_WORKING_PIXELS = 1280.0 * 720.0;
@@ -657,7 +660,18 @@ namespace acmxvk::stable_diffusion {
         Json::Value root;
         std::string encoded_output;
         if (settings.upscale_only) {
-            root["image"] = encoded_input;
+            const cv::Size working_size = neuralUpscaleWorkingSize(settings, rgba.size());
+            cv::Mat working_input = rgba;
+            if (working_input.size() != working_size) {
+                cv::resize(working_input, working_input, working_size, 0.0, 0.0, cv::INTER_LANCZOS4);
+            }
+            cv::Mat working_bgr;
+            cv::cvtColor(working_input, working_bgr, cv::COLOR_RGBA2BGR);
+            std::vector<std::uint8_t> working_png;
+            if (!cv::imencode(".png", working_bgr, working_png)) {
+                throw std::runtime_error("unable to encode Stable Diffusion ESRGAN input frame");
+            }
+            root["image"] = encodeBase64(working_png);
             root["upscaler"] = settings.upscale_model.stem().string();
             root["upscale_repeats"] = 1;
             root["upscale_tile_size"] = 128;

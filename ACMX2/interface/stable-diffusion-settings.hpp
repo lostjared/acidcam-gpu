@@ -27,6 +27,8 @@ struct StableDiffusionConfiguration {
     int server_port = 1234;
     int width = 576;
     int height = 320;
+    int upscale_working_width = 0;
+    int upscale_working_height = 0;
     int steps = 12;
     double strength = 0.35;
     double cfg_scale = 5.0;
@@ -91,6 +93,7 @@ class StableDiffusionSettingsDialog : public QDialog {
     QCheckBox *server_upscale_check_box = nullptr;
     QLineEdit *upscale_model_edit = nullptr;
     QPushButton *browse_upscale_model_button = nullptr;
+    QLineEdit *upscale_working_resolution_edit = nullptr;
 };
 
 #endif

@@ -343,6 +343,8 @@ class MainWindow : public QMainWindow {
     int stable_diffusion_server_port = 1234;
     int stable_diffusion_width = 576;
     int stable_diffusion_height = 320;
+    int stable_diffusion_upscale_working_width = 0;
+    int stable_diffusion_upscale_working_height = 0;
     int stable_diffusion_steps = 12;
     double stable_diffusion_strength = 0.35;
     double stable_diffusion_cfg_scale = 5.0;

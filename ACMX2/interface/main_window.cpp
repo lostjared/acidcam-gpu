@@ -1299,6 +1299,8 @@ void MainWindow::loadSessionSettings() {
     stable_diffusion_server_port = std::clamp(settings.value("stable_diffusion/port", 1234).toInt(), 1024, 65535);
     stable_diffusion_width = std::clamp(settings.value("stable_diffusion/width", 576).toInt(), 64, 2048);
     stable_diffusion_height = std::clamp(settings.value("stable_diffusion/height", 320).toInt(), 64, 2048);
+    stable_diffusion_upscale_working_width = std::clamp(settings.value("stable_diffusion/upscale_working_width", 0).toInt(), 0, 4096);
+    stable_diffusion_upscale_working_height = std::clamp(settings.value("stable_diffusion/upscale_working_height", 0).toInt(), 0, 4096);
     stable_diffusion_steps = std::clamp(settings.value("stable_diffusion/steps", 12).toInt(), 1, 150);
     stable_diffusion_strength = std::clamp(settings.value("stable_diffusion/strength", 0.35).toDouble(), 0.01, 1.0);
     stable_diffusion_cfg_scale = std::clamp(settings.value("stable_diffusion/cfg_scale", 5.0).toDouble(), 0.0, 50.0);
@@ -3803,6 +3805,8 @@ void MainWindow::menuStableDiffusionSettings() {
         stable_diffusion_server_port = config.server_port;
         stable_diffusion_width = config.width;
         stable_diffusion_height = config.height;
+        stable_diffusion_upscale_working_width = config.upscale_working_width;
+        stable_diffusion_upscale_working_height = config.upscale_working_height;
         stable_diffusion_steps = config.steps;
         stable_diffusion_strength = config.strength;
         stable_diffusion_cfg_scale = config.cfg_scale;
@@ -3933,6 +3937,9 @@ void MainWindow::appendStableDiffusionArguments(QStringList &arguments) const {
         arguments << "--sd-server-arg" << argument;
     }
     arguments << "--sd-server-port" << QString::number(stable_diffusion_server_port);
+    if (stable_diffusion_upscale_working_width > 0 && stable_diffusion_upscale_working_height > 0) {
+        arguments << "--sd-upscale-size" << QString("%1x%2").arg(stable_diffusion_upscale_working_width).arg(stable_diffusion_upscale_working_height);
+    }
     if (!stable_diffusion_upscale_only) {
         arguments << "--sd-size" << QString("%1x%2").arg(stable_diffusion_width).arg(stable_diffusion_height);
         arguments << "--sd-steps" << QString::number(stable_diffusion_steps);

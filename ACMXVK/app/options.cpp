@@ -581,6 +581,12 @@ namespace acmxvk {
                     throw std::runtime_error("--sd-size dimensions must be multiples of 64 and no "
                                              "larger than 2048");
                 }
+            } else if (option == "--sd-upscale-size") {
+                options.stable_diffusion_option_specified = true;
+                parseDimensions(optionValue(index, argc, argv, option), options.stable_diffusion_upscale_working_width, options.stable_diffusion_upscale_working_height, option);
+                if (options.stable_diffusion_upscale_working_width < 64 || options.stable_diffusion_upscale_working_height < 64 || options.stable_diffusion_upscale_working_width > 4096 || options.stable_diffusion_upscale_working_height > 4096) {
+                    throw std::runtime_error("--sd-upscale-size dimensions must be between 64 and 4096");
+                }
             } else if (option == "--sd-steps") {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_steps = parseInteger(optionValue(index, argc, argv, option), option);
@@ -1255,6 +1261,7 @@ namespace acmxvk {
                << "      --sd-lora <file>        Add LoRA model (repeatable; same folder)\n"
                << "      --sd-lora-strength <N>  Preceding LoRA multiplier, -10 to 10\n"
                << "      --sd-size <WxH>         Neural size, multiples of 64 (default 576x320)\n"
+               << "      --sd-upscale-size <WxH> ESRGAN working size before final output resize\n"
                << "      --sd-steps <N>          Sampling steps, 1-150 (default 12)\n"
                << "      --sd-strength <N>       Image denoising strength, 0-1 (default 0.35)\n"
                << "      --sd-cfg-scale <N>      Text guidance, 0-50 (default 5.0)\n"

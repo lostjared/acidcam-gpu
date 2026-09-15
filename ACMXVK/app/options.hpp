@@ -53,6 +53,8 @@ namespace acmxvk {
         int dream_smoothing = 0;
         int stable_diffusion_width = 576;
         int stable_diffusion_height = 320;
+        int stable_diffusion_upscale_working_width = 0;
+        int stable_diffusion_upscale_working_height = 0;
         int stable_diffusion_steps = 12;
         int stable_diffusion_seed = 1234;
         int stable_diffusion_server_port = 1234;

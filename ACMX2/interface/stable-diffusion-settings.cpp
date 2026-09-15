@@ -144,6 +144,10 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent) : 
     upscale_model_edit->setReadOnly(true);
     upscale_model_edit->setPlaceholderText("Select an ESRGAN/RealESRGAN model...");
     browse_upscale_model_button = new QPushButton("Browse...", this);
+    upscale_working_resolution_edit = new QLineEdit(this);
+    upscale_working_resolution_edit->setPlaceholderText("Auto (output capped at 1280x720)");
+    upscale_working_resolution_edit->setToolTip("Optional ESRGAN working resolution, WIDTHxHEIGHT. "
+                                                "The neural upscaler runs at this size before ACMXVK resizes to the final output.");
 
     auto *model_group = new QGroupBox("Image-to-Image Model", this);
     auto *model_layout = new QFormLayout(model_group);
@@ -183,6 +187,7 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent) : 
     upscale_model_row->addWidget(upscale_model_edit, 1);
     upscale_model_row->addWidget(browse_upscale_model_button);
     generation_layout->addRow("Upscale model:", upscale_model_row);
+    generation_layout->addRow("ESRGAN working resolution:", upscale_working_resolution_edit);
 
     auto *server_group = new QGroupBox("Local sd-server", this);
     auto *server_layout = new QFormLayout(server_group);
@@ -265,6 +270,7 @@ StableDiffusionConfiguration StableDiffusionSettingsDialog::configuration() cons
     result.server_arguments = server_arguments_edit->text().trimmed();
     result.server_port = server_port_spin_box->value();
     parse_stable_resolution(resolution_combo_box->currentText(), result.width, result.height);
+    parse_stable_resolution(upscale_working_resolution_edit->text(), result.upscale_working_width, result.upscale_working_height);
     result.steps = steps_spin_box->value();
     result.strength = strength_spin_box->value();
     result.cfg_scale = cfg_scale_spin_box->value();
@@ -453,6 +459,16 @@ bool StableDiffusionSettingsDialog::validate_settings() {
         QMessageBox::warning(this, "Upscale Model Required", "Enable the sd-server ESRGAN model and select an existing model.");
         return false;
     }
+    const QString working_resolution = upscale_working_resolution_edit->text().trimmed();
+    if (!working_resolution.isEmpty()) {
+        int working_width = 0;
+        int working_height = 0;
+        if (!parse_stable_resolution(working_resolution, working_width, working_height) || working_width < 64 || working_width > 4096 || working_height < 64 || working_height > 4096) {
+            QMessageBox::warning(this, "Invalid ESRGAN Working Resolution", "Enter WIDTHxHEIGHT between 64 and 4096 pixels, or leave this field blank for automatic sizing.");
+            return false;
+        }
+        upscale_working_resolution_edit->setText(resolution_text(working_width, working_height));
+    }
     int width = 0;
     int height = 0;
     if (!parse_stable_resolution(resolution_combo_box->currentText(), width, height)) {
@@ -507,6 +523,11 @@ void StableDiffusionSettingsDialog::load_ui_state() {
     sampler_combo_box->setCurrentText(settings.value("stable_diffusion/sampler", "euler_a").toString());
     scheduler_combo_box->setCurrentText(settings.value("stable_diffusion/scheduler", "discrete").toString());
     upscale_model_edit->setText(settings.value("stable_diffusion/upscale_model_file").toString());
+    const int upscale_working_width = settings.value("stable_diffusion/upscale_working_width", 0).toInt();
+    const int upscale_working_height = settings.value("stable_diffusion/upscale_working_height", 0).toInt();
+    if (upscale_working_width > 0 && upscale_working_height > 0) {
+        upscale_working_resolution_edit->setText(resolution_text(upscale_working_width, upscale_working_height));
+    }
     server_upscale_check_box->setChecked(settings.value("stable_diffusion/server_upscale", false).toBool());
     upscale_check_box->setChecked(settings.value("stable_diffusion/upscale", false).toBool());
     upscale_only_check_box->setChecked(settings.value("stable_diffusion/upscale_only", false).toBool());
@@ -541,6 +562,8 @@ void StableDiffusionSettingsDialog::save_ui_state() {
     settings.setValue("stable_diffusion/upscale_only", current.upscale_only);
     settings.setValue("stable_diffusion/server_upscale", server_upscale_check_box->isChecked());
     settings.setValue("stable_diffusion/upscale_model_file", upscale_model_edit->text().trimmed());
+    settings.setValue("stable_diffusion/upscale_working_width", current.upscale_working_width);
+    settings.setValue("stable_diffusion/upscale_working_height", current.upscale_working_height);
     settings.sync();
 }
 
@@ -572,4 +595,5 @@ void StableDiffusionSettingsDialog::update_enabled_state() {
     const bool server_upscale_enabled = enabled && (server_upscale_check_box->isChecked() || upscale_only_check_box->isChecked());
     upscale_model_edit->setEnabled(server_upscale_enabled);
     browse_upscale_model_button->setEnabled(server_upscale_enabled);
+    upscale_working_resolution_edit->setEnabled(server_upscale_enabled);
 }

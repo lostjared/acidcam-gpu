@@ -899,6 +899,8 @@ namespace acmxvk {
         settings.height = options.stable_diffusion_height;
         settings.upscale_width = options.width;
         settings.upscale_height = options.height;
+        settings.upscale_working_width = options.stable_diffusion_upscale_working_width;
+        settings.upscale_working_height = options.stable_diffusion_upscale_working_height;
         settings.steps = options.stable_diffusion_steps;
         settings.seed = options.stable_diffusion_seed;
         settings.port = options.stable_diffusion_server_port;

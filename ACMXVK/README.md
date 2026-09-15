@@ -634,8 +634,14 @@ fragment/compute chain:
     --resolution 1920x1080 \
     --fragment shaders/passthrough.frag.spv \
     --sd-upscale-only \
+    --sd-upscale-size 960x540 \
     --upscale-model /path/to/RealESRGAN_x4plus.safetensors
 ```
+
+`--sd-upscale-size WxH` optionally selects the resolution sent to ESRGAN before
+its 4× pass and ACMXVK's final output resize. Omit it to retain automatic
+sizing, which caps the ESRGAN working image at 1280×720 pixels. The same field
+is available as **ESRGAN working resolution** in Stable Diffusion Settings.
 
 The Qt interface exposes the same choice as **Use ESRGAN upscale only before
 shaders**. It disables diffusion-model, prompt, sampler, and LoRA controls so
