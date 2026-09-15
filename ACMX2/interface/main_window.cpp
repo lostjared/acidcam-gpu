@@ -1288,7 +1288,8 @@ void MainWindow::loadSessionSettings() {
         const double multiplier = index < stable_diffusion_lora_multiplier_values.size() ? stable_diffusion_lora_multiplier_values.at(index).toDouble(&multiplier_ok) : 1.0;
         stable_diffusion_lora_multipliers.append(multiplier_ok ? std::clamp(multiplier, -10.0, 10.0) : 1.0);
     }
-    if (settings.value("stable_diffusion/server_upscale", false).toBool()) {
+    stable_diffusion_upscale_only = settings.value("stable_diffusion/upscale_only", false).toBool();
+    if (stable_diffusion_upscale_only || settings.value("stable_diffusion/server_upscale", false).toBool()) {
         stable_diffusion_upscale_model = settings.value("stable_diffusion/upscale_model_file").toString();
     }
     stable_diffusion_prompt = settings.value("stable_diffusion/prompt").toString();
@@ -1304,7 +1305,7 @@ void MainWindow::loadSessionSettings() {
     stable_diffusion_seed = settings.value("stable_diffusion/seed", 1234).toInt();
     stable_diffusion_sampler = settings.value("stable_diffusion/sampler", "euler_a").toString();
     stable_diffusion_scheduler = settings.value("stable_diffusion/scheduler", "discrete").toString();
-    stable_diffusion_upscale = settings.value("stable_diffusion/upscale", false).toBool();
+    stable_diffusion_upscale = settings.value("stable_diffusion/upscale", false).toBool() && !stable_diffusion_upscale_only;
     cuda_device = settings.value("interface/cuda_device", 0).toInt();
     time_speed = settings.value("interface/time_speed", 1.0).toFloat();
     normalized_time = settings.value("interface/normalized_time", false).toBool();
@@ -3809,18 +3810,20 @@ void MainWindow::menuStableDiffusionSettings() {
         stable_diffusion_sampler = config.sampler;
         stable_diffusion_scheduler = config.scheduler;
         stable_diffusion_upscale = config.upscale;
+        stable_diffusion_upscale_only = config.upscale_only;
 
         if (stable_diffusion_enabled) {
             Log(tr("Stable Diffusion Settings Applied: %1, %2x%3, "
                    "%4 step(s)%5%6; changes apply on the next launch")
-                    .arg(QFileInfo(stable_diffusion_model).fileName())
+                    .arg(stable_diffusion_upscale_only ? tr("ESRGAN upscale only") : QFileInfo(stable_diffusion_model).fileName())
                     .arg(stable_diffusion_width)
                     .arg(stable_diffusion_height)
                     .arg(stable_diffusion_steps)
-                    .arg(stable_diffusion_upscale                    ? tr(", compute upscale")
+                    .arg(stable_diffusion_upscale_only               ? tr(", before shader chain")
+                         : stable_diffusion_upscale                  ? tr(", compute upscale")
                          : !stable_diffusion_upscale_model.isEmpty() ? tr(", ESRGAN upscale")
                                                                      : QString())
-                    .arg(stable_diffusion_lora_files.isEmpty() ? QString() : tr(", %1 LoRA(s)").arg(stable_diffusion_lora_files.size())));
+                    .arg(stable_diffusion_upscale_only || stable_diffusion_lora_files.isEmpty() ? QString() : tr(", %1 LoRA(s)").arg(stable_diffusion_lora_files.size())));
         } else {
             Log("Stable Diffusion Disabled");
         }
@@ -3848,17 +3851,17 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
         error = tr("Stable Diffusion cannot be used with still-image input.");
         return false;
     }
-    if (!QFileInfo(stable_diffusion_model).isFile()) {
+    if (!stable_diffusion_upscale_only && !QFileInfo(stable_diffusion_model).isFile()) {
         error = tr("The configured Stable Diffusion model does not exist:\n%1").arg(stable_diffusion_model);
         return false;
     }
-    if (stable_diffusion_lora_files.size() != stable_diffusion_lora_multipliers.size()) {
+    if (!stable_diffusion_upscale_only && stable_diffusion_lora_files.size() != stable_diffusion_lora_multipliers.size()) {
         error = tr("The saved Stable Diffusion LoRA settings are incomplete. "
                    "Open Stable Diffusion Settings and apply them again.");
         return false;
     }
     QString lora_directory;
-    for (int index = 0; index < stable_diffusion_lora_files.size(); ++index) {
+    for (int index = 0; !stable_diffusion_upscale_only && index < stable_diffusion_lora_files.size(); ++index) {
         const QString filename = stable_diffusion_lora_files.at(index);
         const QFileInfo file_info(filename);
         if (!file_info.isFile()) {
@@ -3884,7 +3887,11 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
                     .arg(stable_diffusion_upscale_model);
         return false;
     }
-    if (stable_diffusion_prompt.trimmed().isEmpty()) {
+    if (stable_diffusion_upscale_only && stable_diffusion_upscale_model.isEmpty()) {
+        error = tr("ESRGAN upscale-only mode requires an existing upscale model.");
+        return false;
+    }
+    if (!stable_diffusion_upscale_only && stable_diffusion_prompt.trimmed().isEmpty()) {
         error = tr("Enter a Stable Diffusion image-to-image prompt.");
         return false;
     }
@@ -3892,7 +3899,7 @@ bool MainWindow::validateStableDiffusionLaunch(QString &error) const {
         error = tr("Enter the sd-server executable name or path.");
         return false;
     }
-    if ((stable_diffusion_width % 64) != 0 || (stable_diffusion_height % 64) != 0) {
+    if (!stable_diffusion_upscale_only && ((stable_diffusion_width % 64) != 0 || (stable_diffusion_height % 64) != 0)) {
         error = tr("Stable Diffusion dimensions must be multiples of 64.");
         return false;
     }
@@ -3907,14 +3914,18 @@ void MainWindow::appendStableDiffusionArguments(QStringList &arguments) const {
     if (!stable_diffusion_enabled || active_backend != acmx2::Backend::Acmxvk) {
         return;
     }
-    arguments << "--sd-model" << stable_diffusion_model;
-    arguments << "--sd-prompt" << stable_diffusion_prompt;
-    if (!stable_diffusion_negative_prompt.trimmed().isEmpty()) {
-        arguments << "--sd-negative-prompt" << stable_diffusion_negative_prompt;
-    }
-    for (int index = 0; index < stable_diffusion_lora_files.size(); ++index) {
-        arguments << "--sd-lora" << stable_diffusion_lora_files.at(index);
-        arguments << "--sd-lora-strength" << QString::number(stable_diffusion_lora_multipliers.at(index), 'g', 12);
+    if (stable_diffusion_upscale_only) {
+        arguments << "--sd-upscale-only";
+    } else {
+        arguments << "--sd-model" << stable_diffusion_model;
+        arguments << "--sd-prompt" << stable_diffusion_prompt;
+        if (!stable_diffusion_negative_prompt.trimmed().isEmpty()) {
+            arguments << "--sd-negative-prompt" << stable_diffusion_negative_prompt;
+        }
+        for (int index = 0; index < stable_diffusion_lora_files.size(); ++index) {
+            arguments << "--sd-lora" << stable_diffusion_lora_files.at(index);
+            arguments << "--sd-lora-strength" << QString::number(stable_diffusion_lora_multipliers.at(index), 'g', 12);
+        }
     }
     arguments << "--sd-server" << stable_diffusion_server;
     const QStringList server_arguments = QProcess::splitCommand(stable_diffusion_server_arguments);
@@ -3922,13 +3933,15 @@ void MainWindow::appendStableDiffusionArguments(QStringList &arguments) const {
         arguments << "--sd-server-arg" << argument;
     }
     arguments << "--sd-server-port" << QString::number(stable_diffusion_server_port);
-    arguments << "--sd-size" << QString("%1x%2").arg(stable_diffusion_width).arg(stable_diffusion_height);
-    arguments << "--sd-steps" << QString::number(stable_diffusion_steps);
-    arguments << "--sd-strength" << QString::number(stable_diffusion_strength, 'g', 12);
-    arguments << "--sd-cfg-scale" << QString::number(stable_diffusion_cfg_scale, 'g', 12);
-    arguments << "--sd-seed" << QString::number(stable_diffusion_seed);
-    arguments << "--sd-sampler" << stable_diffusion_sampler;
-    arguments << "--sd-scheduler" << stable_diffusion_scheduler;
+    if (!stable_diffusion_upscale_only) {
+        arguments << "--sd-size" << QString("%1x%2").arg(stable_diffusion_width).arg(stable_diffusion_height);
+        arguments << "--sd-steps" << QString::number(stable_diffusion_steps);
+        arguments << "--sd-strength" << QString::number(stable_diffusion_strength, 'g', 12);
+        arguments << "--sd-cfg-scale" << QString::number(stable_diffusion_cfg_scale, 'g', 12);
+        arguments << "--sd-seed" << QString::number(stable_diffusion_seed);
+        arguments << "--sd-sampler" << stable_diffusion_sampler;
+        arguments << "--sd-scheduler" << stable_diffusion_scheduler;
+    }
     arguments << "--sd-quiet";
     if (stable_diffusion_upscale) {
         arguments << "--sd-upscale";

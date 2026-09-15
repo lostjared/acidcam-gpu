@@ -853,12 +853,15 @@ namespace acmxvk {
 
     void MainWindow::initializeStableDiffusion() {
 #ifdef ACMXVK_WITH_STABLE_DIFFUSION
-        if (options.stable_diffusion_model.empty()) {
+        if (options.stable_diffusion_model.empty() && !options.stable_diffusion_upscale_only) {
             return;
         }
-        const fs::path model = fs::absolute(options.stable_diffusion_model).lexically_normal();
-        if (!fs::is_regular_file(model)) {
-            throw std::runtime_error("Stable Diffusion model is not a regular file: " + model.string());
+        fs::path model;
+        if (!options.stable_diffusion_upscale_only) {
+            model = fs::absolute(options.stable_diffusion_model).lexically_normal();
+            if (!fs::is_regular_file(model)) {
+                throw std::runtime_error("Stable Diffusion model is not a regular file: " + model.string());
+            }
         }
         if (hdr_input_precision_enabled) {
             throw std::runtime_error("Stable Diffusion video preview currently supports SDR input only");
@@ -866,6 +869,7 @@ namespace acmxvk {
         stable_diffusion::Settings settings;
         settings.server_executable = options.stable_diffusion_server;
         settings.model = model;
+        settings.upscale_only = options.stable_diffusion_upscale_only;
         settings.server_arguments = options.stable_diffusion_server_arguments;
         for (const StableDiffusionLora &configured_lora : options.stable_diffusion_loras) {
             const fs::path lora_model = fs::absolute(configured_lora.file).lexically_normal();
@@ -904,8 +908,7 @@ namespace acmxvk {
         settings.quiet = options.stable_diffusion_quiet;
         const std::shared_ptr<std::atomic_bool> cancelled = stable_diffusion_cancelled;
         settings.cancelled = [cancelled] { return cancelled->load(std::memory_order_relaxed) || HEADLESS_SHUTDOWN_REQUESTED != 0; };
-        std::cout << "acmxvk: loading Stable Diffusion model asynchronously; "
-                     "the preview will begin when the model is ready\n";
+        std::cout << "acmxvk: loading " << (settings.upscale_only ? "Stable Diffusion ESRGAN upscaler" : "Stable Diffusion model") << " asynchronously; the preview will begin when it is ready\n";
         stable_diffusion_initialization = std::async(std::launch::async, [settings = std::move(settings)]() mutable { return std::make_unique<stable_diffusion::Server>(std::move(settings)); });
         stable_diffusion_initialization_pending = true;
 #endif
@@ -935,7 +938,8 @@ namespace acmxvk {
         } else {
             std::cout << "acmxvk: Stable Diffusion frame processing enabled before "
                          "the Vulkan shader chain"
-                      << (options.stable_diffusion_upscale                  ? "; high-quality compute upscale enabled"
+                      << (options.stable_diffusion_upscale_only             ? "; sd-server ESRGAN upscale-only enabled"
+                          : options.stable_diffusion_upscale                ? "; high-quality compute upscale enabled"
                           : !options.stable_diffusion_upscale_model.empty() ? "; sd-server ESRGAN upscale enabled"
                                                                             : "")
                       << (options.output_file.empty() ? "; windowed preview mode\n" : "; MXWrite CFR output enabled\n");

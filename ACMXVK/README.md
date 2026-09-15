@@ -44,7 +44,7 @@ Stable Diffusion processing.
 | CUDA filters | Partial | Optional `acidcam-gpu` integration accepts filter chains and temporal-buffer sizes, keeps NVDEC video frames, camera RGBA, and input rotation resident on the GPU through filtering and Vulkan upload/history, and supports ACMX2-compatible Left/Right selection from the keyboard or MIDI maps. |
 | DNN effects | Implemented | Optional `-DWITH_OPENCV_DNN=ON` builds support ACMX2-compatible DexiNed edge detection, PP-HumanSeg foreground isolation/background composition, and generic YAML-configured image-to-image ONNX processing before the Vulkan shader chain. |
 | Deep Dream | Implemented | Optional `-DWITH_DEEP_DREAM=ON` builds use CUDA LibTorch with exported VGG16 or Inception V3 feature models. Pixel-gradient ascent can process camera, video, or image frames before the existing fragment/compute shader chain, with temporal feedback, original independent-frame modes, random animation, feature-layer/channel targeting, progressive octaves, jitter, gradient smoothing, FP16, optional acidcam-gpu-first ordering, interface live control, and a CUDA-resident capture-to-Vulkan path. |
-| Stable Diffusion video | Initial implementation | Optional `-DWITH_STABLE_DIFFUSION=ON` builds launch one local stable-diffusion.cpp `sd-server`, load a safetensors model once, and process video frames through image-to-image generation. Windowed preview feeds generated frames through the Vulkan shader chain; headless encoded output uses sequential constant-frame-rate MXWrite recording. |
+| Stable Diffusion video | Initial implementation | Optional `-DWITH_STABLE_DIFFUSION=ON` builds launch one local stable-diffusion.cpp `sd-server` for image-to-image processing with optional ESRGAN or Vulkan compute upscale, or standalone ESRGAN upscale-only preprocessing. Both paths feed the Vulkan shader chain; headless encoded output uses sequential constant-frame-rate MXWrite recording. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, Deep Dream configuration, and file-audio replacement are integrated into the ACMXVK workflow. |
 
@@ -621,6 +621,25 @@ shader chain. `--upscale-model` and `--sd-upscale` are mutually exclusive. In
 the interface, select **Use an sd-server ESRGAN upscale model** and browse to
 the model file in Stable Diffusion Settings. Neural upscaling requires a recent
 `sd-server` that provides the `/sdcpp/v1/img_gen` job API.
+
+For a lightweight pre-shader path that does not load a diffusion model, use
+`--sd-upscale-only` with an ESRGAN model. ACMXVK launches a current sd-server
+in standalone upscaler mode, sends each source frame to `/sdcpp/v1/upscale`,
+resizes the result to the requested ACMXVK output size, then runs the normal
+fragment/compute chain:
+
+```bash
+./build/acmxvk-sd/acmxvk \
+    --input input.mp4 \
+    --resolution 1920x1080 \
+    --fragment shaders/passthrough.frag.spv \
+    --sd-upscale-only \
+    --upscale-model /path/to/RealESRGAN_x4plus.safetensors
+```
+
+The Qt interface exposes the same choice as **Use ESRGAN upscale only before
+shaders**. It disables diffusion-model, prompt, sampler, and LoRA controls so
+the server consumes considerably less VRAM than the image-to-image path.
 
 Use `--sd-after-shaders` with headless encoded output to preserve the original
 shader-chain-to-SD path instead. That ordering is intentionally unavailable in

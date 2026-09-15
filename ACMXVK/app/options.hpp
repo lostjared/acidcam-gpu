@@ -143,6 +143,7 @@ namespace acmxvk {
         bool stable_diffusion_option_specified = false;
         bool stable_diffusion_after_shaders = false;
         bool stable_diffusion_upscale = false;
+        bool stable_diffusion_upscale_only = false;
         bool stable_diffusion_quiet = false;
         bool human_background = false;
         bool human_black_specified = false;

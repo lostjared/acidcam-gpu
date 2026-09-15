@@ -134,6 +134,9 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent) : 
     upscale_check_box = new QCheckBox("High-quality Vulkan compute upscale before shaders", this);
     upscale_check_box->setToolTip("Keep the native Stable Diffusion image size and run ACMXVK's "
                                   "bicubic detail-preserving compute stage before user shaders.");
+    upscale_only_check_box = new QCheckBox("Use ESRGAN upscale only before shaders (no image-to-image model)", this);
+    upscale_only_check_box->setToolTip("Run the selected ESRGAN model through sd-server before the ACMXVK shader chain. "
+                                       "No diffusion model, prompt, sampler, or LoRA is used.");
     server_upscale_check_box = new QCheckBox("Use an sd-server ESRGAN upscale model", this);
     server_upscale_check_box->setToolTip("Load an ESRGAN or RealESRGAN model in sd-server and use its neural "
                                          "upscaler instead of ACMXVK's Vulkan compute upscaler.");
@@ -174,6 +177,7 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent) : 
     generation_layout->addRow("Sampler:", sampler_combo_box);
     generation_layout->addRow("Scheduler:", scheduler_combo_box);
     generation_layout->addRow(upscale_check_box);
+    generation_layout->addRow(upscale_only_check_box);
     generation_layout->addRow(server_upscale_check_box);
     auto *upscale_model_row = new QHBoxLayout;
     upscale_model_row->addWidget(upscale_model_edit, 1);
@@ -220,6 +224,13 @@ StableDiffusionSettingsDialog::StableDiffusionSettingsDialog(QWidget *parent) : 
         }
         update_enabled_state();
     });
+    connect(upscale_only_check_box, &QCheckBox::toggled, this, [this](bool checked) {
+        if (checked) {
+            server_upscale_check_box->setChecked(true);
+            upscale_check_box->setChecked(false);
+        }
+        update_enabled_state();
+    });
     connect(server_upscale_check_box, &QCheckBox::toggled, this, [this](bool checked) {
         if (checked) {
             upscale_check_box->setChecked(false);
@@ -245,7 +256,7 @@ StableDiffusionConfiguration StableDiffusionSettingsDialog::configuration() cons
         result.lora_files.append(item->data(LORA_PATH_ROLE).toString());
         result.lora_multipliers.append(item->data(LORA_MULTIPLIER_ROLE).toDouble());
     }
-    if (server_upscale_check_box->isChecked()) {
+    if (server_upscale_check_box->isChecked() || upscale_only_check_box->isChecked()) {
         result.upscale_model_file = upscale_model_edit->text().trimmed();
     }
     result.prompt = prompt_edit->text().trimmed();
@@ -261,6 +272,7 @@ StableDiffusionConfiguration StableDiffusionSettingsDialog::configuration() cons
     result.sampler = sampler_combo_box->currentText().trimmed();
     result.scheduler = scheduler_combo_box->currentText().trimmed();
     result.upscale = upscale_check_box->isChecked();
+    result.upscale_only = upscale_only_check_box->isChecked();
     return result;
 }
 
@@ -387,12 +399,12 @@ bool StableDiffusionSettingsDialog::validate_settings() {
     if (!enable_check_box->isChecked()) {
         return true;
     }
-    if (!QFileInfo(model_file_edit->text().trimmed()).isFile()) {
+    if (!upscale_only_check_box->isChecked() && !QFileInfo(model_file_edit->text().trimmed()).isFile()) {
         QMessageBox::warning(this, "Stable Diffusion Model Required", "Select an existing safetensors model file.");
         return false;
     }
     QString lora_directory;
-    for (int row = 0; row < lora_list_widget->count(); ++row) {
+    for (int row = 0; !upscale_only_check_box->isChecked() && row < lora_list_widget->count(); ++row) {
         const QString filename = lora_list_widget->item(row)->data(LORA_PATH_ROLE).toString();
         const QFileInfo file_info(filename);
         if (!file_info.isFile()) {
@@ -409,7 +421,7 @@ bool StableDiffusionSettingsDialog::validate_settings() {
             return false;
         }
     }
-    if (prompt_edit->text().trimmed().isEmpty()) {
+    if (!upscale_only_check_box->isChecked() && prompt_edit->text().trimmed().isEmpty()) {
         QMessageBox::warning(this, "Stable Diffusion Prompt Required", "Enter an image-to-image prompt.");
         return false;
     }
@@ -437,6 +449,10 @@ bool StableDiffusionSettingsDialog::validate_settings() {
         QMessageBox::warning(this, "Upscale Model Required", "Select an existing ESRGAN or RealESRGAN model.");
         return false;
     }
+    if (upscale_only_check_box->isChecked() && !server_upscale_check_box->isChecked()) {
+        QMessageBox::warning(this, "Upscale Model Required", "Enable the sd-server ESRGAN model and select an existing model.");
+        return false;
+    }
     int width = 0;
     int height = 0;
     if (!parse_stable_resolution(resolution_combo_box->currentText(), width, height)) {
@@ -451,7 +467,7 @@ bool StableDiffusionSettingsDialog::validate_settings() {
         return false;
     }
     resolution_combo_box->setCurrentText(resolution_text(width, height));
-    if (sampler_combo_box->currentText().trimmed().isEmpty() || scheduler_combo_box->currentText().trimmed().isEmpty()) {
+    if (!upscale_only_check_box->isChecked() && (sampler_combo_box->currentText().trimmed().isEmpty() || scheduler_combo_box->currentText().trimmed().isEmpty())) {
         QMessageBox::warning(this, "Generation Method Required", "Enter both a sampler and scheduler.");
         return false;
     }
@@ -490,9 +506,10 @@ void StableDiffusionSettingsDialog::load_ui_state() {
     seed_spin_box->setValue(settings.value("stable_diffusion/seed", 1234).toInt());
     sampler_combo_box->setCurrentText(settings.value("stable_diffusion/sampler", "euler_a").toString());
     scheduler_combo_box->setCurrentText(settings.value("stable_diffusion/scheduler", "discrete").toString());
-    upscale_check_box->setChecked(settings.value("stable_diffusion/upscale", false).toBool());
     upscale_model_edit->setText(settings.value("stable_diffusion/upscale_model_file").toString());
     server_upscale_check_box->setChecked(settings.value("stable_diffusion/server_upscale", false).toBool());
+    upscale_check_box->setChecked(settings.value("stable_diffusion/upscale", false).toBool());
+    upscale_only_check_box->setChecked(settings.value("stable_diffusion/upscale_only", false).toBool());
 }
 
 void StableDiffusionSettingsDialog::save_ui_state() {
@@ -521,6 +538,7 @@ void StableDiffusionSettingsDialog::save_ui_state() {
     settings.setValue("stable_diffusion/sampler", current.sampler);
     settings.setValue("stable_diffusion/scheduler", current.scheduler);
     settings.setValue("stable_diffusion/upscale", current.upscale);
+    settings.setValue("stable_diffusion/upscale_only", current.upscale_only);
     settings.setValue("stable_diffusion/server_upscale", server_upscale_check_box->isChecked());
     settings.setValue("stable_diffusion/upscale_model_file", upscale_model_edit->text().trimmed());
     settings.sync();
@@ -528,28 +546,30 @@ void StableDiffusionSettingsDialog::save_ui_state() {
 
 void StableDiffusionSettingsDialog::update_enabled_state() {
     const bool enabled = enable_check_box->isChecked();
-    model_file_edit->setEnabled(enabled);
-    browse_model_button->setEnabled(enabled);
-    prompt_edit->setEnabled(enabled);
-    negative_prompt_edit->setEnabled(enabled);
-    lora_list_widget->setEnabled(enabled);
-    add_lora_button->setEnabled(enabled);
-    remove_lora_button->setEnabled(enabled && !lora_list_widget->selectedItems().isEmpty());
+    const bool image_to_image = enabled && !upscale_only_check_box->isChecked();
+    model_file_edit->setEnabled(image_to_image);
+    browse_model_button->setEnabled(image_to_image);
+    prompt_edit->setEnabled(image_to_image);
+    negative_prompt_edit->setEnabled(image_to_image);
+    lora_list_widget->setEnabled(image_to_image);
+    add_lora_button->setEnabled(image_to_image);
+    remove_lora_button->setEnabled(image_to_image && !lora_list_widget->selectedItems().isEmpty());
     select_lora_model();
     server_edit->setEnabled(enabled);
     server_arguments_edit->setEnabled(enabled);
     browse_server_button->setEnabled(enabled);
     server_port_spin_box->setEnabled(enabled);
-    resolution_combo_box->setEnabled(enabled);
-    steps_spin_box->setEnabled(enabled);
-    strength_spin_box->setEnabled(enabled);
-    cfg_scale_spin_box->setEnabled(enabled);
-    seed_spin_box->setEnabled(enabled);
-    sampler_combo_box->setEnabled(enabled);
-    scheduler_combo_box->setEnabled(enabled);
-    upscale_check_box->setEnabled(enabled);
-    server_upscale_check_box->setEnabled(enabled);
-    const bool server_upscale_enabled = enabled && server_upscale_check_box->isChecked();
+    resolution_combo_box->setEnabled(image_to_image);
+    steps_spin_box->setEnabled(image_to_image);
+    strength_spin_box->setEnabled(image_to_image);
+    cfg_scale_spin_box->setEnabled(image_to_image);
+    seed_spin_box->setEnabled(image_to_image);
+    sampler_combo_box->setEnabled(image_to_image);
+    scheduler_combo_box->setEnabled(image_to_image);
+    upscale_check_box->setEnabled(image_to_image);
+    upscale_only_check_box->setEnabled(enabled);
+    server_upscale_check_box->setEnabled(enabled && !upscale_only_check_box->isChecked());
+    const bool server_upscale_enabled = enabled && (server_upscale_check_box->isChecked() || upscale_only_check_box->isChecked());
     upscale_model_edit->setEnabled(server_upscale_enabled);
     browse_upscale_model_button->setEnabled(server_upscale_enabled);
 }

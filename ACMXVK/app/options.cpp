@@ -614,6 +614,9 @@ namespace acmxvk {
             } else if (option == "--sd-upscale") {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_upscale = true;
+            } else if (option == "--sd-upscale-only") {
+                options.stable_diffusion_option_specified = true;
+                options.stable_diffusion_upscale_only = true;
             } else if (option == "--upscale-model") {
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_upscale_model = optionValue(index, argc, argv, option);
@@ -925,7 +928,7 @@ namespace acmxvk {
             }
         }
 
-        if (!options.stable_diffusion_model.empty() && !options.output_file.empty()) {
+        if ((!options.stable_diffusion_model.empty() || options.stable_diffusion_upscale_only) && !options.output_file.empty()) {
             options.constant_frame_rate = true;
             options.no_drop = true;
         }
@@ -966,7 +969,23 @@ namespace acmxvk {
         if ((options.dream_iterations_specified || options.dream_strength_specified || options.dream_feedback_specified || options.dream_zoom_specified || options.dream_rotation_specified || options.dream_size_specified || options.dream_fp16 || options.dream_channel_specified || options.dream_octaves_specified || options.dream_octave_scale_specified || options.dream_jitter_specified || options.dream_smoothing_specified || options.random_dream_specified || options.dream_headless || options.deep_original || options.gpu_filter_before_dream) && options.dream_model.empty()) {
             throw std::runtime_error("Deep Dream processing options require --dream-model");
         }
-        if (!options.stable_diffusion_model.empty()) {
+        if (options.stable_diffusion_upscale_only) {
+            if (options.input_file.empty() || !options.graphic_file.empty()) {
+                throw std::runtime_error("Stable Diffusion upscale-only processing requires --input <video>");
+            }
+            if (options.stable_diffusion_upscale_model.empty()) {
+                throw std::runtime_error("--sd-upscale-only requires --upscale-model <file>");
+            }
+            if (!options.stable_diffusion_model.empty() || !options.stable_diffusion_prompt.empty() || !options.stable_diffusion_negative_prompt.empty() || !options.stable_diffusion_loras.empty()) {
+                throw std::runtime_error("--sd-upscale-only cannot be combined with image-to-image model, prompt, or LoRA options");
+            }
+            if (options.stable_diffusion_after_shaders || options.stable_diffusion_upscale) {
+                throw std::runtime_error("--sd-upscale-only cannot be combined with --sd-after-shaders or --sd-upscale");
+            }
+            if (options.fill_pts_gaps) {
+                throw std::runtime_error("Stable Diffusion processing cannot be combined with --fill-pts-gaps");
+            }
+        } else if (!options.stable_diffusion_model.empty()) {
             if (options.input_file.empty() || !options.graphic_file.empty()) {
                 throw std::runtime_error("Stable Diffusion processing requires --input <video>");
             }
@@ -1248,6 +1267,7 @@ namespace acmxvk {
                << "      --sd-after-shaders      Preserve shader-chain-then-SD ordering\n"
                << "      --sd-upscale            High-quality compute upscale before shaders\n"
                << "      --upscale-model <file>  ESRGAN model loaded by sd-server\n"
+               << "      --sd-upscale-only       Run ESRGAN upscale-only before shaders\n"
                << "      --sd-quiet              Suppress verbose sd-server output\n"
                << "                              Encoded output implies CFR and no-drop\n"
                << "                              Output feeds the Vulkan shader chain\n\n"

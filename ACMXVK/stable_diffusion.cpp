@@ -293,6 +293,49 @@ namespace acmxvk::stable_diffusion {
                 root["lora"].append(std::move(entry));
             }
         }
+
+        [[nodiscard]] std::string submitAsyncJob(const std::string &endpoint, std::string_view route, const Json::Value &request_root, const Settings &settings) {
+            const std::string body = writeJson(request_root);
+            long status = 0;
+            const ResponseBuffer submission = request(endpoint + std::string(route), &body, 30L, status, &settings.cancelled);
+            const Json::Value accepted = parseJson(submission.value, "sd-server");
+            if (status != 202 || !accepted["id"].isString()) {
+                throw std::runtime_error("sd-server rejected frame: " + serverError(accepted));
+            }
+            const std::string job_id = accepted["id"].asString();
+            const std::string job_url = endpoint + "/sdcpp/v1/jobs/" + job_id;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::hours(1);
+            while (std::chrono::steady_clock::now() < deadline) {
+                if (settings.cancelled && settings.cancelled()) {
+                    const std::string cancel_body = "{}";
+                    long cancel_status = 0;
+                    try {
+                        static_cast<void>(request(job_url + "/cancel", &cancel_body, 3L, cancel_status, nullptr));
+                    } catch (const std::exception &) {
+                    }
+                    throw std::runtime_error("Stable Diffusion request cancelled");
+                }
+                long poll_status = 0;
+                const ResponseBuffer poll = request(job_url, nullptr, 10L, poll_status, &settings.cancelled);
+                const Json::Value job = parseJson(poll.value, "sd-server job");
+                if (poll_status != 200) {
+                    throw std::runtime_error("sd-server job polling failed: " + serverError(job));
+                }
+                const std::string state = job["status"].asString();
+                if (state == "completed") {
+                    const Json::Value &images = job["result"]["images"];
+                    if (!images.isArray() || images.empty() || !images[0]["b64_json"].isString()) {
+                        throw std::runtime_error("sd-server job did not contain an output image");
+                    }
+                    return images[0]["b64_json"].asString();
+                }
+                if (state == "failed" || state == "cancelled") {
+                    throw std::runtime_error("sd-server frame job " + state + ": " + serverError(job["error"]));
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+            throw std::runtime_error("sd-server frame job timed out");
+        }
     } // namespace
 
     Server::Server(Settings settings) : settings(std::move(settings)) {
@@ -318,9 +361,14 @@ namespace acmxvk::stable_diffusion {
     void Server::start() {
         const std::string port = std::to_string(settings.port);
         const std::string executable = settings.server_executable.string();
-        const std::string model = settings.model.string();
-        std::vector<std::string> argument_storage{executable, "--listen-ip", "127.0.0.1", "--listen-port", port, "--model", model, "--type", "f16", "--mmap", "--fa", "--diffusion-conv-direct", "--vae-conv-direct", "--lora-model-dir", settings.lora_directory.string()};
-        if (!settings.upscale_model.empty()) {
+        std::vector<std::string> argument_storage{executable, "--listen-ip", "127.0.0.1", "--listen-port", port};
+        if (settings.upscale_only) {
+            argument_storage.emplace_back("--upscale-model");
+            argument_storage.push_back(settings.upscale_model.string());
+        } else {
+            argument_storage.insert(argument_storage.end(), {"--model", settings.model.string(), "--type", "f16", "--mmap", "--fa", "--diffusion-conv-direct", "--vae-conv-direct", "--lora-model-dir", settings.lora_directory.string()});
+        }
+        if (!settings.upscale_only && !settings.upscale_model.empty()) {
             argument_storage.emplace_back("--hires-upscalers-dir");
             argument_storage.push_back(settings.upscale_model.parent_path().string());
         }
@@ -500,7 +548,7 @@ namespace acmxvk::stable_diffusion {
     }
 
     void Server::waitUntilReady() {
-        const bool require_capabilities = !settings.upscale_model.empty() || !settings.loras.empty();
+        const bool require_capabilities = settings.upscale_only || !settings.upscale_model.empty() || !settings.loras.empty();
         const std::string url = endpoint + (require_capabilities ? "/sdcpp/v1/capabilities" : "/sdapi/v1/options");
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes(5);
         while (std::chrono::steady_clock::now() < deadline) {
@@ -564,7 +612,10 @@ namespace acmxvk::stable_diffusion {
                             }
                         }
                     }
-                    std::cout << "acmxvk: sd-server model ready; processing " << settings.width << 'x' << settings.height << " frames at " << settings.steps << " configured steps, strength " << settings.strength;
+                    std::cout << "acmxvk: sd-server " << (settings.upscale_only ? "upscaler" : "model") << " ready";
+                    if (!settings.upscale_only) {
+                        std::cout << "; processing " << settings.width << 'x' << settings.height << " frames at " << settings.steps << " configured steps, strength " << settings.strength;
+                    }
                     if (!settings.upscale_model.empty()) {
                         const cv::Size working = neuralUpscaleWorkingSize(settings, {settings.width, settings.height});
                         std::cout << "; ESRGAN working resolution " << working.width << 'x' << working.height << ", final resolution " << settings.upscale_width << 'x' << settings.upscale_height;
@@ -604,14 +655,21 @@ namespace acmxvk::stable_diffusion {
 
         const std::string encoded_input = encodeBase64(png);
         Json::Value root;
-        root["prompt"] = settings.prompt;
-        root["negative_prompt"] = settings.negative_prompt;
-        root["width"] = settings.width;
-        root["height"] = settings.height;
-        root["seed"] = settings.seed;
-        appendLoras(root, settings);
         std::string encoded_output;
-        if (settings.upscale_model.empty()) {
+        if (settings.upscale_only) {
+            root["image"] = encoded_input;
+            root["upscaler"] = settings.upscale_model.stem().string();
+            root["upscale_repeats"] = 1;
+            root["upscale_tile_size"] = 128;
+            root["output_compression"] = 100;
+            encoded_output = submitAsyncJob(endpoint, "/sdcpp/v1/upscale", root, settings);
+        } else if (settings.upscale_model.empty()) {
+            root["prompt"] = settings.prompt;
+            root["negative_prompt"] = settings.negative_prompt;
+            root["width"] = settings.width;
+            root["height"] = settings.height;
+            root["seed"] = settings.seed;
+            appendLoras(root, settings);
             root["steps"] = settings.steps;
             root["cfg_scale"] = settings.cfg_scale;
             root["batch_size"] = 1;
@@ -632,6 +690,12 @@ namespace acmxvk::stable_diffusion {
             }
             encoded_output = document["images"][0].asString();
         } else {
+            root["prompt"] = settings.prompt;
+            root["negative_prompt"] = settings.negative_prompt;
+            root["width"] = settings.width;
+            root["height"] = settings.height;
+            root["seed"] = settings.seed;
+            appendLoras(root, settings);
             root["strength"] = settings.strength;
             root["batch_count"] = 1;
             root["init_image"] = encoded_input;
@@ -652,49 +716,7 @@ namespace acmxvk::stable_diffusion {
             hires["steps"] = settings.steps;
             hires["denoising_strength"] = settings.strength;
             hires["upscale_tile_size"] = 128;
-            const std::string body = writeJson(root);
-            long status = 0;
-            const ResponseBuffer submission = request(endpoint + "/sdcpp/v1/img_gen", &body, 30L, status, &settings.cancelled);
-            const Json::Value accepted = parseJson(submission.value, "sd-server");
-            if (status != 202 || !accepted["id"].isString()) {
-                throw std::runtime_error("sd-server rejected frame: " + serverError(accepted));
-            }
-            const std::string job_id = accepted["id"].asString();
-            const std::string job_url = endpoint + "/sdcpp/v1/jobs/" + job_id;
-            const auto deadline = std::chrono::steady_clock::now() + std::chrono::hours(1);
-            while (std::chrono::steady_clock::now() < deadline) {
-                if (settings.cancelled && settings.cancelled()) {
-                    const std::string cancel_body = "{}";
-                    long cancel_status = 0;
-                    try {
-                        static_cast<void>(request(job_url + "/cancel", &cancel_body, 3L, cancel_status, nullptr));
-                    } catch (const std::exception &) {
-                    }
-                    throw std::runtime_error("Stable Diffusion request cancelled");
-                }
-                long poll_status = 0;
-                const ResponseBuffer poll = request(job_url, nullptr, 10L, poll_status, &settings.cancelled);
-                const Json::Value job = parseJson(poll.value, "sd-server job");
-                if (poll_status != 200) {
-                    throw std::runtime_error("sd-server job polling failed: " + serverError(job));
-                }
-                const std::string state = job["status"].asString();
-                if (state == "completed") {
-                    const Json::Value &images = job["result"]["images"];
-                    if (!images.isArray() || images.empty() || !images[0]["b64_json"].isString()) {
-                        throw std::runtime_error("sd-server job did not contain an output image");
-                    }
-                    encoded_output = images[0]["b64_json"].asString();
-                    break;
-                }
-                if (state == "failed" || state == "cancelled") {
-                    throw std::runtime_error("sd-server frame job " + state + ": " + serverError(job["error"]));
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-            if (encoded_output.empty()) {
-                throw std::runtime_error("sd-server frame job timed out");
-            }
+            encoded_output = submitAsyncJob(endpoint, "/sdcpp/v1/img_gen", root, settings);
         }
         const std::vector<std::uint8_t> decoded = decodeBase64(encoded_output);
         cv::Mat encoded(1, static_cast<int>(decoded.size()), CV_8UC1, const_cast<std::uint8_t *>(decoded.data()));

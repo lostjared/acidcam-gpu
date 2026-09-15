@@ -34,6 +34,7 @@ struct StableDiffusionConfiguration {
     QString sampler = "euler_a";
     QString scheduler = "discrete";
     bool upscale = false;
+    bool upscale_only = false;
 };
 
 class StableDiffusionSettingsDialog : public QDialog {
@@ -86,6 +87,7 @@ class StableDiffusionSettingsDialog : public QDialog {
     QComboBox *sampler_combo_box = nullptr;
     QComboBox *scheduler_combo_box = nullptr;
     QCheckBox *upscale_check_box = nullptr;
+    QCheckBox *upscale_only_check_box = nullptr;
     QCheckBox *server_upscale_check_box = nullptr;
     QLineEdit *upscale_model_edit = nullptr;
     QPushButton *browse_upscale_model_button = nullptr;

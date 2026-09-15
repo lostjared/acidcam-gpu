@@ -350,6 +350,7 @@ class MainWindow : public QMainWindow {
     QString stable_diffusion_sampler = "euler_a";
     QString stable_diffusion_scheduler = "discrete";
     bool stable_diffusion_upscale = false;
+    bool stable_diffusion_upscale_only = false;
     QAction *stableDiffusionAction = nullptr;
     QPointer<StableDiffusionSettingsDialog> stableDiffusionSettingsDialog;
     QAction *shaderPassAction;
