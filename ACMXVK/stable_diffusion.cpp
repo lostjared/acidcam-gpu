@@ -627,11 +627,11 @@ namespace acmxvk::stable_diffusion {
                     resetDiagnosticLog();
                     return;
                 }
-                if (status >= 400) {
+                if (status >= 400 && status < 500) {
                     throw std::runtime_error("sd-server readiness check returned HTTP " + std::to_string(status) + diagnosticLogDetails());
                 }
             } catch (const std::exception &) {
-                if (status != 0 || (settings.cancelled && settings.cancelled())) {
+                if ((status > 0 && status < 500) || (settings.cancelled && settings.cancelled())) {
                     throw;
                 }
             }
