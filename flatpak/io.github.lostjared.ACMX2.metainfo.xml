@@ -31,6 +31,14 @@
   <url type="homepage">https://github.com/lostjared/acidcam-gpu</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.140.0" date="2026-09-15">
+      <description>
+        <ul>
+          <li>Keep the ACMX interface responsive while switching ACMXVK shaders with the keyboard.</li>
+          <li>Condense interface-shared shader selection output to the selected shader name while retaining errors and optional render logs.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.139.0" date="2026-09-15">
       <description>
         <ul>

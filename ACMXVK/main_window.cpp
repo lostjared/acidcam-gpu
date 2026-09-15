@@ -2440,7 +2440,7 @@ namespace acmxvk {
         applyShaderPipeline();
         resetShaderTime();
         autopilot_counter = 0;
-        std::cout << "acmxvk: interface selected " << activeShaderRole() << ' ' << (shader_index + 1) << '/' << shaders.size() << ": " << currentShader() << '\n';
+        std::cout << "acmxvk: shader changed " << currentShader() << '\n';
     }
 
     void MainWindow::apply_interface_uniform_values(const std::vector<InterfaceUniformValue> &uniform_values) {
@@ -4271,7 +4271,11 @@ namespace acmxvk {
         applyShaderPipeline();
         resetShaderTime();
         autopilot_counter = 0;
-        std::cout << "acmxvk: " << activeShaderRole() << ' ' << (shader_index + 1) << '/' << shaders.size() << ": " << currentShader() << '\n';
+        if (options.interface_shm) {
+            std::cout << "acmxvk: shader changed " << currentShader() << '\n';
+        } else {
+            std::cout << "acmxvk: " << activeShaderRole() << ' ' << (shader_index + 1) << '/' << shaders.size() << ": " << currentShader() << '\n';
+        }
     }
 
     void MainWindow::selectPlaylistNode(int direction) {
@@ -4413,10 +4417,12 @@ namespace acmxvk {
             }
         }
 
-        std::cout << "acmxvk: Vulkan shader pipeline (" << pipeline.size() << " passes):\n";
-        for (std::size_t index = 0; index < pipeline.size(); ++index) {
-            const bool compute = index < post_process_effect_stages.size() && post_process_effect_stages[index] == mxvk::ShaderStage::Compute;
-            std::cout << "  " << (index + 1) << ": " << pipeline[index].filename().string() << " [" << (compute ? "compute" : "fragment") << "]\n";
+        if (!options.interface_shm) {
+            std::cout << "acmxvk: Vulkan shader pipeline (" << pipeline.size() << " passes):\n";
+            for (std::size_t index = 0; index < pipeline.size(); ++index) {
+                const bool compute = index < post_process_effect_stages.size() && post_process_effect_stages[index] == mxvk::ShaderStage::Compute;
+                std::cout << "  " << (index + 1) << ": " << pipeline[index].filename().string() << " [" << (compute ? "compute" : "fragment") << "]\n";
+            }
         }
     }
 

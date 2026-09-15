@@ -106,6 +106,11 @@ namespace {
         return false;
     }
 
+    bool is_acmxvk_interface_diagnostic(const QString &line) {
+        const QString normalized = line.trimmed();
+        return normalized.startsWith(QStringLiteral("mxvk:")) || normalized.startsWith(QStringLiteral("vk:")) || normalized.startsWith(QStringLiteral("SDL3:")) || normalized.startsWith(QStringLiteral("acmxvk: Vulkan shader pipeline")) || QRegularExpression(QStringLiteral("^\\d+: ")).match(normalized).hasMatch();
+    }
+
     QString shellQuote(const QString &value) {
 #ifdef _WIN32
         if (value.isEmpty()) {
@@ -594,7 +599,10 @@ void MainWindow::initControls() {
             if (active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(line)) {
                 continue;
             }
-            this->Write(line + "<br>");
+            if (active_backend == acmx2::Backend::Acmxvk && is_acmxvk_interface_diagnostic(line)) {
+                continue;
+            }
+            queueProcessOutput(line + "<br>");
         }
     });
 
@@ -606,9 +614,9 @@ void MainWindow::initControls() {
                 return;
             }
             if (line.contains("[ WARN:") || line.contains("[WARN "))
-                this->Write("<b style='color:#ccaa00;'>Warning:</b> " + line + "<br>");
+                queueProcessOutput("<b style='color:#ccaa00;'>Warning:</b> " + line + "<br>");
             else
-                this->Write("<b style='color:red;'>Error:</b> " + line + "<br>");
+                queueProcessOutput("<b style='color:red;'>Error:</b> " + line + "<br>");
         };
 
         stderrBuffer += QString::fromLocal8Bit(process->readAllStandardError());
@@ -626,18 +634,19 @@ void MainWindow::initControls() {
 
     connect(process, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
         if (!stdoutBuffer.isEmpty() && !(active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(stdoutBuffer))) {
-            this->Write(stdoutBuffer + "<br>");
+            queueProcessOutput(stdoutBuffer + "<br>");
         }
         appendOutputRunLog(stdoutBuffer);
         stdoutBuffer.clear();
         if (!stderrBuffer.isEmpty() && !stderrBuffer.contains("GStreamer") && !(active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(stderrBuffer))) {
             if (stderrBuffer.contains("[ WARN:") || stderrBuffer.contains("[WARN "))
-                this->Write("<b style='color:#ccaa00;'>Warning:</b> " + stderrBuffer + "<br>");
+                queueProcessOutput("<b style='color:#ccaa00;'>Warning:</b> " + stderrBuffer + "<br>");
             else
-                this->Write("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
+                queueProcessOutput("<b style='color:red;'>Error:</b> " + stderrBuffer + "<br>");
         }
         appendOutputRunLog(stderrBuffer);
         stderrBuffer.clear();
+        flushProcessOutput();
         QString text;
         QTextStream stream(&text);
         stream << acmx2::backend_name(active_backend) << ": Exited with Code: " << exitCode;
@@ -1124,6 +1133,11 @@ void MainWindow::initControls() {
     bottomTextBox = new QTextEdit(this);
     bottomTextBox->setHtml("<b style='color:red;'>ACMX</b> - Interface: Loaded.");
     bottomTextBox->setReadOnly(true);
+    bottomTextBox->document()->setMaximumBlockCount(2000);
+    processOutputFlushTimer = new QTimer(this);
+    processOutputFlushTimer->setSingleShot(true);
+    processOutputFlushTimer->setInterval(35);
+    connect(processOutputFlushTimer, &QTimer::timeout, this, &MainWindow::flushProcessOutput);
     connect(list_view, &QTreeWidget::doubleClicked, this, &MainWindow::listClicked);
     connect(list_view, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
         if (!list_view)
@@ -3004,17 +3018,33 @@ void MainWindow::Write(const QString &message) {
     cursor.movePosition(QTextCursor::End);
     cursor.insertHtml(message);
     bottomTextBox->setTextCursor(cursor);
+}
 
-    constexpr int MAX_BLOCKS = 5000;
-    QTextDocument *doc = bottomTextBox->document();
-    int excess = doc->blockCount() - MAX_BLOCKS;
-    if (excess > 0) {
-        QTextCursor trim(doc);
-        trim.movePosition(QTextCursor::Start);
-        trim.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor, excess);
-        trim.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
-        trim.removeSelectedText();
-        trim.deleteChar();
+void MainWindow::queueProcessOutput(const QString &message) {
+    pendingProcessOutput += message;
+    if (!processOutputFlushTimer->isActive()) {
+        processOutputFlushTimer->start();
+    }
+}
+
+void MainWindow::flushProcessOutput() {
+    if (pendingProcessOutput.isEmpty()) {
+        return;
+    }
+
+    constexpr qsizetype MAX_OUTPUT_CHARS_PER_FLUSH = 48 * 1024;
+    qsizetype length = std::min<qsizetype>(pendingProcessOutput.size(), MAX_OUTPUT_CHARS_PER_FLUSH);
+    if (length < pendingProcessOutput.size()) {
+        const qsizetype lineEnd = pendingProcessOutput.lastIndexOf(QStringLiteral("<br>"), length - 1);
+        if (lineEnd >= 0) {
+            length = lineEnd + 4;
+        }
+    }
+
+    Write(pendingProcessOutput.left(length));
+    pendingProcessOutput.remove(0, length);
+    if (!pendingProcessOutput.isEmpty()) {
+        processOutputFlushTimer->start();
     }
 }
 

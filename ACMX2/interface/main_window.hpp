@@ -40,6 +40,7 @@ class StableDiffusionSettingsDialog;
 class LibraryBuilderDialog;
 class QDialog;
 class QTabWidget;
+class QTimer;
 class UniformReferenceDialog;
 
 /**
@@ -420,6 +421,8 @@ class MainWindow : public QMainWindow {
     QAction *playlistAction;
     QString stderrBuffer;
     QString stdoutBuffer;
+    QString pendingProcessOutput;
+    QTimer *processOutputFlushTimer = nullptr;
     /// @brief True while an ACMX2 cache rebuild or ACMXVK source build is running.
     bool cacheBuildInProgress = false;
     PendingAcmxvkAction pending_acmxvk_action = PendingAcmxvkAction::None;
@@ -445,6 +448,8 @@ class MainWindow : public QMainWindow {
     quint64 editorPreviewSequence = 0;
 
     void initShaderSelectionSharedMemory();
+    void queueProcessOutput(const QString &message);
+    void flushProcessOutput();
     void handleSavedShader(const QString &filePath);
     void queueAcmxvkLiveCompile(const QString &filePath);
     void startNextAcmxvkLiveCompile();
