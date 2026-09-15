@@ -65,7 +65,11 @@ image input, fragment and compute multipass, playlists and crossfades, texture
 and FFT history, custom uniforms, audio/MIDI control, 3D model texturing,
 recording, snapshots, live shader rebuild/reload, and surface-free headless
 recording. Vulkan shaders require the ACMXVK descriptor ABI and SPIR-V build
-workflow; legacy ACMX2 GLSL is not automatically interchangeable.
+workflow; legacy ACMX2 GLSL is not automatically interchangeable. Optional
+Stable Diffusion processing keeps one local <tt>sd-server</tt> model loaded for
+image-to-image frames, LoRAs, and server-side ESRGAN. A separate ESRGAN-only
+mode can upscale frames before the Vulkan shader chain without loading a
+diffusion model.
 
 The project currently targets native Linux, macOS/Apple Silicon through
 MoltenVK, and Windows. Portable builds do not require CUDA. CUDA acceleration,
@@ -74,11 +78,15 @@ codec, camera, and hardware combinations continue to be tested and hardened.
 
 @section flatpak_download Download the ACMX Flatpak
 
-The portable Linux build includes the Qt interface, RtAudio, MIDI support, and
-the shader library without requiring NVIDIA CUDA. Download it from the
+The portable Linux build includes the Qt interface, ACMX2 and ACMXVK engines,
+RtAudio, MIDI support, shader resources, and a Vulkan-enabled
+<tt>stable-diffusion.cpp</tt> <tt>sd-server</tt> without requiring NVIDIA CUDA.
+Users supply their own Stable Diffusion, LoRA, and ESRGAN model files. Download
+it from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX Linux Flatpak release page</a>.
-The current bundle is <b>ACMX v2.135.0</b> (28,930,176 bytes) with SHA-256
-<tt>dfec3e69a79b0eec4358dff5e954c802025597e5a3c82a9587e5e89b132550a2</tt>.
+The current bundle is <b>ACMX v2.139.0</b> (71,566,960 bytes; 69 MiB) with
+SHA-256
+<tt>e79efcb7eaf23431422820617c8a73591f93288077e1bf9ae6f516fcd53cb2ab</tt>.
 
 @code{.sh}
 sha256sum ACMX2.flatpak
@@ -919,10 +927,13 @@ selects a different destination.
 
 Download the portable, no-CUDA Linux package from the
 <a href="https://lostsidedead.biz/acmx2/release">ACMX2 Flatpak release page</a>.
-The package includes the Qt interface, RtAudio, MIDI support, the MIDI map
-utility, runtime data, playlists, and a ready-to-use shader collection. Its
-x86_64 OpenCV 4.12.0 build includes Intel IPP 2022.1.0 and runtime SIMD
-dispatch for optimized CPU processing while keeping CUDA disabled.
+The package includes the Qt interface, ACMX2 and ACMXVK engines, RtAudio, MIDI
+support, the MIDI map utility, runtime data, playlists, a ready-to-use shader
+collection, and the Vulkan-enabled <tt>sd-server</tt> executable. Stable
+Diffusion, LoRA, and ESRGAN models are intentionally not distributed; choose
+your own compatible model files in Stable Diffusion Settings. Its x86_64
+OpenCV 4.12.0 build includes Intel IPP 2022.1.0 and runtime SIMD dispatch for
+optimized CPU processing while keeping CUDA disabled.
 
 @subsection install_linux Prerequisites for Linux (NVIDIA GPU)
 

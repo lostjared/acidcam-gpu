@@ -128,6 +128,30 @@ one stage is safe to consume by the next stage. Compatible fragment shaders can
 run directly on model UVs in 3D mode; compute, history-dependent, and multipass
 effects render to an offscreen image that becomes the model texture.
 
+@section acmxvk_stable_diffusion Stable Diffusion and ESRGAN Processing
+
+When built with <tt>-DWITH_STABLE_DIFFUSION=ON</tt>, ACMXVK can launch one local
+compatible <tt>stable-diffusion.cpp</tt> <tt>sd-server</tt> and retain the
+selected image-to-image model across video frames. The generated image enters
+the normal Vulkan shader chain, so fragment and compute effects remain usable
+as post-processing stages. Image-to-image mode supports prompts, negative
+prompts, seed and sampler controls, weighted LoRA adapters, preview, and
+constant-frame-rate encoded output.
+
+The server can also provide ESRGAN or RealESRGAN upscale. In full
+image-to-image mode, an upscale model can replace the built-in Vulkan compute
+upscale. The lightweight <tt>--sd-upscale-only</tt> mode instead sends each
+source frame directly to the server's ESRGAN endpoint before the shader chain;
+it does not load a Stable Diffusion generation model and therefore needs much
+less VRAM. <tt>--sd-upscale-size WxH</tt> selects the ESRGAN working resolution
+before the final ACMXVK output resize. The shared Qt interface exposes these
+same choices in Stable Diffusion Settings.
+
+The Flatpak bundles a Vulkan-enabled <tt>sd-server</tt>, but no neural model
+weights. Users must select their own compatible Stable Diffusion, LoRA, or
+ESRGAN model files. See <tt>ACMXVK/README.md</tt> for build requirements,
+commands, supported combinations, and current limitations.
+
 @section acmxvk_libraries Shader Libraries and Live Coding
 
 The preferred source-library manifest is <tt>library.json</tt>. Entries identify

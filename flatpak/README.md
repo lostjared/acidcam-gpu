@@ -22,6 +22,12 @@ IPP integration wrappers. OpenCV selects supported CPU paths at runtime,
 including SSE4, AVX, AVX2/FMA, and AVX-512. This improves CPU image-processing
 performance without changing the package into a CUDA build.
 
+The current release bundle is ACMX 2.139.0. Its SHA-256 is
+`e79efcb7eaf23431422820617c8a73591f93288077e1bf9ae6f516fcd53cb2ab` and its
+size is 71,566,960 bytes (69 MiB). This release updates MXVK to 0.35.0 and the
+bundled stable-diffusion.cpp server, adds ESRGAN-only preprocessing before the
+Vulkan shader chain, and adds a configurable ESRGAN working resolution.
+
 The OpenCV module explicitly enables `WITH_IPP` and grants network access only
 to that module's build sandbox because OpenCV downloads its pinned IPP archive
 during configuration. A clean build therefore needs access to GitHub and
