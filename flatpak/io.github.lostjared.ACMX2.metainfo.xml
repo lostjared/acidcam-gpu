@@ -31,10 +31,13 @@
   <url type="homepage">https://github.com/lostjared/acidcam-gpu</url>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="2.139.0" date="2026-09-14">
+    <release version="2.139.0" date="2026-09-15">
       <description>
         <ul>
           <li>Make ACMXVK PNG sequences write every frame by default; optional generation intervals still select every Nth frame.</li>
+          <li>Add standalone ESRGAN video upscaling before the Vulkan shader chain, without loading a Stable Diffusion image-generation model.</li>
+          <li>Add configurable ESRGAN working resolution to the command line and Stable Diffusion settings.</li>
+          <li>Update the bundled stable-diffusion.cpp server and MXVK 0.35.0.</li>
         </ul>
       </description>
     </release>

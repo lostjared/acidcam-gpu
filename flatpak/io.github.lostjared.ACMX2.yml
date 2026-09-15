@@ -139,7 +139,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/MXVK.git
-        commit: 40a0959bd2b5e7e6773ed132f8b5baed6f3562d6
+        commit: 4bcc4641e2a5e1be589ddaa5ead3cd81e64830e2
         disable-submodules: true
       - type: patch
         path: mxvk-installed-resources.patch
@@ -200,7 +200,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/stable-diffusion.cpp.git
-        commit: d04e8950c1ec8d30248cbe996682b3182fb1adf6
+        commit: 8f191da9b58ebd927dab6bc425420baa58947d8b
         disable-submodules: true
       - type: git
         url: https://github.com/leejet/ggml.git
@@ -237,7 +237,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/acidcam-gpu.git
-        commit: e4041d40d0eb78523846d7c9cdbc2452aa65cb85
+        commit: d18f6e2db7184750429d2495ac327ef32c4f6416
         disable-submodules: true
       - type: file
         path: io.github.lostjared.ACMX2.desktop
