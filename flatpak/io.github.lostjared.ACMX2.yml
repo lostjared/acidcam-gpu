@@ -139,7 +139,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/MXVK.git
-        commit: 4bcc4641e2a5e1be589ddaa5ead3cd81e64830e2
+        commit: 7c3450331f907f587e8ba1213b1a62a6c7f35597
         disable-submodules: true
       - type: patch
         path: mxvk-installed-resources.patch
@@ -237,7 +237,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/lostjared/acidcam-gpu.git
-        commit: d18f6e2db7184750429d2495ac327ef32c4f6416
+        commit: 1e3bdd3ea6b50b2a8e65b9cf3310e3c29612d4aa
         disable-submodules: true
       - type: file
         path: io.github.lostjared.ACMX2.desktop
