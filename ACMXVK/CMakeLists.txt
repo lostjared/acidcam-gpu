@@ -32,6 +32,15 @@ option(WITH_STABLE_DIFFUSION
     "Enable stable-diffusion.cpp img2img video processing" OFF)
 option(ACMXVK_USE_MOLTENVK "Enable MoltenVK portability support on Apple platforms" ${APPLE})
 
+if(WITH_CUDA AND NOT APPLE)
+    # ACMXVK links the CUDA separable-compilation static library exported by
+    # acidcam-gpu. Enable the CUDA language so CMake can run the device-link
+    # step for the final executable on MSVC and other native toolchains.
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 20)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+endif()
+
 set(ACMXVK_MXWRITE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite" CACHE PATH
     "MXWrite source directory containing the ACMXVK encoder API"
 )
@@ -284,6 +293,31 @@ endif()
 if(WITH_STABLE_DIFFUSION)
     pkg_check_modules(ACMXVK_CURL REQUIRED IMPORTED_TARGET libcurl)
     pkg_check_modules(ACMXVK_JSONCPP REQUIRED IMPORTED_TARGET jsoncpp)
+
+    if(WIN32)
+        # vcpkg exposes libcurl.lib through pkg-config, while the runtime DLL
+        # is installed in the sibling bin directory. Keep the DLL explicit so
+        # it is installed even when applocal deployment does not stage it next
+        # to the build executable.
+        set(_acmxvk_curl_runtime_dirs)
+        foreach(_acmxvk_curl_library_dir IN LISTS ACMXVK_CURL_LIBRARY_DIRS)
+            list(APPEND _acmxvk_curl_runtime_dirs
+                "${_acmxvk_curl_library_dir}"
+                "${_acmxvk_curl_library_dir}/../bin"
+                "${_acmxvk_curl_library_dir}/../debug/bin"
+            )
+        endforeach()
+        find_file(ACMXVK_CURL_RUNTIME_DLL
+            NAMES libcurl.dll
+            PATHS ${_acmxvk_curl_runtime_dirs}
+            NO_DEFAULT_PATH
+        )
+        if(NOT ACMXVK_CURL_RUNTIME_DLL)
+            message(WARNING
+                "Stable Diffusion is enabled, but libcurl.dll was not found "
+                "from the libcurl pkg-config library directories.")
+        endif()
+    endif()
 endif()
 
 set(ACMXVK_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
@@ -685,6 +719,13 @@ add_executable(acmxvk
     input_validation.cpp
     input_validation.hpp
 )
+if(WIN32)
+    target_compile_definitions(acmxvk PRIVATE
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+    )
+endif()
+
 if(APPLE)
     target_sources(acmxvk PRIVATE app/camera_probe_macos.mm)
     find_library(ACMXVK_AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
@@ -723,12 +764,12 @@ if(APPLE AND ACMXVK_USE_MOLTENVK)
     )
 endif()
 if(AUDIO)
-    find_library(RTAUDIO_LIBRARY NAMES rtaudio REQUIRED)
-    find_path(RTAUDIO_INCLUDE_DIR NAMES rtaudio/RtAudio.h REQUIRED)
+    # Use the package target so a multi-configuration package manager such as
+    # vcpkg selects matching Debug/Release binaries automatically.
+    find_package(RtAudio CONFIG REQUIRED)
     target_sources(acmxvk PRIVATE audio.cpp audio.hpp file_audio.cpp file_audio.hpp)
-    target_include_directories(acmxvk PRIVATE "${RTAUDIO_INCLUDE_DIR}")
     target_link_libraries(acmxvk PRIVATE
-        "${RTAUDIO_LIBRARY}"
+        RtAudio::rtaudio
         PkgConfig::AVCODEC
         PkgConfig::AVFORMAT
         PkgConfig::AVUTIL
@@ -737,11 +778,15 @@ if(AUDIO)
     target_compile_definitions(acmxvk PRIVATE AUDIO_ENABLED)
 endif()
 if(MIDI)
-    find_library(RTMIDI_LIBRARY NAMES rtmidi REQUIRED)
-    find_path(RTMIDI_INCLUDE_DIR NAMES rtmidi/RtMidi.h REQUIRED)
+    # RtMidi exports both Debug and Release variants under its CMake target.
+    # find_library() can otherwise choose the Debug archive for a Release build.
+    find_package(rtmidi CONFIG REQUIRED)
     target_sources(acmxvk PRIVATE midi.cpp midi.hpp)
-    target_include_directories(acmxvk PRIVATE "${RTMIDI_INCLUDE_DIR}")
-    target_link_libraries(acmxvk PRIVATE "${RTMIDI_LIBRARY}")
+    target_link_libraries(acmxvk PRIVATE RtMidi::rtmidi)
+    if(WIN32)
+        # RtMidi's Windows MM backend calls the WinMM API directly.
+        target_link_libraries(acmxvk PRIVATE winmm)
+    endif()
     target_compile_definitions(acmxvk PRIVATE MIDI_ENABLED)
 endif()
 if(WEBP)
@@ -815,6 +860,7 @@ if(WITH_CUDA)
         acidcam-gpu::acidcam-gpu
         CUDA::cudart
     )
+    set_property(TARGET acmxvk PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_CUDA)
 endif()
 if(VALIDATION)
@@ -850,6 +896,14 @@ target_compile_definitions(acmxvk PRIVATE
 )
 
 if(BUILD_TESTING)
+    function(acmxvk_enable_test_warnings target_name)
+        if(MSVC)
+            target_compile_options(${target_name} PRIVATE /W4 /permissive-)
+        else()
+            target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+    endfunction()
+
     if(WIN32)
         add_executable(acmxvk_interface_client_windows_tests
             interface_client_windows_tests.cpp
@@ -857,9 +911,7 @@ if(BUILD_TESTING)
             app/interface_client.hpp
             interface_control.hpp
         )
-        target_compile_options(acmxvk_interface_client_windows_tests PRIVATE
-            -Wall -Wextra -Wpedantic
-        )
+        acmxvk_enable_test_warnings(acmxvk_interface_client_windows_tests)
         add_test(NAME acmxvk_interface_client_windows
             COMMAND acmxvk_interface_client_windows_tests
         )
@@ -869,9 +921,7 @@ if(BUILD_TESTING)
         input_validation.cpp
         input_validation.hpp
     )
-    target_compile_options(acmxvk_input_validation_tests PRIVATE
-        -Wall -Wextra -Wpedantic
-    )
+    acmxvk_enable_test_warnings(acmxvk_input_validation_tests)
     add_test(NAME acmxvk_input_validation
         COMMAND acmxvk_input_validation_tests
     )
@@ -881,9 +931,7 @@ if(BUILD_TESTING)
         app/resource_paths.hpp
         app/options.hpp
     )
-    target_compile_options(acmxvk_resource_paths_tests PRIVATE
-        -Wall -Wextra -Wpedantic
-    )
+    acmxvk_enable_test_warnings(acmxvk_resource_paths_tests)
     add_test(NAME acmxvk_resource_paths
         COMMAND acmxvk_resource_paths_tests
     )
@@ -895,9 +943,7 @@ if(BUILD_TESTING)
         input_validation.cpp
         input_validation.hpp
     )
-    target_compile_options(acmxvk_playlist_tests PRIVATE
-        -Wall -Wextra -Wpedantic
-    )
+    acmxvk_enable_test_warnings(acmxvk_playlist_tests)
     add_test(NAME acmxvk_playlist
         COMMAND acmxvk_playlist_tests
     )
@@ -908,9 +954,7 @@ if(BUILD_TESTING)
         app/snapshot_writer.hpp
         app/options.hpp
     )
-    target_compile_options(acmxvk_output_paths_tests PRIVATE
-        -Wall -Wextra -Wpedantic
-    )
+    acmxvk_enable_test_warnings(acmxvk_output_paths_tests)
     add_test(NAME acmxvk_output_paths
         COMMAND acmxvk_output_paths_tests
     )
@@ -938,6 +982,26 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS acmxvk RUNTIME DESTINATION bin)
+
+if(WIN32)
+    # vcpkg's applocal deployment runs after the executable is linked and
+    # stages its third-party runtime DLLs beside the build executable. Copy
+    # that staging area into the install tree at install time. Resolving the
+    # full Windows dependency graph here would incorrectly treat Windows
+    # API-set DLLs and externally installed CUDA DLLs as installable files.
+    install(CODE
+        "file(GLOB _acmxvk_runtime_dlls LIST_DIRECTORIES false
+            \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\"
+            \"${CMAKE_CURRENT_BINARY_DIR}/*.DLL\")
+         if(_acmxvk_runtime_dlls)
+             file(INSTALL DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\"
+                  TYPE FILE FILES \${_acmxvk_runtime_dlls})
+         endif()"
+    )
+    if(WITH_STABLE_DIFFUSION AND ACMXVK_CURL_RUNTIME_DLL)
+        install(FILES "${ACMXVK_CURL_RUNTIME_DLL}" DESTINATION bin)
+    endif()
+endif()
 install(FILES
         ${ACMXVK_MANDALA_EXAMPLE_SHADERS}
         "${ACMXVK_SPRITE_VERTEX_SHADER}"

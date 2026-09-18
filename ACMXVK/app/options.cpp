@@ -374,122 +374,194 @@ namespace acmxvk {
         for (int index = 1; index < argc; ++index) {
             const std::string_view option(argv[index]);
             input::validate_string(option, input::StringKind::Token, "command-line option");
+            bool option_handled = false;
             if (option == "-h" || option == "-v" || option == "--help" || option == "--version") {
+                option_handled = true;
                 options.show_help = true;
-            } else if (option == "--unbuffered") {
+            }
+            if (option == "--unbuffered") {
+                option_handled = true;
                 options.unbuffered_output = true;
-            } else if (option == "--silent" || option == "--headless") {
+            }
+            if (option == "--silent" || option == "--headless") {
+                option_handled = true;
                 options.headless = true;
-            } else if (option == "--interface-shm") {
+            }
+            if (option == "--interface-shm") {
+                option_handled = true;
                 options.interface_shm = true;
-            } else if (option == "-p" || option == "--path") {
+            }
+            if (option == "-p" || option == "--path") {
+                option_handled = true;
                 options.resource_directory = optionValue(index, argc, argv, option);
                 if (options.resource_directory.empty()) {
                     throw std::runtime_error("resource path must not be empty");
                 }
-            } else if (option == "-i" || option == "--input") {
+            }
+            if (option == "-i" || option == "--input") {
+                option_handled = true;
                 options.input_file = optionValue(index, argc, argv, option);
-            } else if (option == "-g" || option == "--graphic") {
+            }
+            if (option == "-g" || option == "--graphic") {
+                option_handled = true;
                 options.graphic_file = optionValue(index, argc, argv, option);
-            } else if (option == "-o" || option == "--output") {
+            }
+            if (option == "-o" || option == "--output") {
+                option_handled = true;
                 options.output_file = optionValue(index, argc, argv, option);
-            } else if (option == "-e" || option == "--prefix") {
+            }
+            if (option == "-e" || option == "--prefix") {
+                option_handled = true;
                 options.snapshot_directory = optionValue(index, argc, argv, option);
                 if (options.snapshot_directory.empty()) {
                     throw std::runtime_error("snapshot directory must not be empty");
                 }
-            } else if (option == "-d" || option == "--device") {
+            }
+            if (option == "-d" || option == "--device") {
+                option_handled = true;
                 options.camera_device = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.camera_device < 0 || options.camera_device > 65535) {
                     throw std::runtime_error("camera device index must be between 0 and 65535");
                 }
-            } else if (option == "-c" || option == "--camera-res") {
+            }
+            if (option == "-c" || option == "--camera-res") {
+                option_handled = true;
                 parseDimensions(optionValue(index, argc, argv, option), options.camera_width, options.camera_height, option);
-            } else if (option == "--enumerate-device" || option == "--probe-camera") {
+            }
+            if (option == "--enumerate-device" || option == "--probe-camera") {
+                option_handled = true;
                 options.enumerate_camera_device = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.enumerate_camera_device < 0 || options.enumerate_camera_device > 65535) {
                     throw std::runtime_error("camera probe device index must be between 0 and 65535");
                 }
-            } else if (option == "--list-camera-devices") {
+            }
+            if (option == "--list-camera-devices") {
+                option_handled = true;
                 options.list_camera_devices = true;
-            } else if (option == "--use-yuv") {
+            }
+            if (option == "--use-yuv") {
+                option_handled = true;
                 options.use_yuv = true;
-            } else if (option == "--maximize-fps") {
+            }
+            if (option == "--maximize-fps") {
+                option_handled = true;
                 options.maximize_fps = true;
-            } else if (option == "--use-source-fps") {
+            }
+            if (option == "--use-source-fps") {
+                option_handled = true;
                 options.use_source_fps = true;
-            } else if (option == "--use-source-audio") {
+            }
+            if (option == "--use-source-audio") {
+                option_handled = true;
                 options.use_source_audio = true;
                 options.enable_audio = true;
-            } else if (option == "--edge") {
+            }
+            if (option == "--edge") {
+                option_handled = true;
                 options.edge_model = optionValue(index, argc, argv, option);
-            } else if (option == "--human") {
+            }
+            if (option == "--human") {
+                option_handled = true;
                 options.human_model = optionValue(index, argc, argv, option);
-            } else if (option == "--onnx") {
+            }
+            if (option == "--onnx") {
+                option_handled = true;
                 options.onnx_configuration = optionValue(index, argc, argv, option);
-            } else if (option == "--background") {
+            }
+            if (option == "--background") {
+                option_handled = true;
                 options.human_background = true;
-            } else if (option == "--black") {
+            }
+            if (option == "--black") {
+                option_handled = true;
                 options.human_black_point = parseNumber(optionValue(index, argc, argv, option), option);
                 options.human_black_specified = true;
                 if (options.human_black_point < 0.0 || options.human_black_point > 1.0) {
                     throw std::runtime_error("--black must be between 0.0 and 1.0");
                 }
-            } else if (option == "--white") {
+            }
+            if (option == "--white") {
+                option_handled = true;
                 options.human_white_point = parseNumber(optionValue(index, argc, argv, option), option);
                 options.human_white_specified = true;
                 if (options.human_white_point < 0.0 || options.human_white_point > 1.0) {
                     throw std::runtime_error("--white must be between 0.0 and 1.0");
                 }
-            } else if (option == "--check-dnn") {
+            }
+            if (option == "--check-dnn") {
+                option_handled = true;
                 options.check_dnn = true;
-            } else if (option == "--check-deep-dream") {
+            }
+            if (option == "--check-deep-dream") {
+                option_handled = true;
                 options.check_deep_dream = true;
-            } else if (option == "--check-stable-diffusion") {
+            }
+            if (option == "--check-stable-diffusion") {
+                option_handled = true;
                 options.check_stable_diffusion = true;
-            } else if (option == "--dream-model") {
+            }
+            if (option == "--dream-model") {
+                option_handled = true;
                 options.dream_model = optionValue(index, argc, argv, option);
-            } else if (option == "--dream-layer") {
+            }
+            if (option == "--dream-layer") {
+                option_handled = true;
                 options.dream_layer = optionValue(index, argc, argv, option);
-            } else if (option == "--dream-iterations") {
+            }
+            if (option == "--dream-iterations") {
+                option_handled = true;
                 options.dream_iterations = parseInteger(optionValue(index, argc, argv, option), option);
                 options.dream_iterations_specified = true;
                 if (options.dream_iterations < 1 || options.dream_iterations > 100) {
                     throw std::runtime_error("--dream-iterations must be between 1 and 100");
                 }
-            } else if (option == "--dream-strength") {
+            }
+            if (option == "--dream-strength") {
+                option_handled = true;
                 options.dream_strength = parseNumber(optionValue(index, argc, argv, option), option);
                 options.dream_strength_specified = true;
                 if (options.dream_strength <= 0.0 || options.dream_strength > 10.0) {
                     throw std::runtime_error("--dream-strength must be greater than 0 and no more than 10");
                 }
-            } else if (option == "--dream-feedback") {
+            }
+            if (option == "--dream-feedback") {
+                option_handled = true;
                 options.dream_feedback = parseNumber(optionValue(index, argc, argv, option), option);
                 options.dream_feedback_specified = true;
                 if (options.dream_feedback < 0.0 || options.dream_feedback > 0.99) {
                     throw std::runtime_error("--dream-feedback must be between 0 and 0.99");
                 }
-            } else if (option == "--dream-zoom") {
+            }
+            if (option == "--dream-zoom") {
+                option_handled = true;
                 options.dream_zoom = parseNumber(optionValue(index, argc, argv, option), option);
                 options.dream_zoom_specified = true;
                 if (options.dream_zoom < 0.9 || options.dream_zoom > 1.1) {
                     throw std::runtime_error("--dream-zoom must be between 0.9 and 1.1");
                 }
-            } else if (option == "--dream-rotation") {
+            }
+            if (option == "--dream-rotation") {
+                option_handled = true;
                 options.dream_rotation = parseNumber(optionValue(index, argc, argv, option), option);
                 options.dream_rotation_specified = true;
                 if (options.dream_rotation < -5.0 || options.dream_rotation > 5.0) {
                     throw std::runtime_error("--dream-rotation must be between -5 and 5 degrees");
                 }
-            } else if (option == "--dream-size") {
+            }
+            if (option == "--dream-size") {
+                option_handled = true;
                 options.dream_size = parseInteger(optionValue(index, argc, argv, option), option);
                 options.dream_size_specified = true;
                 if (options.dream_size != 0 && (options.dream_size < 64 || options.dream_size > 4096)) {
                     throw std::runtime_error("--dream-size must be 0 or between 64 and 4096");
                 }
-            } else if (option == "--dream-fp16") {
+            }
+            if (option == "--dream-fp16") {
+                option_handled = true;
                 options.dream_fp16 = true;
-            } else if (option == "--dream-channel") {
+            }
+            if (option == "--dream-channel") {
+                option_handled = true;
                 const std::string value = optionValue(index, argc, argv, option);
                 options.dream_channel_specified = true;
                 if (value == "all") {
@@ -500,55 +572,81 @@ namespace acmxvk {
                         throw std::runtime_error("--dream-channel must be 'all' or between 0 and 65535");
                     }
                 }
-            } else if (option == "--dream-octaves") {
+            }
+            if (option == "--dream-octaves") {
+                option_handled = true;
                 options.dream_octaves = parseInteger(optionValue(index, argc, argv, option), option);
                 options.dream_octaves_specified = true;
                 if (options.dream_octaves < 1 || options.dream_octaves > 8) {
                     throw std::runtime_error("--dream-octaves must be between 1 and 8");
                 }
-            } else if (option == "--dream-octave-scale") {
+            }
+            if (option == "--dream-octave-scale") {
+                option_handled = true;
                 options.dream_octave_scale = parseNumber(optionValue(index, argc, argv, option), option);
                 options.dream_octave_scale_specified = true;
                 if (options.dream_octave_scale < 1.1 || options.dream_octave_scale > 3.0) {
                     throw std::runtime_error("--dream-octave-scale must be between 1.1 and 3.0");
                 }
-            } else if (option == "--dream-jitter") {
+            }
+            if (option == "--dream-jitter") {
+                option_handled = true;
                 options.dream_jitter = parseInteger(optionValue(index, argc, argv, option), option);
                 options.dream_jitter_specified = true;
                 if (options.dream_jitter < 0 || options.dream_jitter > 64) {
                     throw std::runtime_error("--dream-jitter must be between 0 and 64");
                 }
-            } else if (option == "--dream-smoothing") {
+            }
+            if (option == "--dream-smoothing") {
+                option_handled = true;
                 options.dream_smoothing = parseInteger(optionValue(index, argc, argv, option), option);
                 options.dream_smoothing_specified = true;
                 if (options.dream_smoothing < 0 || options.dream_smoothing > 16) {
                     throw std::runtime_error("--dream-smoothing must be between 0 and 16");
                 }
-            } else if (option == "--random-dream" || option == "--random_dream") {
+            }
+            if (option == "--random-dream" || option == "--random_dream") {
+                option_handled = true;
                 options.random_dream_interval = parseNumber(optionValue(index, argc, argv, option), option);
                 options.random_dream_specified = true;
                 if (options.random_dream_interval <= 0.0) {
                     throw std::runtime_error(std::string(option) + " must be greater than 0");
                 }
-            } else if (option == "--dream-headless") {
+            }
+            if (option == "--dream-headless") {
+                option_handled = true;
                 options.dream_headless = true;
-            } else if (option == "--deep-orig") {
+            }
+            if (option == "--deep-orig") {
+                option_handled = true;
                 options.deep_original = true;
-            } else if (option == "--gpu-filter-before-dream") {
+            }
+            if (option == "--gpu-filter-before-dream") {
+                option_handled = true;
                 options.gpu_filter_before_dream = true;
-            } else if (option == "--sd-model") {
+            }
+            if (option == "--sd-model") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_model = optionValue(index, argc, argv, option);
-            } else if (option == "--sd-prompt") {
+            }
+            if (option == "--sd-prompt") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_prompt = optionValue(index, argc, argv, option);
-            } else if (option == "--sd-negative-prompt") {
+            }
+            if (option == "--sd-negative-prompt") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_negative_prompt = optionValue(index, argc, argv, option);
-            } else if (option == "--sd-lora") {
+            }
+            if (option == "--sd-lora") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_loras.push_back({optionValue(index, argc, argv, option), 1.0});
-            } else if (option == "--sd-lora-strength") {
+            }
+            if (option == "--sd-lora-strength") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 if (options.stable_diffusion_loras.empty()) {
                     throw std::runtime_error("--sd-lora-strength must follow --sd-lora");
@@ -558,106 +656,160 @@ namespace acmxvk {
                     throw std::runtime_error("--sd-lora-strength must be between -10 and 10");
                 }
                 options.stable_diffusion_loras.back().multiplier = multiplier;
-            } else if (option == "--sd-server") {
+            }
+            if (option == "--sd-server") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_server = optionValue(index, argc, argv, option);
-            } else if (option == "--sd-server-arg") {
+            }
+            if (option == "--sd-server-arg") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 constexpr std::size_t MAX_SERVER_ARGUMENTS = 256U;
                 if (options.stable_diffusion_server_arguments.size() >= MAX_SERVER_ARGUMENTS) {
                     throw std::runtime_error("--sd-server-arg may be repeated at most 256 times");
                 }
                 options.stable_diffusion_server_arguments.push_back(optionValue(index, argc, argv, option));
-            } else if (option == "--sd-server-port") {
+            }
+            if (option == "--sd-server-port") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_server_port = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.stable_diffusion_server_port < 1024 || options.stable_diffusion_server_port > 65535) {
                     throw std::runtime_error("--sd-server-port must be between 1024 and 65535");
                 }
-            } else if (option == "--sd-size") {
+            }
+            if (option == "--sd-size") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 parseDimensions(optionValue(index, argc, argv, option), options.stable_diffusion_width, options.stable_diffusion_height, option);
                 if ((options.stable_diffusion_width % 64) != 0 || (options.stable_diffusion_height % 64) != 0 || options.stable_diffusion_width > 2048 || options.stable_diffusion_height > 2048) {
                     throw std::runtime_error("--sd-size dimensions must be multiples of 64 and no "
                                              "larger than 2048");
                 }
-            } else if (option == "--sd-upscale-size") {
+            }
+            if (option == "--sd-upscale-size") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 parseDimensions(optionValue(index, argc, argv, option), options.stable_diffusion_upscale_working_width, options.stable_diffusion_upscale_working_height, option);
                 if (options.stable_diffusion_upscale_working_width < 64 || options.stable_diffusion_upscale_working_height < 64 || options.stable_diffusion_upscale_working_width > 4096 || options.stable_diffusion_upscale_working_height > 4096) {
                     throw std::runtime_error("--sd-upscale-size dimensions must be between 64 and 4096");
                 }
-            } else if (option == "--sd-steps") {
+            }
+            if (option == "--sd-steps") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_steps = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.stable_diffusion_steps < 1 || options.stable_diffusion_steps > 150) {
                     throw std::runtime_error("--sd-steps must be between 1 and 150");
                 }
-            } else if (option == "--sd-strength") {
+            }
+            if (option == "--sd-strength") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_strength = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.stable_diffusion_strength <= 0.0 || options.stable_diffusion_strength > 1.0) {
                     throw std::runtime_error("--sd-strength must be greater than 0 and no more than 1");
                 }
-            } else if (option == "--sd-cfg-scale") {
+            }
+            if (option == "--sd-cfg-scale") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_cfg_scale = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.stable_diffusion_cfg_scale < 0.0 || options.stable_diffusion_cfg_scale > 50.0) {
                     throw std::runtime_error("--sd-cfg-scale must be between 0 and 50");
                 }
-            } else if (option == "--sd-seed") {
+            }
+            if (option == "--sd-seed") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_seed = parseInteger(optionValue(index, argc, argv, option), option);
-            } else if (option == "--sd-sampler") {
+            }
+            if (option == "--sd-sampler") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_sampler = optionValue(index, argc, argv, option);
-            } else if (option == "--sd-scheduler") {
+            }
+            if (option == "--sd-scheduler") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_scheduler = optionValue(index, argc, argv, option);
-            } else if (option == "--sd-after-shaders") {
+            }
+            if (option == "--sd-after-shaders") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_after_shaders = true;
-            } else if (option == "--sd-upscale") {
+            }
+            if (option == "--sd-upscale") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_upscale = true;
-            } else if (option == "--sd-upscale-only") {
+            }
+            if (option == "--sd-upscale-only") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_upscale_only = true;
-            } else if (option == "--upscale-model") {
+            }
+            if (option == "--upscale-model") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_upscale_model = optionValue(index, argc, argv, option);
-            } else if (option == "--sd-quiet") {
+            }
+            if (option == "--sd-quiet") {
+                option_handled = true;
                 options.stable_diffusion_option_specified = true;
                 options.stable_diffusion_quiet = true;
-            } else if (option == "--probe-hdr") {
+            }
+            if (option == "--probe-hdr") {
+                option_handled = true;
                 options.probe_hdr_file = optionValue(index, argc, argv, option);
-            } else if (option == "-r" || option == "--resolution") {
+            }
+            if (option == "-r" || option == "--resolution") {
+                option_handled = true;
                 parseDimensions(optionValue(index, argc, argv, option), options.width, options.height, option);
                 options.resolution_specified = true;
-            } else if (option == "-s" || option == "--shaders") {
+            }
+            if (option == "-s" || option == "--shaders") {
+                option_handled = true;
                 options.shader_directory = optionValue(index, argc, argv, option);
-            } else if (option == "-f" || option == "--fragment") {
+            }
+            if (option == "-f" || option == "--fragment") {
+                option_handled = true;
                 options.fragment_shader = optionValue(index, argc, argv, option);
-            } else if (option == "--compute") {
+            }
+            if (option == "--compute") {
+                option_handled = true;
                 options.compute_shader = optionValue(index, argc, argv, option);
-            } else if (option == "--enable-3d") {
+            }
+            if (option == "--enable-3d") {
+                option_handled = true;
                 options.enable_3d = true;
-            } else if (option == "--model") {
+            }
+            if (option == "--model") {
+                option_handled = true;
                 options.model_file = optionValue(index, argc, argv, option);
                 options.enable_3d = true;
-            } else if (option == "-H" || option == "--shader-index") {
+            }
+            if (option == "-H" || option == "--shader-index") {
+                option_handled = true;
                 options.shader_index = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.shader_index < 0 || options.shader_index >= static_cast<int>(input::MAX_SHADER_ENTRIES)) {
                     throw std::runtime_error("shader index is outside the supported range");
                 }
-            } else if (option == "--shader-file") {
+            }
+            if (option == "--shader-file") {
+                option_handled = true;
                 options.shader_file = optionValue(index, argc, argv, option);
-            } else if (option == "--uniform") {
+            }
+            if (option == "--uniform") {
+                option_handled = true;
                 options.custom_uniform_overrides.push_back(optionValue(index, argc, argv, option));
                 if (options.custom_uniform_overrides.size() > mxvk::VK_Sprite::MAX_CUSTOM_UNIFORMS) {
                     throw std::runtime_error("too many --uniform overrides were supplied");
                 }
-            } else if (option == "--shader-pass") {
+            }
+            if (option == "--shader-pass") {
+                option_handled = true;
                 const std::string values = optionValue(index, argc, argv, option);
                 std::size_t start = 0;
                 while (start <= values.size()) {
@@ -675,7 +827,9 @@ namespace acmxvk {
                     }
                     start = separator + 1;
                 }
-            } else if (option == "--shader-pass-files") {
+            }
+            if (option == "--shader-pass-files") {
+                option_handled = true;
                 const std::string payload = optionValue(index, argc, argv, option);
                 std::size_t start = 0;
                 while (start < payload.size()) {
@@ -694,242 +848,385 @@ namespace acmxvk {
                     }
                     start = name_start + static_cast<std::size_t>(length);
                 }
-            } else if (option == "--playlist") {
+            }
+            if (option == "--playlist") {
+                option_handled = true;
                 options.playlist_file = optionValue(index, argc, argv, option);
-            } else if (option == "--enable-playlist") {
+            }
+            if (option == "--enable-playlist") {
+                option_handled = true;
                 options.enable_playlist = true;
-            } else if (option == "--cross-fade") {
+            }
+            if (option == "--cross-fade") {
+                option_handled = true;
                 options.cross_fade_duration = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.cross_fade_duration < 0.0 || options.cross_fade_duration > 60.0) {
                     throw std::runtime_error("crossfade duration must be between 0 and 60 seconds");
                 }
-            } else if (option == "--time-speed") {
+            }
+            if (option == "--time-speed") {
+                option_handled = true;
                 options.time_speed = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.time_speed < -1000.0 || options.time_speed > 1000.0) {
                     throw std::runtime_error("time speed must be between -1000 and 1000");
                 }
-            } else if (option == "--normalized") {
+            }
+            if (option == "--normalized") {
+                option_handled = true;
                 options.normalized_time = true;
-            } else if (option == "--enable-random-autopilot") {
+            }
+            if (option == "--enable-random-autopilot") {
+                option_handled = true;
                 options.enable_random_autopilot = true;
-            } else if (option == "--autopilot-frames" || option == "--autopilot-timeout") {
+            }
+            if (option == "--autopilot-frames" || option == "--autopilot-timeout") {
+                option_handled = true;
                 options.autopilot_frames = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.autopilot_frames < 4 || options.autopilot_frames > 1000000000) {
                     throw std::runtime_error("autopilot frame interval must be between 4 and 1000000000");
                 }
-            } else if (option == "--autopilot-random" || option == "--autiopilot-random") {
+            }
+            if (option == "--autopilot-random" || option == "--autiopilot-random") {
+                option_handled = true;
                 options.autopilot_random_timeout = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.autopilot_random_timeout < 4 || options.autopilot_random_timeout > 1000000000) {
                     throw std::runtime_error("autopilot random interval must be between 4 and 1000000000");
                 }
-            } else if (option == "-u" || option == "--fps") {
+            }
+            if (option == "-u" || option == "--fps") {
+                option_handled = true;
                 options.requested_fps = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.requested_fps <= 0.0 || options.requested_fps > 1000.0) {
                     throw std::runtime_error("FPS must be between 0 and 1000");
                 }
-            } else if (option == "-w" || option == "--enable-audio") {
+            }
+            if (option == "-w" || option == "--enable-audio") {
+                option_handled = true;
                 options.enable_audio = true;
-            } else if (option == "--audio-time" || option == "--enable-audio-time") {
+            }
+            if (option == "--audio-time" || option == "--enable-audio-time") {
+                option_handled = true;
                 options.enable_audio_time = true;
-            } else if (option == "-l" || option == "--channels") {
+            }
+            if (option == "-l" || option == "--channels") {
+                option_handled = true;
                 options.audio_channels = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.audio_channels < 1 || options.audio_channels > 32) {
                     throw std::runtime_error("audio channels must be between 1 and 32");
                 }
-            } else if (option == "-q" || option == "--sense") {
+            }
+            if (option == "-q" || option == "--sense") {
+                option_handled = true;
                 options.audio_sensitivity = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.audio_sensitivity < 0.1 || options.audio_sensitivity > 5.0) {
                     throw std::runtime_error("audio sensitivity must be between 0.1 and 5.0");
                 }
-            } else if (option == "--audio-warm-rate") {
+            }
+            if (option == "--audio-warm-rate") {
+                option_handled = true;
                 options.audio_warm_rate = parseNumber(optionValue(index, argc, argv, option), option);
                 options.audio_warm_rate_specified = true;
                 if (options.audio_warm_rate < 0.0 || options.audio_warm_rate > 1000.0) {
                     throw std::runtime_error("audio warmup rate must be between 0 and 1000");
                 }
-            } else if (option == "--audio-input") {
+            }
+            if (option == "--audio-input") {
+                option_handled = true;
                 const std::string value = optionValue(index, argc, argv, option);
                 options.audio_input_specified = true;
                 options.audio_input_device = value == "default" ? -1 : parseInteger(value, option);
                 if (options.audio_input_device < -1 || options.audio_input_device > 65535) {
                     throw std::runtime_error("audio input must be default or a non-negative device index");
                 }
-            } else if (option == "--audio-file") {
+            }
+            if (option == "--audio-file") {
+                option_handled = true;
                 options.audio_file = optionValue(index, argc, argv, option);
                 options.enable_audio = true;
-            } else if (option == "-y" || option == "--pass-through") {
+            }
+            if (option == "-y" || option == "--pass-through") {
+                option_handled = true;
                 options.audio_pass_through = true;
                 options.enable_audio = true;
-            } else if (option == "--audio-output") {
+            }
+            if (option == "--audio-output") {
+                option_handled = true;
                 const std::string value = optionValue(index, argc, argv, option);
                 options.audio_output_specified = true;
                 options.audio_output_device = value == "default" ? -1 : parseInteger(value, option);
                 if (options.audio_output_device < -1 || options.audio_output_device > 65535) {
                     throw std::runtime_error("audio output must be default or a non-negative device index");
                 }
-            } else if (option == "--pass-through-gain") {
+            }
+            if (option == "--pass-through-gain") {
+                option_handled = true;
                 options.audio_pass_through_gain = parseNumber(optionValue(index, argc, argv, option), option);
                 options.audio_pass_through_gain_specified = true;
                 if (options.audio_pass_through_gain < 0.0 || options.audio_pass_through_gain > 4.0) {
                     throw std::runtime_error("pass-through gain must be between 0.0 and 4.0");
                 }
-            } else if (option == "--record-gain") {
+            }
+            if (option == "--record-gain") {
+                option_handled = true;
                 options.audio_recording_gain = parseNumber(optionValue(index, argc, argv, option), option);
                 options.audio_recording_gain_specified = true;
                 if (options.audio_recording_gain < 0.0 || options.audio_recording_gain > 2.0) {
                     throw std::runtime_error("recording gain must be between 0.0 and 2.0");
                 }
-            } else if (option == "--record-audio") {
+            }
+            if (option == "--record-audio") {
+                option_handled = true;
                 options.record_audio_file = optionValue(index, argc, argv, option);
                 options.enable_audio = true;
-            } else if (option == "--audio-repeat") {
+            }
+            if (option == "--audio-repeat") {
+                option_handled = true;
                 options.audio_repeat = true;
-            } else if (option == "--audio-trunc") {
+            }
+            if (option == "--audio-trunc") {
+                option_handled = true;
                 options.audio_trunc = true;
-            } else if (option == "--enable-audio-buffers" || option == "--audio-buffers") {
+            }
+            if (option == "--enable-audio-buffers" || option == "--audio-buffers") {
+                option_handled = true;
                 options.audio_buffers = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.audio_buffers < 0 || options.audio_buffers > 64) {
                     throw std::runtime_error("audio history buffers must be between 0 and 64");
                 }
-            } else if (option == "--list-devices") {
+            }
+            if (option == "--list-devices") {
+                option_handled = true;
                 options.list_audio_devices = true;
-            } else if (option == "--check-audio") {
+            }
+            if (option == "--check-audio") {
+                option_handled = true;
                 options.check_audio = true;
-            } else if (option == "--midi-device") {
+            }
+            if (option == "--midi-device") {
+                option_handled = true;
                 options.midi_device = parseInteger(optionValue(index, argc, argv, option), option);
                 options.midi_device_specified = true;
                 if (options.midi_device < 0 || options.midi_device > 65535) {
                     throw std::runtime_error("MIDI device index must be between 0 and 65535");
                 }
-            } else if (option == "--midi-monitor") {
+            }
+            if (option == "--midi-monitor") {
+                option_handled = true;
                 options.midi_monitor = true;
-            } else if (option == "--midi-map") {
+            }
+            if (option == "--midi-map") {
+                option_handled = true;
                 options.midi_map_file = optionValue(index, argc, argv, option);
-            } else if (option == "--midi-cc") {
+            }
+            if (option == "--midi-cc") {
+                option_handled = true;
                 options.midi_cc_mappings.push_back(optionValue(index, argc, argv, option));
                 if (options.midi_cc_mappings.size() > mxvk::VK_Sprite::MAX_CUSTOM_UNIFORMS) {
                     throw std::runtime_error("too many --midi-cc mappings were supplied");
                 }
-            } else if (option == "--list-midi") {
+            }
+            if (option == "--list-midi") {
+                option_handled = true;
                 options.list_midi_devices = true;
-            } else if (option == "--check-midi") {
+            }
+            if (option == "--check-midi") {
+                option_handled = true;
                 options.check_midi = true;
-            } else if (option == "--gpu-filter") {
+            }
+            if (option == "--gpu-filter") {
+                option_handled = true;
                 options.gpu_filter_indices = parseIntegerList(optionValue(index, argc, argv, option), option);
                 if (options.gpu_filter_indices.size() > 256U || std::any_of(options.gpu_filter_indices.begin(), options.gpu_filter_indices.end(), [](int value) { return value < 0 || value > 65535; })) {
                     throw std::runtime_error("GPU filter list is outside the supported range");
                 }
-            } else if (option == "--gpu-buffer") {
+            }
+            if (option == "--gpu-buffer") {
+                option_handled = true;
                 options.gpu_frame_buffer_size = parseInteger(optionValue(index, argc, argv, option), option);
                 options.gpu_buffer_specified = true;
                 if (options.gpu_frame_buffer_size < 4 || options.gpu_frame_buffer_size > 32) {
                     throw std::runtime_error("GPU frame buffer must be between 4 and 32");
                 }
-            } else if (option == "-m" || option == "--cuda-device") {
+            }
+            if (option == "-m" || option == "--cuda-device") {
+                option_handled = true;
                 options.cuda_device = parseInteger(optionValue(index, argc, argv, option), option);
                 options.cuda_device_specified = true;
                 if (options.cuda_device < 0 || options.cuda_device > 1024) {
                     throw std::runtime_error("CUDA device index must be between 0 and 1024");
                 }
-            } else if (option == "--list-filters") {
+            }
+            if (option == "--list-filters") {
+                option_handled = true;
                 options.list_gpu_filters = true;
-            } else if (option == "--list-cuda-devices") {
+            }
+            if (option == "--list-cuda-devices") {
+                option_handled = true;
                 options.list_cuda_devices = true;
-            } else if (option == "--check-cuda") {
+            }
+            if (option == "--check-cuda") {
+                option_handled = true;
                 options.check_cuda = true;
-            } else if (option == "--duration") {
+            }
+            if (option == "--duration") {
+                option_handled = true;
                 options.duration = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.duration <= 0.0 || options.duration > 604800.0) {
                     throw std::runtime_error("duration must be between 0 and 604800 seconds");
                 }
-            } else if (option == "--max-size") {
+            }
+            if (option == "--max-size") {
+                option_handled = true;
                 options.max_size_mb = parseNumber(optionValue(index, argc, argv, option), option);
                 if (options.max_size_mb <= 0.0 || options.max_size_mb > 1048576.0) {
                     throw std::runtime_error("maximum output size must be between 0 and 1048576 MB");
                 }
-            } else if (option == "--png") {
+            }
+            if (option == "--png") {
+                option_handled = true;
                 options.png_output = true;
                 options.png_output_directory = optionValue(index, argc, argv, option);
-            } else if (option == "--png-level") {
+            }
+            if (option == "--png-level") {
+                option_handled = true;
                 options.png_level = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.png_level < 1 || options.png_level > 9) {
                     throw std::runtime_error("--png-level must be between 1 and 9");
                 }
-            } else if (option == "--generate") {
+            }
+            if (option == "--generate") {
+                option_handled = true;
                 options.generate_interval = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.generate_interval <= 0) {
                     throw std::runtime_error("--generate requires a positive frame interval");
                 }
-            } else if (option == "-b" || option == "--encode-crf") {
+            }
+            if (option == "-b" || option == "--encode-crf") {
+                option_handled = true;
                 options.encode_crf = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.encode_crf < 0 || options.encode_crf > 51) {
                     throw std::runtime_error("encoder CRF must be between 0 and 51");
                 }
-            } else if (option == "--bitrate" || option == "--video-bitrate" || option == "--encode-bitrate") {
+            }
+            if (option == "--bitrate" || option == "--video-bitrate" || option == "--encode-bitrate") {
+                option_handled = true;
                 options.encode_bitrate = parse_video_bitrate(optionValue(index, argc, argv, option), option);
-            } else if (option == "--encode-preset") {
+            }
+            if (option == "--encode-preset") {
+                option_handled = true;
                 options.encode_preset = optionValue(index, argc, argv, option);
-            } else if (option == "--encode-tune") {
+            }
+            if (option == "--encode-tune") {
+                option_handled = true;
                 options.encode_tune = optionValue(index, argc, argv, option);
-            } else if (option == "--encode-codec") {
+            }
+            if (option == "--encode-codec") {
+                option_handled = true;
                 options.encode_codec = optionValue(index, argc, argv, option);
-            } else if (option == "--encode-params") {
+            }
+            if (option == "--encode-params") {
+                option_handled = true;
                 options.encode_params = optionValue(index, argc, argv, option);
-            } else if (option == "--list-encoders") {
+            }
+            if (option == "--list-encoders") {
+                option_handled = true;
                 options.list_encoders = true;
-            } else if (option == "--list-encoder-options") {
+            }
+            if (option == "--list-encoder-options") {
+                option_handled = true;
                 options.list_encoder_options = optionValue(index, argc, argv, option);
-            } else if (option == "--encode-realtime") {
+            }
+            if (option == "--encode-realtime") {
+                option_handled = true;
                 options.encode_realtime = true;
-            } else if (option == "--no-drop") {
+            }
+            if (option == "--no-drop") {
+                option_handled = true;
                 options.no_drop = true;
-            } else if (option == "--constant-frame-rate" || option == "--sequential-encode") {
+            }
+            if (option == "--constant-frame-rate" || option == "--sequential-encode") {
+                option_handled = true;
                 options.constant_frame_rate = true;
-            } else if (option == "--fill-pts-gaps") {
+            }
+            if (option == "--fill-pts-gaps") {
+                option_handled = true;
                 options.fill_pts_gaps = true;
-            } else if (option == "--display-filter") {
+            }
+            if (option == "--display-filter") {
+                option_handled = true;
                 options.display_filter = true;
-            } else if (option == "--disable-counter") {
+            }
+            if (option == "--disable-counter") {
+                option_handled = true;
                 options.disable_counter = true;
-            } else if (option == "--use-watermark") {
+            }
+            if (option == "--use-watermark") {
+                option_handled = true;
                 options.watermark_text = optionValue(index, argc, argv, option);
                 if (options.watermark_text.empty()) {
                     throw std::runtime_error("--use-watermark requires non-empty text");
                 }
-            } else if (option == "--use-watermark-color") {
+            }
+            if (option == "--use-watermark-color") {
+                option_handled = true;
                 options.watermark_color = parseColor(optionValue(index, argc, argv, option), option);
-            } else if (option == "--copy-audio") {
+            }
+            if (option == "--copy-audio") {
+                option_handled = true;
                 options.copy_audio = true;
-            } else if (option == "--mute-output") {
+            }
+            if (option == "--mute-output") {
+                option_handled = true;
                 options.mute_output = true;
-            } else if (option == "-n" || option == "--fullscreen") {
+            }
+            if (option == "-n" || option == "--fullscreen") {
+                option_handled = true;
                 options.fullscreen = true;
-            } else if (option == "-a" || option == "--repeat") {
+            }
+            if (option == "-a" || option == "--repeat") {
+                option_handled = true;
                 options.repeat = true;
-            } else if (option == "--enable-vsync") {
+            }
+            if (option == "--enable-vsync") {
+                option_handled = true;
                 options.enable_vsync = true;
-            } else if (option == "--enable-screenshot") {
+            }
+            if (option == "--enable-screenshot") {
+                option_handled = true;
                 options.enable_screenshot = true;
-            } else if (option == "--history-test") {
+            }
+            if (option == "--history-test") {
+                option_handled = true;
                 options.history_test = true;
                 options.enable_texture_cache = true;
-            } else if (option == "--texture-cache" || option == "--texture-cache-array") {
+            }
+            if (option == "--texture-cache" || option == "--texture-cache-array") {
+                option_handled = true;
                 options.enable_texture_cache = true;
-            } else if (option == "--cache-delay") {
+            }
+            if (option == "--cache-delay") {
+                option_handled = true;
                 options.cache_delay = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.cache_delay < 0 || options.cache_delay > 1000000) {
                     throw std::runtime_error("--cache-delay must be between 0 and 1000000");
                 }
-            } else if (option == "--texture-cache-size") {
+            }
+            if (option == "--texture-cache-size") {
+                option_handled = true;
                 options.texture_cache_size = parseInteger(optionValue(index, argc, argv, option), option);
                 if (options.texture_cache_size < 1 || options.texture_cache_size > 64) {
                     throw std::runtime_error("--texture-cache-size must be between 1 and 64");
                 }
-            } else if (option == "--flip") {
+            }
+            if (option == "--flip") {
+                option_handled = true;
                 options.flip_output = true;
-            } else if (option == "--rotate") {
+            }
+            if (option == "--rotate") {
+                option_handled = true;
                 options.frame_rotation = parseFrameRotation(optionValue(index, argc, argv, option));
-            } else {
+            }
+            if (!option_handled) {
                 throw std::runtime_error("unknown option: " + std::string(option));
             }
         }

@@ -192,8 +192,15 @@ else()
     message(STATUS "MXWrite: CUDA runtime not found, device-frame ingestion disabled")
 endif()
 
-target_compile_options(mxwrite PRIVATE -O3 -Wall -Wextra -pedantic)
 
+if(MSVC)
+    target_compile_options(mxwrite PRIVATE
+        $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/O2>
+        /W4
+    )
+else()
+target_compile_options(mxwrite PRIVATE -O3 -Wall -Wextra -pedantic)
+endif()
 if(PYTHON_MODULE)
     if(CMAKE_VERSION VERSION_LESS 3.15)
         message(FATAL_ERROR "PYTHON_MODULE requires CMake 3.15 or newer")

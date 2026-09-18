@@ -18,7 +18,9 @@
 #include <signal.h>
 #include <string>
 #include <thread>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #include <vector>
 
 struct AnimationState {

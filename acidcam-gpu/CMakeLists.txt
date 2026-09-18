@@ -1,67 +1,51 @@
 cmake_minimum_required(VERSION 3.18)
 
-find_program(GCC15_CXX g++-15)
-find_program(GCC15_CC gcc-15)
-if(GCC15_CXX)
-    set(CMAKE_CXX_COMPILER "${GCC15_CXX}" CACHE FILEPATH "C++ compiler" FORCE)
-    message(STATUS "Found g++-15, using it as C++ compiler")
-endif()
-if(GCC15_CC)
-    set(CMAKE_CUDA_HOST_COMPILER "${GCC15_CC}" CACHE FILEPATH "CUDA host compiler" FORCE)
-    message(STATUS "Found gcc-15, using it as CUDA host compiler")
-endif()
-
-project(acidcam-gpu 
+project(acidcam-gpu
     VERSION 1.1.0
     DESCRIPTION "GPU-accelerated video filter library using CUDA"
-    LANGUAGES CXX CUDA)
+    LANGUAGES CXX CUDA
+)
 
-if(NOT CMAKE_BUILD_TYPE)
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_INSTALL_INCLUDEDIR "include")
-set(CMAKE_INSTALL_LIBDIR "lib")
-set(CMAKE_INSTALL_BINDIR "bin")
 
+include(GNUInstallDirs)
 include(CheckIncludeFileCXX)
 include(CheckLibraryExists)
 include(CheckCXXSourceCompiles)
-include(GNUInstallDirs)
 
 find_package(CUDAToolkit REQUIRED)
-if(NOT CUDAToolkit_FOUND)
-    message(FATAL_ERROR "CUDA Toolkit not found. This project requires CUDA.")
-endif()
+
 message(STATUS "CUDA Toolkit version: ${CUDAToolkit_VERSION}")
 message(STATUS "CUDA include dirs: ${CUDAToolkit_INCLUDE_DIRS}")
+message(STATUS "CUDA compiler: ${CMAKE_CUDA_COMPILER}")
+message(STATUS "CUDA host compiler: ${CMAKE_CUDA_HOST_COMPILER}")
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS "11.0")
     message(WARNING "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} detected. Version 11.0+ recommended.")
 endif()
 
-find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio cudaimgproc)
-if(NOT OpenCV_FOUND)
-    message(FATAL_ERROR "OpenCV not found. Please install OpenCV with CUDA support.")
-endif()
+find_package(OpenCV REQUIRED COMPONENTS
+    core
+    imgproc
+    highgui
+    videoio
+    cudaimgproc
+)
+
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")
 message(STATUS "OpenCV libraries: ${OpenCV_LIBS}")
 
-if(NOT OpenCV_CUDA_VERSION)
-    message(WARNING "OpenCV CUDA support may not be available.")
-endif()
-
-find_package(PkgConfig REQUIRED)
-if(NOT PKG_CONFIG_FOUND)
-    message(FATAL_ERROR "pkg-config not found. Please install pkg-config.")
-endif()
-
 set(ACIDCAM_GPU_LOCAL_MXWRITE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../MXWrite")
+option(EXAMPLES "build examples" OFF)
 if(NOT EXISTS "${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}/CMakeLists.txt")
     message(FATAL_ERROR
         "The local MXWrite source tree was not found at ${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}. "
@@ -74,28 +58,35 @@ add_subdirectory(
     "${CMAKE_BINARY_DIR}/acidcam_gpu_mxwrite_build"
     EXCLUDE_FROM_ALL
 )
+
 if(NOT TARGET mxwrite)
     message(FATAL_ERROR "The local MXWrite project did not define the expected mxwrite target.")
 endif()
+
 message(STATUS "Using local MXWrite source: ${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}")
 
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-    libavcodec
-    libavformat
-    libavutil
-    libswscale
-)
-if(NOT FFMPEG_FOUND)
-    message(FATAL_ERROR "FFMPEG libraries not found. Please install ffmpeg development libraries.")
-endif()
-message(STATUS "FFMPEG libraries: ${FFMPEG_LIBRARIES}")
-message(STATUS "FFMPEG include dirs: ${FFMPEG_INCLUDE_DIRS}")
+if(NOT WIN32)
+    find_package(PkgConfig REQUIRED)
 
-set(CMAKE_REQUIRED_INCLUDES 
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+        libavcodec
+        libavformat
+        libavutil
+        libswscale
+    )
+
+    message(STATUS "FFMPEG libraries: ${FFMPEG_LIBRARIES}")
+    message(STATUS "FFMPEG include dirs: ${FFMPEG_INCLUDE_DIRS}")
+endif()
+
+set(CMAKE_REQUIRED_INCLUDES
     ${OpenCV_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
-    ${FFMPEG_INCLUDE_DIRS}
 )
+
+if(NOT WIN32)
+    list(APPEND CMAKE_REQUIRED_INCLUDES ${FFMPEG_INCLUDE_DIRS})
+endif()
 
 check_include_file_cxx("opencv2/opencv.hpp" HAVE_OPENCV_HPP)
 check_include_file_cxx("opencv2/core/cuda.hpp" HAVE_OPENCV_CUDA_HPP)
@@ -127,16 +118,15 @@ find_package(Threads REQUIRED)
 
 message(STATUS "")
 message(STATUS "=== acidcam-gpu Configuration Summary ===")
+message(STATUS "C++ Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "CUDA Version: ${CUDAToolkit_VERSION}")
 message(STATUS "OpenCV Version: ${OpenCV_VERSION}")
-message(STATUS "FFMPEG: ${FFMPEG_LIBRARIES}")
 message(STATUS "MXWrite: ${ACIDCAM_GPU_LOCAL_MXWRITE_DIR}")
 message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "========================================")
-message(STATUS "========================================")
 
-add_library(acidcam-gpu SHARED
+add_library(acidcam-gpu STATIC
     src/filters.cu
 )
 
@@ -146,20 +136,30 @@ set_target_properties(acidcam-gpu PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 
-target_compile_options(acidcam-gpu PRIVATE 
-    $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -ffast-math -fomit-frame-pointer>
-    $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -O3>
-)
+if(MSVC)
+    target_compile_options(acidcam-gpu PRIVATE
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Release,RelWithDebInfo,MinSizeRel>>:/O2>
+        $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math;-O3>
+    )
+else()
+    target_compile_options(acidcam-gpu PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-O3;-march=native;-ffast-math;-fomit-frame-pointer>
+        $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math;-O3>
+    )
+endif()
 
 target_include_directories(acidcam-gpu
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${OpenCV_INCLUDE_DIRS}
-        ${FFMPEG_INCLUDE_DIRS}
 )
+
+if(NOT WIN32)
+    target_include_directories(acidcam-gpu PRIVATE ${FFMPEG_INCLUDE_DIRS})
+endif()
 
 target_link_libraries(acidcam-gpu
     PUBLIC
@@ -169,6 +169,8 @@ target_link_libraries(acidcam-gpu
         Threads::Threads
 )
 
+if(EXAMPLES)
+
 add_executable(acidcam
     app/main_cv.cu
 )
@@ -177,10 +179,18 @@ set_target_properties(acidcam PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
 
-target_compile_options(acidcam PRIVATE 
-    $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -ffast-math -fomit-frame-pointer>
-    $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -O3>
-)
+
+if(MSVC)
+    target_compile_options(acidcam PRIVATE
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Release,RelWithDebInfo,MinSizeRel>>:/O2>
+        $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math;-O3>
+    )
+else()
+    target_compile_options(acidcam PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-O3;-march=native;-ffast-math;-fomit-frame-pointer>
+        $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math;-O3>
+    )
+endif()
 
 target_include_directories(acidcam
     PRIVATE
@@ -196,15 +206,21 @@ target_link_libraries(acidcam
         CUDA::cudart
 )
 
+endif()
+
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ac-gpu
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+    FILES_MATCHING
+        PATTERN "*.hpp"
+        PATTERN "*.h"
 )
 
-set_target_properties(acidcam-gpu acidcam PROPERTIES
-    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
-    BUILD_WITH_INSTALL_RPATH FALSE
-)
+if(UNIX AND NOT APPLE)
+    set_target_properties(acidcam-gpu acidcam PROPERTIES
+        INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
+        BUILD_WITH_INSTALL_RPATH FALSE
+    )
+endif()
 
 install(TARGETS acidcam-gpu
     EXPORT acidcam-gpuTargets
@@ -213,10 +229,11 @@ install(TARGETS acidcam-gpu
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
-
+if(EXAMPLES)
 install(TARGETS acidcam
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+endif()
 
 install(EXPORT acidcam-gpuTargets
     FILE acidcam-gpuTargets.cmake
@@ -249,8 +266,10 @@ if(NOT TARGET uninstall)
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
         "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
-        IMMEDIATE @ONLY
+        IMMEDIATE
+        @ONLY
     )
+
     add_custom_target(uninstall
         COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
     )
