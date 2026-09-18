@@ -724,6 +724,14 @@ if(WIN32)
         NOMINMAX
         WIN32_LEAN_AND_MEAN
     )
+    # acmx.cpp provides the standard `main` entry point.  Marking this target
+    # as a GUI executable makes MSVC look for WinMain instead and causes the
+    # link to fail with LNK2019.  Keep the console subsystem so command-line
+    # probes and shader-library commands work as intended.
+    set_target_properties(acmxvk PROPERTIES WIN32_EXECUTABLE FALSE)
+    if(MINGW)
+        target_link_options(acmxvk PRIVATE -mwindows)
+    endif()
 endif()
 
 if(APPLE)

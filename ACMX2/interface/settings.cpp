@@ -27,6 +27,9 @@
 #include <memory>
 #include <vector>
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <dshow.h>
 #include <dvdmedia.h> // VIDEOINFOHEADER2, FORMAT_VideoInfo2 (not pulled in by dshow.h in MinGW)
 #include <olectl.h>
