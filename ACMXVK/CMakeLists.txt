@@ -772,12 +772,22 @@ if(APPLE AND ACMXVK_USE_MOLTENVK)
     )
 endif()
 if(AUDIO)
-    # Use the package target so a multi-configuration package manager such as
-    # vcpkg selects matching Debug/Release binaries automatically.
-    find_package(RtAudio CONFIG REQUIRED)
+    # Prefer the package target so a multi-configuration package manager such
+    # as vcpkg selects matching Debug/Release binaries automatically. Linux
+    # distributions commonly install only rtaudio.pc, so retain a pkg-config
+    # fallback for those installations.
+    find_package(RtAudio CONFIG QUIET)
+    if(TARGET RtAudio::rtaudio)
+        set(ACMXVK_RTAUDIO_TARGET RtAudio::rtaudio)
+    elseif(TARGET RtAudio::RtAudio)
+        set(ACMXVK_RTAUDIO_TARGET RtAudio::RtAudio)
+    else()
+        pkg_check_modules(ACMXVK_RTAUDIO REQUIRED IMPORTED_TARGET rtaudio)
+        set(ACMXVK_RTAUDIO_TARGET PkgConfig::ACMXVK_RTAUDIO)
+    endif()
     target_sources(acmxvk PRIVATE audio.cpp audio.hpp file_audio.cpp file_audio.hpp)
     target_link_libraries(acmxvk PRIVATE
-        RtAudio::rtaudio
+        ${ACMXVK_RTAUDIO_TARGET}
         PkgConfig::AVCODEC
         PkgConfig::AVFORMAT
         PkgConfig::AVUTIL
@@ -786,11 +796,23 @@ if(AUDIO)
     target_compile_definitions(acmxvk PRIVATE AUDIO_ENABLED)
 endif()
 if(MIDI)
-    # RtMidi exports both Debug and Release variants under its CMake target.
-    # find_library() can otherwise choose the Debug archive for a Release build.
-    find_package(rtmidi CONFIG REQUIRED)
+    # Prefer the package target so a multi-configuration package manager such
+    # as vcpkg selects matching Debug/Release binaries automatically. Linux
+    # distributions commonly install only rtmidi.pc, so retain a pkg-config
+    # fallback for those installations.
+    find_package(rtmidi CONFIG QUIET)
+    if(TARGET RtMidi::rtmidi)
+        set(ACMXVK_RTMIDI_TARGET RtMidi::rtmidi)
+    elseif(TARGET RtMidi::RtMidi)
+        set(ACMXVK_RTMIDI_TARGET RtMidi::RtMidi)
+    elseif(TARGET rtmidi::rtmidi)
+        set(ACMXVK_RTMIDI_TARGET rtmidi::rtmidi)
+    else()
+        pkg_check_modules(ACMXVK_RTMIDI REQUIRED IMPORTED_TARGET rtmidi)
+        set(ACMXVK_RTMIDI_TARGET PkgConfig::ACMXVK_RTMIDI)
+    endif()
     target_sources(acmxvk PRIVATE midi.cpp midi.hpp)
-    target_link_libraries(acmxvk PRIVATE RtMidi::rtmidi)
+    target_link_libraries(acmxvk PRIVATE ${ACMXVK_RTMIDI_TARGET})
     if(WIN32)
         # RtMidi's Windows MM backend calls the WinMM API directly.
         target_link_libraries(acmxvk PRIVATE winmm)

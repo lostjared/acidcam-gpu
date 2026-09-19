@@ -452,14 +452,6 @@ namespace {
         return p.c_str();
     }
 
-    bool is_valid_x264_preset(const std::string &p) {
-        static const char *presets[] = {"ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"};
-        for (const char *n : presets)
-            if (p == n)
-                return true;
-        return false;
-    }
-
     std::string lowercase_ascii(std::string text) {
         std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
         return text;
