@@ -9026,7 +9026,7 @@ class ACView : public gl::GLObject {
 
 #if CV_VERSION_MAJOR > 4 || (CV_VERSION_MAJOR == 4 && CV_VERSION_MINOR >= 5)
                 int hw_accel = static_cast<int>(cap.get(cv::CAP_PROP_HW_ACCELERATION));
-                mx::system_out << "acmx2: HW Acceleration result: " << hw_accel << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (auto preference)" : hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)" : hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)" : hw_accel == cv::VIDEO_ACCELERATION_MFX ? " (MFX)" : hw_accel == cv::VIDEO_ACCELERATION_DRM ? " (DRM)" : " (other)") << "\n";
+                mx::system_out << "acmx2: HW Acceleration result: " << hw_accel << (hw_accel == cv::VIDEO_ACCELERATION_NONE ? " (software/fallback)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (auto preference)" : hw_accel == cv::VIDEO_ACCELERATION_VAAPI ? " (VAAPI)" : hw_accel == cv::VIDEO_ACCELERATION_D3D11 ? " (D3D11)" : hw_accel == cv::VIDEO_ACCELERATION_MFX ? " (MFX)" : hw_accel == cv::VIDEO_ACCELERATION_ANY ? " (ANY)" : " (other)") << "\n";
 #else
                 mx::system_out << "acmx2: OpenCV hardware-decoder reporting unavailable "
                                   "with OpenCV "
