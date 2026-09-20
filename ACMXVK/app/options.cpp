@@ -3,6 +3,7 @@
 #include "../input_validation.hpp"
 #include "../version_info.hpp"
 #include "resource_paths.hpp"
+#include <json/json.h>
 #include <mxvk/mxvk.hpp>
 #include <mxwrite.hpp>
 
@@ -10,7 +11,9 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <utility>
 
@@ -280,10 +283,66 @@ namespace acmxvk {
     }
 
     [[nodiscard]] Options parseOptions(int argc, char **argv) {
-        Options options;
         if (argc < 0 || argv == nullptr || argc > 4096) {
             throw std::runtime_error("command line contains an invalid number of arguments");
         }
+        std::vector<std::string> expanded_arguments;
+        expanded_arguments.emplace_back(argc > 0 ? argv[0] : "acmxvk");
+        bool preset_loaded = false;
+        for (int index = 1; index < argc; ++index) {
+            const std::string_view argument(argv[index]);
+            if (argument != "--use-preset") {
+                expanded_arguments.emplace_back(argument);
+                continue;
+            }
+            if (preset_loaded) {
+                throw std::runtime_error("--use-preset may only be supplied once");
+            }
+            if (++index >= argc) {
+                throw std::runtime_error("missing value for --use-preset");
+            }
+            const fs::path preset_path(argv[index]);
+            input::validate_string(preset_path.string(), input::StringKind::Path, "--use-preset");
+            std::ifstream preset_stream(preset_path);
+            if (!preset_stream) {
+                throw std::runtime_error("could not open preset: " + preset_path.string());
+            }
+            Json::CharReaderBuilder builder;
+            std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+            Json::Value preset;
+            std::string errors;
+            const std::string content((std::istreambuf_iterator<char>(preset_stream)), std::istreambuf_iterator<char>());
+            if (!reader->parse(content.data(), content.data() + content.size(), &preset, &errors) || !preset.isObject()) {
+                throw std::runtime_error("could not parse preset " + preset_path.string() + ": " + errors);
+            }
+            if (preset["format"].asString() != "acmx-preset" || preset["version"].asInt() != 1) {
+                throw std::runtime_error("unsupported ACMX preset: " + preset_path.string());
+            }
+            const Json::Value &preset_arguments = preset["acmxvk_arguments"];
+            if (!preset_arguments.isArray()) {
+                throw std::runtime_error("preset does not contain ACMXVK launch arguments: " + preset_path.string());
+            }
+            for (const Json::Value &preset_argument : preset_arguments) {
+                if (!preset_argument.isString()) {
+                    throw std::runtime_error("preset contains a non-string ACMXVK argument: " + preset_path.string());
+                }
+                const std::string value = preset_argument.asString();
+                if (value == "--use-preset") {
+                    throw std::runtime_error("nested --use-preset is not allowed: " + preset_path.string());
+                }
+                expanded_arguments.push_back(value);
+            }
+            preset_loaded = true;
+        }
+        std::vector<char *> expanded_argv;
+        expanded_argv.reserve(expanded_arguments.size());
+        for (std::string &argument : expanded_arguments) {
+            expanded_argv.push_back(argument.data());
+        }
+        argc = static_cast<int>(expanded_argv.size());
+        argv = expanded_argv.data();
+
+        Options options;
         if (argc == 1) {
             options.show_help = true;
             return options;
@@ -1493,7 +1552,11 @@ namespace acmxvk {
                << "Usage:\n"
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
-               << "  acmxvk -d 0 -s shader-directory [options]\n\n"
+               << "  acmxvk -d 0 -s shader-directory [options]\n"
+               << "  acmxvk --use-preset preset.json [overrides]\n\n"
+               << "Presets:\n"
+               << "      --use-preset <file.json> Load ACMXVK settings saved by the interface\n"
+               << "                              Explicit options after this flag override preset values\n\n"
                << "Resources:\n"
                << "  -p, --path <directory>      Assets root containing data/, shaders/,\n"
                << "                              playlists/, and midi-examples/\n"

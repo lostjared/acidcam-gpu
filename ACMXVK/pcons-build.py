@@ -207,7 +207,7 @@ mxwrite = project.StaticLibrary("mxwrite", env, sources=[mxwrite_dir / "mxwrite.
 mxwrite.public.include_dirs.append(mxwrite_dir)
 mxwrite.link(ffmpeg)
 
-libraries: list[Target] = [mxvk, mxwrite, ffmpeg, opencv]
+libraries: list[Target] = [mxvk, mxwrite, ffmpeg, opencv, require_package("jsoncpp")]
 sources: list[Path] = [
     project_dir / "acmx.cpp",
     project_dir / "main_window.cpp",
@@ -253,9 +253,7 @@ if with_dnn:
     env.cxx.defines.append("ACMXVK_WITH_DNN")
 if with_stable_diffusion:
     sources.append(project_dir / "stable_diffusion.cpp")
-    libraries.extend(
-        [require_package("libcurl"), require_package("jsoncpp")]
-    )
+    libraries.append(require_package("libcurl"))
     env.cxx.defines.append("ACMXVK_WITH_STABLE_DIFFUSION")
 cuda_runtime: ImportedTarget | None = find_cuda_runtime() if with_deep_dream or with_cuda else None
 if with_deep_dream:

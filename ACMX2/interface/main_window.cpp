@@ -31,6 +31,10 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QLabel>
 #include <QLayout>
 #include <QLineEdit>
@@ -71,6 +75,50 @@
 
 namespace {
     constexpr int RECENT_LIBRARY_LIMIT = 10;
+    constexpr int RECENT_PRESET_LIMIT = 10;
+
+    QJsonValue preset_json_value(const QVariant &value) {
+        if (value.metaType().id() == QMetaType::QStringList) {
+            QJsonArray array;
+            for (const QString &entry : value.toStringList()) {
+                array.append(entry);
+            }
+            return array;
+        }
+        return QJsonValue::fromVariant(value);
+    }
+
+    QVariant preset_variant(const QJsonValue &value) {
+        if (value.isArray()) {
+            QStringList result;
+            for (const QJsonValue &entry : value.toArray()) {
+                if (!entry.isString()) {
+                    return {};
+                }
+                result.append(entry.toString());
+            }
+            return result;
+        }
+        return value.toVariant();
+    }
+
+    QJsonObject preset_settings(const QSettings &settings) {
+        QJsonObject result;
+        for (const QString &key : settings.allKeys()) {
+            result.insert(key, preset_json_value(settings.value(key)));
+        }
+        return result;
+    }
+
+    void apply_preset_settings(QSettings &settings, const QJsonObject &values) {
+        for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
+            const QVariant value = preset_variant(it.value());
+            if (value.isValid()) {
+                settings.setValue(it.key(), value);
+            }
+        }
+        settings.sync();
+    }
 
     bool take_process_output_line(QString &buffer, QString &line) {
         const qsizetype newline = buffer.indexOf('\n');
@@ -796,6 +844,16 @@ void MainWindow::initControls() {
     listMenu = menuBarPtr->addMenu(tr("List"));
     viewMenu = menuBarPtr->addMenu(tr("View"));
     helpMenu = menuBarPtr->addMenu(tr("Help"));
+    QAction *savePresetAction = playbackMenu->addAction(tr("Save Preset..."));
+    savePresetAction->setShortcut(QKeySequence("Ctrl+Shift+P"));
+    connect(savePresetAction, &QAction::triggered, this, &MainWindow::menuSavePreset);
+    QAction *importPresetAction = playbackMenu->addAction(tr("Import Preset..."));
+    importPresetAction->setShortcut(QKeySequence("Ctrl+Shift+I"));
+    connect(importPresetAction, &QAction::triggered, this, &MainWindow::menuImportPreset);
+    recentPresetsMenu = playbackMenu->addMenu(tr("Recent Presets"));
+    connect(recentPresetsMenu, &QMenu::aboutToShow, this, &MainWindow::updateRecentPresetsMenu);
+    playbackMenu->addSeparator();
+    updateRecentPresetsMenu();
     backendActionGroup = new QActionGroup(this);
     backendActionGroup->setExclusive(true);
     backendAcmx2Action = backendMenu->addAction(tr("ACMX2"));
@@ -3386,6 +3444,240 @@ void MainWindow::updateRecentLibrariesMenu() {
         QAction *action = loadRecentMenu->addAction(path);
         connect(action, &QAction::triggered, this, [this, path]() { loadLibraryPath(path); });
     }
+}
+
+void MainWindow::addRecentPreset(const QString &path) {
+    const QString presetPath = QFileInfo(path).absoluteFilePath();
+    if (presetPath.isEmpty())
+        return;
+
+    QSettings settings("LostSideDead");
+    QStringList recentPresets = settings.value("presets/recent").toStringList();
+    recentPresets.removeAll(presetPath);
+    recentPresets.prepend(presetPath);
+    while (recentPresets.size() > RECENT_PRESET_LIMIT)
+        recentPresets.removeLast();
+    settings.setValue("presets/recent", recentPresets);
+    settings.sync();
+    updateRecentPresetsMenu();
+}
+
+void MainWindow::updateRecentPresetsMenu() {
+    if (!recentPresetsMenu)
+        return;
+
+    recentPresetsMenu->clear();
+    const QStringList recentPresets = QSettings("LostSideDead").value("presets/recent").toStringList();
+    bool added = false;
+    for (const QString &path : recentPresets) {
+        if (!QFileInfo::exists(path))
+            continue;
+        QAction *action = recentPresetsMenu->addAction(QFileInfo(path).fileName());
+        action->setToolTip(path);
+        connect(action, &QAction::triggered, this, [this, path]() { importPreset(path); });
+        added = true;
+    }
+    if (!added) {
+        QAction *emptyAction = recentPresetsMenu->addAction(tr("No Recent Presets"));
+        emptyAction->setEnabled(false);
+    }
+}
+
+bool MainWindow::savePreset(const QString &path) {
+    QStringList acmxvkArguments;
+    if (active_backend == acmx2::Backend::Acmxvk && !buildRunArguments(acmxvkArguments, PendingAcmxvkAction::CopyCommand, true))
+        return false;
+
+    QJsonObject root;
+    root.insert("format", "acmx-preset");
+    root.insert("version", 1);
+    root.insert("backend", acmx2::backend_id(active_backend));
+    root.insert("interface_settings", preset_settings(QSettings("LostSideDead", "acmx2")));
+    root.insert("application_settings", preset_settings(QSettings("LostSideDead")));
+    root.insert("shader_library", shader_path);
+    root.insert("selected_shader", currentShaderName());
+    root.insert("repeat", play_repeat && play_repeat->isChecked());
+
+    QJsonObject runtime;
+    runtime.insert("gpu_filter_enabled", gpu_filter_enabled);
+    runtime.insert("gpu_filter_indices", gpu_filter_indices);
+    runtime.insert("gpu_buffer_size", gpu_buffer_size);
+    runtime.insert("shader_pass_enabled", shader_pass_enabled);
+    runtime.insert("playlist_enabled", playlist_enabled);
+    runtime.insert("playlist_file", playlist_file_path);
+    runtime.insert("autopilot_frames", autopilot_frames);
+    runtime.insert("autopilot_random", autopilot_random);
+    runtime.insert("stay_on_top", stayOnTopAction && stayOnTopAction->isChecked());
+    QJsonArray shaderPasses;
+    for (const QString &name : shader_pass_names)
+        shaderPasses.append(name);
+    runtime.insert("shader_passes", shaderPasses);
+    QJsonArray playlistNames;
+    for (const QString &name : playlist_names)
+        playlistNames.append(name);
+    runtime.insert("playlist_names", playlistNames);
+    QJsonArray playlistTree;
+    for (const auto &[nodeName, nodeShaders] : playlist_tree_data) {
+        QJsonObject node;
+        node.insert("name", nodeName);
+        QJsonArray shaders;
+        for (const QString &shader : nodeShaders)
+            shaders.append(shader);
+        node.insert("shaders", shaders);
+        playlistTree.append(node);
+    }
+    runtime.insert("playlist_tree", playlistTree);
+    root.insert("runtime", runtime);
+
+    QJsonArray arguments;
+    for (const QString &argument : acmxvkArguments)
+        arguments.append(argument);
+    root.insert("acmxvk_arguments", arguments);
+
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Save Preset"), tr("Could not write preset:\n%1").arg(path));
+        return false;
+    }
+    if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
+        QMessageBox::warning(this, tr("Save Preset"), tr("Could not finish writing preset:\n%1").arg(path));
+        return false;
+    }
+    addRecentPreset(path);
+    Log(tr("Saved preset: %1").arg(path));
+    return true;
+}
+
+bool MainWindow::importPreset(const QString &path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Import Preset"), tr("Could not open preset:\n%1").arg(path));
+        return false;
+    }
+    QJsonParseError error;
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
+    if (error.error != QJsonParseError::NoError || !document.isObject()) {
+        QMessageBox::warning(this, tr("Import Preset"), tr("The preset is not valid JSON:\n%1").arg(error.errorString()));
+        return false;
+    }
+    const QJsonObject root = document.object();
+    if (root.value("format").toString() != "acmx-preset" || root.value("version").toInt() != 1) {
+        QMessageBox::warning(this, tr("Import Preset"), tr("This is not a supported ACMX preset file."));
+        return false;
+    }
+    if (!root.value("interface_settings").isObject() || !root.value("application_settings").isObject()) {
+        QMessageBox::warning(this, tr("Import Preset"), tr("The preset does not contain interface settings."));
+        return false;
+    }
+
+    QSettings interfaceSettings("LostSideDead", "acmx2");
+    QSettings applicationSettings("LostSideDead");
+    apply_preset_settings(interfaceSettings, root.value("interface_settings").toObject());
+    apply_preset_settings(applicationSettings, root.value("application_settings").toObject());
+    const std::optional<acmx2::Backend> backend = acmx2::backend_from_id(root.value("backend").toString());
+    if (backend)
+        set_backend(*backend, false);
+    loadSessionSettings();
+
+    audio_enabled = interfaceSettings.value("audio/enabled", false).toBool();
+    audio_channels = static_cast<unsigned int>(std::max(1, interfaceSettings.value("audio/channels", 2).toInt()));
+    audio_sense = static_cast<float>(interfaceSettings.value("audio/sensitivity", 10).toDouble() / 10.0);
+    audio_passthrough = interfaceSettings.value("audio/passthrough", false).toBool();
+    record_audio = interfaceSettings.value("audio/record", false).toBool();
+    record_volume = interfaceSettings.value("audio/record_volume", 100).toDouble() / 100.0;
+    audio_input = interfaceSettings.value("audio/input_device", -1).toInt();
+    audio_output = interfaceSettings.value("audio/output_device", -1).toInt();
+    const bool audioPlaylistEnabled = interfaceSettings.value("audio/playlist_enabled", false).toBool();
+    const bool audioFileEnabled = interfaceSettings.value("audio/file_enabled", false).toBool();
+    if (audioPlaylistEnabled) {
+        audio_file = interfaceSettings.value("audio/playlist_path").toString();
+    } else if (audioFileEnabled) {
+        audio_file = interfaceSettings.value("audio/file_path").toString();
+    } else {
+        audio_file.clear();
+    }
+    audio_trunc = interfaceSettings.value("audio/file_trunc", false).toBool();
+    audio_repeat = interfaceSettings.value("audio/file_repeat", false).toBool();
+    audio_buffers_enabled = interfaceSettings.value("audio/buffers_enabled", false).toBool();
+    audio_buffer_frames = std::max(1, interfaceSettings.value("audio/buffers_frames", 8).toInt());
+    audio_warm_rate = std::max(0.0, interfaceSettings.value("audio/warm_rate", 0.5).toDouble());
+    midi_enabled = applicationSettings.value("midiEnabled", false).toBool();
+    midi_config_file = applicationSettings.value("midiConfigFile").toString();
+    midi_device = applicationSettings.value("midiDevice", -1).toInt();
+    watermark_enabled = applicationSettings.value("watermarkEnabled", false).toBool();
+    watermark_text = applicationSettings.value("watermarkText").toString();
+    watermark_r = applicationSettings.value("watermarkR", 255).toInt();
+    watermark_g = applicationSettings.value("watermarkG", 0).toInt();
+    watermark_b = applicationSettings.value("watermarkB", 150).toInt();
+    display_filter_enabled = applicationSettings.value("displayFilter", false).toBool();
+    if (displayFilterAction) {
+        QSignalBlocker blocker(displayFilterAction);
+        displayFilterAction->setChecked(display_filter_enabled);
+    }
+    customStyleSheet = applicationSettings.value("customStyleSheet", acmx2::defaultCustomStyleSheet()).toString();
+    const bool useCustomStyle = applicationSettings.value("useCustomStyle", false).toBool();
+    if (styleSheetAction) {
+        QSignalBlocker blocker(styleSheetAction);
+        styleSheetAction->setChecked(useCustomStyle);
+    }
+    applyCustomStyleSheet(useCustomStyle);
+
+    const QJsonObject runtime = root.value("runtime").toObject();
+    gpu_filter_enabled = runtime.value("gpu_filter_enabled").toBool(gpu_filter_enabled);
+    gpu_filter_indices = runtime.value("gpu_filter_indices").toString(gpu_filter_indices);
+    gpu_buffer_size = runtime.value("gpu_buffer_size").toInt(gpu_buffer_size);
+    shader_pass_enabled = runtime.value("shader_pass_enabled").toBool(shader_pass_enabled);
+    playlist_enabled = runtime.value("playlist_enabled").toBool(playlist_enabled);
+    playlist_file_path = runtime.value("playlist_file").toString(playlist_file_path);
+    autopilot_frames = runtime.value("autopilot_frames").toInt(autopilot_frames);
+    autopilot_random = runtime.value("autopilot_random").toBool(autopilot_random);
+    if (stayOnTopAction)
+        stayOnTopAction->setChecked(runtime.value("stay_on_top").toBool(false));
+    shader_pass_names.clear();
+    for (const QJsonValue &value : runtime.value("shader_passes").toArray())
+        shader_pass_names.append(value.toString());
+    playlist_names.clear();
+    for (const QJsonValue &value : runtime.value("playlist_names").toArray())
+        playlist_names.append(value.toString());
+    playlist_tree_data.clear();
+    for (const QJsonValue &value : runtime.value("playlist_tree").toArray()) {
+        const QJsonObject node = value.toObject();
+        const QString nodeName = node.value("name").toString();
+        if (nodeName.isEmpty())
+            continue;
+        QStringList nodeShaders;
+        for (const QJsonValue &shader : node.value("shaders").toArray())
+            nodeShaders.append(shader.toString());
+        playlist_tree_data.append({nodeName, nodeShaders});
+    }
+    if (play_repeat) {
+        QSignalBlocker blocker(play_repeat);
+        play_repeat->setChecked(root.value("repeat").toBool(false));
+    }
+
+    const QString library = root.value("shader_library").toString();
+    if (!library.isEmpty() && loadLibraryPath(library)) {
+        const int row = items.indexOf(root.value("selected_shader").toString());
+        if (row >= 0)
+            selectShaderRow(row);
+    }
+    publishRuntimeSettingsToRunningProcess();
+    publishMultipassShadersToRunningProcess();
+    addRecentPreset(path);
+    Log(tr("Imported preset: %1").arg(path));
+    return true;
+}
+
+void MainWindow::menuSavePreset() {
+    const QString path = QFileDialog::getSaveFileName(this, tr("Save Preset"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/acmx-preset.json", tr("ACMX Preset (*.json)"));
+    if (!path.isEmpty())
+        savePreset(path);
+}
+
+void MainWindow::menuImportPreset() {
+    const QString path = QFileDialog::getOpenFileName(this, tr("Import Preset"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), tr("ACMX Preset (*.json)"));
+    if (!path.isEmpty())
+        importPreset(path);
 }
 
 void MainWindow::fileOpenProp() {

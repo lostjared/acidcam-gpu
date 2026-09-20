@@ -107,6 +107,8 @@ class MainWindow : public QMainWindow {
     void menuWatermarkSettings();
     void menuCustomUniforms();
     void menuUniformReference();
+    void menuSavePreset();
+    void menuImportPreset();
     void menuToggleDisplayFilter(bool checked);
     void openCustomStyleEditor();
 
@@ -172,6 +174,10 @@ class MainWindow : public QMainWindow {
     void openShaderEditor(const QString &filePath, int lineNumber = 1, int columnNumber = 0, int matchLength = 0);
     /// @brief Validate, load, persist, and remember a shader library directory.
     bool loadLibraryPath(const QString &path);
+    bool savePreset(const QString &path);
+    bool importPreset(const QString &path);
+    void addRecentPreset(const QString &path);
+    void updateRecentPresetsMenu();
     /// @brief Add a library directory to the persisted recent-libraries list.
     void addRecentLibrary(const QString &path);
     /// @brief Rebuild the File > Load Recent submenu from persisted settings.
@@ -193,6 +199,7 @@ class MainWindow : public QMainWindow {
     QMenu *backendMenu = nullptr;
     QMenu *cameraMenu = nullptr;
     QMenu *playbackMenu = nullptr;
+    QMenu *recentPresetsMenu = nullptr;
     QMenu *runMenu = nullptr;
     QMenu *listMenu = nullptr;
     QMenu *viewMenu = nullptr;

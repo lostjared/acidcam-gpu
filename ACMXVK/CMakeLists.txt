@@ -98,6 +98,7 @@ else()
     pkg_check_modules(SWRESAMPLE REQUIRED IMPORTED_TARGET libswresample>=3.0.0)
     set(ACMXVK_FFMPEG_TARGET PkgConfig::FFMPEG)
 endif()
+pkg_check_modules(ACMXVK_JSONCPP REQUIRED IMPORTED_TARGET jsoncpp)
 
 if(ACMXVK_USE_BUNDLED_MXWRITE)
     if(NOT EXISTS "${ACMXVK_MXWRITE_SOURCE_DIR}/CMakeLists.txt")
@@ -310,7 +311,6 @@ endif()
 
 if(WITH_STABLE_DIFFUSION)
     pkg_check_modules(ACMXVK_CURL REQUIRED IMPORTED_TARGET libcurl)
-    pkg_check_modules(ACMXVK_JSONCPP REQUIRED IMPORTED_TARGET jsoncpp)
 
     if(WIN32)
         # vcpkg exposes libcurl.lib through pkg-config, while the runtime DLL
@@ -776,6 +776,7 @@ target_link_libraries(acmxvk PRIVATE
     Threads::Threads
     ${ACMXVK_FFMPEG_TARGET}
     ${OpenCV_LIBS}
+    PkgConfig::ACMXVK_JSONCPP
 )
 if(MSVC)
     target_compile_options(acmxvk PRIVATE /W4 /permissive-)
@@ -886,7 +887,6 @@ if(WITH_STABLE_DIFFUSION)
     )
     target_link_libraries(acmxvk PRIVATE
         PkgConfig::ACMXVK_CURL
-        PkgConfig::ACMXVK_JSONCPP
     )
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_STABLE_DIFFUSION)
     message(STATUS
