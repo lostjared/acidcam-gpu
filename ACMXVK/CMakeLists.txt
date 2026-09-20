@@ -63,12 +63,26 @@ if(NOT APPLE)
     find_package(CUDAToolkit QUIET)
 endif()
 find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
-
-# MXWrite installations exist with both a combined PkgConfig::FFMPEG target
-# and individual FFmpeg targets in their exported link interface. Define both
-# forms before loading MXWrite so either package generation can be consumed.
-if(NOT TARGET PkgConfig::FFMPEG)
+# Windows/vcpkg ships FFmpeg as a CMake find-module, while pkg-config is not
+# normally available in a Visual Studio developer environment.  Keep the
+# pkg-config path for Unix package managers, but use native CMake targets on
+# Windows so optional features can be configured there as well.
+if(WIN32)
+    find_package(FFMPEG REQUIRED)
+    # FindFFMPEG is vcpkg's native entry point and makes its bundled pkgconf
+    # executable available.  Give ACMXVK a private target so MXWrite's own
+    # FFMPEG lookup cannot overwrite the component list (notably
+    # libswresample, used by AUDIO).
+    pkg_check_modules(ACMXVK_FFMPEG REQUIRED IMPORTED_TARGET
+        libavcodec>=58.0.0
+        libavformat>=58.0.0
+        libavutil>=56.0.0
+        libswscale>=5.0.0
+        libswresample>=3.0.0
+    )
+    set(ACMXVK_FFMPEG_TARGET PkgConfig::ACMXVK_FFMPEG)
+else()
+    find_package(PkgConfig REQUIRED)
     pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
         libavcodec>=58.0.0
         libavformat>=58.0.0
@@ -76,21 +90,12 @@ if(NOT TARGET PkgConfig::FFMPEG)
         libswscale>=5.0.0
         libswresample>=3.0.0
     )
-endif()
-if(NOT TARGET PkgConfig::AVCODEC)
     pkg_check_modules(AVCODEC REQUIRED IMPORTED_TARGET libavcodec>=58.0.0)
-endif()
-if(NOT TARGET PkgConfig::AVFORMAT)
     pkg_check_modules(AVFORMAT REQUIRED IMPORTED_TARGET libavformat>=58.0.0)
-endif()
-if(NOT TARGET PkgConfig::AVUTIL)
     pkg_check_modules(AVUTIL REQUIRED IMPORTED_TARGET libavutil>=56.0.0)
-endif()
-if(NOT TARGET PkgConfig::SWSCALE)
     pkg_check_modules(SWSCALE REQUIRED IMPORTED_TARGET libswscale>=5.0.0)
-endif()
-if(NOT TARGET PkgConfig::SWRESAMPLE)
     pkg_check_modules(SWRESAMPLE REQUIRED IMPORTED_TARGET libswresample>=3.0.0)
+    set(ACMXVK_FFMPEG_TARGET PkgConfig::FFMPEG)
 endif()
 
 if(ACMXVK_USE_BUNDLED_MXWRITE)
@@ -149,10 +154,22 @@ else()
 endif()
 
 if(WEBP)
-    pkg_check_modules(ACMXVK_WEBP REQUIRED IMPORTED_TARGET libwebp)
+    if(WIN32)
+        find_package(WebP CONFIG REQUIRED)
+        set(ACMXVK_WEBP_TARGET WebP::webp)
+    else()
+        pkg_check_modules(ACMXVK_WEBP REQUIRED IMPORTED_TARGET libwebp)
+        set(ACMXVK_WEBP_TARGET PkgConfig::ACMXVK_WEBP)
+    endif()
 endif()
 if(TIFF)
-    pkg_check_modules(ACMXVK_TIFF REQUIRED IMPORTED_TARGET libtiff-4)
+    if(WIN32)
+        find_package(TIFF REQUIRED)
+        set(ACMXVK_TIFF_TARGET TIFF::TIFF)
+    else()
+        pkg_check_modules(ACMXVK_TIFF REQUIRED IMPORTED_TARGET libtiff-4)
+        set(ACMXVK_TIFF_TARGET PkgConfig::ACMXVK_TIFF)
+    endif()
 endif()
 
 find_package(mxvk 0.34.1 CONFIG REQUIRED)
@@ -756,8 +773,7 @@ target_link_libraries(acmxvk PRIVATE
     mxvk::mxvk
     MXWrite::mxwrite
     Threads::Threads
-    PkgConfig::AVFORMAT
-    PkgConfig::AVUTIL
+    ${ACMXVK_FFMPEG_TARGET}
     ${OpenCV_LIBS}
 )
 if(MSVC)
@@ -788,10 +804,7 @@ if(AUDIO)
     target_sources(acmxvk PRIVATE audio.cpp audio.hpp file_audio.cpp file_audio.hpp)
     target_link_libraries(acmxvk PRIVATE
         ${ACMXVK_RTAUDIO_TARGET}
-        PkgConfig::AVCODEC
-        PkgConfig::AVFORMAT
-        PkgConfig::AVUTIL
-        PkgConfig::SWRESAMPLE
+        ${ACMXVK_FFMPEG_TARGET}
     )
     target_compile_definitions(acmxvk PRIVATE AUDIO_ENABLED)
 endif()
@@ -820,7 +833,7 @@ if(MIDI)
     target_compile_definitions(acmxvk PRIVATE MIDI_ENABLED)
 endif()
 if(WEBP)
-    target_link_libraries(acmxvk PRIVATE PkgConfig::ACMXVK_WEBP)
+    target_link_libraries(acmxvk PRIVATE ${ACMXVK_WEBP_TARGET})
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_WEBP)
     message(STATUS
         "WebP snapshot support: ENABLED (libwebp ${ACMXVK_WEBP_VERSION})"
@@ -829,7 +842,7 @@ else()
     message(STATUS "WebP snapshot support: DISABLED")
 endif()
 if(TIFF)
-    target_link_libraries(acmxvk PRIVATE PkgConfig::ACMXVK_TIFF)
+    target_link_libraries(acmxvk PRIVATE ${ACMXVK_TIFF_TARGET})
     target_compile_definitions(acmxvk PRIVATE ACMXVK_WITH_TIFF)
     message(STATUS
         "TIFF snapshot support: ENABLED (libtiff ${ACMXVK_TIFF_VERSION})"

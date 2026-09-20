@@ -34,15 +34,27 @@ if(APPLE)
     endif()
 endif()
 
-find_package(PkgConfig REQUIRED)
 find_package(CUDAToolkit QUIET)
 
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-    libavcodec>=58.0.0
-    libavformat>=58.0.0
-    libavutil>=56.0.0
-    libswscale>=5.0.0
-)
+# vcpkg's Windows FFmpeg port provides a FindFFMPEG module, whereas a normal
+# MSVC environment has no pkg-config executable.  Use it directly there and
+# preserve pkg-config discovery for Unix package managers.
+if(WIN32)
+    find_package(FFMPEG REQUIRED)
+    # Keep the resolved libraries rather than a local interface target: mxwrite
+    # is installed/exported and CMake requires every target dependency of an
+    # exported target to be exported too.
+    set(MXWRITE_FFMPEG_TARGET ${FFMPEG_LIBRARIES})
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+        libavcodec>=58.0.0
+        libavformat>=58.0.0
+        libavutil>=56.0.0
+        libswscale>=5.0.0
+    )
+    set(MXWRITE_FFMPEG_TARGET PkgConfig::FFMPEG)
+endif()
 
 
 if(NOT FFMPEG_FOUND)
@@ -176,7 +188,7 @@ if(FFMPEG_LIBRARY_DIRS)
     target_link_directories(mxwrite PUBLIC ${FFMPEG_LIBRARY_DIRS})
 endif()
 
-target_link_libraries(mxwrite PUBLIC PkgConfig::FFMPEG Threads::Threads)
+target_link_libraries(mxwrite PUBLIC ${MXWRITE_FFMPEG_TARGET} Threads::Threads)
 
 if(CUDAToolkit_FOUND)
     # PUBLIC: this define changes the layout of class Writer (adds the
