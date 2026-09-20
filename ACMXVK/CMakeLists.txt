@@ -69,6 +69,7 @@ find_package(Threads REQUIRED)
 # Windows so optional features can be configured there as well.
 if(WIN32)
     find_package(FFMPEG REQUIRED)
+    find_package(PkgConfig REQUIRED)
     # FindFFMPEG is vcpkg's native entry point and makes its bundled pkgconf
     # executable available.  Give ACMXVK a private target so MXWrite's own
     # FFMPEG lookup cannot overwrite the component list (notably
