@@ -107,6 +107,7 @@ class MainWindow : public QMainWindow {
     void menuWatermarkSettings();
     void menuCustomUniforms();
     void menuUniformReference();
+    void menuNewProject();
     void menuSavePreset();
     void menuImportPreset();
     void menuToggleDisplayFilter(bool checked);
@@ -174,7 +175,8 @@ class MainWindow : public QMainWindow {
     void openShaderEditor(const QString &filePath, int lineNumber = 1, int columnNumber = 0, int matchLength = 0);
     /// @brief Validate, load, persist, and remember a shader library directory.
     bool loadLibraryPath(const QString &path);
-    bool savePreset(const QString &path);
+    bool savePreset(const QString &path, const QString &outputExtension);
+    bool savePresetSynchronously(const QString &path);
     bool importPreset(const QString &path);
     void addRecentPreset(const QString &path);
     void updateRecentPresetsMenu();
@@ -195,6 +197,7 @@ class MainWindow : public QMainWindow {
     /// @brief Start a strict, failure-tolerant, or destructive ACMXVK build.
     void start_acmxvk_build(const QString &build_path, AcmxvkBuildMode mode);
     QMenu *fileMenu = nullptr;
+    QMenu *projectMenu = nullptr;
     QMenu *loadRecentMenu = nullptr;
     QMenu *backendMenu = nullptr;
     QMenu *cameraMenu = nullptr;
@@ -243,6 +246,8 @@ class MainWindow : public QMainWindow {
     QString graphics_file;
     QString prefix_path;
     QString output_file;
+    QString project_output_directory;
+    QString project_output_filename;
     bool save_output_log = false;
     QFile output_run_log;
     double output_fps = 24.0f;

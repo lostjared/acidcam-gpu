@@ -282,6 +282,20 @@ namespace acmxvk {
         }
     }
 
+    void resolve_project_arguments(std::vector<std::string> &arguments, const fs::path &project_directory) {
+        static constexpr std::array<std::string_view, 13> path_options = {"--input", "--graphic", "--audio-file", "--shaders", "--model", "--onnx", "--dream-model", "--sd-model", "--upscale-model", "--sd-lora", "--playlist", "--midi-map", "--output"};
+        for (std::size_t index = 0; index + 1 < arguments.size(); ++index) {
+            const std::string_view option = arguments[index];
+            if (option == "--prefix" || option == "--record-audio" || std::ranges::find(path_options, option) != path_options.end()) {
+                fs::path value(arguments[index + 1]);
+                if (value.is_relative()) {
+                    arguments[index + 1] = (project_directory / value).lexically_normal().string();
+                }
+                ++index;
+            }
+        }
+    }
+
     [[nodiscard]] Options parseOptions(int argc, char **argv) {
         if (argc < 0 || argv == nullptr || argc > 4096) {
             throw std::runtime_error("command line contains an invalid number of arguments");
@@ -291,18 +305,18 @@ namespace acmxvk {
         bool preset_loaded = false;
         for (int index = 1; index < argc; ++index) {
             const std::string_view argument(argv[index]);
-            if (argument != "--use-preset") {
+            if (argument != "--use-project" && argument != "--use-preset") {
                 expanded_arguments.emplace_back(argument);
                 continue;
             }
             if (preset_loaded) {
-                throw std::runtime_error("--use-preset may only be supplied once");
+                throw std::runtime_error("--use-project may only be supplied once");
             }
             if (++index >= argc) {
-                throw std::runtime_error("missing value for --use-preset");
+                throw std::runtime_error("missing value for --use-project");
             }
             const fs::path preset_path(argv[index]);
-            input::validate_string(preset_path.string(), input::StringKind::Path, "--use-preset");
+            input::validate_string(preset_path.string(), input::StringKind::Path, "--use-project");
             std::ifstream preset_stream(preset_path);
             if (!preset_stream) {
                 throw std::runtime_error("could not open preset: " + preset_path.string());
@@ -315,8 +329,11 @@ namespace acmxvk {
             if (!reader->parse(content.data(), content.data() + content.size(), &preset, &errors) || !preset.isObject()) {
                 throw std::runtime_error("could not parse preset " + preset_path.string() + ": " + errors);
             }
-            if (preset["format"].asString() != "acmx-preset" || preset["version"].asInt() != 1) {
-                throw std::runtime_error("unsupported ACMX preset: " + preset_path.string());
+            const int project_version = preset["version"].asInt();
+            const bool legacy_preset = preset["format"].asString() == "acmx-preset" && project_version == 1;
+            const bool portable_project = preset["format"].asString() == "acmx-project" && project_version == 2;
+            if (!legacy_preset && !portable_project) {
+                throw std::runtime_error("unsupported ACMX project: " + preset_path.string());
             }
             const Json::Value &preset_arguments = preset["acmxvk_arguments"];
             if (!preset_arguments.isArray()) {
@@ -327,10 +344,20 @@ namespace acmxvk {
                     throw std::runtime_error("preset contains a non-string ACMXVK argument: " + preset_path.string());
                 }
                 const std::string value = preset_argument.asString();
-                if (value == "--use-preset") {
-                    throw std::runtime_error("nested --use-preset is not allowed: " + preset_path.string());
+                if (value == "--use-project" || value == "--use-preset") {
+                    throw std::runtime_error("nested --use-project is not allowed: " + preset_path.string());
                 }
                 expanded_arguments.push_back(value);
+            }
+            if (portable_project) {
+                std::vector<std::string> project_arguments;
+                project_arguments.reserve(expanded_arguments.size());
+                const std::size_t argument_start = expanded_arguments.size() - preset_arguments.size();
+                for (std::size_t argument_index = argument_start; argument_index < expanded_arguments.size(); ++argument_index) {
+                    project_arguments.push_back(expanded_arguments[argument_index]);
+                }
+                resolve_project_arguments(project_arguments, preset_path.parent_path());
+                std::copy(project_arguments.begin(), project_arguments.end(), expanded_arguments.begin() + static_cast<std::ptrdiff_t>(argument_start));
             }
             preset_loaded = true;
         }
@@ -1553,10 +1580,11 @@ namespace acmxvk {
                << "  acmxvk -i video.mp4 -s shader-directory [options]\n"
                << "  acmxvk -g image.png -f shader.spv [options]\n"
                << "  acmxvk -d 0 -s shader-directory [options]\n"
-               << "  acmxvk --use-preset preset.json [overrides]\n\n"
-               << "Presets:\n"
-               << "      --use-preset <file.json> Load ACMXVK settings saved by the interface\n"
-               << "                              Explicit options after this flag override preset values\n\n"
+               << "  acmxvk --use-project project.json [overrides]\n\n"
+               << "Projects:\n"
+               << "      --use-project <file.json> Load a portable ACMX interface project\n"
+               << "                              Explicit options after this flag override project values\n"
+               << "      --use-preset <file.json>  Compatibility alias for --use-project\n\n"
                << "Resources:\n"
                << "  -p, --path <directory>      Assets root containing data/, shaders/,\n"
                << "                              playlists/, and midi-examples/\n"

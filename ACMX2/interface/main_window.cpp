@@ -21,11 +21,13 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
+#include <QFutureWatcher>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -42,9 +44,11 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QProcess>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QSpinBox>
 #include <QStandardPaths>
 #include <QTabWidget>
@@ -52,11 +56,14 @@
 #include <QTimer>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
+#include <QtConcurrent>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstring>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <random>
 #include <sstream>
 #ifdef _WIN32
@@ -118,6 +125,399 @@ namespace {
             }
         }
         settings.sync();
+    }
+
+    struct ProjectProgress {
+        std::atomic<qint64> total_bytes = 0;
+        std::atomic<qint64> copied_bytes = 0;
+        std::atomic_bool cancelled = false;
+    };
+
+    class ProjectResources {
+      public:
+        ProjectResources(QString project_root, std::shared_ptr<ProjectProgress> progress) : project_root(std::move(project_root)), progress(std::move(progress)) {}
+
+        QString copy_path(const QString &source_path, const QString &category, QString &error) {
+            if (source_path.isEmpty())
+                return {};
+            const QFileInfo source(source_path);
+            if (!source.exists()) {
+                error = QStringLiteral("Project resource does not exist: %1").arg(source_path);
+                return {};
+            }
+            const QString absolute_source = source.absoluteFilePath();
+            for (auto it = copied_paths.constBegin(); it != copied_paths.constEnd(); ++it) {
+                const QFileInfo copied_source(it.key());
+                if (copied_source.isDir() && QDir(it.key()).relativeFilePath(absolute_source) != QStringLiteral("..") && !QDir(it.key()).relativeFilePath(absolute_source).startsWith(QStringLiteral("../"))) {
+                    return QDir(it.value()).filePath(QDir(it.key()).relativeFilePath(absolute_source));
+                }
+                if (it.key() == absolute_source)
+                    return it.value();
+            }
+
+            QString relative_destination = QDir(category).filePath(source.fileName());
+            relative_destination = unique_destination(relative_destination);
+            const QString destination = QDir(project_root).filePath(relative_destination);
+            if (source.isDir()) {
+                progress->total_bytes.fetch_add(directory_size(absolute_source));
+                if (!copy_directory(absolute_source, destination, error))
+                    return {};
+            } else {
+                progress->total_bytes.fetch_add(source.size());
+                if (!copy_file(absolute_source, destination, error))
+                    return {};
+            }
+            copied_paths.insert(absolute_source, relative_destination);
+            return relative_destination;
+        }
+
+        QString absolute_path(const QString &relative_path) const { return QDir(project_root).filePath(relative_path); }
+
+      private:
+        QString unique_destination(const QString &relative_destination) {
+            const QFileInfo info(relative_destination);
+            const QString directory = info.path();
+            const QString suffix = info.completeSuffix();
+            const QString stem = suffix.isEmpty() ? info.fileName() : info.completeBaseName();
+            QString candidate = relative_destination;
+            int index = 2;
+            while (used_destinations.contains(candidate) || QFileInfo::exists(QDir(project_root).filePath(candidate))) {
+                const QString name = suffix.isEmpty() ? QStringLiteral("%1-%2").arg(stem).arg(index) : QStringLiteral("%1-%2.%3").arg(stem).arg(index).arg(suffix);
+                candidate = QDir(directory).filePath(name);
+                ++index;
+            }
+            used_destinations.insert(candidate);
+            return candidate;
+        }
+
+        qint64 directory_size(const QString &source) const {
+            qint64 total = 0;
+            QDirIterator iterator(source, QDir::Files | QDir::NoDotAndDotDot | QDir::Hidden, QDirIterator::Subdirectories);
+            while (iterator.hasNext()) {
+                iterator.next();
+                total += iterator.fileInfo().size();
+            }
+            return total;
+        }
+
+        bool copy_file(const QString &source, const QString &destination, QString &error) const {
+            if (!QDir().mkpath(QFileInfo(destination).absolutePath())) {
+                error = QStringLiteral("Could not copy project resource: %1").arg(source);
+                return false;
+            }
+            QFile input(source);
+            QFile output(destination);
+            if (!input.open(QIODevice::ReadOnly) || !output.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
+                error = QStringLiteral("Could not copy project resource: %1").arg(source);
+                return false;
+            }
+            constexpr qint64 buffer_size = 4 * 1024 * 1024;
+            while (!input.atEnd()) {
+                if (progress->cancelled.load()) {
+                    output.close();
+                    QFile::remove(destination);
+                    error = QStringLiteral("Project save cancelled");
+                    return false;
+                }
+                const QByteArray bytes = input.read(buffer_size);
+                if (bytes.isEmpty() && input.error() != QFile::NoError) {
+                    error = QStringLiteral("Could not read project resource: %1").arg(source);
+                    return false;
+                }
+                if (output.write(bytes) != bytes.size()) {
+                    error = QStringLiteral("Could not copy project resource: %1").arg(source);
+                    return false;
+                }
+                progress->copied_bytes.fetch_add(bytes.size());
+            }
+            return true;
+        }
+
+        bool copy_directory(const QString &source, const QString &destination, QString &error) const {
+            if (!QDir().mkpath(destination)) {
+                error = QStringLiteral("Could not create project resource directory: %1").arg(destination);
+                return false;
+            }
+            QDir source_directory(source);
+            QDirIterator iterator(source, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden, QDirIterator::Subdirectories);
+            while (iterator.hasNext()) {
+                if (progress->cancelled.load()) {
+                    error = QStringLiteral("Project save cancelled");
+                    return false;
+                }
+                const QString entry = iterator.next();
+                const QFileInfo info(entry);
+                const QString target = QDir(destination).filePath(source_directory.relativeFilePath(entry));
+                if (info.isDir()) {
+                    if (!QDir().mkpath(target)) {
+                        error = QStringLiteral("Could not create project resource directory: %1").arg(target);
+                        return false;
+                    }
+                } else if (!copy_file(entry, target, error)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        QString project_root;
+        QHash<QString, QString> copied_paths;
+        QSet<QString> used_destinations;
+        std::shared_ptr<ProjectProgress> progress;
+    };
+
+    QString copy_audio_playlist(ProjectResources &resources, const QString &source_path, QString &error) {
+        const QString relative_playlist = resources.copy_path(source_path, QStringLiteral("resources/audio"), error);
+        if (relative_playlist.isEmpty())
+            return {};
+        QFile source(source_path);
+        if (!source.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            error = QStringLiteral("Could not read audio playlist: %1").arg(source_path);
+            return {};
+        }
+        QTextStream reader(&source);
+        QStringList lines;
+        const QDir source_directory = QFileInfo(source_path).absoluteDir();
+        const QDir destination_directory = QFileInfo(resources.absolute_path(relative_playlist)).absoluteDir();
+        while (!reader.atEnd()) {
+            const QString line = reader.readLine();
+            const QString trimmed = line.trimmed();
+            if (trimmed.isEmpty() || trimmed.startsWith(QLatin1Char('#')) || trimmed.contains(QStringLiteral("://"))) {
+                lines.append(line);
+                continue;
+            }
+            const QString track = QDir::isAbsolutePath(trimmed) ? trimmed : source_directory.filePath(trimmed);
+            const QString relative_track = resources.copy_path(track, QStringLiteral("resources/audio/tracks"), error);
+            if (relative_track.isEmpty())
+                return {};
+            lines.append(destination_directory.relativeFilePath(resources.absolute_path(relative_track)));
+        }
+        QSaveFile playlist(resources.absolute_path(relative_playlist));
+        if (!playlist.open(QIODevice::WriteOnly | QIODevice::Text) || playlist.write(lines.join(QLatin1Char('\n')).toUtf8()) < 0 || !playlist.commit()) {
+            error = QStringLiteral("Could not write portable audio playlist: %1").arg(relative_playlist);
+            return {};
+        }
+        return relative_playlist;
+    }
+
+    QString project_path(const QString &project_root, const QString &path) {
+        if (path.isEmpty() || QDir::isAbsolutePath(path))
+            return path;
+        return QFileInfo(QDir(project_root).filePath(path)).absoluteFilePath();
+    }
+
+    void set_project_path(QJsonObject &settings, const QString &key, const QString &path) {
+        if (!path.isEmpty())
+            settings.insert(key, path);
+    }
+
+    void resolve_project_path(QJsonObject &settings, const QString &key, const QString &project_root) {
+        const QJsonValue value = settings.value(key);
+        if (value.isString())
+            settings.insert(key, project_path(project_root, value.toString()));
+    }
+
+    void resolve_project_path_list(QJsonObject &settings, const QString &key, const QString &project_root) {
+        const QJsonArray values = settings.value(key).toArray();
+        if (values.isEmpty())
+            return;
+        QJsonArray resolved;
+        for (const QJsonValue &value : values)
+            resolved.append(value.isString() ? project_path(project_root, value.toString()) : value);
+        settings.insert(key, resolved);
+    }
+
+    struct ProjectSaveRequest {
+        QString path;
+        acmx2::Backend backend = acmx2::Backend::Acmx2;
+        QJsonObject interface_settings;
+        QJsonObject application_settings;
+        QJsonObject runtime;
+        QString shader_library;
+        QString selected_shader;
+        bool repeat = false;
+        QStringList acmxvk_arguments;
+        QString video_file;
+        QString graphics_file;
+        QString audio_file;
+        QString model_file;
+        QString onnx_model;
+        QString deep_dream_model;
+        QString stable_diffusion_model;
+        QString stable_diffusion_upscale_model;
+        QStringList stable_diffusion_loras;
+        QString midi_config_file;
+        QString playlist_file;
+        QString output_file;
+        QString output_extension;
+        std::shared_ptr<ProjectProgress> progress;
+        bool enable_3d = false;
+        bool onnx_model_enabled = false;
+        bool deep_dream_enabled = false;
+        bool stable_diffusion_enabled = false;
+        bool stable_diffusion_upscale_only = false;
+        bool midi_enabled = false;
+        bool playlist_enabled = false;
+        bool png_output = false;
+    };
+
+    struct ProjectSaveResult {
+        bool success = false;
+        QString message;
+    };
+
+    ProjectSaveResult save_project_bundle(ProjectSaveRequest request) {
+        const QString project_root = QFileInfo(request.path).absolutePath();
+        if (!QDir().mkpath(project_root))
+            return {false, QStringLiteral("Could not create project directory: %1").arg(project_root)};
+        if (!QDir().mkpath(QDir(project_root).filePath(QStringLiteral("output/snapshots"))) || !QDir().mkpath(QDir(project_root).filePath(QStringLiteral("output/logs"))))
+            return {false, QStringLiteral("Could not create project output directory")};
+
+        ProjectResources resources(project_root, request.progress);
+        QString error;
+        const auto copy_resource = [&resources, &error](const QString &source, const QString &category) { return resources.copy_path(source, category, error); };
+        const auto require_resource = [](const QString &resource) { return !resource.isEmpty(); };
+        QJsonObject interface_settings = request.interface_settings;
+        QJsonObject application_settings = request.application_settings;
+
+        QString project_library;
+        if (!request.shader_library.isEmpty()) {
+            project_library = copy_resource(request.shader_library, QStringLiteral("resources/shaders"));
+            if (project_library.isEmpty())
+                return {false, error};
+            application_settings.insert(acmx2::backend_settings_key(request.backend, "library"), project_library);
+        }
+        if (!request.video_file.isEmpty()) {
+            const QString video = copy_resource(request.video_file, QStringLiteral("resources/media"));
+            if (video.isEmpty())
+                return {false, error};
+            set_project_path(interface_settings, QStringLiteral("interface/input_video"), video);
+        }
+        if (!request.graphics_file.isEmpty()) {
+            const QString graphic = copy_resource(request.graphics_file, QStringLiteral("resources/media"));
+            if (graphic.isEmpty())
+                return {false, error};
+            set_project_path(interface_settings, QStringLiteral("interface/graphics_file"), graphic);
+        }
+        if (!request.audio_file.isEmpty()) {
+            const bool audio_playlist = interface_settings.value("audio/playlist_enabled").toBool();
+            const QString audio = audio_playlist ? copy_audio_playlist(resources, request.audio_file, error) : copy_resource(request.audio_file, QStringLiteral("resources/audio"));
+            if (audio.isEmpty())
+                return {false, error};
+            set_project_path(interface_settings, audio_playlist ? QStringLiteral("audio/playlist_path") : QStringLiteral("audio/file_path"), audio);
+        }
+        if (request.enable_3d && !request.model_file.isEmpty()) {
+            const QString model = copy_resource(request.model_file, QStringLiteral("resources/models"));
+            if (model.isEmpty())
+                return {false, error};
+            set_project_path(interface_settings, QStringLiteral("interface/model_file"), model);
+        }
+        if (request.onnx_model_enabled && !request.onnx_model.isEmpty()) {
+            const QString model = copy_resource(request.onnx_model, QStringLiteral("resources/models"));
+            if (model.isEmpty())
+                return {false, error};
+            set_project_path(interface_settings, QStringLiteral("interface/onnx_model_file"), model);
+        }
+        if (request.deep_dream_enabled && !request.deep_dream_model.isEmpty()) {
+            const QString model = copy_resource(request.deep_dream_model, QStringLiteral("resources/models"));
+            if (model.isEmpty())
+                return {false, error};
+            if (QFileInfo::exists(request.deep_dream_model + QStringLiteral(".json")) && !require_resource(copy_resource(request.deep_dream_model + QStringLiteral(".json"), QStringLiteral("resources/models"))))
+                return {false, error};
+            set_project_path(interface_settings, QStringLiteral("deep_dream/model_file"), model);
+        }
+        if (request.stable_diffusion_enabled) {
+            if (!request.stable_diffusion_upscale_only && !request.stable_diffusion_model.isEmpty()) {
+                const QString model = copy_resource(request.stable_diffusion_model, QStringLiteral("resources/models"));
+                if (model.isEmpty())
+                    return {false, error};
+                set_project_path(interface_settings, QStringLiteral("stable_diffusion/model_file"), model);
+            }
+            if (!request.stable_diffusion_upscale_model.isEmpty()) {
+                const QString model = copy_resource(request.stable_diffusion_upscale_model, QStringLiteral("resources/models"));
+                if (model.isEmpty())
+                    return {false, error};
+                set_project_path(interface_settings, QStringLiteral("stable_diffusion/upscale_model_file"), model);
+            }
+            QJsonArray loras;
+            for (const QString &lora : request.stable_diffusion_loras) {
+                const QString copied_lora = copy_resource(lora, QStringLiteral("resources/models/loras"));
+                if (copied_lora.isEmpty())
+                    return {false, error};
+                loras.append(copied_lora);
+            }
+            interface_settings.insert("stable_diffusion/lora_files", loras);
+        }
+        if (request.midi_enabled && !request.midi_config_file.isEmpty()) {
+            const QString midi_map = copy_resource(request.midi_config_file, QStringLiteral("resources/midi"));
+            if (midi_map.isEmpty())
+                return {false, error};
+            application_settings.insert("midiConfigFile", midi_map);
+        }
+        QString project_playlist;
+        if (request.playlist_enabled && !request.playlist_file.isEmpty()) {
+            project_playlist = copy_resource(request.playlist_file, QStringLiteral("resources/playlists"));
+            if (project_playlist.isEmpty())
+                return {false, error};
+        }
+        const QFileInfo source_output(request.output_file.isEmpty() ? QFileInfo(request.path).completeBaseName() + QStringLiteral(".mp4") : request.output_file);
+        const QString output_extension = request.output_extension.isEmpty() ? (source_output.completeSuffix().isEmpty() ? QStringLiteral("mp4") : source_output.completeSuffix()) : request.output_extension;
+        const QString output_name = QStringLiteral("%1-%2.%3").arg(source_output.completeBaseName(), QDateTime::currentDateTime().toString(QStringLiteral("yyyy.MM.dd-hh.mm.ss")), output_extension);
+        interface_settings.insert("interface/save_output", true);
+        set_project_path(interface_settings, QStringLiteral("interface/output_video"), QDir(QStringLiteral("output")).filePath(output_name));
+        if (request.png_output)
+            set_project_path(interface_settings, QStringLiteral("interface/png_output_directory"), QStringLiteral("output/png-sequence"));
+        application_settings.insert("prefix_path", QStringLiteral("output/snapshots"));
+
+        QStringList portable_arguments;
+        const QSet<QString> resource_options = {"--input", "--graphic", "--audio-file", "--shaders", "--model", "--onnx", "--dream-model", "--sd-model", "--upscale-model", "--sd-lora", "--playlist", "--midi-map"};
+        for (int index = 0; index < request.acmxvk_arguments.size(); ++index) {
+            const QString argument = request.acmxvk_arguments.at(index);
+            if (argument == QStringLiteral("--path")) {
+                ++index;
+                continue;
+            }
+            portable_arguments.append(argument);
+            if (index + 1 >= request.acmxvk_arguments.size())
+                continue;
+            const QString value = request.acmxvk_arguments.at(index + 1);
+            if (resource_options.contains(argument)) {
+                const QString category = argument == QStringLiteral("--shaders") ? QStringLiteral("resources/shaders") : QStringLiteral("resources/external");
+                const QString resource = copy_resource(value, category);
+                if (resource.isEmpty())
+                    return {false, error};
+                portable_arguments.append(resource);
+                ++index;
+            } else if (argument == QStringLiteral("--output") || argument == QStringLiteral("--record-audio")) {
+                portable_arguments.append(QDir(QStringLiteral("output")).filePath(QFileInfo(value).fileName()));
+                ++index;
+            } else if (argument == QStringLiteral("--prefix")) {
+                portable_arguments.append(QStringLiteral("output/snapshots"));
+                ++index;
+            }
+        }
+
+        QJsonObject root;
+        root.insert("format", "acmx-project");
+        root.insert("version", 2);
+        root.insert("backend", acmx2::backend_id(request.backend));
+        root.insert("interface_settings", interface_settings);
+        root.insert("application_settings", application_settings);
+        root.insert("shader_library", project_library);
+        root.insert("selected_shader", request.selected_shader);
+        root.insert("repeat", request.repeat);
+        QJsonObject runtime = request.runtime;
+        runtime.insert("playlist_file", project_playlist);
+        root.insert("runtime", runtime);
+        QJsonArray arguments;
+        for (const QString &argument : portable_arguments)
+            arguments.append(argument);
+        root.insert("acmxvk_arguments", arguments);
+
+        QSaveFile file(request.path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text) || file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit())
+            return {false, QStringLiteral("Could not write project: %1").arg(request.path)};
+        return {true, request.path};
     }
 
     bool take_process_output_line(QString &buffer, QString &line) {
@@ -837,6 +1237,7 @@ void MainWindow::initControls() {
 
     menuBar()->setNativeMenuBar(false);
     fileMenu = menuBarPtr->addMenu(tr("File"));
+    projectMenu = menuBarPtr->addMenu(tr("Project"));
     cameraMenu = menuBarPtr->addMenu(tr("Session"));
     backendMenu = menuBarPtr->addMenu(tr("Backend"));
     playbackMenu = menuBarPtr->addMenu(tr("Playback"));
@@ -844,15 +1245,19 @@ void MainWindow::initControls() {
     listMenu = menuBarPtr->addMenu(tr("List"));
     viewMenu = menuBarPtr->addMenu(tr("View"));
     helpMenu = menuBarPtr->addMenu(tr("Help"));
-    QAction *savePresetAction = playbackMenu->addAction(tr("Save Preset..."));
+    QAction *newProjectAction = projectMenu->addAction(tr("New Project..."));
+    newProjectAction->setShortcut(QKeySequence::New);
+    connect(newProjectAction, &QAction::triggered, this, &MainWindow::menuNewProject);
+    projectMenu->addSeparator();
+    QAction *savePresetAction = projectMenu->addAction(tr("Save Project..."));
     savePresetAction->setShortcut(QKeySequence("Ctrl+Shift+P"));
     connect(savePresetAction, &QAction::triggered, this, &MainWindow::menuSavePreset);
-    QAction *importPresetAction = playbackMenu->addAction(tr("Import Preset..."));
+    QAction *importPresetAction = projectMenu->addAction(tr("Load Project..."));
     importPresetAction->setShortcut(QKeySequence("Ctrl+Shift+I"));
     connect(importPresetAction, &QAction::triggered, this, &MainWindow::menuImportPreset);
-    recentPresetsMenu = playbackMenu->addMenu(tr("Recent Presets"));
+    recentPresetsMenu = projectMenu->addMenu(tr("Recent Projects"));
     connect(recentPresetsMenu, &QMenu::aboutToShow, this, &MainWindow::updateRecentPresetsMenu);
-    playbackMenu->addSeparator();
+    projectMenu->addSeparator();
     updateRecentPresetsMenu();
     backendActionGroup = new QActionGroup(this);
     backendActionGroup->setExclusive(true);
@@ -3114,7 +3519,13 @@ void MainWindow::beginOutputRunLog(const QString &command) {
     if (output_run_log.isOpen()) {
         output_run_log.close();
     }
-    output_run_log.setFileName(output_file + QStringLiteral(".log"));
+    const QFileInfo output_info(output_file);
+    const QString log_directory = output_info.absoluteDir().filePath(QStringLiteral("logs"));
+    if (!QDir().mkpath(log_directory)) {
+        Log(tr("<b style='color:red;'>Unable to create render log directory: %1</b>").arg(log_directory));
+        return;
+    }
+    output_run_log.setFileName(QDir(log_directory).filePath(output_info.completeBaseName() + QStringLiteral(".log")));
     if (!output_run_log.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
         Log(tr("<b style='color:red;'>Unable to save render log: %1</b>").arg(output_run_log.errorString()));
         return;
@@ -3452,12 +3863,12 @@ void MainWindow::addRecentPreset(const QString &path) {
         return;
 
     QSettings settings("LostSideDead");
-    QStringList recentPresets = settings.value("presets/recent").toStringList();
+    QStringList recentPresets = settings.value("projects/recent", settings.value("presets/recent")).toStringList();
     recentPresets.removeAll(presetPath);
     recentPresets.prepend(presetPath);
     while (recentPresets.size() > RECENT_PRESET_LIMIT)
         recentPresets.removeLast();
-    settings.setValue("presets/recent", recentPresets);
+    settings.setValue("projects/recent", recentPresets);
     settings.sync();
     updateRecentPresetsMenu();
 }
@@ -3467,7 +3878,8 @@ void MainWindow::updateRecentPresetsMenu() {
         return;
 
     recentPresetsMenu->clear();
-    const QStringList recentPresets = QSettings("LostSideDead").value("presets/recent").toStringList();
+    const QSettings settings("LostSideDead");
+    const QStringList recentPresets = settings.value("projects/recent", settings.value("presets/recent")).toStringList();
     bool added = false;
     for (const QString &path : recentPresets) {
         if (!QFileInfo::exists(path))
@@ -3478,23 +3890,307 @@ void MainWindow::updateRecentPresetsMenu() {
         added = true;
     }
     if (!added) {
-        QAction *emptyAction = recentPresetsMenu->addAction(tr("No Recent Presets"));
+        QAction *emptyAction = recentPresetsMenu->addAction(tr("No Recent Projects"));
         emptyAction->setEnabled(false);
     }
 }
 
-bool MainWindow::savePreset(const QString &path) {
+bool MainWindow::savePreset(const QString &path, const QString &outputExtension) {
+    QStringList acmxvk_arguments;
+    if (active_backend == acmx2::Backend::Acmxvk && !buildRunArguments(acmxvk_arguments, PendingAcmxvkAction::CopyCommand, true))
+        return false;
+
+    ProjectSaveRequest request;
+    request.path = path;
+    request.backend = active_backend;
+    request.interface_settings = preset_settings(QSettings("LostSideDead", "acmx2"));
+    request.application_settings = preset_settings(QSettings("LostSideDead"));
+    request.application_settings.remove("presets/recent");
+    request.application_settings.remove("recentLibraries");
+    request.application_settings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmx2, "recentLibraries"));
+    request.application_settings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "recentLibraries"));
+    request.application_settings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmx2, "executable"));
+    request.application_settings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "executable"));
+    request.application_settings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_path"));
+    request.application_settings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmx2, "library"));
+    request.application_settings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "library"));
+    request.shader_library = shader_path;
+    request.selected_shader = currentShaderName();
+    request.repeat = play_repeat && play_repeat->isChecked();
+    request.acmxvk_arguments = acmxvk_arguments;
+    request.video_file = video_file;
+    request.graphics_file = graphics_file;
+    request.audio_file = audio_file;
+    request.model_file = model_file;
+    request.onnx_model = onnx_model;
+    request.deep_dream_model = deep_dream_model;
+    request.stable_diffusion_model = stable_diffusion_model;
+    request.stable_diffusion_upscale_model = stable_diffusion_upscale_model;
+    request.stable_diffusion_loras = stable_diffusion_lora_files;
+    request.midi_config_file = midi_config_file;
+    request.playlist_file = playlist_file_path;
+    request.output_file = output_file;
+    request.output_extension = outputExtension;
+    request.enable_3d = enable_3d;
+    request.onnx_model_enabled = onnx_model_enabled;
+    request.deep_dream_enabled = deep_dream_enabled;
+    request.stable_diffusion_enabled = stable_diffusion_enabled;
+    request.stable_diffusion_upscale_only = stable_diffusion_upscale_only;
+    request.midi_enabled = midi_enabled;
+    request.playlist_enabled = playlist_enabled;
+    request.png_output = png_output;
+    request.runtime.insert("gpu_filter_enabled", gpu_filter_enabled);
+    request.runtime.insert("gpu_filter_indices", gpu_filter_indices);
+    request.runtime.insert("gpu_buffer_size", gpu_buffer_size);
+    request.runtime.insert("shader_pass_enabled", shader_pass_enabled);
+    request.runtime.insert("playlist_enabled", playlist_enabled);
+    request.runtime.insert("autopilot_frames", autopilot_frames);
+    request.runtime.insert("autopilot_random", autopilot_random);
+    request.runtime.insert("stay_on_top", stayOnTopAction && stayOnTopAction->isChecked());
+    QJsonArray shader_passes;
+    for (const QString &name : shader_pass_names)
+        shader_passes.append(name);
+    request.runtime.insert("shader_passes", shader_passes);
+    QJsonArray playlist_names_json;
+    for (const QString &name : playlist_names)
+        playlist_names_json.append(name);
+    request.runtime.insert("playlist_names", playlist_names_json);
+    QJsonArray playlist_tree;
+    for (const auto &[node_name, node_shaders] : playlist_tree_data) {
+        QJsonObject node;
+        node.insert("name", node_name);
+        QJsonArray shaders;
+        for (const QString &shader : node_shaders)
+            shaders.append(shader);
+        node.insert("shaders", shaders);
+        playlist_tree.append(node);
+    }
+    request.runtime.insert("playlist_tree", playlist_tree);
+
+    const auto progress = std::make_shared<ProjectProgress>();
+    request.progress = progress;
+    auto *dialog = new QProgressDialog(tr("Preparing project resources..."), tr("Cancel"), 0, 0, this);
+    dialog->setWindowTitle(tr("Saving Project"));
+    dialog->setWindowModality(Qt::WindowModal);
+    dialog->setAutoClose(false);
+    dialog->setAutoReset(false);
+    dialog->setMinimumDuration(0);
+    dialog->show();
+
+    auto *watcher = new QFutureWatcher<ProjectSaveResult>(this);
+    auto *timer = new QTimer(watcher);
+    timer->setInterval(100);
+    connect(timer, &QTimer::timeout, this, [dialog, progress]() {
+        const qint64 total_mb = (progress->total_bytes.load() + 1048575) / 1048576;
+        const qint64 copied_mb = (progress->copied_bytes.load() + 1048575) / 1048576;
+        if (total_mb <= 0) {
+            dialog->setRange(0, 0);
+            dialog->setLabelText(QObject::tr("Preparing project resources..."));
+            return;
+        }
+        const int maximum = static_cast<int>(std::min<qint64>(total_mb, std::numeric_limits<int>::max()));
+        dialog->setRange(0, maximum);
+        dialog->setValue(static_cast<int>(std::min<qint64>(copied_mb, maximum)));
+        dialog->setLabelText(QObject::tr("Copying project resources: %1 MB of %2 MB").arg(copied_mb).arg(total_mb));
+    });
+    connect(dialog, &QProgressDialog::canceled, this, [progress]() { progress->cancelled.store(true); });
+    connect(watcher, &QFutureWatcher<ProjectSaveResult>::finished, this, [this, watcher, timer, dialog, path]() {
+        timer->stop();
+        const ProjectSaveResult result = watcher->result();
+        dialog->close();
+        dialog->deleteLater();
+        watcher->deleteLater();
+        if (!result.success) {
+            QMessageBox::warning(this, tr("Save Project"), result.message);
+            Log(tr("Project save failed: %1").arg(result.message));
+            return;
+        }
+        addRecentPreset(path);
+        Log(tr("Saved portable project: %1").arg(path));
+    });
+    timer->start();
+    watcher->setFuture(QtConcurrent::run([request = std::move(request)]() mutable { return save_project_bundle(std::move(request)); }));
+    return true;
+}
+
+bool MainWindow::savePresetSynchronously(const QString &path) {
+    const QString projectRoot = QFileInfo(path).absolutePath();
+    if (!QDir().mkpath(projectRoot)) {
+        QMessageBox::warning(this, tr("Save Project"), tr("Could not create project directory:\n%1").arg(projectRoot));
+        return false;
+    }
+    ProjectResources resources(projectRoot, std::make_shared<ProjectProgress>());
+    QString resourceError;
     QStringList acmxvkArguments;
     if (active_backend == acmx2::Backend::Acmxvk && !buildRunArguments(acmxvkArguments, PendingAcmxvkAction::CopyCommand, true))
         return false;
 
+    QJsonObject interfaceSettings = preset_settings(QSettings("LostSideDead", "acmx2"));
+    QJsonObject applicationSettings = preset_settings(QSettings("LostSideDead"));
+    applicationSettings.remove("presets/recent");
+    applicationSettings.remove("recentLibraries");
+    applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmx2, "recentLibraries"));
+    applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "recentLibraries"));
+    applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmx2, "executable"));
+    applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "executable"));
+    applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "shader_compiler_path"));
+    applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmx2, "library"));
+    applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "library"));
+
+    const auto copyResource = [&resources, &resourceError](const QString &source, const QString &category) { return resources.copy_path(source, category, resourceError); };
+    QString projectLibrary;
+    if (!shader_path.isEmpty()) {
+        projectLibrary = copyResource(shader_path, QStringLiteral("resources/shaders"));
+        if (projectLibrary.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        applicationSettings.insert(acmx2::backend_settings_key(active_backend, "library"), projectLibrary);
+    }
+    if (!video_file.isEmpty()) {
+        const QString video = copyResource(video_file, QStringLiteral("resources/media"));
+        if (video.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        set_project_path(interfaceSettings, QStringLiteral("interface/input_video"), video);
+    }
+    if (!graphics_file.isEmpty()) {
+        const QString graphic = copyResource(graphics_file, QStringLiteral("resources/media"));
+        if (graphic.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        set_project_path(interfaceSettings, QStringLiteral("interface/graphics_file"), graphic);
+    }
+    if (!audio_file.isEmpty()) {
+        const bool audioPlaylist = interfaceSettings.value("audio/playlist_enabled").toBool();
+        const QString audio = audioPlaylist ? copy_audio_playlist(resources, audio_file, resourceError) : copyResource(audio_file, QStringLiteral("resources/audio"));
+        if (audio.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        set_project_path(interfaceSettings, audioPlaylist ? QStringLiteral("audio/playlist_path") : QStringLiteral("audio/file_path"), audio);
+    }
+    if (enable_3d && !model_file.isEmpty()) {
+        const QString model = copyResource(model_file, QStringLiteral("resources/models"));
+        if (model.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        set_project_path(interfaceSettings, QStringLiteral("interface/model_file"), model);
+    }
+    if (onnx_model_enabled && !onnx_model.isEmpty()) {
+        const QString model = copyResource(onnx_model, QStringLiteral("resources/models"));
+        if (model.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        set_project_path(interfaceSettings, QStringLiteral("interface/onnx_model_file"), model);
+    }
+    if (deep_dream_enabled && !deep_dream_model.isEmpty()) {
+        const QString model = copyResource(deep_dream_model, QStringLiteral("resources/models"));
+        if (model.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        if (QFileInfo::exists(deep_dream_model + QStringLiteral(".json")) && copyResource(deep_dream_model + QStringLiteral(".json"), QStringLiteral("resources/models")).isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        set_project_path(interfaceSettings, QStringLiteral("deep_dream/model_file"), model);
+    }
+    if (stable_diffusion_enabled) {
+        if (!stable_diffusion_upscale_only && !stable_diffusion_model.isEmpty()) {
+            const QString model = copyResource(stable_diffusion_model, QStringLiteral("resources/models"));
+            if (model.isEmpty()) {
+                QMessageBox::warning(this, tr("Save Project"), resourceError);
+                return false;
+            }
+            set_project_path(interfaceSettings, QStringLiteral("stable_diffusion/model_file"), model);
+        }
+        if (!stable_diffusion_upscale_model.isEmpty()) {
+            const QString model = copyResource(stable_diffusion_upscale_model, QStringLiteral("resources/models"));
+            if (model.isEmpty()) {
+                QMessageBox::warning(this, tr("Save Project"), resourceError);
+                return false;
+            }
+            set_project_path(interfaceSettings, QStringLiteral("stable_diffusion/upscale_model_file"), model);
+        }
+        QJsonArray loras;
+        for (const QString &lora : stable_diffusion_lora_files) {
+            const QString copiedLora = copyResource(lora, QStringLiteral("resources/models/loras"));
+            if (copiedLora.isEmpty()) {
+                QMessageBox::warning(this, tr("Save Project"), resourceError);
+                return false;
+            }
+            loras.append(copiedLora);
+        }
+        interfaceSettings.insert("stable_diffusion/lora_files", loras);
+    }
+    if (midi_enabled && !midi_config_file.isEmpty()) {
+        const QString midiMap = copyResource(midi_config_file, QStringLiteral("resources/midi"));
+        if (midiMap.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+        applicationSettings.insert("midiConfigFile", midiMap);
+    }
+    QString projectPlaylist;
+    if (playlist_enabled && !playlist_file_path.isEmpty()) {
+        projectPlaylist = copyResource(playlist_file_path, QStringLiteral("resources/playlists"));
+        if (projectPlaylist.isEmpty()) {
+            QMessageBox::warning(this, tr("Save Project"), resourceError);
+            return false;
+        }
+    }
+
+    if (!output_file.isEmpty()) {
+        const QString output = QDir(QStringLiteral("output")).filePath(QFileInfo(output_file).fileName());
+        set_project_path(interfaceSettings, QStringLiteral("interface/output_video"), output);
+    }
+    if (png_output) {
+        set_project_path(interfaceSettings, QStringLiteral("interface/png_output_directory"), QStringLiteral("output/png-sequence"));
+    }
+    applicationSettings.insert("prefix_path", QStringLiteral("output/snapshots"));
+
+    QStringList portableArguments;
+    const QSet<QString> resourceOptions = {"--input", "--graphic", "--audio-file", "--shaders", "--model", "--onnx", "--dream-model", "--sd-model", "--upscale-model", "--sd-lora", "--playlist", "--midi-map"};
+    for (int index = 0; index < acmxvkArguments.size(); ++index) {
+        const QString argument = acmxvkArguments.at(index);
+        if (argument == QStringLiteral("--path")) {
+            ++index;
+            continue;
+        }
+        portableArguments.append(argument);
+        if (index + 1 >= acmxvkArguments.size())
+            continue;
+        const QString value = acmxvkArguments.at(index + 1);
+        if (resourceOptions.contains(argument)) {
+            const QString category = argument == QStringLiteral("--shaders") ? QStringLiteral("resources/shaders") : QStringLiteral("resources/external");
+            const QString resource = copyResource(value, category);
+            if (resource.isEmpty()) {
+                QMessageBox::warning(this, tr("Save Project"), resourceError);
+                return false;
+            }
+            portableArguments.append(resource);
+            ++index;
+        } else if (argument == QStringLiteral("--output") || argument == QStringLiteral("--record-audio")) {
+            portableArguments.append(QDir(QStringLiteral("output")).filePath(QFileInfo(value).fileName()));
+            ++index;
+        } else if (argument == QStringLiteral("--prefix")) {
+            portableArguments.append(QStringLiteral("output/snapshots"));
+            ++index;
+        }
+    }
+
     QJsonObject root;
-    root.insert("format", "acmx-preset");
-    root.insert("version", 1);
+    root.insert("format", "acmx-project");
+    root.insert("version", 2);
     root.insert("backend", acmx2::backend_id(active_backend));
-    root.insert("interface_settings", preset_settings(QSettings("LostSideDead", "acmx2")));
-    root.insert("application_settings", preset_settings(QSettings("LostSideDead")));
-    root.insert("shader_library", shader_path);
+    root.insert("interface_settings", interfaceSettings);
+    root.insert("application_settings", applicationSettings);
+    root.insert("shader_library", projectLibrary);
     root.insert("selected_shader", currentShaderName());
     root.insert("repeat", play_repeat && play_repeat->isChecked());
 
@@ -3504,7 +4200,7 @@ bool MainWindow::savePreset(const QString &path) {
     runtime.insert("gpu_buffer_size", gpu_buffer_size);
     runtime.insert("shader_pass_enabled", shader_pass_enabled);
     runtime.insert("playlist_enabled", playlist_enabled);
-    runtime.insert("playlist_file", playlist_file_path);
+    runtime.insert("playlist_file", projectPlaylist);
     runtime.insert("autopilot_frames", autopilot_frames);
     runtime.insert("autopilot_random", autopilot_random);
     runtime.insert("stay_on_top", stayOnTopAction && stayOnTopAction->isChecked());
@@ -3530,54 +4226,98 @@ bool MainWindow::savePreset(const QString &path) {
     root.insert("runtime", runtime);
 
     QJsonArray arguments;
-    for (const QString &argument : acmxvkArguments)
+    for (const QString &argument : portableArguments)
         arguments.append(argument);
     root.insert("acmxvk_arguments", arguments);
 
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, tr("Save Preset"), tr("Could not write preset:\n%1").arg(path));
+        QMessageBox::warning(this, tr("Save Project"), tr("Could not write project:\n%1").arg(path));
         return false;
     }
     if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
-        QMessageBox::warning(this, tr("Save Preset"), tr("Could not finish writing preset:\n%1").arg(path));
+        QMessageBox::warning(this, tr("Save Project"), tr("Could not finish writing project:\n%1").arg(path));
         return false;
     }
     addRecentPreset(path);
-    Log(tr("Saved preset: %1").arg(path));
+    Log(tr("Saved portable project: %1").arg(path));
     return true;
 }
 
 bool MainWindow::importPreset(const QString &path) {
+    QProgressDialog progress(tr("Reading project settings..."), QString(), 0, 0, this);
+    progress.setWindowTitle(tr("Loading Project"));
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setCancelButton(nullptr);
+    progress.setMinimumDuration(0);
+    progress.show();
+    QCoreApplication::processEvents();
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, tr("Import Preset"), tr("Could not open preset:\n%1").arg(path));
+        QMessageBox::warning(this, tr("Load Project"), tr("Could not open project:\n%1").arg(path));
         return false;
     }
     QJsonParseError error;
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
     if (error.error != QJsonParseError::NoError || !document.isObject()) {
-        QMessageBox::warning(this, tr("Import Preset"), tr("The preset is not valid JSON:\n%1").arg(error.errorString()));
+        QMessageBox::warning(this, tr("Load Project"), tr("The project is not valid JSON:\n%1").arg(error.errorString()));
         return false;
     }
     const QJsonObject root = document.object();
-    if (root.value("format").toString() != "acmx-preset" || root.value("version").toInt() != 1) {
-        QMessageBox::warning(this, tr("Import Preset"), tr("This is not a supported ACMX preset file."));
+    const int projectVersion = root.value("version").toInt();
+    const bool legacyPreset = root.value("format").toString() == QStringLiteral("acmx-preset") && projectVersion == 1;
+    const bool portableProject = root.value("format").toString() == QStringLiteral("acmx-project") && projectVersion == 2;
+    if (!legacyPreset && !portableProject) {
+        QMessageBox::warning(this, tr("Load Project"), tr("This is not a supported ACMX project file."));
         return false;
     }
     if (!root.value("interface_settings").isObject() || !root.value("application_settings").isObject()) {
-        QMessageBox::warning(this, tr("Import Preset"), tr("The preset does not contain interface settings."));
+        QMessageBox::warning(this, tr("Load Project"), tr("The project does not contain interface settings."));
         return false;
+    }
+
+    QJsonObject projectInterfaceSettings = root.value("interface_settings").toObject();
+    QJsonObject projectApplicationSettings = root.value("application_settings").toObject();
+    QString projectLibrary = root.value("shader_library").toString();
+    QJsonObject runtime = root.value("runtime").toObject();
+    if (portableProject) {
+        const QString projectRoot = QFileInfo(path).absolutePath();
+        for (const QString &key : {QStringLiteral("interface/input_video"), QStringLiteral("interface/graphics_file"), QStringLiteral("interface/model_file"), QStringLiteral("interface/onnx_model_file"), QStringLiteral("deep_dream/model_file"), QStringLiteral("stable_diffusion/model_file"), QStringLiteral("stable_diffusion/upscale_model_file"), QStringLiteral("audio/file_path"), QStringLiteral("audio/playlist_path"), QStringLiteral("interface/output_video"), QStringLiteral("interface/png_output_directory")}) {
+            resolve_project_path(projectInterfaceSettings, key, projectRoot);
+        }
+        resolve_project_path_list(projectInterfaceSettings, QStringLiteral("stable_diffusion/lora_files"), projectRoot);
+        for (const QString &key : {QStringLiteral("midiConfigFile"), QStringLiteral("prefix_path"), acmx2::backend_settings_key(acmx2::Backend::Acmx2, "library"), acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "library")}) {
+            resolve_project_path(projectApplicationSettings, key, projectRoot);
+        }
+        projectLibrary = project_path(projectRoot, projectLibrary);
+        runtime.insert("playlist_file", project_path(projectRoot, runtime.value("playlist_file").toString()));
+        const QString outputName = QFileInfo(projectInterfaceSettings.value("interface/output_video").toString()).fileName().isEmpty() ? QFileInfo(path).completeBaseName() + QStringLiteral(".mp4") : QFileInfo(projectInterfaceSettings.value("interface/output_video").toString()).fileName();
+        projectInterfaceSettings.insert("interface/save_output", true);
+        projectInterfaceSettings.insert("interface/output_video", QDir(projectRoot).filePath(QStringLiteral("output/") + outputName));
     }
 
     QSettings interfaceSettings("LostSideDead", "acmx2");
     QSettings applicationSettings("LostSideDead");
-    apply_preset_settings(interfaceSettings, root.value("interface_settings").toObject());
-    apply_preset_settings(applicationSettings, root.value("application_settings").toObject());
+    progress.setLabelText(tr("Applying project settings..."));
+    QCoreApplication::processEvents();
+    apply_preset_settings(interfaceSettings, projectInterfaceSettings);
+    apply_preset_settings(applicationSettings, projectApplicationSettings);
     const std::optional<acmx2::Backend> backend = acmx2::backend_from_id(root.value("backend").toString());
     if (backend)
         set_backend(*backend, false);
     loadSessionSettings();
+
+    if (portableProject) {
+        project_output_directory = QDir(QFileInfo(path).absolutePath()).filePath(QStringLiteral("output"));
+        project_output_filename = QFileInfo(output_file).fileName();
+    } else {
+        project_output_directory.clear();
+        project_output_filename.clear();
+    }
+
+    prefix_path = applicationSettings.value("prefix_path", QDir(QFileInfo(path).absolutePath()).filePath(QStringLiteral("output/snapshots"))).toString();
+    if (portableProject && prefix_path.isEmpty())
+        prefix_path = QDir(QFileInfo(path).absolutePath()).filePath(QStringLiteral("output/snapshots"));
 
     audio_enabled = interfaceSettings.value("audio/enabled", false).toBool();
     audio_channels = static_cast<unsigned int>(std::max(1, interfaceSettings.value("audio/channels", 2).toInt()));
@@ -3622,7 +4362,6 @@ bool MainWindow::importPreset(const QString &path) {
     }
     applyCustomStyleSheet(useCustomStyle);
 
-    const QJsonObject runtime = root.value("runtime").toObject();
     gpu_filter_enabled = runtime.value("gpu_filter_enabled").toBool(gpu_filter_enabled);
     gpu_filter_indices = runtime.value("gpu_filter_indices").toString(gpu_filter_indices);
     gpu_buffer_size = runtime.value("gpu_buffer_size").toInt(gpu_buffer_size);
@@ -3655,7 +4394,9 @@ bool MainWindow::importPreset(const QString &path) {
         play_repeat->setChecked(root.value("repeat").toBool(false));
     }
 
-    const QString library = root.value("shader_library").toString();
+    const QString library = projectLibrary;
+    progress.setLabelText(tr("Loading bundled shader library..."));
+    QCoreApplication::processEvents();
     if (!library.isEmpty() && loadLibraryPath(library)) {
         const int row = items.indexOf(root.value("selected_shader").toString());
         if (row >= 0)
@@ -3664,18 +4405,75 @@ bool MainWindow::importPreset(const QString &path) {
     publishRuntimeSettingsToRunningProcess();
     publishMultipassShadersToRunningProcess();
     addRecentPreset(path);
-    Log(tr("Imported preset: %1").arg(path));
+    Log(tr("Loaded project: %1").arg(path));
     return true;
 }
 
 void MainWindow::menuSavePreset() {
-    const QString path = QFileDialog::getSaveFileName(this, tr("Save Preset"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/acmx-preset.json", tr("ACMX Preset (*.json)"));
-    if (!path.isEmpty())
-        savePreset(path);
+    const QString baseDirectory = QFileDialog::getExistingDirectory(this, tr("Choose Project Location"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+    if (baseDirectory.isEmpty())
+        return;
+    bool accepted = false;
+    QString projectName = QInputDialog::getText(this, tr("Project Name"), tr("Project name:"), QLineEdit::Normal, tr("acmx-project"), &accepted).trimmed();
+    if (!accepted || projectName.isEmpty())
+        return;
+    projectName.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9._-]+")), QStringLiteral("-"));
+    if (projectName.isEmpty())
+        projectName = QStringLiteral("acmx-project");
+    const QString projectDirectory = QDir(baseDirectory).filePath(projectName);
+    if (QDir(projectDirectory).exists() && !QDir(projectDirectory).entryList(QDir::NoDotAndDotDot | QDir::AllEntries).isEmpty()) {
+        QMessageBox::warning(this, tr("Save Project"), tr("Choose a new project name. The project directory already contains files:\n%1").arg(projectDirectory));
+        return;
+    }
+    const QStringList formats = {QStringLiteral("mp4"), QStringLiteral("mkv"), QStringLiteral("mov"), QStringLiteral("webm"), QStringLiteral("avi")};
+    const int defaultFormat = std::max(0, static_cast<int>(formats.indexOf(QFileInfo(output_file).suffix().toLower())));
+    const QString outputFormat = QInputDialog::getItem(this, tr("Project Video Format"), tr("Project output format:"), formats, defaultFormat, false, &accepted);
+    if (!accepted)
+        return;
+    savePreset(QDir(projectDirectory).filePath(projectName + QStringLiteral(".json")), outputFormat);
+}
+
+void MainWindow::menuNewProject() {
+    const auto answer = QMessageBox::warning(this, tr("New Project"), tr("Clear all ACMX interface settings and start a new project?\n\nThis keeps existing project files and source media, but clears the current project configuration and shader list."), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer != QMessageBox::Yes)
+        return;
+
+    QSettings interfaceSettings("LostSideDead", "acmx2");
+    QSettings applicationSettings("LostSideDead");
+    interfaceSettings.clear();
+    applicationSettings.clear();
+    interfaceSettings.sync();
+    applicationSettings.sync();
+
+    active_backend = acmx2::Backend::Acmx2;
+    if (backendAcmx2Action)
+        backendAcmx2Action->setChecked(true);
+    executable_path = acmx2::default_backend_executable(active_backend);
+    shader_path.clear();
+    activeShaderManifestPath.clear();
+    indexTimestamp = QDateTime();
+    items.clear();
+    if (list_view)
+        list_view->clear();
+
+    project_output_directory.clear();
+    project_output_filename.clear();
+    prefix_path = QStringLiteral(".");
+    output_file.clear();
+    save_output_log = false;
+    video_file.clear();
+    graphics_file.clear();
+    loadSessionSettings();
+    updateRecentLibrariesMenu();
+    updateRecentPresetsMenu();
+    update_backend_ui();
+    publishRuntimeSettingsToRunningProcess();
+    publishSelectedShaderIndexToRunningProcess();
+    Log(tr("Started a new project. Load a shader library to continue."));
 }
 
 void MainWindow::menuImportPreset() {
-    const QString path = QFileDialog::getOpenFileName(this, tr("Import Preset"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), tr("ACMX Preset (*.json)"));
+    const QString path = QFileDialog::getOpenFileName(this, tr("Load Project"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), tr("ACMX Project (*.json)"));
     if (!path.isEmpty())
         importPreset(path);
 }
@@ -4555,7 +5353,22 @@ void MainWindow::cameraSettings() {
         }
         if (settingsWindow.isSavingToOutputVideoFile()) {
             output_file = settingsWindow.getOutputVideoFile();
+            if (!project_output_directory.isEmpty()) {
+                QString output_filename = QFileInfo(output_file).fileName();
+                if (output_filename.isEmpty())
+                    output_filename = project_output_filename;
+                if (output_filename.isEmpty())
+                    output_filename = QStringLiteral("output.mp4");
+                project_output_filename = output_filename;
+                output_file = QDir(project_output_directory).filePath(output_filename);
+            }
             save_output_log = settingsWindow.isSavingOutputLog();
+
+            QSettings settings("LostSideDead", "acmx2");
+            settings.setValue("interface/save_output", true);
+            settings.setValue("interface/output_video", output_file);
+            settings.setValue("interface/save_output_log", save_output_log);
+            settings.sync();
         } else {
             output_file = "";
             save_output_log = false;
