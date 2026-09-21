@@ -159,6 +159,8 @@ class MainWindow : public QMainWindow {
     /// @brief Repopulate the shader tree widget from the current `items` list,
     ///        recomputing Last Modified, Compile Health, and Type columns.
     void populateShaderTree();
+    /// @brief Refresh per-shader metadata without rebuilding or reordering the list.
+    void refreshShaderTreeMetadata();
     /// @brief Compile-health status for a single shader.
     enum class CompileHealth { Unknown, Cached, Failed, Stale };
     /// @brief Cached map of shader stem -> failed flag for the current library.

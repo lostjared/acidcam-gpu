@@ -1286,9 +1286,11 @@ void MainWindow::initControls() {
             Log("<b style='color:red;'>" + acmx2::backend_name(active_backend) + " engine crashed.</b><br>");
         }
 
-        // Refresh the shader tree's compile-health column now that
-        // the child process has (re)written the binary shader cache.
-        populateShaderTree();
+        // Refresh the shader tree's metadata in place now that the child
+        // process may have rewritten the binary shader cache.  Do not rebuild
+        // the list between runs: its order belongs to the loaded library (or
+        // to an explicit user reorder).
+        refreshShaderTreeMetadata();
 
         const bool finishedBuildProcess = cacheBuildInProgress;
         if (cacheBuildInProgress) {
@@ -2867,7 +2869,7 @@ void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
 }
 
 void MainWindow::handleSavedShader(const QString &filePath) {
-    populateShaderTree();
+    refreshShaderTreeMetadata();
     if (active_backend == acmx2::Backend::Acmxvk) {
         queueAcmxvkLiveCompile(filePath);
         return;
@@ -3004,7 +3006,7 @@ void MainWindow::startNextAcmxvkLiveCompile() {
                 QFile::remove(liveShaderCompileTemporary);
             } else {
                 Log(tr("Compiled and installed ACMXVK shader: %1").arg(liveShaderCompileOutput));
-                populateShaderTree();
+                refreshShaderTreeMetadata();
                 publishAcmxvkCompiledShaderReload(liveShaderCompileSource, liveShaderCompileOutput);
             }
 
@@ -3359,7 +3361,6 @@ void MainWindow::publishMultipassShadersToRunningProcess() {
 
     quint32 passCount = 0;
     if (shader_pass_enabled && !shader_pass_names.isEmpty()) {
-        loadShaders(shader_path, true);
         for (const QString &name : shader_pass_names) {
             if (passCount >= acmx2::ipc::kShaderSelectionMaxPassCount)
                 break;
@@ -3670,6 +3671,65 @@ void MainWindow::populateShaderTree() {
             list_view->setCurrentItem(it);
             list_view->scrollToItem(it, QAbstractItemView::PositionAtCenter);
         }
+    }
+}
+
+void MainWindow::refreshShaderTreeMetadata() {
+    if (!list_view || list_view->topLevelItemCount() != items.size())
+        return;
+
+    refreshShaderCacheStatus();
+
+    const QSignalBlocker blocker(list_view);
+    QString acmxvkTypeError;
+    const bool acmxvkSource = active_backend == acmx2::Backend::Acmxvk && is_acmxvk_source_library(shader_path, acmxvkTypeError) && acmxvkTypeError.isEmpty();
+
+    for (int i = 0; i < items.size(); ++i) {
+        QTreeWidgetItem *item = list_view->topLevelItem(i);
+        if (!item)
+            continue;
+
+        const QString &name = items.at(i);
+        const QFileInfo fileInfo(QDir(shader_path).filePath(name));
+        const QString stem = QFileInfo(name).completeBaseName();
+        const bool isCompute = name.endsWith(QStringLiteral(".comp"), Qt::CaseInsensitive) || name.endsWith(QStringLiteral(".comp.spv"), Qt::CaseInsensitive);
+
+        QString health;
+        QColor healthColor;
+        if (active_backend == acmx2::Backend::Acmxvk) {
+            const AcmxvkBuildState state = acmxvkSource ? acmxvk_shader_build_state(shader_path, name) : AcmxvkBuildState::UpToDate;
+            if (state == AcmxvkBuildState::NotBuilt) {
+                health = tr("Not Built");
+                healthColor = QColor("#888888");
+            } else if (state == AcmxvkBuildState::Stale) {
+                health = tr("Stale");
+                healthColor = QColor("#ffaa00");
+            } else {
+                health = tr("Up to Date");
+                healthColor = QColor("#55ff55");
+            }
+        } else if (shaderCacheStatus.isEmpty()) {
+            health = tr("No cache");
+            healthColor = QColor("#888888");
+        } else if (!shaderCacheStatus.contains(stem)) {
+            health = tr("Uncached");
+            healthColor = QColor("#cccc00");
+        } else if (shaderCacheStatus.value(stem)) {
+            health = tr("Failed");
+            healthColor = QColor("#ff5555");
+        } else if (fileInfo.exists() && shaderCacheMTime.isValid() && fileInfo.lastModified() > shaderCacheMTime) {
+            health = tr("Stale");
+            healthColor = QColor("#ffaa00");
+        } else {
+            health = tr("Cached");
+            healthColor = QColor("#55ff55");
+        }
+
+        item->setText(2, fileInfo.exists() ? formatLastModified(fileInfo.lastModified()) : tr("missing"));
+        item->setText(3, health);
+        item->setText(4, isCompute ? tr("Compute") : tr("Fragment"));
+        item->setForeground(2, fileInfo.exists() ? QBrush() : QBrush(QColor("#ff5555")));
+        item->setForeground(3, QBrush(healthColor));
     }
 }
 
@@ -5520,8 +5580,6 @@ void MainWindow::menuShaderPassSettings() {
         return;
     }
 
-    loadShaders(shader_path, true);
-
     if (items.isEmpty()) {
         QMessageBox::information(this, "Load Shaders First", "Please load a shader library before configuring multi-pass shaders.");
         return;
@@ -5581,8 +5639,6 @@ void MainWindow::menuPlaylistSettings() {
         QMessageBox::information(this, "Load Shaders First", "Please load a shader library before configuring playlist.");
         return;
     }
-
-    loadShaders(shader_path, true);
 
     if (items.isEmpty()) {
         QMessageBox::information(this, "Load Shaders First", "Please load a shader library before configuring playlist.");
@@ -6726,7 +6782,6 @@ QString MainWindow::concatList(const QStringList lst) {
 
 QString MainWindow::getShaderPassIndicesFromNames() {
     QStringList indices;
-    loadShaders(shader_path, true);
     for (const QString &name : shader_pass_names) {
         int idx = items.indexOf(name);
         if (idx >= 0) {
@@ -7120,7 +7175,7 @@ void MainWindow::menuCleanShaderCache() {
     } else {
         Log(QString("Shader cache clean complete: removed %1 file(s), %2 failed").arg(removedCount).arg(failedCount));
     }
-    populateShaderTree();
+    refreshShaderTreeMetadata();
 #endif
 }
 
