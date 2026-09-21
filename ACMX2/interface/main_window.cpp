@@ -6553,24 +6553,22 @@ void MainWindow::copyCommand() {
             return;
         }
 
-        // Run the command verbatim through a shell so that env-var prefixes,
-        // quoting, and PATH lookup behave exactly like pasting it into a
-        // terminal. This avoids any ambiguity from re-parsing the line into
-        // tokens and re-applying environment via QProcessEnvironment.
         process->setProcessEnvironment(QProcessEnvironment::systemEnvironment());
 #ifdef Q_OS_WIN
-        QString shell = qEnvironmentVariable("COMSPEC");
-        if (shell.isEmpty())
-            shell = "cmd.exe";
-        QStringList shellArgs{"/C", cmdText};
+        QStringList command_arguments = QProcess::splitCommand(cmdText);
+        if (command_arguments.isEmpty()) {
+            QMessageBox::warning(&dialog, tr("Invalid Command"), tr("The command does not contain an executable."));
+            return;
+        }
+        const QString command_program = command_arguments.takeFirst();
 #else
-        QString shell = "/bin/sh";
-        QStringList shellArgs{"-c", cmdText};
+        const QString command_program = QStringLiteral("/bin/sh");
+        const QStringList command_arguments{QStringLiteral("-c"), cmdText};
 #endif
         Log("shell: " + cmdText + "<br>");
         initShaderSelectionSharedMemory();
         beginOutputRunLog(cmdText);
-        process->start(shell, shellArgs);
+        process->start(command_program, command_arguments);
         if (!process->waitForStarted()) {
             appendOutputRunLog(tr("Failed to start: %1").arg(process->errorString()));
             finishOutputRunLog(-1, QProcess::CrashExit);
