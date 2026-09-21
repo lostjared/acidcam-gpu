@@ -84,6 +84,16 @@ namespace {
     constexpr int RECENT_LIBRARY_LIMIT = 10;
     constexpr int RECENT_PRESET_LIMIT = 10;
 
+    QString timestamped_output_path(const QString &output_path) {
+        const QFileInfo output_info(output_path);
+        const QString base_name = output_info.completeBaseName();
+        const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss-zzz"));
+        QString file_name = base_name + QStringLiteral("-") + timestamp;
+        if (!output_info.suffix().isEmpty())
+            file_name += QStringLiteral(".") + output_info.suffix();
+        return output_info.dir().filePath(file_name);
+    }
+
     QJsonValue preset_json_value(const QVariant &value) {
         if (value.metaType().id() == QMetaType::QStringList) {
             QJsonArray array;
@@ -5630,7 +5640,8 @@ void MainWindow::runSelected() {
     }
 
     if (!output_file.isEmpty()) {
-        arguments << "--output" << output_file;
+        const QString launch_output_file = active_backend == acmx2::Backend::Acmxvk ? timestamped_output_path(output_file) : output_file;
+        arguments << "--output" << launch_output_file;
         if (active_backend == acmx2::Backend::Acmxvk && encode_rate_control == "bitrate")
             arguments << "--video-bitrate" << encode_bitrate;
         else
@@ -5929,7 +5940,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
         arguments << "--png-level" << QString::number(png_level);
     }
     if (!output_file.isEmpty()) {
-        arguments << "--output" << output_file;
+        const QString launch_output_file = active_backend == acmx2::Backend::Acmxvk ? timestamped_output_path(output_file) : output_file;
+        arguments << "--output" << launch_output_file;
         if (active_backend == acmx2::Backend::Acmxvk && encode_rate_control == "bitrate")
             arguments << "--video-bitrate" << encode_bitrate;
         else
