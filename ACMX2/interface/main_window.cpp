@@ -264,12 +264,23 @@ namespace {
 
         qint64 directory_size(const QString &source) const {
             qint64 total = 0;
+            const QDir source_directory(source);
             QDirIterator iterator(source, QDir::Files | QDir::NoDotAndDotDot | QDir::Hidden, QDirIterator::Subdirectories);
             while (iterator.hasNext()) {
-                iterator.next();
+                const QString entry = iterator.next();
+                if (is_temporary_resource(source_directory.relativeFilePath(entry)))
+                    continue;
                 total += iterator.fileInfo().size();
             }
             return total;
+        }
+
+        bool is_temporary_resource(const QString &relative_path) const {
+            QString normalized_path = relative_path;
+            normalized_path.replace(QLatin1Char('\\'), QLatin1Char('/'));
+            const QStringList path_components = normalized_path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+            const QString file_name = QFileInfo(normalized_path).fileName();
+            return file_name.contains(QStringLiteral(".acmxvk-tmp-")) || file_name.contains(QStringLiteral(".live-tmp-")) || path_components.contains(QStringLiteral(".editor-preview")) || path_components.contains(QStringLiteral(".acmx2-editor-preview"));
         }
 
         bool copy_file(const QString &source, const QString &destination, QString &error) const {
@@ -332,7 +343,10 @@ namespace {
                 }
                 const QString entry = iterator.next();
                 const QFileInfo info(entry);
-                const QString target = QDir(destination).filePath(source_directory.relativeFilePath(entry));
+                const QString relative_path = source_directory.relativeFilePath(entry);
+                if (is_temporary_resource(relative_path))
+                    continue;
+                const QString target = QDir(destination).filePath(relative_path);
                 if (info.isDir()) {
                     if (!QDir().mkpath(target)) {
                         error = QStringLiteral("Could not create project resource directory: %1").arg(target);
