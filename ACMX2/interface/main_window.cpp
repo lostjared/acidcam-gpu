@@ -340,6 +340,49 @@ namespace {
         settings.insert(key, resolved);
     }
 
+    bool is_nonportable_path(const QString &value) {
+        const QString path = value.trimmed();
+        return QDir::isAbsolutePath(path) || QRegularExpression(QStringLiteral("^[A-Za-z]:[/\\\\]|^//|^\\\\\\\\")).match(path).hasMatch();
+    }
+
+    void remove_nonportable_paths(QJsonObject &settings) {
+        for (auto it = settings.begin(); it != settings.end();) {
+            if (it.value().isString() && is_nonportable_path(it.value().toString())) {
+                it = settings.erase(it);
+                continue;
+            }
+            if (it.value().isArray()) {
+                QJsonArray portable_values;
+                for (const QJsonValue &value : it.value().toArray()) {
+                    if (!value.isString() || !is_nonportable_path(value.toString()))
+                        portable_values.append(value);
+                }
+                *it = portable_values;
+            }
+            ++it;
+        }
+    }
+
+    void remove_nonportable_project_settings(QJsonObject &interface_settings, QJsonObject &application_settings) {
+        remove_nonportable_paths(interface_settings);
+        remove_nonportable_paths(application_settings);
+
+        const QStringList local_interface_keys = {QStringLiteral("interface/extra_arguments")};
+        const QStringList local_application_keys = {QStringLiteral("exePath"), QStringLiteral("shaders"), QStringLiteral("midiDevice"), QStringLiteral("editor/geometry"), QStringLiteral("editor/workspaceGeometry"), QStringLiteral("findInFiles/geometry"), QStringLiteral("lastExeDir"), QStringLiteral("lastShaderDir"), QStringLiteral("lastScreenshotDir"), QStringLiteral("lastShaderCompilerDir"), QStringLiteral("lastLibraryDir"), QStringLiteral("lastPlaylistDir"), QStringLiteral("lastMidiConfigDir"), QStringLiteral("lastGpuFilterDir"), QStringLiteral("lastEditorSaveDir")};
+        for (const QString &key : local_interface_keys)
+            interface_settings.remove(key);
+        for (const QString &key : local_application_keys)
+            application_settings.remove(key);
+
+        for (auto it = application_settings.begin(); it != application_settings.end();) {
+            if (it.key().startsWith(QStringLiteral("last"), Qt::CaseInsensitive) || it.key().contains(QStringLiteral("/recent"), Qt::CaseInsensitive) || it.key().endsWith(QStringLiteral("/executable")) || it.key().endsWith(QStringLiteral("/shader_compiler_path"))) {
+                it = application_settings.erase(it);
+                continue;
+            }
+            ++it;
+        }
+    }
+
     struct ProjectSaveRequest {
         QString path;
         acmx2::Backend backend = acmx2::Backend::Acmx2;
@@ -503,32 +546,43 @@ namespace {
         application_settings.insert("prefix_path", QStringLiteral("output/snapshots"));
 
         QStringList portable_arguments;
-        const QSet<QString> resource_options = {"--input", "--graphic", "--audio-file", "--shaders", "--model", "--onnx", "--dream-model", "--sd-model", "--upscale-model", "--sd-lora", "--playlist", "--midi-map"};
+        const QSet<QString> resource_options = {"--input", "--graphic", "--audio-file", "--shaders", "--model", "--onnx", "--dream-model", "--sd-model", "--upscale-model", "--sd-lora", "--playlist", "--midi-map", "--edge", "--human"};
+        const QSet<QString> local_path_options = {"--fragment", "--compute", "--shader-file", "--sd-server", "--glslc", "--build", "--builddir", "--fix", "--probe-hdr"};
         for (int index = 0; index < request.acmxvk_arguments.size(); ++index) {
             const QString argument = request.acmxvk_arguments.at(index);
             if (argument == QStringLiteral("--path")) {
                 ++index;
                 continue;
             }
-            portable_arguments.append(argument);
-            if (index + 1 >= request.acmxvk_arguments.size())
+            if (index + 1 >= request.acmxvk_arguments.size()) {
+                portable_arguments.append(argument);
                 continue;
+            }
             const QString value = request.acmxvk_arguments.at(index + 1);
             if (resource_options.contains(argument)) {
                 const QString category = argument == QStringLiteral("--shaders") ? QStringLiteral("resources/shaders") : QStringLiteral("resources/external");
                 const QString resource = copy_resource(value, category);
                 if (resource.isEmpty())
                     return {false, error};
+                portable_arguments.append(argument);
                 portable_arguments.append(resource);
                 ++index;
             } else if (argument == QStringLiteral("--output") || argument == QStringLiteral("--record-audio")) {
+                portable_arguments.append(argument);
                 portable_arguments.append(QDir(QStringLiteral("output")).filePath(QFileInfo(value).fileName()));
                 ++index;
             } else if (argument == QStringLiteral("--prefix")) {
+                portable_arguments.append(argument);
                 portable_arguments.append(QStringLiteral("output/snapshots"));
                 ++index;
+            } else if (local_path_options.contains(argument) || (argument.startsWith(QStringLiteral("--")) && is_nonportable_path(value))) {
+                ++index;
+            } else {
+                portable_arguments.append(argument);
             }
         }
+
+        remove_nonportable_project_settings(interface_settings, application_settings);
 
         QJsonObject root;
         root.insert("format", "acmx-project");
