@@ -84,6 +84,36 @@ namespace {
     constexpr int RECENT_LIBRARY_LIMIT = 10;
     constexpr int RECENT_PRESET_LIMIT = 10;
 
+    QString parallel_build_jobs_key() { return acmx2::backend_settings_key(acmx2::Backend::Acmxvk, QStringLiteral("parallel_build_jobs")); }
+
+    QString legacy_parallel_build_enabled_key() { return acmx2::backend_settings_key(acmx2::Backend::Acmxvk, QStringLiteral("parallel_build_enabled")); }
+
+    int parallel_build_jobs(QSettings &settings) {
+        const QString jobs_key = parallel_build_jobs_key();
+        const QString enabled_key = legacy_parallel_build_enabled_key();
+        if (settings.contains(enabled_key)) {
+            const bool enabled = settings.value(enabled_key, false).toBool();
+            const int jobs = qBound(1, settings.value(jobs_key, 2).toInt(), 256);
+            settings.setValue(jobs_key, enabled ? jobs : 0);
+            settings.remove(enabled_key);
+            return enabled ? jobs : 0;
+        }
+        return qBound(0, settings.value(jobs_key, 0).toInt(), 256);
+    }
+
+    void normalize_parallel_build_settings(QJsonObject &settings) {
+        const QString jobs_key = parallel_build_jobs_key();
+        const QString enabled_key = legacy_parallel_build_enabled_key();
+        if (settings.contains(enabled_key)) {
+            const bool enabled = settings.value(enabled_key).toBool(false);
+            const int jobs = qBound(1, settings.value(jobs_key).toInt(2), 256);
+            settings.insert(jobs_key, enabled ? jobs : 0);
+            settings.remove(enabled_key);
+        } else if (settings.contains(jobs_key)) {
+            settings.insert(jobs_key, qBound(0, settings.value(jobs_key).toInt(), 256));
+        }
+    }
+
     QString timestamped_output_path(const QString &output_path) {
         const QFileInfo output_info(output_path);
         const QString base_name = output_info.completeBaseName();
@@ -595,6 +625,7 @@ namespace {
         }
 
         remove_nonportable_project_settings(interface_settings, application_settings);
+        normalize_parallel_build_settings(application_settings);
 
         QJsonObject root;
         root.insert("format", "acmx-project");
@@ -1796,6 +1827,8 @@ void MainWindow::initControls() {
 
 void MainWindow::loadSessionSettings() {
     QSettings settings("LostSideDead", "acmx2");
+    QSettings application_settings("LostSideDead");
+    parallel_build_jobs(application_settings);
 
     const QString inputMode = settings.value("interface/input_mode", "camera").toString();
     const bool videoMode = inputMode == "video";
@@ -4173,6 +4206,7 @@ bool MainWindow::savePresetSynchronously(const QString &path) {
 
     QJsonObject interfaceSettings = preset_settings(QSettings("LostSideDead", "acmx2"));
     QJsonObject applicationSettings = preset_settings(QSettings("LostSideDead"));
+    normalize_parallel_build_settings(applicationSettings);
     applicationSettings.remove("presets/recent");
     applicationSettings.remove("recentLibraries");
     applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmx2, "recentLibraries"));
@@ -6447,13 +6481,13 @@ void MainWindow::copyCommand() {
 
     if (active_backend == acmx2::Backend::Acmxvk) {
         QSettings settings("LostSideDead");
-        const QString enabledKey = acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "parallel_build_enabled");
-        const QString jobsKey = acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "parallel_build_jobs");
+        const QString jobsKey = parallel_build_jobs_key();
+        const int configuredJobs = parallel_build_jobs(settings);
         auto *parallelBuildCheckBox = new QCheckBox(tr("Enable parallel build"), &dialog);
         auto *parallelBuildJobsSpinBox = new QSpinBox(&dialog);
         parallelBuildJobsSpinBox->setRange(1, 256);
-        parallelBuildJobsSpinBox->setValue(qBound(1, settings.value(jobsKey, 2).toInt(), 256));
-        parallelBuildCheckBox->setChecked(settings.value(enabledKey, false).toBool());
+        parallelBuildJobsSpinBox->setValue(configuredJobs > 0 ? configuredJobs : 2);
+        parallelBuildCheckBox->setChecked(configuredJobs > 0);
         parallelBuildJobsSpinBox->setEnabled(parallelBuildCheckBox->isChecked());
         parallelBuildJobsSpinBox->setToolTip(tr("Number of concurrent ACMXVK shader compiler jobs (1-256)."));
         auto *parallelBuildLayout = new QHBoxLayout();
@@ -6462,14 +6496,14 @@ void MainWindow::copyCommand() {
         parallelBuildLayout->addWidget(parallelBuildJobsSpinBox);
         parallelBuildLayout->addStretch(1);
         layout->addLayout(parallelBuildLayout);
-        connect(parallelBuildCheckBox, &QCheckBox::toggled, &dialog, [parallelBuildJobsSpinBox, enabledKey](bool enabled) {
+        connect(parallelBuildCheckBox, &QCheckBox::toggled, &dialog, [parallelBuildJobsSpinBox, jobsKey](bool enabled) {
             parallelBuildJobsSpinBox->setEnabled(enabled);
             QSettings settings("LostSideDead");
-            settings.setValue(enabledKey, enabled);
+            settings.setValue(jobsKey, enabled ? parallelBuildJobsSpinBox->value() : 0);
         });
-        connect(parallelBuildJobsSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), &dialog, [jobsKey](int jobs) {
-            QSettings settings("LostSideDead");
-            settings.setValue(jobsKey, jobs);
+        connect(parallelBuildJobsSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), &dialog, [parallelBuildCheckBox, jobsKey](int jobs) {
+            if (parallelBuildCheckBox->isChecked())
+                QSettings("LostSideDead").setValue(jobsKey, jobs);
         });
     }
 
@@ -6733,11 +6767,9 @@ void MainWindow::start_acmxvk_build(const QString &build_path, AcmxvkBuildMode m
     arguments << (fix ? QStringLiteral("--fix") : QStringLiteral("--builddir")) << output_path;
     arguments << QStringLiteral("--glslc") << compiler;
     QSettings settings("LostSideDead");
-    const bool parallelBuildEnabled = settings.value(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "parallel_build_enabled"), false).toBool();
-    if (parallelBuildEnabled) {
-        const int parallelBuildJobs = qBound(1, settings.value(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "parallel_build_jobs"), 2).toInt(), 256);
+    const int parallelBuildJobs = parallel_build_jobs(settings);
+    if (parallelBuildJobs > 0)
         arguments << QStringLiteral("--parallel") << QString::number(parallelBuildJobs);
-    }
     if (prune)
         arguments << QStringLiteral("--prune") << QStringLiteral("--force");
     Log(prune ? tr("Removing broken ACMXVK shader sources from: %1").arg(build_path) : (fix ? tr("Fix building ACMXVK SPIR-V library: %1").arg(build_path) : tr("Building ACMXVK SPIR-V library: %1").arg(build_path)));
