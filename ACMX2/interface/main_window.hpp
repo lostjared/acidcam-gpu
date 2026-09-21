@@ -39,6 +39,7 @@ class DeepDreamSettingsDialog;
 class StableDiffusionSettingsDialog;
 class LibraryBuilderDialog;
 class QDialog;
+class QProgressDialog;
 class QTabWidget;
 class QTimer;
 class UniformReferenceDialog;
@@ -178,6 +179,7 @@ class MainWindow : public QMainWindow {
     bool savePreset(const QString &path, const QString &outputExtension);
     bool savePresetSynchronously(const QString &path);
     bool importPreset(const QString &path);
+    bool applyProjectDocument(const QString &path, const QJsonDocument &document);
     void addRecentPreset(const QString &path);
     void updateRecentPresetsMenu();
     /// @brief Add a library directory to the persisted recent-libraries list.
@@ -248,6 +250,8 @@ class MainWindow : public QMainWindow {
     QString output_file;
     QString project_output_directory;
     QString project_output_filename;
+    bool show_shader_library_load_progress = false;
+    QPointer<QProgressDialog> shader_library_progress_dialog;
     bool save_output_log = false;
     QFile output_run_log;
     double output_fps = 24.0f;

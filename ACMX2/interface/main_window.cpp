@@ -366,6 +366,24 @@ namespace {
         QString message;
     };
 
+    struct ProjectLoadResult {
+        bool success = false;
+        QString message;
+        QJsonDocument document;
+    };
+
+    ProjectLoadResult load_project_document(const QString &path) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+            return {false, QStringLiteral("Could not open project:\n%1").arg(path), {}};
+
+        QJsonParseError error;
+        const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
+        if (error.error != QJsonParseError::NoError || !document.isObject())
+            return {false, QStringLiteral("The project is not valid JSON:\n%1").arg(error.errorString()), {}};
+        return {true, {}, document};
+    }
+
     ProjectSaveResult save_project_bundle(ProjectSaveRequest request) {
         const QString project_root = QFileInfo(request.path).absolutePath();
         if (!QDir().mkpath(project_root))
@@ -3404,10 +3422,23 @@ void MainWindow::populateShaderTree() {
     const QSignalBlocker blocker(list_view);
     list_view->clear();
 
+    QProgressDialog *progress = shader_library_progress_dialog.data();
+    if (progress) {
+        progress->setRange(0, items.size());
+        progress->setValue(0);
+    }
+
     QString acmxvk_type_error;
     const bool acmxvk_source = active_backend == acmx2::Backend::Acmxvk && is_acmxvk_source_library(shader_path, acmxvk_type_error) && acmxvk_type_error.isEmpty();
     const int width = QString::number(items.size()).size();
     for (int i = 0; i < items.size(); ++i) {
+        if (i % 32 == 0) {
+            if (progress) {
+                progress->setValue(i);
+                progress->setLabelText(tr("Loading shader %1 of %2...").arg(i + 1).arg(items.size()));
+            }
+            QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        }
         const QString &name = items.at(i);
         QFileInfo fi(shader_path + "/" + name);
         const QString stem = QFileInfo(name).completeBaseName();
@@ -3453,6 +3484,8 @@ void MainWindow::populateShaderTree() {
         if (!fi.exists())
             item->setForeground(2, QBrush(QColor("#ff5555")));
     }
+    if (progress)
+        progress->setValue(items.size());
 
     // Restore the previously selected row after the rebuild.
     if (previousRow >= 0 && previousRow < list_view->topLevelItemCount()) {
@@ -3754,6 +3787,19 @@ bool MainWindow::loadLibraryPath(const QString &path) {
     const QString trimmedPath = path.trimmed();
     if (trimmedPath.isEmpty())
         return false;
+
+    QProgressDialog progress(tr("Reading shader library metadata..."), QString(), 0, 0, this);
+    if (show_shader_library_load_progress) {
+        progress.setWindowTitle(tr("Loading Shader Library"));
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setAutoClose(false);
+        progress.setAutoReset(false);
+        progress.setMinimumDuration(0);
+        shader_library_progress_dialog = &progress;
+        progress.show();
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    }
+
     const QString libraryPath = QDir::cleanPath(trimmedPath);
     const QFileInfo libraryInfo(libraryPath);
     if (!libraryInfo.exists()) {
@@ -3797,6 +3843,11 @@ bool MainWindow::loadLibraryPath(const QString &path) {
     if (!loadShaders(libraryPath, true)) {
         Log(tr("Warning: Could not load shaders from directory: %1").arg(libraryPath));
         return false;
+    }
+
+    if (shader_library_progress_dialog) {
+        progress.close();
+        shader_library_progress_dialog.clear();
     }
 
     QSettings settings("LostSideDead");
@@ -4245,24 +4296,32 @@ bool MainWindow::savePresetSynchronously(const QString &path) {
 }
 
 bool MainWindow::importPreset(const QString &path) {
-    QProgressDialog progress(tr("Reading project settings..."), QString(), 0, 0, this);
-    progress.setWindowTitle(tr("Loading Project"));
-    progress.setWindowModality(Qt::WindowModal);
-    progress.setCancelButton(nullptr);
-    progress.setMinimumDuration(0);
-    progress.show();
-    QCoreApplication::processEvents();
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, tr("Load Project"), tr("Could not open project:\n%1").arg(path));
-        return false;
-    }
-    QJsonParseError error;
-    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
-    if (error.error != QJsonParseError::NoError || !document.isObject()) {
-        QMessageBox::warning(this, tr("Load Project"), tr("The project is not valid JSON:\n%1").arg(error.errorString()));
-        return false;
-    }
+    auto *dialog = new QProgressDialog(tr("Reading project settings..."), QString(), 0, 0, this);
+    dialog->setWindowTitle(tr("Loading Project"));
+    dialog->setWindowModality(Qt::WindowModal);
+    dialog->setAutoClose(false);
+    dialog->setAutoReset(false);
+    dialog->setMinimumDuration(0);
+    dialog->show();
+
+    auto *watcher = new QFutureWatcher<ProjectLoadResult>(this);
+    connect(watcher, &QFutureWatcher<ProjectLoadResult>::finished, this, [this, watcher, dialog, path]() {
+        const ProjectLoadResult result = watcher->result();
+        dialog->close();
+        dialog->deleteLater();
+        watcher->deleteLater();
+        if (!result.success) {
+            QMessageBox::warning(this, tr("Load Project"), result.message);
+            return;
+        }
+        applyProjectDocument(path, result.document);
+    });
+    watcher->setFuture(QtConcurrent::run([path]() { return load_project_document(path); }));
+    return true;
+}
+
+bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &document) {
+    Log(tr("Loading project: %1").arg(path));
     const QJsonObject root = document.object();
     const int projectVersion = root.value("version").toInt();
     const bool legacyPreset = root.value("format").toString() == QStringLiteral("acmx-preset") && projectVersion == 1;
@@ -4298,8 +4357,6 @@ bool MainWindow::importPreset(const QString &path) {
 
     QSettings interfaceSettings("LostSideDead", "acmx2");
     QSettings applicationSettings("LostSideDead");
-    progress.setLabelText(tr("Applying project settings..."));
-    QCoreApplication::processEvents();
     apply_preset_settings(interfaceSettings, projectInterfaceSettings);
     apply_preset_settings(applicationSettings, projectApplicationSettings);
     const std::optional<acmx2::Backend> backend = acmx2::backend_from_id(root.value("backend").toString());
@@ -4395,9 +4452,12 @@ bool MainWindow::importPreset(const QString &path) {
     }
 
     const QString library = projectLibrary;
-    progress.setLabelText(tr("Loading bundled shader library..."));
+    Log(tr("Loading project shader library..."));
     QCoreApplication::processEvents();
-    if (!library.isEmpty() && loadLibraryPath(library)) {
+    show_shader_library_load_progress = true;
+    const bool libraryLoaded = !library.isEmpty() && loadLibraryPath(library);
+    show_shader_library_load_progress = false;
+    if (libraryLoaded) {
         const int row = items.indexOf(root.value("selected_shader").toString());
         if (row >= 0)
             selectShaderRow(row);
@@ -4610,7 +4670,18 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     const QString previouslySelected = currentShaderName();
     items.clear();
     QStringList uniqueItems;
-    for (const QString &rawEntry : manifestEntries) {
+    QSet<QString> uniqueKeys;
+    if (QProgressDialog *progress = shader_library_progress_dialog.data()) {
+        progress->setRange(0, manifestEntries.size());
+        progress->setLabelText(tr("Validating shader library..."));
+    }
+    for (int index = 0; index < manifestEntries.size(); ++index) {
+        if (index % 32 == 0) {
+            if (QProgressDialog *progress = shader_library_progress_dialog.data())
+                progress->setValue(index);
+            QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        }
+        const QString &rawEntry = manifestEntries.at(index);
         const QString line = rawEntry.trimmed();
 
         if (line.isEmpty()) {
@@ -4627,7 +4698,9 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
             Log("Skipping non-existent file: " + shaderEntry);
             continue;
         }
-        if (!uniqueItems.contains(shaderEntry, Qt::CaseInsensitive)) {
+        const QString uniqueKey = shaderEntry.toCaseFolded();
+        if (!uniqueKeys.contains(uniqueKey)) {
+            uniqueKeys.insert(uniqueKey);
             uniqueItems.append(shaderEntry);
         } else {
             Log("Skipping duplicate shader: " + shaderEntry);
@@ -4636,8 +4709,9 @@ bool MainWindow::loadShaders(const QString &path, bool force) {
     items = uniqueItems;
 
     Log("Loaded " + QString::number(items.size()) + " unique shader files");
+    items.sort(Qt::CaseInsensitive);
     populateShaderTree();
-    menuSort();
+    Log("Shaders sorted alphabetically");
 
     if (!items.isEmpty()) {
         int restoredRow = previousRow;
