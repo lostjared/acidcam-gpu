@@ -279,7 +279,7 @@ class MainWindow : public QMainWindow {
     /// @param include_extra_arguments Append the persisted user arguments when true.
     /// @return true if arguments were built, false on user-facing error.
     bool buildRunArguments(QStringList &arguments, PendingAcmxvkAction resume_action = PendingAcmxvkAction::None, bool include_extra_arguments = true, const QString &output_override = QString());
-    void beginOutputRunLog(const QString &command);
+    void beginOutputRunLog(const QString &command, const QString &run_output_file = QString());
     void appendOutputRunLog(const QString &message);
     void finishOutputRunLog(int exitCode, QProcess::ExitStatus exitStatus);
     /// @brief Run ffmpeg to convert the just-produced acmx2 output (assumed

@@ -134,6 +134,17 @@ namespace {
         return base_name;
     }
 
+    QString output_path_from_arguments(const QStringList &arguments) {
+        QString output_path;
+        for (qsizetype index = 0; index + 1 < arguments.size(); ++index) {
+            if (arguments.at(index) == QStringLiteral("--output")) {
+                output_path = arguments.at(index + 1);
+                ++index;
+            }
+        }
+        return output_path;
+    }
+
     QJsonValue preset_json_value(const QVariant &value) {
         if (value.metaType().id() == QMetaType::QStringList) {
             QJsonArray array;
@@ -3657,16 +3668,17 @@ void MainWindow::flushProcessOutput() {
     }
 }
 
-void MainWindow::beginOutputRunLog(const QString &command) {
-    if (!save_output_log || output_file.isEmpty()) {
+void MainWindow::beginOutputRunLog(const QString &command, const QString &run_output_file) {
+    const QString effective_output_file = run_output_file.isEmpty() ? output_file : run_output_file;
+    if (!save_output_log || effective_output_file.isEmpty()) {
         return;
     }
 
     if (output_run_log.isOpen()) {
         output_run_log.close();
     }
-    const QFileInfo output_info(output_file);
-    const QString log_directory = output_info.absoluteDir().filePath(QStringLiteral("logs"));
+    const QFileInfo output_info(effective_output_file);
+    const QString log_directory = project_output_directory.isEmpty() ? output_info.absoluteDir().filePath(QStringLiteral("logs")) : QDir(project_output_directory).filePath(QStringLiteral("logs"));
     if (!QDir().mkpath(log_directory)) {
         Log(tr("<b style='color:red;'>Unable to create render log directory: %1</b>").arg(log_directory));
         return;
@@ -5927,7 +5939,7 @@ void MainWindow::runSelected() {
     // ACMX2 single-source mode bypasses its binary cache. ACMXVK uses the
     // selected runtime library and does not accept ACMX2 cache controls.
     Log("shell: " + executable_path + " " + concatList(arguments) + "<br>");
-    beginOutputRunLog(executable_path + " " + concatList(arguments));
+    beginOutputRunLog(executable_path + " " + concatList(arguments), output_path_from_arguments(arguments));
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
         appendOutputRunLog(tr("Failed to start: %1").arg(process->errorString()));
@@ -6421,7 +6433,7 @@ void MainWindow::runAll() {
     publishRuntimeSettingsToRunningProcess();
 
     Log("shell: " + executable_path + " " + concatList(arguments) + "<br>");
-    beginOutputRunLog(executable_path + " " + concatList(arguments));
+    beginOutputRunLog(executable_path + " " + concatList(arguments), output_path_from_arguments(arguments));
     process->start(executable_path, arguments);
     if (!process->waitForStarted()) {
         appendOutputRunLog(tr("Failed to start: %1").arg(process->errorString()));
@@ -6567,7 +6579,7 @@ void MainWindow::copyCommand() {
 #endif
         Log("shell: " + cmdText + "<br>");
         initShaderSelectionSharedMemory();
-        beginOutputRunLog(cmdText);
+        beginOutputRunLog(cmdText, output_path_from_arguments(QProcess::splitCommand(cmdText)));
         process->start(command_program, command_arguments);
         if (!process->waitForStarted()) {
             appendOutputRunLog(tr("Failed to start: %1").arg(process->errorString()));
