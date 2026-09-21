@@ -283,7 +283,7 @@ namespace acmxvk {
     }
 
     void resolve_project_arguments(std::vector<std::string> &arguments, const fs::path &project_directory) {
-        static constexpr std::array<std::string_view, 13> path_options = {"--input", "--graphic", "--audio-file", "--shaders", "--model", "--onnx", "--dream-model", "--sd-model", "--upscale-model", "--sd-lora", "--playlist", "--midi-map", "--output"};
+        static constexpr std::array<std::string_view, 15> path_options = {"--input", "--graphic", "--audio-file", "--shaders", "--model", "--onnx", "--dream-model", "--sd-model", "--upscale-model", "--sd-lora", "--playlist", "--midi-map", "--edge", "--human", "--output"};
         for (std::size_t index = 0; index + 1 < arguments.size(); ++index) {
             const std::string_view option = arguments[index];
             if (option == "--prefix" || option == "--record-audio" || std::ranges::find(path_options, option) != path_options.end()) {

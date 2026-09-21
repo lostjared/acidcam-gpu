@@ -9,6 +9,9 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin"
 endif()
 
 project(ACMXVK VERSION 2.140.0 LANGUAGES CXX)
+if(WIN32)
+    enable_language(RC)
+endif()
 
 if(APPLE)
     enable_language(OBJCXX)
@@ -738,6 +741,10 @@ add_executable(acmxvk
     input_validation.hpp
 )
 if(WIN32)
+    target_sources(acmxvk PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../ACMX2/interface/win-icon.rc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../ACMX2/interface/win-icon.ico"
+    )
     target_compile_definitions(acmxvk PRIVATE
         NOMINMAX
         WIN32_LEAN_AND_MEAN

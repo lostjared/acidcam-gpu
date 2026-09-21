@@ -28,6 +28,7 @@ CMake-only acidcam-gpu CUDA-filter configuration.
 """
 
 import os
+import shutil
 from pathlib import Path
 
 from pcons import ImportedTarget, PackageDescription, Project, Target, find_c_toolchain, get_platform, get_var
@@ -63,6 +64,27 @@ def configure_homebrew_paths() -> None:
 
 
 configure_homebrew_paths()
+
+
+def windows_icon_source(name: str, env):
+    if not platform.is_windows:
+        return []
+    rc_file = project_dir.parent / "ACMX2" / "interface" / "win-icon.rc"
+    icon_file = project_dir.parent / "ACMX2" / "interface" / "win-icon.ico"
+    if env.has_tool("rc"):
+        return [rc_file]
+    windres = shutil.which("windres")
+    if windres is None:
+        raise SystemExit("A Windows resource compiler is required to embed win-icon.ico")
+    resource = project.Command(
+        f"{name}-windows-icon",
+        env,
+        target=project_dir / project.build_dir / f"{name}-icon{platform.object_suffix}",
+        source=rc_file,
+        command=[windres, "--input", "$SOURCE", "--output", "$TARGET", "--output-format", "coff"],
+    )
+    resource.depends(icon_file)
+    return [resource]
 
 
 def option(name: str, default: bool = False) -> bool:
@@ -360,7 +382,7 @@ resource_targets = [
     ),
 ]
 
-acmxvk = project.Program("acmxvk", env, sources=sources)
+acmxvk = project.Program("acmxvk", env, sources=[*sources, *windows_icon_source("acmxvk", env)])
 acmxvk.private.include_dirs.extend([project_dir, project_dir / "app"])
 acmxvk.link(*libraries)
 acmxvk.depends(*resource_targets, *shader_targets)

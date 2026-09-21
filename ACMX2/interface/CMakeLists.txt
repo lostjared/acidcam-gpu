@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 project(acmx2_interface LANGUAGES CXX C)
+if(WIN32)
+    enable_language(RC)
+endif()
 include(CTest)
 set(LAUNCHER_MAJOR_VERSION 2)
 set(LAUNCHER_MINOR_VERSION 140)
@@ -202,7 +205,7 @@ else()
     )
 endif()
 
-if(MINGW)
+if(WIN32)
     target_sources(acmx2_interface PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.rc
         ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.ico

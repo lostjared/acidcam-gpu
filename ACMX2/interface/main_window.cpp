@@ -97,6 +97,13 @@ namespace {
         return output_info.dir().filePath(file_name);
     }
 
+    QString untimestamped_output_base_name(const QString &output_path) {
+        QString base_name = QFileInfo(output_path).completeBaseName();
+        static const QRegularExpression timestamp_suffix(QStringLiteral("-\\d{8}-\\d{6}-\\d{3}$"));
+        base_name.remove(timestamp_suffix);
+        return base_name;
+    }
+
     QJsonValue preset_json_value(const QVariant &value) {
         if (value.metaType().id() == QMetaType::QStringList) {
             QJsonArray array;
@@ -367,25 +374,27 @@ namespace {
         remove_nonportable_paths(interface_settings);
         remove_nonportable_paths(application_settings);
 
-        const QStringList local_interface_keys = {QStringLiteral("interface/extra_arguments")};
-        const QStringList local_application_keys = {QStringLiteral("exePath"), QStringLiteral("shaders"), QStringLiteral("midiDevice"), QStringLiteral("customStyleSheet"), QStringLiteral("customStylePreset"), QStringLiteral("useCustomStyle"), QStringLiteral("editor/geometry"), QStringLiteral("editor/workspaceGeometry"), QStringLiteral("findInFiles/geometry"), QStringLiteral("lastExeDir"), QStringLiteral("lastShaderDir"), QStringLiteral("lastScreenshotDir"), QStringLiteral("lastShaderCompilerDir"), QStringLiteral("lastLibraryDir"), QStringLiteral("lastPlaylistDir"), QStringLiteral("lastMidiConfigDir"), QStringLiteral("lastGpuFilterDir"), QStringLiteral("lastEditorSaveDir")};
-        for (const QString &key : local_interface_keys)
+        const QStringList local_keys = {QStringLiteral("interface/backend"), QStringLiteral("interface/extra_arguments"), QStringLiteral("exePath"), QStringLiteral("shaders"), QStringLiteral("midiDevice"), QStringLiteral("customStyleSheet"), QStringLiteral("customStylePreset"), QStringLiteral("useCustomStyle"), QStringLiteral("editor/geometry"), QStringLiteral("editor/workspaceGeometry"), QStringLiteral("findInFiles/geometry"), QStringLiteral("lastExeDir"), QStringLiteral("lastShaderDir"), QStringLiteral("lastScreenshotDir"), QStringLiteral("lastShaderCompilerDir"), QStringLiteral("lastLibraryDir"), QStringLiteral("lastPlaylistDir"), QStringLiteral("lastMidiConfigDir"), QStringLiteral("lastGpuFilterDir"), QStringLiteral("lastEditorSaveDir")};
+        for (const QString &key : local_keys) {
             interface_settings.remove(key);
-        for (const QString &key : local_application_keys)
             application_settings.remove(key);
-
-        for (auto it = application_settings.begin(); it != application_settings.end();) {
-            if (it.key().startsWith(QStringLiteral("last"), Qt::CaseInsensitive) || it.key().contains(QStringLiteral("/recent"), Qt::CaseInsensitive) || it.key().endsWith(QStringLiteral("/executable")) || it.key().endsWith(QStringLiteral("/shader_compiler_path"))) {
-                it = application_settings.erase(it);
-                continue;
-            }
-            ++it;
         }
+
+        const auto remove_local_keys = [](QJsonObject &settings) {
+            for (auto it = settings.begin(); it != settings.end();) {
+                if (it.key().startsWith(QStringLiteral("last"), Qt::CaseInsensitive) || it.key().startsWith(QStringLiteral("backend/acmx2/")) || it.key().contains(QStringLiteral("/recent"), Qt::CaseInsensitive) || it.key().endsWith(QStringLiteral("/executable")) || it.key().endsWith(QStringLiteral("/shader_compiler_path"))) {
+                    it = settings.erase(it);
+                    continue;
+                }
+                ++it;
+            }
+        };
+        remove_local_keys(interface_settings);
+        remove_local_keys(application_settings);
     }
 
     struct ProjectSaveRequest {
         QString path;
-        acmx2::Backend backend = acmx2::Backend::Acmx2;
         QJsonObject interface_settings;
         QJsonObject application_settings;
         QJsonObject runtime;
@@ -459,7 +468,7 @@ namespace {
             project_library = copy_resource(request.shader_library, QStringLiteral("resources/shaders"));
             if (project_library.isEmpty())
                 return {false, error};
-            application_settings.insert(acmx2::backend_settings_key(request.backend, "library"), project_library);
+            application_settings.insert(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "library"), project_library);
         }
         if (!request.video_file.isEmpty()) {
             const QString video = copy_resource(request.video_file, QStringLiteral("resources/media"));
@@ -547,9 +556,12 @@ namespace {
 
         QStringList portable_arguments;
         const QSet<QString> resource_options = {"--input", "--graphic", "--audio-file", "--shaders", "--model", "--onnx", "--dream-model", "--sd-model", "--upscale-model", "--sd-lora", "--playlist", "--midi-map", "--edge", "--human"};
-        const QSet<QString> local_path_options = {"--fragment", "--compute", "--shader-file", "--sd-server", "--glslc", "--build", "--builddir", "--fix", "--probe-hdr"};
+        const QSet<QString> local_path_options = {"--fragment", "--compute", "--sd-server", "--glslc", "--build", "--builddir", "--fix", "--probe-hdr"};
+        const QSet<QString> interface_only_options = {"--interface-shm"};
         for (int index = 0; index < request.acmxvk_arguments.size(); ++index) {
             const QString argument = request.acmxvk_arguments.at(index);
+            if (interface_only_options.contains(argument))
+                continue;
             if (argument == QStringLiteral("--path")) {
                 ++index;
                 continue;
@@ -587,7 +599,6 @@ namespace {
         QJsonObject root;
         root.insert("format", "acmx-project");
         root.insert("version", 2);
-        root.insert("backend", acmx2::backend_id(request.backend));
         root.insert("interface_settings", interface_settings);
         root.insert("application_settings", application_settings);
         root.insert("shader_library", project_library);
@@ -3709,6 +3720,8 @@ void MainWindow::update_backend_ui() {
         backendAcmx2Action->setChecked(active_backend == acmx2::Backend::Acmx2);
     if (backendAcmxvkAction)
         backendAcmxvkAction->setChecked(active_backend == acmx2::Backend::Acmxvk);
+    if (projectMenu)
+        projectMenu->setEnabled(active_backend == acmx2::Backend::Acmxvk);
 
     const bool launchAvailable = backend_launch_available();
     const bool acmx2Tools = active_backend == acmx2::Backend::Acmx2;
@@ -4016,16 +4029,19 @@ void MainWindow::updateRecentPresetsMenu() {
 }
 
 bool MainWindow::savePreset(const QString &path, const QString &outputExtension) {
+    if (active_backend != acmx2::Backend::Acmxvk) {
+        QMessageBox::information(this, tr("Save Project"), tr("Projects are available only with the ACMXVK backend."));
+        return false;
+    }
     const QFileInfo existing_output(output_file);
-    const QString output_base_name = output_file.isEmpty() ? QFileInfo(path).completeBaseName() : existing_output.completeBaseName();
-    const QString project_output_path = timestamped_output_path(QDir(QFileInfo(path).absolutePath()).filePath(QStringLiteral("output/%1.%2").arg(output_base_name, outputExtension)));
+    const QString output_base_name = output_file.isEmpty() ? QFileInfo(path).completeBaseName() : untimestamped_output_base_name(existing_output.filePath());
+    const QString project_output_path = QDir(QFileInfo(path).absolutePath()).filePath(QStringLiteral("output/%1.%2").arg(output_base_name, outputExtension));
     QStringList acmxvk_arguments;
-    if (active_backend == acmx2::Backend::Acmxvk && !buildRunArguments(acmxvk_arguments, PendingAcmxvkAction::CopyCommand, true, project_output_path))
+    if (!buildRunArguments(acmxvk_arguments, PendingAcmxvkAction::CopyCommand, true, project_output_path))
         return false;
 
     ProjectSaveRequest request;
     request.path = path;
-    request.backend = active_backend;
     request.interface_settings = preset_settings(QSettings("LostSideDead", "acmx2"));
     request.application_settings = preset_settings(QSettings("LostSideDead"));
     request.application_settings.remove("presets/recent");
@@ -4317,7 +4333,6 @@ bool MainWindow::savePresetSynchronously(const QString &path) {
     QJsonObject root;
     root.insert("format", "acmx-project");
     root.insert("version", 2);
-    root.insert("backend", acmx2::backend_id(active_backend));
     root.insert("interface_settings", interfaceSettings);
     root.insert("application_settings", applicationSettings);
     root.insert("shader_library", projectLibrary);
@@ -4438,9 +4453,13 @@ bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &
     QSettings applicationSettings("LostSideDead");
     apply_preset_settings(interfaceSettings, projectInterfaceSettings);
     apply_preset_settings(applicationSettings, projectApplicationSettings);
-    const std::optional<acmx2::Backend> backend = acmx2::backend_from_id(root.value("backend").toString());
-    if (backend)
-        set_backend(*backend, false);
+    if (portableProject) {
+        set_backend(acmx2::Backend::Acmxvk, false);
+    } else {
+        const std::optional<acmx2::Backend> backend = acmx2::backend_from_id(root.value("backend").toString());
+        if (backend)
+            set_backend(*backend, false);
+    }
     loadSessionSettings();
 
     if (portableProject) {
@@ -4549,6 +4568,8 @@ bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &
 }
 
 void MainWindow::menuSavePreset() {
+    if (active_backend != acmx2::Backend::Acmxvk)
+        return;
     const QString baseDirectory = QFileDialog::getExistingDirectory(this, tr("Choose Project Location"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
     if (baseDirectory.isEmpty())
         return;
@@ -4573,6 +4594,8 @@ void MainWindow::menuSavePreset() {
 }
 
 void MainWindow::menuNewProject() {
+    if (active_backend != acmx2::Backend::Acmxvk)
+        return;
     const auto answer = QMessageBox::warning(this, tr("New Project"), tr("Clear all ACMX interface settings and start a new project?\n\nThis keeps existing project files and source media, but clears the current project configuration and shader list."), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
     if (answer != QMessageBox::Yes)
         return;
@@ -4581,12 +4604,13 @@ void MainWindow::menuNewProject() {
     QSettings applicationSettings("LostSideDead");
     interfaceSettings.clear();
     applicationSettings.clear();
+    applicationSettings.setValue("interface/backend", acmx2::backend_id(acmx2::Backend::Acmxvk));
     interfaceSettings.sync();
     applicationSettings.sync();
 
-    active_backend = acmx2::Backend::Acmx2;
-    if (backendAcmx2Action)
-        backendAcmx2Action->setChecked(true);
+    active_backend = acmx2::Backend::Acmxvk;
+    if (backendAcmxvkAction)
+        backendAcmxvkAction->setChecked(true);
     executable_path = acmx2::default_backend_executable(active_backend);
     shader_path.clear();
     activeShaderManifestPath.clear();
@@ -4612,6 +4636,8 @@ void MainWindow::menuNewProject() {
 }
 
 void MainWindow::menuImportPreset() {
+    if (active_backend != acmx2::Backend::Acmxvk)
+        return;
     const QString path = QFileDialog::getOpenFileName(this, tr("Load Project"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), tr("ACMX Project (*.json)"));
     if (!path.isEmpty())
         importPreset(path);

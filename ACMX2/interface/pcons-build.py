@@ -25,6 +25,7 @@ The install alias matches CMake's executable and desktop-entry installation:
 """
 
 import os
+import shutil
 from pathlib import Path
 
 from pcons import Project, find_c_toolchain, get_platform
@@ -66,6 +67,25 @@ if platform.is_linux:
 if platform.is_windows:
     env.link.libs.extend(["ole32", "oleaut32", "strmiids"])
 
+
+def windows_icon_source(name: str, rc_file: Path, icon_file: Path):
+    if not platform.is_windows:
+        return []
+    if env.has_tool("rc"):
+        return [rc_file]
+    windres = shutil.which("windres")
+    if windres is None:
+        raise SystemExit("A Windows resource compiler is required to embed win-icon.ico")
+    resource = project.Command(
+        f"{name}-windows-icon",
+        env,
+        target=project_dir / project.build_dir / f"{name}-icon{platform.object_suffix}",
+        source=rc_file,
+        command=[windres, "--input", "$SOURCE", "--output", "$TARGET", "--output-format", "coff"],
+    )
+    resource.depends(icon_file)
+    return [resource]
+
 app = project.QtProgram(
     "acmx2_interface",
     env,
@@ -94,6 +114,11 @@ app = project.QtProgram(
         "syntax.cpp",
         "uniform-reference.cpp",
         "qresource.qrc",
+        *windows_icon_source(
+            "acmx2-interface",
+            project_dir / "win-icon.rc",
+            project_dir / "win-icon.ico",
+        ),
     ],
     link=[qt.Widgets, qt.Gui, qt.Concurrent, qt.Network, qt.Core],
 )
