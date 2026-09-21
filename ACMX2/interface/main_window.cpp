@@ -87,6 +87,9 @@ namespace {
     QString timestamped_output_path(const QString &output_path) {
         const QFileInfo output_info(output_path);
         const QString base_name = output_info.completeBaseName();
+        static const QRegularExpression timestamp_suffix(QStringLiteral("-\\d{8}-\\d{6}-\\d{3}$"));
+        if (timestamp_suffix.match(base_name).hasMatch())
+            return output_info.absoluteFilePath();
         const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss-zzz"));
         QString file_name = base_name + QStringLiteral("-") + timestamp;
         if (!output_info.suffix().isEmpty())
@@ -490,7 +493,9 @@ namespace {
         }
         const QFileInfo source_output(request.output_file.isEmpty() ? QFileInfo(request.path).completeBaseName() + QStringLiteral(".mp4") : request.output_file);
         const QString output_extension = request.output_extension.isEmpty() ? (source_output.completeSuffix().isEmpty() ? QStringLiteral("mp4") : source_output.completeSuffix()) : request.output_extension;
-        const QString output_name = QStringLiteral("%1-%2.%3").arg(source_output.completeBaseName(), QDateTime::currentDateTime().toString(QStringLiteral("yyyy.MM.dd-hh.mm.ss")), output_extension);
+        QString output_name = source_output.fileName();
+        if (output_name.isEmpty())
+            output_name = source_output.completeBaseName() + QStringLiteral(".") + output_extension;
         interface_settings.insert("interface/save_output", true);
         set_project_path(interface_settings, QStringLiteral("interface/output_video"), QDir(QStringLiteral("output")).filePath(output_name));
         if (request.png_output)
@@ -3957,8 +3962,11 @@ void MainWindow::updateRecentPresetsMenu() {
 }
 
 bool MainWindow::savePreset(const QString &path, const QString &outputExtension) {
+    const QFileInfo existing_output(output_file);
+    const QString output_base_name = output_file.isEmpty() ? QFileInfo(path).completeBaseName() : existing_output.completeBaseName();
+    const QString project_output_path = timestamped_output_path(QDir(QFileInfo(path).absolutePath()).filePath(QStringLiteral("output/%1.%2").arg(output_base_name, outputExtension)));
     QStringList acmxvk_arguments;
-    if (active_backend == acmx2::Backend::Acmxvk && !buildRunArguments(acmxvk_arguments, PendingAcmxvkAction::CopyCommand, true))
+    if (active_backend == acmx2::Backend::Acmxvk && !buildRunArguments(acmxvk_arguments, PendingAcmxvkAction::CopyCommand, true, project_output_path))
         return false;
 
     ProjectSaveRequest request;
@@ -3990,7 +3998,7 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension)
     request.stable_diffusion_loras = stable_diffusion_lora_files;
     request.midi_config_file = midi_config_file;
     request.playlist_file = playlist_file_path;
-    request.output_file = output_file;
+    request.output_file = project_output_path;
     request.output_extension = outputExtension;
     request.enable_3d = enable_3d;
     request.onnx_model_enabled = onnx_model_enabled;
@@ -4055,7 +4063,7 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension)
         dialog->setLabelText(QObject::tr("Copying project resources: %1 MB of %2 MB").arg(copied_mb).arg(total_mb));
     });
     connect(dialog, &QProgressDialog::canceled, this, [progress]() { progress->cancelled.store(true); });
-    connect(watcher, &QFutureWatcher<ProjectSaveResult>::finished, this, [this, watcher, timer, dialog, path]() {
+    connect(watcher, &QFutureWatcher<ProjectSaveResult>::finished, this, [this, watcher, timer, dialog, path, project_output_path]() {
         timer->stop();
         const ProjectSaveResult result = watcher->result();
         dialog->close();
@@ -4066,6 +4074,13 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension)
             Log(tr("Project save failed: %1").arg(result.message));
             return;
         }
+        output_file = project_output_path;
+        project_output_directory = QFileInfo(project_output_path).absolutePath();
+        project_output_filename = QFileInfo(project_output_path).fileName();
+        QSettings settings("LostSideDead", "acmx2");
+        settings.setValue("interface/save_output", true);
+        settings.setValue("interface/output_video", output_file);
+        settings.sync();
         addRecentPreset(path);
         Log(tr("Saved portable project: %1").arg(path));
     });
@@ -5810,7 +5825,7 @@ void MainWindow::runSelected() {
     }
 }
 
-bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction resume_action, bool include_extra_arguments) {
+bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction resume_action, bool include_extra_arguments, const QString &output_override) {
     QString deep_dream_error;
     if (!validateDeepDreamLaunch(deep_dream_error)) {
         QMessageBox::warning(this, tr("Deep Dream Settings"), deep_dream_error);
@@ -5939,8 +5954,9 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
     if (active_backend == acmx2::Backend::Acmxvk) {
         arguments << "--png-level" << QString::number(png_level);
     }
-    if (!output_file.isEmpty()) {
-        const QString launch_output_file = active_backend == acmx2::Backend::Acmxvk ? timestamped_output_path(output_file) : output_file;
+    const QString configured_output_file = output_override.isEmpty() ? output_file : output_override;
+    if (!configured_output_file.isEmpty()) {
+        const QString launch_output_file = output_override.isEmpty() && active_backend == acmx2::Backend::Acmxvk ? timestamped_output_path(configured_output_file) : configured_output_file;
         arguments << "--output" << launch_output_file;
         if (active_backend == acmx2::Backend::Acmxvk && encode_rate_control == "bitrate")
             arguments << "--video-bitrate" << encode_bitrate;
@@ -5977,8 +5993,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
 
         if (record_audio) {
             QString wavPath;
-            if (!output_file.isEmpty()) {
-                QFileInfo fi(output_file);
+            if (!configured_output_file.isEmpty()) {
+                QFileInfo fi(configured_output_file);
                 wavPath = fi.absolutePath() + "/" + fi.completeBaseName() + ".wav";
             } else {
                 wavPath = prefix_path + "/recorded_audio.wav";
