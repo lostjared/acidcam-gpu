@@ -4624,7 +4624,7 @@ void MainWindow::menuSavePreset() {
     const QString outputFormat = QInputDialog::getItem(this, tr("Project Video Format"), tr("Project output format:"), formats, defaultFormat, false, &accepted);
     if (!accepted)
         return;
-    savePreset(QDir(projectDirectory).filePath(projectName + QStringLiteral(".json")), outputFormat);
+    savePreset(QDir(projectDirectory).filePath(projectName + QStringLiteral(".acmxproj")), outputFormat);
 }
 
 void MainWindow::menuNewProject() {
@@ -4672,7 +4672,7 @@ void MainWindow::menuNewProject() {
 void MainWindow::menuImportPreset() {
     if (active_backend != acmx2::Backend::Acmxvk)
         return;
-    const QString path = QFileDialog::getOpenFileName(this, tr("Load Project"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), tr("ACMX Project (*.json)"));
+    const QString path = QFileDialog::getOpenFileName(this, tr("Load Project"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), tr("ACMX Project (*.acmxproj);;Legacy ACMX Project (*.json)"));
     if (!path.isEmpty())
         importPreset(path);
 }
