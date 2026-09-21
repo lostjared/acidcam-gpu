@@ -368,7 +368,7 @@ namespace {
         remove_nonportable_paths(application_settings);
 
         const QStringList local_interface_keys = {QStringLiteral("interface/extra_arguments")};
-        const QStringList local_application_keys = {QStringLiteral("exePath"), QStringLiteral("shaders"), QStringLiteral("midiDevice"), QStringLiteral("editor/geometry"), QStringLiteral("editor/workspaceGeometry"), QStringLiteral("findInFiles/geometry"), QStringLiteral("lastExeDir"), QStringLiteral("lastShaderDir"), QStringLiteral("lastScreenshotDir"), QStringLiteral("lastShaderCompilerDir"), QStringLiteral("lastLibraryDir"), QStringLiteral("lastPlaylistDir"), QStringLiteral("lastMidiConfigDir"), QStringLiteral("lastGpuFilterDir"), QStringLiteral("lastEditorSaveDir")};
+        const QStringList local_application_keys = {QStringLiteral("exePath"), QStringLiteral("shaders"), QStringLiteral("midiDevice"), QStringLiteral("customStyleSheet"), QStringLiteral("customStylePreset"), QStringLiteral("useCustomStyle"), QStringLiteral("editor/geometry"), QStringLiteral("editor/workspaceGeometry"), QStringLiteral("findInFiles/geometry"), QStringLiteral("lastExeDir"), QStringLiteral("lastShaderDir"), QStringLiteral("lastScreenshotDir"), QStringLiteral("lastShaderCompilerDir"), QStringLiteral("lastLibraryDir"), QStringLiteral("lastPlaylistDir"), QStringLiteral("lastMidiConfigDir"), QStringLiteral("lastGpuFilterDir"), QStringLiteral("lastEditorSaveDir")};
         for (const QString &key : local_interface_keys)
             interface_settings.remove(key);
         for (const QString &key : local_application_keys)
