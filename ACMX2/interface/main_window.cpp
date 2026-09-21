@@ -114,6 +114,17 @@ namespace {
         }
     }
 
+    void normalize_project_parallel_build_settings(QJsonObject &interface_settings, QJsonObject &application_settings) {
+        const QString jobs_key = parallel_build_jobs_key();
+        const QString enabled_key = legacy_parallel_build_enabled_key();
+        normalize_parallel_build_settings(application_settings);
+        normalize_parallel_build_settings(interface_settings);
+        if (!application_settings.contains(jobs_key) && interface_settings.contains(jobs_key))
+            application_settings.insert(jobs_key, interface_settings.value(jobs_key));
+        interface_settings.remove(jobs_key);
+        interface_settings.remove(enabled_key);
+    }
+
     QString timestamped_output_path(const QString &output_path) {
         const QFileInfo output_info(output_path);
         const QString base_name = output_info.completeBaseName();
@@ -291,6 +302,19 @@ namespace {
                 }
                 progress->copied_bytes.fetch_add(bytes.size());
             }
+            if (!output.flush()) {
+                error = QStringLiteral("Could not finish copying project resource: %1").arg(source);
+                return false;
+            }
+            output.close();
+            const QDateTime modification_time = QFileInfo(source).lastModified();
+            if (modification_time.isValid()) {
+                QFile timestamp_file(destination);
+                if (!timestamp_file.open(QIODevice::ReadWrite) || !timestamp_file.setFileTime(modification_time, QFileDevice::FileModificationTime)) {
+                    error = QStringLiteral("Could not preserve the project resource timestamp: %1").arg(source);
+                    return false;
+                }
+            }
             return true;
         }
 
@@ -465,6 +489,7 @@ namespace {
         bool midi_enabled = false;
         bool playlist_enabled = false;
         bool png_output = false;
+        bool create_output_directories = true;
     };
 
     struct ProjectSaveResult {
@@ -494,7 +519,7 @@ namespace {
         const QString project_root = QFileInfo(request.path).absolutePath();
         if (!QDir().mkpath(project_root))
             return {false, QStringLiteral("Could not create project directory: %1").arg(project_root)};
-        if (!QDir().mkpath(QDir(project_root).filePath(QStringLiteral("output/snapshots"))) || !QDir().mkpath(QDir(project_root).filePath(QStringLiteral("output/logs"))))
+        if (request.create_output_directories && (!QDir().mkpath(QDir(project_root).filePath(QStringLiteral("output/snapshots"))) || !QDir().mkpath(QDir(project_root).filePath(QStringLiteral("output/logs")))))
             return {false, QStringLiteral("Could not create project output directory")};
 
         ProjectResources resources(project_root, request.progress);
@@ -636,7 +661,7 @@ namespace {
         }
 
         remove_nonportable_project_settings(interface_settings, application_settings);
-        normalize_parallel_build_settings(application_settings);
+        normalize_project_parallel_build_settings(interface_settings, application_settings);
 
         QJsonObject root;
         root.insert("format", "acmx-project");
@@ -1392,6 +1417,8 @@ void MainWindow::initControls() {
     QAction *savePresetAction = projectMenu->addAction(tr("Save Project..."));
     savePresetAction->setShortcut(QKeySequence("Ctrl+Shift+P"));
     connect(savePresetAction, &QAction::triggered, this, &MainWindow::menuSavePreset);
+    QAction *exportProjectAction = projectMenu->addAction(tr("Export Project..."));
+    connect(exportProjectAction, &QAction::triggered, this, &MainWindow::menuExportProject);
     QAction *importPresetAction = projectMenu->addAction(tr("Load Project..."));
     importPresetAction->setShortcut(QKeySequence("Ctrl+Shift+I"));
     connect(importPresetAction, &QAction::triggered, this, &MainWindow::menuImportPreset);
@@ -1763,6 +1790,8 @@ void MainWindow::initControls() {
     centralWidget->setLayout(layout);
     setCentralWidget(centralWidget);
     QSettings appSettings("LostSideDead");
+    const QString last_project_path = appSettings.value("projects/last_open").toString();
+    const bool restore_last_project = QFileInfo(last_project_path).isFile();
     active_backend = acmx2::backend_from_id(appSettings.value("interface/backend", "acmx2").toString()).value_or(acmx2::Backend::Acmx2);
     backendAcmx2Action->setChecked(active_backend == acmx2::Backend::Acmx2);
     backendAcmxvkAction->setChecked(active_backend == acmx2::Backend::Acmxvk);
@@ -1800,7 +1829,7 @@ void MainWindow::initControls() {
         displayFilterAction->setChecked(display_filter_enabled);
     }
     publishRuntimeSettingsToRunningProcess();
-    if (!path.isEmpty()) {
+    if (!path.isEmpty() && !restore_last_project) {
         QFileInfo pathInfo(path);
         if (pathInfo.exists() && pathInfo.isDir() && acmx2::shader_manifest_exists(path)) {
             QString backendError;
@@ -1834,6 +1863,13 @@ void MainWindow::initControls() {
     customStyleSheet = appSettings.value("customStyleSheet", defaultCustomStyleSheet).toString();
 
     applyCustomStyleSheet(useCustomStyle);
+
+    if (restore_last_project) {
+        QTimer::singleShot(0, this, [this, last_project_path]() { importPreset(last_project_path); });
+    } else if (!last_project_path.isEmpty()) {
+        appSettings.remove("projects/last_open");
+        appSettings.sync();
+    }
 }
 
 void MainWindow::loadSessionSettings() {
@@ -3762,7 +3798,8 @@ void MainWindow::prompt_acmxvk_rebuild(const QString &reason, PendingAcmxvkActio
 
 void MainWindow::update_backend_ui() {
     const QString name = acmx2::backend_name(active_backend);
-    setWindowTitle(tr("%1 - Interface").arg(name));
+    const QString project_name = current_project_path.isEmpty() ? QString() : QFileInfo(current_project_path).completeBaseName();
+    setWindowTitle(project_name.isEmpty() ? tr("%1 - Interface").arg(name) : tr("%1 - Interface - %2").arg(name, project_name));
     if (backendAcmx2Action)
         backendAcmx2Action->setChecked(active_backend == acmx2::Backend::Acmx2);
     if (backendAcmxvkAction)
@@ -4053,6 +4090,18 @@ void MainWindow::addRecentPreset(const QString &path) {
     updateRecentPresetsMenu();
 }
 
+void MainWindow::set_current_project_path(const QString &path) {
+    current_project_path = path.isEmpty() ? QString() : QFileInfo(path).absoluteFilePath();
+    QSettings settings("LostSideDead");
+    if (current_project_path.isEmpty()) {
+        settings.remove("projects/last_open");
+    } else {
+        settings.setValue("projects/last_open", current_project_path);
+    }
+    settings.sync();
+    update_backend_ui();
+}
+
 void MainWindow::updateRecentPresetsMenu() {
     if (!recentPresetsMenu)
         return;
@@ -4075,7 +4124,7 @@ void MainWindow::updateRecentPresetsMenu() {
     }
 }
 
-bool MainWindow::savePreset(const QString &path, const QString &outputExtension) {
+bool MainWindow::savePreset(const QString &path, const QString &outputExtension, bool exportProject) {
     if (active_backend != acmx2::Backend::Acmxvk) {
         QMessageBox::information(this, tr("Save Project"), tr("Projects are available only with the ACMXVK backend."));
         return false;
@@ -4125,6 +4174,7 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension)
     request.midi_enabled = midi_enabled;
     request.playlist_enabled = playlist_enabled;
     request.png_output = png_output;
+    request.create_output_directories = !exportProject;
     request.runtime.insert("gpu_filter_enabled", gpu_filter_enabled);
     request.runtime.insert("gpu_filter_indices", gpu_filter_indices);
     request.runtime.insert("gpu_buffer_size", gpu_buffer_size);
@@ -4155,8 +4205,8 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension)
 
     const auto progress = std::make_shared<ProjectProgress>();
     request.progress = progress;
-    auto *dialog = new QProgressDialog(tr("Preparing project resources..."), tr("Cancel"), 0, 0, this);
-    dialog->setWindowTitle(tr("Saving Project"));
+    auto *dialog = new QProgressDialog(exportProject ? tr("Preparing exported project resources...") : tr("Preparing project resources..."), tr("Cancel"), 0, 0, this);
+    dialog->setWindowTitle(exportProject ? tr("Exporting Project") : tr("Saving Project"));
     dialog->setWindowModality(Qt::WindowModal);
     dialog->setAutoClose(false);
     dialog->setAutoReset(false);
@@ -4180,15 +4230,19 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension)
         dialog->setLabelText(QObject::tr("Copying project resources: %1 MB of %2 MB").arg(copied_mb).arg(total_mb));
     });
     connect(dialog, &QProgressDialog::canceled, this, [progress]() { progress->cancelled.store(true); });
-    connect(watcher, &QFutureWatcher<ProjectSaveResult>::finished, this, [this, watcher, timer, dialog, path, project_output_path]() {
+    connect(watcher, &QFutureWatcher<ProjectSaveResult>::finished, this, [this, watcher, timer, dialog, path, project_output_path, exportProject]() {
         timer->stop();
         const ProjectSaveResult result = watcher->result();
         dialog->close();
         dialog->deleteLater();
         watcher->deleteLater();
         if (!result.success) {
-            QMessageBox::warning(this, tr("Save Project"), result.message);
-            Log(tr("Project save failed: %1").arg(result.message));
+            QMessageBox::warning(this, exportProject ? tr("Export Project") : tr("Save Project"), result.message);
+            Log(exportProject ? tr("Project export failed: %1").arg(result.message) : tr("Project save failed: %1").arg(result.message));
+            return;
+        }
+        if (exportProject) {
+            Log(tr("Exported portable project: %1").arg(path));
             return;
         }
         output_file = project_output_path;
@@ -4199,6 +4253,7 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension)
         settings.setValue("interface/output_video", output_file);
         settings.sync();
         addRecentPreset(path);
+        set_current_project_path(path);
         Log(tr("Saved portable project: %1").arg(path));
     });
     timer->start();
@@ -4220,7 +4275,7 @@ bool MainWindow::savePresetSynchronously(const QString &path) {
 
     QJsonObject interfaceSettings = preset_settings(QSettings("LostSideDead", "acmx2"));
     QJsonObject applicationSettings = preset_settings(QSettings("LostSideDead"));
-    normalize_parallel_build_settings(applicationSettings);
+    normalize_project_parallel_build_settings(interfaceSettings, applicationSettings);
     applicationSettings.remove("presets/recent");
     applicationSettings.remove("recentLibraries");
     applicationSettings.remove(acmx2::backend_settings_key(acmx2::Backend::Acmx2, "recentLibraries"));
@@ -4433,6 +4488,7 @@ bool MainWindow::savePresetSynchronously(const QString &path) {
         return false;
     }
     addRecentPreset(path);
+    set_current_project_path(path);
     Log(tr("Saved portable project: %1").arg(path));
     return true;
 }
@@ -4483,6 +4539,10 @@ bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &
     QJsonObject runtime = root.value("runtime").toObject();
     if (portableProject) {
         const QString projectRoot = QFileInfo(path).absolutePath();
+        if (!QDir().mkpath(QDir(projectRoot).filePath(QStringLiteral("output/snapshots"))) || !QDir().mkpath(QDir(projectRoot).filePath(QStringLiteral("output/logs")))) {
+            QMessageBox::warning(this, tr("Load Project"), tr("Could not create the project output directories."));
+            return false;
+        }
         for (const QString &key : {QStringLiteral("interface/input_video"), QStringLiteral("interface/graphics_file"), QStringLiteral("interface/model_file"), QStringLiteral("interface/onnx_model_file"), QStringLiteral("deep_dream/model_file"), QStringLiteral("stable_diffusion/model_file"), QStringLiteral("stable_diffusion/upscale_model_file"), QStringLiteral("audio/file_path"), QStringLiteral("audio/playlist_path"), QStringLiteral("interface/output_video"), QStringLiteral("interface/png_output_directory")}) {
             resolve_project_path(projectInterfaceSettings, key, projectRoot);
         }
@@ -4611,6 +4671,7 @@ bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &
     publishRuntimeSettingsToRunningProcess();
     publishMultipassShadersToRunningProcess();
     addRecentPreset(path);
+    set_current_project_path(path);
     Log(tr("Loaded project: %1").arg(path));
     return true;
 }
@@ -4641,6 +4702,34 @@ void MainWindow::menuSavePreset() {
     savePreset(QDir(projectDirectory).filePath(projectName + QStringLiteral(".acmxproj")), outputFormat);
 }
 
+void MainWindow::menuExportProject() {
+    if (active_backend != acmx2::Backend::Acmxvk)
+        return;
+    const QString initialDirectory = current_project_path.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) : QFileInfo(current_project_path).absolutePath();
+    const QString baseDirectory = QFileDialog::getExistingDirectory(this, tr("Choose Export Location"), initialDirectory);
+    if (baseDirectory.isEmpty())
+        return;
+    bool accepted = false;
+    const QString defaultName = current_project_path.isEmpty() ? QStringLiteral("acmx-project-export") : QFileInfo(current_project_path).completeBaseName() + QStringLiteral("-export");
+    QString projectName = QInputDialog::getText(this, tr("Export Project"), tr("Export name:"), QLineEdit::Normal, defaultName, &accepted).trimmed();
+    if (!accepted || projectName.isEmpty())
+        return;
+    projectName.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9._-]+")), QStringLiteral("-"));
+    if (projectName.isEmpty())
+        projectName = QStringLiteral("acmx-project-export");
+    const QString projectDirectory = QDir(baseDirectory).filePath(projectName);
+    if (QDir(projectDirectory).exists() && !QDir(projectDirectory).entryList(QDir::NoDotAndDotDot | QDir::AllEntries).isEmpty()) {
+        QMessageBox::warning(this, tr("Export Project"), tr("Choose a new export name. The export directory already contains files:\n%1").arg(projectDirectory));
+        return;
+    }
+    const QStringList formats = {QStringLiteral("mp4"), QStringLiteral("mkv"), QStringLiteral("mov"), QStringLiteral("webm"), QStringLiteral("avi")};
+    const int defaultFormat = std::max(0, static_cast<int>(formats.indexOf(QFileInfo(output_file).suffix().toLower())));
+    const QString outputFormat = QInputDialog::getItem(this, tr("Project Video Format"), tr("Project output format:"), formats, defaultFormat, false, &accepted);
+    if (!accepted)
+        return;
+    savePreset(QDir(projectDirectory).filePath(projectName + QStringLiteral(".acmxproj")), outputFormat, true);
+}
+
 void MainWindow::menuNewProject() {
     if (active_backend != acmx2::Backend::Acmxvk)
         return;
@@ -4669,6 +4758,7 @@ void MainWindow::menuNewProject() {
 
     project_output_directory.clear();
     project_output_filename.clear();
+    set_current_project_path(QString());
     prefix_path = QStringLiteral(".");
     output_file.clear();
     save_output_log = false;

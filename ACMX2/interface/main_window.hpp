@@ -110,6 +110,7 @@ class MainWindow : public QMainWindow {
     void menuUniformReference();
     void menuNewProject();
     void menuSavePreset();
+    void menuExportProject();
     void menuImportPreset();
     void menuToggleDisplayFilter(bool checked);
     void openCustomStyleEditor();
@@ -176,10 +177,11 @@ class MainWindow : public QMainWindow {
     void openShaderEditor(const QString &filePath, int lineNumber = 1, int columnNumber = 0, int matchLength = 0);
     /// @brief Validate, load, persist, and remember a shader library directory.
     bool loadLibraryPath(const QString &path);
-    bool savePreset(const QString &path, const QString &outputExtension);
+    bool savePreset(const QString &path, const QString &outputExtension, bool exportProject = false);
     bool savePresetSynchronously(const QString &path);
     bool importPreset(const QString &path);
     bool applyProjectDocument(const QString &path, const QJsonDocument &document);
+    void set_current_project_path(const QString &path);
     void addRecentPreset(const QString &path);
     void updateRecentPresetsMenu();
     /// @brief Add a library directory to the persisted recent-libraries list.
@@ -248,6 +250,7 @@ class MainWindow : public QMainWindow {
     QString graphics_file;
     QString prefix_path;
     QString output_file;
+    QString current_project_path;
     QString project_output_directory;
     QString project_output_filename;
     bool show_shader_library_load_progress = false;
