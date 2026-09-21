@@ -289,13 +289,53 @@ namespace acmxvk {
         throw std::runtime_error("unable to allocate a temporary shader build path for: " + destination.string());
     }
 
+    void remove_temporary_file(const fs::path &path) noexcept {
+#ifdef _WIN32
+        constexpr int REMOVE_ATTEMPTS = 40;
+        for (int attempt = 0; attempt < REMOVE_ATTEMPTS; ++attempt) {
+            if (DeleteFileW(path.c_str()) != FALSE) {
+                return;
+            }
+            const DWORD remove_error = GetLastError();
+            if (remove_error == ERROR_FILE_NOT_FOUND || remove_error == ERROR_PATH_NOT_FOUND) {
+                return;
+            }
+            if (remove_error != ERROR_SHARING_VIOLATION && remove_error != ERROR_LOCK_VIOLATION && remove_error != ERROR_ACCESS_DENIED) {
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        }
+#else
+        std::error_code error;
+        fs::remove(path, error);
+#endif
+    }
+
     void replaceBuiltFile(const fs::path &temporary, const fs::path &destination) {
+#ifdef _WIN32
+        constexpr int REPLACE_ATTEMPTS = 80;
+        DWORD replace_error = ERROR_SUCCESS;
+        for (int attempt = 0; attempt < REPLACE_ATTEMPTS; ++attempt) {
+            if (MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE) {
+                return;
+            }
+            replace_error = GetLastError();
+            if (replace_error != ERROR_SHARING_VIOLATION && replace_error != ERROR_LOCK_VIOLATION && replace_error != ERROR_ACCESS_DENIED) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        }
+        remove_temporary_file(temporary);
+        const std::error_code error(static_cast<int>(replace_error), std::system_category());
+        throw std::runtime_error("unable to install built file " + destination.string() + ": " + error.message());
+#else
         std::error_code error;
         fs::rename(temporary, destination, error);
         if (error) {
-            fs::remove(temporary);
+            remove_temporary_file(temporary);
             throw std::runtime_error("unable to install built file " + destination.string() + ": " + error.message());
         }
+#endif
     }
 
     class ShaderCompilationError : public std::runtime_error {
@@ -561,7 +601,7 @@ namespace acmxvk {
                         input::validate_spirv_file(temporary, "compiled shader module");
                         replaceBuiltFile(temporary, destination);
                     } catch (...) {
-                        fs::remove(temporary);
+                        remove_temporary_file(temporary);
                         throw;
                     }
                     if (copy_source) {
@@ -669,7 +709,7 @@ namespace acmxvk {
             }
             output << "    ]\n}\n";
             if (!output) {
-                fs::remove(temporary_manifest);
+                remove_temporary_file(temporary_manifest);
                 throw std::runtime_error("unable to write output library.json");
             }
         }
@@ -677,7 +717,7 @@ namespace acmxvk {
             input::validate_text_file(temporary_manifest, "built shader library.json");
             replaceBuiltFile(temporary_manifest, output_manifest);
         } catch (...) {
-            fs::remove(temporary_manifest);
+            remove_temporary_file(temporary_manifest);
             throw;
         }
 
