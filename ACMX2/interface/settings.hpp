@@ -77,6 +77,10 @@ class SettingsWindow : public QDialog {
     int getCacheSize() const;
     /// @return True if fullscreen mode is enabled.
     bool isFullscreen() const;
+    /// @return True if ACMXVK should use VSync presentation.
+    bool isVsyncEnabled() const;
+    /// @return The 1-based target monitor index, or zero for the primary monitor.
+    int getMonitorIndex() const;
     /// @return True if ACMXVK should render camera input at the selected FPS.
     bool isMaximizeFpsEnabled() const;
     /// @return True if ACMXVK should pace video using its reported frame rate.
@@ -220,6 +224,8 @@ class SettingsWindow : public QDialog {
     QSpinBox *cacheDelaySpinBox;
     QSpinBox *cacheSizeSpinBox;
     QCheckBox *fullscreenCheckBox;
+    QCheckBox *vsyncCheckBox = nullptr;
+    QComboBox *monitorComboBox = nullptr;
     QCheckBox *maximizeFpsCheckBox = nullptr;
     QCheckBox *useSourceFpsCheckBox = nullptr;
     QCheckBox *useSourceAudioCheckBox = nullptr;

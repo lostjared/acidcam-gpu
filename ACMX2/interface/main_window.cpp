@@ -1861,6 +1861,8 @@ void MainWindow::loadSessionSettings() {
     output_file = saveOutput ? settings.value("interface/output_video", "").toString() : QString();
     save_output_log = saveOutput && settings.value("interface/save_output_log", false).toBool();
     full_screen_value = settings.value("interface/fullscreen", false).toBool();
+    enable_vsync = settings.value("interface/acmxvk_vsync", false).toBool();
+    monitor_index = std::max(0, settings.value("interface/acmxvk_monitor", 0).toInt());
     copy_audio = videoMode && saveOutput && settings.value("interface/copy_audio", false).toBool();
 
     cache_enabled = !graphicsMode && settings.value("interface/texture_cache", false).toBool();
@@ -5540,6 +5542,8 @@ void MainWindow::cameraSettings() {
     settingsWindow.setDnnAvailable(dnn_available);
     if (settingsWindow.exec() == QDialog::Accepted) {
         full_screen_value = settingsWindow.isFullscreen();
+        enable_vsync = settingsWindow.isVsyncEnabled();
+        monitor_index = settingsWindow.getMonitorIndex();
         if (settingsWindow.isUsingInputVideoFile()) {
             QString videoFile = settingsWindow.getInputVideoFile();
             QSize screenResolution = settingsWindow.getSelectedScreenResolution();
@@ -5737,6 +5741,10 @@ void MainWindow::runSelected() {
 
     if (full_screen_value)
         arguments << "--fullscreen";
+    if (active_backend == acmx2::Backend::Acmxvk && enable_vsync)
+        arguments << "--enable-vsync";
+    if (active_backend == acmx2::Backend::Acmxvk && monitor_index > 0)
+        arguments << "--monitor" << QString::number(monitor_index);
 
     if (!graphics_file.isEmpty()) {
         arguments << "--graphic" << graphics_file;
@@ -6038,6 +6046,10 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
 
     if (full_screen_value)
         arguments << "--fullscreen";
+    if (active_backend == acmx2::Backend::Acmxvk && enable_vsync)
+        arguments << "--enable-vsync";
+    if (active_backend == acmx2::Backend::Acmxvk && monitor_index > 0)
+        arguments << "--monitor" << QString::number(monitor_index);
 
     if (!graphics_file.isEmpty()) {
         arguments << "--graphic" << graphics_file;

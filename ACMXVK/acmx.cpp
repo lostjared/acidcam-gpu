@@ -6,6 +6,8 @@
 #include <mxvk/mxvk_exception.hpp>
 #include <mxvk/mxvk_runtime_options.hpp>
 
+#include <SDL3/SDL.h>
+
 #ifdef AUDIO_ENABLED
 #include "audio.hpp"
 #endif
@@ -34,6 +36,44 @@
 #include <string_view>
 #include <utility>
 
+namespace {
+    int list_monitors(std::ostream &output) {
+        if (!SDL_Init(SDL_INIT_VIDEO)) {
+            throw std::runtime_error(std::string("unable to initialize SDL video for monitor enumeration: ") + SDL_GetError());
+        }
+
+        int count = 0;
+        SDL_DisplayID *displays = SDL_GetDisplays(&count);
+        if (displays == nullptr || count <= 0) {
+            const std::string error = SDL_GetError();
+            SDL_free(displays);
+            SDL_Quit();
+            throw std::runtime_error("unable to enumerate monitors: " + error);
+        }
+
+        output << "acmxvk: monitors: " << count << '\n';
+        for (int index = 0; index < count; ++index) {
+            SDL_Rect bounds{};
+            const char *name = SDL_GetDisplayName(displays[index]);
+            const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(displays[index]);
+            output << (index + 1) << ": " << (name != nullptr ? name : "Unknown monitor");
+            if (SDL_GetDisplayBounds(displays[index], &bounds)) {
+                output << " (" << bounds.w << 'x' << bounds.h << " at " << bounds.x << ',' << bounds.y << ')';
+            }
+            if (mode != nullptr) {
+                output << " current " << mode->w << 'x' << mode->h;
+                if (mode->refresh_rate > 0.0F) {
+                    output << " @ " << mode->refresh_rate << " Hz";
+                }
+            }
+            output << '\n';
+        }
+        SDL_free(displays);
+        SDL_Quit();
+        return EXIT_SUCCESS;
+    }
+} // namespace
+
 int main(int argc, char **argv) {
     try {
         for (int index = 1; index < argc; ++index) {
@@ -56,6 +96,9 @@ int main(int argc, char **argv) {
         }
         if (options.list_camera_devices) {
             return acmxvk::listCameraDevices(std::cout, std::cerr) ? EXIT_SUCCESS : EXIT_FAILURE;
+        }
+        if (options.list_monitors) {
+            return list_monitors(std::cout);
         }
         if (options.check_audio) {
 #ifdef AUDIO_ENABLED

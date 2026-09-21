@@ -18,6 +18,50 @@ namespace acmxvk {
             return text.str();
         }
 
+        void place_window_on_monitor(SDL_Window *window, int monitor) {
+            int monitor_count = 0;
+            SDL_DisplayID *monitors = SDL_GetDisplays(&monitor_count);
+            if (monitors == nullptr || monitor < 1 || monitor > monitor_count) {
+                SDL_free(monitors);
+                throw std::runtime_error("--monitor " + std::to_string(monitor) + " is unavailable; use --list-monitors to list valid monitors");
+            }
+
+            const SDL_DisplayID display = monitors[monitor - 1];
+            SDL_Rect bounds{};
+            if (!SDL_GetDisplayBounds(display, &bounds)) {
+                const std::string error = SDL_GetError();
+                SDL_free(monitors);
+                throw std::runtime_error("unable to query monitor " + std::to_string(monitor) + ": " + error);
+            }
+            const char *name = SDL_GetDisplayName(display);
+            const bool fullscreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+            if (fullscreen && !SDL_SetWindowFullscreen(window, false)) {
+                const std::string error = SDL_GetError();
+                SDL_free(monitors);
+                throw std::runtime_error("unable to leave fullscreen while selecting monitor: " + error);
+            }
+            if (!SDL_SetWindowPosition(window, bounds.x, bounds.y)) {
+                const std::string error = SDL_GetError();
+                SDL_free(monitors);
+                throw std::runtime_error("unable to move window to monitor " + std::to_string(monitor) + ": " + error);
+            }
+            if (fullscreen) {
+                const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(display);
+                if (mode != nullptr && !SDL_SetWindowFullscreenMode(window, mode)) {
+                    const std::string error = SDL_GetError();
+                    SDL_free(monitors);
+                    throw std::runtime_error("unable to set fullscreen mode for monitor " + std::to_string(monitor) + ": " + error);
+                }
+                if (!SDL_SetWindowFullscreen(window, true)) {
+                    const std::string error = SDL_GetError();
+                    SDL_free(monitors);
+                    throw std::runtime_error("unable to enter fullscreen on monitor " + std::to_string(monitor) + ": " + error);
+                }
+            }
+            std::cout << "acmxvk: window monitor " << monitor << ": " << (name != nullptr ? name : "Unknown monitor") << '\n';
+            SDL_free(monitors);
+        }
+
         [[nodiscard]] float decode_pq(float encoded) {
             constexpr float M1 = 2610.0F / 16384.0F;
             constexpr float M2 = 2523.0F / 32.0F;
@@ -112,6 +156,9 @@ namespace acmxvk {
         if (this->options.headless) {
             std::cout << "acmxvk: headless mode enabled: surface-free Vulkan "
                          "rendering without an SDL window\n";
+        }
+        if (this->options.monitor != 0) {
+            place_window_on_monitor(getSDLWindow(), this->options.monitor);
         }
         setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
         setEnableScreenshot(this->options.enable_screenshot);

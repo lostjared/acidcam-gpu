@@ -220,7 +220,7 @@ namespace acmxvk {
         throw std::runtime_error("--rotate requires clockwise, 180, or counterclockwise");
     }
 
-    [[nodiscard]] bool isUtilityRequest(const Options &options) { return options.show_help || options.list_audio_devices || options.list_camera_devices || options.check_audio || options.list_midi_devices || options.check_midi || options.list_gpu_filters || options.list_cuda_devices || options.check_cuda || options.check_dnn || options.check_deep_dream || options.check_stable_diffusion || !options.probe_hdr_file.empty() || options.enumerate_camera_device >= 0 || options.list_encoders || !options.list_encoder_options.empty(); }
+    [[nodiscard]] bool isUtilityRequest(const Options &options) { return options.show_help || options.list_audio_devices || options.list_camera_devices || options.list_monitors || options.check_audio || options.list_midi_devices || options.check_midi || options.list_gpu_filters || options.list_cuda_devices || options.check_cuda || options.check_dnn || options.check_deep_dream || options.check_stable_diffusion || !options.probe_hdr_file.empty() || options.enumerate_camera_device >= 0 || options.list_encoders || !options.list_encoder_options.empty(); }
 
     void applyResourceDefaults(Options &options) {
         if (isUtilityRequest(options)) {
@@ -1269,6 +1269,17 @@ namespace acmxvk {
                 option_handled = true;
                 options.fullscreen = true;
             }
+            if (option == "--monitor") {
+                option_handled = true;
+                options.monitor = parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.monitor < 1 || options.monitor > 65535) {
+                    throw std::runtime_error("--monitor must be between 1 and 65535");
+                }
+            }
+            if (option == "--list-monitors") {
+                option_handled = true;
+                options.list_monitors = true;
+            }
             if (option == "-a" || option == "--repeat") {
                 option_handled = true;
                 options.repeat = true;
@@ -1514,9 +1525,9 @@ namespace acmxvk {
                 throw std::runtime_error("--headless/--silent with --repeat requires --duration "
                                          "<seconds>");
             }
-            if (options.fullscreen || options.enable_vsync || options.enable_screenshot) {
+            if (options.fullscreen || options.monitor != 0 || options.enable_vsync || options.enable_screenshot) {
                 throw std::runtime_error("--headless/--silent cannot be combined with "
-                                         "--fullscreen, --enable-vsync, or --enable-screenshot");
+                                         "--fullscreen, --monitor, --enable-vsync, or --enable-screenshot");
             }
         }
         if (options.audio_buffers > 0 && !options.enable_audio) {
@@ -1778,6 +1789,8 @@ namespace acmxvk {
                << "  -r, --resolution <WxH>      Render/output resolution override\n"
                << "                              Preview fits display without changing output size\n"
                << "  -n, --fullscreen            Start fullscreen\n"
+               << "      --monitor <index>        Place the window on a 1-based monitor index\n"
+               << "      --list-monitors          List available monitors and exit\n"
                << "  -a, --repeat                Repeat video input\n"
                << "      --rotate <mode>         clockwise, 180, or counterclockwise\n"
                << "      --flip                  Flip final display/encoded output vertically\n"

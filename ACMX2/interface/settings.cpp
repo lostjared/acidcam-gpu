@@ -891,6 +891,17 @@ void SettingsWindow::init() {
     fullscreenCheckBox = new QCheckBox("Fullscreen", this);
 
     if (activeBackend == acmx2::Backend::Acmxvk) {
+        vsyncCheckBox = new QCheckBox("Enable VSync", this);
+        vsyncCheckBox->setToolTip("Use FIFO presentation to synchronize the preview with the monitor refresh rate.");
+        monitorComboBox = new QComboBox(this);
+        monitorComboBox->addItem("Primary monitor", 0);
+        const QList<QScreen *> screens = QGuiApplication::screens();
+        for (int index = 0; index < screens.size(); ++index) {
+            const QScreen *screen = screens.at(index);
+            const QRect geometry = screen->geometry();
+            const QString name = screen->name().isEmpty() ? tr("Monitor %1").arg(index + 1) : screen->name();
+            monitorComboBox->addItem(tr("Monitor %1: %2 (%3x%4 at %5,%6)").arg(index + 1).arg(name).arg(geometry.width()).arg(geometry.height()).arg(geometry.x()).arg(geometry.y()), index + 1);
+        }
         maximizeFpsCheckBox = new QCheckBox("Maximize FPS", this);
         maximizeFpsCheckBox->setToolTip("Camera mode: render at the selected FPS while updating the image "
                                         "at the camera's capture rate (--maximize-fps).");
@@ -1133,6 +1144,11 @@ void SettingsWindow::init() {
     playbackGrid->addWidget(rotate_check_box, ++r, 0);
     playbackGrid->addWidget(rotate_combo_box, r, 1);
     playbackGrid->addWidget(fullscreenCheckBox, ++r, 0, 1, 2);
+    if (vsyncCheckBox) {
+        playbackGrid->addWidget(vsyncCheckBox, ++r, 0, 1, 2);
+        playbackGrid->addWidget(new QLabel("Monitor:", this), ++r, 0);
+        playbackGrid->addWidget(monitorComboBox, r, 1);
+    }
     if (maximizeFpsCheckBox) {
         playbackGrid->addWidget(maximizeFpsCheckBox, ++r, 0, 1, 2);
         playbackGrid->addWidget(useSourceFpsCheckBox, ++r, 0, 1, 2);
@@ -1588,6 +1604,11 @@ void SettingsWindow::loadUiState() {
     }
 
     fullscreenCheckBox->setChecked(appSettings.value("interface/fullscreen", false).toBool());
+    if (vsyncCheckBox) {
+        vsyncCheckBox->setChecked(appSettings.value("interface/acmxvk_vsync", false).toBool());
+        const int monitor_index = monitorComboBox->findData(appSettings.value("interface/acmxvk_monitor", 0).toInt());
+        monitorComboBox->setCurrentIndex(monitor_index >= 0 ? monitor_index : 0);
+    }
     if (maximizeFpsCheckBox) {
         maximizeFpsCheckBox->setChecked(appSettings.value("interface/acmxvk_maximize_fps", false).toBool());
         useSourceFpsCheckBox->setChecked(appSettings.value("interface/acmxvk_use_source_fps", false).toBool());
@@ -1678,6 +1699,10 @@ void SettingsWindow::saveUiState() {
     }
 
     appSettings.setValue("interface/fullscreen", fullscreenCheckBox->isChecked());
+    if (vsyncCheckBox) {
+        appSettings.setValue("interface/acmxvk_vsync", vsyncCheckBox->isChecked());
+        appSettings.setValue("interface/acmxvk_monitor", monitorComboBox->currentData().toInt());
+    }
     if (maximizeFpsCheckBox) {
         appSettings.setValue("interface/acmxvk_maximize_fps", maximizeFpsCheckBox->isChecked());
         appSettings.setValue("interface/acmxvk_use_source_fps", useSourceFpsCheckBox->isChecked());
@@ -1743,6 +1768,10 @@ int SettingsWindow::getCacheDelay() const { return cacheDelaySpinBox->value(); }
 int SettingsWindow::getCacheSize() const { return cacheSizeSpinBox->value(); }
 
 bool SettingsWindow::isFullscreen() const { return fullscreenCheckBox->isChecked(); }
+
+bool SettingsWindow::isVsyncEnabled() const { return vsyncCheckBox && vsyncCheckBox->isChecked(); }
+
+int SettingsWindow::getMonitorIndex() const { return monitorComboBox ? monitorComboBox->currentData().toInt() : 0; }
 
 bool SettingsWindow::isMaximizeFpsEnabled() const { return maximizeFpsCheckBox && maximizeFpsCheckBox->isChecked(); }
 

@@ -311,6 +311,8 @@ class MainWindow : public QMainWindow {
     int cache_delay = 1;
     int cache_size = 8;
     bool full_screen_value = false;
+    bool enable_vsync = false;
+    int monitor_index = 0;
     bool copy_audio = false;
     bool enable_3d = false;
     bool onnx_model_enabled = false;
