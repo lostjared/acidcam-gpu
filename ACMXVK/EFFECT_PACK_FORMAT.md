@@ -113,3 +113,35 @@ value only and never changes renderer state.
 
 See `tests/effect_packs/complete/effect.json` for a complete non-rendering
 version 1 example.
+
+## Discovery and compiled cache
+
+Catalog discovery accepts one or more user-selected or installed-data roots,
+searches up to eight directory levels, and ignores symbolic links,
+`.acmxvk-build`, and editor-preview directories. Packs are ordered by stable ID.
+If two manifests declare the same ID, the first canonical manifest is retained
+and the duplicate is reported as a warning. Missing optional icons are warnings;
+an invalid manifest does not prevent other packs from being discovered.
+
+Compiled shaders are stored inside the pack:
+
+```text
+dreaming-crystal/
+    .acmxvk-build/
+        effect-cache.json
+        shaders/
+            warp.comp.spv
+            kaleidoscope.frag.spv
+```
+
+The source directory structure and pass order are preserved. A shader is
+rebuilt when its source, any recursively included file, or `effect.json` is
+newer than its valid SPIR-V output. Otherwise it remains current. Builds use
+the same atomic compiler/install path as the full shader-library builder and
+may run up to 64 jobs. Interrupted `.acmxvk-tmp-*`, live-preview temporary
+files, and `.editor-preview` contents are removed before a build.
+
+After compilation, ACMXVK verifies that every pass is fragment or compute
+SPIR-V and that source extensions match their compiled stages. Bindings for
+history, spectrum, spectrum history, and `originalFrame` must be declared in
+the manifest's `requires` object before a pack can be considered ready.

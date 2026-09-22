@@ -14,6 +14,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace acmxvk {
     namespace {
@@ -401,6 +403,82 @@ namespace acmxvk {
             pack.deep_dream = parse_deep_dream(root["deep_dream"]);
         }
         return pack;
+    }
+
+    EffectPackCatalog discover_effect_packs(const std::vector<fs::path> &roots) {
+        EffectPackCatalog catalog;
+        std::vector<fs::path> manifests;
+        std::unordered_set<std::string> seen_manifests;
+        for (const fs::path &requested_root : roots) {
+            std::error_code error;
+            const fs::path root = fs::weakly_canonical(requested_root, error);
+            if (error || !fs::is_directory(root) || fs::is_symlink(root)) {
+                catalog.diagnostics.push_back({EffectPackDiagnosticSeverity::Warning, requested_root, "effect-pack search root is unavailable"});
+                continue;
+            }
+            if (fs::is_regular_file(root / "effect.json")) {
+                const std::string key = (root / "effect.json").generic_string();
+                if (seen_manifests.insert(key).second) {
+                    manifests.push_back(root / "effect.json");
+                }
+            }
+            for (fs::recursive_directory_iterator iterator(root, fs::directory_options::skip_permission_denied, error), end; iterator != end; iterator.increment(error)) {
+                if (error) {
+                    error.clear();
+                    continue;
+                }
+                if (iterator.depth() >= 8) {
+                    iterator.disable_recursion_pending();
+                }
+                const fs::directory_entry &entry = *iterator;
+                if (entry.is_symlink(error)) {
+                    if (entry.is_directory(error)) {
+                        iterator.disable_recursion_pending();
+                    }
+                    error.clear();
+                    continue;
+                }
+                if (entry.is_directory(error) && (entry.path().filename() == ".acmxvk-build" || entry.path().filename() == ".editor-preview")) {
+                    iterator.disable_recursion_pending();
+                    continue;
+                }
+                if (!entry.is_regular_file(error) || entry.path().filename() != "effect.json") {
+                    error.clear();
+                    continue;
+                }
+                const fs::path manifest = fs::weakly_canonical(entry.path(), error);
+                if (!error && seen_manifests.insert(manifest.generic_string()).second) {
+                    manifests.push_back(manifest);
+                }
+                error.clear();
+                if (manifests.size() > MAX_DISCOVERED_EFFECT_PACKS) {
+                    catalog.diagnostics.push_back({EffectPackDiagnosticSeverity::Error, root, "effect-pack search exceeded the 4096-pack limit"});
+                    manifests.resize(MAX_DISCOVERED_EFFECT_PACKS);
+                    break;
+                }
+            }
+        }
+
+        std::sort(manifests.begin(), manifests.end());
+        std::unordered_map<std::string, fs::path> pack_ids;
+        for (const fs::path &manifest : manifests) {
+            try {
+                EffectPack pack = load_effect_pack(manifest);
+                const auto [existing, inserted] = pack_ids.emplace(pack.id, pack.manifest);
+                if (!inserted) {
+                    catalog.diagnostics.push_back({EffectPackDiagnosticSeverity::Warning, pack.manifest, "duplicate effect-pack ID '" + pack.id + "'; first declared by " + existing->second.string()});
+                    continue;
+                }
+                if (pack.icon.has_value() && !fs::is_regular_file(*pack.icon)) {
+                    catalog.diagnostics.push_back({EffectPackDiagnosticSeverity::Warning, *pack.icon, "effect-pack icon is missing"});
+                }
+                catalog.packs.push_back(std::move(pack));
+            } catch (const std::exception &error) {
+                catalog.diagnostics.push_back({EffectPackDiagnosticSeverity::Error, manifest, error.what()});
+            }
+        }
+        std::sort(catalog.packs.begin(), catalog.packs.end(), [](const EffectPack &left, const EffectPack &right) { return left.id < right.id; });
+        return catalog;
     }
 
 } // namespace acmxvk

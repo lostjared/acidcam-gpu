@@ -723,6 +723,8 @@ add_executable(acmxvk
     app/camera_probe.hpp
     app/effect_pack.cpp
     app/effect_pack.hpp
+    app/effect_pack_build.cpp
+    app/effect_pack_build.hpp
     app/media_helpers.cpp
     app/media_helpers.hpp
     app/media_utils.cpp
@@ -737,6 +739,8 @@ add_executable(acmxvk
     app/resource_paths.hpp
     app/shader_library.cpp
     app/shader_library.hpp
+    app/shader_compiler.cpp
+    app/shader_compiler.hpp
     app/snapshot_writer.cpp
     app/snapshot_writer.hpp
     input_validation.cpp
@@ -1027,6 +1031,30 @@ if(BUILD_TESTING)
     acmxvk_enable_test_warnings(acmxvk_effect_pack_tests)
     add_test(NAME acmxvk_effect_pack
         COMMAND acmxvk_effect_pack_tests
+    )
+    add_executable(acmxvk_effect_pack_build_tests
+        effect_pack_build_tests.cpp
+        app/effect_pack.cpp
+        app/effect_pack.hpp
+        app/effect_pack_build.cpp
+        app/effect_pack_build.hpp
+        app/shader_compiler.cpp
+        app/shader_compiler.hpp
+        input_validation.cpp
+        input_validation.hpp
+    )
+    target_compile_definitions(acmxvk_effect_pack_build_tests PRIVATE
+        ACMXVK_EFFECT_PACK_FIXTURE_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/tests/effect_packs"
+        ACMXVK_TEST_GLSLC_EXECUTABLE="${GLSLC_EXECUTABLE}"
+    )
+    target_link_libraries(acmxvk_effect_pack_build_tests PRIVATE
+        mxvk::mxvk
+        Threads::Threads
+        PkgConfig::ACMXVK_JSONCPP
+    )
+    acmxvk_enable_test_warnings(acmxvk_effect_pack_build_tests)
+    add_test(NAME acmxvk_effect_pack_build
+        COMMAND acmxvk_effect_pack_build_tests
     )
     add_test(NAME acmxvk_deep_dream_probe
         COMMAND acmxvk --check-deep-dream

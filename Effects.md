@@ -256,7 +256,7 @@ load without absolute paths, and the existing full-library workflow is unchanged
 | --- | --- | --- | --- |
 | 2026-09-22 | Planning | Complete | Reviewed existing multipass, custom-uniform, resource-reflection, Deep Dream, MIDI/audio, project-copy, and cross-platform shared-memory paths. Defined the version 1 direction and ten-increment implementation plan. |
 | 2026-09-22 | 1 | Complete | Added the version 1 value model, strict portable parser, cross-platform path/range/count validation, format documentation, valid/invalid fixtures, and focused automated tests. CMake and Pcons include the parser; the main executable and all five core portable test groups build and pass. |
-| 2026-09-22 | 2 | Not started | — |
+| 2026-09-22 | 2 | Complete | Added bounded multi-root discovery, duplicate-ID and missing-icon diagnostics, shared compiler extraction, pack-local incremental SPIR-V caches, include/manifest staleness checks, temporary cleanup, stage/resource validation, and focused build fixtures. Verified a three-pass incremental build and all ten configured tests. |
 | 2026-09-22 | 3 | Not started | — |
 | 2026-09-22 | 4 | Not started | — |
 | 2026-09-22 | 5 | Not started | — |
@@ -268,6 +268,6 @@ load without absolute paths, and the existing full-library workflow is unchanged
 
 ## Current status
 
-Increment 1 is complete. The version 1 format and parser are implemented and
-verified without renderer or interface activation. The next task is Increment
-2: discovery, pack-local compilation, and cache validation.
+Increment 2 is complete. Discovery and pack-local compilation are implemented
+and verified without renderer or interface activation. The next task is
+Increment 3: transactional runtime activation through the existing pipeline.

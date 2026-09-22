@@ -1,5 +1,7 @@
 #include "shader_library.hpp"
 
+#include "shader_compiler.hpp"
+
 #include "../input_validation.hpp"
 
 #include <mxvk/mxvk.hpp>
@@ -338,11 +340,6 @@ namespace acmxvk {
 #endif
     }
 
-    class ShaderCompilationError : public std::runtime_error {
-      public:
-        using std::runtime_error::runtime_error;
-    };
-
 #ifdef _WIN32
     [[nodiscard]] std::wstring utf8_to_wide(const std::string &value) {
         if (value.empty()) {
@@ -571,44 +568,11 @@ namespace acmxvk {
                     throw std::runtime_error("shader output resolves outside the output directory: " + prepared.output_entry);
                 }
 
-                bool needs_build = !fs::is_regular_file(destination);
-                if (!needs_build) {
-                    needs_build = fs::last_write_time(destination, entry_error) < fs::last_write_time(source);
-                    if (entry_error) {
-                        needs_build = true;
-                        entry_error.clear();
-                    }
-                }
-                if (!needs_build) {
-                    try {
-                        input::validate_spirv_file(destination, "built shader module");
-                    } catch (const std::runtime_error &) {
-                        needs_build = true;
-                    }
-                }
-
-                if (needs_build) {
-                    const fs::path temporary = temporaryBuildPath(destination);
-                    const bool copy_source = source.extension() == ".spv";
-                    try {
-                        if (copy_source) {
-                            input::validate_spirv_file(source, "source shader module");
-                            fs::copy_file(source, temporary, fs::copy_options::overwrite_existing);
-                        } else {
-                            input::validate_text_file(source, "GLSL shader source");
-                            runGlslc(options.glslc_executable, source_root, source, temporary);
-                        }
-                        input::validate_spirv_file(temporary, "compiled shader module");
-                        replaceBuiltFile(temporary, destination);
-                    } catch (...) {
-                        remove_temporary_file(temporary);
-                        throw;
-                    }
-                    if (copy_source) {
-                        ++copied;
-                    } else {
-                        ++compiled;
-                    }
+                const ShaderBuildStatus build_status = build_shader_file(options.glslc_executable, source_root, source, destination, options.build_force);
+                if (build_status == ShaderBuildStatus::Copied) {
+                    ++copied;
+                } else if (build_status == ShaderBuildStatus::Compiled) {
+                    ++compiled;
                 } else {
                     ++current;
                 }

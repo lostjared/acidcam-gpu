@@ -14,6 +14,7 @@ namespace acmxvk {
     constexpr std::size_t MAX_EFFECT_PACK_CONTROLS = 64;
     constexpr std::size_t MAX_EFFECT_PACK_AUDIO_MAPPINGS = 64;
     constexpr std::size_t MAX_EFFECT_PACK_MIDI_MAPPINGS = 64;
+    constexpr std::size_t MAX_DISCOVERED_EFFECT_PACKS = 4096;
 
     struct EffectPackRequirements {
         bool history = false;
@@ -82,7 +83,21 @@ namespace acmxvk {
         std::optional<EffectPackDeepDream> deep_dream;
     };
 
+    enum class EffectPackDiagnosticSeverity { Warning, Error };
+
+    struct EffectPackDiagnostic {
+        EffectPackDiagnosticSeverity severity = EffectPackDiagnosticSeverity::Warning;
+        std::filesystem::path path;
+        std::string message;
+    };
+
+    struct EffectPackCatalog {
+        std::vector<EffectPack> packs;
+        std::vector<EffectPackDiagnostic> diagnostics;
+    };
+
     [[nodiscard]] EffectPack load_effect_pack(const std::filesystem::path &manifest_path);
+    [[nodiscard]] EffectPackCatalog discover_effect_packs(const std::vector<std::filesystem::path> &roots);
 
 } // namespace acmxvk
 

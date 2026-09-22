@@ -234,6 +234,7 @@ sources: list[Path] = [
     project_dir / "acmx.cpp",
     project_dir / "main_window.cpp",
     project_dir / "app" / "effect_pack.cpp",
+    project_dir / "app" / "effect_pack_build.cpp",
     project_dir / "app" / "interface_client.cpp",
     project_dir / "app" / "media_helpers.cpp",
     project_dir / "app" / "media_utils.cpp",
@@ -242,6 +243,7 @@ sources: list[Path] = [
     project_dir / "app" / "playlist.cpp",
     project_dir / "app" / "resource_paths.cpp",
     project_dir / "app" / "shader_library.cpp",
+    project_dir / "app" / "shader_compiler.cpp",
     project_dir / "app" / "snapshot_writer.cpp",
     project_dir / "input_validation.cpp",
 ]
