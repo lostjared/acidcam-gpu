@@ -65,6 +65,10 @@ Each control requires:
 - `default`: finite value within the inclusive range.
 
 Control IDs and uniform names must each be unique within the pack.
+In the ACMXVK interface, the Effect Pack Controls panel uses `label` for the
+slider, shows `uniform` for diagnostics, and remembers edited values by pack ID.
+Reset returns one control or the entire pack to its declared defaults. Saved
+values are sent with pack activation; they are not written back to `effect.json`.
 
 ## Audio and MIDI mappings
 
@@ -107,12 +111,19 @@ resolved locally and are not bundled by default.
 
 The parser rejects malformed JSON, duplicate JSON keys, comments, trailing
 commas, unknown fields, invalid types, non-finite or out-of-range numbers,
-excessive list sizes, duplicate passes or controls, and unsafe resource paths.
+excessive list sizes, duplicate control IDs or uniform declarations, and unsafe
+resource paths. Repeated shader pass paths are permitted and retain their order.
 Errors identify the failing field or array entry. Parsing creates an in-memory
 value only and never changes renderer state.
 
 See `tests/effect_packs/complete/effect.json` for a complete non-rendering
 version 1 example.
+
+To build one pack from a terminal, run
+`acmxvk --build-effect-pack /path/to/effect.json --glslc /path/to/glslc --parallel 2`.
+The compiler writes the pack-local `.acmxvk-build` cache and reports progress
+for each unique shader source. A repeated pass still appears multiple times in
+the rendered pipeline.
 
 ## Discovery and compiled cache
 

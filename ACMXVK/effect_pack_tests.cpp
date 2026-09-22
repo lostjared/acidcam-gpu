@@ -86,6 +86,10 @@ int main() {
         write_text(manifest, R"({"format":"acmxvk-effect-pack","version":1,"id":"test.range","name":"Range","passes":["test.frag"],"controls":[{"id":"amount","label":"Amount","uniform":"amount","minimum":1,"maximum":0,"step":0.1,"default":0.5}]})");
         expect_rejected(manifest, "controls[0].maximum");
 
+        write_text(manifest, R"({"format":"acmxvk-effect-pack","version":1,"id":"test.repeated","name":"Repeated","passes":["blur.frag","blur.frag","sharpen.frag"]})");
+        const acmxvk::EffectPack repeated = acmxvk::load_effect_pack(manifest);
+        expect(repeated.passes.size() == 3 && repeated.passes[0] == repeated.passes[1] && repeated.passes[2].filename() == "sharpen.frag", "repeated shader passes lost their order");
+
         std::string excessive = R"({"format":"acmxvk-effect-pack","version":1,"id":"test.passes","name":"Passes","passes":[)";
         for (std::size_t index = 0; index <= acmxvk::MAX_EFFECT_PACK_PASSES; ++index) {
             if (index != 0) {

@@ -378,7 +378,7 @@ namespace acmxvk {
         const bool library_build_requested = [&] {
             for (int index = 1; index < argc; ++index) {
                 const std::string_view argument(argv[index]);
-                if (argument == "--build" || argument == "--builddir" || argument == "--fix" || argument == "--prune" || argument == "--force" || argument == "--glslc" || argument == "--parallel") {
+                if (argument == "--build" || argument == "--build-effect-pack" || argument == "--builddir" || argument == "--fix" || argument == "--prune" || argument == "--force" || argument == "--glslc" || argument == "--parallel") {
                     return true;
                 }
             }
@@ -397,6 +397,11 @@ namespace acmxvk {
                         throw std::runtime_error("--build may only be supplied once");
                     }
                     options.build_manifest = optionValue(index, argc, argv, option);
+                } else if (option == "--build-effect-pack") {
+                    if (!options.effect_pack_build_manifest.empty()) {
+                        throw std::runtime_error("--build-effect-pack may only be supplied once");
+                    }
+                    options.effect_pack_build_manifest = optionValue(index, argc, argv, option);
                 } else if (option == "--builddir") {
                     if (!options.build_directory.empty()) {
                         throw std::runtime_error("--builddir and --fix are mutually exclusive");
@@ -431,17 +436,24 @@ namespace acmxvk {
                 }
             }
             input::validate_string(options.build_manifest, input::StringKind::Path, "--build", true);
+            input::validate_string(options.effect_pack_build_manifest, input::StringKind::Path, "--build-effect-pack", true);
             input::validate_string(options.build_directory, input::StringKind::Path, options.build_fix ? "--fix" : "--builddir", true);
             input::validate_string(options.glslc_executable, input::StringKind::Path, "--glslc");
             if (options.build_parallel < 1 || options.build_parallel > 256) {
                 throw std::runtime_error("--parallel job count must be between 1 and 256");
             }
-            if (!options.show_help && options.build_manifest.empty()) {
-                throw std::runtime_error("--builddir/--fix/--prune/--force/--glslc/--parallel requires "
-                                         "--build <library.json>");
+            if (!options.build_manifest.empty() && !options.effect_pack_build_manifest.empty()) {
+                throw std::runtime_error("--build and --build-effect-pack are mutually exclusive");
             }
-            if (!options.show_help && options.build_directory.empty()) {
+            if (!options.show_help && options.build_manifest.empty() && options.effect_pack_build_manifest.empty()) {
+                throw std::runtime_error("--builddir/--fix/--prune/--force/--glslc/--parallel requires "
+                                         "--build <library.json> or --build-effect-pack <effect.json>");
+            }
+            if (!options.show_help && !options.build_manifest.empty() && options.build_directory.empty()) {
                 throw std::runtime_error("--build requires --builddir or --fix <output-directory>");
+            }
+            if (!options.effect_pack_build_manifest.empty() && (!options.build_directory.empty() || options.build_fix || options.build_prune || options.build_force)) {
+                throw std::runtime_error("--build-effect-pack cannot be combined with --builddir/--fix/--prune/--force");
             }
             if (!options.show_help && options.build_prune && !options.build_fix) {
                 throw std::runtime_error("--prune requires --fix <output-directory>");
@@ -1679,12 +1691,13 @@ namespace acmxvk {
                << "                              Output feeds the Vulkan shader chain\n\n"
                << "Shaders:\n"
                << "      --build <library.json> Compile a source shader library and exit\n"
+               << "      --build-effect-pack <effect.json> Compile a portable effect pack and exit\n"
                << "      --builddir <directory> Output directory required by --build\n"
                << "      --fix <directory>      Continue and omit/remove failed shaders\n"
                << "      --prune                Delete GLSL sources that fail compilation\n"
                << "      --force                Confirm permanent deletion by --prune\n"
-               << "      --glslc <executable>   GLSL compiler for --build (default: glslc)\n"
-               << "      --parallel <jobs>      Concurrent shader jobs for --build (default: 1)\n"
+               << "      --glslc <executable>   GLSL compiler for library or effect-pack builds (default: glslc)\n"
+               << "      --parallel <jobs>      Concurrent library or effect-pack shader jobs (default: 1)\n"
                << "  -s, --shaders <directory>   SPIR-V library with library.json or index.txt\n"
                << "  -f, --fragment <file.spv>   Use one SPIR-V fragment shader\n"
                << "      --compute <file.spv>    Use one SPIR-V compute shader\n"

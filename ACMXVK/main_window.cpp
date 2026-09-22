@@ -1958,12 +1958,16 @@ namespace acmxvk {
         interface_connection_warning_reported = false;
         interface_last_sequence = state.sequence;
         interface_last_effect_pack_sequence = state.effect_pack.request_sequence;
+        bool effect_pack_request_accepted = true;
         if (!state.effect_pack.manifest_path.empty() || effect_pack_enabled) {
-            apply_interface_effect_pack_state(state.effect_pack);
+            effect_pack_request_accepted = apply_interface_effect_pack_state(state.effect_pack);
         }
         apply_interface_shader_selection(state.selected_shader_name);
         apply_interface_multipass_state(state.multipass);
-        apply_interface_uniform_values(state.uniform_values);
+        const bool uniform_target_matches = effect_pack_enabled ? fs::path(state.effect_pack.manifest_path).lexically_normal() == active_effect_pack_manifest : state.effect_pack.manifest_path.empty();
+        if (effect_pack_request_accepted && uniform_target_matches) {
+            apply_interface_uniform_values(state.uniform_values);
+        }
         apply_interface_playback_state(state.playback, false);
         apply_interface_overlay_state(state.overlay, false);
         apply_interface_gpu_filter_state(state.gpu_filters, false);
@@ -2000,15 +2004,19 @@ namespace acmxvk {
             return;
         }
         interface_last_sequence = state.sequence;
+        bool effect_pack_request_accepted = true;
         if (state.effect_pack.request_sequence != interface_last_effect_pack_sequence) {
             if (frame_sprite == nullptr || !shader_locked) {
                 interface_last_effect_pack_sequence = state.effect_pack.request_sequence;
-                apply_interface_effect_pack_state(state.effect_pack);
+                effect_pack_request_accepted = apply_interface_effect_pack_state(state.effect_pack);
             }
         }
         apply_interface_shader_selection(state.selected_shader_name);
         apply_interface_multipass_state(state.multipass);
-        apply_interface_uniform_values(state.uniform_values);
+        const bool uniform_target_matches = effect_pack_enabled ? fs::path(state.effect_pack.manifest_path).lexically_normal() == active_effect_pack_manifest : state.effect_pack.manifest_path.empty();
+        if (effect_pack_request_accepted && uniform_target_matches) {
+            apply_interface_uniform_values(state.uniform_values);
+        }
         apply_interface_playback_state(state.playback, true);
         apply_interface_overlay_state(state.overlay, true);
         apply_interface_gpu_filter_state(state.gpu_filters, true);
@@ -2400,15 +2408,15 @@ namespace acmxvk {
         }
     }
 
-    void MainWindow::apply_interface_effect_pack_state(const InterfaceEffectPackState &requested) {
+    bool MainWindow::apply_interface_effect_pack_state(const InterfaceEffectPackState &requested) {
         if (frame_sprite != nullptr && shader_locked) {
             std::cerr << "acmxvk: effect-pack activation ignored while shader switching is locked\n";
-            return;
+            return false;
         }
 
         if (requested.manifest_path.empty()) {
             if (!effect_pack_enabled || !effect_pack_previous_state_saved) {
-                return;
+                return true;
             }
 
             const std::vector<fs::path> pack_passes = configured_passes;
@@ -2457,14 +2465,14 @@ namespace acmxvk {
                     std::cerr << "acmxvk: effect-pack rollback failed: " << rollback_error.what() << '\n';
                 }
                 std::cerr << "acmxvk: could not leave effect pack; previous effect restored: " << error.what() << '\n';
-                return;
+                return false;
             }
             effect_pack_previous_state_saved = false;
             effect_pack_previous_passes.clear();
             effect_pack_previous_uniforms.clear();
             effect_pack_previous_uniform_values.clear();
             std::cout << "acmxvk: effect pack disabled; restored normal shader workflow\n";
-            return;
+            return true;
         }
 
         EffectPack pack;
@@ -2492,7 +2500,7 @@ namespace acmxvk {
             }
         } catch (const std::exception &error) {
             std::cerr << "acmxvk: rejected effect-pack activation: " << error.what() << '\n';
-            return;
+            return false;
         }
 
         const std::vector<fs::path> previous_passes = configured_passes;
@@ -2583,10 +2591,11 @@ namespace acmxvk {
                 std::cerr << "acmxvk: effect-pack rollback failed: " << rollback_error.what() << '\n';
             }
             std::cerr << "acmxvk: effect-pack activation failed; previous effect restored: " << error.what() << '\n';
-            return;
+            return false;
         }
 
         std::cout << "acmxvk: activated effect pack " << pack.name << " (" << cache.compiled_passes.size() << " passes, " << pack.controls.size() << " controls)\n";
+        return true;
     }
 
     void MainWindow::apply_interface_multipass_state(const InterfaceMultipassState &requested) {

@@ -21,6 +21,8 @@
 #include "deep_dream.hpp"
 #endif
 #include "app/camera_probe.hpp"
+#include "app/effect_pack.hpp"
+#include "app/effect_pack_build.hpp"
 #include "app/media_utils.hpp"
 #include "app/options.hpp"
 #include "app/resource_paths.hpp"
@@ -30,6 +32,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <stdexcept>
@@ -90,6 +93,20 @@ int main(int argc, char **argv) {
         }
         if (!options.build_manifest.empty()) {
             return acmxvk::buildShaderLibrary(options);
+        }
+        if (!options.effect_pack_build_manifest.empty()) {
+            const acmxvk::EffectPack pack = acmxvk::load_effect_pack(options.effect_pack_build_manifest);
+            acmxvk::EffectPackBuildOptions build_options;
+            build_options.glslc_executable = options.glslc_executable;
+            build_options.parallel_jobs = static_cast<std::size_t>(options.build_parallel);
+            std::mutex progress_mutex;
+            build_options.progress = [&progress_mutex](std::size_t completed, std::size_t total) {
+                const std::lock_guard lock(progress_mutex);
+                std::cout << "acmxvk: effect pack build progress: " << completed << '/' << total << std::endl;
+            };
+            const acmxvk::EffectPackBuildResult result = acmxvk::build_effect_pack(pack, build_options);
+            std::cout << "acmxvk: effect pack ready: " << pack.name << " (" << result.compiled << " compiled, " << result.copied << " copied, " << result.current << " current)\n";
+            return EXIT_SUCCESS;
         }
         if (options.enumerate_camera_device >= 0) {
             return acmxvk::probeCameraDevice(options.enumerate_camera_device, std::cout, std::cerr) ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -3,6 +3,7 @@
 #include "custom-uniforms.hpp"
 #include "custom_style.hpp"
 #include "deep-dream-settings.hpp"
+#include "effect-pack-browser.hpp"
 #include "find-shader.hpp"
 #include "library-builder.hpp"
 #include "metadata-viewer.hpp"
@@ -60,9 +61,11 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <random>
 #include <sstream>
@@ -1285,6 +1288,18 @@ void MainWindow::initControls() {
         QTextStream stream(&text);
         stream << acmx2::backend_name(active_backend) << ": Exited with Code: " << exitCode;
         Log(text + "<br>");
+        if (effectPackBrowser) {
+            effectPackBrowser->clear_active_pack();
+        }
+        if (active_backend == acmx2::Backend::Acmxvk && shaderSelectionShm) {
+            acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
+            if (lock) {
+                std::fill(std::begin(shaderSelectionShm->effect_pack_manifest_path), std::end(shaderSelectionShm->effect_pack_manifest_path), '\0');
+                ++shaderSelectionShm->effect_pack_sequence;
+                ++shaderSelectionShm->sequence;
+            }
+            publishCustomUniformsToRunningProcess();
+        }
         finishOutputRunLog(exitCode, exitStatus);
         play_stop->setEnabled(false);
 
@@ -1547,6 +1562,9 @@ void MainWindow::initControls() {
     connect(runMenu_clearLog, &QAction::triggered, this, [this]() { bottomTextBox->clear(); });
     runMenu->addAction(runMenu_clearLog);
     play_repeat = new QAction(tr("Repeat"), this);
+    effectPacksAction = playbackMenu->addAction(tr("Effect Packs..."));
+    connect(effectPacksAction, &QAction::triggered, this, &MainWindow::menuEffectPacks);
+    playbackMenu->addSeparator();
     play_repeat->setShortcut(QKeySequence("Ctrl+R"));
     play_repeat->setCheckable(true);
     play_repeat->setChecked(false);
@@ -2843,6 +2861,112 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
 #endif
 }
 
+static bool write_effect_pack_uniforms(acmx2::ipc::ShaderSelectionShmData *shared, const QVector<EffectPackUniformValue> &values) {
+    if (values.size() > static_cast<int>(acmx2::ipc::kShaderSelectionMaxCustomUniforms)) {
+        return false;
+    }
+    for (const EffectPackUniformValue &value : values) {
+        const QByteArray name = value.name.toUtf8();
+        if (name.isEmpty() || name.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName) || !std::isfinite(value.value) || std::abs(value.value) > std::numeric_limits<float>::max()) {
+            return false;
+        }
+    }
+    std::fill(&shared->custom_uniform_names[0][0], &shared->custom_uniform_names[0][0] + acmx2::ipc::kShaderSelectionMaxCustomUniforms * acmx2::ipc::kShaderSelectionMaxUniformName, '\0');
+    std::fill(std::begin(shared->custom_uniform_values), std::end(shared->custom_uniform_values), 0.0f);
+    for (int index = 0; index < values.size(); ++index) {
+        const QByteArray name = values[index].name.toUtf8();
+        std::copy(name.cbegin(), name.cend(), shared->custom_uniform_names[index]);
+        shared->custom_uniform_values[index] = static_cast<float>(values[index].value);
+    }
+    shared->custom_uniform_count = static_cast<quint32>(values.size());
+    return true;
+}
+
+void MainWindow::publishEffectPackToRunningProcess(const QString &manifest_path, const QVector<EffectPackUniformValue> &values) {
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+    if (active_backend != acmx2::Backend::Acmxvk) {
+        return;
+    }
+    if (!process || process->state() != QProcess::Running || cacheBuildInProgress) {
+        if (effectPackBrowser) {
+            effectPackBrowser->clear_active_pack();
+        }
+        Log(tr("Start ACMXVK before activating an effect pack."));
+        return;
+    }
+    if (!shaderSelectionShm) {
+        initShaderSelectionSharedMemory();
+    }
+    if (!shaderSelectionShm) {
+        Log(tr("Unable to publish effect pack: interface shared memory is unavailable."));
+        return;
+    }
+    const QByteArray path = manifest_path.toUtf8();
+    if (path.size() >= static_cast<qsizetype>(acmx2::ipc::kShaderSelectionMaxEffectPackPath)) {
+        Log(tr("Effect-pack path is too long for the interface protocol."));
+        return;
+    }
+    QVector<EffectPackUniformValue> requested_values = values;
+    if (manifest_path.isEmpty() && customUniformDialog) {
+        for (const acmx2::CustomUniformDefinition &uniform : customUniformDialog->uniforms()) {
+            requested_values.push_back({uniform.name, uniform.value});
+        }
+    }
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
+    if (!lock) {
+        Log(tr("Unable to publish effect pack: interface lock failed."));
+        return;
+    }
+    if (!write_effect_pack_uniforms(shaderSelectionShm, requested_values)) {
+        Log(tr("Effect-pack uniform values are invalid or exceed the shared-memory limit."));
+        return;
+    }
+    std::fill(std::begin(shaderSelectionShm->effect_pack_manifest_path), std::end(shaderSelectionShm->effect_pack_manifest_path), '\0');
+    std::copy(path.cbegin(), path.cend(), shaderSelectionShm->effect_pack_manifest_path);
+    ++shaderSelectionShm->effect_pack_sequence;
+    ++shaderSelectionShm->sequence;
+    Log(manifest_path.isEmpty() ? tr("Returned to the shader library.") : tr("Requested effect pack: %1").arg(manifest_path));
+#else
+    Q_UNUSED(manifest_path);
+    Q_UNUSED(values);
+#endif
+}
+
+void MainWindow::publishEffectPackUniformsToRunningProcess(const QVector<EffectPackUniformValue> &values) {
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+    if (active_backend != acmx2::Backend::Acmxvk || !process || process->state() != QProcess::Running || !shaderSelectionShm || !effectPackBrowser || !effectPackBrowser->has_active_pack()) {
+        return;
+    }
+    acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
+    if (!lock || !write_effect_pack_uniforms(shaderSelectionShm, values)) {
+        Log(tr("Unable to publish effect-pack controls."));
+        return;
+    }
+    ++shaderSelectionShm->sequence;
+#else
+    Q_UNUSED(values);
+#endif
+}
+
+void MainWindow::menuEffectPacks() {
+    if (active_backend != acmx2::Backend::Acmxvk) {
+        return;
+    }
+    if (!effectPackBrowser) {
+        effectPackBrowser = new EffectPackBrowser(this);
+        connect(effectPackBrowser, &EffectPackBrowser::activation_requested, this, &MainWindow::publishEffectPackToRunningProcess);
+        connect(effectPackBrowser, &EffectPackBrowser::uniform_values_changed, this, &MainWindow::publishEffectPackUniformsToRunningProcess);
+    }
+    QString compiler_error;
+    const QString compiler = resolve_acmxvk_shader_compiler(compiler_error);
+    QSettings settings("LostSideDead");
+    const int jobs = parallel_build_jobs(settings);
+    effectPackBrowser->set_build_tools(executable_path, compiler, jobs > 0 ? jobs : 2);
+    effectPackBrowser->show();
+    effectPackBrowser->raise();
+    effectPackBrowser->activateWindow();
+}
+
 void MainWindow::publishShaderReloadToRunningProcess(const QString &filePath) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (active_backend != acmx2::Backend::Acmx2 || !shaderSelectionShm || !process || process->state() != QProcess::Running || cacheBuildInProgress) {
@@ -3494,6 +3618,9 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
 
 void MainWindow::publishCustomUniformsToRunningProcess() {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+    if (active_backend == acmx2::Backend::Acmxvk && effectPackBrowser && effectPackBrowser->has_active_pack()) {
+        return;
+    }
     if (!shaderSelectionShm || !customUniformDialog)
         return;
 
@@ -3891,6 +4018,8 @@ void MainWindow::update_backend_ui() {
         backendAcmxvkAction->setChecked(active_backend == acmx2::Backend::Acmxvk);
     if (projectMenu)
         projectMenu->setEnabled(active_backend == acmx2::Backend::Acmxvk);
+    if (effectPacksAction)
+        effectPacksAction->setVisible(active_backend == acmx2::Backend::Acmxvk);
 
     const bool launchAvailable = backend_launch_available();
     const bool acmx2Tools = active_backend == acmx2::Backend::Acmx2;
@@ -3977,6 +4106,9 @@ void MainWindow::set_backend(acmx2::Backend backend, bool persist) {
     if (libraryBuilderDialog) {
         libraryBuilderDialog->close();
         libraryBuilderDialog = nullptr;
+    }
+    if (effectPackBrowser && backend != acmx2::Backend::Acmxvk) {
+        effectPackBrowser->hide();
     }
     if (deepDreamSettingsDialog) {
         deepDreamSettingsDialog->close();

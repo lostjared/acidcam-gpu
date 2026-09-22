@@ -432,7 +432,7 @@ namespace acmxvk {
         void apply_interface_deep_dream_state(const InterfaceDeepDreamState &requested, bool announce);
         void apply_interface_audio_file_state(const InterfaceAudioFileState &requested);
         void apply_interface_shader_reload(const InterfaceReloadState &requested);
-        void apply_interface_effect_pack_state(const InterfaceEffectPackState &requested);
+        bool apply_interface_effect_pack_state(const InterfaceEffectPackState &requested);
         void apply_interface_multipass_state(const InterfaceMultipassState &requested);
         void apply_interface_shader_selection(const std::string &requested_name);
         void apply_interface_uniform_values(const std::vector<InterfaceUniformValue> &uniform_values);

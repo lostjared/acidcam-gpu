@@ -177,6 +177,7 @@ namespace acmxvk {
         std::string compute_shader;
         std::string shader_file;
         std::string build_manifest;
+        std::string effect_pack_build_manifest;
         std::string build_directory;
         std::string glslc_executable = "glslc";
         std::string model_file;

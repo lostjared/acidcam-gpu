@@ -114,6 +114,8 @@ set(LAUNCHER_GUI_HEADERS
     deep-dream-settings.hpp
     stable-diffusion-settings.hpp
     editor.hpp
+    effect-pack-browser.hpp
+    effect-pack-controls.hpp
     find-shader.hpp
     gpufilter.hpp
     library-builder.hpp
@@ -141,6 +143,8 @@ set(LAUNCHER_GUI_SOURCES
     deep-dream-settings.cpp
     stable-diffusion-settings.cpp
     editor.cpp
+    effect-pack-browser.cpp
+    effect-pack-controls.cpp
     find-shader.cpp
     gpufilter.cpp
     library-builder.cpp
@@ -199,6 +203,18 @@ if(BUILD_TESTING)
         target_link_libraries(acmxvk_source_manifest_test PRIVATE Qt5::Core)
     endif()
     add_test(NAME acmxvk_source_manifest COMMAND acmxvk_source_manifest_test)
+    add_executable(effect_pack_controls_test
+        tests/effect-pack-controls-test.cpp
+        effect-pack-controls.cpp
+        effect-pack-controls.hpp
+    )
+    target_include_directories(effect_pack_controls_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    if(QT_VERSION_MAJOR EQUAL 6)
+        target_link_libraries(effect_pack_controls_test PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+    else()
+        target_link_libraries(effect_pack_controls_test PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets)
+    endif()
+    add_test(NAME effect_pack_controls COMMAND effect_pack_controls_test)
 endif()
 
 target_include_directories(acmx2_interface

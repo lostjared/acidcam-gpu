@@ -378,13 +378,9 @@ namespace acmxvk {
         if (passes.size() > MAX_EFFECT_PACK_PASSES) {
             fail("passes", "contains more than 64 entries");
         }
-        std::set<fs::path> unique_passes;
         for (Json::ArrayIndex index = 0; index < passes.size(); ++index) {
             const std::string field = "passes[" + std::to_string(index) + "]";
             const fs::path relative = read_relative_path(passes[index], field);
-            if (!unique_passes.insert(relative).second) {
-                fail(field, "duplicates another shader pass");
-            }
             pack.passes.push_back(pack.root / relative);
         }
         if (root.isMember("requires")) {

@@ -328,8 +328,8 @@ load without absolute paths, and the existing full-library workflow is unchanged
 | 2026-09-22 | 2 | Complete (baseline) | Added bounded multi-root discovery, duplicate-ID and missing-icon diagnostics, shared compiler extraction, pack-local incremental SPIR-V caches, include/manifest staleness checks, temporary cleanup, stage/resource validation, and focused build fixtures. Verified a three-pass incremental build and all ten configured tests. Hard format/ABI/Vulkan/content compatibility keys and separate build provenance remain required before compiled caches are portable export artifacts. |
 | 2026-09-22 | 3 | Complete | Added shared-memory protocol version 12 with sequenced effect-pack requests, validated pack-local cache loading, transactional live activation and rollback, existing-pipeline integration, resource provisioning, crossfades, friendly-control defaults, ordinary-workflow isolation, protocol-layout coverage, and stale-cache activation tests. ACMXVK, the Qt interface, and all eleven configured tests build and pass. |
 | 2026-09-22 | Plan revision | Complete | Clarified that pass order may intentionally contain repeated shader paths, kept control IDs/uniform declarations unique, moved Effect Pack MIDI semantics above device-specific CC mappings, and separated compiled-cache hard compatibility keys from diagnostic compiler/build provenance. |
-| 2026-09-22 | 4 | Not started | — |
-| 2026-09-22 | 5 | Not started | — |
+| 2026-09-22 | 4 | Implemented; live GPU smoke test pending | Added an ACMXVK-only modeless icon browser with configurable roots, asynchronous bounded discovery/icon decoding, cache status, background pack builds with pass progress, one-click live activation, normal-library return, and last-selection recall without automatic activation. Added a standalone `--build-effect-pack` command for the GUI worker, preserved repeated shader passes while compiling each unique source once, and added parser/build coverage. |
+| 2026-09-22 | 5 | Implemented; live GPU smoke test pending | Added a modeless control panel generated from pack controls, friendly labels with exact GLSL names, slider/spin editing, per-control and whole-pack reset, debounced per-pack value persistence, and A → B → A restoration. Activation publishes the selected pack and all restored uniforms in one shared-memory transaction; subsequent changes publish live. ACMXVK now ignores uniform updates aimed at a pack whose activation failed. The Qt interface and ACMXVK build, the new UI state test and all existing configured tests pass. |
 | 2026-09-22 | 6 | Not started | — |
 | 2026-09-22 | 7 | Not started | — |
 | 2026-09-22 | 8 | Not started | — |
@@ -338,15 +338,11 @@ load without absolute paths, and the existing full-library workflow is unchanged
 
 ## Current status
 
-Increment 3 is complete. Protocol version 12, validated external-pack cache
-loading, transactional live activation/rollback, renderer resource provisioning,
-crossfades, and restoration of the ordinary shader workflow are implemented and
-verified. The ACMXVK and Qt interface builds pass, as do all eleven configured
-tests.
-
-Before or as part of Increment 4, the parser/build validation must be corrected
-to preserve intentional duplicate pass paths; the current Increment 1 parser
-still rejects them. Cache compatibility metadata also remains a planned
+Increments 4 and 5 are implemented. The Qt interface and ACMXVK builds pass,
+both interface tests and all eleven ACMXVK tests pass. Repeated pass paths
+remain in the pipeline, with a single compile per unique source. Pack controls
+restore their saved state on return and publish with activation before the next
+rendered frame. A manual running-engine GPU smoke test of switching and live
+control edits is still pending. Cache compatibility metadata remains a planned
 follow-up before compiled caches are treated as portable export artifacts.
-Increment 4 is next: the modeless icon-based Effect Pack browser and its
-asynchronous discovery/build/activation workflow.
+Increment 6 will integrate Deep Dream with effect packs.

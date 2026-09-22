@@ -11,6 +11,7 @@
 #include "../shader_selection_shm.hpp"
 #include "backend.hpp"
 #include "editor.hpp"
+#include "effect-pack-controls.hpp"
 #include "gpufilter.hpp"
 #include "midi-settings.hpp"
 #include "playlist.hpp"
@@ -36,6 +37,7 @@
 
 class CustomUniformDialog;
 class DeepDreamSettingsDialog;
+class EffectPackBrowser;
 class StableDiffusionSettingsDialog;
 class LibraryBuilderDialog;
 class QDialog;
@@ -95,6 +97,7 @@ class MainWindow : public QMainWindow {
     void menuGPUFilterSettings();
     void menuDeepDreamSettings();
     void menuStableDiffusionSettings();
+    void menuEffectPacks();
     void menuShaderPassSettings();
     void menuPlaylistSettings();
     void menuLibraryBuilder();
@@ -195,6 +198,8 @@ class MainWindow : public QMainWindow {
     void set_backend(acmx2::Backend backend, bool persist = true);
     /// @brief Update title, actions, and status text for the active backend.
     void update_backend_ui();
+    void publishEffectPackToRunningProcess(const QString &manifest_path, const QVector<EffectPackUniformValue> &values);
+    void publishEffectPackUniformsToRunningProcess(const QVector<EffectPackUniformValue> &values);
     /// @brief Return whether the active backend can be launched.
     bool backend_launch_available() const;
     enum class PendingAcmxvkAction { None, RunSelected, RunAll, CopyCommand };
@@ -225,6 +230,8 @@ class MainWindow : public QMainWindow {
     QAction *normalizedTimeAction = nullptr;
     QAction *listMenu_new = nullptr, *listMenu_shader = nullptr, *listMenu_remove = nullptr, *listMenu_set_current = nullptr, *listMenu_up = nullptr, *listMenu_down = nullptr, *listMenu_shuffle = nullptr, *listMenu_sort = nullptr;
     QAction *libraryBuilderAction = nullptr;
+    QAction *effectPacksAction = nullptr;
+    EffectPackBrowser *effectPackBrowser = nullptr;
     QAction *helpMenu_about = nullptr;
     QAction *helpMenu_uniformReference = nullptr;
     QAction *listMenu_findNext = nullptr;
