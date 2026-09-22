@@ -34,8 +34,12 @@ dreaming-crystal/
 
 The pack owns its source shaders. Compiled SPIR-V is stored in a pack-local
 `.acmxvk-build/` cache and is regenerated only when its source, includes, or
-manifest data is newer. Portable export may include valid compiled output for
-fast startup, while temporary compiler and editor-preview files are excluded.
+manifest data is newer. Portable export may include compatible compiled output
+for fast startup, while temporary compiler and editor-preview files are
+excluded. Exported cache metadata must identify the shader ABI, target Vulkan
+environment, source and recursive-include hashes, compiler identity/version,
+and ACMXVK build version so an incompatible cache can be rejected cheaply and
+rebuilt from source.
 
 ## Proposed JSON contract
 
@@ -77,17 +81,25 @@ fast startup, while temporary compiler and editor-preview files are excluded.
 ```
 
 The final schema will also allow optional audio and MIDI sections. It will reject
-unknown unsafe paths, absolute bundled-resource paths, parent traversal, duplicate
-uniforms, duplicate shader passes, invalid ranges, excessive counts, and Stable
-Diffusion fields. Pack paths are resolved relative to the directory containing
-`effect.json`.
+unknown unsafe paths, absolute bundled-resource paths, parent traversal,
+duplicate control IDs or uniform declarations, invalid ranges, excessive
+counts, and Stable Diffusion fields. Duplicate pass paths are valid and retain
+their declared order because running the same shader more than once is a useful
+multipass operation. Pack paths are resolved relative to the directory
+containing `effect.json`.
 
 ## Design decisions
 
 - The full shader library remains available and unchanged.
 - Pack identity uses a stable `id`; display names may change or be translated.
+- Passes are an ordered execution list, not a set. Repeated paths such as
+  blur → blur, feedback → feedback, or repeated sharpening are preserved.
+- Control IDs and control uniform declarations must be unique even though pass
+  paths may repeat.
 - Pack source files are authoritative. `.acmxvk-build` is only an incremental
-  cache.
+  cache. Cache reuse requires matching ABI, Vulkan target, content hashes,
+  compiler/build identity, and any other compatibility fields defined by the
+  cache format; otherwise ACMXVK recompiles from source.
 - A live activation is transactional: validate and prepare the new pack first,
   then replace the active pipeline and settings together. A failed activation
   leaves the current effect running.
@@ -96,6 +108,10 @@ Diffusion fields. Pack paths are resolved relative to the directory containing
   spectrum, spectrum-history, and `originalFrame` resources used today.
 - Friendly controls map by uniform name, not by raw slot number. ACMXVK resolves
   each name against the active custom-uniform table.
+- MIDI remains device-independent at the pack layer. Packs map logical inputs
+  such as `slider_1` to named controls/uniforms, or reference a selected
+  pack-specific MIDI profile. The user's controller profile remains responsible
+  for translating physical device messages and CC numbers into those inputs.
 - Per-pack control state is user state keyed by pack ID. It is not written back
   into a shared or read-only pack unless the user explicitly saves the pack.
 - Deep Dream model references are logical identifiers or requirements. A local
@@ -111,7 +127,9 @@ Diffusion fields. Pack paths are resolved relative to the directory containing
   audio/MIDI declarations, and Deep Dream settings.
 - Implement strict `effect.json` parsing and relative-path validation.
 - Define limits consistent with the renderer: 64 passes, 64 custom uniforms,
-  bounded strings, finite numeric values, and unique pack/control IDs.
+  bounded strings, finite numeric values, and unique pack/control IDs. Preserve
+  repeated pass paths in their declared order while rejecting duplicate control
+  IDs and control uniform declarations.
 - Add parser fixtures covering a minimal valid pack, a complete valid pack, and
   malformed/unsafe packs.
 - Add a versioned format document and one non-rendering example pack fixture.
@@ -127,6 +145,9 @@ specific field/path error without touching runtime state.
   source files into its local `.acmxvk-build` directory.
 - Preserve timestamps and skip valid SPIR-V; remove or ignore interrupted
   `.acmxvk-tmp-*`, live-preview, and editor-preview files.
+- Record the shader ABI version, Vulkan target environment, source/include
+  hashes, compiler identity/version, and ACMXVK build version in cache metadata.
+  Reuse compiled output only when all required compatibility fields match.
 - Validate shader stages, pass count, and declared resource requirements.
 
 Acceptance: a three-pass sample pack builds incrementally and a second build does
@@ -186,7 +207,12 @@ missing models produce a useful warning and do not break the active effect.
 
 - Finalize version 1 audio mapping semantics around existing spectrum bands,
   spectrum history, and named uniforms.
-- Add optional MIDI CC-to-uniform mappings and validate channel/controller ranges.
+- Define logical, device-independent MIDI inputs such as `slider_1`, `knob_2`,
+  or named pack actions and map those inputs to pack controls/uniforms.
+- Reuse the user's selected controller profile to translate physical MIDI
+  devices, channels, and CC numbers into logical inputs; optionally let a pack
+  reference a compatible pack-specific MIDI profile without embedding hardware
+  assumptions in `effect.json`.
 - Extend live control only where needed so mappings can change with the pack.
 - Restore the user's previous non-pack mappings when leaving pack mode.
 - Keep builds without audio or MIDI functional and show capability warnings.
@@ -203,6 +229,9 @@ restarting ACMXVK, including graceful behavior when those features are disabled.
   background-copy/progress patterns.
 - Export a portable folder or archive with safe relative paths and no rendered
   videos, logs, snapshots, or temporary files.
+- Include compiled SPIR-V only with complete compatibility metadata; consumers
+  discard and rebuild cache entries whose ABI, Vulkan target, hashes, compiler,
+  or ACMXVK build requirements do not match.
 - Import into a chosen user pack root with collision handling.
 
 Acceptance: a setup created from the current session can be exported, moved to a
@@ -224,7 +253,8 @@ pipeline, and Deep Dream setup without rebuilding unchanged shaders.
 ### Increment 10 — Hardening, examples, documentation, and release readiness
 
 - Add integration tests for protocol compatibility, transactional failure,
-  traversal rejection, duplicate IDs, stale caches, and missing capabilities.
+  traversal rejection, duplicate control declarations, intentional repeated
+  passes, stale/incompatible caches, and missing capabilities.
 - Exercise Linux, macOS, and Windows path and shared-memory behavior.
 - Add several curated example packs demonstrating fragment, compute, multipass,
   history, original-frame, audio, MIDI, and optional Deep Dream use.
@@ -249,15 +279,19 @@ load without absolute paths, and the existing full-library workflow is unchanged
   run outside the GUI thread with bounded progress reporting.
 - **Untrusted packs:** Enforce file-size/count limits, JSON type/range checks,
   bounded images, safe relative paths, and SPIR-V validation before activation.
+- **Portable compiled caches:** Treat source as authoritative. Accept exported
+  SPIR-V only when ABI, Vulkan environment, source/include hashes, compiler, and
+  build compatibility metadata all match; otherwise rebuild locally.
 
 ## Progress log
 
 | Date | Increment | Status | Work completed |
 | --- | --- | --- | --- |
 | 2026-09-22 | Planning | Complete | Reviewed existing multipass, custom-uniform, resource-reflection, Deep Dream, MIDI/audio, project-copy, and cross-platform shared-memory paths. Defined the version 1 direction and ten-increment implementation plan. |
-| 2026-09-22 | 1 | Complete | Added the version 1 value model, strict portable parser, cross-platform path/range/count validation, format documentation, valid/invalid fixtures, and focused automated tests. CMake and Pcons include the parser; the main executable and all five core portable test groups build and pass. |
-| 2026-09-22 | 2 | Complete | Added bounded multi-root discovery, duplicate-ID and missing-icon diagnostics, shared compiler extraction, pack-local incremental SPIR-V caches, include/manifest staleness checks, temporary cleanup, stage/resource validation, and focused build fixtures. Verified a three-pass incremental build and all ten configured tests. |
+| 2026-09-22 | 1 | Complete (baseline) | Added the version 1 value model, strict portable parser, cross-platform path/range/count validation, format documentation, valid/invalid fixtures, and focused automated tests. CMake and Pcons include the parser; the main executable and all five core portable test groups build and pass. A plan correction now requires intentional duplicate pass paths to be preserved before Increment 4. |
+| 2026-09-22 | 2 | Complete (baseline) | Added bounded multi-root discovery, duplicate-ID and missing-icon diagnostics, shared compiler extraction, pack-local incremental SPIR-V caches, include/manifest staleness checks, temporary cleanup, stage/resource validation, and focused build fixtures. Verified a three-pass incremental build and all ten configured tests. Full ABI/Vulkan/hash/compiler compatibility metadata remains required before compiled caches are portable export artifacts. |
 | 2026-09-22 | 3 | Complete | Added shared-memory protocol version 12 with sequenced effect-pack requests, validated pack-local cache loading, transactional live activation and rollback, existing-pipeline integration, resource provisioning, crossfades, friendly-control defaults, ordinary-workflow isolation, protocol-layout coverage, and stale-cache activation tests. ACMXVK, the Qt interface, and all eleven configured tests build and pass. |
+| 2026-09-22 | Plan revision | Complete | Clarified that pass order may intentionally contain repeated shader paths, kept control IDs/uniform declarations unique, moved Effect Pack MIDI semantics above device-specific CC mappings, and defined the compatibility metadata required for safely exporting compiled SPIR-V caches. |
 | 2026-09-22 | 4 | Not started | — |
 | 2026-09-22 | 5 | Not started | — |
 | 2026-09-22 | 6 | Not started | — |
@@ -268,6 +302,15 @@ load without absolute paths, and the existing full-library workflow is unchanged
 
 ## Current status
 
-Increment 2 is complete. Discovery and pack-local compilation are implemented
-and verified without renderer or interface activation. The next task is
-Increment 3: transactional runtime activation through the existing pipeline.
+Increment 3 is complete. Protocol version 12, validated external-pack cache
+loading, transactional live activation/rollback, renderer resource provisioning,
+crossfades, and restoration of the ordinary shader workflow are implemented and
+verified. The ACMXVK and Qt interface builds pass, as do all eleven configured
+tests.
+
+Before or as part of Increment 4, the parser/build validation must be corrected
+to preserve intentional duplicate pass paths; the current Increment 1 parser
+still rejects them. Cache compatibility metadata also remains a planned
+follow-up before compiled caches are treated as portable export artifacts.
+Increment 4 is next: the modeless icon-based Effect Pack browser and its
+asynchronous discovery/build/activation workflow.
