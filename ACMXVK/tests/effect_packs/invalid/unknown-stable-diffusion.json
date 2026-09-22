@@ -1,0 +1,8 @@
+{
+    "format": "acmxvk-effect-pack",
+    "version": 1,
+    "id": "invalid.stable-diffusion",
+    "name": "Invalid Stable Diffusion",
+    "passes": ["shader.frag"],
+    "stable_diffusion": {"enabled": true}
+}

@@ -1,0 +1,8 @@
+{
+    "format": "acmxvk-effect-pack",
+    "version": 1,
+    "id": "invalid.absolute",
+    "name": "Invalid Absolute Path",
+    "icon": "/tmp/icon.png",
+    "passes": ["shader.frag"]
+}

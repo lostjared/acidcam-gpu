@@ -233,6 +233,7 @@ libraries: list[Target] = [mxvk, mxwrite, ffmpeg, opencv, require_package("jsonc
 sources: list[Path] = [
     project_dir / "acmx.cpp",
     project_dir / "main_window.cpp",
+    project_dir / "app" / "effect_pack.cpp",
     project_dir / "app" / "interface_client.cpp",
     project_dir / "app" / "media_helpers.cpp",
     project_dir / "app" / "media_utils.cpp",

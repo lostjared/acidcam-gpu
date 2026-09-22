@@ -1,0 +1,7 @@
+{
+    "format": "acmxvk-effect-pack",
+    "version": 1,
+    "id": "invalid.traversal",
+    "name": "Invalid Traversal",
+    "passes": ["../outside.frag"]
+}

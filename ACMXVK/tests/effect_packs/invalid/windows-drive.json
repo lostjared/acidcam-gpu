@@ -1,0 +1,7 @@
+{
+    "format": "acmxvk-effect-pack",
+    "version": 1,
+    "id": "invalid.windows-drive",
+    "name": "Invalid Windows Drive",
+    "passes": ["C:/outside.frag"]
+}

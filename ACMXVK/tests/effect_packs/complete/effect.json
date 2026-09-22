@@ -1,0 +1,74 @@
+{
+    "format": "acmxvk-effect-pack",
+    "version": 1,
+    "id": "org.acmxvk.example.dreaming-crystal",
+    "name": "Dreaming Crystal",
+    "description": "A non-rendering parser fixture for the complete version 1 format.",
+    "icon": "icon.png",
+    "passes": [
+        "shaders/warp.comp",
+        "shaders/kaleidoscope.frag",
+        "shaders/original_blend.comp"
+    ],
+    "requires": {
+        "history": true,
+        "spectrum": true,
+        "spectrum_history": false,
+        "original_frame": true
+    },
+    "controls": [
+        {
+            "id": "symmetry",
+            "label": "Symmetry",
+            "uniform": "symmetry",
+            "minimum": 1.0,
+            "maximum": 16.0,
+            "step": 1.0,
+            "default": 6.0
+        },
+        {
+            "id": "restore-original",
+            "label": "Restore Original",
+            "uniform": "restore",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": 0.01,
+            "default": 0.2
+        }
+    ],
+    "audio_mappings": [
+        {
+            "source": "mid",
+            "uniform": "restore",
+            "minimum": 0.0,
+            "maximum": 0.8
+        }
+    ],
+    "midi_mappings": [
+        {
+            "uniform": "symmetry",
+            "channel": 1,
+            "controller": 74,
+            "minimum": 1.0,
+            "maximum": 16.0
+        }
+    ],
+    "deep_dream": {
+        "enabled": true,
+        "model": "vgg16",
+        "layer": "relu4_2",
+        "channel": -1,
+        "iterations": 2,
+        "strength": 0.05,
+        "feedback": 0.9,
+        "zoom": 1.01,
+        "rotation": 0.1,
+        "working_size": 512,
+        "fp16": true,
+        "octaves": 2,
+        "octave_scale": 1.4,
+        "jitter": 8,
+        "smoothing": 1,
+        "gpu_filter_before_dream": false
+    }
+}

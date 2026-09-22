@@ -1,0 +1,9 @@
+{
+    "format": "acmxvk-effect-pack",
+    "version": 1,
+    "id": "org.acmxvk.example.minimum",
+    "name": "Minimum Effect Pack",
+    "passes": [
+        "shaders/passthrough.frag"
+    ]
+}

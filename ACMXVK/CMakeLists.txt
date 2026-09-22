@@ -721,6 +721,8 @@ add_executable(acmxvk
     app/interface_client.cpp
     app/interface_client.hpp
     app/camera_probe.hpp
+    app/effect_pack.cpp
+    app/effect_pack.hpp
     app/media_helpers.cpp
     app/media_helpers.hpp
     app/media_utils.cpp
@@ -1008,6 +1010,23 @@ if(BUILD_TESTING)
     acmxvk_enable_test_warnings(acmxvk_output_paths_tests)
     add_test(NAME acmxvk_output_paths
         COMMAND acmxvk_output_paths_tests
+    )
+    add_executable(acmxvk_effect_pack_tests
+        effect_pack_tests.cpp
+        app/effect_pack.cpp
+        app/effect_pack.hpp
+        input_validation.cpp
+        input_validation.hpp
+    )
+    target_compile_definitions(acmxvk_effect_pack_tests PRIVATE
+        ACMXVK_EFFECT_PACK_FIXTURE_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/tests/effect_packs"
+    )
+    target_link_libraries(acmxvk_effect_pack_tests PRIVATE
+        PkgConfig::ACMXVK_JSONCPP
+    )
+    acmxvk_enable_test_warnings(acmxvk_effect_pack_tests)
+    add_test(NAME acmxvk_effect_pack
+        COMMAND acmxvk_effect_pack_tests
     )
     add_test(NAME acmxvk_deep_dream_probe
         COMMAND acmxvk --check-deep-dream
