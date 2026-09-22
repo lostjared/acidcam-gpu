@@ -37,9 +37,10 @@ The pack owns its source shaders. Compiled SPIR-V is stored in a pack-local
 manifest data is newer. Portable export may include compatible compiled output
 for fast startup, while temporary compiler and editor-preview files are
 excluded. Exported cache metadata must identify the shader ABI, target Vulkan
-environment, source and recursive-include hashes, compiler identity/version,
-and ACMXVK build version so an incompatible cache can be rejected cheaply and
-rebuilt from source.
+environment, and source and recursive-include hashes as hard compatibility
+keys. Compiler identity/version and the ACMXVK version that produced the cache
+are retained separately as diagnostic build provenance and do not normally
+invalidate otherwise compatible SPIR-V.
 
 ## Proposed JSON contract
 
@@ -97,9 +98,10 @@ containing `effect.json`.
 - Control IDs and control uniform declarations must be unique even though pass
   paths may repeat.
 - Pack source files are authoritative. `.acmxvk-build` is only an incremental
-  cache. Cache reuse requires matching ABI, Vulkan target, content hashes,
-  compiler/build identity, and any other compatibility fields defined by the
-  cache format; otherwise ACMXVK recompiles from source.
+  cache. Cache reuse requires matching cache format, shader ABI, Vulkan target,
+  content hashes, and any future explicitly designated hard compatibility
+  fields; otherwise ACMXVK recompiles from source. Compiler and ACMXVK versions
+  are provenance rather than unconditional compatibility keys.
 - A live activation is transactional: validate and prepare the new pack first,
   then replace the active pipeline and settings together. A failed activation
   leaves the current effect running.
@@ -118,6 +120,35 @@ containing `effect.json`.
   resolver maps them to installed model paths. Models are not copied by default.
 - Stable Diffusion is explicitly excluded from version 1 effect packs.
 - Linux, macOS, and Windows use the same format and path rules.
+
+## Compiled cache compatibility policy
+
+Cache metadata is divided into two groups:
+
+- **Hard compatibility keys:** cache format version, shader ABI version, target
+  Vulkan environment, source hash, and recursive-include hash. Every hard key
+  must match before compiled SPIR-V can be reused.
+- **Build provenance:** compiler name/version, compiler command or relevant
+  flags, ACMXVK version, platform, and build timestamp. These fields are kept
+  for diagnostics and reproducibility but do not invalidate the cache merely
+  because a patch release or compiler revision changed.
+
+The normal decision is equivalent to:
+
+```cpp
+const bool compatible =
+    cache.format_version == expected_format &&
+    cache.shader_abi == runtime_shader_abi &&
+    cache.vulkan_target == runtime_vulkan_target &&
+    cache.source_hash == current_source_hash &&
+    cache.include_hash == current_include_hash;
+```
+
+Provenance remains available alongside that decision, for example
+`compiler = "glslc 1.x"` and `compiled_by_acmxvk = "2.140.0"`. If a specific
+compiler revision is later found to emit incompatible output, ACMXVK can add a
+targeted invalidation rule for that compiler/version/target combination without
+making exact compiler-version matching a permanent cache requirement.
 
 ## Increment plan
 
@@ -145,9 +176,11 @@ specific field/path error without touching runtime state.
   source files into its local `.acmxvk-build` directory.
 - Preserve timestamps and skip valid SPIR-V; remove or ignore interrupted
   `.acmxvk-tmp-*`, live-preview, and editor-preview files.
-- Record the shader ABI version, Vulkan target environment, source/include
-  hashes, compiler identity/version, and ACMXVK build version in cache metadata.
-  Reuse compiled output only when all required compatibility fields match.
+- Record cache-format version, shader ABI, Vulkan target environment, and
+  source/include hashes as hard compatibility metadata. Record compiler details,
+  relevant flags, ACMXVK version, platform, and build timestamp as provenance.
+  Reuse compiled output only when the hard keys match and no targeted
+  invalidation rule applies.
 - Validate shader stages, pass count, and declared resource requirements.
 
 Acceptance: a three-pass sample pack builds incrementally and a second build does
@@ -230,8 +263,9 @@ restarting ACMXVK, including graceful behavior when those features are disabled.
 - Export a portable folder or archive with safe relative paths and no rendered
   videos, logs, snapshots, or temporary files.
 - Include compiled SPIR-V only with complete compatibility metadata; consumers
-  discard and rebuild cache entries whose ABI, Vulkan target, hashes, compiler,
-  or ACMXVK build requirements do not match.
+  discard and rebuild cache entries whose format, ABI, Vulkan target, or content
+  hashes do not match. Preserve compiler and ACMXVK build provenance for
+  diagnostics without invalidating compatible output solely on version changes.
 - Import into a chosen user pack root with collision handling.
 
 Acceptance: a setup created from the current session can be exported, moved to a
@@ -280,8 +314,10 @@ load without absolute paths, and the existing full-library workflow is unchanged
 - **Untrusted packs:** Enforce file-size/count limits, JSON type/range checks,
   bounded images, safe relative paths, and SPIR-V validation before activation.
 - **Portable compiled caches:** Treat source as authoritative. Accept exported
-  SPIR-V only when ABI, Vulkan environment, source/include hashes, compiler, and
-  build compatibility metadata all match; otherwise rebuild locally.
+  SPIR-V only when its hard format/ABI/Vulkan/source/include compatibility keys
+  match and no targeted invalidation rule applies. Keep compiler and ACMXVK
+  build information as provenance; otherwise harmless patch releases would
+  cause unnecessary rebuilds.
 
 ## Progress log
 
@@ -289,9 +325,9 @@ load without absolute paths, and the existing full-library workflow is unchanged
 | --- | --- | --- | --- |
 | 2026-09-22 | Planning | Complete | Reviewed existing multipass, custom-uniform, resource-reflection, Deep Dream, MIDI/audio, project-copy, and cross-platform shared-memory paths. Defined the version 1 direction and ten-increment implementation plan. |
 | 2026-09-22 | 1 | Complete (baseline) | Added the version 1 value model, strict portable parser, cross-platform path/range/count validation, format documentation, valid/invalid fixtures, and focused automated tests. CMake and Pcons include the parser; the main executable and all five core portable test groups build and pass. A plan correction now requires intentional duplicate pass paths to be preserved before Increment 4. |
-| 2026-09-22 | 2 | Complete (baseline) | Added bounded multi-root discovery, duplicate-ID and missing-icon diagnostics, shared compiler extraction, pack-local incremental SPIR-V caches, include/manifest staleness checks, temporary cleanup, stage/resource validation, and focused build fixtures. Verified a three-pass incremental build and all ten configured tests. Full ABI/Vulkan/hash/compiler compatibility metadata remains required before compiled caches are portable export artifacts. |
+| 2026-09-22 | 2 | Complete (baseline) | Added bounded multi-root discovery, duplicate-ID and missing-icon diagnostics, shared compiler extraction, pack-local incremental SPIR-V caches, include/manifest staleness checks, temporary cleanup, stage/resource validation, and focused build fixtures. Verified a three-pass incremental build and all ten configured tests. Hard format/ABI/Vulkan/content compatibility keys and separate build provenance remain required before compiled caches are portable export artifacts. |
 | 2026-09-22 | 3 | Complete | Added shared-memory protocol version 12 with sequenced effect-pack requests, validated pack-local cache loading, transactional live activation and rollback, existing-pipeline integration, resource provisioning, crossfades, friendly-control defaults, ordinary-workflow isolation, protocol-layout coverage, and stale-cache activation tests. ACMXVK, the Qt interface, and all eleven configured tests build and pass. |
-| 2026-09-22 | Plan revision | Complete | Clarified that pass order may intentionally contain repeated shader paths, kept control IDs/uniform declarations unique, moved Effect Pack MIDI semantics above device-specific CC mappings, and defined the compatibility metadata required for safely exporting compiled SPIR-V caches. |
+| 2026-09-22 | Plan revision | Complete | Clarified that pass order may intentionally contain repeated shader paths, kept control IDs/uniform declarations unique, moved Effect Pack MIDI semantics above device-specific CC mappings, and separated compiled-cache hard compatibility keys from diagnostic compiler/build provenance. |
 | 2026-09-22 | 4 | Not started | — |
 | 2026-09-22 | 5 | Not started | — |
 | 2026-09-22 | 6 | Not started | — |
