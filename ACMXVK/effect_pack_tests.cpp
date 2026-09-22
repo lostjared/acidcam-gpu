@@ -71,7 +71,7 @@ int main() {
         expect(complete.requirements.history && complete.requirements.original_frame, "complete fixture requirements are incorrect");
         expect(complete.controls.size() == 2 && complete.controls[0].default_value == 6.0, "complete fixture controls are incorrect");
         expect(complete.audio_mappings.size() == 1, "complete fixture audio mapping is missing");
-        expect(complete.midi_mappings.size() == 1 && complete.midi_mappings[0].controller == 74, "complete fixture MIDI mapping is incorrect");
+        expect(complete.midi_mappings.size() == 1 && complete.midi_mappings[0].input == "slider_1", "complete fixture MIDI mapping is incorrect");
         expect(complete.deep_dream.has_value() && complete.deep_dream->layer == "relu4_2", "complete fixture Deep Dream settings are incorrect");
 
         expect_rejected(fixture_root / "invalid/malformed.json", "root");
@@ -85,6 +85,13 @@ int main() {
         const fs::path manifest = temporary.path / "effect.json";
         write_text(manifest, R"({"format":"acmxvk-effect-pack","version":1,"id":"test.range","name":"Range","passes":["test.frag"],"controls":[{"id":"amount","label":"Amount","uniform":"amount","minimum":1,"maximum":0,"step":0.1,"default":0.5}]})");
         expect_rejected(manifest, "controls[0].maximum");
+
+        write_text(manifest, R"({"format":"acmxvk-effect-pack","version":1,"id":"test.midi","name":"MIDI","passes":["test.frag"],"controls":[{"id":"amount","label":"Amount","uniform":"amount","minimum":0,"maximum":1,"step":0.1,"default":0.5}],"midi_mappings":[{"input":"slider_5","uniform":"amount","minimum":0,"maximum":1}]})");
+        expect_rejected(manifest, "midi_mappings[0].input");
+        write_text(manifest, R"({"format":"acmxvk-effect-pack","version":1,"id":"test.audio","name":"Audio","passes":["test.frag"],"controls":[{"id":"amount","label":"Amount","uniform":"amount","minimum":0,"maximum":1,"step":0.1,"default":0.5}],"audio_mappings":[{"source":"bass","uniform":"amount","minimum":0,"maximum":1}]})");
+        expect_rejected(manifest, "audio_mappings[0].source");
+        write_text(manifest, R"({"format":"acmxvk-effect-pack","version":1,"id":"test.mapped","name":"Mapped","passes":["test.frag"],"controls":[{"id":"amount","label":"Amount","uniform":"amount","minimum":0,"maximum":1,"step":0.1,"default":0.5}],"audio_mappings":[{"source":"low","uniform":"amount","minimum":0,"maximum":1}],"midi_mappings":[{"input":"slider_1","uniform":"amount","minimum":0,"maximum":1}]})");
+        expect_rejected(manifest, "midi_mappings[0].uniform");
 
         write_text(manifest, R"({"format":"acmxvk-effect-pack","version":1,"id":"test.repeated","name":"Repeated","passes":["blur.frag","blur.frag","sharpen.frag"]})");
         const acmxvk::EffectPack repeated = acmxvk::load_effect_pack(manifest);

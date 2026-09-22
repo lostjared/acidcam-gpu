@@ -1292,6 +1292,10 @@ namespace acmxvk {
     [[nodiscard]] bool MainWindow::isMidiMappingSupported(const midi::MidiMapping &mapping) const {
         if (isMidiSliderMapping(mapping)) {
             const int slider = (mapping.primary_action - 600) / 2;
+            if (effect_pack_enabled) {
+                const std::string input = "slider_" + std::to_string(slider + 1);
+                return std::any_of(active_effect_pack_midi_mappings.begin(), active_effect_pack_midi_mappings.end(), [&](const EffectPackMidiMapping &candidate) { return candidate.input == input; });
+            }
             return midi_slider_uniform_indices[slider] >= 0;
         }
         if (mapping.secondary_action == 0) {
@@ -1498,6 +1502,30 @@ namespace acmxvk {
         return true;
     }
 
+    [[nodiscard]] bool MainWindow::applyEffectPackMidiSlider(int slider, int value) {
+        if (!effect_pack_enabled) {
+            return false;
+        }
+        const std::string input = "slider_" + std::to_string(slider + 1);
+        bool changed = false;
+        for (const EffectPackMidiMapping &mapping : active_effect_pack_midi_mappings) {
+            if (mapping.input != input) {
+                continue;
+            }
+            const auto uniform = std::find_if(custom_uniforms.begin(), custom_uniforms.end(), [&](const ShaderManifest::CustomUniform &candidate) { return candidate.name == mapping.uniform; });
+            if (uniform == custom_uniforms.end()) {
+                continue;
+            }
+            const std::size_t index = static_cast<std::size_t>(std::distance(custom_uniforms.begin(), uniform));
+            custom_uniform_values[index] = static_cast<float>(mapping.minimum + static_cast<double>(value) / 127.0 * (mapping.maximum - mapping.minimum));
+            changed = true;
+            if (options.midi_monitor) {
+                std::cout << "acmxvk: effect pack MIDI " << input << " -> " << mapping.uniform << '=' << custom_uniform_values[index] << '\n';
+            }
+        }
+        return changed;
+    }
+
     [[nodiscard]] bool MainWindow::applyMidiMap(const midi::MidiMessage &message) {
         if (message.bytes.size() < 3) {
             return false;
@@ -1518,6 +1546,10 @@ namespace acmxvk {
 
             if (isMidiSliderMapping(mapping)) {
                 const int slider = (mapping.primary_action - 600) / 2;
+                if (effect_pack_enabled) {
+                    changed = applyEffectPackMidiSlider(slider, value) || changed;
+                    continue;
+                }
                 const int uniform_index = midi_slider_uniform_indices[slider];
                 if (uniform_index >= 0) {
                     changed = setMidiUniform(static_cast<std::size_t>(uniform_index), value, "Slider " + std::to_string(slider + 1)) || changed;
@@ -2456,6 +2488,8 @@ namespace acmxvk {
             const std::vector<fs::path> pack_passes = configured_passes;
             const std::vector<ShaderManifest::CustomUniform> pack_uniforms = custom_uniforms;
             const std::vector<float> pack_values = custom_uniform_values;
+            const std::vector<EffectPackAudioMapping> pack_audio_mappings = active_effect_pack_audio_mappings;
+            const std::vector<EffectPackMidiMapping> pack_midi_mappings = active_effect_pack_midi_mappings;
             const std::string pack_id = active_effect_pack_id;
             const fs::path pack_manifest = active_effect_pack_manifest;
             const bool pack_crossfade_active = crossfade_active;
@@ -2473,6 +2507,8 @@ namespace acmxvk {
             effect_pack_enabled = false;
             active_effect_pack_id.clear();
             active_effect_pack_manifest.clear();
+            active_effect_pack_audio_mappings.clear();
+            active_effect_pack_midi_mappings.clear();
             try {
                 if (frame_sprite != nullptr) {
                     applyShaderPipeline();
@@ -2489,6 +2525,8 @@ namespace acmxvk {
                 effect_pack_enabled = true;
                 active_effect_pack_id = pack_id;
                 active_effect_pack_manifest = pack_manifest;
+                active_effect_pack_audio_mappings = pack_audio_mappings;
+                active_effect_pack_midi_mappings = pack_midi_mappings;
                 crossfade_active = pack_crossfade_active;
                 crossfade_alpha = pack_crossfade_alpha;
                 crossfade_uses_video_timeline = pack_crossfade_uses_video_timeline;
@@ -2567,6 +2605,8 @@ namespace acmxvk {
         const bool previous_multipass_enabled = multipass_enabled;
         const std::vector<ShaderManifest::CustomUniform> previous_uniforms = custom_uniforms;
         const std::vector<float> previous_values = custom_uniform_values;
+        const std::vector<EffectPackAudioMapping> previous_audio_mappings = active_effect_pack_audio_mappings;
+        const std::vector<EffectPackMidiMapping> previous_midi_mappings = active_effect_pack_midi_mappings;
         const bool previous_pack_enabled = effect_pack_enabled;
         const std::string previous_pack_id = active_effect_pack_id;
         const fs::path previous_pack_manifest = active_effect_pack_manifest;
@@ -2596,6 +2636,8 @@ namespace acmxvk {
         effect_pack_enabled = true;
         active_effect_pack_id = pack.id;
         active_effect_pack_manifest = pack.manifest;
+        active_effect_pack_audio_mappings = pack.audio_mappings;
+        active_effect_pack_midi_mappings = pack.midi_mappings;
         shader_history_required = shader_history_required || pack.requirements.history;
         shader_spectrum_required = shader_spectrum_required || pack.requirements.spectrum;
         shader_spectrum_history_required = shader_spectrum_history_required || pack.requirements.spectrum_history;
@@ -2628,6 +2670,8 @@ namespace acmxvk {
             effect_pack_enabled = previous_pack_enabled;
             active_effect_pack_id = previous_pack_id;
             active_effect_pack_manifest = previous_pack_manifest;
+            active_effect_pack_audio_mappings = previous_audio_mappings;
+            active_effect_pack_midi_mappings = previous_midi_mappings;
             shader_history_required = previous_history_required;
             shader_spectrum_required = previous_spectrum_required;
             shader_spectrum_history_required = previous_spectrum_history_required;
@@ -2659,6 +2703,24 @@ namespace acmxvk {
         }
 
         std::cout << "acmxvk: activated effect pack " << pack.name << " (" << cache.compiled_passes.size() << " passes, " << pack.controls.size() << " controls)\n";
+#ifndef AUDIO_ENABLED
+        if (!active_effect_pack_audio_mappings.empty()) {
+            std::cerr << "acmxvk: effect-pack audio mappings inactive: this build has no audio support\n";
+        }
+#else
+        if (!active_effect_pack_audio_mappings.empty() && !audioSourceOpen()) {
+            std::cerr << "acmxvk: effect-pack audio mappings idle until an audio source is active\n";
+        }
+#endif
+#ifndef MIDI_ENABLED
+        if (!active_effect_pack_midi_mappings.empty()) {
+            std::cerr << "acmxvk: effect-pack MIDI mappings inactive: this build has no MIDI support\n";
+        }
+#else
+        if (!active_effect_pack_midi_mappings.empty() && (midi_input == nullptr || !midi_input->is_open() || midi_action_mappings.empty())) {
+            std::cerr << "acmxvk: effect-pack MIDI mappings inactive: select and enable a controller profile before launch\n";
+        }
+#endif
         return true;
     }
 
@@ -5506,6 +5568,23 @@ namespace acmxvk {
             }
         }
 #endif
+        if (effect_pack_enabled && !active_effect_pack_audio_mappings.empty()) {
+#ifdef AUDIO_ENABLED
+            if (audioSourceOpen()) {
+                for (const EffectPackAudioMapping &mapping : active_effect_pack_audio_mappings) {
+                    const float source = mapping.source == "low" ? audio_low : mapping.source == "mid" ? audio_mid : mapping.source == "high" ? audio_high : mapping.source == "peak" ? audio_peak : mapping.source == "smooth" ? audio_smooth : audio_rms;
+                    const auto uniform = std::find_if(custom_uniforms.begin(), custom_uniforms.end(), [&](const ShaderManifest::CustomUniform &candidate) { return candidate.name == mapping.uniform; });
+                    if (uniform == custom_uniforms.end()) {
+                        continue;
+                    }
+                    const std::size_t index = static_cast<std::size_t>(std::distance(custom_uniforms.begin(), uniform));
+                    const double normalized = std::clamp(std::isfinite(source) ? static_cast<double>(source) : 0.0, 0.0, 1.0);
+                    custom_uniform_values[index] = static_cast<float>(mapping.minimum + normalized * (mapping.maximum - mapping.minimum));
+                }
+                uploadCustomUniforms();
+            }
+#endif
+        }
         if (audio_time_active) {
             const float delta_scale = audio_delta_time ? delta : 1.0F;
             shader_time += static_cast<double>(raw_audio_amplitude) * static_cast<double>(audio_sensitivity) * options.time_speed * static_cast<double>(delta_scale);

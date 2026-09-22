@@ -253,11 +253,13 @@ namespace acmxvk {
                 const Json::Value &item = value[index];
                 const std::string field = "midi_mappings[" + std::to_string(index) + "]";
                 require_object(item, field);
-                reject_unknown_fields(item, field, {"uniform", "channel", "controller", "minimum", "maximum"});
+                reject_unknown_fields(item, field, {"input", "uniform", "minimum", "maximum"});
                 EffectPackMidiMapping mapping;
+                mapping.input = read_string(required(item, "input", field), input::StringKind::Token, field + ".input");
                 mapping.uniform = read_string(required(item, "uniform", field), input::StringKind::Identifier, field + ".uniform");
-                mapping.channel = read_integer(required(item, "channel", field), field + ".channel", 1, 16);
-                mapping.controller = read_integer(required(item, "controller", field), field + ".controller", 0, 127);
+                if (mapping.input != "slider_1" && mapping.input != "slider_2" && mapping.input != "slider_3" && mapping.input != "slider_4") {
+                    fail(field + ".input", "must be slider_1 through slider_4");
+                }
                 mapping.minimum = read_number(required(item, "minimum", field), field + ".minimum");
                 mapping.maximum = read_number(required(item, "maximum", field), field + ".maximum");
                 if (!(mapping.minimum < mapping.maximum)) {
@@ -397,6 +399,31 @@ namespace acmxvk {
         }
         if (root.isMember("deep_dream")) {
             pack.deep_dream = parse_deep_dream(root["deep_dream"]);
+        }
+        std::unordered_set<std::string> mapped_uniforms;
+        const auto validate_mapping = [&](const std::string &uniform, double minimum, double maximum, const std::string &field) {
+            const auto control = std::find_if(pack.controls.begin(), pack.controls.end(), [&](const EffectPackControl &candidate) { return candidate.uniform == uniform; });
+            if (control == pack.controls.end()) {
+                fail(field + ".uniform", "must refer to a declared control");
+            }
+            if (minimum < control->minimum || maximum > control->maximum) {
+                fail(field, "mapping range must stay within the control range");
+            }
+            if (!mapped_uniforms.insert(uniform).second) {
+                fail(field + ".uniform", "has more than one audio/MIDI mapping");
+            }
+        };
+        for (std::size_t index = 0; index < pack.audio_mappings.size(); ++index) {
+            const EffectPackAudioMapping &mapping = pack.audio_mappings[index];
+            const std::string field = "audio_mappings[" + std::to_string(index) + "]";
+            if (mapping.source != "low" && mapping.source != "mid" && mapping.source != "high" && mapping.source != "peak" && mapping.source != "smooth" && mapping.source != "rms") {
+                fail(field + ".source", "must be low, mid, high, peak, smooth, or rms");
+            }
+            validate_mapping(mapping.uniform, mapping.minimum, mapping.maximum, field);
+        }
+        for (std::size_t index = 0; index < pack.midi_mappings.size(); ++index) {
+            const EffectPackMidiMapping &mapping = pack.midi_mappings[index];
+            validate_mapping(mapping.uniform, mapping.minimum, mapping.maximum, "midi_mappings[" + std::to_string(index) + "]");
         }
         return pack;
     }

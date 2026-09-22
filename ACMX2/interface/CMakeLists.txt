@@ -117,6 +117,7 @@ set(LAUNCHER_GUI_HEADERS
     effect-pack-browser.hpp
     effect-pack-controls.hpp
     effect-pack-models.hpp
+    effect-pack-transfer.hpp
     find-shader.hpp
     gpufilter.hpp
     library-builder.hpp
@@ -147,6 +148,7 @@ set(LAUNCHER_GUI_SOURCES
     effect-pack-browser.cpp
     effect-pack-controls.cpp
     effect-pack-models.cpp
+    effect-pack-transfer.cpp
     find-shader.cpp
     gpufilter.cpp
     library-builder.cpp
@@ -229,6 +231,17 @@ if(BUILD_TESTING)
         target_link_libraries(effect_pack_models_test PRIVATE Qt5::Core)
     endif()
     add_test(NAME effect_pack_models COMMAND effect_pack_models_test)
+    add_executable(effect_pack_transfer_test
+        tests/effect-pack-transfer-test.cpp
+        effect-pack-transfer.cpp
+        effect-pack-transfer.hpp)
+    target_include_directories(effect_pack_transfer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    if(QT_VERSION_MAJOR EQUAL 6)
+        target_link_libraries(effect_pack_transfer_test PRIVATE Qt6::Core)
+    else()
+        target_link_libraries(effect_pack_transfer_test PRIVATE Qt5::Core)
+    endif()
+    add_test(NAME effect_pack_transfer COMMAND effect_pack_transfer_test)
 endif()
 
 target_include_directories(acmx2_interface

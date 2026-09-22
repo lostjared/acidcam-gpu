@@ -331,19 +331,22 @@ load without absolute paths, and the existing full-library workflow is unchanged
 | 2026-09-22 | 4 | Implemented; live GPU smoke test pending | Added an ACMXVK-only modeless icon browser with configurable roots, asynchronous bounded discovery/icon decoding, cache status, background pack builds with pass progress, one-click live activation, normal-library return, and last-selection recall without automatic activation. Added a standalone `--build-effect-pack` command for the GUI worker, preserved repeated shader passes while compiling each unique source once, and added parser/build coverage. |
 | 2026-09-22 | 5 | Implemented; live GPU smoke test pending | Added a modeless control panel generated from pack controls, friendly labels with exact GLSL names, slider/spin editing, per-control and whole-pack reset, debounced per-pack value persistence, and A → B → A restoration. Activation publishes the selected pack and all restored uniforms in one shared-memory transaction; subsequent changes publish live. ACMXVK now ignores uniform updates aimed at a pack whose activation failed. The Qt interface and ACMXVK build, the new UI state test and all existing configured tests pass. |
 | 2026-09-22 | 6 | Implemented; live GPU smoke test pending | Added local logical-model resolution and per-pack overrides in the Effect Pack browser, with missing-model and unsupported-build status before activation. Pack activation now publishes shader, uniform, and Deep Dream requests together; ACMXVK applies the authoritative pack Dream configuration through its existing validation path and rolls back shader state if model/layer validation fails. Returning to the normal library restores the previous Dream settings. Both affected builds and all configured tests pass, including new model-resolution tests. |
-| 2026-09-22 | 7 | Not started | — |
-| 2026-09-22 | 8 | Not started | — |
+| 2026-09-22 | 7 | Implemented; live hardware smoke test pending | Finalized portable audio sources and device-independent `slider_1`–`slider_4` MIDI inputs. Validated mapping targets/ranges and rejected competing live mappings. Pack activation switches audio/MIDI mappings with the shader pipeline; audio metrics drive mapped controls per frame, while existing user MIDI profiles translate hardware CCs into logical sliders. Leaving pack mode restores normal mapping behavior; unavailable capabilities are warned about without rejecting a visual pack. Updated the complete fixture and parser tests. |
+| 2026-09-22 | 8 | Implemented; cross-machine smoke test pending | Added interface Create from Current, Save Pack As, Export, and Import workflows with asynchronous resource copy and progress. New packs capture source pass order, custom-uniform definitions/values, inferred shader resource needs, and enabled Deep Dream settings; copies of existing packs retain their audio/MIDI mappings. The transfer copies only required shader passes/includes and an optional icon, rejects traversal and symlinks, uses collision-safe destination names, and excludes rendered output/logs/temp files. It deliberately omits `.acmxvk-build` because the current cache metadata lacks the hard compatibility keys required for portable reuse. Added transfer tests and Pcons source registration. |
 | 2026-09-22 | 9 | Not started | — |
 | 2026-09-22 | 10 | Not started | — |
 
 ## Current status
 
-Increments 4–6 are implemented. The Qt interface and ACMXVK builds pass,
-all three interface tests and all eleven ACMXVK tests pass. Repeated pass paths
+Increments 4–8 are implemented. The Qt interface and ACMXVK builds pass,
+all four interface tests and all eleven ACMXVK tests pass. Repeated pass paths
 remain in the pipeline, with a single compile per unique source. Pack controls
 restore their saved state on return, and pack Dream settings use locally
 resolved models. Failed Dream activation preserves the previously active
 effect. A manual running-engine GPU smoke test of switching, live control
-edits, and Dream model changes is still pending. Cache compatibility metadata
-remains a planned follow-up before compiled caches are treated as portable
-export artifacts. Increment 7 will add portable audio/MIDI mappings.
+edits, Dream model changes, audio input, and MIDI hardware is still pending.
+The new authoring/export workflow is tested with a portable transfer fixture,
+but moving a pack between computers is not yet manually tested. Cache
+compatibility metadata remains a planned follow-up before compiled caches
+are treated as portable export artifacts. Increment 9 will integrate packs
+with `.acmxproj` sessions.

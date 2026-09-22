@@ -2,7 +2,8 @@
 
 This document defines version 1 of the portable ACMXVK effect-pack manifest.
 Parsing, discovery, pack-local compilation, cache validation, and live runtime
-activation are implemented. The remaining authoring and interface work is
+activation are implemented. The interface also supports pack authoring and
+folder transfer. The remaining project integration and hardening work is
 tracked in [`../Effects.md`](../Effects.md).
 
 ## Directory layout
@@ -36,11 +37,11 @@ The root object accepts the following fields. Unknown fields are errors.
 | `name` | yes | Display name, up to 1024 bytes. |
 | `description` | no | Display description, up to 1024 bytes. |
 | `icon` | no | Safe relative image path. |
-| `passes` | yes | One to 64 unique relative shader paths in execution order. |
+| `passes` | yes | One to 64 relative shader paths in execution order; repeats are allowed. |
 | `requires` | no | Resource requirements object. |
 | `controls` | no | Up to 64 friendly custom-uniform controls. |
 | `audio_mappings` | no | Up to 64 audio-to-uniform declarations. |
-| `midi_mappings` | no | Up to 64 MIDI CC-to-uniform declarations. |
+| `midi_mappings` | no | Up to 64 logical MIDI-input-to-uniform declarations. |
 | `deep_dream` | no | Optional Deep Dream configuration. |
 
 Stable Diffusion is intentionally not part of the effect-pack format. A
@@ -73,13 +74,26 @@ values are sent with pack activation; they are not written back to `effect.json`
 ## Audio and MIDI mappings
 
 An audio mapping contains `source`, `uniform`, `minimum`, and `maximum`. The
-source is a portable token such as `low`, `mid`, `high`, `peak`, or `smooth`.
-The numeric range maps the normalized source value to the named uniform.
-Increment 7 will finalize runtime source availability and application behavior.
+source is one of `low`, `mid`, `high`, `peak`, `smooth`, or `rms`. ACMXVK takes
+the corresponding live audio metric after sensitivity and warmup, clamps it to
+0–1, and maps it linearly into the declared numeric range each frame. Without
+an active audio source the control retains its saved/default value. Shader
+spectrum and spectrum-history resources remain available through `requires`;
+these mappings do not replace the shader's spectrum textures.
 
-A MIDI mapping contains `uniform`, a `channel` from 1 through 16, a MIDI CC
-`controller` from 0 through 127, and finite `minimum` and `maximum` values with
-`minimum < maximum`.
+A MIDI mapping contains `input`, `uniform`, `minimum`, and `maximum`. Version 1
+supports the device-independent inputs `slider_1` through `slider_4`. The
+user's selected ACMX2 MIDI controller profile maps physical channels/CCs to
+those four actions (600/601 through 606/607); the pack contains no device
+numbers. A received 0–127 controller value maps linearly into the declared
+range. A profile and MIDI input must be enabled before launch.
+
+Both mapping types must target a declared control uniform, and their numeric
+ranges must lie within that control's range. A control may have only one
+audio-or-MIDI mapping, avoiding conflicting live writers. Switching packs
+switches these mappings with the pipeline. Leaving pack mode resumes the
+user's normal MIDI mappings; builds without audio or MIDI retain the pack's
+static controls and warn that the respective live mappings are inactive.
 
 ## Deep Dream
 
@@ -141,6 +155,35 @@ To build one pack from a terminal, run
 The compiler writes the pack-local `.acmxvk-build` cache and reports progress
 for each unique shader source. A repeated pass still appears multiple times in
 the rendered pipeline.
+
+## Authoring and transfer in the interface
+
+Open **Playback → Effect Packs** in ACMXVK mode. **Create from Current...**
+captures the selected shader or enabled multipass order from a GLSL source
+library, the current custom-uniform definitions and values, inferred resource
+bindings, and enabled Deep Dream settings. It prompts for an optional icon.
+When a pack is active, this action saves a copy of that pack instead, retaining
+its audio/MIDI mappings. Hardware-specific MIDI controller settings and Deep
+Dream model binaries are not embedded.
+
+**Save Pack As...** creates a new user pack from the selected pack and uses its
+locally saved control values as the new defaults. **Export...** copies a pack
+into a chosen folder, preserving its ID. **Import...** copies a chosen pack
+folder into the user's effect-pack root; an ID collision produces a new local
+ID, and a folder-name collision receives a numbered suffix. Copying is done
+off the UI thread with a progress dialog. These operations copy only the
+manifest, referenced shader passes and recursive includes, and the optional
+icon. They reject paths that escape the source root and never copy rendered
+outputs, logs, or temporary files. Transfer requires GLSL `.frag` or `.comp`
+passes; SPIR-V-only packs need source shaders before they can be exported.
+
+Portable exports currently omit `.acmxvk-build`: the existing cache manifest
+does not yet contain all required shader-ABI, Vulkan-target, source, and
+recursive-include hashes. Rebuild the imported pack before activation; the
+browser's **Build & Activate** action does this automatically. Compatible
+compiled-cache transfer will be enabled only after the required hard keys
+are present and checked, without making compiler or ACMXVK patch versions
+unconditional invalidation keys.
 
 ## Discovery and compiled cache
 

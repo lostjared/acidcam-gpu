@@ -3023,7 +3023,50 @@ void MainWindow::menuEffectPacks() {
     QSettings settings("LostSideDead");
     const int jobs = parallel_build_jobs(settings);
     effectPackBrowser->set_build_tools(executable_path, compiler, jobs > 0 ? jobs : 2);
-    effectPackBrowser->set_dream_context(deep_dream_available, deep_dream_model);
+    effectPackBrowser->set_runtime_context(deep_dream_available, deep_dream_model, audio_available, midi_available, midi_enabled && !midi_config_file.isEmpty());
+    QJsonObject snapshot;
+    QString source_error;
+    const bool source_library = !shader_path.isEmpty() && is_acmxvk_source_library(shader_path, source_error);
+    const QStringList pass_names = shader_pass_enabled && !shader_pass_names.isEmpty() ? shader_pass_names : QStringList{currentShaderName()};
+    if (source_library && !pass_names.isEmpty() && pass_names.size() <= 64) {
+        QJsonArray passes;
+        bool complete = true;
+        for (const QString &name : pass_names) {
+            const QString relative = QDir::fromNativeSeparators(name);
+            if ((!relative.endsWith(QStringLiteral(".frag"), Qt::CaseInsensitive) && !relative.endsWith(QStringLiteral(".comp"), Qt::CaseInsensitive)) || relative.startsWith(QStringLiteral("../")) || relative.contains(QStringLiteral("/../")) || !QFileInfo(QDir(shader_path).filePath(relative)).isFile()) {
+                complete = false;
+                break;
+            }
+            passes.append(relative);
+        }
+        if (complete) {
+            snapshot.insert(QStringLiteral("format"), QStringLiteral("acmxvk-effect-pack"));
+            snapshot.insert(QStringLiteral("version"), 1);
+            snapshot.insert(QStringLiteral("passes"), passes);
+            QJsonArray controls;
+            QList<acmx2::CustomUniformDefinition> definitions;
+            if (customUniformDialog) {
+                definitions = customUniformDialog->uniforms();
+            } else {
+                acmx2::load_custom_uniforms(shader_path, definitions, source_error);
+            }
+            for (const acmx2::CustomUniformDefinition &uniform : definitions) {
+                if (uniform.name.isEmpty() || !std::isfinite(uniform.minimum) || !std::isfinite(uniform.maximum) || !std::isfinite(uniform.step) || !std::isfinite(uniform.value) || uniform.minimum >= uniform.maximum) {
+                    continue;
+                }
+                controls.append(QJsonObject{{QStringLiteral("id"), uniform.name}, {QStringLiteral("label"), uniform.name}, {QStringLiteral("uniform"), uniform.name}, {QStringLiteral("minimum"), uniform.minimum}, {QStringLiteral("maximum"), uniform.maximum}, {QStringLiteral("step"), uniform.step}, {QStringLiteral("default"), std::clamp(uniform.value, uniform.minimum, uniform.maximum)}});
+            }
+            snapshot.insert(QStringLiteral("controls"), controls);
+            if (deep_dream_enabled && !deep_dream_model.isEmpty()) {
+                QString model_id = QFileInfo(deep_dream_model).completeBaseName();
+                if (model_id.startsWith(QStringLiteral("deep-dream-"))) {
+                    model_id.remove(0, 11);
+                }
+                snapshot.insert(QStringLiteral("deep_dream"), QJsonObject{{QStringLiteral("enabled"), true}, {QStringLiteral("model"), model_id}, {QStringLiteral("layer"), deep_dream_layer}, {QStringLiteral("channel"), deep_dream_channel}, {QStringLiteral("iterations"), deep_dream_iterations}, {QStringLiteral("strength"), deep_dream_strength}, {QStringLiteral("feedback"), deep_dream_feedback}, {QStringLiteral("zoom"), deep_dream_zoom}, {QStringLiteral("rotation"), deep_dream_rotation}, {QStringLiteral("working_size"), deep_dream_maximum_dimension}, {QStringLiteral("fp16"), deep_dream_fp16}, {QStringLiteral("octaves"), deep_dream_octaves}, {QStringLiteral("octave_scale"), deep_dream_octave_scale}, {QStringLiteral("jitter"), deep_dream_jitter}, {QStringLiteral("smoothing"), deep_dream_smoothing}, {QStringLiteral("gpu_filter_before_dream"), deep_dream_gpu_filter_first}});
+            }
+        }
+    }
+    effectPackBrowser->set_session_snapshot(snapshot.isEmpty() ? QString() : shader_path, snapshot);
     effectPackBrowser->refresh();
     effectPackBrowser->show();
     effectPackBrowser->raise();

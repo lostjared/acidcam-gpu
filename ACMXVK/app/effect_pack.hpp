@@ -41,9 +41,8 @@ namespace acmxvk {
     };
 
     struct EffectPackMidiMapping {
+        std::string input;
         std::string uniform;
-        int channel = 1;
-        int controller = 0;
         double minimum = 0.0;
         double maximum = 1.0;
     };

@@ -178,6 +178,8 @@ namespace acmxvk {
         std::vector<ShaderManifest::CustomUniform> effect_pack_previous_uniforms;
         std::vector<float> effect_pack_previous_uniform_values;
         InterfaceDeepDreamState effect_pack_previous_dream;
+        std::vector<EffectPackAudioMapping> active_effect_pack_audio_mappings;
+        std::vector<EffectPackMidiMapping> active_effect_pack_midi_mappings;
         float mouse_x = 0.0F;
         float mouse_y = 0.0F;
         bool mouse_pressed = false;
@@ -401,6 +403,7 @@ namespace acmxvk {
         void dispatchMidiAction(int action);
         [[nodiscard]] bool setMidiUniform(std::size_t uniform_index, int value, std::string_view label);
         [[nodiscard]] bool applyMidiMap(const midi::MidiMessage &message);
+        [[nodiscard]] bool applyEffectPackMidiSlider(int slider, int value);
         void dispatchMidiKnobs();
 #endif
         void uploadCustomUniforms();

@@ -46,9 +46,8 @@
     ],
     "midi_mappings": [
         {
+            "input": "slider_1",
             "uniform": "symmetry",
-            "channel": 1,
-            "controller": 74,
             "minimum": 1.0,
             "maximum": 16.0
         }
