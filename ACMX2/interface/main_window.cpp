@@ -1288,20 +1288,8 @@ void MainWindow::initControls() {
         QTextStream stream(&text);
         stream << acmx2::backend_name(active_backend) << ": Exited with Code: " << exitCode;
         Log(text + "<br>");
-        if (effectPackBrowser) {
-            effectPackBrowser->clear_active_pack();
-        }
-        active_effect_pack_dream = {};
-        if (active_backend == acmx2::Backend::Acmxvk && shaderSelectionShm) {
-            acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
-            if (lock) {
-                std::fill(std::begin(shaderSelectionShm->effect_pack_manifest_path), std::end(shaderSelectionShm->effect_pack_manifest_path), '\0');
-                ++shaderSelectionShm->effect_pack_sequence;
-                ++shaderSelectionShm->sequence;
-            }
-            publishCustomUniformsToRunningProcess();
-            publishRuntimeSettingsToRunningProcess();
-        }
+        // Keep the selected pack in shared memory across a shader-library build
+        // and across launches. The next ACMXVK process reads it on startup.
         finishOutputRunLog(exitCode, exitStatus);
         play_stop->setEnabled(false);
 
@@ -1314,9 +1302,10 @@ void MainWindow::initControls() {
         // process may have rewritten the binary shader cache.  Do not rebuild
         // the list between runs: its order belongs to the loaded library (or
         // to an explicit user reorder).
-        refreshShaderTreeMetadata();
-
         const bool finishedBuildProcess = cacheBuildInProgress;
+        if (!finishedBuildProcess) {
+            refreshShaderTreeMetadata();
+        }
         if (cacheBuildInProgress) {
             const PendingAcmxvkAction resume_action = pending_acmxvk_action;
             const QString pruneLibraryPath = acmxvkPruneLibraryPath;
@@ -2772,7 +2761,11 @@ void MainWindow::initShaderSelectionSharedMemory() {
     acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
 #if defined(__linux__) || defined(__APPLE__)
-        Log(tr("Shared interface control unavailable: could not lock %1: %2").arg(acmx2::ipc::kShaderSelectionSemaphoreName, QString::fromLocal8Bit(std::strerror(errno))));
+        const int lock_error = errno;
+        Log(tr("Shared interface control unavailable: could not lock %1: %2").arg(acmx2::ipc::kShaderSelectionSemaphoreName, QString::fromLocal8Bit(std::strerror(lock_error))));
+        if (lock_error == ETIMEDOUT) {
+            Log(tr("The interface lock may have been left stale by a force-quit. Close all ACMX processes before resetting the shared-memory semaphore."));
+        }
 #else
         Log(tr("Shared interface control unavailable: could not lock the "
                "Windows control mutex (error %1)")
@@ -2943,13 +2936,7 @@ void MainWindow::publishEffectPackToRunningProcess(const QString &manifest_path,
     if (active_backend != acmx2::Backend::Acmxvk) {
         return;
     }
-    if (!process || process->state() != QProcess::Running || cacheBuildInProgress) {
-        if (effectPackBrowser) {
-            effectPackBrowser->clear_active_pack();
-        }
-        Log(tr("Start ACMXVK before activating an effect pack."));
-        return;
-    }
+    const bool running_engine = process && process->state() == QProcess::Running && !cacheBuildInProgress;
     if (!shaderSelectionShm) {
         initShaderSelectionSharedMemory();
     }
@@ -2985,7 +2972,7 @@ void MainWindow::publishEffectPackToRunningProcess(const QString &manifest_path,
     ++shaderSelectionShm->effect_pack_sequence;
     ++shaderSelectionShm->sequence;
     active_effect_pack_dream = manifest_path.isEmpty() ? DeepDreamConfiguration{} : requested_dream;
-    Log(manifest_path.isEmpty() ? tr("Returned to the shader library.") : tr("Requested effect pack: %1").arg(manifest_path));
+    Log(manifest_path.isEmpty() ? tr("Returned to the shader library.") : running_engine ? tr("Requested effect pack: %1").arg(manifest_path) : tr("Effect pack selected for the next ACMXVK launch: %1").arg(manifest_path));
 #else
     Q_UNUSED(manifest_path);
     Q_UNUSED(values);
@@ -2995,7 +2982,7 @@ void MainWindow::publishEffectPackToRunningProcess(const QString &manifest_path,
 
 void MainWindow::publishEffectPackUniformsToRunningProcess(const QVector<EffectPackUniformValue> &values) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-    if (active_backend != acmx2::Backend::Acmxvk || !process || process->state() != QProcess::Running || !shaderSelectionShm || !effectPackBrowser || !effectPackBrowser->has_active_pack()) {
+    if (active_backend != acmx2::Backend::Acmxvk || !shaderSelectionShm || !effectPackBrowser || !effectPackBrowser->has_active_pack()) {
         return;
     }
     acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);

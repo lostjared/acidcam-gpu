@@ -20,6 +20,7 @@
 namespace acmxvk {
     struct InterfaceClient::Impl {
         bool open_error_reported = false;
+        bool read_error_reported = false;
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
         ipc::ShaderSelectionData *selection = nullptr;
 #if defined(__linux__) || defined(__APPLE__)
@@ -182,11 +183,25 @@ namespace acmxvk {
         }
         ipc::InterfaceLock lock(impl->lock_handle);
         if (!lock) {
+            if (!impl->read_error_reported) {
+#if defined(__linux__) || defined(__APPLE__)
+                const int lock_error = errno;
+                std::cerr << "acmxvk: interface control lock unavailable: " << std::strerror(lock_error) << '\n';
+#else
+                std::cerr << "acmxvk: interface control lock unavailable\n";
+#endif
+                impl->read_error_reported = true;
+            }
             return false;
         }
         if (impl->selection->magic != ipc::SHADER_SELECTION_MAGIC || impl->selection->version != ipc::SHADER_SELECTION_VERSION) {
+            if (!impl->read_error_reported) {
+                std::cerr << "acmxvk: incompatible interface control header: magic=" << impl->selection->magic << ", version=" << impl->selection->version << "; expected magic=" << ipc::SHADER_SELECTION_MAGIC << ", version=" << ipc::SHADER_SELECTION_VERSION << '\n';
+                impl->read_error_reported = true;
+            }
             return false;
         }
+        impl->read_error_reported = false;
 
         InterfaceState next;
         next.sequence = impl->selection->sequence;

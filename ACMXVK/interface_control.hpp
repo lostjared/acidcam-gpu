@@ -6,7 +6,9 @@
 #include <type_traits>
 #if defined(__linux__) || defined(__APPLE__)
 #include <cerrno>
+#include <chrono>
 #include <semaphore.h>
+#include <thread>
 #elif defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -111,9 +113,15 @@ namespace acmxvk::ipc {
         explicit InterfaceLock(sem_t *value) : semaphore(value) {
             if (semaphore == nullptr || semaphore == SEM_FAILED)
                 return;
-            while (::sem_wait(semaphore) != 0) {
-                if (errno != EINTR)
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+            while (::sem_trywait(semaphore) != 0) {
+                if (errno != EAGAIN && errno != EINTR)
                     return;
+                if (std::chrono::steady_clock::now() >= deadline) {
+                    errno = ETIMEDOUT;
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             locked = true;
         }
