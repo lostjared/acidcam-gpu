@@ -2814,6 +2814,8 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->dream_octave_scale = 1.4F;
         std::fill(std::begin(shaderSelectionShm->dream_model_path), std::end(shaderSelectionShm->dream_model_path), '\0');
         std::fill(std::begin(shaderSelectionShm->dream_layer), std::end(shaderSelectionShm->dream_layer), '\0');
+        std::fill(std::begin(shaderSelectionShm->effect_pack_manifest_path), std::end(shaderSelectionShm->effect_pack_manifest_path), '\0');
+        shaderSelectionShm->effect_pack_sequence = 0;
         std::fill(std::begin(shaderSelectionShm->selected_shader_name), std::end(shaderSelectionShm->selected_shader_name), '\0');
         shaderSelectionShm->sequence = 0;
     }

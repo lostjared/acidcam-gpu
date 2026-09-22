@@ -67,6 +67,8 @@ int main() {
         selection->dream_octave_scale = 1.6F;
         std::strcpy(selection->dream_model_path, "C:/models/dream.pt");
         std::strcpy(selection->dream_layer, "relu4_2");
+        selection->effect_pack_sequence = 9;
+        std::strcpy(selection->effect_pack_manifest_path, "C:/effects/crystal/effect.json");
     }
 
     acmxvk::InterfaceClient client;
@@ -74,7 +76,7 @@ int main() {
     const bool opened = client.open();
     const bool read = opened && client.read(state);
     const bool valid = read && state.sequence == 42 && state.selected_shader_name == "selected.frag.spv" && state.multipass.enabled && state.multipass.shader_names.size() == 2 && state.multipass.shader_names[0] == "first.comp.spv" && state.multipass.shader_names[1] == "second.frag.spv" && state.uniform_values.size() == 1 && state.uniform_values[0].name == "slider1" && state.uniform_values[0].value == 0.75F && state.audio_file.request_sequence == 7 && state.audio_file.path == "C:/audio/test.wav" && state.audio_file.pass_through && state.deep_dream.enabled && state.deep_dream.fp16 && state.deep_dream.gpu_filter_first && state.deep_dream.iterations == 3 && state.deep_dream.maximum_dimension == 768 && state.deep_dream.channel == 12 && state.deep_dream.octaves == 2 && state.deep_dream.jitter == 4 && state.deep_dream.smoothing == 2 && state.deep_dream.strength == 0.125F && state.deep_dream.feedback == 0.8F && state.deep_dream.zoom == 1.02F && state.deep_dream.rotation == -0.25F &&
-                       state.deep_dream.octave_scale == 1.6F && state.deep_dream.model_path == "C:/models/dream.pt" && state.deep_dream.layer == "relu4_2";
+                       state.deep_dream.octave_scale == 1.6F && state.deep_dream.model_path == "C:/models/dream.pt" && state.deep_dream.layer == "relu4_2" && state.effect_pack.request_sequence == 9 && state.effect_pack.manifest_path == "C:/effects/crystal/effect.json";
 
     client.close();
     ::UnmapViewOfFile(view);

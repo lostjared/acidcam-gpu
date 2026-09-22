@@ -70,6 +70,11 @@ namespace acmxvk {
         std::string path;
     };
 
+    struct InterfaceEffectPackState {
+        std::uint32_t request_sequence = 0;
+        std::string manifest_path;
+    };
+
     struct InterfaceState {
         std::uint32_t sequence = 0;
         std::string selected_shader_name;
@@ -81,6 +86,7 @@ namespace acmxvk {
         InterfaceDeepDreamState deep_dream;
         InterfaceAudioFileState audio_file;
         InterfaceReloadState reload;
+        InterfaceEffectPackState effect_pack;
     };
 
     class InterfaceClient {

@@ -16,14 +16,14 @@
 
 namespace acmx2::ipc {
 
-    inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection_v11";
-    inline constexpr const char *kShaderSelectionSemaphoreName = "/acmx2_shm_v11";
+    inline constexpr const char *kShaderSelectionShmName = "/acmx2_shader_selection_v12";
+    inline constexpr const char *kShaderSelectionSemaphoreName = "/acmx2_shm_v12";
 #ifdef _WIN32
-    inline constexpr const wchar_t *kShaderSelectionMappingNameWindows = L"Local\\ACMX2ShaderSelectionV11";
-    inline constexpr const wchar_t *kShaderSelectionMutexNameWindows = L"Local\\ACMX2ShaderSelectionMutexV11";
+    inline constexpr const wchar_t *kShaderSelectionMappingNameWindows = L"Local\\ACMX2ShaderSelectionV12";
+    inline constexpr const wchar_t *kShaderSelectionMutexNameWindows = L"Local\\ACMX2ShaderSelectionMutexV12";
 #endif
     inline constexpr std::uint32_t kShaderSelectionMagic = 0x41434D58; // 'ACMX'
-    inline constexpr std::uint32_t kShaderSelectionVersion = 11;
+    inline constexpr std::uint32_t kShaderSelectionVersion = 12;
     inline constexpr std::uint32_t kShaderSelectionMaxPassCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxGpuFilterCount = 64;
     inline constexpr std::uint32_t kShaderSelectionMaxWatermarkText = 256;
@@ -33,8 +33,9 @@ namespace acmx2::ipc {
     inline constexpr std::uint32_t kShaderSelectionMaxAudioFilePath = 4096;
     inline constexpr std::uint32_t kShaderSelectionMaxDreamModelPath = 4096;
     inline constexpr std::uint32_t kShaderSelectionMaxDreamLayer = 128;
+    inline constexpr std::uint32_t kShaderSelectionMaxEffectPackPath = 4096;
     inline constexpr std::uint32_t kShaderSelectionMaxShaderName = 1024;
-    inline constexpr std::size_t kShaderSelectionDataSize = 81136;
+    inline constexpr std::size_t kShaderSelectionDataSize = 85236;
 #ifdef _WIN32
     inline constexpr DWORD kShaderSelectionLockTimeoutMs = 1000;
 #endif
@@ -91,6 +92,8 @@ namespace acmx2::ipc {
         float dream_octave_scale = 1.4F;
         char dream_model_path[kShaderSelectionMaxDreamModelPath] = {};
         char dream_layer[kShaderSelectionMaxDreamLayer] = {};
+        char effect_pack_manifest_path[kShaderSelectionMaxEffectPackPath] = {};
+        std::uint32_t effect_pack_sequence = 0;
         char selected_shader_name[kShaderSelectionMaxShaderName] = {};
         std::uint32_t sequence = 0;
     };

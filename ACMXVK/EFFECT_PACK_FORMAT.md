@@ -1,9 +1,9 @@
 # ACMXVK Effect Pack Format
 
 This document defines version 1 of the portable ACMXVK effect-pack manifest.
-Increment 1 provides parsing and validation only; discovery, compilation, and
-live activation are introduced by later increments described in
-[`../Effects.md`](../Effects.md).
+Parsing, discovery, pack-local compilation, cache validation, and live runtime
+activation are implemented. The remaining authoring and interface work is
+tracked in [`../Effects.md`](../Effects.md).
 
 ## Directory layout
 
@@ -145,3 +145,20 @@ After compilation, ACMXVK verifies that every pass is fragment or compute
 SPIR-V and that source extensions match their compiled stages. Bindings for
 history, spectrum, spectrum history, and `originalFrame` must be declared in
 the manifest's `requires` object before a pack can be considered ready.
+
+## Live activation
+
+The Qt interface and ACMXVK use shared-memory protocol version 12 for sequenced
+effect-pack activation requests. A request names the pack's canonical
+`effect.json`; ACMXVK reparses the manifest and accepts only current, validated
+SPIR-V beneath that pack's `.acmxvk-build` directory. Ordinary shader,
+multipass, and playlist requests remain restricted to the configured shader
+library.
+
+Activation stages the complete pass order and default control values before it
+changes the existing post-processing pipeline. ACMXVK provisions newly required
+history, spectrum, and spectrum-history resources and uses the existing
+crossfade path where possible. If validation, resource creation, or pipeline
+attachment fails, the previous pipeline and uniform state are restored. Sending
+an empty pack path leaves pack mode and restores the normal shader workflow that
+was active before the first pack was selected.

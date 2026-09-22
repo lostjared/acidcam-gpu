@@ -16,16 +16,16 @@
 
 namespace acmxvk::ipc {
     // This layout intentionally mirrors ACMX2/shader_selection_shm.hpp version
-    // 11. Keeping a local protocol declaration lets ACMXVK remain buildable as
+    // 12. Keeping a local protocol declaration lets ACMXVK remain buildable as
     // a standalone source tree while sharing the Qt launcher's control block.
-    inline constexpr const char *SHADER_SELECTION_SHM_NAME = "/acmx2_shader_selection_v11";
-    inline constexpr const char *SHADER_SELECTION_SEMAPHORE_NAME = "/acmx2_shm_v11";
+    inline constexpr const char *SHADER_SELECTION_SHM_NAME = "/acmx2_shader_selection_v12";
+    inline constexpr const char *SHADER_SELECTION_SEMAPHORE_NAME = "/acmx2_shm_v12";
 #ifdef _WIN32
-    inline constexpr const wchar_t *SHADER_SELECTION_MAPPING_NAME_WINDOWS = L"Local\\ACMX2ShaderSelectionV11";
-    inline constexpr const wchar_t *SHADER_SELECTION_MUTEX_NAME_WINDOWS = L"Local\\ACMX2ShaderSelectionMutexV11";
+    inline constexpr const wchar_t *SHADER_SELECTION_MAPPING_NAME_WINDOWS = L"Local\\ACMX2ShaderSelectionV12";
+    inline constexpr const wchar_t *SHADER_SELECTION_MUTEX_NAME_WINDOWS = L"Local\\ACMX2ShaderSelectionMutexV12";
 #endif
     inline constexpr std::uint32_t SHADER_SELECTION_MAGIC = 0x41434D58;
-    inline constexpr std::uint32_t SHADER_SELECTION_VERSION = 11;
+    inline constexpr std::uint32_t SHADER_SELECTION_VERSION = 12;
     inline constexpr std::uint32_t MAX_PASS_COUNT = 64;
     inline constexpr std::uint32_t MAX_GPU_FILTER_COUNT = 64;
     inline constexpr std::uint32_t MAX_WATERMARK_TEXT = 256;
@@ -35,8 +35,9 @@ namespace acmxvk::ipc {
     inline constexpr std::uint32_t MAX_AUDIO_FILE_PATH = 4096;
     inline constexpr std::uint32_t MAX_DREAM_MODEL_PATH = 4096;
     inline constexpr std::uint32_t MAX_DREAM_LAYER = 128;
+    inline constexpr std::uint32_t MAX_EFFECT_PACK_PATH = 4096;
     inline constexpr std::uint32_t MAX_SHADER_NAME = 1024;
-    inline constexpr std::size_t SHADER_SELECTION_DATA_SIZE = 81136;
+    inline constexpr std::size_t SHADER_SELECTION_DATA_SIZE = 85236;
 #ifdef _WIN32
     inline constexpr DWORD INTERFACE_LOCK_TIMEOUT_MS = 1000;
 #endif
@@ -93,6 +94,8 @@ namespace acmxvk::ipc {
         float dream_octave_scale = 1.4F;
         char dream_model_path[MAX_DREAM_MODEL_PATH] = {};
         char dream_layer[MAX_DREAM_LAYER] = {};
+        char effect_pack_manifest_path[MAX_EFFECT_PACK_PATH] = {};
+        std::uint32_t effect_pack_sequence = 0;
         char selected_shader_name[MAX_SHADER_NAME] = {};
         std::uint32_t sequence = 0;
     };

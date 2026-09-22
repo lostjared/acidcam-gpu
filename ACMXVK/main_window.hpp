@@ -28,6 +28,8 @@
 #ifdef ACMXVK_WITH_STABLE_DIFFUSION
 #include "stable_diffusion.hpp"
 #endif
+#include "app/effect_pack.hpp"
+#include "app/effect_pack_build.hpp"
 #include "app/interface_client.hpp"
 #include "app/media_helpers.hpp"
 #include "app/media_utils.hpp"
@@ -149,11 +151,14 @@ namespace acmxvk {
         bool interface_connection_warning_reported = false;
         std::uint32_t interface_last_audio_file_sequence = 0;
         std::uint32_t interface_last_reload_sequence = 0;
+        std::uint32_t interface_last_effect_pack_sequence = 0;
         std::size_t shader_index = 0;
         std::size_t playlist_index = 0;
         std::size_t crossfade_post_process_index = std::numeric_limits<std::size_t>::max();
         bool effects_enabled = true;
         bool multipass_enabled = false;
+        bool effect_pack_enabled = false;
+        bool effect_pack_previous_state_saved = false;
         bool playlist_enabled = false;
         bool shader_locked = false;
         bool model_initialized = false;
@@ -166,6 +171,12 @@ namespace acmxvk {
         bool shader_history_required = false;
         bool shader_spectrum_required = false;
         bool shader_spectrum_history_required = false;
+        std::string active_effect_pack_id;
+        fs::path active_effect_pack_manifest;
+        std::vector<fs::path> effect_pack_previous_passes;
+        bool effect_pack_previous_multipass_enabled = false;
+        std::vector<ShaderManifest::CustomUniform> effect_pack_previous_uniforms;
+        std::vector<float> effect_pack_previous_uniform_values;
         float mouse_x = 0.0F;
         float mouse_y = 0.0F;
         bool mouse_pressed = false;
@@ -421,6 +432,7 @@ namespace acmxvk {
         void apply_interface_deep_dream_state(const InterfaceDeepDreamState &requested, bool announce);
         void apply_interface_audio_file_state(const InterfaceAudioFileState &requested);
         void apply_interface_shader_reload(const InterfaceReloadState &requested);
+        void apply_interface_effect_pack_state(const InterfaceEffectPackState &requested);
         void apply_interface_multipass_state(const InterfaceMultipassState &requested);
         void apply_interface_shader_selection(const std::string &requested_name);
         void apply_interface_uniform_values(const std::vector<InterfaceUniformValue> &uniform_values);

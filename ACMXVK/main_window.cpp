@@ -1151,7 +1151,7 @@ namespace acmxvk {
 
 #ifdef MIDI_ENABLED
     [[nodiscard]] bool MainWindow::applyMidiCc(const midi::MidiMessage &message) {
-        if (message.bytes.size() < 3 || (message.bytes[0] & 0xF0U) != 0xB0U) {
+        if (effect_pack_enabled || message.bytes.size() < 3 || (message.bytes[0] & 0xF0U) != 0xB0U) {
             return false;
         }
         const int channel = message.bytes[0] & 0x0FU;
@@ -1485,7 +1485,7 @@ namespace acmxvk {
     }
 
     [[nodiscard]] bool MainWindow::setMidiUniform(std::size_t uniform_index, int value, std::string_view label) {
-        if (uniform_index >= custom_uniforms.size() || uniform_index >= custom_uniform_values.size()) {
+        if (effect_pack_enabled || uniform_index >= custom_uniforms.size() || uniform_index >= custom_uniform_values.size()) {
             return false;
         }
         const ShaderManifest::CustomUniform &uniform = custom_uniforms[uniform_index];
@@ -1957,6 +1957,10 @@ namespace acmxvk {
         const bool reconnected = interface_connection_warning_reported;
         interface_connection_warning_reported = false;
         interface_last_sequence = state.sequence;
+        interface_last_effect_pack_sequence = state.effect_pack.request_sequence;
+        if (!state.effect_pack.manifest_path.empty() || effect_pack_enabled) {
+            apply_interface_effect_pack_state(state.effect_pack);
+        }
         apply_interface_shader_selection(state.selected_shader_name);
         apply_interface_multipass_state(state.multipass);
         apply_interface_uniform_values(state.uniform_values);
@@ -1966,7 +1970,7 @@ namespace acmxvk {
         apply_interface_deep_dream_state(state.deep_dream, false);
         interface_last_audio_file_sequence = state.audio_file.request_sequence;
         interface_last_reload_sequence = state.reload.request_sequence;
-        std::cout << "acmxvk: interface live shader, multipass, playback, "
+        std::cout << "acmxvk: interface live shader, effect-pack, multipass, playback, "
                      "overlay, GPU-filter, Deep Dream, and audio-file control "
                      "enabled"
                   << (reconnected ? " (reconnected)" : "") << '\n';
@@ -1996,6 +2000,12 @@ namespace acmxvk {
             return;
         }
         interface_last_sequence = state.sequence;
+        if (state.effect_pack.request_sequence != interface_last_effect_pack_sequence) {
+            if (frame_sprite == nullptr || !shader_locked) {
+                interface_last_effect_pack_sequence = state.effect_pack.request_sequence;
+                apply_interface_effect_pack_state(state.effect_pack);
+            }
+        }
         apply_interface_shader_selection(state.selected_shader_name);
         apply_interface_multipass_state(state.multipass);
         apply_interface_uniform_values(state.uniform_values);
@@ -2390,7 +2400,199 @@ namespace acmxvk {
         }
     }
 
+    void MainWindow::apply_interface_effect_pack_state(const InterfaceEffectPackState &requested) {
+        if (frame_sprite != nullptr && shader_locked) {
+            std::cerr << "acmxvk: effect-pack activation ignored while shader switching is locked\n";
+            return;
+        }
+
+        if (requested.manifest_path.empty()) {
+            if (!effect_pack_enabled || !effect_pack_previous_state_saved) {
+                return;
+            }
+
+            const std::vector<fs::path> pack_passes = configured_passes;
+            const std::vector<ShaderManifest::CustomUniform> pack_uniforms = custom_uniforms;
+            const std::vector<float> pack_values = custom_uniform_values;
+            const std::string pack_id = active_effect_pack_id;
+            const fs::path pack_manifest = active_effect_pack_manifest;
+            const bool pack_crossfade_active = crossfade_active;
+            const float pack_crossfade_alpha = crossfade_alpha;
+            const bool pack_crossfade_uses_video_timeline = crossfade_uses_video_timeline;
+            const std::chrono::steady_clock::time_point pack_crossfade_start_time = crossfade_start_time;
+            const double pack_crossfade_start_video_timeline = crossfade_start_video_timeline;
+            if (frame_sprite != nullptr && !crossfade_active) {
+                beginCrossfade();
+            }
+            configured_passes = effect_pack_previous_passes;
+            multipass_enabled = effect_pack_previous_multipass_enabled;
+            custom_uniforms = effect_pack_previous_uniforms;
+            custom_uniform_values = effect_pack_previous_uniform_values;
+            effect_pack_enabled = false;
+            active_effect_pack_id.clear();
+            active_effect_pack_manifest.clear();
+            try {
+                if (frame_sprite != nullptr) {
+                    applyShaderPipeline();
+                    resetShaderTime();
+                }
+            } catch (const std::exception &error) {
+                configured_passes = pack_passes;
+                multipass_enabled = true;
+                custom_uniforms = pack_uniforms;
+                custom_uniform_values = pack_values;
+                effect_pack_enabled = true;
+                active_effect_pack_id = pack_id;
+                active_effect_pack_manifest = pack_manifest;
+                crossfade_active = pack_crossfade_active;
+                crossfade_alpha = pack_crossfade_alpha;
+                crossfade_uses_video_timeline = pack_crossfade_uses_video_timeline;
+                crossfade_start_time = pack_crossfade_start_time;
+                crossfade_start_video_timeline = pack_crossfade_start_video_timeline;
+                try {
+                    if (frame_sprite != nullptr) {
+                        applyShaderPipeline();
+                    }
+                } catch (const std::exception &rollback_error) {
+                    std::cerr << "acmxvk: effect-pack rollback failed: " << rollback_error.what() << '\n';
+                }
+                std::cerr << "acmxvk: could not leave effect pack; previous effect restored: " << error.what() << '\n';
+                return;
+            }
+            effect_pack_previous_state_saved = false;
+            effect_pack_previous_passes.clear();
+            effect_pack_previous_uniforms.clear();
+            effect_pack_previous_uniform_values.clear();
+            std::cout << "acmxvk: effect pack disabled; restored normal shader workflow\n";
+            return;
+        }
+
+        EffectPack pack;
+        EffectPackBuildResult cache;
+        std::vector<ShaderManifest::CustomUniform> pack_uniforms;
+        std::vector<float> pack_values;
+        try {
+            input::validate_string(requested.manifest_path, input::StringKind::Path, "interface effect-pack manifest path");
+            const fs::path manifest = fs::weakly_canonical(requested.manifest_path);
+            if (manifest.filename() != "effect.json" || !fs::is_regular_file(manifest)) {
+                throw std::runtime_error("effect-pack request must name a readable effect.json");
+            }
+            pack = load_effect_pack(manifest);
+            cache = load_effect_pack_cache(pack);
+            pack_uniforms.reserve(pack.controls.size());
+            pack_values.reserve(pack.controls.size());
+            constexpr double MAX_FLOAT = static_cast<double>(std::numeric_limits<float>::max());
+            for (std::size_t index = 0; index < pack.controls.size(); ++index) {
+                const EffectPackControl &control = pack.controls[index];
+                if (std::abs(control.minimum) > MAX_FLOAT || std::abs(control.maximum) > MAX_FLOAT || std::abs(control.step) > MAX_FLOAT || std::abs(control.default_value) > MAX_FLOAT) {
+                    throw std::runtime_error("effect-pack control cannot be represented by the renderer: " + control.uniform);
+                }
+                pack_uniforms.push_back({control.uniform, index, control.minimum, control.maximum, control.step, control.default_value});
+                pack_values.push_back(static_cast<float>(control.default_value));
+            }
+        } catch (const std::exception &error) {
+            std::cerr << "acmxvk: rejected effect-pack activation: " << error.what() << '\n';
+            return;
+        }
+
+        const std::vector<fs::path> previous_passes = configured_passes;
+        const bool previous_multipass_enabled = multipass_enabled;
+        const std::vector<ShaderManifest::CustomUniform> previous_uniforms = custom_uniforms;
+        const std::vector<float> previous_values = custom_uniform_values;
+        const bool previous_pack_enabled = effect_pack_enabled;
+        const std::string previous_pack_id = active_effect_pack_id;
+        const fs::path previous_pack_manifest = active_effect_pack_manifest;
+        const bool previous_history_required = shader_history_required;
+        const bool previous_spectrum_required = shader_spectrum_required;
+        const bool previous_spectrum_history_required = shader_spectrum_history_required;
+        const int previous_audio_buffers = options.audio_buffers;
+        const bool previous_crossfade_active = crossfade_active;
+        const float previous_crossfade_alpha = crossfade_alpha;
+        const bool previous_crossfade_uses_video_timeline = crossfade_uses_video_timeline;
+        const std::chrono::steady_clock::time_point previous_crossfade_start_time = crossfade_start_time;
+        const double previous_crossfade_start_video_timeline = crossfade_start_video_timeline;
+        const bool save_previous_state = !effect_pack_enabled;
+        if (save_previous_state) {
+            effect_pack_previous_passes = configured_passes;
+            effect_pack_previous_multipass_enabled = multipass_enabled;
+            effect_pack_previous_uniforms = custom_uniforms;
+            effect_pack_previous_uniform_values = custom_uniform_values;
+            effect_pack_previous_state_saved = true;
+        }
+
+        configured_passes = cache.compiled_passes;
+        multipass_enabled = true;
+        custom_uniforms = std::move(pack_uniforms);
+        custom_uniform_values = std::move(pack_values);
+        effect_pack_enabled = true;
+        active_effect_pack_id = pack.id;
+        active_effect_pack_manifest = pack.manifest;
+        shader_history_required = shader_history_required || pack.requirements.history;
+        shader_spectrum_required = shader_spectrum_required || pack.requirements.spectrum;
+        shader_spectrum_history_required = shader_spectrum_history_required || pack.requirements.spectrum_history;
+        if (pack.requirements.spectrum_history && options.audio_buffers == 0) {
+            options.audio_buffers = 8;
+        }
+        const bool resources_grew = shader_history_required != previous_history_required || shader_spectrum_required != previous_spectrum_required || shader_spectrum_history_required != previous_spectrum_history_required;
+
+        try {
+            if (frame_sprite != nullptr) {
+                if (resources_grew) {
+                    initializeSprite();
+                } else {
+                    if (!crossfade_active) {
+                        beginCrossfade();
+                    }
+                    applyShaderPipeline();
+                }
+                resetShaderTime();
+                autopilot_counter = 0;
+            }
+        } catch (const std::exception &error) {
+            configured_passes = previous_passes;
+            multipass_enabled = previous_multipass_enabled;
+            custom_uniforms = previous_uniforms;
+            custom_uniform_values = previous_values;
+            effect_pack_enabled = previous_pack_enabled;
+            active_effect_pack_id = previous_pack_id;
+            active_effect_pack_manifest = previous_pack_manifest;
+            shader_history_required = previous_history_required;
+            shader_spectrum_required = previous_spectrum_required;
+            shader_spectrum_history_required = previous_spectrum_history_required;
+            options.audio_buffers = previous_audio_buffers;
+            crossfade_active = previous_crossfade_active;
+            crossfade_alpha = previous_crossfade_alpha;
+            crossfade_uses_video_timeline = previous_crossfade_uses_video_timeline;
+            crossfade_start_time = previous_crossfade_start_time;
+            crossfade_start_video_timeline = previous_crossfade_start_video_timeline;
+            if (save_previous_state) {
+                effect_pack_previous_state_saved = false;
+                effect_pack_previous_passes.clear();
+                effect_pack_previous_uniforms.clear();
+                effect_pack_previous_uniform_values.clear();
+            }
+            try {
+                if (frame_sprite != nullptr) {
+                    if (resources_grew) {
+                        initializeSprite();
+                    } else {
+                        applyShaderPipeline();
+                    }
+                }
+            } catch (const std::exception &rollback_error) {
+                std::cerr << "acmxvk: effect-pack rollback failed: " << rollback_error.what() << '\n';
+            }
+            std::cerr << "acmxvk: effect-pack activation failed; previous effect restored: " << error.what() << '\n';
+            return;
+        }
+
+        std::cout << "acmxvk: activated effect pack " << pack.name << " (" << cache.compiled_passes.size() << " passes, " << pack.controls.size() << " controls)\n";
+    }
+
     void MainWindow::apply_interface_multipass_state(const InterfaceMultipassState &requested) {
+        if (effect_pack_enabled) {
+            return;
+        }
         std::vector<fs::path> requested_passes;
         if (requested.enabled) {
             if (requested.shader_names.empty()) {
@@ -2452,6 +2654,9 @@ namespace acmxvk {
     }
 
     void MainWindow::apply_interface_shader_selection(const std::string &requested_name) {
+        if (effect_pack_enabled) {
+            return;
+        }
         if (requested_name.empty()) {
             return;
         }
@@ -2624,6 +2829,9 @@ namespace acmxvk {
     }
 
     [[nodiscard]] const std::vector<fs::path> *MainWindow::activePasses() const {
+        if (effect_pack_enabled && !configured_passes.empty()) {
+            return &configured_passes;
+        }
         if (playlist_enabled && !playlist.empty()) {
             return &playlist[playlist_index].shaders;
         }
@@ -2634,6 +2842,9 @@ namespace acmxvk {
     }
 
     [[nodiscard]] std::string_view MainWindow::activeShaderRole() const {
+        if (effect_pack_enabled) {
+            return "Effect pack";
+        }
         const std::vector<fs::path> *passes = activePasses();
         return passes != nullptr && !passes->empty() ? "Post-shader" : "Shader";
     }
@@ -2644,7 +2855,7 @@ namespace acmxvk {
             return {};
         }
 
-        std::string description = "Multipass: ";
+        std::string description = effect_pack_enabled ? "Effect pack passes: " : "Multipass: ";
         for (std::size_t index = 0; index < passes->size(); ++index) {
             if (index > 0U) {
                 description += ", ";
@@ -2655,7 +2866,7 @@ namespace acmxvk {
     }
 
     [[nodiscard]] std::string MainWindow::activePlaylistDescription() const {
-        if (!playlist_enabled || playlist.empty()) {
+        if (effect_pack_enabled || !playlist_enabled || playlist.empty()) {
             return {};
         }
         std::ostringstream description;
@@ -2930,7 +3141,7 @@ namespace acmxvk {
         updateHudFrameRate();
 
         const SDL_Color shader_color{0U, 96U, 255U, 255U};
-        std::string shader = effects_enabled ? fs::path(currentShader()).filename().string() : "bypassed";
+        std::string shader = effects_enabled ? (effect_pack_enabled ? active_effect_pack_id : fs::path(currentShader()).filename().string()) : "bypassed";
         if (shader_locked) {
             shader += " [locked]";
         }
@@ -3083,11 +3294,11 @@ namespace acmxvk {
         int y = TOP_MARGIN;
         if (options.display_filter) {
             const SDL_Color filter_color{255U, 0U, 255U, 255U};
-            std::string shader = effects_enabled ? fs::path(currentShader()).filename().string() : "bypassed";
+            std::string shader = effects_enabled ? (effect_pack_enabled ? active_effect_pack_id : fs::path(currentShader()).filename().string()) : "bypassed";
             printText(clipOverlayText(std::string(activeShaderRole()) + ": " + std::move(shader)), LEFT_MARGIN, y, filter_color);
             y += line_height;
 
-            if (playlist_enabled && !playlist.empty()) {
+            if (!effect_pack_enabled && playlist_enabled && !playlist.empty()) {
                 printText(clipOverlayText("Playlist: " + playlist[playlist_index].name), LEFT_MARGIN, y, filter_color);
                 y += line_height;
             }
@@ -4274,7 +4485,7 @@ namespace acmxvk {
 
     void MainWindow::updateAutopilot() {
         const std::uint64_t frame_advance = autopilotFrameAdvance();
-        if (shader_locked || !autopilot_enabled || !playlist_enabled || playlist.empty() || autopilot_interval_frames <= 0) {
+        if (shader_locked || effect_pack_enabled || !autopilot_enabled || !playlist_enabled || playlist.empty() || autopilot_interval_frames <= 0) {
             return;
         }
         const std::uint64_t remaining = static_cast<std::uint64_t>(std::max(0, autopilot_interval_frames - autopilot_counter));
@@ -4306,7 +4517,7 @@ namespace acmxvk {
     }
 
     void MainWindow::selectShader(int direction) {
-        if (shader_locked || shaders.size() < 2 || frame_sprite == nullptr) {
+        if (shader_locked || effect_pack_enabled || shaders.size() < 2 || frame_sprite == nullptr) {
             return;
         }
         const auto count = static_cast<std::ptrdiff_t>(shaders.size());
@@ -4326,7 +4537,7 @@ namespace acmxvk {
     }
 
     void MainWindow::selectPlaylistNode(int direction) {
-        if (shader_locked || playlist.empty()) {
+        if (shader_locked || effect_pack_enabled || playlist.empty()) {
             return;
         }
         const auto count = static_cast<std::ptrdiff_t>(playlist.size());
@@ -4343,12 +4554,14 @@ namespace acmxvk {
     [[nodiscard]] std::vector<fs::path> MainWindow::activeShaderPipeline() const {
         std::vector<fs::path> pipeline;
         if (effects_enabled) {
-            if (playlist_enabled && !playlist.empty()) {
+            if (effect_pack_enabled) {
+                pipeline = configured_passes;
+            } else if (playlist_enabled && !playlist.empty()) {
                 pipeline = playlist[playlist_index].shaders;
             } else if (multipass_enabled) {
                 pipeline = configured_passes;
             }
-            if (!currentShader().empty()) {
+            if (!effect_pack_enabled && !currentShader().empty()) {
                 pipeline.emplace_back(currentShader());
             }
         }
@@ -4373,7 +4586,7 @@ namespace acmxvk {
     }
 
     [[nodiscard]] fs::path MainWindow::directModelFragmentShader() const {
-        if (!model_3d_active || !model_initialized || !effects_enabled || hdr_input_precision_enabled || playlist_enabled || multipass_enabled || currentShader().empty()) {
+        if (!model_3d_active || !model_initialized || !effects_enabled || hdr_input_precision_enabled || effect_pack_enabled || playlist_enabled || multipass_enabled || currentShader().empty()) {
             return {};
         }
 

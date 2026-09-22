@@ -265,6 +265,10 @@ namespace acmxvk {
         const auto reload_path_end = std::find(std::begin(impl->selection->reload_shader_path), std::end(impl->selection->reload_shader_path), '\0');
         next.reload.path.assign(std::begin(impl->selection->reload_shader_path), reload_path_end);
 
+        next.effect_pack.request_sequence = impl->selection->effect_pack_sequence;
+        const auto effect_pack_path_end = std::find(std::begin(impl->selection->effect_pack_manifest_path), std::end(impl->selection->effect_pack_manifest_path), '\0');
+        next.effect_pack.manifest_path.assign(std::begin(impl->selection->effect_pack_manifest_path), effect_pack_path_end);
+
         state = std::move(next);
         return true;
     }

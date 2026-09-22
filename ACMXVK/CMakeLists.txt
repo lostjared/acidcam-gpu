@@ -1015,6 +1015,17 @@ if(BUILD_TESTING)
     add_test(NAME acmxvk_output_paths
         COMMAND acmxvk_output_paths_tests
     )
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../ACMX2/shader_selection_shm.hpp")
+        add_executable(acmxvk_interface_protocol_tests
+            interface_protocol_tests.cpp
+            interface_control.hpp
+            ../ACMX2/shader_selection_shm.hpp
+        )
+        acmxvk_enable_test_warnings(acmxvk_interface_protocol_tests)
+        add_test(NAME acmxvk_interface_protocol
+            COMMAND acmxvk_interface_protocol_tests
+        )
+    endif()
     add_executable(acmxvk_effect_pack_tests
         effect_pack_tests.cpp
         app/effect_pack.cpp
