@@ -108,6 +108,7 @@ app = project.QtProgram(
         "effect-pack-browser.cpp",
         "effect-pack-controls.cpp",
         "effect-pack-models.cpp",
+        "effect-pack-project.cpp",
         "effect-pack-transfer.cpp",
         "find-shader.cpp",
         "gpufilter.cpp",

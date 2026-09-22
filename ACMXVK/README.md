@@ -3191,6 +3191,17 @@ prints the compiler's complete failure diagnostic. Its ACMXVK Properties dialog
 can resolve `glslc` automatically or select a custom glslc-compatible
 executable; that selection is also passed to full Build and Fix Build runs.
 
+## Effect Packs
+
+Effect Packs are portable, self-contained shader setups selected from the Qt
+interface's **Playback → Effect Packs** browser. They can combine fragment and
+compute passes, friendly controls, history and spectrum resources, logical
+audio/MIDI mappings, and optional Deep Dream settings. Four buildable examples
+ship in [`effect-packs/`](effect-packs/). See the
+[`effect-pack format guide`](EFFECT_PACK_FORMAT.md) for authoring, building,
+project portability, model resolution, and troubleshooting. The normal full
+shader-library workflow remains available.
+
 ## Development note
 
 I have been using the **Codex CLI from OpenAI** as an

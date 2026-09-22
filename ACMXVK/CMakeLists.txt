@@ -1056,6 +1056,7 @@ if(BUILD_TESTING)
     )
     target_compile_definitions(acmxvk_effect_pack_build_tests PRIVATE
         ACMXVK_EFFECT_PACK_FIXTURE_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/tests/effect_packs"
+        ACMXVK_EXAMPLE_EFFECT_PACK_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/effect-packs"
         ACMXVK_TEST_GLSLC_EXECUTABLE="${GLSLC_EXECUTABLE}"
     )
     target_link_libraries(acmxvk_effect_pack_build_tests PRIVATE
@@ -1139,6 +1140,11 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/midi-examples/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/midi-examples")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/effect-packs/"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/effect-packs"
+        PATTERN ".acmxvk-build" EXCLUDE
+        PATTERN ".editor-preview" EXCLUDE
+        PATTERN "*.acmxvk-tmp-*" EXCLUDE)
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/models/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/models")
 if(WITH_DEEP_DREAM)

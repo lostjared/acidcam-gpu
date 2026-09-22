@@ -1,8 +1,10 @@
 #include "effect_pack_build.hpp"
 
 #include "../input_validation.hpp"
+#include "../version_info.hpp"
 #include "shader_compiler.hpp"
 
+#include <json/json.h>
 #include <mxvk/mxvk.hpp>
 
 #include <algorithm>
@@ -11,6 +13,8 @@
 #include <cstring>
 #include <exception>
 #include <fstream>
+#include <iomanip>
+#include <iterator>
 #include <mutex>
 #include <set>
 #include <sstream>
@@ -23,6 +27,28 @@ namespace acmxvk {
     namespace {
 
         namespace fs = std::filesystem;
+        constexpr int CACHE_FORMAT_VERSION = 2;
+        constexpr std::string_view SHADER_ABI = "acmxvk-effect-abi-1";
+        constexpr std::string_view VULKAN_TARGET = "vulkan1.0";
+
+        struct CacheFingerprints {
+            std::string source_hash;
+            std::string include_hash;
+            std::vector<std::string> pass_hashes;
+        };
+
+        void hash_bytes(std::uint64_t &hash, std::string_view bytes) {
+            for (const unsigned char byte : bytes) {
+                hash = (hash ^ byte) * 1099511628211ULL;
+            }
+            hash = (hash ^ 0U) * 1099511628211ULL;
+        }
+
+        std::string hash_hex(std::uint64_t hash) {
+            std::ostringstream output;
+            output << std::hex << std::setfill('0') << std::setw(16) << hash;
+            return output.str();
+        }
 
         [[nodiscard]] bool path_is_below(const fs::path &path, const fs::path &root) {
             const std::string relative = path.lexically_relative(root).generic_string();
@@ -81,6 +107,74 @@ namespace acmxvk {
                 collect_dependencies(include_path, root, visited, dependencies, depth + 1U);
             }
         }
+
+        [[nodiscard]] CacheFingerprints fingerprint_sources(const EffectPack &pack, const fs::path &root) {
+            std::set<std::string> source_paths;
+            std::set<std::string> include_paths;
+            std::unordered_set<std::string> visited;
+            std::vector<fs::path> dependencies;
+            std::vector<std::set<std::string>> per_pass_paths;
+            for (const fs::path &requested : pack.passes) {
+                const fs::path source = canonical_pack_file(requested, root, "effect-pack shader pass");
+                source_paths.insert(source.lexically_relative(root).generic_string());
+                std::unordered_set<std::string> pass_visited;
+                std::vector<fs::path> pass_dependencies;
+                collect_dependencies(source, root, pass_visited, pass_dependencies, 0);
+                std::set<std::string> paths;
+                for (const fs::path &dependency : pass_dependencies) {
+                    paths.insert(dependency.lexically_relative(root).generic_string());
+                }
+                per_pass_paths.push_back(std::move(paths));
+                collect_dependencies(source, root, visited, dependencies, 0);
+            }
+            for (const fs::path &dependency : dependencies) {
+                const std::string relative = dependency.lexically_relative(root).generic_string();
+                if (!source_paths.contains(relative)) {
+                    include_paths.insert(relative);
+                }
+            }
+            const auto fingerprint = [&root](const std::set<std::string> &paths) {
+                std::uint64_t hash = 14695981039346656037ULL;
+                for (const std::string &relative : paths) {
+                    if (fs::path(relative).extension() == ".spv") {
+                        input::validate_spirv_file(root / relative, "effect-pack cache dependency");
+                    } else {
+                        input::validate_text_file(root / relative, "effect-pack cache dependency");
+                    }
+                    std::ifstream file(root / relative, std::ios::binary);
+                    if (!file) {
+                        throw std::runtime_error("cannot hash effect-pack dependency: " + relative);
+                    }
+                    const std::string bytes(std::istreambuf_iterator<char>(file), {});
+                    hash_bytes(hash, relative);
+                    hash_bytes(hash, bytes);
+                }
+                return hash_hex(hash);
+            };
+            CacheFingerprints result{fingerprint(source_paths), fingerprint(include_paths), {}};
+            for (const auto &paths : per_pass_paths) {
+                result.pass_hashes.push_back(fingerprint(paths));
+            }
+            return result;
+        }
+
+        [[nodiscard]] Json::Value read_cache_metadata(const fs::path &build_root) {
+            const fs::path path = build_root / "effect-cache.json";
+            if (!fs::is_regular_file(path)) {
+                return {};
+            }
+            input::validate_text_file(path, "effect-pack cache manifest");
+            std::ifstream file(path);
+            Json::Value cache;
+            Json::CharReaderBuilder reader;
+            std::string errors;
+            if (!Json::parseFromStream(reader, file, &cache, &errors) || !cache.isObject()) {
+                return {};
+            }
+            return cache;
+        }
+
+        [[nodiscard]] bool cache_metadata_compatible(const EffectPack &pack, const Json::Value &cache) { return cache.isObject() && cache["format"].isString() && cache["version"].isInt() && cache["pack_id"].isString() && cache["shader_abi"].isString() && cache["vulkan_target"].isString() && cache["format"].asString() == "acmxvk-effect-cache" && cache["version"].asInt() == CACHE_FORMAT_VERSION && cache["pack_id"].asString() == pack.id && cache["shader_abi"].asString() == SHADER_ABI && cache["vulkan_target"].asString() == VULKAN_TARGET; }
 
         [[nodiscard]] bool dependencies_newer_than(const fs::path &source, const fs::path &manifest, const fs::path &destination, const fs::path &root) {
             if (!fs::is_regular_file(destination)) {
@@ -141,20 +235,34 @@ namespace acmxvk {
             }
         }
 
-        void write_cache_manifest(const EffectPack &pack, const EffectPackBuildResult &result) {
+        void write_cache_manifest(const EffectPack &pack, const EffectPackBuildResult &result, const CacheFingerprints &fingerprints, const std::string &compiler) {
             const fs::path destination = result.build_root / "effect-cache.json";
             fs::path temporary = destination;
             temporary += ".acmxvk-tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+            Json::Value cache(Json::objectValue);
+            cache["format"] = "acmxvk-effect-cache";
+            cache["version"] = CACHE_FORMAT_VERSION;
+            cache["pack_id"] = pack.id;
+            cache["shader_abi"] = std::string(SHADER_ABI);
+            cache["vulkan_target"] = std::string(VULKAN_TARGET);
+            cache["source_hash"] = fingerprints.source_hash;
+            cache["include_hash"] = fingerprints.include_hash;
+            cache["compiler"] = fs::path(compiler).filename().string();
+            cache["compiled_by_acmxvk"] = ACMXVK_VERSION_INFO;
+            for (const fs::path &pass : result.compiled_passes) {
+                cache["passes"].append(pass.lexically_relative(result.build_root).generic_string());
+            }
+            for (const std::string &hash : fingerprints.pass_hashes) {
+                cache["pass_hashes"].append(hash);
+            }
             {
                 std::ofstream output(temporary, std::ios::out | std::ios::trunc);
                 if (!output) {
                     throw std::runtime_error("unable to create effect-pack cache manifest");
                 }
-                output << "{\n    \"format\": \"acmxvk-effect-cache\",\n    \"version\": 1,\n    \"pack_id\": \"" << pack.id << "\",\n    \"passes\": [\n";
-                for (std::size_t index = 0; index < result.compiled_passes.size(); ++index) {
-                    output << "        \"" << result.compiled_passes[index].lexically_relative(result.build_root).generic_string() << '"' << (index + 1U < result.compiled_passes.size() ? ",\n" : "\n");
-                }
-                output << "    ]\n}\n";
+                Json::StreamWriterBuilder writer;
+                writer["indentation"] = "    ";
+                output << Json::writeString(writer, cache);
             }
             std::error_code error;
 #ifdef _WIN32
@@ -230,6 +338,10 @@ namespace acmxvk {
             prepared.push_back({source, destination, expected_stage});
         }
 
+        const CacheFingerprints fingerprints = fingerprint_sources(pack, root);
+        const Json::Value previous_cache = read_cache_metadata(result.build_root);
+        const bool cache_compatible = cache_metadata_compatible(pack, previous_cache);
+
         std::vector<ShaderBuildStatus> statuses(prepared.size(), ShaderBuildStatus::Current);
         std::unordered_map<std::string, std::size_t> first_pass_by_source;
         std::vector<std::size_t> work_indices;
@@ -254,7 +366,8 @@ namespace acmxvk {
                 try {
                     const std::size_t pass_index = work_indices[index];
                     const PreparedPass &pass = prepared[pass_index];
-                    const bool stale = options.force || dependencies_newer_than(pass.source, manifest, pass.destination, root);
+                    const bool pass_compatible = cache_compatible && previous_cache["pass_hashes"].isArray() && previous_cache["pass_hashes"].size() == prepared.size() && previous_cache["pass_hashes"][static_cast<Json::ArrayIndex>(pass_index)].isString() && previous_cache["pass_hashes"][static_cast<Json::ArrayIndex>(pass_index)].asString() == fingerprints.pass_hashes[pass_index];
+                    const bool stale = options.force || !pass_compatible || dependencies_newer_than(pass.source, manifest, pass.destination, root);
                     statuses[pass_index] = build_shader_file(options.glslc_executable, root, pass.source, pass.destination, stale);
                 } catch (...) {
                     const std::lock_guard lock(failure_mutex);
@@ -312,7 +425,7 @@ namespace acmxvk {
             }
         }
         validate_resources(pack, uses_history, uses_spectrum, uses_spectrum_history, uses_original_frame);
-        write_cache_manifest(pack, result);
+        write_cache_manifest(pack, result, fingerprints, options.glslc_executable);
         return result;
     }
 
@@ -327,6 +440,16 @@ namespace acmxvk {
         result.build_root = fs::weakly_canonical(root / ".acmxvk-build", error);
         if (error || !fs::is_directory(result.build_root) || fs::is_symlink(root / ".acmxvk-build") || !path_is_below(result.build_root, root)) {
             throw std::runtime_error("effect-pack compiled cache is unavailable");
+        }
+        const CacheFingerprints fingerprints = fingerprint_sources(pack, root);
+        const Json::Value cache_metadata = read_cache_metadata(result.build_root);
+        if (!cache_metadata_compatible(pack, cache_metadata) || !cache_metadata["source_hash"].isString() || !cache_metadata["include_hash"].isString() || cache_metadata["source_hash"].asString() != fingerprints.source_hash || cache_metadata["include_hash"].asString() != fingerprints.include_hash || !cache_metadata["pass_hashes"].isArray() || cache_metadata["pass_hashes"].size() != pack.passes.size()) {
+            throw std::runtime_error("effect-pack compiled cache is missing or incompatible with its sources or shader ABI");
+        }
+        for (std::size_t index = 0; index < fingerprints.pass_hashes.size(); ++index) {
+            if (!cache_metadata["pass_hashes"][static_cast<Json::ArrayIndex>(index)].isString() || cache_metadata["pass_hashes"][static_cast<Json::ArrayIndex>(index)].asString() != fingerprints.pass_hashes[index]) {
+                throw std::runtime_error("effect-pack compiled cache is incompatible with shader source or includes");
+            }
         }
 
         bool uses_history = false;

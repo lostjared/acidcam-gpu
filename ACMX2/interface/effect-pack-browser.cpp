@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <iterator>
 #include <memory>
 #include <utility>
 
@@ -166,15 +167,24 @@ EffectPackBrowser::EffectPackBrowser(QWidget *parent) : QDialog(parent) {
                     control_dialog = new EffectPackControls(this);
                     connect(control_dialog, &EffectPackControls::values_changed, this, [this](const QVector<EffectPackUniformValue> &values) {
                         if (!active_manifest.isEmpty() && control_manifest == active_manifest) {
+                            active_values = values;
+                            if (project_manifest == active_manifest) {
+                                project_values = control_dialog->project_values();
+                            }
                             emit uniform_values_changed(values);
                         }
                     });
                 }
                 const PackEntry &pack = packs[pending_row];
-                control_dialog->set_pack(pack.id, pack.name, pack.controls);
+                const bool project_pack = project_manifest == pack.manifest;
+                control_dialog->set_pack(pack.id, pack.name, pack.controls, !project_pack);
+                if (project_pack) {
+                    control_dialog->set_project_values(project_values);
+                }
                 control_manifest = pack.manifest;
                 active_manifest = pack.manifest;
-                emit activation_requested(pack.manifest, control_dialog->values(), pack.dream);
+                active_values = control_dialog->values();
+                emit activation_requested(pack.manifest, active_values, pack.dream);
                 if (!pack.controls.isEmpty() && has_active_pack()) {
                     control_dialog->show();
                     control_dialog->raise();
@@ -246,11 +256,19 @@ EffectPackBrowser::EffectPackBrowser(QWidget *parent) : QDialog(parent) {
             control_dialog = new EffectPackControls(this);
             connect(control_dialog, &EffectPackControls::values_changed, this, [this](const QVector<EffectPackUniformValue> &values) {
                 if (!active_manifest.isEmpty() && control_manifest == active_manifest) {
+                    active_values = values;
+                    if (project_manifest == active_manifest) {
+                        project_values = control_dialog->project_values();
+                    }
                     emit uniform_values_changed(values);
                 }
             });
         }
-        control_dialog->set_pack(packs[row].id, packs[row].name, packs[row].controls);
+        const bool project_pack = project_manifest == packs[row].manifest;
+        control_dialog->set_pack(packs[row].id, packs[row].name, packs[row].controls, !project_pack);
+        if (project_pack) {
+            control_dialog->set_project_values(project_values);
+        }
         control_manifest = packs[row].manifest;
         control_dialog->show();
         control_dialog->raise();
@@ -298,16 +316,137 @@ void EffectPackBrowser::set_session_snapshot(const QString &source_root, const Q
 
 bool EffectPackBrowser::has_active_pack() const { return !active_manifest.isEmpty(); }
 
+bool EffectPackBrowser::has_project_pack() const { return !project_manifest.isEmpty(); }
+
 void EffectPackBrowser::clear_active_pack() {
     active_manifest.clear();
+    active_values.clear();
     if (control_dialog) {
         control_dialog->hide();
     }
 }
 
+void EffectPackBrowser::clear_project_pack() {
+    clear_active_pack();
+    project_manifest.clear();
+    project_values = {};
+    project_model_file.clear();
+}
+
+EffectPackProjectState EffectPackBrowser::project_state() const {
+    EffectPackProjectState state;
+    if (active_manifest.isEmpty()) {
+        return state;
+    }
+    for (const PackEntry &pack : packs) {
+        if (pack.manifest != active_manifest) {
+            continue;
+        }
+        state.manifest_path = pack.manifest;
+        state.id = pack.id;
+        state.dream_model_file = pack.dream.enabled ? pack.dream.model_file : QString();
+        if (control_dialog && control_manifest == active_manifest) {
+            state.values = control_dialog->project_values();
+        } else {
+            for (int index = 0; index < pack.controls.size() && index < active_values.size(); ++index) {
+                state.values.insert(pack.controls[index].id, active_values[index].value);
+            }
+        }
+        return state;
+    }
+    return state;
+}
+
+bool EffectPackBrowser::restore_project_pack(const EffectPackProjectState &state, QString &error) {
+    if (!acmx2::validate_effect_pack_project_cache(state.manifest_path, state.id, error)) {
+        return false;
+    }
+    const QString manifest = QFileInfo(state.manifest_path).canonicalFilePath();
+    const QStringList model_roots = acmx2::effect_pack_model_roots(state.dream_model_file.isEmpty() ? configured_dream_model : state.dream_model_file);
+    const QVector<PackEntry> found = discover({QFileInfo(manifest).absolutePath()}, model_roots, dream_supported, audio_supported, midi_supported, midi_profile_selected, state.dream_model_file);
+    auto match = std::find_if(found.cbegin(), found.cend(), [&manifest](const PackEntry &pack) { return pack.manifest == manifest; });
+    if (match == found.cend() || !match->valid || match->id != state.id) {
+        error = match == found.cend() ? tr("Project effect pack is missing.") : tr("Project effect pack is unavailable: %1").arg(match->status);
+        return false;
+    }
+    for (auto it = state.values.constBegin(); it != state.values.constEnd(); ++it) {
+        const auto control = std::find_if(match->controls.cbegin(), match->controls.cend(), [&it](const EffectPackControlDefinition &item) { return item.id == it.key(); });
+        if (control == match->controls.cend() || !it.value().isDouble() || !std::isfinite(it.value().toDouble()) || it.value().toDouble() < control->minimum || it.value().toDouble() > control->maximum) {
+            error = tr("Project effect-pack control override is invalid: %1").arg(it.key());
+            return false;
+        }
+    }
+    clear_project_pack();
+    project_manifest = manifest;
+    project_values = state.values;
+    project_model_file = state.dream_model_file;
+    auto existing = std::find_if(packs.begin(), packs.end(), [&manifest](const PackEntry &pack) { return pack.manifest == manifest; });
+    if (existing == packs.end()) {
+        packs.push_back(*match);
+        existing = std::prev(packs.end());
+    } else {
+        *existing = *match;
+    }
+    if (!control_dialog) {
+        control_dialog = new EffectPackControls(this);
+        connect(control_dialog, &EffectPackControls::values_changed, this, [this](const QVector<EffectPackUniformValue> &values) {
+            if (!active_manifest.isEmpty() && control_manifest == active_manifest) {
+                active_values = values;
+                if (project_manifest == active_manifest) {
+                    project_values = control_dialog->project_values();
+                }
+                emit uniform_values_changed(values);
+            }
+        });
+    }
+    control_dialog->set_pack(existing->id, existing->name, existing->controls, false);
+    control_dialog->set_project_values(project_values);
+    control_manifest = manifest;
+    active_manifest = manifest;
+    active_values = control_dialog->values();
+    emit activation_requested(manifest, active_values, existing->dream);
+    status->setText(tr("Restored project effect pack: %1").arg(existing->name));
+    return true;
+}
+
+bool EffectPackBrowser::queue_project_pack_for_build(const EffectPackProjectState &state, QString &error) {
+    const QString manifest = QFileInfo(state.manifest_path).canonicalFilePath();
+    if (manifest.isEmpty()) {
+        error = tr("Project effect-pack manifest is missing.");
+        return false;
+    }
+    const QStringList model_roots = acmx2::effect_pack_model_roots(state.dream_model_file.isEmpty() ? configured_dream_model : state.dream_model_file);
+    const QVector<PackEntry> found = discover({QFileInfo(manifest).absolutePath()}, model_roots, dream_supported, audio_supported, midi_supported, midi_profile_selected, state.dream_model_file);
+    const auto match = std::find_if(found.cbegin(), found.cend(), [&manifest](const PackEntry &pack) { return pack.manifest == manifest; });
+    if (match == found.cend() || match->id != state.id || !match->valid) {
+        error = tr("Project effect-pack source is missing or invalid.");
+        return false;
+    }
+    for (auto it = state.values.constBegin(); it != state.values.constEnd(); ++it) {
+        const auto control = std::find_if(match->controls.cbegin(), match->controls.cend(), [&it](const EffectPackControlDefinition &item) { return item.id == it.key(); });
+        if (control == match->controls.cend() || !it.value().isDouble() || !std::isfinite(it.value().toDouble()) || it.value().toDouble() < control->minimum || it.value().toDouble() > control->maximum) {
+            error = tr("Project effect-pack control override is invalid: %1").arg(it.key());
+            return false;
+        }
+    }
+    clear_project_pack();
+    project_manifest = manifest;
+    project_values = state.values;
+    project_model_file = state.dream_model_file;
+    auto existing = std::find_if(packs.begin(), packs.end(), [&manifest](const PackEntry &pack) { return pack.manifest == manifest; });
+    if (existing == packs.end()) {
+        packs.push_back(*match);
+    } else {
+        *existing = *match;
+    }
+    populate();
+    status->setText(tr("Project effect pack needs a rebuild. Select it and click Build & Activate."));
+    return true;
+}
+
 QStringList EffectPackBrowser::search_roots() const { return configured_roots(); }
 
-QVector<EffectPackBrowser::PackEntry> EffectPackBrowser::discover(const QStringList &roots, const QStringList &model_roots, bool dream_supported, bool audio_supported, bool midi_supported, bool midi_profile_selected) {
+QVector<EffectPackBrowser::PackEntry> EffectPackBrowser::discover(const QStringList &roots, const QStringList &model_roots, bool dream_supported, bool audio_supported, bool midi_supported, bool midi_profile_selected, const QString &model_override) {
     QVector<PackEntry> entries;
     QSettings model_settings("LostSideDead", "acmx2");
     QSet<QString> paths;
@@ -407,7 +546,7 @@ QVector<EffectPackBrowser::PackEntry> EffectPackBrowser::discover(const QStringL
                 entry.dream.smoothing = dream.value(QStringLiteral("smoothing")).toInt(0);
                 entry.dream.gpu_filter_first = dream.value(QStringLiteral("gpu_filter_before_dream")).toBool(false);
                 if (!entry.dream_model_id.isEmpty()) {
-                    entry.dream.model_file = acmx2::resolve_effect_pack_model(entry.dream_model_id, model_roots, model_settings.value(model_override_key(entry.id)).toString());
+                    entry.dream.model_file = acmx2::resolve_effect_pack_model(entry.dream_model_id, model_roots, model_override.isEmpty() ? model_settings.value(model_override_key(entry.id)).toString() : model_override);
                 }
                 if (entry.dream.enabled && !dream_supported) {
                     entry.valid = false;
@@ -445,6 +584,15 @@ QVector<EffectPackBrowser::PackEntry> EffectPackBrowser::discover(const QStringL
                 const QFileInfo output(pack_root.filePath(QStringLiteral(".acmxvk-build/") + source_name + (source_name.endsWith(QStringLiteral(".spv")) ? QString() : QStringLiteral(".spv"))));
                 if (!source.isFile() || !output.isFile() || output.lastModified() < source.lastModified() || output.lastModified() < QFileInfo(canonical).lastModified()) {
                     cached = false;
+                }
+            }
+            if (cached) {
+                QFile cache_file(pack_root.filePath(QStringLiteral(".acmxvk-build/effect-cache.json")));
+                if (!cache_file.open(QIODevice::ReadOnly) || cache_file.size() > 1024 * 1024) {
+                    cached = false;
+                } else {
+                    const QJsonObject metadata = QJsonDocument::fromJson(cache_file.readAll()).object();
+                    cached = metadata.value(QStringLiteral("format")).toString() == QStringLiteral("acmxvk-effect-cache") && metadata.value(QStringLiteral("version")).toInt() == 2 && metadata.value(QStringLiteral("pack_id")).toString() == entry.id && metadata.value(QStringLiteral("shader_abi")).toString() == QStringLiteral("acmxvk-effect-abi-1") && metadata.value(QStringLiteral("vulkan_target")).toString() == QStringLiteral("vulkan1.0");
                 }
             }
             if (entry.status.isEmpty()) {
@@ -487,6 +635,16 @@ void EffectPackBrowser::refresh() {
         packs = watcher->result();
         watcher->deleteLater();
         scanning = false;
+        if (!project_manifest.isEmpty() && std::none_of(packs.cbegin(), packs.cend(), [this](const PackEntry &pack) { return pack.manifest == project_manifest; })) {
+            const QStringList model_roots = acmx2::effect_pack_model_roots(project_model_file.isEmpty() ? configured_dream_model : project_model_file);
+            const QVector<PackEntry> project_packs = discover({QFileInfo(project_manifest).absolutePath()}, model_roots, dream_supported, audio_supported, midi_supported, midi_profile_selected, project_model_file);
+            for (const PackEntry &pack : project_packs) {
+                if (pack.manifest == project_manifest) {
+                    packs.push_back(pack);
+                    break;
+                }
+            }
+        }
         populate();
         status->setText(transfer_message.isEmpty() ? tr("%1 effect packs found. Click an icon to activate.").arg(packs.size()) : transfer_message);
         transfer_message.clear();

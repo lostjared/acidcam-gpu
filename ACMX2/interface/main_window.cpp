@@ -4,6 +4,7 @@
 #include "custom_style.hpp"
 #include "deep-dream-settings.hpp"
 #include "effect-pack-browser.hpp"
+#include "effect-pack-project.hpp"
 #include "find-shader.hpp"
 #include "library-builder.hpp"
 #include "metadata-viewer.hpp"
@@ -471,7 +472,7 @@ namespace {
 
         const auto remove_local_keys = [](QJsonObject &settings) {
             for (auto it = settings.begin(); it != settings.end();) {
-                if (it.key().startsWith(QStringLiteral("last"), Qt::CaseInsensitive) || it.key().startsWith(QStringLiteral("backend/acmx2/")) || it.key().contains(QStringLiteral("/recent"), Qt::CaseInsensitive) || it.key().endsWith(QStringLiteral("/executable")) || it.key().endsWith(QStringLiteral("/shader_compiler_path"))) {
+                if (it.key().startsWith(QStringLiteral("last"), Qt::CaseInsensitive) || it.key().startsWith(QStringLiteral("effect_packs/")) || it.key().startsWith(QStringLiteral("backend/acmx2/")) || it.key().contains(QStringLiteral("/recent"), Qt::CaseInsensitive) || it.key().endsWith(QStringLiteral("/executable")) || it.key().endsWith(QStringLiteral("/shader_compiler_path"))) {
                     it = settings.erase(it);
                     continue;
                 }
@@ -504,6 +505,7 @@ namespace {
         QString playlist_file;
         QString output_file;
         QString output_extension;
+        EffectPackProjectState effect_pack;
         std::shared_ptr<ProjectProgress> progress;
         bool enable_3d = false;
         bool onnx_model_enabled = false;
@@ -559,6 +561,23 @@ namespace {
             if (project_library.isEmpty())
                 return {false, error};
             application_settings.insert(acmx2::backend_settings_key(acmx2::Backend::Acmxvk, "library"), project_library);
+        }
+        QJsonObject project_effect_pack;
+        if (!request.effect_pack.manifest_path.isEmpty()) {
+            QString relative_manifest;
+            if (!acmx2::bundle_effect_pack_project(request.effect_pack, project_root, relative_manifest, error))
+                return {false, error};
+            project_effect_pack.insert(QStringLiteral("id"), request.effect_pack.id);
+            project_effect_pack.insert(QStringLiteral("manifest"), relative_manifest);
+            project_effect_pack.insert(QStringLiteral("values"), request.effect_pack.values);
+            if (!request.effect_pack.dream_model_file.isEmpty()) {
+                const QString model = copy_resource(request.effect_pack.dream_model_file, QStringLiteral("resources/models"));
+                if (model.isEmpty())
+                    return {false, error};
+                if (QFileInfo::exists(request.effect_pack.dream_model_file + QStringLiteral(".json")) && copy_resource(request.effect_pack.dream_model_file + QStringLiteral(".json"), QStringLiteral("resources/models")).isEmpty())
+                    return {false, error};
+                project_effect_pack.insert(QStringLiteral("model"), model);
+            }
         }
         if (!request.video_file.isEmpty()) {
             const QString video = copy_resource(request.video_file, QStringLiteral("resources/media"));
@@ -694,6 +713,8 @@ namespace {
         root.insert("application_settings", application_settings);
         root.insert("shader_library", project_library);
         root.insert("selected_shader", request.selected_shader);
+        if (!project_effect_pack.isEmpty())
+            root.insert(QStringLiteral("effect_pack"), project_effect_pack);
         root.insert("repeat", request.repeat);
         QJsonObject runtime = request.runtime;
         runtime.insert("playlist_file", project_playlist);
@@ -2996,10 +3017,7 @@ void MainWindow::publishEffectPackUniformsToRunningProcess(const QVector<EffectP
 #endif
 }
 
-void MainWindow::menuEffectPacks() {
-    if (active_backend != acmx2::Backend::Acmxvk) {
-        return;
-    }
+void MainWindow::ensureEffectPackBrowser() {
     if (!effectPackBrowser) {
         effectPackBrowser = new EffectPackBrowser(this);
         connect(effectPackBrowser, &EffectPackBrowser::activation_requested, this, &MainWindow::publishEffectPackToRunningProcess);
@@ -3011,6 +3029,12 @@ void MainWindow::menuEffectPacks() {
     const int jobs = parallel_build_jobs(settings);
     effectPackBrowser->set_build_tools(executable_path, compiler, jobs > 0 ? jobs : 2);
     effectPackBrowser->set_runtime_context(deep_dream_available, deep_dream_model, audio_available, midi_available, midi_enabled && !midi_config_file.isEmpty());
+}
+
+void MainWindow::menuEffectPacks() {
+    if (active_backend != acmx2::Backend::Acmxvk)
+        return;
+    ensureEffectPackBrowser();
     QJsonObject snapshot;
     QString source_error;
     const bool source_library = !shader_path.isEmpty() && is_acmxvk_source_library(shader_path, source_error);
@@ -4418,6 +4442,10 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension,
         QMessageBox::information(this, tr("Save Project"), tr("Projects are available only with the ACMXVK backend."));
         return false;
     }
+    if (effectPackBrowser && effectPackBrowser->has_project_pack() && !effectPackBrowser->has_active_pack()) {
+        QMessageBox::warning(this, tr("Save Project"), tr("Rebuild and activate the project's effect pack before saving this project again."));
+        return false;
+    }
     const QFileInfo existing_output(output_file);
     const QString output_base_name = output_file.isEmpty() ? QFileInfo(path).completeBaseName() : untimestamped_output_base_name(existing_output.filePath());
     const QString project_output_path = QDir(QFileInfo(path).absolutePath()).filePath(QStringLiteral("output/%1.%2").arg(output_base_name, outputExtension));
@@ -4455,6 +4483,12 @@ bool MainWindow::savePreset(const QString &path, const QString &outputExtension,
     request.playlist_file = playlist_file_path;
     request.output_file = project_output_path;
     request.output_extension = outputExtension;
+    if (effectPackBrowser && effectPackBrowser->has_active_pack())
+        request.effect_pack = effectPackBrowser->project_state();
+    if (effectPackBrowser && effectPackBrowser->has_active_pack() && request.effect_pack.manifest_path.isEmpty()) {
+        QMessageBox::warning(this, tr("Save Project"), tr("The active effect pack could not be captured for this project."));
+        return false;
+    }
     request.enable_3d = enable_3d;
     request.onnx_model_enabled = onnx_model_enabled;
     request.deep_dream_enabled = deep_dream_enabled;
@@ -4957,6 +4991,26 @@ bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &
         if (row >= 0)
             selectShaderRow(row);
     }
+    if (effectPackBrowser)
+        effectPackBrowser->clear_project_pack();
+    if (portableProject && root.value(QStringLiteral("effect_pack")).isObject()) {
+        EffectPackProjectState pack_state;
+        QString pack_error;
+        if (acmx2::resolve_effect_pack_project_state(root.value(QStringLiteral("effect_pack")).toObject(), QFileInfo(path).absolutePath(), pack_state, pack_error)) {
+            ensureEffectPackBrowser();
+            if (!effectPackBrowser->restore_project_pack(pack_state, pack_error)) {
+                Log(tr("Project effect pack was not activated: %1").arg(pack_error));
+                QString recovery_error;
+                if (!effectPackBrowser->queue_project_pack_for_build(pack_state, recovery_error))
+                    Log(tr("Project effect pack cannot be rebuilt: %1").arg(recovery_error));
+            }
+        } else {
+            Log(tr("Project effect pack was not activated: %1").arg(pack_error));
+        }
+    }
+    if (!effectPackBrowser || !effectPackBrowser->has_active_pack()) {
+        publishEffectPackToRunningProcess({}, {}, regular_deep_dream_configuration());
+    }
     publishRuntimeSettingsToRunningProcess();
     publishMultipassShadersToRunningProcess();
     addRecentPreset(path);
@@ -5041,6 +5095,10 @@ void MainWindow::menuNewProject() {
     const auto answer = QMessageBox::warning(this, tr("New Project"), tr("Clear all ACMX interface settings and start a new project?\n\nThis keeps existing project files and source media, but clears the current project configuration and shader list."), QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
     if (answer != QMessageBox::Yes)
         return;
+
+    if (effectPackBrowser)
+        effectPackBrowser->clear_project_pack();
+    publishEffectPackToRunningProcess({}, {}, regular_deep_dream_configuration());
 
     QSettings interfaceSettings("LostSideDead", "acmx2");
     QSettings applicationSettings("LostSideDead");

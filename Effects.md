@@ -333,20 +333,21 @@ load without absolute paths, and the existing full-library workflow is unchanged
 | 2026-09-22 | 6 | Implemented; live GPU smoke test pending | Added local logical-model resolution and per-pack overrides in the Effect Pack browser, with missing-model and unsupported-build status before activation. Pack activation now publishes shader, uniform, and Deep Dream requests together; ACMXVK applies the authoritative pack Dream configuration through its existing validation path and rolls back shader state if model/layer validation fails. Returning to the normal library restores the previous Dream settings. Both affected builds and all configured tests pass, including new model-resolution tests. |
 | 2026-09-22 | 7 | Implemented; live hardware smoke test pending | Finalized portable audio sources and device-independent `slider_1`–`slider_4` MIDI inputs. Validated mapping targets/ranges and rejected competing live mappings. Pack activation switches audio/MIDI mappings with the shader pipeline; audio metrics drive mapped controls per frame, while existing user MIDI profiles translate hardware CCs into logical sliders. Leaving pack mode restores normal mapping behavior; unavailable capabilities are warned about without rejecting a visual pack. Updated the complete fixture and parser tests. |
 | 2026-09-22 | 8 | Implemented; cross-machine smoke test pending | Added interface Create from Current, Save Pack As, Export, and Import workflows with asynchronous resource copy and progress. New packs capture source pass order, custom-uniform definitions/values, inferred shader resource needs, and enabled Deep Dream settings; copies of existing packs retain their audio/MIDI mappings. The transfer copies only required shader passes/includes and an optional icon, rejects traversal and symlinks, uses collision-safe destination names, and excludes rendered output/logs/temp files. It deliberately omits `.acmxvk-build` because the current cache metadata lacks the hard compatibility keys required for portable reuse. Added transfer tests and Pcons source registration. |
-| 2026-09-22 | 9 | Not started | — |
-| 2026-09-22 | 10 | Not started | — |
+| 2026-09-22 | 9 | Implemented; cross-machine smoke test pending | `.acmxproj` now records the active pack ID, relative bundled manifest, per-project control values, and optional bundled Dream model. Save/Export copies the pack's required source, includes, icon, and existing compiled cache, preserving timestamps and excluding temporary files and rendered output. Load resolves paths relative to the project, validates the manifest/cache/dependencies, and restores the pack after the shader library; invalid packs leave the ordinary library active. Project overrides take precedence over per-user state without writing them into global pack settings. Added a portable round-trip and stale-cache/path-traversal test; all five interface tests pass. The current cache validation covers format, pass order, timestamps, and SPIR-V magic, but not yet ABI/Vulkan/source hashes, so cross-machine cache reuse remains provisional and a rebuild may be required. |
+| 2026-09-22 | 10 | Implemented on Linux; native-platform and live-GPU smoke tests pending | Added cache format 2 with hard shader-ABI/Vulkan-target/source/include/per-pass content hashes and separate compiler/ACMXVK provenance; old or incompatible caches rebuild rather than silently activate. Added cache tampering, same-timestamp source-change, duplicate uniform, future-schema, and four buildable example-pack tests. The examples cover fragment, compute/multipass, history, original-frame, spectrum/audio, device-independent MIDI, and opt-in Deep Dream. CMake/Pcons install the examples, the interface can offer an incompatible project pack for rebuild, and the format guide and release notes cover authoring, project portability, migration, and troubleshooting. Linux ACMXVK and interface builds and all 11 + 5 configured tests pass. Native macOS/Windows builds and live GPU/audio/MIDI switching still require device-side validation. |
 
 ## Current status
 
-Increments 4–8 are implemented. The Qt interface and ACMXVK builds pass,
-all four interface tests and all eleven ACMXVK tests pass. Repeated pass paths
+All ten planned increments are implemented. The Linux ACMXVK engine and Qt
+interface build; all eleven engine and five interface tests pass. Repeated pass paths
 remain in the pipeline, with a single compile per unique source. Pack controls
 restore their saved state on return, and pack Dream settings use locally
 resolved models. Failed Dream activation preserves the previously active
 effect. A manual running-engine GPU smoke test of switching, live control
 edits, Dream model changes, audio input, and MIDI hardware is still pending.
 The new authoring/export workflow is tested with a portable transfer fixture,
-but moving a pack between computers is not yet manually tested. Cache
-compatibility metadata remains a planned follow-up before compiled caches
-are treated as portable export artifacts. Increment 9 will integrate packs
-with `.acmxproj` sessions.
+but moving a pack between computers is not yet manually tested. Cache format 2
+adds hard compatibility metadata, and project bundles retain pack sources so
+users can rebuild an incompatible cache on the destination computer. Native
+macOS/Windows builds and live GPU, audio, and MIDI smoke tests remain release
+validation work rather than another planned increment.

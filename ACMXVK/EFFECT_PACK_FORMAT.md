@@ -2,9 +2,9 @@
 
 This document defines version 1 of the portable ACMXVK effect-pack manifest.
 Parsing, discovery, pack-local compilation, cache validation, and live runtime
-activation are implemented. The interface also supports pack authoring and
-folder transfer. The remaining project integration and hardening work is
-tracked in [`../Effects.md`](../Effects.md).
+activation are implemented. The interface supports pack authoring, folder
+transfer, and portable `.acmxproj` integration. Progress and platform-test
+status are tracked in [`../Effects.md`](../Effects.md).
 
 ## Directory layout
 
@@ -51,8 +51,7 @@ Stable Diffusion is intentionally not part of the effect-pack format. A
 
 `requires` may contain the Boolean fields `history`, `spectrum`,
 `spectrum_history`, and `original_frame`. Missing fields default to `false`.
-Later increments validate these declarations against the compiled shader
-pipeline.
+The builder validates these declarations against the compiled shader pipeline.
 
 ## Controls
 
@@ -147,8 +146,18 @@ resource paths. Repeated shader pass paths are permitted and retain their order.
 Errors identify the failing field or array entry. Parsing creates an in-memory
 value only and never changes renderer state.
 
-See `tests/effect_packs/complete/effect.json` for a complete non-rendering
-version 1 example.
+See `tests/effect_packs/complete/effect.json` for a complete parser fixture and
+[`effect-packs/`](effect-packs/) for four buildable examples:
+
+- `prism-fold`: fragment-only symmetry, original-frame blend, logical MIDI slider;
+- `echo-mosaic`: history/original-frame two-pass effect;
+- `spectrum-bloom`: compute plus fragment, spectrum, audio mapping, logical MIDI slider;
+- `dream-glass`: fragment effect with VGG16 Dream settings (requires a local model and a Deep Dream-enabled build).
+
+The example packs contain no model binaries or absolute paths. CMake and Pcons
+install them beneath `share/acmxvk/effect-packs`; the interface finds this
+directory automatically in an installed layout. In a source checkout, use
+**Playback → Effect Packs → Add Folder** and choose `ACMXVK/effect-packs`.
 
 To build one pack from a terminal, run
 `acmxvk --build-effect-pack /path/to/effect.json --glslc /path/to/glslc --parallel 2`.
@@ -177,13 +186,16 @@ icon. They reject paths that escape the source root and never copy rendered
 outputs, logs, or temporary files. Transfer requires GLSL `.frag` or `.comp`
 passes; SPIR-V-only packs need source shaders before they can be exported.
 
-Portable exports currently omit `.acmxvk-build`: the existing cache manifest
-does not yet contain all required shader-ABI, Vulkan-target, source, and
-recursive-include hashes. Rebuild the imported pack before activation; the
-browser's **Build & Activate** action does this automatically. Compatible
-compiled-cache transfer will be enabled only after the required hard keys
-are present and checked, without making compiler or ACMXVK patch versions
-unconditional invalidation keys.
+Standalone **Export...** and **Import...** omit `.acmxvk-build`, so use
+**Build & Activate** after transfer. Portable `.acmxproj` Save/Export includes
+the active pack's compiled cache when it is compatible; rebuild an old cache
+before saving a project with that pack active. Loading validates its
+version, shader ABI, Vulkan target, source and recursive-include hashes,
+per-pass hashes, pass order, and freshness before activation. If a cache is
+incompatible on another computer, rebuild the bundled pack from its source
+with **Build & Activate**. Project control overrides are saved in the project;
+per-user pack values remain separate. A project override wins over the user's
+saved value, which wins over the manifest default.
 
 ## Discovery and compiled cache
 
@@ -205,9 +217,13 @@ dreaming-crystal/
             kaleidoscope.frag.spv
 ```
 
-The source directory structure and pass order are preserved. A shader is
-rebuilt when its source, any recursively included file, or `effect.json` is
-newer than its valid SPIR-V output. Otherwise it remains current. Builds use
+The source directory structure and pass order are preserved. Cache format 2
+records `shader_abi`, `vulkan_target`, `source_hash`, `include_hash`, and
+`pass_hashes` as hard compatibility keys. `compiler` and
+`compiled_by_acmxvk` are provenance only; a patch-version change does not
+invalidate an otherwise compatible cache. A pass is rebuilt when its content
+hash changes or its source, recursive includes, or `effect.json` is newer
+than its valid SPIR-V output. Otherwise it remains current. Builds use
 the same atomic compiler/install path as the full shader-library builder and
 may run up to 64 jobs. Interrupted `.acmxvk-tmp-*`, live-preview temporary
 files, and `.editor-preview` contents are removed before a build.
@@ -233,3 +249,22 @@ crossfade path where possible. If validation, resource creation, or pipeline
 attachment fails, the previous pipeline and uniform state are restored. Sending
 an empty pack path leaves pack mode and restores the normal shader workflow that
 was active before the first pack was selected.
+
+## Version migration and troubleshooting
+
+The `effect.json` schema is version 1. Unknown schema versions and fields are
+rejected rather than silently interpreted. A future schema revision must use a
+new version number and an explicit migration step that preserves pass order,
+control IDs, logical MIDI inputs, and relative resource paths. Cache format 1
+is not accepted by the format-2 runtime: run **Build & Activate** once to
+regenerate it. Cache provenance fields do not require an exact compiler or
+ACMXVK patch-version match; only hard compatibility keys do.
+
+If a pack is shown as **Needs build**, check that `glslc` is configured, then
+use **Build & Activate**. A missing Dream model makes only Dream-enabled packs
+unavailable; choose a local model or disable Dream in a copy of the pack. If
+audio or MIDI is unavailable, the visual pipeline still works with static
+control defaults. A rejected pack request leaves the previously running
+pipeline active. SPIR-V-only packs may run locally but standalone Export
+requires GLSL source files. Shader errors use the pack-local filenames, so
+inspect `effect.json` and the listed pass under its `shaders/` directory.

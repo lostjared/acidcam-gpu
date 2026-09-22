@@ -67,6 +67,8 @@ running a session.
   resolution
 - Fragment/compute multipass chains, named playlists, crossfades, shader
   randomization, and random autopilot
+- ACMXVK [Effect Packs](ACMXVK/EFFECT_PACK_FORMAT.md): shareable curated shader
+  setups with friendly controls, optional Dream settings, and project recall
 - Built-in shader editor with diagnostics, live preview/reload, Find in Files,
   snippets, and custom-uniform controls
 - Texture history, FFT and spectrum history, audio-reactive time, live or

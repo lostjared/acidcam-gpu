@@ -172,6 +172,11 @@ namespace acmx2 {
                 result.error = QStringLiteral("Could not copy pack resource: %1").arg(relative);
                 return result;
             }
+            QFile copied(destination);
+            if (!copied.open(QIODevice::ReadWrite) || !copied.setFileTime(QFileInfo(QDir(root).filePath(relative)).lastModified(), QFileDevice::FileModificationTime)) {
+                result.error = QStringLiteral("Could not preserve pack resource timestamp: %1").arg(relative);
+                return result;
+            }
             if (progress) {
                 progress(++current, total);
             }

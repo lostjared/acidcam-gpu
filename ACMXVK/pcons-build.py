@@ -437,6 +437,8 @@ def install_tree(destination: str, source_dir: Path) -> list[Target]:
     """Install a directory's contents without adding its basename twice."""
     files_by_destination: dict[Path, list[Path]] = {}
     for source in sorted(source_dir.rglob("*")):
+        if any(part in (".acmxvk-build", ".editor-preview") or ".acmxvk-tmp-" in part for part in source.relative_to(source_dir).parts):
+            continue
         if source.is_file():
             relative_parent = source.relative_to(source_dir).parent
             target_dir = Path(destination) / relative_parent
@@ -462,5 +464,6 @@ installed: list[Target] = [
 ]
 installed.extend(install_tree("share/acmxvk/playlists", project_dir / "playlists"))
 installed.extend(install_tree("share/acmxvk/midi-examples", project_dir / "midi-examples"))
+installed.extend(install_tree("share/acmxvk/effect-packs", project_dir / "effect-packs"))
 installed.extend(install_tree("share/acmxvk/models", project_dir / "models"))
 project.Alias("install", *installed)

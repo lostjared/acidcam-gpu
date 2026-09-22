@@ -69,5 +69,18 @@ int main(int argc, char **argv) {
         std::cerr << "reset defaults were not persisted\n";
         return 6;
     }
+    dialog.set_pack("org.acmxvk.test.first", "First", first, false);
+    dialog.set_project_values(QJsonObject{{QStringLiteral("symmetry"), 12.0}});
+    if (dialog.values()[0].value != 12.0 || dialog.values()[1].value != 0.2) {
+        std::cerr << "project override did not take precedence over defaults\n";
+        return 7;
+    }
+    dialog.findChildren<QDoubleSpinBox *>()[0]->setValue(14.0);
+    dialog.set_pack("org.acmxvk.test.second", "Second", second);
+    dialog.set_pack("org.acmxvk.test.first", "First", first);
+    if (dialog.values()[0].value != 6.0) {
+        std::cerr << "project override leaked into the user's saved pack state\n";
+        return 8;
+    }
     return 0;
 }

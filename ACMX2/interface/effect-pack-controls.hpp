@@ -2,6 +2,7 @@
 #define ACMX2_INTERFACE_EFFECT_PACK_CONTROLS_HPP
 
 #include <QDialog>
+#include <QJsonObject>
 #include <QString>
 #include <QVector>
 
@@ -30,7 +31,9 @@ class EffectPackControls : public QDialog {
   public:
     explicit EffectPackControls(QWidget *parent = nullptr);
     ~EffectPackControls() override;
-    void set_pack(const QString &id, const QString &name, const QVector<EffectPackControlDefinition> &definitions);
+    void set_pack(const QString &id, const QString &name, const QVector<EffectPackControlDefinition> &definitions, bool persist_user_values = true);
+    void set_project_values(const QJsonObject &values);
+    QJsonObject project_values() const;
     QVector<EffectPackUniformValue> values() const;
 
   signals:
@@ -45,6 +48,7 @@ class EffectPackControls : public QDialog {
     QString pack_name;
     QVector<EffectPackControlDefinition> controls;
     QVector<double> control_values;
+    bool persist_user_values = true;
     QVBoxLayout *rows_layout = nullptr;
     QWidget *rows_widget = nullptr;
     QTimer *save_timer = nullptr;

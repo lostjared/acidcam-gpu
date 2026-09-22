@@ -68,7 +68,7 @@ EffectPackControls::EffectPackControls(QWidget *parent) : QDialog(parent) {
 
 EffectPackControls::~EffectPackControls() { save_values(); }
 
-void EffectPackControls::set_pack(const QString &id, const QString &name, const QVector<EffectPackControlDefinition> &definitions) {
+void EffectPackControls::set_pack(const QString &id, const QString &name, const QVector<EffectPackControlDefinition> &definitions, bool persist_user_values) {
     if (save_timer->isActive()) {
         save_timer->stop();
         save_values();
@@ -76,9 +76,10 @@ void EffectPackControls::set_pack(const QString &id, const QString &name, const 
     pack_id = id;
     pack_name = name;
     controls = definitions;
+    this->persist_user_values = persist_user_values;
     control_values.clear();
     QSettings settings("LostSideDead", "acmx2");
-    const QVariantMap saved = settings.value(settings_key(pack_id)).toMap();
+    const QVariantMap saved = persist_user_values ? settings.value(settings_key(pack_id)).toMap() : QVariantMap{};
     for (const EffectPackControlDefinition &control : controls) {
         bool valid = false;
         const double restored = saved.value(control.id).toDouble(&valid);
@@ -86,6 +87,24 @@ void EffectPackControls::set_pack(const QString &id, const QString &name, const 
     }
     setWindowTitle(tr("%1 — Effect Pack Controls").arg(pack_name));
     rebuild();
+}
+
+void EffectPackControls::set_project_values(const QJsonObject &values) {
+    for (int index = 0; index < controls.size(); ++index) {
+        const QJsonValue value = values.value(controls[index].id);
+        if (value.isDouble() && std::isfinite(value.toDouble())) {
+            control_values[index] = std::clamp(value.toDouble(), controls[index].minimum, controls[index].maximum);
+        }
+    }
+    rebuild();
+}
+
+QJsonObject EffectPackControls::project_values() const {
+    QJsonObject result;
+    for (int index = 0; index < controls.size(); ++index) {
+        result.insert(controls[index].id, control_values[index]);
+    }
+    return result;
 }
 
 QVector<EffectPackUniformValue> EffectPackControls::values() const {
@@ -111,7 +130,7 @@ void EffectPackControls::set_value(int index, double value) {
 }
 
 void EffectPackControls::save_values() const {
-    if (pack_id.isEmpty()) {
+    if (pack_id.isEmpty() || !persist_user_values) {
         return;
     }
     QVariantMap saved;

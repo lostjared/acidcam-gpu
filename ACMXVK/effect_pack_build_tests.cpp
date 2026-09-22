@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -53,6 +54,11 @@ namespace {
         output << text;
     }
 
+    std::string read_text(const fs::path &path) {
+        std::ifstream input(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(input), {}};
+    }
+
 } // namespace
 
 int main() {
@@ -89,11 +95,58 @@ int main() {
         try {
             static_cast<void>(acmxvk::load_effect_pack_cache(pack));
         } catch (const std::exception &error) {
-            rejected_stale_cache = std::string(error.what()).find("missing or stale") != std::string::npos;
+            rejected_stale_cache = std::string(error.what()).find("incompatible") != std::string::npos || std::string(error.what()).find("missing or stale") != std::string::npos;
         }
         expect(rejected_stale_cache, "stale effect-pack cache was accepted for activation");
         const acmxvk::EffectPackBuildResult include_update = acmxvk::build_effect_pack(pack, options);
         expect(include_update.compiled == 1 && include_update.current == 2, "changing an include did not rebuild exactly its dependent pass");
+
+        const fs::path cache_manifest = build_root / "effect-cache.json";
+        std::string metadata = read_text(cache_manifest);
+        const std::string abi = "acmxvk-effect-abi-1";
+        const std::size_t abi_position = metadata.find(abi);
+        expect(abi_position != std::string::npos, "cache ABI metadata is missing");
+        metadata.replace(abi_position, abi.size(), "acmxvk-effect-abi-0");
+        write_text(cache_manifest, metadata);
+        bool rejected_abi = false;
+        try {
+            static_cast<void>(acmxvk::load_effect_pack_cache(pack));
+        } catch (const std::exception &) {
+            rejected_abi = true;
+        }
+        expect(rejected_abi, "incompatible cache ABI was accepted");
+        const acmxvk::EffectPackBuildResult abi_update = acmxvk::build_effect_pack(pack, options);
+        expect(abi_update.compiled == 3, "incompatible cache ABI did not rebuild all passes");
+
+        metadata = read_text(cache_manifest);
+        const std::string target = "vulkan1.0";
+        const std::size_t target_position = metadata.find(target);
+        expect(target_position != std::string::npos, "cache Vulkan target metadata is missing");
+        metadata.replace(target_position, target.size(), "vulkan9.9");
+        write_text(cache_manifest, metadata);
+        bool rejected_target = false;
+        try {
+            static_cast<void>(acmxvk::load_effect_pack_cache(pack));
+        } catch (const std::exception &) {
+            rejected_target = true;
+        }
+        expect(rejected_target, "incompatible Vulkan target was accepted");
+        const acmxvk::EffectPackBuildResult target_update = acmxvk::build_effect_pack(pack, options);
+        expect(target_update.compiled == 3, "incompatible Vulkan target did not rebuild all passes");
+
+        const fs::path source = pack_root / "shaders/first.frag";
+        const fs::file_time_type original_time = fs::last_write_time(source);
+        write_text(source, read_text(source) + "\n// cache hash must detect this change\n");
+        fs::last_write_time(source, original_time);
+        bool rejected_same_time_edit = false;
+        try {
+            static_cast<void>(acmxvk::load_effect_pack_cache(pack));
+        } catch (const std::exception &) {
+            rejected_same_time_edit = true;
+        }
+        expect(rejected_same_time_edit, "changed source with preserved timestamp was accepted");
+        const acmxvk::EffectPackBuildResult hashed_update = acmxvk::build_effect_pack(pack, options);
+        expect(hashed_update.compiled == 1 && hashed_update.current == 2, "source hash change did not rebuild only the affected pass");
 
         const fs::path repeated_root = temporary.path / "repeated-pass";
         copy_directory(fixtures / "build-three", repeated_root);
@@ -127,6 +180,15 @@ int main() {
         const acmxvk::EffectPackCatalog duplicate_catalog = acmxvk::discover_effect_packs({duplicates});
         expect(duplicate_catalog.packs.size() == 1, "duplicate effect-pack IDs were not collapsed");
         expect(duplicate_catalog.diagnostics.size() == 1 && duplicate_catalog.diagnostics.front().message.find("duplicate effect-pack ID") != std::string::npos, "duplicate effect-pack ID diagnostic is missing");
+
+        for (const std::string name : {"prism-fold", "echo-mosaic", "spectrum-bloom", "dream-glass"}) {
+            const fs::path example_root = temporary.path / name;
+            copy_directory(fs::path(ACMXVK_EXAMPLE_EFFECT_PACK_DIRECTORY) / name, example_root);
+            const acmxvk::EffectPack example = acmxvk::load_effect_pack(example_root / "effect.json");
+            const acmxvk::EffectPackBuildResult built = acmxvk::build_effect_pack(example, options);
+            expect(built.compiled_passes.size() == example.passes.size(), "example pack did not build every pass: " + name);
+            expect(acmxvk::load_effect_pack_cache(example).compiled_passes.size() == example.passes.size(), "example pack cache was rejected: " + name);
+        }
     } catch (const std::exception &error) {
         std::cerr << "effect-pack build test failed: " << error.what() << '\n';
         return 1;

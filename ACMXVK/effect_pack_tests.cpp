@@ -97,6 +97,11 @@ int main() {
         const acmxvk::EffectPack repeated = acmxvk::load_effect_pack(manifest);
         expect(repeated.passes.size() == 3 && repeated.passes[0] == repeated.passes[1] && repeated.passes[2].filename() == "sharpen.frag", "repeated shader passes lost their order");
 
+        write_text(manifest, R"({"format":"acmxvk-effect-pack","version":1,"id":"test.uniform","name":"Duplicate Uniform","passes":["test.frag"],"controls":[{"id":"one","label":"One","uniform":"amount","minimum":0,"maximum":1,"step":0.1,"default":0.5},{"id":"two","label":"Two","uniform":"amount","minimum":0,"maximum":1,"step":0.1,"default":0.5}]})");
+        expect_rejected(manifest, "controls[1].uniform");
+        write_text(manifest, R"({"format":"acmxvk-effect-pack","version":2,"id":"test.future","name":"Future","passes":["test.frag"]})");
+        expect_rejected(manifest, "version");
+
         std::string excessive = R"({"format":"acmxvk-effect-pack","version":1,"id":"test.passes","name":"Passes","passes":[)";
         for (std::size_t index = 0; index <= acmxvk::MAX_EFFECT_PACK_PASSES; ++index) {
             if (index != 0) {

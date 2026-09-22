@@ -188,6 +188,7 @@ class MainWindow : public QMainWindow {
     bool savePresetSynchronously(const QString &path);
     bool importPreset(const QString &path);
     bool applyProjectDocument(const QString &path, const QJsonDocument &document);
+    void ensureEffectPackBrowser();
     void set_current_project_path(const QString &path);
     void addRecentPreset(const QString &path);
     void updateRecentPresetsMenu();

@@ -3,6 +3,7 @@
 
 #include "deep-dream-settings.hpp"
 #include "effect-pack-controls.hpp"
+#include "effect-pack-project.hpp"
 #include "effect-pack-transfer.hpp"
 #include <QByteArray>
 #include <QDialog>
@@ -29,7 +30,12 @@ class EffectPackBrowser : public QDialog {
     void set_session_snapshot(const QString &source_root, const QJsonObject &manifest);
     void refresh();
     bool has_active_pack() const;
+    bool has_project_pack() const;
     void clear_active_pack();
+    void clear_project_pack();
+    EffectPackProjectState project_state() const;
+    bool restore_project_pack(const EffectPackProjectState &state, QString &error);
+    bool queue_project_pack_for_build(const EffectPackProjectState &state, QString &error);
 
   signals:
     void activation_requested(const QString &manifest_path, const QVector<EffectPackUniformValue> &values, const DeepDreamConfiguration &dream);
@@ -50,7 +56,7 @@ class EffectPackBrowser : public QDialog {
         bool valid = false;
     };
 
-    static QVector<PackEntry> discover(const QStringList &roots, const QStringList &model_roots, bool dream_supported, bool audio_supported, bool midi_supported, bool midi_profile_selected);
+    static QVector<PackEntry> discover(const QStringList &roots, const QStringList &model_roots, bool dream_supported, bool audio_supported, bool midi_supported, bool midi_profile_selected, const QString &model_override = {});
     QStringList search_roots() const;
     void populate();
     void update_details(int row);
@@ -83,6 +89,10 @@ class EffectPackBrowser : public QDialog {
     QString executable_path;
     QString compiler_path;
     QString active_manifest;
+    QVector<EffectPackUniformValue> active_values;
+    QString project_manifest;
+    QJsonObject project_values;
+    QString project_model_file;
     QString control_manifest;
     QString configured_dream_model;
     QString session_source_root;
