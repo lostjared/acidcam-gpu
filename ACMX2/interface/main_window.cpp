@@ -218,6 +218,13 @@ namespace {
                 return {};
             }
             const QString absolute_source = source.absoluteFilePath();
+            const QString project_relative_source = QDir(project_root).relativeFilePath(absolute_source);
+            if (project_relative_source != QStringLiteral("..") && !project_relative_source.startsWith(QStringLiteral("../")) && !project_relative_source.startsWith(QStringLiteral("..\\"))) {
+                // Saving an open project should keep resources that are already
+                // inside its bundle in place instead of copying a new numbered
+                // duplicate on every save.
+                return project_relative_source;
+            }
             for (auto it = copied_paths.constBegin(); it != copied_paths.constEnd(); ++it) {
                 const QFileInfo copied_source(it.key());
                 if (copied_source.isDir() && QDir(it.key()).relativeFilePath(absolute_source) != QStringLiteral("..") && !QDir(it.key()).relativeFilePath(absolute_source).startsWith(QStringLiteral("../"))) {
@@ -1430,9 +1437,11 @@ void MainWindow::initControls() {
     newProjectAction->setShortcut(QKeySequence::New);
     connect(newProjectAction, &QAction::triggered, this, &MainWindow::menuNewProject);
     projectMenu->addSeparator();
-    QAction *savePresetAction = projectMenu->addAction(tr("Save Project..."));
-    savePresetAction->setShortcut(QKeySequence("Ctrl+Shift+P"));
-    connect(savePresetAction, &QAction::triggered, this, &MainWindow::menuSavePreset);
+    QAction *saveProjectAction = projectMenu->addAction(tr("Save Project"));
+    saveProjectAction->setShortcut(QKeySequence::Save);
+    connect(saveProjectAction, &QAction::triggered, this, &MainWindow::menuSaveProject);
+    QAction *saveProjectAsAction = projectMenu->addAction(tr("Save Project As..."));
+    connect(saveProjectAsAction, &QAction::triggered, this, &MainWindow::menuSaveProjectAs);
     QAction *exportProjectAction = projectMenu->addAction(tr("Export Project..."));
     connect(exportProjectAction, &QAction::triggered, this, &MainWindow::menuExportProject);
     QAction *importPresetAction = projectMenu->addAction(tr("Load Project..."));
@@ -4750,7 +4759,23 @@ bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &
     return true;
 }
 
-void MainWindow::menuSavePreset() {
+void MainWindow::menuSaveProject() {
+    if (active_backend != acmx2::Backend::Acmxvk)
+        return;
+    if (current_project_path.isEmpty()) {
+        menuSaveProjectAs();
+        return;
+    }
+
+    QString outputFormat = QFileInfo(output_file).suffix().toLower();
+    if (outputFormat.isEmpty())
+        outputFormat = QFileInfo(project_output_filename).suffix().toLower();
+    if (outputFormat.isEmpty())
+        outputFormat = QStringLiteral("mp4");
+    savePreset(current_project_path, outputFormat);
+}
+
+void MainWindow::menuSaveProjectAs() {
     if (active_backend != acmx2::Backend::Acmxvk)
         return;
     const QString baseDirectory = QFileDialog::getExistingDirectory(this, tr("Choose Project Location"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));

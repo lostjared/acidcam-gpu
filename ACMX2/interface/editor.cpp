@@ -1264,6 +1264,11 @@ void TextEditor::init() {
 
     fileMenu->addSeparator();
 
+    QAction *previewAction = fileMenu->addAction("Compile &Preview");
+    previewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
+
+    fileMenu->addSeparator();
+
     QAction *closeAction = fileMenu->addAction("&Close");
     closeAction->setShortcut(QKeySequence::Close);
 
@@ -1439,6 +1444,7 @@ void TextEditor::init() {
 
     connect(saveAction, &QAction::triggered, this, &TextEditor::saveContents);
     connect(saveAsAction, &QAction::triggered, this, &TextEditor::saveAs);
+    connect(previewAction, &QAction::triggered, this, &TextEditor::requestPreview);
     connect(closeAction, &QAction::triggered, this, &TextEditor::close);
     connect(previewButton, &QPushButton::clicked, this, &TextEditor::requestPreview);
     connect(saveApplyButton, &QPushButton::clicked, this, &TextEditor::saveContents);

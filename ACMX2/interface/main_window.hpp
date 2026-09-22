@@ -109,7 +109,8 @@ class MainWindow : public QMainWindow {
     void menuCustomUniforms();
     void menuUniformReference();
     void menuNewProject();
-    void menuSavePreset();
+    void menuSaveProject();
+    void menuSaveProjectAs();
     void menuExportProject();
     void menuImportPreset();
     void menuToggleDisplayFilter(bool checked);
