@@ -1959,8 +1959,10 @@ namespace acmxvk {
         interface_last_sequence = state.sequence;
         interface_last_effect_pack_sequence = state.effect_pack.request_sequence;
         bool effect_pack_request_accepted = true;
+        bool effect_pack_request_processed = false;
         if (!state.effect_pack.manifest_path.empty() || effect_pack_enabled) {
-            effect_pack_request_accepted = apply_interface_effect_pack_state(state.effect_pack);
+            effect_pack_request_processed = true;
+            effect_pack_request_accepted = apply_interface_effect_pack_state(state.effect_pack, state.deep_dream);
         }
         apply_interface_shader_selection(state.selected_shader_name);
         apply_interface_multipass_state(state.multipass);
@@ -1971,7 +1973,9 @@ namespace acmxvk {
         apply_interface_playback_state(state.playback, false);
         apply_interface_overlay_state(state.overlay, false);
         apply_interface_gpu_filter_state(state.gpu_filters, false);
-        apply_interface_deep_dream_state(state.deep_dream, false);
+        if (effect_pack_request_accepted && uniform_target_matches && !effect_pack_request_processed) {
+            apply_interface_deep_dream_state(state.deep_dream, false);
+        }
         interface_last_audio_file_sequence = state.audio_file.request_sequence;
         interface_last_reload_sequence = state.reload.request_sequence;
         std::cout << "acmxvk: interface live shader, effect-pack, multipass, playback, "
@@ -2005,10 +2009,12 @@ namespace acmxvk {
         }
         interface_last_sequence = state.sequence;
         bool effect_pack_request_accepted = true;
+        bool effect_pack_request_processed = false;
         if (state.effect_pack.request_sequence != interface_last_effect_pack_sequence) {
             if (frame_sprite == nullptr || !shader_locked) {
                 interface_last_effect_pack_sequence = state.effect_pack.request_sequence;
-                effect_pack_request_accepted = apply_interface_effect_pack_state(state.effect_pack);
+                effect_pack_request_processed = true;
+                effect_pack_request_accepted = apply_interface_effect_pack_state(state.effect_pack, state.deep_dream);
             }
         }
         apply_interface_shader_selection(state.selected_shader_name);
@@ -2020,7 +2026,9 @@ namespace acmxvk {
         apply_interface_playback_state(state.playback, true);
         apply_interface_overlay_state(state.overlay, true);
         apply_interface_gpu_filter_state(state.gpu_filters, true);
-        apply_interface_deep_dream_state(state.deep_dream, true);
+        if (effect_pack_request_accepted && uniform_target_matches && !effect_pack_request_processed) {
+            apply_interface_deep_dream_state(state.deep_dream, true);
+        }
         if (state.audio_file.request_sequence != interface_last_audio_file_sequence) {
             interface_last_audio_file_sequence = state.audio_file.request_sequence;
             apply_interface_audio_file_state(state.audio_file);
@@ -2137,12 +2145,12 @@ namespace acmxvk {
 #endif
     }
 
-    void MainWindow::apply_interface_deep_dream_state(const InterfaceDeepDreamState &requested, bool announce) {
+    bool MainWindow::apply_interface_deep_dream_state(const InterfaceDeepDreamState &requested, bool announce) {
 #ifdef ACMXVK_WITH_DEEP_DREAM
         const bool currently_enabled = deep_dream_model != nullptr;
         if (!requested.enabled) {
             if (!currently_enabled) {
-                return;
+                return true;
             }
             deep_dream_model.reset();
 #ifdef ACMXVK_WITH_MXVK_CUDA
@@ -2155,7 +2163,7 @@ namespace acmxvk {
             if (announce) {
                 std::cout << "acmxvk: interface Deep Dream disabled\n";
             }
-            return;
+            return true;
         }
 
         try {
@@ -2218,7 +2226,7 @@ namespace acmxvk {
 
             const bool settings_changed = !currently_enabled || options.dream_model != requested.model_path || options.dream_layer != requested.layer || options.dream_fp16 != requested.fp16 || options.dream_iterations != requested.iterations || options.dream_size != requested.maximum_dimension || options.dream_channel != requested.channel || options.dream_octaves != requested.octaves || options.dream_jitter != requested.jitter || options.dream_smoothing != requested.smoothing || options.dream_strength != requested.strength || options.dream_feedback != requested.feedback || options.dream_zoom != requested.zoom || options.dream_rotation != requested.rotation || options.dream_octave_scale != requested.octave_scale || options.gpu_filter_before_dream != requested.gpu_filter_first;
             if (!settings_changed) {
-                return;
+                return true;
             }
 
             const bool reload_model = !currently_enabled || options.dream_model != requested.model_path || options.dream_layer != requested.layer || options.dream_fp16 != requested.fp16;
@@ -2258,15 +2266,41 @@ namespace acmxvk {
             if (announce) {
                 std::cout << "acmxvk: interface Deep Dream settings applied: " << requested.layer << ", " << requested.iterations << " iteration(s), strength " << requested.strength << ", feedback " << requested.feedback << ", zoom " << requested.zoom << ", rotation " << requested.rotation << " degrees, " << (requested.gpu_filter_first ? "acidcam-gpu first" : "Deep Dream first") << (reload_model ? " (model reloaded)" : "") << '\n';
             }
+            return true;
         } catch (const std::exception &error) {
             std::cerr << "acmxvk: rejected interface Deep Dream settings: " << error.what() << '\n';
+            return false;
         }
 #else
         if (announce && requested.enabled) {
             std::cerr << "acmxvk: ignored interface Deep Dream settings: this "
                          "build does not include Deep Dream support\n";
         }
+        return !requested.enabled;
 #endif
+    }
+
+    InterfaceDeepDreamState MainWindow::current_deep_dream_state() const {
+        InterfaceDeepDreamState state;
+#ifdef ACMXVK_WITH_DEEP_DREAM
+        state.enabled = deep_dream_model != nullptr;
+        state.fp16 = options.dream_fp16;
+        state.gpu_filter_first = options.gpu_filter_before_dream;
+        state.iterations = options.dream_iterations;
+        state.maximum_dimension = options.dream_size;
+        state.channel = options.dream_channel;
+        state.octaves = options.dream_octaves;
+        state.jitter = options.dream_jitter;
+        state.smoothing = options.dream_smoothing;
+        state.strength = static_cast<float>(options.dream_strength);
+        state.feedback = static_cast<float>(options.dream_feedback);
+        state.zoom = static_cast<float>(options.dream_zoom);
+        state.rotation = static_cast<float>(options.dream_rotation);
+        state.octave_scale = static_cast<float>(options.dream_octave_scale);
+        state.model_path = options.dream_model;
+        state.layer = options.dream_layer;
+#endif
+        return state;
     }
 
     void MainWindow::apply_interface_audio_file_state(const InterfaceAudioFileState &requested) {
@@ -2408,7 +2442,7 @@ namespace acmxvk {
         }
     }
 
-    bool MainWindow::apply_interface_effect_pack_state(const InterfaceEffectPackState &requested) {
+    bool MainWindow::apply_interface_effect_pack_state(const InterfaceEffectPackState &requested, const InterfaceDeepDreamState &requested_dream) {
         if (frame_sprite != nullptr && shader_locked) {
             std::cerr << "acmxvk: effect-pack activation ignored while shader switching is locked\n";
             return false;
@@ -2444,6 +2478,9 @@ namespace acmxvk {
                     applyShaderPipeline();
                     resetShaderTime();
                 }
+                if (!apply_interface_deep_dream_state(effect_pack_previous_dream, true)) {
+                    throw std::runtime_error("unable to restore the previous Deep Dream configuration");
+                }
             } catch (const std::exception &error) {
                 configured_passes = pack_passes;
                 multipass_enabled = true;
@@ -2477,6 +2514,7 @@ namespace acmxvk {
 
         EffectPack pack;
         EffectPackBuildResult cache;
+        InterfaceDeepDreamState pack_dream;
         std::vector<ShaderManifest::CustomUniform> pack_uniforms;
         std::vector<float> pack_values;
         try {
@@ -2487,6 +2525,28 @@ namespace acmxvk {
             }
             pack = load_effect_pack(manifest);
             cache = load_effect_pack_cache(pack);
+            if (pack.deep_dream.has_value() && pack.deep_dream->enabled) {
+                const EffectPackDeepDream &dream = *pack.deep_dream;
+                pack_dream.enabled = true;
+                pack_dream.model_path = requested_dream.model_path;
+                pack_dream.layer = dream.layer;
+                pack_dream.channel = dream.channel;
+                pack_dream.iterations = dream.iterations;
+                pack_dream.strength = static_cast<float>(dream.strength);
+                pack_dream.feedback = static_cast<float>(dream.feedback);
+                pack_dream.zoom = static_cast<float>(dream.zoom);
+                pack_dream.rotation = static_cast<float>(dream.rotation);
+                pack_dream.maximum_dimension = dream.working_size;
+                pack_dream.fp16 = dream.fp16;
+                pack_dream.octaves = dream.octaves;
+                pack_dream.octave_scale = static_cast<float>(dream.octave_scale);
+                pack_dream.jitter = dream.jitter;
+                pack_dream.smoothing = dream.smoothing;
+                pack_dream.gpu_filter_first = dream.gpu_filter_before_dream;
+                if (pack_dream.model_path.empty()) {
+                    throw std::runtime_error("effect-pack Deep Dream model '" + dream.model + "' could not be resolved");
+                }
+            }
             pack_uniforms.reserve(pack.controls.size());
             pack_values.reserve(pack.controls.size());
             constexpr double MAX_FLOAT = static_cast<double>(std::numeric_limits<float>::max());
@@ -2525,6 +2585,7 @@ namespace acmxvk {
             effect_pack_previous_multipass_enabled = multipass_enabled;
             effect_pack_previous_uniforms = custom_uniforms;
             effect_pack_previous_uniform_values = custom_uniform_values;
+            effect_pack_previous_dream = current_deep_dream_state();
             effect_pack_previous_state_saved = true;
         }
 
@@ -2555,6 +2616,9 @@ namespace acmxvk {
                 }
                 resetShaderTime();
                 autopilot_counter = 0;
+            }
+            if (!apply_interface_deep_dream_state(pack_dream, true)) {
+                throw std::runtime_error("effect-pack Deep Dream model, layer, or settings were rejected");
             }
         } catch (const std::exception &error) {
             configured_passes = previous_passes;

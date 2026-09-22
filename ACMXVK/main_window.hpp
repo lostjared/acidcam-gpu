@@ -177,6 +177,7 @@ namespace acmxvk {
         bool effect_pack_previous_multipass_enabled = false;
         std::vector<ShaderManifest::CustomUniform> effect_pack_previous_uniforms;
         std::vector<float> effect_pack_previous_uniform_values;
+        InterfaceDeepDreamState effect_pack_previous_dream;
         float mouse_x = 0.0F;
         float mouse_y = 0.0F;
         bool mouse_pressed = false;
@@ -429,10 +430,11 @@ namespace acmxvk {
         void apply_interface_playback_state(const InterfacePlaybackState &requested, bool announce);
         void apply_interface_overlay_state(const InterfaceOverlayState &requested, bool announce);
         void apply_interface_gpu_filter_state(const InterfaceGpuFilterState &requested, bool announce);
-        void apply_interface_deep_dream_state(const InterfaceDeepDreamState &requested, bool announce);
+        bool apply_interface_deep_dream_state(const InterfaceDeepDreamState &requested, bool announce);
+        InterfaceDeepDreamState current_deep_dream_state() const;
         void apply_interface_audio_file_state(const InterfaceAudioFileState &requested);
         void apply_interface_shader_reload(const InterfaceReloadState &requested);
-        bool apply_interface_effect_pack_state(const InterfaceEffectPackState &requested);
+        bool apply_interface_effect_pack_state(const InterfaceEffectPackState &requested, const InterfaceDeepDreamState &requested_dream);
         void apply_interface_multipass_state(const InterfaceMultipassState &requested);
         void apply_interface_shader_selection(const std::string &requested_name);
         void apply_interface_uniform_values(const std::vector<InterfaceUniformValue> &uniform_values);

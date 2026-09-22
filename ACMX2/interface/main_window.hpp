@@ -10,6 +10,7 @@
  */
 #include "../shader_selection_shm.hpp"
 #include "backend.hpp"
+#include "deep-dream-settings.hpp"
 #include "editor.hpp"
 #include "effect-pack-controls.hpp"
 #include "gpufilter.hpp"
@@ -198,8 +199,9 @@ class MainWindow : public QMainWindow {
     void set_backend(acmx2::Backend backend, bool persist = true);
     /// @brief Update title, actions, and status text for the active backend.
     void update_backend_ui();
-    void publishEffectPackToRunningProcess(const QString &manifest_path, const QVector<EffectPackUniformValue> &values);
+    void publishEffectPackToRunningProcess(const QString &manifest_path, const QVector<EffectPackUniformValue> &values, const DeepDreamConfiguration &dream);
     void publishEffectPackUniformsToRunningProcess(const QVector<EffectPackUniformValue> &values);
+    DeepDreamConfiguration regular_deep_dream_configuration() const;
     /// @brief Return whether the active backend can be launched.
     bool backend_launch_available() const;
     enum class PendingAcmxvkAction { None, RunSelected, RunAll, CopyCommand };
@@ -232,6 +234,7 @@ class MainWindow : public QMainWindow {
     QAction *libraryBuilderAction = nullptr;
     QAction *effectPacksAction = nullptr;
     EffectPackBrowser *effectPackBrowser = nullptr;
+    DeepDreamConfiguration active_effect_pack_dream;
     QAction *helpMenu_about = nullptr;
     QAction *helpMenu_uniformReference = nullptr;
     QAction *listMenu_findNext = nullptr;

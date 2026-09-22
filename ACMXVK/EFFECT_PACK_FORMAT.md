@@ -105,7 +105,24 @@ A MIDI mapping contains `uniform`, a `channel` from 1 through 16, a MIDI CC
 | `gpu_filter_before_dream` | Boolean |
 
 When Deep Dream is enabled, both `model` and `layer` are required. Models are
-resolved locally and are not bundled by default.
+resolved locally and are not bundled by default. The Effect Pack browser treats
+`model` as a logical ID (for example, `vgg16`), not a portable filesystem path.
+It searches the folders configured through **Model Folder...**, the directory
+of the interface's current Deep Dream model, the application's data `models`
+folder, the installed ACMXVK `models` folder, and `models` in the current
+working directory. It tries the ID as written, `<id>.pt`,
+`deep-dream-<id>.pt`, and `<id>.torchscript`. **Choose Dream Model...** sets a
+local override for one pack; that path is stored in the interface's local
+settings, never in the shareable pack JSON.
+
+The browser marks an enabled Dream pack unavailable if its model cannot be
+resolved or the current build lacks Deep Dream support. An unavailable model
+in a disabled Dream configuration produces a warning but does not prevent
+activation. Switching packs applies the resolved model and the pack's Dream
+options with its shader pipeline and controls. A model/layer validation failure
+rejects the switch and preserves the previously active effect. A pack without
+enabled Deep Dream disables Dream; returning to the normal shader library
+restores the Dream configuration that was active before entering pack mode.
 
 ## Validation behavior
 

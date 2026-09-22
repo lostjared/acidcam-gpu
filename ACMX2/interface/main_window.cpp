@@ -1291,6 +1291,7 @@ void MainWindow::initControls() {
         if (effectPackBrowser) {
             effectPackBrowser->clear_active_pack();
         }
+        active_effect_pack_dream = {};
         if (active_backend == acmx2::Backend::Acmxvk && shaderSelectionShm) {
             acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
             if (lock) {
@@ -1299,6 +1300,7 @@ void MainWindow::initControls() {
                 ++shaderSelectionShm->sequence;
             }
             publishCustomUniformsToRunningProcess();
+            publishRuntimeSettingsToRunningProcess();
         }
         finishOutputRunLog(exitCode, exitStatus);
         play_stop->setEnabled(false);
@@ -2861,7 +2863,54 @@ void MainWindow::publishSelectedShaderIndexToRunningProcess() {
 #endif
 }
 
-static bool write_effect_pack_uniforms(acmx2::ipc::ShaderSelectionShmData *shared, const QVector<EffectPackUniformValue> &values) {
+DeepDreamConfiguration MainWindow::regular_deep_dream_configuration() const {
+    DeepDreamConfiguration dream;
+    dream.enabled = deep_dream_enabled;
+    dream.model_file = deep_dream_model;
+    dream.layer = deep_dream_layer;
+    dream.iterations = deep_dream_iterations;
+    dream.strength = deep_dream_strength;
+    dream.feedback = deep_dream_feedback;
+    dream.zoom = deep_dream_zoom;
+    dream.rotation = deep_dream_rotation;
+    dream.maximum_dimension = deep_dream_maximum_dimension;
+    dream.fp16 = deep_dream_fp16;
+    dream.channel = deep_dream_channel;
+    dream.octaves = deep_dream_octaves;
+    dream.octave_scale = deep_dream_octave_scale;
+    dream.jitter = deep_dream_jitter;
+    dream.smoothing = deep_dream_smoothing;
+    dream.gpu_filter_first = deep_dream_gpu_filter_first;
+    dream.deep_original = deep_dream_original;
+    return dream;
+}
+
+static bool dream_state_fits(const DeepDreamConfiguration &dream) { return dream.model_file.toUtf8().size() < static_cast<int>(acmx2::ipc::kShaderSelectionMaxDreamModelPath) && dream.layer.toUtf8().size() < static_cast<int>(acmx2::ipc::kShaderSelectionMaxDreamLayer); }
+
+static void write_dream_state(acmx2::ipc::ShaderSelectionShmData *shared, const DeepDreamConfiguration &dream, bool enabled) {
+    shared->dream_enabled = enabled && dream.enabled ? 1 : 0;
+    shared->dream_fp16 = dream.fp16 ? 1 : 0;
+    shared->dream_gpu_filter_first = dream.gpu_filter_first ? 1 : 0;
+    shared->dream_iterations = dream.iterations;
+    shared->dream_maximum_dimension = dream.maximum_dimension;
+    shared->dream_channel = dream.channel;
+    shared->dream_octaves = dream.octaves;
+    shared->dream_jitter = dream.jitter;
+    shared->dream_smoothing = dream.smoothing;
+    shared->dream_strength = static_cast<float>(dream.strength);
+    shared->dream_feedback = static_cast<float>(dream.feedback);
+    shared->dream_zoom = static_cast<float>(dream.zoom);
+    shared->dream_rotation = static_cast<float>(dream.rotation);
+    shared->dream_octave_scale = static_cast<float>(dream.octave_scale);
+    std::fill(std::begin(shared->dream_model_path), std::end(shared->dream_model_path), '\0');
+    std::fill(std::begin(shared->dream_layer), std::end(shared->dream_layer), '\0');
+    const QByteArray model = dream.model_file.toUtf8();
+    const QByteArray layer = dream.layer.toUtf8();
+    std::copy(model.cbegin(), model.cend(), shared->dream_model_path);
+    std::copy(layer.cbegin(), layer.cend(), shared->dream_layer);
+}
+
+static bool valid_effect_pack_uniforms(const QVector<EffectPackUniformValue> &values) {
     if (values.size() > static_cast<int>(acmx2::ipc::kShaderSelectionMaxCustomUniforms)) {
         return false;
     }
@@ -2870,6 +2919,13 @@ static bool write_effect_pack_uniforms(acmx2::ipc::ShaderSelectionShmData *share
         if (name.isEmpty() || name.size() >= static_cast<int>(acmx2::ipc::kShaderSelectionMaxUniformName) || !std::isfinite(value.value) || std::abs(value.value) > std::numeric_limits<float>::max()) {
             return false;
         }
+    }
+    return true;
+}
+
+static bool write_effect_pack_uniforms(acmx2::ipc::ShaderSelectionShmData *shared, const QVector<EffectPackUniformValue> &values) {
+    if (!valid_effect_pack_uniforms(values)) {
+        return false;
     }
     std::fill(&shared->custom_uniform_names[0][0], &shared->custom_uniform_names[0][0] + acmx2::ipc::kShaderSelectionMaxCustomUniforms * acmx2::ipc::kShaderSelectionMaxUniformName, '\0');
     std::fill(std::begin(shared->custom_uniform_values), std::end(shared->custom_uniform_values), 0.0f);
@@ -2882,7 +2938,7 @@ static bool write_effect_pack_uniforms(acmx2::ipc::ShaderSelectionShmData *share
     return true;
 }
 
-void MainWindow::publishEffectPackToRunningProcess(const QString &manifest_path, const QVector<EffectPackUniformValue> &values) {
+void MainWindow::publishEffectPackToRunningProcess(const QString &manifest_path, const QVector<EffectPackUniformValue> &values, const DeepDreamConfiguration &dream) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
     if (active_backend != acmx2::Backend::Acmxvk) {
         return;
@@ -2912,23 +2968,28 @@ void MainWindow::publishEffectPackToRunningProcess(const QString &manifest_path,
             requested_values.push_back({uniform.name, uniform.value});
         }
     }
+    const DeepDreamConfiguration requested_dream = manifest_path.isEmpty() ? regular_deep_dream_configuration() : dream;
+    if (!valid_effect_pack_uniforms(requested_values) || !dream_state_fits(requested_dream) || (!manifest_path.isEmpty() && requested_dream.enabled && (!deep_dream_available || !QFileInfo(requested_dream.model_file).isFile() || requested_dream.layer.isEmpty()))) {
+        Log(tr("Effect-pack controls or Deep Dream model are unavailable or exceed the interface limits."));
+        return;
+    }
     acmx2::ipc::ShaderSelectionLock lock(shaderSelectionSemaphore);
     if (!lock) {
         Log(tr("Unable to publish effect pack: interface lock failed."));
         return;
     }
-    if (!write_effect_pack_uniforms(shaderSelectionShm, requested_values)) {
-        Log(tr("Effect-pack uniform values are invalid or exceed the shared-memory limit."));
-        return;
-    }
+    write_effect_pack_uniforms(shaderSelectionShm, requested_values);
+    write_dream_state(shaderSelectionShm, requested_dream, active_backend == acmx2::Backend::Acmxvk && deep_dream_available);
     std::fill(std::begin(shaderSelectionShm->effect_pack_manifest_path), std::end(shaderSelectionShm->effect_pack_manifest_path), '\0');
     std::copy(path.cbegin(), path.cend(), shaderSelectionShm->effect_pack_manifest_path);
     ++shaderSelectionShm->effect_pack_sequence;
     ++shaderSelectionShm->sequence;
+    active_effect_pack_dream = manifest_path.isEmpty() ? DeepDreamConfiguration{} : requested_dream;
     Log(manifest_path.isEmpty() ? tr("Returned to the shader library.") : tr("Requested effect pack: %1").arg(manifest_path));
 #else
     Q_UNUSED(manifest_path);
     Q_UNUSED(values);
+    Q_UNUSED(dream);
 #endif
 }
 
@@ -2962,6 +3023,8 @@ void MainWindow::menuEffectPacks() {
     QSettings settings("LostSideDead");
     const int jobs = parallel_build_jobs(settings);
     effectPackBrowser->set_build_tools(executable_path, compiler, jobs > 0 ? jobs : 2);
+    effectPackBrowser->set_dream_context(deep_dream_available, deep_dream_model);
+    effectPackBrowser->refresh();
     effectPackBrowser->show();
     effectPackBrowser->raise();
     effectPackBrowser->activateWindow();
@@ -3584,32 +3647,11 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
     shaderSelectionShm->gpu_buffer_size = static_cast<uint8_t>(std::clamp(gpu_buffer_size, 4, 32));
     std::copy(gpuIndices.begin(), gpuIndices.end(), std::begin(shaderSelectionShm->gpu_filter_indices));
 
-    const QByteArray dreamModel = deep_dream_model.toUtf8();
-    const QByteArray dreamLayer = deep_dream_layer.toUtf8();
-    const bool dreamStringsFit = dreamModel.size() < static_cast<int>(acmx2::ipc::kShaderSelectionMaxDreamModelPath) && dreamLayer.size() < static_cast<int>(acmx2::ipc::kShaderSelectionMaxDreamLayer);
-    const bool dreamActive = active_backend == acmx2::Backend::Acmxvk && deep_dream_available && deep_dream_enabled && !dreamModel.isEmpty() && dreamStringsFit;
-    shaderSelectionShm->dream_enabled = dreamActive ? 1 : 0;
-    shaderSelectionShm->dream_fp16 = deep_dream_fp16 ? 1 : 0;
-    shaderSelectionShm->dream_gpu_filter_first = deep_dream_gpu_filter_first ? 1 : 0;
-    shaderSelectionShm->dream_iterations = deep_dream_iterations;
-    shaderSelectionShm->dream_maximum_dimension = deep_dream_maximum_dimension;
-    shaderSelectionShm->dream_channel = deep_dream_channel;
-    shaderSelectionShm->dream_octaves = deep_dream_octaves;
-    shaderSelectionShm->dream_jitter = deep_dream_jitter;
-    shaderSelectionShm->dream_smoothing = deep_dream_smoothing;
-    shaderSelectionShm->dream_strength = static_cast<float>(deep_dream_strength);
-    shaderSelectionShm->dream_feedback = static_cast<float>(deep_dream_feedback);
-    shaderSelectionShm->dream_zoom = static_cast<float>(deep_dream_zoom);
-    shaderSelectionShm->dream_rotation = static_cast<float>(deep_dream_rotation);
-    shaderSelectionShm->dream_octave_scale = static_cast<float>(deep_dream_octave_scale);
-    std::fill(std::begin(shaderSelectionShm->dream_model_path), std::end(shaderSelectionShm->dream_model_path), '\0');
-    std::fill(std::begin(shaderSelectionShm->dream_layer), std::end(shaderSelectionShm->dream_layer), '\0');
-    if (dreamStringsFit) {
-        std::copy(dreamModel.cbegin(), dreamModel.cend(), shaderSelectionShm->dream_model_path);
-        std::copy(dreamLayer.cbegin(), dreamLayer.cend(), shaderSelectionShm->dream_layer);
-    } else if (deep_dream_enabled) {
-        Log("Deep Dream settings were not published because the model path "
-            "or layer name is too long");
+    const DeepDreamConfiguration dream = effectPackBrowser && effectPackBrowser->has_active_pack() ? active_effect_pack_dream : regular_deep_dream_configuration();
+    if (dream_state_fits(dream)) {
+        write_dream_state(shaderSelectionShm, dream, active_backend == acmx2::Backend::Acmxvk && deep_dream_available);
+    } else if (dream.enabled) {
+        Log(tr("Deep Dream settings were not published because the model path or layer is too long."));
     }
 
     ++shaderSelectionShm->sequence;
