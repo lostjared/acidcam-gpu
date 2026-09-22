@@ -1,4 +1,5 @@
 #include "settings.hpp"
+#include "media-probe.hpp"
 #include "custom_style.hpp"
 #include <QApplication>
 #include <QDialogButtonBox>
@@ -2124,49 +2125,19 @@ void SettingsWindow::detectInputHdr() {
         return;
     }
 
-    QProcess probe;
-    QStringList args;
-    args << "-v" << "error"
-         << "-select_streams" << "v:0"
-         << "-show_entries" << "stream=color_transfer,color_primaries,color_space"
-         << "-of" << "default=noprint_wrappers=1:nokey=0" << file;
-    probe.start("ffprobe", args);
-    if (!probe.waitForStarted(3000)) {
-        hdrStatusLabel->setText("HDR: ffprobe not available");
-        convertHdr10CheckBox->setEnabled(false);
-        convertHdr10CheckBox->setChecked(false);
-        return;
-    }
-    if (!probe.waitForFinished(8000)) {
-        probe.kill();
-        probe.waitForFinished(1000);
-        hdrStatusLabel->setText("HDR: ffprobe timed out");
+    const acmx2::media::VideoColorInfo color = acmx2::media::probeFirstVideoColor(file);
+    if (!color) {
+        hdrStatusLabel->setText("HDR: inspection failed");
+        hdrStatusLabel->setToolTip(color.error);
         convertHdr10CheckBox->setEnabled(false);
         convertHdr10CheckBox->setChecked(false);
         return;
     }
 
-    const QString output = QString::fromUtf8(probe.readAllStandardOutput()).toLower();
-    QString transfer;
-    QString primaries;
-    QString space;
-    const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
-    for (const QString &line : lines) {
-        const QString trimmed = line.trimmed();
-        const qsizetype eq = trimmed.indexOf('=');
-        if (eq <= 0) {
-            continue;
-        }
-        const QString key = trimmed.left(eq);
-        const QString value = trimmed.mid(eq + 1).trimmed();
-        if (key == "color_transfer") {
-            transfer = value;
-        } else if (key == "color_primaries") {
-            primaries = value;
-        } else if (key == "color_space") {
-            space = value;
-        }
-    }
+    hdrStatusLabel->setToolTip(QString());
+    const QString transfer = color.transfer.toLower();
+    const QString primaries = color.primaries.toLower();
+    const QString space = color.space.toLower();
 
     const bool isHlg = transfer.contains("arib-std-b67") || transfer.contains("arib_std_b67") || transfer.contains("hlg");
     const bool isPq = transfer.contains("smpte2084") || transfer.contains("smpte-2084") || transfer.contains("pq");

@@ -167,7 +167,7 @@ class SettingsWindow : public QDialog {
     void browseOnnxModelFile();
     /// @brief Display the AVOptions reported by the selected FFmpeg encoder.
     void showEncoderOptions();
-    /// @brief Probe the currently selected input video file with ffprobe and
+    /// @brief Inspect the selected input with the linked FFmpeg libraries and
     ///        update HDR-related UI state (status label, HDR10 checkbox).
     void detectInputHdr();
     /// @brief React to camera-device combo selection changes.

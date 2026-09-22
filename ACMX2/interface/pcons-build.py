@@ -57,6 +57,14 @@ env.set_variant(os.environ.get("VARIANT", "release"))
 qt = find_qt(
     project, env, modules=["Core", "Gui", "Widgets", "Concurrent", "Network"]
 )
+ffmpeg = project.find_package("libavcodec")
+if ffmpeg is None:
+    raise SystemExit("FFmpeg development libraries are required (libavcodec, libavformat, libavutil)")
+for ffmpeg_component in ("libavformat", "libavutil"):
+    component = project.find_package(ffmpeg_component)
+    if component is None:
+        raise SystemExit(f"FFmpeg development library is required ({ffmpeg_component})")
+    ffmpeg.link(component)
 
 if not platform.is_windows:
     env.cxx.flags.append("-pthread")
@@ -103,6 +111,7 @@ app = project.QtProgram(
         "main.cpp",
         "main_window.cpp",
         "metadata-viewer.cpp",
+        "media-probe.cpp",
         "midi-settings.cpp",
         "playlist.cpp",
         "prop.cpp",
@@ -120,7 +129,7 @@ app = project.QtProgram(
             project_dir / "win-icon.ico",
         ),
     ],
-    link=[qt.Widgets, qt.Gui, qt.Concurrent, qt.Network, qt.Core],
+    link=[qt.Widgets, qt.Gui, qt.Concurrent, qt.Network, qt.Core, ffmpeg],
 )
 if platform.is_windows:
     app.private.link_flags.append("-mwindows")

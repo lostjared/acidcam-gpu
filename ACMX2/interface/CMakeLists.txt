@@ -79,6 +79,27 @@ else()
     message(FATAL_ERROR "Threads library not found!")
 endif()
 
+# Media inspection uses the FFmpeg libraries directly so the interface does
+# not depend on a separately installed ffprobe executable.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(INTERFACE_FFMPEG QUIET IMPORTED_TARGET
+        libavcodec libavformat libavutil)
+endif()
+if(TARGET PkgConfig::INTERFACE_FFMPEG)
+    set(INTERFACE_FFMPEG_TARGET PkgConfig::INTERFACE_FFMPEG)
+else()
+    find_path(INTERFACE_FFMPEG_INCLUDE_DIR NAMES libavformat/avformat.h REQUIRED)
+    find_library(INTERFACE_AVCODEC_LIBRARY NAMES avcodec REQUIRED)
+    find_library(INTERFACE_AVFORMAT_LIBRARY NAMES avformat REQUIRED)
+    find_library(INTERFACE_AVUTIL_LIBRARY NAMES avutil REQUIRED)
+    add_library(interface_ffmpeg INTERFACE)
+    target_include_directories(interface_ffmpeg INTERFACE ${INTERFACE_FFMPEG_INCLUDE_DIR})
+    target_link_libraries(interface_ffmpeg INTERFACE
+        ${INTERFACE_AVCODEC_LIBRARY} ${INTERFACE_AVFORMAT_LIBRARY} ${INTERFACE_AVUTIL_LIBRARY})
+    set(INTERFACE_FFMPEG_TARGET interface_ffmpeg)
+endif()
+
 message(STATUS "")
 message(STATUS "--- Dependency Check Complete ---")
 message(STATUS "")
@@ -98,6 +119,7 @@ set(LAUNCHER_GUI_HEADERS
     library-builder.hpp
     main_window.hpp
     metadata-viewer.hpp
+    media-probe.hpp
     midi-settings.hpp
     playlist.hpp
     prop.hpp
@@ -125,6 +147,7 @@ set(LAUNCHER_GUI_SOURCES
     main.cpp
     main_window.cpp
     metadata-viewer.cpp
+    media-probe.cpp
     midi-settings.cpp
     playlist.cpp
     prop.cpp
@@ -192,6 +215,7 @@ if(QT_VERSION_MAJOR EQUAL 6)
             Qt6::Concurrent
             Qt6::Network
             Threads::Threads
+            ${INTERFACE_FFMPEG_TARGET}
     )
 else()
     target_link_libraries(acmx2_interface
@@ -202,6 +226,7 @@ else()
             Qt5::Concurrent
             Qt5::Network
             Threads::Threads
+            ${INTERFACE_FFMPEG_TARGET}
     )
 endif()
 

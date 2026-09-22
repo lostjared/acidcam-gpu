@@ -5,6 +5,7 @@
 
 #include "metadata-viewer.hpp"
 #include "custom_style.hpp"
+#include "media-probe.hpp"
 
 #include <QClipboard>
 #include <QDialogButtonBox>
@@ -22,7 +23,6 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPlainTextEdit>
-#include <QProcess>
 #include <QPushButton>
 #include <QTabBar>
 #include <QTabWidget>
@@ -268,41 +268,15 @@ void MetadataViewer::analyzeFile() {
         return;
     }
 
-    QProcess proc;
-    QStringList args;
-    // Pull format + streams + frame-level side data (HDR mastering, MaxCLL, etc).
-    args << "-v" << "error"
-         << "-print_format" << "json"
-         << "-show_format"
-         << "-show_streams"
-         << "-show_frames"
-         << "-read_intervals" << "%+#1"
-         << "-show_entries" << "frame=side_data_list:format:stream" << path;
-    proc.start("ffprobe", args);
-    if (!proc.waitForStarted(5000)) {
-        QMessageBox::critical(this, tr("Metadata Viewer"), tr("Failed to launch ffprobe. Is it installed and on PATH?"));
-        return;
-    }
-    if (!proc.waitForFinished(30000)) {
-        proc.kill();
-        QMessageBox::critical(this, tr("Metadata Viewer"), tr("ffprobe timed out."));
-        return;
-    }
-    if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
-        const QString err = QString::fromUtf8(proc.readAllStandardError());
-        QMessageBox::critical(this, tr("Metadata Viewer"), tr("ffprobe failed:\n%1").arg(err.isEmpty() ? tr("(no error output)") : err));
+    // Pull format + streams + first-frame side data (HDR mastering, MaxCLL,
+    // etc.) in-process. This works on platforms where ffprobe is unavailable.
+    const acmx2::media::ProbeResult probe = acmx2::media::probe(path, true);
+    if (!probe) {
+        QMessageBox::critical(this, tr("Metadata Viewer"), tr("Could not inspect media file:\n%1").arg(probe.error));
         return;
     }
 
-    QJsonParseError parseErr;
-    const QByteArray out = proc.readAllStandardOutput();
-    const QJsonDocument doc = QJsonDocument::fromJson(out, &parseErr);
-    if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
-        QMessageBox::critical(this, tr("Metadata Viewer"), tr("Failed to parse ffprobe JSON: %1").arg(parseErr.errorString()));
-        return;
-    }
-
-    const QJsonObject root = doc.object();
+    const QJsonObject root = probe.json;
     populateTree(root);
     markdownPreview->setPlainText(buildMarkdown(root));
     htmlPreview->setPlainText(buildHtml(root));

@@ -3,8 +3,8 @@
 
 /**
  * @file metadata-viewer.hpp
- * @brief Media metadata viewer dialog. Runs ffprobe on a user-selected file,
- *        parses the JSON output, and presents the result in a tree along with
+ * @brief Media metadata viewer dialog. Inspects a user-selected file through
+ *        the linked FFmpeg libraries and presents the result in a tree along with
  *        copy-friendly Markdown / HTML / plain-text summaries suitable for
  *        pasting into a README, web page, or chat message.
  */
@@ -19,7 +19,6 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QPlainTextEdit;
 class QTabWidget;
-class QProcess;
 
 class MetadataViewer : public QDialog {
     Q_OBJECT
@@ -29,14 +28,14 @@ class MetadataViewer : public QDialog {
   private slots:
     /// @brief Open a file picker and store the chosen path in the path field.
     void browseFile();
-    /// @brief Launch ffprobe against the current file and refresh the tree.
+    /// @brief Inspect the current file and refresh the tree.
     void analyzeFile();
     /// @brief Copy the currently selected tab's text (Markdown/HTML/Text)
     ///        to the system clipboard.
     void copyCurrentTab();
 
   private:
-    /// @brief Populate the tree widget from a parsed ffprobe JSON object.
+    /// @brief Populate the tree widget from the media probe JSON object.
     void populateTree(const QJsonObject &root);
     /// @brief Render a Markdown-formatted summary of the metadata.
     QString buildMarkdown(const QJsonObject &root) const;
