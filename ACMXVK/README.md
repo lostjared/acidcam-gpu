@@ -1848,6 +1848,7 @@ when their feature is unavailable.
 | 3 | `uniform sampler1D spectrum;` | Fragment and compute | Current 256-bin R32 floating-point FFT. ACMXVK detects this binding from SPIR-V and supplies a zero-initialized descriptor when audio support or an active audio source is unavailable. |
 | 4 | `uniform sampler1DArray spectrum_history;` | Fragment and compute | Circular FFT history. ACMXVK detects this binding from SPIR-V and automatically allocates eight zero-initialized layers when `--enable-audio-buffers N` was not supplied. |
 | 5 | `layout(rgba8)` or `layout(rgba16f) writeonly uniform image2D output_image;` | Compute only | Compute destination. Always required by an ACMXVK compute shader and unavailable to fragment shaders. Use `rgba8` for SDR input and `rgba16f` for HDR input. |
+| 6 | `uniform sampler2D originalFrame;` | Fragment and compute | Always present. The original frame uploaded to `frame_sprite`, unchanged while binding 0 advances through a multi-pass fragment/compute chain. It reuses the existing sprite image and does not allocate or upload a second texture. |
 
 Binding numbers, descriptor types, array lengths, and block-member order are
 part of the ABI and must match exactly. Resource and member names are not part

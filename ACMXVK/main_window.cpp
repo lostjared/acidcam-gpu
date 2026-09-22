@@ -4444,6 +4444,7 @@ namespace acmxvk {
             } else if (historyCacheEnabled()) {
                 effect.historySource = frame_sprite;
             }
+            effect.originalFrameSource = frame_sprite;
             if (spectrumTextureEnabledForShaders()) {
                 effect.spectrumBinCount = spectrumBinCount();
             }

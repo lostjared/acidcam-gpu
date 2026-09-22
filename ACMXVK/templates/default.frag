@@ -6,6 +6,9 @@ layout(location = 0) out vec4 color;
 // Binding 0: Previous stage output
 layout(set = 0, binding = 0) uniform sampler2D input_image;
 
+// Binding 6: Original uploaded frame (unchanged across effect passes)
+layout(set = 0, binding = 6) uniform sampler2D originalFrame;
+
 // Binding 1: MXVK Engine State
 layout(set = 0, binding = 1, std140) uniform SpriteExtended {
     vec4 mouse;
