@@ -1,7 +1,14 @@
 cmake_minimum_required(VERSION 3.16)
 project(midi-map LANGUAGES CXX)
 
-if(NOT CMAKE_BUILD_TYPE)
+if(WIN32)
+    enable_language(RC)
+endif()
+
+# CMAKE_BUILD_TYPE is only meaningful for single-configuration generators
+# (for example Ninja or Unix Makefiles).  Visual Studio selects the
+# configuration at build time, so do not force one into its cache.
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
@@ -9,13 +16,24 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
-find_library(RTMIDI_LIBRARY NAMES rtmidi REQUIRED)
-find_path(RTMIDI_INCLUDE_DIR NAMES rtmidi/RtMidi.h PATHS /usr/include /usr/local/include)
-if(NOT RTMIDI_LIBRARY)
-    message(FATAL_ERROR "RtMidi library not found. Please install rtmidi.")
-endif()
-if(NOT RTMIDI_INCLUDE_DIR)
-    message(FATAL_ERROR "RtMidi headers not found. Please install rtmidi development files.")
+
+# Package managers such as vcpkg provide RtMidi's CMake target.  Retain a
+# library/header fallback for distributions that only install the raw files.
+find_package(RtMidi CONFIG QUIET)
+if(TARGET RtMidi::rtmidi)
+    set(RTMIDI_TARGET RtMidi::rtmidi)
+elseif(TARGET rtmidi)
+    set(RTMIDI_TARGET rtmidi)
+else()
+    find_library(RTMIDI_LIBRARY NAMES rtmidi RtMidi rtmidi-static REQUIRED)
+    find_path(RTMIDI_INCLUDE_DIR NAMES rtmidi/RtMidi.h REQUIRED)
+
+    add_library(RtMidi::rtmidi UNKNOWN IMPORTED)
+    set_target_properties(RtMidi::rtmidi PROPERTIES
+        IMPORTED_LOCATION "${RTMIDI_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${RTMIDI_INCLUDE_DIR}"
+    )
+    set(RTMIDI_TARGET RtMidi::rtmidi)
 endif()
 
 add_executable(midi-map
@@ -23,23 +41,21 @@ add_executable(midi-map
     midi_window.cpp
 )
 
-target_compile_options(midi-map PRIVATE -O3 -Wall -pedantic)
-
-target_include_directories(midi-map PRIVATE
-    ${RTMIDI_INCLUDE_DIR}
-)
+if(MSVC)
+    target_compile_options(midi-map PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(midi-map PRIVATE -O3 -Wall -Wextra -Wpedantic)
+endif()
 
 target_link_libraries(midi-map PRIVATE
     Qt6::Widgets
-    ${RTMIDI_LIBRARY}
+    ${RTMIDI_TARGET}
 )
 
-if(MINGW)
+if(WIN32)
     target_sources(midi-map PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.rc
-        ${CMAKE_CURRENT_SOURCE_DIR}/win-icon.ico
     )
-    target_link_options(midi-map PRIVATE -mwindows)
     set_target_properties(midi-map PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
