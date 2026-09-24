@@ -1,6 +1,6 @@
 # ACMX Interface
 
-Qt-based GUI launcher for the ACMX2 engine with staged ACMXVK integration.
+Qt-based GUI launcher for the ACMX2 and ACMXVK engines.
 
 ## Backend Integration
 
@@ -214,6 +214,52 @@ Interface version 2.141.0 includes the current ACMXVK integration increments:
 
 The remaining shared runtime controls are still ACMX2-only. ACMX2-specific
 binary-cache maintenance actions remain disabled when ACMXVK is selected.
+
+## ACMXVK Effect Packs
+
+Choose **Backend > ACMXVK**, then open **Playback > Effect Packs...**. The
+browser displays packs from the installed data directory, the per-user pack
+directory, and folders added with **Add Folder...**. In a source checkout, add
+`ACMXVK/effect-packs` to browse the four supplied examples. Select a pack and
+click **Build & Activate** to compile changed GLSL sources into its local
+`.acmxvk-build` cache and apply its ordered fragment/compute passes to a running
+ACMXVK session. **Use Shader Library** returns to the previous library workflow.
+
+**Controls...** opens the pack's named controls; their values are saved per pack
+and can be changed while ACMXVK runs. A pack may also declare audio and MIDI
+mappings or Deep Dream settings. For a Dream pack, use **Model Folder...** to
+add a model search location or **Choose Dream Model...** to set a local override
+when the requested model is not installed under its logical name. Model binaries
+are not included in packs.
+
+**Create from Current...** captures the selected source shader or enabled
+multipass chain, current uniform values, resource requirements, and enabled
+Deep Dream settings. **Save Pack As...** copies the selected pack with its
+current control values as defaults. **Export...** and **Import...** transfer the
+manifest, shader sources, recursive includes, and optional icon. They omit the
+compiled cache, so build an imported pack before activating it. Export requires
+GLSL sources; a pack containing only SPIR-V cannot be exported this way. The
+[effect-pack format guide](../../ACMXVK/EFFECT_PACK_FORMAT.md) documents the
+manifest, validation rules, and cache behavior.
+
+## ACMXVK Projects
+
+The **Project** menu is available with ACMXVK selected. Use **New Project...**
+to clear the current interface configuration and shader list, **Save Project**
+to update the current project, or **Save Project As...** to create a new project
+folder containing a `.acmxproj` file. **Export Project...** creates a separate
+portable folder. **Load Project...** accepts `.acmxproj` and legacy `.json`
+projects; **Recent Projects** reopens a previously loaded project.
+
+Project saves capture the selected shader, runtime and interface settings,
+referenced library and media resources, and the active effect pack with its
+project-specific control values. A compatible pack cache is included with a
+portable project. If a project loaded on another machine has an incompatible
+cache, open **Playback > Effect Packs...** and use **Build & Activate** to
+recompile its bundled sources. Save again after the pack is active. Project
+output is directed to an `output/` folder beside the `.acmxproj` file. See the
+[project portability details](../../ACMXVK/EFFECT_PACK_FORMAT.md#authoring-and-transfer-in-the-interface)
+for cache validation and control-value precedence.
 
 ## Building
 
