@@ -1140,8 +1140,10 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/playlists/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/playlists")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/midi-examples/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/midi-examples")
+install(DIRECTORY DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/effect-packs")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/effect-packs/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/acmxvk/effect-packs"
+        OPTIONAL
         PATTERN ".acmxvk-build" EXCLUDE
         PATTERN ".editor-preview" EXCLUDE
         PATTERN "*.acmxvk-tmp-*" EXCLUDE)
