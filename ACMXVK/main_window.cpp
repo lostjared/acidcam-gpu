@@ -824,7 +824,7 @@ namespace acmxvk {
                 throw std::runtime_error("export resolution is too small for the photosensitivity warning");
             }
             const SDL_Color color{255U, 255U, 255U, 255U};
-            warning_text_bounds.clear();
+            cv::Mat card(card_height, card_width, CV_8UC4, cv::Scalar(0, 0, 0, 255));
             int y = (card_height - static_cast<int>(lines.size()) * line_spacing) / 2;
             for (const std::string &line : lines) {
                 int text_width = 0;
@@ -834,11 +834,38 @@ namespace acmxvk {
                     throw std::runtime_error("unable to measure photosensitivity warning text");
                 }
                 const int x = (card_width - text_width) / 2;
-                warning_text_bounds.push_back(SDL_Rect{x, y, text_width, text_height});
+                SDL_Surface *text_surface = TTF_RenderText_Blended(font, line.c_str(), line.size(), color);
+                SDL_Surface *rgba_surface = text_surface != nullptr ? SDL_ConvertSurface(text_surface, SDL_PIXELFORMAT_RGBA32) : nullptr;
+                SDL_DestroySurface(text_surface);
+                if (rgba_surface == nullptr) {
+                    TTF_CloseFont(font);
+                    throw std::runtime_error("unable to render photosensitivity warning text");
+                }
+                for (int row = 0; row < rgba_surface->h && y + row < card_height; ++row) {
+                    if (y + row < 0) {
+                        continue;
+                    }
+                    const auto *source = static_cast<const std::uint8_t *>(rgba_surface->pixels) + static_cast<std::size_t>(row) * rgba_surface->pitch;
+                    std::uint8_t *target = card.ptr<std::uint8_t>(y + row);
+                    for (int column = 0; column < rgba_surface->w && x + column < card_width; ++column) {
+                        if (x + column < 0) {
+                            continue;
+                        }
+                        const std::uint8_t shade = source[static_cast<std::size_t>(column) * 4U + 3U];
+                        const std::size_t offset = static_cast<std::size_t>(x + column) * 4U;
+                        target[offset] = shade;
+                        target[offset + 1U] = shade;
+                        target[offset + 2U] = shade;
+                    }
+                }
+                SDL_DestroySurface(rgba_surface);
                 printText(line, x, y, color, font);
                 y += line_spacing;
             }
             TTF_CloseFont(font);
+            warning_card_width = card_width;
+            warning_card_height = card_height;
+            warning_card_rgba.assign(card.data, card.data + card.total() * card.elemSize());
             setFrameReadbackEnabled(true);
             return;
         }
@@ -4258,24 +4285,10 @@ namespace acmxvk {
         readback_requests.pop_front();
 
         if (request.warning_card) {
-            cv::Mat card(static_cast<int>(height), static_cast<int>(width), CV_8UC4, cv::Scalar(0, 0, 0, 255));
-            for (const SDL_Rect &bounds : warning_text_bounds) {
-                const int left = std::clamp(bounds.x, 0, static_cast<int>(width));
-                const int top = std::clamp(bounds.y, 0, static_cast<int>(height));
-                const int right = std::clamp(bounds.x + bounds.w, 0, static_cast<int>(width));
-                const int bottom = std::clamp(bounds.y + bounds.h, 0, static_cast<int>(height));
-                for (int row = top; row < bottom; ++row) {
-                    const std::uint8_t *source = rgba.data() + static_cast<std::size_t>(row) * width * 4U;
-                    std::uint8_t *target = card.ptr<std::uint8_t>(row);
-                    for (int column = left; column < right; ++column) {
-                        const std::size_t offset = static_cast<std::size_t>(column) * 4U;
-                        const std::uint8_t shade = std::min({source[offset], source[offset + 1U], source[offset + 2U]});
-                        target[offset] = shade;
-                        target[offset + 1U] = shade;
-                        target[offset + 2U] = shade;
-                    }
-                }
+            if (warning_card_width != static_cast<int>(width) || warning_card_height != static_cast<int>(height)) {
+                throw std::runtime_error("photosensitivity warning card size does not match render size");
             }
+            cv::Mat card(warning_card_height, warning_card_width, CV_8UC4, warning_card_rgba.data());
             cv::Mat resized_card;
             if (static_cast<int>(width) != recording_width || static_cast<int>(height) != recording_height) {
                 if (recording_width >= static_cast<int>(width) && recording_width - static_cast<int>(width) <= 1 && recording_height >= static_cast<int>(height) && recording_height - static_cast<int>(height) <= 1) {

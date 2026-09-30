@@ -198,7 +198,9 @@ namespace acmxvk {
         bool recording_complete = false;
         bool warning_card_pending = false;
         bool warning_card_queued = false;
-        std::vector<SDL_Rect> warning_text_bounds;
+        std::vector<std::uint8_t> warning_card_rgba;
+        int warning_card_width = 0;
+        int warning_card_height = 0;
         std::uint64_t warning_frame_count = 0;
         bool headless_shutdown_logged = false;
         bool headless_progress_complete = false;
