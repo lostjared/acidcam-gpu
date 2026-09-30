@@ -233,7 +233,7 @@ namespace acmxvk {
         if (writer.is_open()) {
             writer.close();
             std::cout << "acmxvk: recording closed after " << output_frame_count << " rendered frames";
-            if (options.fill_pts_gaps) {
+            if (options.fill_pts_gaps || preserveWarningAudioTimeline()) {
                 std::cout << " (" << gap_fill_duplicate_count << " held-frame duplicates added)";
             }
             std::cout << '\n';
@@ -4130,6 +4130,10 @@ namespace acmxvk {
 
     [[nodiscard]] bool MainWindow::continuousReadbackEnabled() const { return writer.is_open() || options.png_output || options.generate_interval > 0; }
 
+    [[nodiscard]] bool MainWindow::preserveWarningAudioTimeline() const {
+        return options.photosensitivity_warning && options.constant_frame_rate && source_kind == SourceKind::Video && !options.mute_output && (options.use_source_audio || options.copy_audio || !options.audio_file.empty());
+    }
+
     void MainWindow::openOutput() {
         if (options.output_file.empty() && !options.png_output && options.generate_interval <= 0) {
             return;
@@ -4142,6 +4146,11 @@ namespace acmxvk {
         } else {
             recording_width = options.width;
             recording_height = options.height;
+        }
+        if (!options.output_file.empty() && !options.png_output && ((recording_width & 1) != 0 || (recording_height & 1) != 0)) {
+            recording_width += recording_width & 1;
+            recording_height += recording_height & 1;
+            std::cout << "acmxvk: padded encoded output to " << recording_width << 'x' << recording_height << " for 4:2:0 video\n";
         }
         recording_fps = outputFrameRate();
 
@@ -4165,7 +4174,7 @@ namespace acmxvk {
             encode_options.codec = options.encode_codec;
             encode_options.ffmpeg_options = options.encode_params;
             encode_options.realtime = options.encode_realtime;
-            encode_options.block_when_full = options.no_drop || options.fill_pts_gaps;
+            encode_options.block_when_full = options.no_drop || options.fill_pts_gaps || preserveWarningAudioTimeline();
             hdr_output_enabled = hdr_transfer_processing_enabled;
             if (hdr_output_enabled) {
                 if ((recording_width & 1) != 0 || (recording_height & 1) != 0) {
@@ -4190,7 +4199,10 @@ namespace acmxvk {
             if (!writer.open(options.output_file, recording_width, recording_height, static_cast<float>(recording_fps), encode_options)) {
                 throw std::runtime_error("unable to open output video: " + options.output_file);
             }
-            writer.set_block_when_full(options.no_drop || options.fill_pts_gaps);
+            writer.set_block_when_full(options.no_drop || options.fill_pts_gaps || preserveWarningAudioTimeline());
+            if (preserveWarningAudioTimeline()) {
+                std::cout << "acmxvk: holding skipped source frames to keep audio and video aligned after the warning\n";
+            }
             if (options.photosensitivity_warning) {
                 warning_card_pending = true;
                 warning_frame_count = std::max<std::uint64_t>(1U, static_cast<std::uint64_t>(std::llround(recording_fps * 4.0)));
@@ -4223,7 +4235,7 @@ namespace acmxvk {
         if (request.warning_card) {
             warning_card_queued = true;
         }
-        request.has_pts = recording_frame_has_pts && !options.constant_frame_rate;
+        request.has_pts = recording_frame_has_pts && (!options.constant_frame_rate || preserveWarningAudioTimeline());
         request.pts = recording_frame_pts;
         readback_requests.push_back(request);
 
@@ -4266,7 +4278,11 @@ namespace acmxvk {
             }
             cv::Mat resized_card;
             if (static_cast<int>(width) != recording_width || static_cast<int>(height) != recording_height) {
-                cv::resize(card, resized_card, cv::Size(recording_width, recording_height));
+                if (recording_width >= static_cast<int>(width) && recording_width - static_cast<int>(width) <= 1 && recording_height >= static_cast<int>(height) && recording_height - static_cast<int>(height) <= 1) {
+                    cv::copyMakeBorder(card, resized_card, 0, recording_height - static_cast<int>(height), 0, recording_width - static_cast<int>(width), cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0, 255));
+                } else {
+                    cv::resize(card, resized_card, cv::Size(recording_width, recording_height));
+                }
             }
             std::uint8_t *pixels = resized_card.empty() ? card.ptr<std::uint8_t>() : resized_card.ptr<std::uint8_t>();
             std::vector<std::uint16_t> hdr_card;
@@ -4322,11 +4338,20 @@ namespace acmxvk {
         cv::Mat hdr_resized;
         if (static_cast<int>(width) != recording_width || static_cast<int>(height) != recording_height) {
             const cv::Mat source(static_cast<int>(height), static_cast<int>(width), CV_8UC4, rgba.data());
-            cv::resize(source, resized, cv::Size(recording_width, recording_height), 0.0, 0.0, cv::INTER_LINEAR);
+            const bool pad_edge = recording_width >= static_cast<int>(width) && recording_width - static_cast<int>(width) <= 1 && recording_height >= static_cast<int>(height) && recording_height - static_cast<int>(height) <= 1;
+            if (pad_edge) {
+                cv::copyMakeBorder(source, resized, 0, recording_height - static_cast<int>(height), 0, recording_width - static_cast<int>(width), cv::BORDER_REPLICATE);
+            } else {
+                cv::resize(source, resized, cv::Size(recording_width, recording_height), 0.0, 0.0, cv::INTER_LINEAR);
+            }
             output_pixels = resized.ptr();
             if (rgba16 != nullptr) {
                 const cv::Mat hdr_source(static_cast<int>(height), static_cast<int>(width), CV_16UC4, const_cast<std::uint16_t *>(rgba16->data()));
-                cv::resize(hdr_source, hdr_resized, cv::Size(recording_width, recording_height), 0.0, 0.0, cv::INTER_LINEAR);
+                if (pad_edge) {
+                    cv::copyMakeBorder(hdr_source, hdr_resized, 0, recording_height - static_cast<int>(height), 0, recording_width - static_cast<int>(width), cv::BORDER_REPLICATE);
+                } else {
+                    cv::resize(hdr_source, hdr_resized, cv::Size(recording_width, recording_height), 0.0, 0.0, cv::INTER_LINEAR);
+                }
                 hdr_output_pixels = hdr_resized.ptr<std::uint16_t>();
             }
         }
@@ -4358,7 +4383,8 @@ namespace acmxvk {
             };
 
             const std::uint64_t output_pts = request.pts + warning_frame_count;
-            if (options.fill_pts_gaps && request.has_pts && output_pts >= gap_fill_next_pts) {
+            const bool fill_pts_gaps = options.fill_pts_gaps || preserveWarningAudioTimeline();
+            if (fill_pts_gaps && request.has_pts && output_pts >= gap_fill_next_pts) {
                 while (gap_fill_next_pts < output_pts) {
                     if (gap_fill_previous_valid) {
                         write_sequential_frame(gap_fill_previous_rgba.data(), hdr_output_enabled ? gap_fill_previous_rgba16.data() : nullptr);
@@ -4378,9 +4404,9 @@ namespace acmxvk {
                     gap_fill_previous_rgba.assign(output_pixels, output_pixels + pixel_count);
                 }
                 gap_fill_previous_valid = true;
-            } else if (options.fill_pts_gaps && !request.has_pts) {
+            } else if (fill_pts_gaps && !request.has_pts) {
                 write_sequential_frame(output_pixels, hdr_output_pixels);
-            } else if (!options.fill_pts_gaps) {
+            } else if (!fill_pts_gaps) {
                 if (hdr_output_enabled) {
                     if (request.has_pts) {
                         writer.write_hdr_rgba16_at_pts(const_cast<std::uint16_t *>(hdr_output_pixels), static_cast<std::int64_t>(output_pts));

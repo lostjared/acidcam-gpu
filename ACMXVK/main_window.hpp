@@ -484,6 +484,7 @@ namespace acmxvk {
         void requestSnapshot(SnapshotFormat format);
         [[nodiscard]] bool continuousReadbackEnabled() const;
         void openOutput();
+        [[nodiscard]] bool preserveWarningAudioTimeline() const;
         void onFrameReadbackScheduled() override;
         void onFrameReadback(std::vector<std::uint8_t> &rgba, uint32_t width, uint32_t height) override;
         void onFrameReadbackRgba16(std::vector<std::uint16_t> &rgba, uint32_t width, uint32_t height) override;

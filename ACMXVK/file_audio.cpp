@@ -644,7 +644,8 @@ namespace acmxvk::audio {
             const double source_duration = duration_seconds();
             const double content_duration = video_duration - audio_delay_seconds;
             const double mux_duration = repeat ? content_duration : std::min(content_duration, source_duration);
-            const std::int64_t target_sample_count = static_cast<std::int64_t>(std::floor(mux_duration * static_cast<double>(FILE_SAMPLE_RATE)));
+            const std::int64_t delay_sample_count = static_cast<std::int64_t>(std::llround(audio_delay_seconds * static_cast<double>(FILE_SAMPLE_RATE)));
+            const std::int64_t target_sample_count = delay_sample_count + static_cast<std::int64_t>(std::floor(mux_duration * static_cast<double>(FILE_SAMPLE_RATE)));
             if (target_sample_count <= 0) {
                 std::cerr << "acmxvk: file audio mux duration is empty\n";
                 return false;
@@ -787,7 +788,7 @@ namespace acmxvk::audio {
             }
 
             std::int64_t source_position = 0;
-            std::int64_t encoded_position = static_cast<std::int64_t>(std::llround(audio_delay_seconds * FILE_SAMPLE_RATE));
+            std::int64_t encoded_position = 0;
             std::vector<float> input_samples(static_cast<std::size_t>(audio_frame_capacity));
 
             auto drain_audio_packets = [&]() {
@@ -826,8 +827,13 @@ namespace acmxvk::audio {
                         input_samples[static_cast<std::size_t>(index)] = 0.0F;
                         continue;
                     }
-                    const std::size_t sample_index = repeat ? static_cast<std::size_t>(source_position + index) % samples.size() : static_cast<std::size_t>(source_position + index);
-                    input_samples[static_cast<std::size_t>(index)] = samples[sample_index];
+                    const std::int64_t sample_position = source_position + index - delay_sample_count;
+                    if (sample_position < 0) {
+                        input_samples[static_cast<std::size_t>(index)] = 0.0F;
+                    } else {
+                        const std::size_t sample_index = repeat ? static_cast<std::size_t>(sample_position) % samples.size() : static_cast<std::size_t>(sample_position);
+                        input_samples[static_cast<std::size_t>(index)] = samples[sample_index];
+                    }
                 }
 
                 audio_frame->nb_samples = submitted_count;
@@ -866,7 +872,7 @@ namespace acmxvk::audio {
                     break;
                 }
 
-                const std::int64_t audio_target = std::min<std::int64_t>(target_sample_count, static_cast<std::int64_t>(std::ceil((packet_time - audio_delay_seconds + static_cast<double>(audio_frame_capacity) / static_cast<double>(FILE_SAMPLE_RATE)) * static_cast<double>(FILE_SAMPLE_RATE))));
+                const std::int64_t audio_target = std::min<std::int64_t>(target_sample_count, static_cast<std::int64_t>(std::ceil((packet_time + static_cast<double>(audio_frame_capacity) / static_cast<double>(FILE_SAMPLE_RATE)) * static_cast<double>(FILE_SAMPLE_RATE))));
                 while (source_position < audio_target) {
                     if (!encode_audio_frame()) {
                         return fail("could not encode AAC samples", result);
