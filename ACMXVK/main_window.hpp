@@ -200,6 +200,7 @@ namespace acmxvk {
         bool warning_card_pending = false;
         bool warning_card_queued = false;
         std::vector<std::uint8_t> warning_card_rgba;
+        std::vector<std::uint16_t> warning_card_rgba16;
         int warning_card_width = 0;
         int warning_card_height = 0;
         std::uint64_t warning_frame_count = 0;

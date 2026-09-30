@@ -4320,6 +4320,11 @@ namespace acmxvk {
                     writer.write(pixels);
                 }
             }
+            if (!resized_card.empty()) {
+                const std::size_t samples = static_cast<std::size_t>(recording_width) * static_cast<std::size_t>(recording_height) * 4U;
+                warning_card_rgba.assign(pixels, pixels + samples);
+            }
+            warning_card_rgba16 = std::move(hdr_card);
             gap_fill_next_pts = warning_frame_count;
             warning_card_pending = false;
             warning_card_queued = false;
@@ -4387,6 +4392,27 @@ namespace acmxvk {
             output_pixels = stable_diffusion_output.ptr<std::uint8_t>();
         }
 #endif
+
+        cv::Mat warning_fade;
+        cv::Mat warning_fade_hdr;
+        if (writer.is_open() && warning_frame_count > 0 && !warning_card_rgba.empty()) {
+            constexpr double WARNING_FADE_SECONDS = 0.5;
+            const std::uint64_t fade_frame_count = std::max<std::uint64_t>(2U, static_cast<std::uint64_t>(std::llround(recording_fps * WARNING_FADE_SECONDS)));
+            const std::uint64_t frame_index = request.has_pts ? request.pts : output_frame_count;
+            if (frame_index < fade_frame_count) {
+                const double video_weight = static_cast<double>(frame_index + 1U) / static_cast<double>(fade_frame_count);
+                const cv::Mat card(recording_height, recording_width, CV_8UC4, warning_card_rgba.data());
+                const cv::Mat video(recording_height, recording_width, CV_8UC4, output_pixels);
+                cv::addWeighted(card, 1.0 - video_weight, video, video_weight, 0.0, warning_fade);
+                output_pixels = warning_fade.ptr<std::uint8_t>();
+                if (hdr_output_enabled && hdr_output_pixels != nullptr && !warning_card_rgba16.empty()) {
+                    const cv::Mat hdr_card(recording_height, recording_width, CV_16UC4, warning_card_rgba16.data());
+                    const cv::Mat hdr_video(recording_height, recording_width, CV_16UC4, const_cast<std::uint16_t *>(hdr_output_pixels));
+                    cv::addWeighted(hdr_card, 1.0 - video_weight, hdr_video, video_weight, 0.0, warning_fade_hdr);
+                    hdr_output_pixels = warning_fade_hdr.ptr<std::uint16_t>();
+                }
+            }
+        }
 
         if (writer.is_open()) {
             if (hdr_output_enabled && hdr_output_pixels == nullptr) {

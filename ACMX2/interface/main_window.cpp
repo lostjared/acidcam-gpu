@@ -2047,6 +2047,12 @@ void MainWindow::loadSessionSettings() {
         QSignalBlocker blocker(normalizedTimeAction);
         normalizedTimeAction->setChecked(normalized_time);
     }
+    photosensitivity_mitigation_enabled = settings.value("interface/photosensitivity_mitigation_enabled", false).toBool();
+    photosensitivity_mitigation_strength = std::clamp(settings.value("interface/photosensitivity_mitigation_strength", 0.45).toDouble(), 0.0, 1.0);
+    if (photosensitivityMitigationAction) {
+        QSignalBlocker blocker(photosensitivityMitigationAction);
+        photosensitivityMitigationAction->setChecked(photosensitivity_mitigation_enabled);
+    }
     duration_limit_enabled = settings.value("interface/duration_enabled", false).toBool();
     max_duration = settings.value("interface/duration_seconds", 60.0).toDouble();
     max_size_limit_enabled = settings.value("interface/max_size_enabled", false).toBool();
@@ -4964,12 +4970,6 @@ bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &
     watermark_g = applicationSettings.value("watermarkG", 0).toInt();
     watermark_b = applicationSettings.value("watermarkB", 150).toInt();
     display_filter_enabled = applicationSettings.value("displayFilter", false).toBool();
-    photosensitivity_mitigation_enabled = interfaceSettings.value("interface/photosensitivity_mitigation_enabled", false).toBool();
-    photosensitivity_mitigation_strength = std::clamp(interfaceSettings.value("interface/photosensitivity_mitigation_strength", 0.45).toDouble(), 0.0, 1.0);
-    if (photosensitivityMitigationAction) {
-        QSignalBlocker blocker(photosensitivityMitigationAction);
-        photosensitivityMitigationAction->setChecked(photosensitivity_mitigation_enabled);
-    }
     if (displayFilterAction) {
         QSignalBlocker blocker(displayFilterAction);
         displayFilterAction->setChecked(display_filter_enabled);
